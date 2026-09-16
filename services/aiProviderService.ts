@@ -506,6 +506,101 @@ async function attemptPromotedOpenRouterFallback(
   }
 }
 
+// QNBS-v3: after the chain is exhausted, deliver a registered heuristic result through the stream (onChunk + onDone) instead of erroring — so streaming features (Writer tools) stay useful offline.
+function tryHeuristicStream(
+  mergedOpts: AIRequestOptions,
+  prompt: string,
+  guardedCallbacks: AIStreamCallbacks,
+): boolean {
+  const heuristic = applyHeuristicFallback<string>(
+    mergedOpts.heuristicTask,
+    mergedOpts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
+  );
+  if (!heuristic) return false;
+  guardedCallbacks.onChunk(heuristic.data);
+  guardedCallbacks.onDone?.();
+  return true;
+}
+
+// QNBS-v3: the whole fallback-chain walk, extracted so streamText itself stays a shallow coordinator (build guardedCallbacks, resolve chain, delegate) instead of owning every branch of the walk.
+async function runProviderFallbackChain(
+  prompt: string,
+  creativity: AiCreativity,
+  mergedOpts: AIRequestOptions,
+  callbacks: AIStreamCallbacks,
+  guardedCallbacks: AIStreamCallbacks,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  const chain = resolveProviderFallbackChain(mergedOpts);
+  let lastError: unknown;
+  // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate chunks) if the chain also lists it later.
+  let attemptedOpenRouterFallback: string | undefined;
+  for (let i = 0; i < chain.length; i++) {
+    const nextProvider = chain[i];
+    if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
+    const outcome = await attemptChainProvider(
+      prompt,
+      creativity,
+      mergedOpts,
+      nextProvider,
+      guardedCallbacks,
+      signal,
+    );
+    if (outcome.kind === 'succeeded') {
+      // QNBS-v3: mirrors generateText's fallback-reason bookkeeping — without this, a stale reason from an earlier failed/promoted request would keep showing in GpuMetricsPanel after this request's primary provider succeeds outright.
+      recordProviderSuccess(mergedOpts.provider, nextProvider, i);
+      return;
+    }
+    if (outcome.kind === 'failed-emitted') {
+      // QNBS-v3: A partial response from any provider must terminate rather than append fallback text to a truncated answer.
+      const terminal =
+        outcome.error instanceof Error ? outcome.error : new Error(String(outcome.error));
+      callbacks.onError?.(terminal);
+      throw terminal;
+    }
+    const error = outcome.error;
+    lastError = error;
+    // QNBS-v3: mirrors generateText's OpenRouter rate-limit/circuit-open promotion — without this, a stream promoted to OpenRouter by resolvePositiveRoutingOpts would fail hard on a transient OpenRouter outage instead of falling back.
+    if (isOpenRouterTransientFailure(nextProvider, error)) {
+      const fallback = getOpenRouterFallbackProvider();
+      attemptedOpenRouterFallback = fallback;
+      const promotedOutcome = await attemptPromotedOpenRouterFallback(
+        mergedOpts,
+        fallback,
+        prompt,
+        creativity,
+        guardedCallbacks,
+        signal,
+      );
+      if (promotedOutcome.kind === 'succeeded') {
+        _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
+        return;
+      }
+      if (promotedOutcome.kind === 'failed-emitted') {
+        // QNBS-v3: same partial-response guard applies to the promoted OpenRouter fallback attempt itself.
+        const terminal =
+          promotedOutcome.error instanceof Error
+            ? promotedOutcome.error
+            : new Error(String(promotedOutcome.error));
+        callbacks.onError?.(terminal);
+        throw terminal;
+      }
+      lastError = promotedOutcome.error;
+    }
+    if (i === chain.length - 1) {
+      // QNBS-v3: onError is owned by this orchestration layer — fire it exactly once, after the whole chain is exhausted, so no fallback provider still in flight gets a premature terminal error.
+      const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
+      if (tryHeuristicStream(mergedOpts, prompt, guardedCallbacks)) return;
+      callbacks.onError?.(terminal);
+      throw terminal;
+    }
+  }
+  const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
+  if (tryHeuristicStream(mergedOpts, prompt, guardedCallbacks)) return;
+  callbacks.onError?.(terminal);
+  throw terminal;
+}
+
 export async function streamText(
   prompt: string,
   creativity: AiCreativity,
@@ -524,86 +619,14 @@ export async function streamText(
         if (!mergedOpts.signal?.aborted) callbacks.onDone?.();
       },
     };
-    const chain = resolveProviderFallbackChain(mergedOpts);
-    let lastError: unknown;
-    // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate chunks) if the chain also lists it later.
-    let attemptedOpenRouterFallback: string | undefined;
-    // QNBS-v3: after the chain is exhausted, deliver a registered heuristic result through the stream
-    // (onChunk + onDone) instead of erroring — so streaming features (Writer tools) stay useful offline.
-    const tryHeuristicStream = (): boolean => {
-      const heuristic = applyHeuristicFallback<string>(
-        mergedOpts.heuristicTask,
-        mergedOpts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
-      );
-      if (!heuristic) return false;
-      guardedCallbacks.onChunk(heuristic.data);
-      guardedCallbacks.onDone?.();
-      return true;
-    };
-    for (let i = 0; i < chain.length; i++) {
-      const nextProvider = chain[i];
-      if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
-      const outcome = await attemptChainProvider(
-        prompt,
-        creativity,
-        mergedOpts,
-        nextProvider,
-        guardedCallbacks,
-        signal,
-      );
-      if (outcome.kind === 'succeeded') {
-        // QNBS-v3: mirrors generateText's fallback-reason bookkeeping — without this, a stale reason from an earlier failed/promoted request would keep showing in GpuMetricsPanel after this request's primary provider succeeds outright.
-        recordProviderSuccess(mergedOpts.provider, nextProvider, i);
-        return;
-      }
-      if (outcome.kind === 'failed-emitted') {
-        // QNBS-v3: A partial response from any provider must terminate rather than append fallback text to a truncated answer.
-        const terminal =
-          outcome.error instanceof Error ? outcome.error : new Error(String(outcome.error));
-        callbacks.onError?.(terminal);
-        throw terminal;
-      }
-      const error = outcome.error;
-      lastError = error;
-      // QNBS-v3: mirrors generateText's OpenRouter rate-limit/circuit-open promotion — without this, a stream promoted to OpenRouter by resolvePositiveRoutingOpts would fail hard on a transient OpenRouter outage instead of falling back.
-      if (isOpenRouterTransientFailure(nextProvider, error)) {
-        const fallback = getOpenRouterFallbackProvider();
-        attemptedOpenRouterFallback = fallback;
-        const promotedOutcome = await attemptPromotedOpenRouterFallback(
-          mergedOpts,
-          fallback,
-          prompt,
-          creativity,
-          guardedCallbacks,
-          signal,
-        );
-        if (promotedOutcome.kind === 'succeeded') {
-          _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
-          return;
-        }
-        if (promotedOutcome.kind === 'failed-emitted') {
-          // QNBS-v3: same partial-response guard applies to the promoted OpenRouter fallback attempt itself.
-          const terminal =
-            promotedOutcome.error instanceof Error
-              ? promotedOutcome.error
-              : new Error(String(promotedOutcome.error));
-          callbacks.onError?.(terminal);
-          throw terminal;
-        }
-        lastError = promotedOutcome.error;
-      }
-      if (i === chain.length - 1) {
-        // QNBS-v3: onError is owned by this orchestration layer — fire it exactly once, after the whole chain is exhausted, so no fallback provider still in flight gets a premature terminal error.
-        const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
-        if (tryHeuristicStream()) return;
-        callbacks.onError?.(terminal);
-        throw terminal;
-      }
-    }
-    const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
-    if (tryHeuristicStream()) return;
-    callbacks.onError?.(terminal);
-    throw terminal;
+    await runProviderFallbackChain(
+      prompt,
+      creativity,
+      mergedOpts,
+      callbacks,
+      guardedCallbacks,
+      signal,
+    );
   });
 }
 
