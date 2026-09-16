@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAppDispatch, useAppSelector, useAppSelectorShallow } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import {
+  captureActiveProjectIdentity,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
+import {
   selectAllCharacters,
   selectManuscript,
   selectProjectData,
@@ -269,7 +273,8 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       dispatch(writerActions.setLastRagChunks([]));
     }
 
-    dispatch(writerActions.startLoading());
+    // QNBS-v3 (#713): captured now so handleAccept can later verify the generation it's applying still targets the active project -- writerSlice is global Redux and survives a Writer-view unmount/remount across a project switch.
+    dispatch(writerActions.startLoading(captureActiveProjectIdentity()));
     dispatch(writerActions.clearResultStream());
     fullStreamRef.current = '';
     dispatch(writerActions.addHistory(''));
@@ -355,6 +360,12 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 
   const handleAccept = useCallback(
     (action: 'insert' | 'replace') => {
+      // QNBS-v3 (#713): reject applying a generation that targeted a different project incarnation -- writerSlice is global Redux, so a stale generationHistory entry can otherwise outlive a project switch and get inserted into the wrong project's manuscript.
+      if (
+        !identityUnchanged(writerState.generatedForProjectIdentity, captureActiveProjectIdentity())
+      ) {
+        return;
+      }
       const selectedSectionIndex = manuscript.findIndex((s) => s.id === selectedSectionId);
       if (selectedSectionIndex === -1) return;
 
@@ -380,6 +391,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       activeHistoryIndex,
       selection,
       handleContentChange,
+      writerState.generatedForProjectIdentity,
     ],
   );
 

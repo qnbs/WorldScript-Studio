@@ -33,6 +33,8 @@ export interface WriterState {
   lastRagChunkCount: number;
   // QNBS-v3: PR4 — transparency: a preview of the RAG chunks injected into the last AI request.
   lastRagChunks: RagChunkPreview[];
+  // QNBS-v3 (#713): the project incarnation the CURRENT generationHistory entry was generated for -- this state is global Redux (unlike Manuscript view's local hook state), so it survives a Writer-view unmount/remount and must carry its own origin identity for handleAccept to verify against.
+  generatedForProjectIdentity: string | null;
 }
 
 /** A display-safe summary of a retrieved RAG chunk (no full text payload kept in Redux). */
@@ -59,6 +61,7 @@ const initialState: WriterState = {
   useRagContext: true,
   lastRagChunkCount: 0,
   lastRagChunks: [],
+  generatedForProjectIdentity: null,
 };
 
 const writerSlice = createSlice({
@@ -93,11 +96,21 @@ const writerSlice = createSlice({
     setStyle: (state, action: PayloadAction<string>) => {
       state.style = action.payload;
     },
-    startLoading: (state) => {
+    // QNBS-v3 (#713): captures the project incarnation this generation targets -- handleAccept checks it later, since the async generation may outlive a project switch.
+    startLoading: (state, action: PayloadAction<string | null>) => {
       state.isLoading = true;
+      state.generatedForProjectIdentity = action.payload;
     },
     stopLoading: (state) => {
       state.isLoading = false;
+    },
+    // QNBS-v3 (#713): this slice is global Redux (unlike Manuscript view's local hook state), so it survives a Writer-view unmount/remount -- a project switch must invalidate it explicitly rather than relying on the component's own lifecycle.
+    invalidateForProjectChange: (state) => {
+      state.isLoading = false;
+      state.generationHistory = [];
+      state.activeHistoryIndex = -1;
+      state.resultStream = '';
+      state.generatedForProjectIdentity = null;
     },
     addHistory: (state, action: PayloadAction<string>) => {
       state.generationHistory = [action.payload, ...state.generationHistory].slice(0, 50);

@@ -25,6 +25,8 @@ export interface CopilotState {
   messages: CopilotMessage[];
   status: CopilotStatus;
   error: string | null;
+  // QNBS-v3 (#713): the project incarnation the most recent sendMessage() targets -- this state is global Redux (unlike Manuscript view's local hook state), so it survives an unmount/remount and applyLastSuggestion must verify against it before writing into the manuscript.
+  generatedForProjectIdentity: string | null;
 }
 
 const initialState: CopilotState = {
@@ -32,6 +34,7 @@ const initialState: CopilotState = {
   messages: [],
   status: 'idle',
   error: null,
+  generatedForProjectIdentity: null,
 };
 
 const copilotSlice = createSlice({
@@ -87,11 +90,23 @@ const copilotSlice = createSlice({
       state.error = action.payload;
       if (action.payload) state.status = 'error';
     },
+    // QNBS-v3 (#713): captured at sendMessage() time, checked by applyLastSuggestion later since the async response may outlive a project switch.
+    setGeneratedForProjectIdentity(state, action: PayloadAction<string | null>) {
+      state.generatedForProjectIdentity = action.payload;
+    },
     clear(state) {
       state.messages = [];
       state.status = 'idle';
       state.error = null;
+      state.generatedForProjectIdentity = null;
       // QNBS-v3: copilotInsights + copilotInsightStatus reset via transientUiStore in useGlobalCopilot
+    },
+    // QNBS-v3 (#713): this slice is global Redux (unlike Manuscript view's local hook state), so it survives an unmount/remount -- a project switch must invalidate it explicitly rather than relying on the component's own lifecycle.
+    invalidateForProjectChange(state) {
+      state.messages = [];
+      state.status = 'idle';
+      state.error = null;
+      state.generatedForProjectIdentity = null;
     },
   },
 });
@@ -102,5 +117,7 @@ export const selectCopilotIsOpen = (s: { copilot: CopilotState }) => s.copilot.i
 export const selectCopilotMessages = (s: { copilot: CopilotState }) => s.copilot.messages;
 export const selectCopilotStatus = (s: { copilot: CopilotState }) => s.copilot.status;
 export const selectCopilotError = (s: { copilot: CopilotState }) => s.copilot.error;
+export const selectCopilotGeneratedForProjectIdentity = (s: { copilot: CopilotState }) =>
+  s.copilot.generatedForProjectIdentity;
 
 export default copilotSlice.reducer;

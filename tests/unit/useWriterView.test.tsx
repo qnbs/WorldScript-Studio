@@ -90,6 +90,8 @@ const mockState: {
     selectedSectionId: string | null;
     useRagContext: boolean;
     lastRagChunkCount: number;
+    // QNBS-v3 (#713): the project incarnation the current generationHistory entry was generated for.
+    generatedForProjectIdentity: string | null;
   };
 } = {
   projectData: {
@@ -136,8 +138,18 @@ const mockState: {
     selectedSectionId: null,
     useRagContext: false,
     lastRagChunkCount: 0,
+    generatedForProjectIdentity: 'id:p1:gen:0',
   },
 };
+
+// QNBS-v3 (#713): mutable so tests can simulate a project-incarnation change mid-test -- captureActiveProjectIdentity() takes no arguments, so this is a plain variable rather than a selector.
+let mockLiveProjectIdentity: string | null = 'id:p1:gen:0';
+
+vi.mock('../../features/project/projectIdentity', () => ({
+  captureActiveProjectIdentity: () => mockLiveProjectIdentity,
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
+}));
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
@@ -174,7 +186,7 @@ vi.mock('../../features/project/projectSelectors', () => ({
 const writerActions = {
   setSelectedSectionId: (id: string) => ({ type: 'setSelectedSectionId', payload: id }),
   stopLoading: () => ({ type: 'stopLoading' }),
-  startLoading: () => ({ type: 'startLoading' }),
+  startLoading: (payload: unknown) => ({ type: 'startLoading', payload }),
   clearResultStream: () => ({ type: 'clearResultStream' }),
   updateCurrentHistoryItem: (payload: unknown) => ({ type: 'updateCurrentHistoryItem', payload }),
   appendResultStream: (payload: unknown) => ({ type: 'appendResultStream', payload }),
@@ -236,6 +248,8 @@ describe('useWriterView', () => {
     // QNBS-v3 (CodeAnt): reset RAG state + the assembly mock so one test's config/flag can't leak
     // into another (avoids order-dependent failures if an assertion throws before inline cleanup).
     mockState.writer.useRagContext = false;
+    mockState.writer.generatedForProjectIdentity = 'id:p1:gen:0';
+    mockLiveProjectIdentity = 'id:p1:gen:0';
     mockAssembleRAGPrompt.mockReset();
   });
 
@@ -307,6 +321,44 @@ describe('useWriterView', () => {
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'updateManuscriptSection',
       payload: { id: 's1', changes: { content: 'Hello  worldworld' } },
+    });
+  });
+
+  // QNBS-v3 (#713): writerSlice is global Redux, so a generation started before a project switch must not be applicable to the newly active project.
+  describe('#713 project-incarnation guard', () => {
+    it('captures the live project identity when starting generation', async () => {
+      mockLiveProjectIdentity = 'id:p1:gen:0';
+      const view = await createHookWrapper();
+      await act(async () => {
+        await view.handleGenerate();
+      });
+
+      expect(mockDispatch).toHaveBeenCalledWith({
+        type: 'startLoading',
+        payload: 'id:p1:gen:0',
+      });
+    });
+
+    it('rejects handleAccept when the generation targeted a different project incarnation', async () => {
+      mockState.writer.selection = { text: '', start: 6, end: 6 };
+      mockState.writer.generationHistory = [' world'];
+      mockState.writer.activeHistoryIndex = 0;
+      // Simulate: generation was started for project A, then the active project changed to B
+      // before Accept was clicked (writerSlice state survives the switch since it's global Redux).
+      mockState.writer.generatedForProjectIdentity = 'id:pA:gen:0';
+      mockLiveProjectIdentity = 'id:pB:gen:0';
+
+      const view = await createHookWrapper();
+      mockDispatch.mockClear();
+      await act(async () => {
+        view.handleAccept('insert');
+      });
+
+      expect(
+        mockDispatch.mock.calls.some(
+          ([action]) => isDispatcherAction(action) && action.type === 'updateManuscriptSection',
+        ),
+      ).toBe(false);
     });
   });
 

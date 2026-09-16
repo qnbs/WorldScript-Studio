@@ -12,11 +12,16 @@ import { useCommandExecutor } from '../contexts/CommandExecutorContext';
 import {
   copilotActions,
   selectCopilotError,
+  selectCopilotGeneratedForProjectIdentity,
   selectCopilotIsOpen,
   selectCopilotMessages,
   selectCopilotStatus,
 } from '../features/copilot/copilotSlice';
 import { selectEnableProForge } from '../features/featureFlags/featureFlagsSlice';
+import {
+  captureActiveProjectIdentity,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import { getAiErrorMessage } from '../services/ai/aiErrorTaxonomy';
@@ -79,6 +84,7 @@ export function useGlobalCopilot(currentView: View) {
   const messages = useAppSelector(selectCopilotMessages);
   const status = useAppSelector(selectCopilotStatus);
   const error = useAppSelector(selectCopilotError);
+  const generatedForProjectIdentity = useAppSelector(selectCopilotGeneratedForProjectIdentity);
   // QNBS-v3: panel-only overlay state lives in transientUiStore, not Redux (CodeAnt findings)
   const proactiveInsights = useTransientUiStore((s) => s.copilotInsights);
   // QNBS-v3: Ref tracks latest insight count without triggering buildContext re-identity —
@@ -167,6 +173,8 @@ export function useGlobalCopilot(currentView: View) {
 
       dispatch(copilotActions.setError(null));
       dispatch(copilotActions.addMessage('user', trimmed));
+      // QNBS-v3 (#713): captured once per send, covering every reply path below -- applyLastSuggestion checks it later since copilotSlice is global Redux and survives a panel close/reopen across a project switch.
+      dispatch(copilotActions.setGeneratedForProjectIdentity(captureActiveProjectIdentity()));
 
       // QNBS-v3: Heuristics-only mode — skip all AI calls and reply with a summary of
       // current insights (offline, privacy-maximal).
@@ -265,6 +273,8 @@ export function useGlobalCopilot(currentView: View) {
   const applyLastSuggestion = useCallback(
     (codeBlock: string) => {
       if (!activeSectionId || !project) return;
+      // QNBS-v3 (#713): reject applying a reply that targeted a different project incarnation -- copilotSlice is global Redux, so a stale reply can otherwise outlive a project switch and get inserted into the wrong project's manuscript.
+      if (!identityUnchanged(generatedForProjectIdentity, captureActiveProjectIdentity())) return;
       const section = project.manuscript.find((s) => s.id === activeSectionId);
       if (!section) return;
 
@@ -300,7 +310,7 @@ export function useGlobalCopilot(currentView: View) {
       // Auto-clear feedback after 3s
       setTimeout(() => setApplyStatus('idle'), 3000);
     },
-    [activeSectionId, project, dispatch],
+    [activeSectionId, project, dispatch, generatedForProjectIdentity],
   );
 
   // QNBS-v3: Dynamic view + project-aware suggestions replace the static 3-string list.
