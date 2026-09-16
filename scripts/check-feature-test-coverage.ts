@@ -117,6 +117,8 @@ const silentHighRiskGaps: string[] = [];
 for (const entry of FEATURE_CATALOG) {
   if (entry.riskLevel !== 'high') continue;
   const coverage = FEATURE_TEST_COVERAGE[entry.flagKey];
+  // QNBS-v3: guards a transpiled/type-stripped divergence (same defense-in-depth as section 4) so a missing entry is reported there instead of crashing this loop first.
+  if (!coverage) continue;
   if (STRONG_DISPOSITIONS.has(coverage.disposition)) continue;
   if (!coverage.rationale || coverage.rationale.trim().length === 0) {
     silentHighRiskGaps.push(entry.flagKey);
