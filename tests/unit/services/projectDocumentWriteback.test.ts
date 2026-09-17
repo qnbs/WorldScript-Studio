@@ -331,4 +331,82 @@ describe('projectDocumentWriteback (#553)', () => {
 
     expectVerificationFailedContaining(result, 'schemaVersion cannot be set');
   });
+
+  it('reports VERIFICATION_FAILED when an upserted entity has an explicit undefined field', () => {
+    // QNBS-v3: JSON has no undefined -- the dropped property would silently differ from the caller's literal intended value; the primitive must detect and refuse this, not accept the narrowed result.
+    const characters: EntityCollectionEdit = {
+      upsert: [{ id: 'c1', name: 'Alicia', note: undefined }],
+    };
+
+    const result = commitEdit({ collections: { characters } });
+
+    expectVerificationFailedContaining(result, 'does not match the intended upsert value');
+  });
+
+  it('round-trips a null entity field value exactly', () => {
+    const characters = commitCharactersEdit({ upsert: [{ id: 'c1', name: 'Alicia', bio: null }] });
+
+    expect(characters.entities['c1']).toMatchObject({ bio: null });
+  });
+
+  it('accepts an upserted plain-number field whose re-parsed value is an unsafe RawNumberLiteral', () => {
+    // QNBS-v3: a plain-number caller value revives as a RawNumberLiteral after the round trip past the unsafe-integer boundary; verification must compare by numeric value, not by type.
+    const boundaryValue = Number.MAX_SAFE_INTEGER + 1; // 2^53, exactly representable as a double
+    const characters = commitCharactersEdit({
+      upsert: [{ id: 'c1', name: 'Alicia', externalId: boundaryValue }],
+    });
+
+    expect(characters.entities['c1']).toMatchObject({ externalId: boundaryValue });
+  });
+
+  it('preserves a large/unsafe negative-integer raw value on an untouched entity exactly', () => {
+    // QNBS-v3: isUnsafeIntegerLiteral's OR has two sides (> MAX_SAFE_INTEGER, < MIN_SAFE_INTEGER); every other test here only exercises the positive side.
+    const negativeUnsafeLiteral = '-9007199254740993';
+    const raw = baseDocument().replace(UNSAFE_INTEGER_LITERAL, negativeUnsafeLiteral);
+    expect(raw).toContain(negativeUnsafeLiteral);
+
+    const result = commitEdit(
+      { collections: { characters: { upsert: [{ id: 'c1', name: 'Alicia' }] } } },
+      raw,
+    );
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain(negativeUnsafeLiteral);
+  });
+
+  it('reports VERIFICATION_FAILED for an array field containing an undefined element', () => {
+    // QNBS-v3: unlike an object property, an array element is never filtered -- it serializes to null (matching JSON.stringify), which then correctly fails the comparison against the literal undefined.
+    const characters: EntityCollectionEdit = {
+      upsert: [{ id: 'c1', name: 'Alicia', tags: ['a', undefined, 'b'] }],
+    };
+
+    const result = commitEdit({ collections: { characters } });
+
+    expectVerificationFailedContaining(result, 'does not match the intended upsert value');
+  });
+
+  it('throws rather than silently dropping a non-JSON-serializable entity field value', () => {
+    // QNBS-v3: a caller-supplied function/symbol violates EntityLike's implicit JSON-serializable contract; failing loudly beats silently persisting a narrowed document.
+    const characters: EntityCollectionEdit = {
+      upsert: [{ id: 'c1', name: 'Alicia', callback: () => undefined }],
+    };
+
+    expect(() => commitEdit({ collections: { characters } })).toThrow(
+      /cannot stringify value of type/,
+    );
+  });
+
+  it('inserts a genuinely new top-level field into a non-empty document', () => {
+    const raw = minimalDocument();
+    expect(JSON.parse(raw)).not.toHaveProperty('outline');
+
+    const result = commitEdit({ fields: { outline: 'newly added opaque value' } }, raw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    const parsed = JSON.parse(result.raw) as { outline: string; title: string };
+    expect(parsed.outline).toBe('newly added opaque value');
+    expect(parsed.title).toBe('t');
+  });
 });
