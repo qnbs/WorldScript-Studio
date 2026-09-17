@@ -2,13 +2,20 @@
  * IDB canonical project admission + durable-commit boundary (#553, Phase D1).
  *
  * Establishes the "one authoritative persisted project generation" invariant for the IndexedDB
- * backend: a companion, unencrypted generation record proves which raw-carrier generation the
- * `'project'` record currently holds. That comparison is checked and replaced inside the SAME
- * IndexedDB transaction as the project write itself (mirroring encryptionMigrationJournal.ts's
+ * backend. The real fence compares the RAW (undecoded) stored `'project'` value -- captured at
+ * admission time -- against a fresh read of that same key, synchronously inside the SAME
+ * IndexedDB transaction as the write itself (mirroring encryptionMigrationJournal.ts's
  * saveIfCurrent pattern) -- never merely compared beforehand and then written by a later,
- * unrelated put(). WebCrypto encryption always completes BEFORE that transaction opens (mirrors
+ * unrelated put(). Comparing raw bytes (not decrypted content) means the fence never needs to
+ * decrypt inside that transaction, and it detects a concurrent write from ANY writer of that key,
+ * including the legacy (non-fenced) saveSlice/saveProject path, not only one that participates in
+ * this authority. WebCrypto encryption always completes BEFORE the transaction opens (mirrors
  * idbProjectStore.ts#saveSlice's existing discipline), since awaiting it mid-transaction would let
  * IndexedDB auto-commit the transaction first (TransactionInactiveError).
+ *
+ * A companion, unencrypted generation record is still written on every successful commit -- not as
+ * the fencing mechanism, but as a durable "this project has been canonically committed at least
+ * once" marker, used only to detect the contract's §2.7 downgrade contradiction.
  *
  * This is the IDB-specific backend adapter services/projectDocumentWriteback.ts's own module doc
  * anticipated: it re-reads the current raw carrier, calls commitOwnedProjectEdit, and persists the
@@ -49,9 +56,10 @@ interface ProjectGenerationRecord {
   migrated: boolean;
 }
 
-/** True when the stored record used the `{present: {data}}` redux-undo shape, not the flat `{data}` shape. */
+/** The original decoded envelope, minus its data/present.data payload -- sibling keys (e.g. past/future) survive a canonical commit unchanged. */
 export interface ProjectEnvelopeShape {
   isPresentShape: boolean;
+  originalEnvelope: Record<string, unknown>;
 }
 
 export type CanonicalProjectAdmission =
@@ -88,19 +96,26 @@ function unwrapProjectEnvelope(
   if (!isRecord(raw)) return null;
   const record = raw as StoredProjectEnvelope;
   if (isRecord(record.present) && isRecord(record.present.data)) {
-    return { payload: record.present.data, envelope: { isPresentShape: true } };
+    return {
+      payload: record.present.data,
+      envelope: { isPresentShape: true, originalEnvelope: raw },
+    };
   }
   if (isRecord(record.data)) {
-    return { payload: record.data, envelope: { isPresentShape: false } };
+    return { payload: record.data, envelope: { isPresentShape: false, originalEnvelope: raw } };
   }
   return null;
 }
 
+/** Replaces only the nested data field; every other envelope member (e.g. redux-undo's past/future) survives untouched. */
 function rewrapProjectEnvelope(
   payload: Record<string, unknown>,
   envelope: ProjectEnvelopeShape,
 ): StoredProjectEnvelope {
-  return envelope.isPresentShape ? { present: { data: payload } } : { data: payload };
+  const { originalEnvelope, isPresentShape } = envelope;
+  if (!isPresentShape) return { ...originalEnvelope, data: payload };
+  const originalPresent = isRecord(originalEnvelope['present']) ? originalEnvelope['present'] : {};
+  return { ...originalEnvelope, present: { ...originalPresent, data: payload } };
 }
 
 function parseGenerationRecord(value: unknown): ProjectGenerationRecord | null {
@@ -119,6 +134,22 @@ function readKey(store: IDBObjectStore, key: string): Promise<unknown> {
   });
 }
 
+// QNBS-v3: compares the RAW (undecoded) stored representation for exact identity -- sufficient for the CAS fence without decrypting inside a transaction, where an await would let IndexedDB auto-commit it first.
+function rawStoredValuesEqual(a: unknown, b: unknown): boolean {
+  if (a instanceof Uint8Array && b instanceof Uint8Array) {
+    return a.length === b.length && a.every((byte, index) => byte === b[index]);
+  }
+  if (typeof a === 'string' && typeof b === 'string') return a === b;
+  if (isRecord(a) && isRecord(b)) {
+    try {
+      return JSON.stringify(a) === JSON.stringify(b);
+    } catch {
+      return false;
+    }
+  }
+  return a === b;
+}
+
 // QNBS-v3 (#553 §2.7): a migrated companion record combined with a non-CURRENT raw payload means a stale pre-contract-shaped write superseded it -- surfaced distinctly, never as ordinary non-admission.
 function admitNonCurrentClassification(
   classification: ProjectVersionClassification,
@@ -129,52 +160,75 @@ function admitNonCurrentClassification(
     : { status: 'NOT_ADMITTED', classification };
 }
 
+interface CanonicalProjectSnapshot {
+  admission: CanonicalProjectAdmission;
+  /** The exact raw (undecoded) value read from PROJECT_RECORD_KEY, for the raw-bytes CAS fence. */
+  rawRecordSnapshot: unknown;
+}
+
 export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
-  /**
-   * Reads, decrypts/decompresses, and classifies the current canonical project record.
-   * Bootstraps (or resyncs) the companion generation record whenever a CURRENT document's actual
-   * content hash disagrees with it -- necessary while the legacy (non-fenced) saveSlice/saveProject
-   * path can still write this project outside commitCanonicalProjectEdit's control (Phase D1/D2;
-   * closed once Phase D3 makes this the sole writer).
-   */
+  /** Reads, decrypts/decompresses, and classifies the current canonical project record. Never writes anything. */
   async loadCanonicalProjectAdmission(): Promise<CanonicalProjectAdmission> {
+    return (await this.readCanonicalProjectSnapshot()).admission;
+  }
+
+  private async readCanonicalProjectSnapshot(): Promise<CanonicalProjectSnapshot> {
     const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
     const [rawRecord, generationRecordRaw] = await Promise.all([
       readKey(store, PROJECT_RECORD_KEY),
       readKey(store, GENERATION_RECORD_KEY),
     ]);
-    if (rawRecord === undefined) return { status: 'ABSENT' };
+    if (rawRecord === undefined) {
+      return { admission: { status: 'ABSENT' }, rawRecordSnapshot: rawRecord };
+    }
 
     const decoded = await idbReadSecure<unknown>(rawRecord);
     const unwrapped = unwrapProjectEnvelope(decoded);
     const parsedGeneration = parseGenerationRecord(generationRecordRaw);
-    if (!unwrapped) return admitNonCurrentClassification('MALFORMED', parsedGeneration);
+    if (!unwrapped) {
+      return {
+        admission: admitNonCurrentClassification('MALFORMED', parsedGeneration),
+        rawRecordSnapshot: rawRecord,
+      };
+    }
 
-    const currentRaw = JSON.stringify(unwrapped.payload);
+    let currentRaw: string;
+    try {
+      currentRaw = JSON.stringify(unwrapped.payload);
+    } catch {
+      return {
+        admission: admitNonCurrentClassification('MALFORMED', parsedGeneration),
+        rawRecordSnapshot: rawRecord,
+      };
+    }
     const classification = classifyRawProjectVersionFromParsed(currentRaw, unwrapped.payload);
     if (classification !== 'CURRENT') {
-      return admitNonCurrentClassification(classification, parsedGeneration);
+      return {
+        admission: admitNonCurrentClassification(classification, parsedGeneration),
+        rawRecordSnapshot: rawRecord,
+      };
     }
 
     const generation = computeProjectSourceGeneration(currentRaw);
-    if (!parsedGeneration || parsedGeneration.generation !== generation) {
-      await this.writeGenerationRecordUnconditionally({ generation, migrated: true });
-    }
-    return { status: 'CURRENT', currentRaw, generation, envelope: unwrapped.envelope };
+    return {
+      admission: { status: 'CURRENT', currentRaw, generation, envelope: unwrapped.envelope },
+      rawRecordSnapshot: rawRecord,
+    };
   }
 
   /**
    * Fences, overlays, verifies, and durably commits one writer's owned-path edit against the
    * canonical project record. `expectedGeneration` must come from a `loadCanonicalProjectAdmission`
-   * call the caller made itself -- a concurrent newer write (same tab via the legacy path, or
-   * another tab) between that read and this commit fails closed (CONFLICT), never silently
-   * overwritten.
+   * call the caller made itself; the primitive re-reads the record fresh regardless, and the
+   * actual atomicity fence compares raw stored bytes inside the write transaction, so a concurrent
+   * write from ANY writer of PROJECT_RECORD_KEY -- another commitCanonicalProjectEdit caller, or
+   * the legacy saveSlice/saveProject path -- fails closed (CONFLICT), never silently overwritten.
    */
   async commitCanonicalProjectEdit(params: {
     expectedGeneration: ProjectSourceGeneration;
     edit: OwnedProjectEdit;
   }): Promise<CommitCanonicalProjectEditResult> {
-    const admission = await this.loadCanonicalProjectAdmission();
+    const { admission, rawRecordSnapshot } = await this.readCanonicalProjectSnapshot();
     if (admission.status !== 'CURRENT') {
       const classification =
         admission.status === 'ABSENT'
@@ -204,31 +258,16 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
         : compressData(newPayload);
       await assertNoActiveEncryptionMigration();
       return this.commitGenerationFencedWrite(
-        params.expectedGeneration,
+        rawRecordSnapshot,
         applied.generation,
         encodedPayload,
       );
     });
   }
 
-  private async writeGenerationRecordUnconditionally(
-    record: ProjectGenerationRecord,
-  ): Promise<void> {
-    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
-    const transaction = store.transaction;
-    return new Promise((resolve, reject) => {
-      const request = store.put(record, GENERATION_RECORD_KEY);
-      request.onerror = () => reject(request.error);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () =>
-        reject(transaction.error ?? new Error('project generation bootstrap transaction aborted'));
-    });
-  }
-
-  // QNBS-v3: the real fence -- get, compare, and put both keys synchronously inside one IDB transaction, atomic with respect to every other writer, not merely a check before an unrelated later put().
+  // QNBS-v3: the real fence -- get PROJECT_RECORD_KEY, compare its raw bytes against the admission-time snapshot, and put both keys, synchronously inside one IDB transaction; detects a concurrent write from any writer, not only one that updates the companion generation record.
   private commitGenerationFencedWrite(
-    expectedGeneration: ProjectSourceGeneration,
+    expectedRawRecord: unknown,
     newGeneration: ProjectSourceGeneration,
     encodedPayload: unknown,
   ): Promise<CommitCanonicalProjectEditResult> {
@@ -237,19 +276,18 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
         new Promise<CommitCanonicalProjectEditResult>((resolve, reject) => {
           const transaction = store.transaction;
           let writeQueued = false;
-          const genRequest = store.get(GENERATION_RECORD_KEY);
-          genRequest.onerror = () => reject(genRequest.error);
-          genRequest.onsuccess = () => {
-            const current = parseGenerationRecord(genRequest.result);
-            if (!current || current.generation !== expectedGeneration) {
+          const projectRequest = store.get(PROJECT_RECORD_KEY);
+          projectRequest.onerror = () => reject(projectRequest.error);
+          projectRequest.onsuccess = () => {
+            if (!rawStoredValuesEqual(projectRequest.result, expectedRawRecord)) {
               resolve({ status: 'CONFLICT' });
               return;
             }
-            const nextRecord: ProjectGenerationRecord = {
+            const nextGenerationRecord: ProjectGenerationRecord = {
               generation: newGeneration,
               migrated: true,
             };
-            const putGenRequest = store.put(nextRecord, GENERATION_RECORD_KEY);
+            const putGenRequest = store.put(nextGenerationRecord, GENERATION_RECORD_KEY);
             const putProjectRequest = store.put(encodedPayload, PROJECT_RECORD_KEY);
             putGenRequest.onerror = () => reject(putGenRequest.error);
             putProjectRequest.onerror = () => reject(putProjectRequest.error);

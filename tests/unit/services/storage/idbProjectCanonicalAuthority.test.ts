@@ -1,9 +1,10 @@
 // @vitest-environment node
 // QNBS-v3: node env avoids jsdom's non-functional indexedDB stub from tests/setup.ts.
 import { IDBFactory } from 'fake-indexeddb';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_DATA_STORE } from '../../../../services/dbConstants';
 import { IdbProjectCanonicalAuthority } from '../../../../services/storage/idbProjectCanonicalAuthority';
+import * as storageEncryptionService from '../../../../services/storage/storageEncryptionService';
 import {
   clearIdbEncryptionKey,
   initIdbEncryption,
@@ -79,31 +80,33 @@ describe('IdbProjectCanonicalAuthority#loadCanonicalProjectAdmission', () => {
     await expect(authority.loadCanonicalProjectAdmission()).resolves.toEqual({ status: 'ABSENT' });
   });
 
-  it('returns CURRENT for a valid schema-current record and bootstraps the generation record', async () => {
+  it('returns CURRENT for a valid schema-current record, read-only (no write)', async () => {
     const authority = new IdbProjectCanonicalAuthority();
-    await seedProjectRecord(authority, { data: baseProjectPayload() });
+    const seeded = { data: baseProjectPayload() };
+    await seedProjectRecord(authority, seeded);
 
     const admission = await authority.loadCanonicalProjectAdmission();
 
     expect(admission.status).toBe('CURRENT');
     if (admission.status !== 'CURRENT') return;
-    expect(admission.envelope).toEqual({ isPresentShape: false });
+    expect(admission.envelope).toEqual({ isPresentShape: false, originalEnvelope: seeded });
     expect(JSON.parse(admission.currentRaw)).toMatchObject({ title: 'My Story' });
 
-    // QNBS-v3: a second load must observe the SAME generation the bootstrap established.
+    // QNBS-v3: a read-only admission call must never write anything -- a second load observes identical results.
     const second = await authority.loadCanonicalProjectAdmission();
     expect(second).toEqual(admission);
   });
 
   it('recognizes the {present: {data}} redux-undo envelope shape', async () => {
     const authority = new IdbProjectCanonicalAuthority();
-    await seedProjectRecord(authority, { present: { data: baseProjectPayload() } });
+    const seeded = { present: { data: baseProjectPayload() } };
+    await seedProjectRecord(authority, seeded);
 
     const admission = await authority.loadCanonicalProjectAdmission();
 
     expect(admission.status).toBe('CURRENT');
     if (admission.status !== 'CURRENT') return;
-    expect(admission.envelope).toEqual({ isPresentShape: true });
+    expect(admission.envelope).toEqual({ isPresentShape: true, originalEnvelope: seeded });
   });
 
   it('never admits a FUTURE document for editable write authority', async () => {
@@ -151,7 +154,13 @@ describe('IdbProjectCanonicalAuthority#loadCanonicalProjectAdmission', () => {
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, { data: baseProjectPayload() });
     const admission = await authority.loadCanonicalProjectAdmission();
-    expect(admission.status).toBe('CURRENT');
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+    // QNBS-v3: an actual commit is what establishes the "migrated" companion marker now -- a read-only admission never writes anything.
+    const committed = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: admission.generation,
+      edit: { fields: { title: 'Confirmed canonical' } },
+    });
+    expect(committed.status).toBe('COMMITTED');
 
     // QNBS-v3: simulates an old cached build resaving its own legacy-shaped copy directly, bypassing the canonical authority entirely (contract §2.7).
     const { schemaVersion: _schemaVersion, ...legacy } = baseProjectPayload();
@@ -160,6 +169,46 @@ describe('IdbProjectCanonicalAuthority#loadCanonicalProjectAdmission', () => {
     await expect(authority.loadCanonicalProjectAdmission()).resolves.toEqual({
       status: 'GENERATION_CONTRADICTION',
       classification: 'LEGACY_UNVERSIONED',
+    });
+  });
+
+  it('preserves opaque envelope siblings (e.g. redux-undo past/future) across a canonical commit', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, {
+      past: ['snapshot-1'],
+      present: { data: baseProjectPayload() },
+      future: [],
+      _latestUnfiltered: { data: baseProjectPayload() },
+    });
+    const admission = await authority.loadCanonicalProjectAdmission();
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+
+    const result = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: admission.generation,
+      edit: { fields: { title: 'Renamed Story' } },
+    });
+    expect(result.status).toBe('COMMITTED');
+
+    const store = await (authority as unknown as StoreWithObjectStoreAccess).getObjectStore(
+      APP_DATA_STORE,
+      'readonly',
+    );
+    const stored = await new Promise<unknown>((resolve, reject) => {
+      const request = store.get('project');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    expect(stored).toMatchObject({ past: ['snapshot-1'], future: [] });
+  });
+
+  it('never throws when a stored payload cannot be JSON-serialized, classifying it MALFORMED instead', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    // QNBS-v3: compressData/decompressData preserve non-JSON-safe values (e.g. BigInt) unchanged for small, unencrypted payloads -- JSON.stringify on read must fail closed, not throw uncaught.
+    await seedProjectRecord(authority, { data: { schemaVersion: 1n } });
+
+    await expect(authority.loadCanonicalProjectAdmission()).resolves.toEqual({
+      status: 'NOT_ADMITTED',
+      classification: 'MALFORMED',
     });
   });
 });
@@ -231,6 +280,36 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
     });
   });
 
+  it('fails closed when a legacy (non-fenced) writer changes the raw project bytes during the async encrypt window, after the fresh-read generation check already passed', async () => {
+    // QNBS-v3 regression: the fence must compare raw project bytes inside the write transaction, not
+    // rely solely on the companion generation record (which a legacy writer never updates) or on the
+    // generation check performed before this async window opened.
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: baseProjectPayload() });
+    const admission = await authority.loadCanonicalProjectAdmission();
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+
+    const spy = vi
+      .spyOn(storageEncryptionService, 'resolveProtectedWriteKey')
+      .mockImplementationOnce(async () => {
+        // QNBS-v3: simulates a legacy write landing during the async key-resolve/encrypt window, strictly after commitOwnedProjectEdit's own generation check already passed against the fresh read.
+        await seedProjectRecord(authority, { data: baseProjectPayload({ title: 'Raced In' }) });
+        return null;
+      });
+
+    const result = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: admission.generation,
+      edit: { fields: { title: 'Should not land' } },
+    });
+
+    spy.mockRestore();
+    expect(result.status).toBe('CONFLICT');
+    const reloaded = await authority.loadCanonicalProjectAdmission();
+    if (reloaded.status !== 'CURRENT') throw new Error('expected CURRENT');
+    // QNBS-v3: the raced-in legacy write must survive untouched -- the rejected edit never lands.
+    expect(JSON.parse(reloaded.currentRaw)).toMatchObject({ title: 'Raced In' });
+  });
+
   it('preserves opaque data across repeated save/reload cycles without progressive normalization or loss', async () => {
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, { data: baseProjectPayload() });
@@ -268,7 +347,14 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
   it('refuses to commit against a GENERATION_CONTRADICTION document', async () => {
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, { data: baseProjectPayload() });
-    await authority.loadCanonicalProjectAdmission(); // establishes the migrated companion record
+    const admission = await authority.loadCanonicalProjectAdmission();
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+    // QNBS-v3: an actual commit is what establishes the "migrated" companion marker now.
+    const committed = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: admission.generation,
+      edit: { fields: { title: 'Confirmed canonical' } },
+    });
+    expect(committed.status).toBe('COMMITTED');
     const { schemaVersion: _schemaVersion, ...legacy } = baseProjectPayload();
     await seedProjectRecord(authority, { data: legacy });
 
