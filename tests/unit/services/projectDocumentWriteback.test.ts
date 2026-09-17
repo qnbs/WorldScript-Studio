@@ -20,7 +20,7 @@ function baseDocument(): string {
       entities: {
         c1: { id: 'c1', name: 'Alice', notes: 'opaque nested field on c1' },
         // QNBS-v3: raw literal spliced in below to preserve the exact unsafe-integer token untouched by JSON.stringify.
-        c2: { id: 'c2', name: 'Bob', externalId: '__UNSAFE_INT__' },
+        c2: { id: 'c2', name: 'Bob', externalId: '__UNSAFE_INT__', secretNote: 'do-not-touch' },
       },
     },
     worlds: { ids: [], entities: {} },
@@ -98,17 +98,22 @@ describe('projectDocumentWriteback (#553)', () => {
     expect(result.status).toBe('COMMITTED');
     if (result.status !== 'COMMITTED') return;
     const parsed = JSON.parse(result.raw) as {
-      characters: { entities: Record<string, { notes: string }> };
+      characters: { entities: Record<string, { notes?: string; secretNote?: string }> };
     };
     expect(parsed.characters.entities['c2']?.notes).toBeUndefined();
+    expect(parsed.characters.entities['c2']?.secretNote).toBe('do-not-touch');
     expect((parsed.characters.entities['c2'] as unknown as { name: string }).name).toBe('Bob');
   });
 
-  it('preserves a large/unsafe-integer raw value on an untouched entity exactly, byte for byte', () => {
+  it('preserves a large/unsafe-integer raw value on an untouched entity exactly through a collection edit', () => {
     const raw = baseDocument();
     expect(raw).toContain(UNSAFE_INTEGER_LITERAL);
 
-    const result = commitEdit({ fields: { title: 'Renamed Story' } }, raw);
+    // QNBS-v3: the edit must touch the collection (not just a top-level field) so the protect/revive path this test targets actually runs.
+    const result = commitEdit(
+      { collections: { characters: { upsert: [{ id: 'c1', name: 'Alicia' }] } } },
+      raw,
+    );
 
     expect(result.status).toBe('COMMITTED');
     if (result.status !== 'COMMITTED') return;

@@ -397,16 +397,22 @@ interface ReadCollectionResult {
   originalValue: unknown;
 }
 
+// QNBS-v3: proves the marker absent from THIS source slice before use -- entropy alone makes collision astronomically unlikely, but proof makes the guarantee absolute rather than probabilistic.
+function createUniqueProtectionMarker(sourceText: string): string {
+  let marker = createProtectionMarker();
+  while (sourceText.includes(marker)) marker = createProtectionMarker();
+  return marker;
+}
+
 function parseEntityCollectionValue(
   raw: string,
   valueRange: { start: number; end: number },
   key: CoreCollection,
 ): { value: unknown } | { error: string } {
-  const marker = createProtectionMarker();
+  const sourceText = raw.slice(valueRange.start, valueRange.end);
+  const marker = createUniqueProtectionMarker(sourceText);
   try {
-    const parsed = JSON.parse(
-      protectUnsafeIntegers(raw.slice(valueRange.start, valueRange.end), marker),
-    );
+    const parsed = JSON.parse(protectUnsafeIntegers(sourceText, marker));
     return { value: reviveRawNumberMarkers(parsed, marker) };
   } catch {
     return { error: `collection "${key}" is not valid JSON` };
