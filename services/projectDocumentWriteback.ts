@@ -111,8 +111,10 @@ function isUnsafeIntegerLiteral(literal: string): boolean {
 }
 
 type RawScanStep = { text: string; nextIndex: number };
+type RawScanPosition = { raw: string; index: number };
 
-function protectStringToken(raw: string, index: number): RawScanStep {
+function protectStringToken(position: RawScanPosition): RawScanStep {
+  const { raw, index } = position;
   const stringEnd = skipRawJsonString(raw, index);
   return stringEnd === null
     ? { text: raw.slice(index), nextIndex: raw.length }
@@ -124,16 +126,18 @@ function isNumberLiteralStart(character: string | undefined): boolean {
   return character === '-' || (character >= '0' && character <= '9');
 }
 
-function matchNumberLiteralAt(raw: string, index: number): string | null {
+function matchNumberLiteralAt(position: RawScanPosition): string | null {
+  const { raw, index } = position;
   JSON_NUMBER_PATTERN.lastIndex = index;
   const match = JSON_NUMBER_PATTERN.exec(raw);
   const matchedAtIndex = match !== null && match.index === index && match[0].length > 0;
   return matchedAtIndex ? (match?.[0] ?? null) : null;
 }
 
-function protectNumberToken(raw: string, index: number, marker: string): RawScanStep | null {
+function protectNumberToken(position: RawScanPosition, marker: string): RawScanStep | null {
+  const { raw, index } = position;
   if (!isNumberLiteralStart(raw[index])) return null;
-  const literal = matchNumberLiteralAt(raw, index);
+  const literal = matchNumberLiteralAt(position);
   if (literal === null) return null;
   const text = isUnsafeIntegerLiteral(literal) ? `"${marker}${literal}"` : literal;
   return { text, nextIndex: index + literal.length };
@@ -145,8 +149,9 @@ function protectUnsafeIntegers(raw: string, marker: string): string {
   let index = 0;
   while (index < raw.length) {
     const character = raw[index];
+    const position: RawScanPosition = { raw, index };
     const step =
-      character === '"' ? protectStringToken(raw, index) : protectNumberToken(raw, index, marker);
+      character === '"' ? protectStringToken(position) : protectNumberToken(position, marker);
     if (step) {
       result += step.text;
       index = step.nextIndex;
@@ -778,10 +783,8 @@ type AdmissionRequest = {
   expectedGeneration: ProjectSourceGeneration;
 };
 
-function admitCurrentDocumentForWrite({
-  currentRaw,
-  expectedGeneration,
-}: AdmissionRequest): AdmissionCheck {
+function admitCurrentDocumentForWrite(request: AdmissionRequest): AdmissionCheck {
+  const { currentRaw, expectedGeneration } = request;
   const classification = classifyRawProjectVersion(currentRaw);
   if (classification !== 'CURRENT') {
     return { ok: false, result: { status: 'NOT_ADMITTED_FOR_WRITE', classification } };
