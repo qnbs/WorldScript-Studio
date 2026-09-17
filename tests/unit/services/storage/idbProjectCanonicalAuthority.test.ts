@@ -74,6 +74,19 @@ async function seedProjectRecord(
   });
 }
 
+/** Reads the raw companion generation record directly, bypassing any admission/classification logic. */
+async function readGenerationRecord(authority: IdbProjectCanonicalAuthority): Promise<unknown> {
+  const store = await (authority as unknown as StoreWithObjectStoreAccess).getObjectStore(
+    APP_DATA_STORE,
+    'readonly',
+  );
+  return new Promise((resolve, reject) => {
+    const request = store.get('__idb_project_canonical_generation_v1__');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 describe('IdbProjectCanonicalAuthority#loadCanonicalProjectAdmission', () => {
   it('returns ABSENT when no project record exists', async () => {
     const authority = new IdbProjectCanonicalAuthority();
@@ -310,13 +323,16 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
     expect(JSON.parse(reloaded.currentRaw)).toMatchObject({ title: 'Raced In' });
   });
 
-  it('detects a concurrent change to a Map-valued opaque field that JSON.stringify cannot distinguish', async () => {
+  it('detects a concurrent change to a Map-valued opaque envelope sibling that JSON.stringify cannot distinguish', async () => {
     // QNBS-v3 regression: JSON.stringify serializes every Map as "{}" regardless of its entries, so
     // a JSON.stringify-based raw-bytes comparison would wrongly treat two DIFFERENT Maps as equal --
-    // the fence must use a type-aware structural comparison instead.
+    // the fence must use a type-aware structural comparison instead. The Map lives as an envelope
+    // SIBLING of `data` (e.g. redux-undo bookkeeping), not inside `data` itself -- a Map *inside*
+    // `data` fails the admission-time lossless round-trip check and is classified MALFORMED instead.
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, {
-      data: { ...baseProjectPayload(), meta: new Map([['a', 1]]) },
+      data: baseProjectPayload(),
+      meta: new Map([['a', 1]]),
     });
     const admission = await authority.loadCanonicalProjectAdmission();
     if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
@@ -326,7 +342,8 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
       .mockImplementationOnce(async () => {
         // QNBS-v3: same JSON-visible content but a genuinely different Map -- JSON.stringify collapses both Maps to identical text, so even commitOwnedProjectEdit's own generation check can't see this.
         await seedProjectRecord(authority, {
-          data: { ...baseProjectPayload(), meta: new Map([['a', 2]]) },
+          data: baseProjectPayload(),
+          meta: new Map([['a', 2]]),
         });
         return null;
       });
@@ -340,13 +357,14 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
     expect(result.status).toBe('CONFLICT');
   });
 
-  it('does not false-positive CONFLICT when a Set contains structurally-identical objects at different references', async () => {
+  it('does not false-positive CONFLICT when a Set-valued envelope sibling contains structurally-identical objects at different references', async () => {
     // QNBS-v3 regression: comparing Set/Map elements via .has() uses reference equality, so IndexedDB
     // structured-clone re-reading the SAME unchanged content at a NEW object identity would wrongly
     // report a conflict; the fence must compare Set/Map elements structurally instead.
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, {
-      data: { ...baseProjectPayload(), tags: new Set([{ name: 'fantasy' }]) },
+      data: baseProjectPayload(),
+      tags: new Set([{ name: 'fantasy' }]),
     });
     const admission = await authority.loadCanonicalProjectAdmission();
     if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
@@ -359,13 +377,14 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
     expect(result.status).toBe('COMMITTED');
   });
 
-  it('detects a change when structured-clone values of genuinely different exotic types occupy the same field', async () => {
+  it('detects a change when structured-clone values of genuinely different exotic types occupy the same envelope-sibling field', async () => {
     // QNBS-v3 regression: Date and RegExp instances both have zero own enumerable keys, so a
     // plain-object fallback comparison would wrongly treat a Date-vs-RegExp mismatch as two equal
     // empty objects; the fence must require both values to be genuine plain objects for that path.
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, {
-      data: { ...baseProjectPayload(), marker: new Date('2026-01-01') },
+      data: baseProjectPayload(),
+      marker: new Date('2026-01-01'),
     });
     const admission = await authority.loadCanonicalProjectAdmission();
     if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
@@ -374,7 +393,8 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
       .spyOn(storageEncryptionService, 'resolveProtectedWriteKey')
       .mockImplementationOnce(async () => {
         await seedProjectRecord(authority, {
-          data: { ...baseProjectPayload(), marker: /raced-in/ },
+          data: baseProjectPayload(),
+          marker: /raced-in/,
         });
         return null;
       });
@@ -386,6 +406,18 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
 
     spy.mockRestore();
     expect(result.status).toBe('CONFLICT');
+  });
+
+  it('classifies a project record MALFORMED when an opaque field inside `data` itself cannot survive a JSON round-trip', async () => {
+    // QNBS-v3: a Map inside `data` would otherwise be silently blanked to "{}" and lost on the next commit -- refusing it here is the same outcome a cyclic value inside `data` already gets from JSON.stringify throwing.
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, {
+      data: { ...baseProjectPayload(), meta: new Map([['a', 1]]) },
+    });
+
+    const admission = await authority.loadCanonicalProjectAdmission();
+
+    expect(admission.status).toBe('NOT_ADMITTED');
   });
 
   it('does not crash on a cyclic value in an opaque envelope sibling reachable through the raw-bytes fence', async () => {
@@ -591,5 +623,64 @@ describe('IdbProjectCanonicalAuthority#commitLegacyToV1Migration', () => {
     const reloaded = await authority.loadCanonicalProjectAdmission();
     // QNBS-v3: the raced-in write is still legacy-shaped -- the rejected migration never landed, so it stays NOT_ADMITTED, not CURRENT.
     expect(reloaded).toEqual({ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' });
+  });
+
+  it('writes the companion generation marker as migrated:true, and refuses to re-migrate a stale legacy write that supersedes it afterward (§2.7)', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: legacyProjectPayload() });
+
+    const result = await authority.commitLegacyToV1Migration();
+    expect(result.status).toBe('COMMITTED');
+
+    const generationRecord = await readGenerationRecord(authority);
+    expect(generationRecord).toMatchObject({ migrated: true });
+
+    // QNBS-v3 (#553 §2.7): a stale legacy-shaped write superseding an already-migrated project must never be treated as an ordinary migration candidate again.
+    await seedProjectRecord(authority, {
+      data: legacyProjectPayload({ title: 'Stale Downgrade' }),
+    });
+
+    const admission = await authority.loadCanonicalProjectAdmission();
+    expect(admission).toEqual({
+      status: 'GENERATION_CONTRADICTION',
+      classification: 'LEGACY_UNVERSIONED',
+    });
+    const migrationAttempt = await authority.commitLegacyToV1Migration();
+    expect(migrationAttempt).toEqual({
+      status: 'NOT_ELIGIBLE',
+      classification: 'GENERATION_CONTRADICTION:LEGACY_UNVERSIONED',
+    });
+  });
+
+  it('recognizes the {present: {data}} redux-undo envelope shape -- the real on-disk shape idbProjectStore.saveSlice writes', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { present: { data: legacyProjectPayload() } });
+
+    const result = await authority.commitLegacyToV1Migration();
+
+    expect(result.status).toBe('COMMITTED');
+    const admission = await authority.loadCanonicalProjectAdmission();
+    expect(admission.status).toBe('CURRENT');
+    if (admission.status !== 'CURRENT') return;
+    expect(admission.envelope.isPresentShape).toBe(true);
+    const parsed = JSON.parse(admission.currentRaw) as { schemaVersion: number; title: string };
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.title).toBe('My Legacy Story');
+  });
+
+  it('round-trips a migration correctly when at-rest encryption is active', async () => {
+    await initIdbEncryption('test-pass');
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: legacyProjectPayload() });
+
+    const result = await authority.commitLegacyToV1Migration();
+
+    expect(result.status).toBe('COMMITTED');
+    const admission = await authority.loadCanonicalProjectAdmission();
+    expect(admission.status).toBe('CURRENT');
+    if (admission.status !== 'CURRENT') return;
+    const parsed = JSON.parse(admission.currentRaw) as { schemaVersion: number; title: string };
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.title).toBe('My Legacy Story');
   });
 });

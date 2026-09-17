@@ -308,6 +308,11 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
 
     try {
       const currentRaw = JSON.stringify(unwrapped.payload);
+      // QNBS-v3: JSON.stringify silently blanks a Map/Set/RegExp field to `{}` and drops undefined-valued keys instead of throwing -- round-trip and structurally compare so a payload this text representation can't faithfully carry is classified MALFORMED, the same outcome a cyclic value inside `data` already gets from the throw above, instead of being silently truncated on the next commit.
+      const roundTripped = JSON.parse(currentRaw) as Record<string, unknown>;
+      if (!deepStructuredEqual(roundTripped, unwrapped.payload)) {
+        return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+      }
       return {
         rawRecordSnapshot: rawRecord,
         parsedGeneration,
@@ -405,10 +410,15 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
    * through the SAME atomic raw-bytes fence commitCanonicalProjectEdit uses -- not a second,
    * independent write protocol. Refuses (NOT_ELIGIBLE) any record that is not exactly
    * LEGACY_UNVERSIONED and does not conform to PROJECT_SCHEMA_V1's field set, or a CURRENT record
-   * (already migrated -- see commitCanonicalProjectEdit instead), FUTURE, or MALFORMED.
+   * (already migrated -- see commitCanonicalProjectEdit instead), FUTURE, or MALFORMED. Also refuses
+   * (as a §2.7 GENERATION_CONTRADICTION, not an ordinary migration) a LEGACY_UNVERSIONED record when
+   * the companion generation record says this project was already canonically committed once --
+   * migrating and durably committing it would let a stale pre-contract-shaped write silently
+   * supersede the already-migrated canonical generation.
    */
   async commitLegacyToV1Migration(): Promise<CommitLegacyToV1MigrationResult> {
-    const { rawRecordSnapshot, decoded } = await this.readDecodedProjectSnapshot();
+    const { rawRecordSnapshot, parsedGeneration, decoded } =
+      await this.readDecodedProjectSnapshot();
     if (rawRecordSnapshot === undefined)
       return { status: 'NOT_ELIGIBLE', classification: 'ABSENT' };
     if (!decoded) return { status: 'NOT_ELIGIBLE', classification: 'MALFORMED' };
@@ -416,6 +426,12 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
     const classification = classifyRawProjectVersionFromParsed(decoded.currentRaw, decoded.payload);
     if (classification !== 'LEGACY_UNVERSIONED') {
       return { status: 'NOT_ELIGIBLE', classification };
+    }
+    if (parsedGeneration?.migrated) {
+      return {
+        status: 'NOT_ELIGIBLE',
+        classification: `GENERATION_CONTRADICTION:${classification}`,
+      };
     }
 
     // QNBS-v3: recognize + verify against PROJECT_SCHEMA_V1 + stamp + revalidate (contract §2.4, steps 1-4) -- a pure byte-splice overlay, so no-loss is structural, not a separate check.
