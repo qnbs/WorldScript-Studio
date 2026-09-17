@@ -39,7 +39,7 @@ export interface CanonicalProjectAdmission<TProjection> {
   status: CanonicalProjectAdmissionStatus;
 }
 
-type CanonicalRawObjectMember = {
+export type CanonicalRawObjectMember = {
   key: string;
   start: number;
   valueEnd: number;
@@ -140,7 +140,7 @@ function overlayCurrentSchemaVersion(raw: CanonicalProjectRawPayload): string | 
   return `${raw.slice(0, objectStart + 1)}"schemaVersion":${CURRENT_PROJECT_SCHEMA_VERSION}${separator}${raw.slice(objectStart + 1)}`;
 }
 
-function skipRawJsonString(raw: string, start: number): number | null {
+export function skipRawJsonString(raw: string, start: number): number | null {
   let index = start + 1;
   while (index < raw.length) {
     if (raw[index] === '\\') {
@@ -153,7 +153,7 @@ function skipRawJsonString(raw: string, start: number): number | null {
   return null;
 }
 
-function skipRawJsonWhitespace(raw: string, start: number): number {
+export function skipRawJsonWhitespace(raw: string, start: number): number {
   let index = start;
   while (/\s/.test(raw[index] ?? '')) index++;
   return index;
@@ -205,7 +205,7 @@ function skipRawJsonContainer(raw: string, start: number): number | null {
   return null;
 }
 
-function skipRawJsonValue(raw: string, start: number): number | null {
+export function skipRawJsonValue(raw: string, start: number): number | null {
   if (raw[start] === '"') return skipRawJsonString(raw, start);
   if (raw[start] === '{' || raw[start] === '[') return skipRawJsonContainer(raw, start);
   return skipRawJsonScalar(raw, start);
@@ -234,7 +234,7 @@ function readRawObjectMember(raw: string, start: number): CanonicalRawObjectMemb
   return { key: parsedKey.key, start, valueEnd };
 }
 
-function readTopLevelObjectMembers(raw: string): CanonicalRawObjectMember[] | null {
+export function readTopLevelObjectMembers(raw: string): CanonicalRawObjectMember[] | null {
   const objectStart = raw.search(/\S/);
   if (objectStart === -1 || raw[objectStart] !== '{') return null;
 
