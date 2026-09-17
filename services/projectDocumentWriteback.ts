@@ -100,14 +100,11 @@ class RawNumberLiteral {
   constructor(public readonly text: string) {}
 }
 
+// QNBS-v3: no try/catch -- the ^-?\d+$ guard above admits only plain-digit text, which BigInt() can never fail to parse.
 function isUnsafeIntegerLiteral(literal: string): boolean {
   if (!/^-?\d+$/.test(literal)) return false;
-  try {
-    const value = BigInt(literal);
-    return value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER);
-  } catch {
-    return false;
-  }
+  const value = BigInt(literal);
+  return value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER);
 }
 
 type RawScanStep = { text: string; nextIndex: number };
