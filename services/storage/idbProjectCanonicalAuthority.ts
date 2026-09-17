@@ -24,6 +24,14 @@
  * ProjectData autosave input into an OwnedProjectEdit and routes it through
  * commitCanonicalProjectEdit. The existing (non-fenced) saveSlice/saveProject path is untouched by
  * this module and keeps working exactly as before.
+ *
+ * commitLegacyToV1Migration (#553 Phase D2) durably commits the contract's §2.4 LEGACY_TO_V1 step
+ * (recognize -> verify against PROJECT_SCHEMA_V1's field set -> stamp schemaVersion -> revalidate)
+ * through this SAME atomic boundary -- commitGenerationFencedWrite -- rather than a second,
+ * independent write protocol. It reuses services/projectDocument.ts's existing, already-admitted
+ * admitCanonicalProjectDocument for steps 1-2 and 3-4 (a pure byte-splice overlay that touches no
+ * other byte, so no-loss is structural, not a separate verification pass); this module owns only
+ * the durable-commit boundary, not the migration logic itself.
  */
 
 import {
@@ -31,6 +39,7 @@ import {
   type ProjectVersionClassification,
 } from '../../features/project/projectSchemaVersion';
 import { APP_DATA_STORE } from '../dbConstants';
+import { admitCanonicalProjectDocument } from '../projectDocument';
 import {
   type CanonicalProjectRawText,
   commitOwnedProjectEdit,
@@ -38,6 +47,7 @@ import {
   type OwnedProjectEdit,
   type ProjectSourceGeneration,
 } from '../projectDocumentWriteback';
+import { importedProjectJsonSchema } from '../projectImportSchema';
 import { compressData, IdbConnectionManager } from './idbCore';
 import { withProtectedWriteAdmission } from './protectedWriteAdmission';
 import {
@@ -80,6 +90,11 @@ export type CommitCanonicalProjectEditResult =
   | { status: 'VERIFICATION_FAILED'; reason: string }
   | { status: 'MALFORMED_SOURCE'; reason: string }
   | { status: 'NOT_ADMITTED_FOR_WRITE'; classification: string };
+
+export type CommitLegacyToV1MigrationResult =
+  | CommitCanonicalProjectEditResult
+  // QNBS-v3: distinct from NOT_ADMITTED_FOR_WRITE -- this path exists specifically for LEGACY_UNVERSIONED sources, so an already-CURRENT (or FUTURE/MALFORMED) document is "not eligible for migration", not "refused write authority".
+  | { status: 'NOT_ELIGIBLE'; classification: string };
 
 interface StoredProjectEnvelope {
   data?: Record<string, unknown>;
@@ -259,53 +274,80 @@ interface CanonicalProjectSnapshot {
   rawRecordSnapshot: unknown;
 }
 
+interface DecodedProjectSnapshot {
+  /** The exact raw (undecoded) value read from PROJECT_RECORD_KEY, for the raw-bytes CAS fence. */
+  rawRecordSnapshot: unknown;
+  parsedGeneration: ProjectGenerationRecord | null;
+  /** Null when the record is absent, not a recognized envelope, or its payload cannot be JSON-stringified. */
+  decoded: {
+    payload: Record<string, unknown>;
+    envelope: ProjectEnvelopeShape;
+    currentRaw: string;
+  } | null;
+}
+
 export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
   /** Reads, decrypts/decompresses, and classifies the current canonical project record. Never writes anything. */
   async loadCanonicalProjectAdmission(): Promise<CanonicalProjectAdmission> {
     return (await this.readCanonicalProjectSnapshot()).admission;
   }
 
-  private async readCanonicalProjectSnapshot(): Promise<CanonicalProjectSnapshot> {
+  private async readDecodedProjectSnapshot(): Promise<DecodedProjectSnapshot> {
     const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
     const [rawRecord, generationRecordRaw] = await Promise.all([
       readKey(store, PROJECT_RECORD_KEY),
       readKey(store, GENERATION_RECORD_KEY),
     ]);
-    if (rawRecord === undefined) {
-      return { admission: { status: 'ABSENT' }, rawRecordSnapshot: rawRecord };
-    }
-
-    const decoded = await idbReadSecure<unknown>(rawRecord);
-    const unwrapped = unwrapProjectEnvelope(decoded);
     const parsedGeneration = parseGenerationRecord(generationRecordRaw);
-    if (!unwrapped) {
+    if (rawRecord === undefined)
+      return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+
+    const decodedValue = await idbReadSecure<unknown>(rawRecord);
+    const unwrapped = unwrapProjectEnvelope(decodedValue);
+    if (!unwrapped) return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+
+    try {
+      const currentRaw = JSON.stringify(unwrapped.payload);
+      return {
+        rawRecordSnapshot: rawRecord,
+        parsedGeneration,
+        decoded: { payload: unwrapped.payload, envelope: unwrapped.envelope, currentRaw },
+      };
+    } catch {
+      return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+    }
+  }
+
+  private async readCanonicalProjectSnapshot(): Promise<CanonicalProjectSnapshot> {
+    const { rawRecordSnapshot, parsedGeneration, decoded } =
+      await this.readDecodedProjectSnapshot();
+    if (rawRecordSnapshot === undefined) {
+      return { admission: { status: 'ABSENT' }, rawRecordSnapshot };
+    }
+    if (!decoded) {
       return {
         admission: admitNonCurrentClassification('MALFORMED', parsedGeneration),
-        rawRecordSnapshot: rawRecord,
+        rawRecordSnapshot,
       };
     }
 
-    let currentRaw: string;
-    try {
-      currentRaw = JSON.stringify(unwrapped.payload);
-    } catch {
-      return {
-        admission: admitNonCurrentClassification('MALFORMED', parsedGeneration),
-        rawRecordSnapshot: rawRecord,
-      };
-    }
-    const classification = classifyRawProjectVersionFromParsed(currentRaw, unwrapped.payload);
+    const classification = classifyRawProjectVersionFromParsed(decoded.currentRaw, decoded.payload);
     if (classification !== 'CURRENT') {
       return {
         admission: admitNonCurrentClassification(classification, parsedGeneration),
-        rawRecordSnapshot: rawRecord,
+        rawRecordSnapshot,
       };
     }
 
-    const generation = computeProjectSourceGeneration(currentRaw);
+    const generation = computeProjectSourceGeneration(decoded.currentRaw);
     return {
-      admission: { status: 'CURRENT', currentRaw, generation, envelope: unwrapped.envelope },
-      rawRecordSnapshot: rawRecord,
+      admission: {
+        status: 'CURRENT',
+        currentRaw: decoded.currentRaw,
+        generation,
+        envelope: decoded.envelope,
+      },
+      rawRecordSnapshot,
     };
   }
 
@@ -355,6 +397,48 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
         applied.generation,
         encodedPayload,
       );
+    });
+  }
+
+  /**
+   * Durably commits the contract's §2.4 LEGACY_TO_V1 step for a LEGACY_UNVERSIONED project record,
+   * through the SAME atomic raw-bytes fence commitCanonicalProjectEdit uses -- not a second,
+   * independent write protocol. Refuses (NOT_ELIGIBLE) any record that is not exactly
+   * LEGACY_UNVERSIONED and does not conform to PROJECT_SCHEMA_V1's field set, or a CURRENT record
+   * (already migrated -- see commitCanonicalProjectEdit instead), FUTURE, or MALFORMED.
+   */
+  async commitLegacyToV1Migration(): Promise<CommitLegacyToV1MigrationResult> {
+    const { rawRecordSnapshot, decoded } = await this.readDecodedProjectSnapshot();
+    if (rawRecordSnapshot === undefined)
+      return { status: 'NOT_ELIGIBLE', classification: 'ABSENT' };
+    if (!decoded) return { status: 'NOT_ELIGIBLE', classification: 'MALFORMED' };
+
+    const classification = classifyRawProjectVersionFromParsed(decoded.currentRaw, decoded.payload);
+    if (classification !== 'LEGACY_UNVERSIONED') {
+      return { status: 'NOT_ELIGIBLE', classification };
+    }
+
+    // QNBS-v3: recognize + verify against PROJECT_SCHEMA_V1 + stamp + revalidate (contract §2.4, steps 1-4) -- a pure byte-splice overlay, so no-loss is structural, not a separate check.
+    const admission = admitCanonicalProjectDocument(decoded.currentRaw, importedProjectJsonSchema);
+    if (admission.status !== 'LEGACY_TO_V1' || admission.canonical === null) {
+      return { status: 'NOT_ELIGIBLE', classification: admission.source.classification };
+    }
+
+    const migratedRaw = admission.canonical.raw;
+    const newPayload = rewrapProjectEnvelope(
+      JSON.parse(migratedRaw) as Record<string, unknown>,
+      decoded.envelope,
+    );
+    const newGeneration = computeProjectSourceGeneration(migratedRaw);
+
+    return withProtectedWriteAdmission(async () => {
+      // QNBS-v3: key resolution + encryption complete fully before the transaction opens -- an await here once the transaction is live would let IndexedDB auto-commit it first.
+      const writeKey = await resolveProtectedWriteKey();
+      const encodedPayload = writeKey
+        ? await idbEncryptWithKey(writeKey, newPayload)
+        : compressData(newPayload);
+      await assertNoActiveEncryptionMigration();
+      return this.commitGenerationFencedWrite(rawRecordSnapshot, newGeneration, encodedPayload);
     });
   }
 

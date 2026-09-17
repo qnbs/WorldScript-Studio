@@ -497,3 +497,99 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
     expect(JSON.parse(reloaded.currentRaw)).toMatchObject({ title: 'Renamed Under Encryption' });
   });
 });
+
+function legacyProjectPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    title: 'My Legacy Story',
+    logline: 'A legacy logline.',
+    author: 'Author',
+    // QNBS-v3: a field genuinely absent from importedProjectJsonSchema -- proves opaque data survives the byte-splice stamp, not just fields the schema happens to model.
+    outlineNote: 'An opaque, Core-unmodeled field not in the import schema.',
+    characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice' } } },
+    worlds: { ids: [], entities: {} },
+    ...overrides,
+  };
+}
+
+describe('IdbProjectCanonicalAuthority#commitLegacyToV1Migration', () => {
+  it('durably migrates a LEGACY_UNVERSIONED record to CURRENT, stamping schemaVersion losslessly', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: legacyProjectPayload() });
+
+    const result = await authority.commitLegacyToV1Migration();
+
+    expect(result.status).toBe('COMMITTED');
+    const admission = await authority.loadCanonicalProjectAdmission();
+    expect(admission.status).toBe('CURRENT');
+    if (admission.status !== 'CURRENT') return;
+    const parsed = JSON.parse(admission.currentRaw) as {
+      schemaVersion: number;
+      title: string;
+      outlineNote: string;
+    };
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.title).toBe('My Legacy Story');
+    expect(parsed.outlineNote).toBe('An opaque, Core-unmodeled field not in the import schema.');
+  });
+
+  it('reports NOT_ELIGIBLE for an already-CURRENT document', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: baseProjectPayload() });
+
+    const result = await authority.commitLegacyToV1Migration();
+
+    expect(result).toEqual({ status: 'NOT_ELIGIBLE', classification: 'CURRENT' });
+  });
+
+  it('reports NOT_ELIGIBLE for a FUTURE document', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: baseProjectPayload({ schemaVersion: 999 }) });
+
+    const result = await authority.commitLegacyToV1Migration();
+
+    expect(result).toEqual({ status: 'NOT_ELIGIBLE', classification: 'FUTURE' });
+  });
+
+  it('reports NOT_ELIGIBLE for a legacy document that fails schema validation', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    // QNBS-v3: "title" is required by importedProjectJsonSchema -- an unversioned-looking header alone must never grant migration authority.
+    const { title: _title, ...invalidLegacy } = legacyProjectPayload();
+    await seedProjectRecord(authority, { data: invalidLegacy });
+
+    const result = await authority.commitLegacyToV1Migration();
+
+    expect(result).toEqual({ status: 'NOT_ELIGIBLE', classification: 'MALFORMED' });
+  });
+
+  it('reports NOT_ELIGIBLE when no project record exists yet', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+
+    const result = await authority.commitLegacyToV1Migration();
+
+    expect(result).toEqual({ status: 'NOT_ELIGIBLE', classification: 'ABSENT' });
+  });
+
+  it('fails closed (CONFLICT) when a concurrent writer changes the raw bytes during the async encrypt window', async () => {
+    // QNBS-v3 regression: the migration commit must go through the SAME raw-bytes fence as an
+    // ordinary edit, not a second, independent write protocol.
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: legacyProjectPayload() });
+
+    const spy = vi
+      .spyOn(storageEncryptionService, 'resolveProtectedWriteKey')
+      .mockImplementationOnce(async () => {
+        await seedProjectRecord(authority, {
+          data: legacyProjectPayload({ title: 'Raced In' }),
+        });
+        return null;
+      });
+
+    const result = await authority.commitLegacyToV1Migration();
+
+    spy.mockRestore();
+    expect(result.status).toBe('CONFLICT');
+    const reloaded = await authority.loadCanonicalProjectAdmission();
+    // QNBS-v3: the raced-in write is still legacy-shaped -- the rejected migration never landed, so it stays NOT_ADMITTED, not CURRENT.
+    expect(reloaded).toEqual({ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' });
+  });
+});
