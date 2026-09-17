@@ -137,6 +137,16 @@ describe('IdbProjectCanonicalAuthority#loadCanonicalProjectAdmission', () => {
     });
   });
 
+  it('never admits a record object with neither a data nor a present.data envelope member', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { unrelated: 'value' });
+
+    await expect(authority.loadCanonicalProjectAdmission()).resolves.toEqual({
+      status: 'NOT_ADMITTED',
+      classification: 'MALFORMED',
+    });
+  });
+
   it('reports GENERATION_CONTRADICTION when a migrated project is superseded by a stale legacy-shaped write', async () => {
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, { data: baseProjectPayload() });
@@ -253,6 +263,24 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
     });
 
     expect(result).toEqual({ status: 'NOT_ADMITTED_FOR_WRITE', classification: 'FUTURE' });
+  });
+
+  it('refuses to commit against a GENERATION_CONTRADICTION document', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: baseProjectPayload() });
+    await authority.loadCanonicalProjectAdmission(); // establishes the migrated companion record
+    const { schemaVersion: _schemaVersion, ...legacy } = baseProjectPayload();
+    await seedProjectRecord(authority, { data: legacy });
+
+    const result = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: 'irrelevant',
+      edit: { fields: { title: 'Should never land' } },
+    });
+
+    expect(result).toEqual({
+      status: 'NOT_ADMITTED_FOR_WRITE',
+      classification: 'GENERATION_CONTRADICTION:LEGACY_UNVERSIONED',
+    });
   });
 
   it('refuses to commit when no project record exists yet', async () => {
