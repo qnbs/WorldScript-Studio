@@ -45,20 +45,13 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     expect(edit.fields).not.toHaveProperty('author');
   });
 
-  it('upserts every current character/world entity, in current order', () => {
+  it('upserts every current character entity, in current order', () => {
     const data = baseProjectData({
       characters: {
         ids: ['c2', 'c1'],
         entities: {
           c1: { id: 'c1', name: 'Alice' },
           c2: { id: 'c2', name: 'Bob' },
-        },
-      },
-      worlds: {
-        ids: ['w2', 'w1'],
-        entities: {
-          w1: { id: 'w1', name: 'Aldoria' },
-          w2: { id: 'w2', name: 'Brythos' },
         },
       },
     });
@@ -72,6 +65,22 @@ describe('buildAutosaveOwnedProjectEdit', () => {
       { id: 'c1', name: 'Alice' },
     ]);
     expect(edit.collections?.characters?.remove).toBeUndefined();
+  });
+
+  it('upserts every current world entity, in current order', () => {
+    const data = baseProjectData({
+      worlds: {
+        ids: ['w2', 'w1'],
+        entities: {
+          w1: { id: 'w1', name: 'Aldoria' },
+          w2: { id: 'w2', name: 'Brythos' },
+        },
+      },
+    });
+    const currentRaw = currentRawFor(data as unknown as Record<string, unknown>);
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+
     expect(edit.collections?.worlds?.order).toEqual(['w2', 'w1']);
     expect(edit.collections?.worlds?.upsert).toEqual([
       { id: 'w2', name: 'Brythos' },
