@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Closed #773's post-merge patch-coverage gap on the canonical writeback primitive:** 6 new
+  tests cover previously-unexercised, genuinely reachable branches in
+  `services/projectDocumentWriteback.ts` (an upserted entity with an explicit `undefined` field,
+  a `null` field round-tripping exactly, an array element serializing to `null`, a
+  non-JSON-serializable field value throwing, a plain-number field reviving as a `RawNumberLiteral`
+  past the unsafe-integer boundary, and inserting a genuinely new top-level field), and removes one
+  provably dead branch (`isUnsafeIntegerLiteral`'s unreachable `try/catch`). No functional change to
+  #773 itself. PR #774.
 - **ProForge's Human-in-the-Loop pipeline review no longer applies stale project-incarnation
   edits to the manuscript:** a run's accepted AI-generated edits were applied at approval time
   keyed only by section id and a bare project id, so a pipeline left mid-review across a project
