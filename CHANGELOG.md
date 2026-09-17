@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standard). Fails closed on a concurrent source-generation change instead of silently overwriting
   it; entity collections merge by stable id, never array position. Not yet wired into any production
   writer. Part of #553. PR #773.
+- **The IndexedDB-specific canonical admission and durable-commit boundary for the persisted
+  project record:** `services/storage/idbProjectCanonicalAuthority.ts` establishes one authoritative
+  persisted generation for the `project` record via a companion generation record, checked and
+  replaced inside the same IndexedDB transaction as the project write itself (not merely compared
+  beforehand and written by a later, unrelated `put()`), atomic with respect to every other writer
+  of that store. WebCrypto encryption always completes before that transaction opens, matching
+  `idbProjectStore.ts#saveSlice`'s existing discipline, so a concurrent transaction can never be
+  auto-committed out from under an in-flight write. Detects the contract's §2.7 downgrade
+  contradiction (a stale pre-contract-shaped write superseding an already-migrated canonical
+  generation) and refuses to treat it as ordinary editable state. Built directly on
+  `commitOwnedProjectEdit` (#773) as its IDB backend adapter. Not yet wired into the production
+  autosave path. Part of #553. PR #775.
 
 ### Fixed
 
