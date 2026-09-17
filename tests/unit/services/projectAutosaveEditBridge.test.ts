@@ -45,48 +45,40 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     expect(edit.fields).not.toHaveProperty('author');
   });
 
-  it('upserts every current character entity, in current order', () => {
+  // QNBS-v3: table-driven -- characters/worlds go through the identical buildCollectionEdit path, so one parametrized test covers both without duplicating the assertion structure (CodeScene flagged the prior two near-identical tests as duplication).
+  it.each([
+    {
+      collection: 'characters' as const,
+      ids: ['c2', 'c1'],
+      entities: { c1: { id: 'c1', name: 'Alice' }, c2: { id: 'c2', name: 'Bob' } },
+      expectedOrder: ['c2', 'c1'],
+      expectedUpsert: [
+        { id: 'c2', name: 'Bob' },
+        { id: 'c1', name: 'Alice' },
+      ],
+    },
+    {
+      collection: 'worlds' as const,
+      ids: ['w2', 'w1'],
+      entities: { w1: { id: 'w1', name: 'Aldoria' }, w2: { id: 'w2', name: 'Brythos' } },
+      expectedOrder: ['w2', 'w1'],
+      expectedUpsert: [
+        { id: 'w2', name: 'Brythos' },
+        { id: 'w1', name: 'Aldoria' },
+      ],
+    },
+  ])('upserts every current $collection entity, in current order', (fixture) => {
     const data = baseProjectData({
-      characters: {
-        ids: ['c2', 'c1'],
-        entities: {
-          c1: { id: 'c1', name: 'Alice' },
-          c2: { id: 'c2', name: 'Bob' },
-        },
-      },
+      [fixture.collection]: { ids: fixture.ids, entities: fixture.entities },
     });
     const currentRaw = currentRawFor(data as unknown as Record<string, unknown>);
 
     const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+    const result = edit.collections?.[fixture.collection];
 
-    expect(edit.collections?.characters?.order).toEqual(['c2', 'c1']);
-    expect(edit.collections?.characters?.upsert).toEqual([
-      { id: 'c2', name: 'Bob' },
-      { id: 'c1', name: 'Alice' },
-    ]);
-    expect(edit.collections?.characters?.remove).toBeUndefined();
-  });
-
-  it('upserts every current world entity, in current order', () => {
-    const data = baseProjectData({
-      worlds: {
-        ids: ['w2', 'w1'],
-        entities: {
-          w1: { id: 'w1', name: 'Aldoria' },
-          w2: { id: 'w2', name: 'Brythos' },
-        },
-      },
-    });
-    const currentRaw = currentRawFor(data as unknown as Record<string, unknown>);
-
-    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
-
-    expect(edit.collections?.worlds?.order).toEqual(['w2', 'w1']);
-    expect(edit.collections?.worlds?.upsert).toEqual([
-      { id: 'w2', name: 'Brythos' },
-      { id: 'w1', name: 'Aldoria' },
-    ]);
-    expect(edit.collections?.worlds?.remove).toBeUndefined();
+    expect(result?.order).toEqual(fixture.expectedOrder);
+    expect(result?.upsert).toEqual(fixture.expectedUpsert);
+    expect(result?.remove).toBeUndefined();
   });
 
   it('preserves an opaque field the raw carrier holds but the typed entity does not model', () => {
