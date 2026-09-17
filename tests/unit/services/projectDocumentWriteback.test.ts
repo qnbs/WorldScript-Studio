@@ -359,6 +359,22 @@ describe('projectDocumentWriteback (#553)', () => {
     expect(characters.entities['c1']).toMatchObject({ externalId: boundaryValue });
   });
 
+  it('preserves a large/unsafe negative-integer raw value on an untouched entity exactly', () => {
+    // QNBS-v3: isUnsafeIntegerLiteral's OR has two sides (> MAX_SAFE_INTEGER, < MIN_SAFE_INTEGER); every other test here only exercises the positive side.
+    const negativeUnsafeLiteral = '-9007199254740993';
+    const raw = baseDocument().replace(UNSAFE_INTEGER_LITERAL, negativeUnsafeLiteral);
+    expect(raw).toContain(negativeUnsafeLiteral);
+
+    const result = commitEdit(
+      { collections: { characters: { upsert: [{ id: 'c1', name: 'Alicia' }] } } },
+      raw,
+    );
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain(negativeUnsafeLiteral);
+  });
+
   it('reports VERIFICATION_FAILED for an array field containing an undefined element', () => {
     // QNBS-v3: unlike an object property, an array element is never filtered -- it serializes to null (matching JSON.stringify), which then correctly fails the comparison against the literal undefined.
     const characters: EntityCollectionEdit = {
