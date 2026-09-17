@@ -340,6 +340,75 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
     expect(result.status).toBe('CONFLICT');
   });
 
+  it('does not false-positive CONFLICT when a Set contains structurally-identical objects at different references', async () => {
+    // QNBS-v3 regression: comparing Set/Map elements via .has() uses reference equality, so IndexedDB
+    // structured-clone re-reading the SAME unchanged content at a NEW object identity would wrongly
+    // report a conflict; the fence must compare Set/Map elements structurally instead.
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, {
+      data: { ...baseProjectPayload(), tags: new Set([{ name: 'fantasy' }]) },
+    });
+    const admission = await authority.loadCanonicalProjectAdmission();
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+
+    const result = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: admission.generation,
+      edit: { fields: { title: 'Renamed Story' } },
+    });
+
+    expect(result.status).toBe('COMMITTED');
+  });
+
+  it('detects a change when structured-clone values of genuinely different exotic types occupy the same field', async () => {
+    // QNBS-v3 regression: Date and RegExp instances both have zero own enumerable keys, so a
+    // plain-object fallback comparison would wrongly treat a Date-vs-RegExp mismatch as two equal
+    // empty objects; the fence must require both values to be genuine plain objects for that path.
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, {
+      data: { ...baseProjectPayload(), marker: new Date('2026-01-01') },
+    });
+    const admission = await authority.loadCanonicalProjectAdmission();
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+
+    const spy = vi
+      .spyOn(storageEncryptionService, 'resolveProtectedWriteKey')
+      .mockImplementationOnce(async () => {
+        await seedProjectRecord(authority, {
+          data: { ...baseProjectPayload(), marker: /raced-in/ },
+        });
+        return null;
+      });
+
+    const result = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: admission.generation,
+      edit: { fields: { title: 'Should not land' } },
+    });
+
+    spy.mockRestore();
+    expect(result.status).toBe('CONFLICT');
+  });
+
+  it('does not crash on a cyclic value in an opaque envelope sibling reachable through the raw-bytes fence', async () => {
+    // QNBS-v3 regression: a cycle inside `data` itself would already fail JSON.stringify during
+    // admission (classified MALFORMED) -- but a cycle in a SIBLING of `data` (e.g. an opaque
+    // envelope member this classifier never stringifies) survives admission as CURRENT and still
+    // reaches rawStoredValuesEqual's recursive comparison during commit; it must terminate via
+    // seen-pair tracking, not overflow the call stack.
+    const authority = new IdbProjectCanonicalAuthority();
+    const cyclic: Record<string, unknown> = { name: 'cyclic' };
+    cyclic['self'] = cyclic;
+    await seedProjectRecord(authority, { data: baseProjectPayload(), opaqueSibling: cyclic });
+    const admission = await authority.loadCanonicalProjectAdmission();
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+
+    const result = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: admission.generation,
+      edit: { fields: { title: 'Renamed Story' } },
+    });
+
+    expect(result.status).toBe('COMMITTED');
+  });
+
   it('preserves opaque data across repeated save/reload cycles without progressive normalization or loss', async () => {
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, { data: baseProjectPayload() });
