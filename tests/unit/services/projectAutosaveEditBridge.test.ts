@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectData } from '../../../features/project/projectState';
 import { buildAutosaveOwnedProjectEdit } from '../../../services/projectAutosaveEditBridge';
+import {
+  commitOwnedProjectEdit,
+  computeProjectSourceGeneration,
+} from '../../../services/projectDocumentWriteback';
+
+const UNSAFE_INTEGER_LITERAL = '9007199254740993'; // Number.MAX_SAFE_INTEGER + 2
 
 // QNBS-v3: overrides stay loosely typed (not Partial<ProjectData>) -- fixtures only need id-bearing entity stubs, not every real Character/World field.
 function baseProjectData(overrides: Record<string, unknown> = {}): ProjectData {
@@ -18,6 +24,16 @@ function baseProjectData(overrides: Record<string, unknown> = {}): ProjectData {
 
 function currentRawFor(payload: Record<string, unknown>): string {
   return JSON.stringify(payload);
+}
+
+/** Runs the built edit through the real canonical writeback fence -- the downstream consumer this bridge exists to feed. */
+function commitBridgeEdit(data: ProjectData, currentRaw: string) {
+  const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+  return commitOwnedProjectEdit({
+    expectedGeneration: computeProjectSourceGeneration(currentRaw),
+    currentRaw,
+    edit,
+  });
 }
 
 describe('buildAutosaveOwnedProjectEdit', () => {
@@ -98,6 +114,83 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     expect(edit.collections?.characters?.upsert).toEqual([
       { id: 'c1', name: 'Alice Renamed', pluginNote: 'from an older build' },
     ]);
+  });
+
+  it('lets an explicitly-undefined typed entity prop defer to the opaque raw value (end-to-end through writeback)', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: {
+        ids: ['c1'],
+        entities: { c1: { id: 'c1', name: 'Alice', pluginNote: 'from an older build' } },
+      },
+      worlds: { ids: [], entities: {} },
+    });
+    const data = baseProjectData({
+      characters: {
+        ids: ['c1'],
+        entities: { c1: { id: 'c1', name: 'Alice', pluginNote: undefined } },
+      },
+    });
+
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    const committed = JSON.parse(result.raw) as {
+      characters: { entities: Record<string, { pluginNote?: string }> };
+    };
+    expect(committed.characters.entities['c1']?.pluginNote).toBe('from an older build');
+  });
+
+  it('preserves an opaque unsafe-integer literal byte-exactly through writeback (entity-state raw shape, incl. nested opaque values)', () => {
+    // QNBS-v3: raw literal spliced in below to preserve the exact unsafe-integer token untouched by JSON.stringify.
+    const currentRaw = JSON.stringify({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: {
+        ids: ['c1'],
+        entities: {
+          c1: {
+            id: 'c1',
+            name: 'Alice',
+            externalId: '__UNSAFE_INT__',
+            plugin: { ref: '__UNSAFE_INT__', note: 'opaque nested object' },
+          },
+        },
+      },
+      worlds: { ids: [], entities: {} },
+    }).replaceAll('"__UNSAFE_INT__"', UNSAFE_INTEGER_LITERAL);
+    const data = baseProjectData({
+      characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice Renamed' } } },
+    });
+
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain(`"externalId":${UNSAFE_INTEGER_LITERAL}`);
+    expect(result.raw).toContain(`"ref":${UNSAFE_INTEGER_LITERAL}`);
+    expect(result.raw).not.toContain('9007199254740992');
+  });
+
+  it('preserves an opaque unsafe-integer literal byte-exactly through writeback (plain-array raw shape)', () => {
+    const currentRaw = JSON.stringify({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [{ id: 'c1', name: 'Alice', externalId: '__UNSAFE_INT__' }],
+      worlds: [],
+    }).replace('"__UNSAFE_INT__"', UNSAFE_INTEGER_LITERAL);
+    const data = baseProjectData({
+      characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice Renamed' } } },
+    });
+
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain(UNSAFE_INTEGER_LITERAL);
+    expect(result.raw).not.toContain('9007199254740992');
   });
 
   it('reads prior ids/entities from a plain-array-shaped raw collection (the Core boundary/filesystem on-disk shape)', () => {

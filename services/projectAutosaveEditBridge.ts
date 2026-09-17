@@ -1,10 +1,11 @@
 import { entityStateToCoreArray } from '../features/project/coreBoundaryAdapter';
 import type { ProjectData } from '../features/project/projectState';
-import type {
-  CanonicalProjectRawText,
-  EntityCollectionEdit,
-  EntityLike,
-  OwnedProjectEdit,
+import {
+  type CanonicalProjectRawText,
+  type EntityCollectionEdit,
+  type EntityLike,
+  type OwnedProjectEdit,
+  parseCanonicalRawPreservingUnsafeIntegers,
 } from './projectDocumentWriteback';
 
 /**
@@ -30,7 +31,12 @@ import type {
  * over its own prior raw counterpart (when one exists, in either the `{ids, entities}` or plain
  * array on-disk shape) rather than replacing it outright, so an opaque field the raw carrier holds
  * but the typed `Character`/`World` shape does not model survives -- an unmodified entity merged
- * over itself is a verified no-op, never a false change.
+ * over itself is a verified no-op, never a false change. The prior raw carrier is parsed through
+ * the writeback module's unsafe-integer-preserving parser, so an opaque integer literal beyond
+ * JS safe-integer precision survives byte-exactly instead of being rounded by a plain JSON.parse.
+ * An explicitly-undefined-valued typed entity property is dropped before the merge, mirroring the
+ * top-level `fields` rule: it can then neither reach canonical writeback as invalid content nor
+ * clobber an opaque prior raw value.
  */
 
 interface RawCollectionState {
@@ -78,8 +84,11 @@ function buildCollectionEdit(
   const newIdSet = new Set(newIds);
   const removedIds = currentRaw.ids.filter((id) => !newIdSet.has(id));
   const upsert = newEntities.map((entity) => {
+    // Same rule as top-level `fields`: an explicitly-undefined typed property means "unowned" and
+    // must not clobber an opaque prior raw value in the merge.
+    const definedEntity = Object.fromEntries(Object.entries(entity).filter(isDefinedEntry));
     const priorRaw = currentRaw.entities[entity.id];
-    return isRecord(priorRaw) ? { ...priorRaw, ...entity } : entity;
+    return isRecord(priorRaw) ? { ...priorRaw, ...definedEntity } : definedEntity;
   });
   return {
     upsert: upsert as unknown as readonly EntityLike[],
@@ -105,7 +114,7 @@ export function buildAutosaveOwnedProjectEdit(
 ): OwnedProjectEdit {
   const { characters, worlds, ...rest } = newData;
   const fields = Object.fromEntries(Object.entries(rest).filter(isDefinedEntry));
-  const parsedCurrent: unknown = JSON.parse(currentRaw);
+  const parsedCurrent: unknown = parseCanonicalRawPreservingUnsafeIntegers(currentRaw);
   const newCharacters = entityStateToCoreArray(characters, 'characters');
   const newWorlds = entityStateToCoreArray(worlds, 'worlds');
   return {

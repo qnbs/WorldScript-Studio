@@ -421,6 +421,18 @@ function parseEntityCollectionValue(
   }
 }
 
+/**
+ * Parses canonical raw text for read-only inspection with unsafe-integer literals preserved
+ * exactly (as RawNumberLiteral sentinels), reusing this module's own protection machinery so
+ * there is a single preserve-first parse authority. The result must never be re-serialized with
+ * JSON.stringify -- route any write through commitOwnedProjectEdit, whose serializer restores
+ * the exact original digits.
+ */
+export function parseCanonicalRawPreservingUnsafeIntegers(raw: CanonicalProjectRawText): unknown {
+  const marker = createUniqueProtectionMarker(raw);
+  return reviveRawNumberMarkers(JSON.parse(protectUnsafeIntegers(raw, marker)), marker);
+}
+
 function isEntityStateShaped(value: unknown): value is EntityState<EntityLike, string> {
   return (
     value !== null &&
