@@ -29,12 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transaction opens, matching `idbProjectStore.ts#saveSlice`'s existing discipline, so a concurrent
   transaction can never be auto-committed out from under an in-flight write. Detects the contract's
   §2.7 downgrade contradiction (a stale pre-contract-shaped write superseding an already-migrated
-  canonical generation) and refuses to treat it as ordinary editable state. Also durably commits the
-  contract's §2.4 `LEGACY_TO_V1` migration step through this SAME atomic boundary
-  (`commitLegacyToV1Migration`, reusing `services/projectDocument.ts`'s existing in-memory
-  recognize/verify/stamp/revalidate admission primitive for the migration logic itself). Built
-  directly on `commitOwnedProjectEdit` (#773) as its IDB backend adapter. Not yet wired into the
-  production autosave path. Part of #553. PR #775.
+  canonical generation) and refuses to treat it as ordinary editable state. Built directly on
+  `commitOwnedProjectEdit` (#773) as its IDB backend adapter. Not yet wired into the production
+  autosave path. Part of #553. PR #775.
+- **Durable `LEGACY_TO_V1` migration through the same IndexedDB canonical authority:**
+  `commitLegacyToV1Migration` recognizes a legacy (unversioned) stored project, reuses
+  `services/projectDocument.ts`'s existing in-memory recognize/verify/stamp/revalidate admission
+  primitive for the migration logic itself (steps 1-4 of contract §2.4; the stamp is a byte-splice
+  overlay touching no other byte, so no-loss is structural), and durably commits the result through
+  the SAME raw-bytes CAS boundary (`commitGenerationFencedWrite`) an ordinary edit uses -- not a
+  second, independent write protocol. Part of #553. PR #776.
 
 ### Fixed
 
