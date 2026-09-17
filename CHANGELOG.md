@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A generation-fenced canonical writeback primitive for the persisted project document:**
+  `services/projectDocumentWriteback.ts` overlays an owned-path edit onto the raw project carrier
+  and verifies it two-sided: unowned top-level scalar fields stay byte-identical (never
+  re-serialized), and every entity-collection value -- touched and untouched alike -- is confirmed
+  value-equal to its pre-edit or intended content (contract §4's semantic, not byte-exact, no-loss
+  standard). Fails closed on a concurrent source-generation change instead of silently overwriting
+  it; entity collections merge by stable id, never array position. Not yet wired into any production
+  writer. Part of #553. PR #773.
+
 ### Fixed
 
 - **ProForge's Human-in-the-Loop pipeline review no longer applies stale project-incarnation
