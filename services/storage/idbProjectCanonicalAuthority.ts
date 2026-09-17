@@ -24,6 +24,14 @@
  * ProjectData autosave input into an OwnedProjectEdit and routes it through
  * commitCanonicalProjectEdit. The existing (non-fenced) saveSlice/saveProject path is untouched by
  * this module and keeps working exactly as before.
+ *
+ * commitLegacyToV1Migration (#553 Phase D2) durably commits the contract's §2.4 LEGACY_TO_V1 step
+ * (recognize -> verify against PROJECT_SCHEMA_V1's field set -> stamp schemaVersion -> revalidate)
+ * through this SAME atomic boundary -- commitGenerationFencedWrite -- rather than a second,
+ * independent write protocol. It reuses services/projectDocument.ts's existing, already-admitted
+ * admitCanonicalProjectDocument for steps 1-2 and 3-4 (a pure byte-splice overlay that touches no
+ * other byte, so no-loss is structural, not a separate verification pass); this module owns only
+ * the durable-commit boundary, not the migration logic itself.
  */
 
 import {
@@ -31,6 +39,7 @@ import {
   type ProjectVersionClassification,
 } from '../../features/project/projectSchemaVersion';
 import { APP_DATA_STORE } from '../dbConstants';
+import { admitCanonicalProjectDocument } from '../projectDocument';
 import {
   type CanonicalProjectRawText,
   commitOwnedProjectEdit,
@@ -38,10 +47,12 @@ import {
   type OwnedProjectEdit,
   type ProjectSourceGeneration,
 } from '../projectDocumentWriteback';
-import { compressData, IdbConnectionManager } from './idbCore';
+import { importedProjectJsonSchema } from '../projectImportSchema';
+import { compressData, decompressData, IdbConnectionManager } from './idbCore';
 import { withProtectedWriteAdmission } from './protectedWriteAdmission';
 import {
   assertNoActiveEncryptionMigration,
+  idbDecryptWithKey,
   idbEncryptWithKey,
   idbReadSecure,
   resolveProtectedWriteKey,
@@ -56,11 +67,17 @@ interface ProjectGenerationRecord {
   migrated: boolean;
 }
 
-/** The original decoded envelope, minus its data/present.data payload -- sibling keys (e.g. past/future) survive a canonical commit unchanged. */
-export interface ProjectEnvelopeShape {
-  isPresentShape: boolean;
-  originalEnvelope: Record<string, unknown>;
-}
+/**
+ * The original decoded envelope, minus its payload -- sibling keys (e.g. redux-undo's past/future)
+ * survive a canonical commit unchanged. 'flat' is a self-describing record with no wrapper at all
+ * (idbProjectStore.ts#selectIdbProjectObservationTarget's own precedent: a record with its own
+ * schemaVersion is classified directly, never misread as a Redux envelope via an unrelated
+ * data/present field) -- commitOwnedProjectEdit's real production input via saveProject(StoryProject).
+ */
+export type ProjectEnvelopeShape =
+  | { kind: 'flat' }
+  | { kind: 'data'; originalEnvelope: Record<string, unknown> }
+  | { kind: 'present'; originalEnvelope: Record<string, unknown> };
 
 export type CanonicalProjectAdmission =
   | { status: 'ABSENT' }
@@ -81,6 +98,11 @@ export type CommitCanonicalProjectEditResult =
   | { status: 'MALFORMED_SOURCE'; reason: string }
   | { status: 'NOT_ADMITTED_FOR_WRITE'; classification: string };
 
+export type CommitLegacyToV1MigrationResult =
+  | CommitCanonicalProjectEditResult
+  // QNBS-v3: distinct from NOT_ADMITTED_FOR_WRITE -- this path exists specifically for LEGACY_UNVERSIONED sources, so an already-CURRENT (or FUTURE/MALFORMED) document is "not eligible for migration", not "refused write authority".
+  | { status: 'NOT_ELIGIBLE'; classification: string };
+
 interface StoredProjectEnvelope {
   data?: Record<string, unknown>;
   present?: { data: Record<string, unknown> };
@@ -95,27 +117,34 @@ function unwrapProjectEnvelope(
 ): { payload: Record<string, unknown>; envelope: ProjectEnvelopeShape } | null {
   if (!isRecord(raw)) return null;
   const record = raw as StoredProjectEnvelope;
+  // QNBS-v3: mirrors idbProjectStore.ts#selectIdbProjectObservationTarget's own precedent -- checked first so a flat record that also happens to carry an unrelated data/present field is never misread via that field instead of its own header.
+  if (Object.hasOwn(record, 'schemaVersion')) {
+    return { payload: raw as Record<string, unknown>, envelope: { kind: 'flat' } };
+  }
   if (isRecord(record.present) && isRecord(record.present.data)) {
     return {
       payload: record.present.data,
-      envelope: { isPresentShape: true, originalEnvelope: raw },
+      envelope: { kind: 'present', originalEnvelope: raw },
     };
   }
   if (isRecord(record.data)) {
-    return { payload: record.data, envelope: { isPresentShape: false, originalEnvelope: raw } };
+    return { payload: record.data, envelope: { kind: 'data', originalEnvelope: raw } };
   }
-  return null;
+  // QNBS-v3: a pre-v1 flat record necessarily lacks schemaVersion, so it can't hit the check above -- without this, every genuinely flat legacy project would be classified MALFORMED and never eligible for migration. classifyRawProjectVersionFromParsed/importedProjectJsonSchema still validate real shape downstream; this only decides which bytes are the payload.
+  return { payload: raw, envelope: { kind: 'flat' } };
 }
 
-/** Replaces only the nested data field; every other envelope member (e.g. redux-undo's past/future) survives untouched. */
+/** Replaces only the nested payload; every other envelope member (e.g. redux-undo's past/future) survives untouched. A 'flat' record stays flat -- never gains a data/present wrapper it never had. */
 function rewrapProjectEnvelope(
   payload: Record<string, unknown>,
   envelope: ProjectEnvelopeShape,
-): StoredProjectEnvelope {
-  const { originalEnvelope, isPresentShape } = envelope;
-  if (!isPresentShape) return { ...originalEnvelope, data: payload };
-  const originalPresent = isRecord(originalEnvelope['present']) ? originalEnvelope['present'] : {};
-  return { ...originalEnvelope, present: { ...originalPresent, data: payload } };
+): StoredProjectEnvelope | Record<string, unknown> {
+  if (envelope.kind === 'flat') return payload;
+  if (envelope.kind === 'data') return { ...envelope.originalEnvelope, data: payload };
+  const originalPresent = isRecord(envelope.originalEnvelope['present'])
+    ? envelope.originalEnvelope['present']
+    : {};
+  return { ...envelope.originalEnvelope, present: { ...originalPresent, data: payload } };
 }
 
 function parseGenerationRecord(value: unknown): ProjectGenerationRecord | null {
@@ -154,6 +183,15 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((byte, index) => byte === b[index]);
+}
+
+// QNBS-v3: covers every typed-array/DataView kind, not just Uint8Array -- an unrecognized exotic type otherwise always compares unequal, so an unchanged envelope sibling holding one would spuriously CONFLICT on every commit.
+function typedArrayViewsEqual(a: ArrayBufferView, b: ArrayBufferView): boolean {
+  if (a.constructor !== b.constructor) return false;
+  return bytesEqual(
+    new Uint8Array(a.buffer, a.byteOffset, a.byteLength),
+    new Uint8Array(b.buffer, b.byteOffset, b.byteLength),
+  );
 }
 
 // QNBS-v3: Map/Set iteration order is preserved by both native insertion order and structured clone, so an ordered array comparison correctly handles object-typed keys/values -- `.has()` would use reference equality and miss a structurally-identical-but-different-instance match.
@@ -205,8 +243,13 @@ const STRUCTURED_EQUALITY_HANDLERS: readonly StructuredEqualityHandler[] = [
       (a as RegExp).source === (b as RegExp).source && (a as RegExp).flags === (b as RegExp).flags,
   },
   {
-    test: (a, b) => a instanceof Uint8Array && b instanceof Uint8Array,
-    equal: (a, b) => bytesEqual(a as Uint8Array, b as Uint8Array),
+    test: (a, b) => ArrayBuffer.isView(a) && ArrayBuffer.isView(b),
+    equal: (a, b) => typedArrayViewsEqual(a as ArrayBufferView, b as ArrayBufferView),
+  },
+  // QNBS-v3: a bare ArrayBuffer (not a view) is a distinct type ArrayBuffer.isView() never matches -- without this it always fell through to the "unequal" default, so an unchanged sibling holding one would spuriously CONFLICT on every commit.
+  {
+    test: (a, b) => a instanceof ArrayBuffer && b instanceof ArrayBuffer,
+    equal: (a, b) => bytesEqual(new Uint8Array(a as ArrayBuffer), new Uint8Array(b as ArrayBuffer)),
   },
   {
     test: (a, b) => a instanceof Map && b instanceof Map,
@@ -229,7 +272,8 @@ const STRUCTURED_EQUALITY_HANDLERS: readonly StructuredEqualityHandler[] = [
 
 // QNBS-v3 (#553): a type-aware structural comparison -- JSON.stringify silently equates structurally-different Map/Set/Date/RegExp values (and drops undefined-valued properties), which would let the CAS fence miss a genuine concurrent change.
 function deepStructuredEqual(a: unknown, b: unknown, seen: SeenPairs = new WeakMap()): boolean {
-  if (a === b) return true;
+  // QNBS-v3: Object.is, not === -- JSON.stringify(-0) emits "0", so a === b would wrongly accept that silent -0-to-0 change as a lossless round-trip.
+  if (Object.is(a, b)) return true;
   if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
     if (alreadyComparing(seen, a, b)) return true;
   }
@@ -259,53 +303,85 @@ interface CanonicalProjectSnapshot {
   rawRecordSnapshot: unknown;
 }
 
+interface DecodedProjectSnapshot {
+  /** The exact raw (undecoded) value read from PROJECT_RECORD_KEY, for the raw-bytes CAS fence. */
+  rawRecordSnapshot: unknown;
+  parsedGeneration: ProjectGenerationRecord | null;
+  /** Null when the record is absent, not a recognized envelope, or its payload cannot be JSON-stringified. */
+  decoded: {
+    payload: Record<string, unknown>;
+    envelope: ProjectEnvelopeShape;
+    currentRaw: string;
+  } | null;
+}
+
 export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
   /** Reads, decrypts/decompresses, and classifies the current canonical project record. Never writes anything. */
   async loadCanonicalProjectAdmission(): Promise<CanonicalProjectAdmission> {
     return (await this.readCanonicalProjectSnapshot()).admission;
   }
 
-  private async readCanonicalProjectSnapshot(): Promise<CanonicalProjectSnapshot> {
+  private async readDecodedProjectSnapshot(): Promise<DecodedProjectSnapshot> {
     const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
     const [rawRecord, generationRecordRaw] = await Promise.all([
       readKey(store, PROJECT_RECORD_KEY),
       readKey(store, GENERATION_RECORD_KEY),
     ]);
-    if (rawRecord === undefined) {
-      return { admission: { status: 'ABSENT' }, rawRecordSnapshot: rawRecord };
-    }
-
-    const decoded = await idbReadSecure<unknown>(rawRecord);
-    const unwrapped = unwrapProjectEnvelope(decoded);
     const parsedGeneration = parseGenerationRecord(generationRecordRaw);
-    if (!unwrapped) {
+    if (rawRecord === undefined)
+      return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+
+    const decodedValue = await idbReadSecure<unknown>(rawRecord);
+    const unwrapped = unwrapProjectEnvelope(decodedValue);
+    if (!unwrapped) return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+
+    try {
+      const currentRaw = JSON.stringify(unwrapped.payload);
+      // QNBS-v3: JSON.stringify silently blanks a Map/Set/RegExp field to `{}` and drops undefined-valued keys instead of throwing -- round-trip and structurally compare so a payload this text representation can't faithfully carry is classified MALFORMED, the same outcome a cyclic value inside `data` already gets from the throw above, instead of being silently truncated on the next commit.
+      const roundTripped = JSON.parse(currentRaw) as Record<string, unknown>;
+      if (!deepStructuredEqual(roundTripped, unwrapped.payload)) {
+        return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+      }
+      return {
+        rawRecordSnapshot: rawRecord,
+        parsedGeneration,
+        decoded: { payload: unwrapped.payload, envelope: unwrapped.envelope, currentRaw },
+      };
+    } catch {
+      return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+    }
+  }
+
+  private async readCanonicalProjectSnapshot(): Promise<CanonicalProjectSnapshot> {
+    const { rawRecordSnapshot, parsedGeneration, decoded } =
+      await this.readDecodedProjectSnapshot();
+    if (rawRecordSnapshot === undefined) {
+      return { admission: { status: 'ABSENT' }, rawRecordSnapshot };
+    }
+    if (!decoded) {
       return {
         admission: admitNonCurrentClassification('MALFORMED', parsedGeneration),
-        rawRecordSnapshot: rawRecord,
+        rawRecordSnapshot,
       };
     }
 
-    let currentRaw: string;
-    try {
-      currentRaw = JSON.stringify(unwrapped.payload);
-    } catch {
-      return {
-        admission: admitNonCurrentClassification('MALFORMED', parsedGeneration),
-        rawRecordSnapshot: rawRecord,
-      };
-    }
-    const classification = classifyRawProjectVersionFromParsed(currentRaw, unwrapped.payload);
+    const classification = classifyRawProjectVersionFromParsed(decoded.currentRaw, decoded.payload);
     if (classification !== 'CURRENT') {
       return {
         admission: admitNonCurrentClassification(classification, parsedGeneration),
-        rawRecordSnapshot: rawRecord,
+        rawRecordSnapshot,
       };
     }
 
-    const generation = computeProjectSourceGeneration(currentRaw);
+    const generation = computeProjectSourceGeneration(decoded.currentRaw);
     return {
-      admission: { status: 'CURRENT', currentRaw, generation, envelope: unwrapped.envelope },
-      rawRecordSnapshot: rawRecord,
+      admission: {
+        status: 'CURRENT',
+        currentRaw: decoded.currentRaw,
+        generation,
+        envelope: decoded.envelope,
+      },
+      rawRecordSnapshot,
     };
   }
 
@@ -344,16 +420,96 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
       admission.envelope,
     );
     return withProtectedWriteAdmission(async () => {
-      // QNBS-v3: key resolution + encryption complete fully before the transaction opens -- an await here once the transaction is live would let IndexedDB auto-commit it first.
-      const writeKey = await resolveProtectedWriteKey();
-      const encodedPayload = writeKey
-        ? await idbEncryptWithKey(writeKey, newPayload)
-        : compressData(newPayload);
-      await assertNoActiveEncryptionMigration();
+      const encoded = await this.encodeVerifiedPayload(newPayload);
+      if (encoded.status === 'VERIFICATION_FAILED') return encoded;
       return this.commitGenerationFencedWrite(
         rawRecordSnapshot,
         applied.generation,
-        encodedPayload,
+        encoded.encodedPayload,
+      );
+    });
+  }
+
+  /**
+   * Encrypts/compresses newPayload, then decodes it back and verifies it round-trips losslessly
+   * before ever attempting a commit -- compressData JSON-serializes payloads at or above its
+   * threshold (dropping undefined-valued keys and converting unsupported structured-clone values
+   * like Map/Set instead of throwing), so an envelope sibling holding such a value could otherwise
+   * be silently corrupted on write. Fully resolved before the write transaction opens, so this
+   * extra async decode is safe here (unlike inside commitGenerationFencedWrite's transaction).
+   */
+  private async encodeVerifiedPayload(
+    newPayload: StoredProjectEnvelope | Record<string, unknown>,
+  ): Promise<
+    { status: 'OK'; encodedPayload: unknown } | { status: 'VERIFICATION_FAILED'; reason: string }
+  > {
+    // QNBS-v3: key resolution + encryption complete fully before the transaction opens -- an await here once the transaction is live would let IndexedDB auto-commit it first.
+    const writeKey = await resolveProtectedWriteKey();
+    const encodedPayload = writeKey
+      ? await idbEncryptWithKey(writeKey, newPayload)
+      : compressData(newPayload);
+    await assertNoActiveEncryptionMigration();
+    const decoded = writeKey
+      ? await idbDecryptWithKey<unknown>(writeKey, encodedPayload as Uint8Array)
+      : decompressData<unknown>(encodedPayload);
+    if (!deepStructuredEqual(decoded, newPayload)) {
+      return {
+        status: 'VERIFICATION_FAILED',
+        reason: 'Encoded payload does not round-trip losslessly before commit.',
+      };
+    }
+    return { status: 'OK', encodedPayload };
+  }
+
+  /**
+   * Durably commits the contract's §2.4 LEGACY_TO_V1 step for a LEGACY_UNVERSIONED project record,
+   * through the SAME atomic raw-bytes fence commitCanonicalProjectEdit uses -- not a second,
+   * independent write protocol. Refuses (NOT_ELIGIBLE) any record that is not exactly
+   * LEGACY_UNVERSIONED and does not conform to PROJECT_SCHEMA_V1's field set, or a CURRENT record
+   * (already migrated -- see commitCanonicalProjectEdit instead), FUTURE, or MALFORMED. Also refuses
+   * (as a §2.7 GENERATION_CONTRADICTION, not an ordinary migration) a LEGACY_UNVERSIONED record when
+   * the companion generation record says this project was already canonically committed once --
+   * migrating and durably committing it would let a stale pre-contract-shaped write silently
+   * supersede the already-migrated canonical generation.
+   */
+  async commitLegacyToV1Migration(): Promise<CommitLegacyToV1MigrationResult> {
+    const { rawRecordSnapshot, parsedGeneration, decoded } =
+      await this.readDecodedProjectSnapshot();
+    if (rawRecordSnapshot === undefined)
+      return { status: 'NOT_ELIGIBLE', classification: 'ABSENT' };
+    if (!decoded) return { status: 'NOT_ELIGIBLE', classification: 'MALFORMED' };
+
+    const classification = classifyRawProjectVersionFromParsed(decoded.currentRaw, decoded.payload);
+    if (classification !== 'LEGACY_UNVERSIONED') {
+      return { status: 'NOT_ELIGIBLE', classification };
+    }
+    if (parsedGeneration?.migrated) {
+      return {
+        status: 'NOT_ELIGIBLE',
+        classification: `GENERATION_CONTRADICTION:${classification}`,
+      };
+    }
+
+    // QNBS-v3: recognize + verify against PROJECT_SCHEMA_V1 + stamp + revalidate (contract §2.4, steps 1-4) -- a pure byte-splice overlay, so no-loss is structural, not a separate check.
+    const admission = admitCanonicalProjectDocument(decoded.currentRaw, importedProjectJsonSchema);
+    if (admission.status !== 'LEGACY_TO_V1' || admission.canonical === null) {
+      return { status: 'NOT_ELIGIBLE', classification: admission.source.classification };
+    }
+
+    const migratedRaw = admission.canonical.raw;
+    const newPayload = rewrapProjectEnvelope(
+      JSON.parse(migratedRaw) as Record<string, unknown>,
+      decoded.envelope,
+    );
+    const newGeneration = computeProjectSourceGeneration(migratedRaw);
+
+    return withProtectedWriteAdmission(async () => {
+      const encoded = await this.encodeVerifiedPayload(newPayload);
+      if (encoded.status === 'VERIFICATION_FAILED') return encoded;
+      return this.commitGenerationFencedWrite(
+        rawRecordSnapshot,
+        newGeneration,
+        encoded.encodedPayload,
       );
     });
   }
@@ -394,6 +550,35 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
             reject(transaction.error ?? new Error('project canonical write transaction aborted'));
         }),
     );
+  }
+
+  /**
+   * Clears the companion §2.7 marker before a deliberate whole-project replacement (Factory Reset,
+   * importing an unrelated project) -- otherwise a genuinely new, unrelated legacy project would be
+   * permanently misclassified as a stale downgrade of whatever was migrated before it. This
+   * authority has no reliable way to distinguish "a new project" from "a stale copy of the same
+   * one" on its own: ProjectData's `id` field cannot help, since every fresh project reuses
+   * id:'default' until explicitly saved elsewhere.
+   *
+   * NOT internally race-safe against a concurrent commit: this runs as its own transaction, not
+   * fenced against PROJECT_RECORD_KEY, and `withProtectedWriteAdmission`'s lock is 'shared' mode --
+   * it excludes only an in-progress encryption migration, not another ordinary writer, so it cannot
+   * serialize this against a concurrent commitCanonicalProjectEdit/commitLegacyToV1Migration either.
+   * The caller (#553 Phase D3's reset/replace flow) MUST ensure no concurrent commit can land
+   * between deciding to replace the project and calling this -- e.g. by suspending autosave for the
+   * duration, the same way a whole-project replacement already must for the legacy saveSlice path.
+   */
+  async clearCanonicalGenerationMarker(): Promise<void> {
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    return new Promise<void>((resolve, reject) => {
+      const request = store.delete(GENERATION_RECORD_KEY);
+      const transaction = store.transaction;
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('clear generation marker transaction aborted'));
+    });
   }
 }
 
