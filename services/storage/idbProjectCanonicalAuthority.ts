@@ -67,11 +67,17 @@ interface ProjectGenerationRecord {
   migrated: boolean;
 }
 
-/** The original decoded envelope, minus its data/present.data payload -- sibling keys (e.g. past/future) survive a canonical commit unchanged. */
-export interface ProjectEnvelopeShape {
-  isPresentShape: boolean;
-  originalEnvelope: Record<string, unknown>;
-}
+/**
+ * The original decoded envelope, minus its payload -- sibling keys (e.g. redux-undo's past/future)
+ * survive a canonical commit unchanged. 'flat' is a self-describing record with no wrapper at all
+ * (idbProjectStore.ts#selectIdbProjectObservationTarget's own precedent: a record with its own
+ * schemaVersion is classified directly, never misread as a Redux envelope via an unrelated
+ * data/present field) -- commitOwnedProjectEdit's real production input via saveProject(StoryProject).
+ */
+export type ProjectEnvelopeShape =
+  | { kind: 'flat' }
+  | { kind: 'data'; originalEnvelope: Record<string, unknown> }
+  | { kind: 'present'; originalEnvelope: Record<string, unknown> };
 
 export type CanonicalProjectAdmission =
   | { status: 'ABSENT' }
@@ -111,27 +117,33 @@ function unwrapProjectEnvelope(
 ): { payload: Record<string, unknown>; envelope: ProjectEnvelopeShape } | null {
   if (!isRecord(raw)) return null;
   const record = raw as StoredProjectEnvelope;
+  // QNBS-v3: mirrors idbProjectStore.ts#selectIdbProjectObservationTarget's own precedent -- checked first so a flat record that also happens to carry an unrelated data/present field is never misread via that field instead of its own header.
+  if (Object.hasOwn(record, 'schemaVersion')) {
+    return { payload: raw as Record<string, unknown>, envelope: { kind: 'flat' } };
+  }
   if (isRecord(record.present) && isRecord(record.present.data)) {
     return {
       payload: record.present.data,
-      envelope: { isPresentShape: true, originalEnvelope: raw },
+      envelope: { kind: 'present', originalEnvelope: raw },
     };
   }
   if (isRecord(record.data)) {
-    return { payload: record.data, envelope: { isPresentShape: false, originalEnvelope: raw } };
+    return { payload: record.data, envelope: { kind: 'data', originalEnvelope: raw } };
   }
   return null;
 }
 
-/** Replaces only the nested data field; every other envelope member (e.g. redux-undo's past/future) survives untouched. */
+/** Replaces only the nested payload; every other envelope member (e.g. redux-undo's past/future) survives untouched. A 'flat' record stays flat -- never gains a data/present wrapper it never had. */
 function rewrapProjectEnvelope(
   payload: Record<string, unknown>,
   envelope: ProjectEnvelopeShape,
-): StoredProjectEnvelope {
-  const { originalEnvelope, isPresentShape } = envelope;
-  if (!isPresentShape) return { ...originalEnvelope, data: payload };
-  const originalPresent = isRecord(originalEnvelope['present']) ? originalEnvelope['present'] : {};
-  return { ...originalEnvelope, present: { ...originalPresent, data: payload } };
+): StoredProjectEnvelope | Record<string, unknown> {
+  if (envelope.kind === 'flat') return payload;
+  if (envelope.kind === 'data') return { ...envelope.originalEnvelope, data: payload };
+  const originalPresent = isRecord(envelope.originalEnvelope['present'])
+    ? envelope.originalEnvelope['present']
+    : {};
+  return { ...envelope.originalEnvelope, present: { ...originalPresent, data: payload } };
 }
 
 function parseGenerationRecord(value: unknown): ProjectGenerationRecord | null {
@@ -233,6 +245,11 @@ const STRUCTURED_EQUALITY_HANDLERS: readonly StructuredEqualityHandler[] = [
     test: (a, b) => ArrayBuffer.isView(a) && ArrayBuffer.isView(b),
     equal: (a, b) => typedArrayViewsEqual(a as ArrayBufferView, b as ArrayBufferView),
   },
+  // QNBS-v3: a bare ArrayBuffer (not a view) is a distinct type ArrayBuffer.isView() never matches -- without this it always fell through to the "unequal" default, so an unchanged sibling holding one would spuriously CONFLICT on every commit.
+  {
+    test: (a, b) => a instanceof ArrayBuffer && b instanceof ArrayBuffer,
+    equal: (a, b) => bytesEqual(new Uint8Array(a as ArrayBuffer), new Uint8Array(b as ArrayBuffer)),
+  },
   {
     test: (a, b) => a instanceof Map && b instanceof Map,
     equal: (a, b, seen) => mapsEqual(a as Map<unknown, unknown>, b as Map<unknown, unknown>, seen),
@@ -254,7 +271,8 @@ const STRUCTURED_EQUALITY_HANDLERS: readonly StructuredEqualityHandler[] = [
 
 // QNBS-v3 (#553): a type-aware structural comparison -- JSON.stringify silently equates structurally-different Map/Set/Date/RegExp values (and drops undefined-valued properties), which would let the CAS fence miss a genuine concurrent change.
 function deepStructuredEqual(a: unknown, b: unknown, seen: SeenPairs = new WeakMap()): boolean {
-  if (a === b) return true;
+  // QNBS-v3: Object.is, not === -- JSON.stringify(-0) emits "0", so a === b would wrongly accept that silent -0-to-0 change as a lossless round-trip.
+  if (Object.is(a, b)) return true;
   if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
     if (alreadyComparing(seen, a, b)) return true;
   }
@@ -420,7 +438,7 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
    * extra async decode is safe here (unlike inside commitGenerationFencedWrite's transaction).
    */
   private async encodeVerifiedPayload(
-    newPayload: StoredProjectEnvelope,
+    newPayload: StoredProjectEnvelope | Record<string, unknown>,
   ): Promise<
     { status: 'OK'; encodedPayload: unknown } | { status: 'VERIFICATION_FAILED'; reason: string }
   > {
@@ -431,8 +449,8 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
       : compressData(newPayload);
     await assertNoActiveEncryptionMigration();
     const decoded = writeKey
-      ? await idbDecryptWithKey<StoredProjectEnvelope>(writeKey, encodedPayload as Uint8Array)
-      : decompressData<StoredProjectEnvelope>(encodedPayload);
+      ? await idbDecryptWithKey<unknown>(writeKey, encodedPayload as Uint8Array)
+      : decompressData<unknown>(encodedPayload);
     if (!deepStructuredEqual(decoded, newPayload)) {
       return {
         status: 'VERIFICATION_FAILED',
@@ -531,6 +549,28 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
             reject(transaction.error ?? new Error('project canonical write transaction aborted'));
         }),
     );
+  }
+
+  /**
+   * Clears the companion §2.7 marker before a deliberate whole-project replacement (Factory Reset,
+   * importing an unrelated project) -- otherwise a genuinely new, unrelated legacy project would be
+   * permanently misclassified as a stale downgrade of whatever was migrated before it. This
+   * authority has no reliable way to distinguish "a new project" from "a stale copy of the same
+   * one" on its own: ProjectData's `id` field cannot help, since every fresh project reuses
+   * id:'default' until explicitly saved elsewhere. Wiring this into an actual reset/replace flow is
+   * #553 Phase D3's responsibility, not this standalone primitive's.
+   */
+  async clearCanonicalGenerationMarker(): Promise<void> {
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    return new Promise<void>((resolve, reject) => {
+      const request = store.delete(GENERATION_RECORD_KEY);
+      const transaction = store.transaction;
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('clear generation marker transaction aborted'));
+    });
   }
 }
 
