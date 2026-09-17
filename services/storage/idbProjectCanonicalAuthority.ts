@@ -119,6 +119,16 @@ function readKey(store: IDBObjectStore, key: string): Promise<unknown> {
   });
 }
 
+// QNBS-v3 (#553 §2.7): a migrated companion record combined with a non-CURRENT raw payload means a stale pre-contract-shaped write superseded it -- surfaced distinctly, never as ordinary non-admission.
+function admitNonCurrentClassification(
+  classification: ProjectVersionClassification,
+  parsedGeneration: { migrated: boolean } | null,
+): CanonicalProjectAdmission {
+  return parsedGeneration?.migrated
+    ? { status: 'GENERATION_CONTRADICTION', classification }
+    : { status: 'NOT_ADMITTED', classification };
+}
+
 export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
   /**
    * Reads, decrypts/decompresses, and classifies the current canonical project record.
@@ -138,19 +148,12 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
     const decoded = await idbReadSecure<unknown>(rawRecord);
     const unwrapped = unwrapProjectEnvelope(decoded);
     const parsedGeneration = parseGenerationRecord(generationRecordRaw);
-    if (!unwrapped) {
-      return parsedGeneration?.migrated
-        ? { status: 'GENERATION_CONTRADICTION', classification: 'MALFORMED' }
-        : { status: 'NOT_ADMITTED', classification: 'MALFORMED' };
-    }
+    if (!unwrapped) return admitNonCurrentClassification('MALFORMED', parsedGeneration);
 
     const currentRaw = JSON.stringify(unwrapped.payload);
     const classification = classifyRawProjectVersionFromParsed(currentRaw, unwrapped.payload);
-
     if (classification !== 'CURRENT') {
-      return parsedGeneration?.migrated
-        ? { status: 'GENERATION_CONTRADICTION', classification }
-        : { status: 'NOT_ADMITTED', classification };
+      return admitNonCurrentClassification(classification, parsedGeneration);
     }
 
     const generation = computeProjectSourceGeneration(currentRaw);
