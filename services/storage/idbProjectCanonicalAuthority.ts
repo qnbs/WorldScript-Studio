@@ -134,20 +134,84 @@ function readKey(store: IDBObjectStore, key: string): Promise<unknown> {
   });
 }
 
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((byte, index) => byte === b[index]);
+}
+
+function mapsEqual(a: ReadonlyMap<unknown, unknown>, b: ReadonlyMap<unknown, unknown>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [key, value] of a) {
+    if (!b.has(key) || !deepStructuredEqual(value, b.get(key))) return false;
+  }
+  return true;
+}
+
+function setsEqual(a: ReadonlySet<unknown>, b: ReadonlySet<unknown>): boolean {
+  return a.size === b.size && [...a].every((value) => b.has(value));
+}
+
+function arraysEqual(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.every((value, index) => deepStructuredEqual(value, b[index]));
+}
+
+function recordsEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  return (
+    aKeys.length === bKeys.length &&
+    aKeys.every((key) => Object.hasOwn(b, key) && deepStructuredEqual(a[key], b[key]))
+  );
+}
+
+type StructuredEqualityHandler = {
+  test: (a: unknown, b: unknown) => boolean;
+  equal: (a: unknown, b: unknown) => boolean;
+};
+
+// QNBS-v3: a data-driven dispatch table keeps this a single lookup instead of a branch per structured-clone value kind.
+const STRUCTURED_EQUALITY_HANDLERS: readonly StructuredEqualityHandler[] = [
+  {
+    test: (a, b) => a instanceof Date && b instanceof Date,
+    equal: (a, b) => (a as Date).getTime() === (b as Date).getTime(),
+  },
+  {
+    test: (a, b) => a instanceof RegExp && b instanceof RegExp,
+    equal: (a, b) =>
+      (a as RegExp).source === (b as RegExp).source && (a as RegExp).flags === (b as RegExp).flags,
+  },
+  {
+    test: (a, b) => a instanceof Uint8Array && b instanceof Uint8Array,
+    equal: (a, b) => bytesEqual(a as Uint8Array, b as Uint8Array),
+  },
+  {
+    test: (a, b) => a instanceof Map && b instanceof Map,
+    equal: (a, b) => mapsEqual(a as Map<unknown, unknown>, b as Map<unknown, unknown>),
+  },
+  {
+    test: (a, b) => a instanceof Set && b instanceof Set,
+    equal: (a, b) => setsEqual(a as Set<unknown>, b as Set<unknown>),
+  },
+  {
+    test: (a, b) => Array.isArray(a) && Array.isArray(b),
+    equal: (a, b) => arraysEqual(a as unknown[], b as unknown[]),
+  },
+  {
+    test: (a, b) => isRecord(a) && isRecord(b),
+    equal: (a, b) => recordsEqual(a as Record<string, unknown>, b as Record<string, unknown>),
+  },
+];
+
+// QNBS-v3 (#553): a type-aware structural comparison -- JSON.stringify silently equates structurally-different Map/Set/Date/RegExp values (and drops undefined-valued properties), which would let the CAS fence miss a genuine concurrent change.
+function deepStructuredEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  const handler = STRUCTURED_EQUALITY_HANDLERS.find((candidate) => candidate.test(a, b));
+  return handler ? handler.equal(a, b) : false;
+}
+
 // QNBS-v3: compares the RAW (undecoded) stored representation for exact identity -- sufficient for the CAS fence without decrypting inside a transaction, where an await would let IndexedDB auto-commit it first.
 function rawStoredValuesEqual(a: unknown, b: unknown): boolean {
-  if (a instanceof Uint8Array && b instanceof Uint8Array) {
-    return a.length === b.length && a.every((byte, index) => byte === b[index]);
-  }
   if (typeof a === 'string' && typeof b === 'string') return a === b;
-  if (isRecord(a) && isRecord(b)) {
-    try {
-      return JSON.stringify(a) === JSON.stringify(b);
-    } catch {
-      return false;
-    }
-  }
-  return a === b;
+  return deepStructuredEqual(a, b);
 }
 
 // QNBS-v3 (#553 §2.7): a migrated companion record combined with a non-CURRENT raw payload means a stale pre-contract-shaped write superseded it -- surfaced distinctly, never as ordinary non-admission.

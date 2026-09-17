@@ -310,6 +310,36 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
     expect(JSON.parse(reloaded.currentRaw)).toMatchObject({ title: 'Raced In' });
   });
 
+  it('detects a concurrent change to a Map-valued opaque field that JSON.stringify cannot distinguish', async () => {
+    // QNBS-v3 regression: JSON.stringify serializes every Map as "{}" regardless of its entries, so
+    // a JSON.stringify-based raw-bytes comparison would wrongly treat two DIFFERENT Maps as equal --
+    // the fence must use a type-aware structural comparison instead.
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, {
+      data: { ...baseProjectPayload(), meta: new Map([['a', 1]]) },
+    });
+    const admission = await authority.loadCanonicalProjectAdmission();
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+
+    const spy = vi
+      .spyOn(storageEncryptionService, 'resolveProtectedWriteKey')
+      .mockImplementationOnce(async () => {
+        // QNBS-v3: same JSON-visible content but a genuinely different Map -- JSON.stringify collapses both Maps to identical text, so even commitOwnedProjectEdit's own generation check can't see this.
+        await seedProjectRecord(authority, {
+          data: { ...baseProjectPayload(), meta: new Map([['a', 2]]) },
+        });
+        return null;
+      });
+
+    const result = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: admission.generation,
+      edit: { fields: { title: 'Should not land' } },
+    });
+
+    spy.mockRestore();
+    expect(result.status).toBe('CONFLICT');
+  });
+
   it('preserves opaque data across repeated save/reload cycles without progressive normalization or loss', async () => {
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, { data: baseProjectPayload() });
