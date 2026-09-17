@@ -48,10 +48,11 @@ import {
   type ProjectSourceGeneration,
 } from '../projectDocumentWriteback';
 import { importedProjectJsonSchema } from '../projectImportSchema';
-import { compressData, IdbConnectionManager } from './idbCore';
+import { compressData, decompressData, IdbConnectionManager } from './idbCore';
 import { withProtectedWriteAdmission } from './protectedWriteAdmission';
 import {
   assertNoActiveEncryptionMigration,
+  idbDecryptWithKey,
   idbEncryptWithKey,
   idbReadSecure,
   resolveProtectedWriteKey,
@@ -171,6 +172,15 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((byte, index) => byte === b[index]);
 }
 
+// QNBS-v3: covers every typed-array/DataView kind, not just Uint8Array -- an unrecognized exotic type otherwise always compares unequal, so an unchanged envelope sibling holding one would spuriously CONFLICT on every commit.
+function typedArrayViewsEqual(a: ArrayBufferView, b: ArrayBufferView): boolean {
+  if (a.constructor !== b.constructor) return false;
+  return bytesEqual(
+    new Uint8Array(a.buffer, a.byteOffset, a.byteLength),
+    new Uint8Array(b.buffer, b.byteOffset, b.byteLength),
+  );
+}
+
 // QNBS-v3: Map/Set iteration order is preserved by both native insertion order and structured clone, so an ordered array comparison correctly handles object-typed keys/values -- `.has()` would use reference equality and miss a structurally-identical-but-different-instance match.
 function mapsEqual(
   a: ReadonlyMap<unknown, unknown>,
@@ -220,8 +230,8 @@ const STRUCTURED_EQUALITY_HANDLERS: readonly StructuredEqualityHandler[] = [
       (a as RegExp).source === (b as RegExp).source && (a as RegExp).flags === (b as RegExp).flags,
   },
   {
-    test: (a, b) => a instanceof Uint8Array && b instanceof Uint8Array,
-    equal: (a, b) => bytesEqual(a as Uint8Array, b as Uint8Array),
+    test: (a, b) => ArrayBuffer.isView(a) && ArrayBuffer.isView(b),
+    equal: (a, b) => typedArrayViewsEqual(a as ArrayBufferView, b as ArrayBufferView),
   },
   {
     test: (a, b) => a instanceof Map && b instanceof Map,
@@ -391,18 +401,45 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
       admission.envelope,
     );
     return withProtectedWriteAdmission(async () => {
-      // QNBS-v3: key resolution + encryption complete fully before the transaction opens -- an await here once the transaction is live would let IndexedDB auto-commit it first.
-      const writeKey = await resolveProtectedWriteKey();
-      const encodedPayload = writeKey
-        ? await idbEncryptWithKey(writeKey, newPayload)
-        : compressData(newPayload);
-      await assertNoActiveEncryptionMigration();
+      const encoded = await this.encodeVerifiedPayload(newPayload);
+      if (encoded.status === 'VERIFICATION_FAILED') return encoded;
       return this.commitGenerationFencedWrite(
         rawRecordSnapshot,
         applied.generation,
-        encodedPayload,
+        encoded.encodedPayload,
       );
     });
+  }
+
+  /**
+   * Encrypts/compresses newPayload, then decodes it back and verifies it round-trips losslessly
+   * before ever attempting a commit -- compressData JSON-serializes payloads at or above its
+   * threshold (dropping undefined-valued keys and converting unsupported structured-clone values
+   * like Map/Set instead of throwing), so an envelope sibling holding such a value could otherwise
+   * be silently corrupted on write. Fully resolved before the write transaction opens, so this
+   * extra async decode is safe here (unlike inside commitGenerationFencedWrite's transaction).
+   */
+  private async encodeVerifiedPayload(
+    newPayload: StoredProjectEnvelope,
+  ): Promise<
+    { status: 'OK'; encodedPayload: unknown } | { status: 'VERIFICATION_FAILED'; reason: string }
+  > {
+    // QNBS-v3: key resolution + encryption complete fully before the transaction opens -- an await here once the transaction is live would let IndexedDB auto-commit it first.
+    const writeKey = await resolveProtectedWriteKey();
+    const encodedPayload = writeKey
+      ? await idbEncryptWithKey(writeKey, newPayload)
+      : compressData(newPayload);
+    await assertNoActiveEncryptionMigration();
+    const decoded = writeKey
+      ? await idbDecryptWithKey<StoredProjectEnvelope>(writeKey, encodedPayload as Uint8Array)
+      : decompressData<StoredProjectEnvelope>(encodedPayload);
+    if (!deepStructuredEqual(decoded, newPayload)) {
+      return {
+        status: 'VERIFICATION_FAILED',
+        reason: 'Encoded payload does not round-trip losslessly before commit.',
+      };
+    }
+    return { status: 'OK', encodedPayload };
   }
 
   /**
@@ -448,13 +485,13 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
     const newGeneration = computeProjectSourceGeneration(migratedRaw);
 
     return withProtectedWriteAdmission(async () => {
-      // QNBS-v3: key resolution + encryption complete fully before the transaction opens -- an await here once the transaction is live would let IndexedDB auto-commit it first.
-      const writeKey = await resolveProtectedWriteKey();
-      const encodedPayload = writeKey
-        ? await idbEncryptWithKey(writeKey, newPayload)
-        : compressData(newPayload);
-      await assertNoActiveEncryptionMigration();
-      return this.commitGenerationFencedWrite(rawRecordSnapshot, newGeneration, encodedPayload);
+      const encoded = await this.encodeVerifiedPayload(newPayload);
+      if (encoded.status === 'VERIFICATION_FAILED') return encoded;
+      return this.commitGenerationFencedWrite(
+        rawRecordSnapshot,
+        newGeneration,
+        encoded.encodedPayload,
+      );
     });
   }
 

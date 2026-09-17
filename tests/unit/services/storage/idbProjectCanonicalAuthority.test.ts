@@ -420,6 +420,42 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
     expect(admission.status).toBe('NOT_ADMITTED');
   });
 
+  it('fails closed (VERIFICATION_FAILED) instead of silently corrupting a large envelope sibling that compressData cannot preserve', async () => {
+    // QNBS-v3 regression: compressData JSON-serializes payloads at/above its 10KB threshold, so a Map-valued envelope sibling would otherwise be silently blanked to "{}" and permanently lost on write.
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, {
+      data: baseProjectPayload({ manuscript: 'x'.repeat(20_000) }),
+      history: new Map([['a', 1]]),
+    });
+    const admission = await authority.loadCanonicalProjectAdmission();
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+
+    const result = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: admission.generation,
+      edit: { fields: { title: 'Should not silently corrupt history' } },
+    });
+
+    expect(result.status).toBe('VERIFICATION_FAILED');
+  });
+
+  it('does not false-positive CONFLICT for an unrecognized typed-array envelope sibling', async () => {
+    // QNBS-v3 regression: only Uint8Array had a dedicated comparator -- any other typed array fell through to the "unequal" default, so an unchanged sibling would spuriously CONFLICT on every commit.
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, {
+      data: baseProjectPayload(),
+      checksum: new Int16Array([1, 2, 3]),
+    });
+    const admission = await authority.loadCanonicalProjectAdmission();
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+
+    const result = await authority.commitCanonicalProjectEdit({
+      expectedGeneration: admission.generation,
+      edit: { fields: { title: 'Renamed Story' } },
+    });
+
+    expect(result.status).toBe('COMMITTED');
+  });
+
   it('does not crash on a cyclic value in an opaque envelope sibling reachable through the raw-bytes fence', async () => {
     // QNBS-v3 regression: a cycle inside `data` itself would already fail JSON.stringify during
     // admission (classified MALFORMED) -- but a cycle in a SIBLING of `data` (e.g. an opaque
