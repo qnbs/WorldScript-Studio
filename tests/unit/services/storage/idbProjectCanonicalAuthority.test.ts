@@ -177,13 +177,14 @@ describe('IdbProjectCanonicalAuthority#loadCanonicalProjectAdmission', () => {
     });
   });
 
-  it('never admits a record object with neither a data nor a present.data envelope member', async () => {
+  it('treats a record with neither a data/present.data wrapper nor its own schemaVersion as a flat LEGACY_UNVERSIONED candidate', async () => {
+    // QNBS-v3: real shape validation (title, characters, etc.) is importedProjectJsonSchema's job, not this classifier's -- an unrecognized flat shape is LEGACY_UNVERSIONED (not admitted for ordinary edits either way), never MALFORMED, matching classifyRawProjectVersionFromParsed's own schemaVersion-only contract.
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, { unrelated: 'value' });
 
     await expect(authority.loadCanonicalProjectAdmission()).resolves.toEqual({
       status: 'NOT_ADMITTED',
-      classification: 'MALFORMED',
+      classification: 'LEGACY_UNVERSIONED',
     });
   });
 
@@ -754,6 +755,23 @@ describe('IdbProjectCanonicalAuthority#commitLegacyToV1Migration', () => {
     expect(admission.status).toBe('CURRENT');
     if (admission.status !== 'CURRENT') return;
     expect(admission.envelope.kind).toBe('present');
+    const parsed = JSON.parse(admission.currentRaw) as { schemaVersion: number; title: string };
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.title).toBe('My Legacy Story');
+  });
+
+  it('migrates a flat legacy record (no data/present wrapper at all) and keeps it flat', async () => {
+    // QNBS-v3: a genuine pre-v1 project necessarily lacks schemaVersion, so it can't hit the flat-record self-describing check either -- this proves the unwrapProjectEnvelope fallback admits it for migration too, not just ordinary edits.
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, legacyProjectPayload());
+
+    const result = await authority.commitLegacyToV1Migration();
+
+    expect(result.status).toBe('COMMITTED');
+    const admission = await authority.loadCanonicalProjectAdmission();
+    expect(admission.status).toBe('CURRENT');
+    if (admission.status !== 'CURRENT') return;
+    expect(admission.envelope).toEqual({ kind: 'flat' });
     const parsed = JSON.parse(admission.currentRaw) as { schemaVersion: number; title: string };
     expect(parsed.schemaVersion).toBe(1);
     expect(parsed.title).toBe('My Legacy Story');

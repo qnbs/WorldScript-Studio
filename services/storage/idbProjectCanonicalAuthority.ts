@@ -130,7 +130,8 @@ function unwrapProjectEnvelope(
   if (isRecord(record.data)) {
     return { payload: record.data, envelope: { kind: 'data', originalEnvelope: raw } };
   }
-  return null;
+  // QNBS-v3: a pre-v1 flat record necessarily lacks schemaVersion, so it can't hit the check above -- without this, every genuinely flat legacy project would be classified MALFORMED and never eligible for migration. classifyRawProjectVersionFromParsed/importedProjectJsonSchema still validate real shape downstream; this only decides which bytes are the payload.
+  return { payload: raw, envelope: { kind: 'flat' } };
 }
 
 /** Replaces only the nested payload; every other envelope member (e.g. redux-undo's past/future) survives untouched. A 'flat' record stays flat -- never gains a data/present wrapper it never had. */
