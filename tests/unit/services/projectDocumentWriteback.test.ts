@@ -134,8 +134,8 @@ describe('projectDocumentWriteback (#553)', () => {
   });
 
   /** Commits a characters-collection edit and returns its parsed characters, asserting COMMITTED. */
-  function commitCharactersEdit(edit: EntityCollectionEdit) {
-    const result = commitEdit({ collections: { characters: edit } });
+  function commitCharactersEdit(edit: EntityCollectionEdit, raw: string = baseDocument()) {
+    const result = commitEdit({ collections: { characters: edit } }, raw);
     expect(result.status).toBe('COMMITTED');
     if (result.status !== 'COMMITTED') throw new Error('expected COMMITTED');
     return (
@@ -170,6 +170,17 @@ describe('projectDocumentWriteback (#553)', () => {
     expect(characters.ids).toEqual(['c2', 'c1']);
     expect((characters.entities['c1'] as { name: string })?.name).toBe('Alice');
     expect((characters.entities['c2'] as { name: string })?.name).toBe('Bob');
+  });
+
+  it('does not treat a decimal number on an untouched entity as an unsafe integer', () => {
+    const raw = baseDocument().replace(
+      `"externalId":${UNSAFE_INTEGER_LITERAL}`,
+      '"externalId":4.5',
+    );
+
+    const characters = commitCharactersEdit({ upsert: [{ id: 'c1', name: 'Alicia' }] }, raw);
+
+    expect((characters.entities['c2'] as { externalId: number })?.externalId).toBe(4.5);
   });
 
   it.each([
