@@ -557,8 +557,15 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
    * permanently misclassified as a stale downgrade of whatever was migrated before it. This
    * authority has no reliable way to distinguish "a new project" from "a stale copy of the same
    * one" on its own: ProjectData's `id` field cannot help, since every fresh project reuses
-   * id:'default' until explicitly saved elsewhere. Wiring this into an actual reset/replace flow is
-   * #553 Phase D3's responsibility, not this standalone primitive's.
+   * id:'default' until explicitly saved elsewhere.
+   *
+   * NOT internally race-safe against a concurrent commit: this runs as its own transaction, not
+   * fenced against PROJECT_RECORD_KEY, and `withProtectedWriteAdmission`'s lock is 'shared' mode --
+   * it excludes only an in-progress encryption migration, not another ordinary writer, so it cannot
+   * serialize this against a concurrent commitCanonicalProjectEdit/commitLegacyToV1Migration either.
+   * The caller (#553 Phase D3's reset/replace flow) MUST ensure no concurrent commit can land
+   * between deciding to replace the project and calling this -- e.g. by suspending autosave for the
+   * duration, the same way a whole-project replacement already must for the legacy saveSlice path.
    */
   async clearCanonicalGenerationMarker(): Promise<void> {
     const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
