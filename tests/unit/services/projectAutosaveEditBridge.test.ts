@@ -21,19 +21,28 @@ function currentRawFor(payload: Record<string, unknown>): string {
 }
 
 describe('buildAutosaveOwnedProjectEdit', () => {
-  it('puts every non-collection top-level field into `fields`', () => {
-    const data = baseProjectData({ author: 'Author', outline: [{ id: 'o1' } as never] });
+  it('puts every non-collection top-level field, and only those, into `fields`', () => {
+    const data = baseProjectData();
     const currentRaw = currentRawFor(data as unknown as Record<string, unknown>);
 
     const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
 
-    expect(edit.fields).toMatchObject({
+    expect(edit.fields).toEqual({
+      id: 'default',
       title: 'My Story',
       logline: 'A logline.',
-      author: 'Author',
+      outline: [],
+      manuscript: [],
     });
-    expect(edit.fields).not.toHaveProperty('characters');
-    expect(edit.fields).not.toHaveProperty('worlds');
+  });
+
+  it('drops an explicitly-undefined-valued field instead of forwarding invalid JSON', () => {
+    const data = baseProjectData({ author: undefined });
+    const currentRaw = currentRawFor({ title: 'x' });
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+
+    expect(edit.fields).not.toHaveProperty('author');
   });
 
   it('upserts every current character/world entity, in current order', () => {
@@ -43,6 +52,13 @@ describe('buildAutosaveOwnedProjectEdit', () => {
         entities: {
           c1: { id: 'c1', name: 'Alice' },
           c2: { id: 'c2', name: 'Bob' },
+        },
+      },
+      worlds: {
+        ids: ['w2', 'w1'],
+        entities: {
+          w1: { id: 'w1', name: 'Aldoria' },
+          w2: { id: 'w2', name: 'Brythos' },
         },
       },
     });
@@ -56,6 +72,51 @@ describe('buildAutosaveOwnedProjectEdit', () => {
       { id: 'c1', name: 'Alice' },
     ]);
     expect(edit.collections?.characters?.remove).toBeUndefined();
+    expect(edit.collections?.worlds?.order).toEqual(['w2', 'w1']);
+    expect(edit.collections?.worlds?.upsert).toEqual([
+      { id: 'w2', name: 'Brythos' },
+      { id: 'w1', name: 'Aldoria' },
+    ]);
+    expect(edit.collections?.worlds?.remove).toBeUndefined();
+  });
+
+  it('preserves an opaque field the raw carrier holds but the typed entity does not model', () => {
+    const currentRaw = currentRawFor({
+      characters: {
+        ids: ['c1'],
+        entities: { c1: { id: 'c1', name: 'Alice', pluginNote: 'from an older build' } },
+      },
+      worlds: { ids: [], entities: {} },
+    });
+    const data = baseProjectData({
+      characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice Renamed' } } },
+    });
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+
+    expect(edit.collections?.characters?.upsert).toEqual([
+      { id: 'c1', name: 'Alice Renamed', pluginNote: 'from an older build' },
+    ]);
+  });
+
+  it('reads prior ids/entities from a plain-array-shaped raw collection (the Core boundary/filesystem on-disk shape)', () => {
+    const currentRaw = currentRawFor({
+      characters: [
+        { id: 'c1', name: 'Alice', pluginNote: 'kept' },
+        { id: 'c2', name: 'Bob' },
+      ],
+      worlds: [],
+    });
+    const data = baseProjectData({
+      characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice' } } },
+    });
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+
+    expect(edit.collections?.characters?.remove).toEqual(['c2']);
+    expect(edit.collections?.characters?.upsert).toEqual([
+      { id: 'c1', name: 'Alice', pluginNote: 'kept' },
+    ]);
   });
 
   it('computes remove as the set difference between the current raw carrier and the new state', () => {
@@ -94,14 +155,17 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     expect(edit.collections?.characters?.upsert).toHaveLength(1);
   });
 
-  it('does not mutate or re-serialize currentRaw -- it is read only to derive the removal set', () => {
+  it('is idempotent -- calling it twice with the same inputs never mutates currentRaw between calls', () => {
     const currentRaw = currentRawFor({
-      characters: { ids: ['c1', 'stale-id'], entities: {} },
+      characters: { ids: ['c1', 'stale-id'], entities: { c1: {}, 'stale-id': {} } },
       worlds: { ids: [], entities: {} },
     });
-    const frozenRaw = Object.freeze(currentRaw);
     const data = baseProjectData();
 
-    expect(() => buildAutosaveOwnedProjectEdit(data, frozenRaw)).not.toThrow();
+    const first = buildAutosaveOwnedProjectEdit(data, currentRaw);
+    const second = buildAutosaveOwnedProjectEdit(data, currentRaw);
+
+    expect(second).toEqual(first);
+    expect(second.collections?.characters?.remove).toEqual(['stale-id']);
   });
 });
