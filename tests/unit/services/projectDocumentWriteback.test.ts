@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   commitOwnedProjectEdit,
   computeProjectSourceGeneration,
+  type EntityCollectionEdit,
   type OwnedProjectEdit,
 } from '../../../services/projectDocumentWriteback';
 
@@ -132,57 +133,43 @@ describe('projectDocumentWriteback (#553)', () => {
     expect(parsed.logline).toBe('New logline.');
   });
 
-  it('applies an owned entity edit (upsert of an existing entity)', () => {
-    const result = commitEdit({
-      collections: { characters: { upsert: [{ id: 'c1', name: 'Alicia' }] } },
-    });
-
+  /** Commits a characters-collection edit and returns its parsed characters, asserting COMMITTED. */
+  function commitCharactersEdit(edit: EntityCollectionEdit) {
+    const result = commitEdit({ collections: { characters: edit } });
     expect(result.status).toBe('COMMITTED');
-    if (result.status !== 'COMMITTED') return;
-    const parsed = JSON.parse(result.raw) as {
-      characters: { ids: string[]; entities: Record<string, { name: string }> };
-    };
-    expect(parsed.characters.entities['c1']?.name).toBe('Alicia');
-    expect(parsed.characters.ids).toEqual(['c1', 'c2']);
+    if (result.status !== 'COMMITTED') throw new Error('expected COMMITTED');
+    return (
+      JSON.parse(result.raw) as { characters: { ids: string[]; entities: Record<string, unknown> } }
+    ).characters;
+  }
+
+  it('applies an owned entity edit (upsert of an existing entity)', () => {
+    const characters = commitCharactersEdit({ upsert: [{ id: 'c1', name: 'Alicia' }] });
+
+    expect((characters.entities['c1'] as { name: string })?.name).toBe('Alicia');
+    expect(characters.ids).toEqual(['c1', 'c2']);
   });
 
   it('applies an intentional entity create without treating it as an invented-field violation', () => {
-    const result = commitEdit({
-      collections: { characters: { upsert: [{ id: 'c3', name: 'Carol' }] } },
-    });
+    const characters = commitCharactersEdit({ upsert: [{ id: 'c3', name: 'Carol' }] });
 
-    expect(result.status).toBe('COMMITTED');
-    if (result.status !== 'COMMITTED') return;
-    const parsed = JSON.parse(result.raw) as {
-      characters: { ids: string[]; entities: Record<string, unknown> };
-    };
-    expect(parsed.characters.ids).toEqual(['c1', 'c2', 'c3']);
-    expect(parsed.characters.entities['c3']).toEqual({ id: 'c3', name: 'Carol' });
+    expect(characters.ids).toEqual(['c1', 'c2', 'c3']);
+    expect(characters.entities['c3']).toEqual({ id: 'c3', name: 'Carol' });
   });
 
   it('applies an intentional entity delete without treating it as opaque-data loss', () => {
-    const result = commitEdit({ collections: { characters: { remove: ['c2'] } } });
+    const characters = commitCharactersEdit({ remove: ['c2'] });
 
-    expect(result.status).toBe('COMMITTED');
-    if (result.status !== 'COMMITTED') return;
-    const parsed = JSON.parse(result.raw) as {
-      characters: { ids: string[]; entities: Record<string, unknown> };
-    };
-    expect(parsed.characters.ids).toEqual(['c1']);
-    expect(parsed.characters.entities['c2']).toBeUndefined();
+    expect(characters.ids).toEqual(['c1']);
+    expect(characters.entities['c2']).toBeUndefined();
   });
 
   it('reorders entities by an explicit declared order while preserving stable ids and content', () => {
-    const result = commitEdit({ collections: { characters: { order: ['c2', 'c1'] } } });
+    const characters = commitCharactersEdit({ order: ['c2', 'c1'] });
 
-    expect(result.status).toBe('COMMITTED');
-    if (result.status !== 'COMMITTED') return;
-    const parsed = JSON.parse(result.raw) as {
-      characters: { ids: string[]; entities: Record<string, { name: string }> };
-    };
-    expect(parsed.characters.ids).toEqual(['c2', 'c1']);
-    expect(parsed.characters.entities['c1']?.name).toBe('Alice');
-    expect(parsed.characters.entities['c2']?.name).toBe('Bob');
+    expect(characters.ids).toEqual(['c2', 'c1']);
+    expect((characters.entities['c1'] as { name: string })?.name).toBe('Alice');
+    expect((characters.entities['c2'] as { name: string })?.name).toBe('Bob');
   });
 
   it.each([

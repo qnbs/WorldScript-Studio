@@ -773,10 +773,15 @@ function hasDuplicateTopLevelKeys(members: readonly CanonicalRawObjectMember[]):
 }
 
 // QNBS-v3 (#553): a non-CURRENT document (MALFORMED/FUTURE/UNSUPPORTED_OLDER/LEGACY_UNVERSIONED) never gains write authority through this primitive, regardless of caller discipline upstream.
-function admitCurrentDocumentForWrite(
-  currentRaw: CanonicalProjectRawText,
-  expectedGeneration: ProjectSourceGeneration,
-): AdmissionCheck {
+type AdmissionRequest = {
+  currentRaw: CanonicalProjectRawText;
+  expectedGeneration: ProjectSourceGeneration;
+};
+
+function admitCurrentDocumentForWrite({
+  currentRaw,
+  expectedGeneration,
+}: AdmissionRequest): AdmissionCheck {
   const classification = classifyRawProjectVersion(currentRaw);
   if (classification !== 'CURRENT') {
     return { ok: false, result: { status: 'NOT_ADMITTED_FOR_WRITE', classification } };
@@ -881,7 +886,7 @@ export function commitOwnedProjectEdit(params: {
   currentRaw: CanonicalProjectRawText;
   edit: OwnedProjectEdit;
 }): ProjectWritebackResult {
-  const admission = admitCurrentDocumentForWrite(params.currentRaw, params.expectedGeneration);
+  const admission = admitCurrentDocumentForWrite(params);
   if (!admission.ok) return admission.result;
 
   const fieldsStep = applyOwnedFieldsStep(params.currentRaw, params.edit.fields);
