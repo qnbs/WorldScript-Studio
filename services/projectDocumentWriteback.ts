@@ -421,6 +421,19 @@ function parseEntityCollectionValue(
   }
 }
 
+// QNBS-v3: exported for the autosave bridge's read-only merge base (#553 D3) -- reuses this module's own protect/revive machinery so there is exactly one preserve-first raw-parse authority, never a second JSON parser.
+/**
+ * Parses canonical raw text for read-only inspection with unsafe-integer literals preserved
+ * exactly (as RawNumberLiteral sentinels), reusing this module's own protection machinery so
+ * there is a single preserve-first parse authority. The result must never be re-serialized with
+ * JSON.stringify -- route any write through commitOwnedProjectEdit, whose serializer restores
+ * the exact original digits.
+ */
+export function parseCanonicalRawPreservingUnsafeIntegers(raw: CanonicalProjectRawText): unknown {
+  const marker = createUniqueProtectionMarker(raw);
+  return reviveRawNumberMarkers(JSON.parse(protectUnsafeIntegers(raw, marker)), marker);
+}
+
 function isEntityStateShaped(value: unknown): value is EntityState<EntityLike, string> {
   return (
     value !== null &&

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A full-snapshot-to-owned-edit autosave bridge:** `services/projectAutosaveEditBridge.ts`
+  converts autosave's full `ProjectData` snapshot into the `OwnedProjectEdit` shape
+  `commitOwnedProjectEdit` (#773) and the IDB canonical authority (#775, #776) expect --
+  non-collection fields are treated as owned; `characters`/`worlds` merge by stable id (`upsert`
+  the current list, `remove` the set difference against the currently-committed carrier, `order`
+  the current declared order). Standalone and pure; not yet wired into any production writer. Part
+  of #553. PR #777.
 - **A generation-fenced canonical writeback primitive for the persisted project document:**
   `services/projectDocumentWriteback.ts` overlays an owned-path edit onto the raw project carrier
   and verifies it two-sided: unowned top-level scalar fields stay byte-identical (never
