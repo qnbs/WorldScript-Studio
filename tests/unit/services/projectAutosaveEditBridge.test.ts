@@ -208,6 +208,52 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     ]);
   });
 
+  it('treats prototype-named ids as ordinary entities in a plain-array raw collection', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [
+        { id: '__proto__', name: 'Proto', pluginNote: 'opaque-proto' },
+        { id: 'constructor', name: 'Ctor', pluginNote: 'opaque-ctor' },
+      ],
+      worlds: [],
+    });
+    const data = baseProjectData({
+      characters: {
+        ids: ['__proto__', 'constructor'],
+        entities: {
+          // Computed key: a plain '__proto__' literal key (quoted or not) would set the fixture's prototype instead of an own property.
+          ['__proto__']: { id: '__proto__', name: 'Renamed Proto' },
+          constructor: { id: 'constructor', name: 'Renamed Ctor' },
+        },
+      },
+    });
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+
+    expect(edit.collections?.characters?.upsert).toEqual([
+      { id: '__proto__', name: 'Renamed Proto', pluginNote: 'opaque-proto' },
+      { id: 'constructor', name: 'Renamed Ctor', pluginNote: 'opaque-ctor' },
+    ]);
+    expect(edit.collections?.characters?.remove).toBeUndefined();
+  });
+
+  it('never reads a "__proto__" entity body as a phantom merge base for unrelated ids', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [{ id: '__proto__', name: 'Proto', c9: { note: 'phantom-object' } }],
+      worlds: [],
+    });
+    const data = baseProjectData({
+      characters: { ids: ['c9'], entities: { c9: { id: 'c9', name: 'New' } } },
+    });
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+
+    expect(edit.collections?.characters?.upsert).toEqual([{ id: 'c9', name: 'New' }]);
+  });
+
   it('computes remove as the set difference between the current raw carrier and the new state', () => {
     const currentRaw = currentRawFor({
       characters: { ids: ['c1', 'c2'], entities: { c1: {}, c2: {} } },

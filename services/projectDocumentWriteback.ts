@@ -421,6 +421,7 @@ function parseEntityCollectionValue(
   }
 }
 
+// QNBS-v3: exported for the autosave bridge's read-only merge base (#553 D3) -- reuses this module's own protect/revive machinery so there is exactly one preserve-first raw-parse authority, never a second JSON parser.
 /**
  * Parses canonical raw text for read-only inspection with unsafe-integer literals preserved
  * exactly (as RawNumberLiteral sentinels), reusing this module's own protection machinery so

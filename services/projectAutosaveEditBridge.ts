@@ -60,7 +60,8 @@ function readRawCollection(
   if (!isRecord(parsedCurrent)) return { ids: [], entities: {} };
   const raw = parsedCurrent[collection];
   if (Array.isArray(raw)) {
-    const entities: Record<string, unknown> = {};
+    // QNBS-v3: Object.create(null) (not {}) so an id of "__proto__" becomes a real own property instead of hitting the inherited prototype setter (or reading Object.prototype back as a phantom merge base).
+    const entities: Record<string, unknown> = Object.create(null);
     const ids: string[] = [];
     for (const entity of raw) {
       if (!isIdBearing(entity)) continue;
@@ -84,8 +85,7 @@ function buildCollectionEdit(
   const newIdSet = new Set(newIds);
   const removedIds = currentRaw.ids.filter((id) => !newIdSet.has(id));
   const upsert = newEntities.map((entity) => {
-    // Same rule as top-level `fields`: an explicitly-undefined typed property means "unowned" and
-    // must not clobber an opaque prior raw value in the merge.
+    // QNBS-v3: same rule as top-level fields -- an explicitly-undefined typed property means "unowned" and must not clobber an opaque prior raw value in the merge.
     const definedEntity = Object.fromEntries(Object.entries(entity).filter(isDefinedEntry));
     const priorRaw = currentRaw.entities[entity.id];
     return isRecord(priorRaw) ? { ...priorRaw, ...definedEntity } : definedEntity;
