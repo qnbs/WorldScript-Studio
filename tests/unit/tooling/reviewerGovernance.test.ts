@@ -1,5 +1,9 @@
 // @vitest-environment node
+
 import { spawnSync } from 'node:child_process';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
@@ -46,5 +50,45 @@ describe('reviewer-status CLI validation', () => {
     );
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('--repo must be exactly owner/name');
+  });
+
+  it('collects commit statuses from paginated status response objects', () => {
+    const tempDirectory = mkdtempSync(join(tmpdir(), 'reviewer-status-gh-'));
+    const fakeGh = join(tempDirectory, 'gh');
+    writeFileSync(
+      fakeGh,
+      `#!/usr/bin/env node
+const request = process.argv.slice(2).join(' ');
+let response;
+if (request.includes('graphql')) {
+  response = [{ data: { repository: { pullRequest: { reviewThreads: { nodes: [] } } } } }];
+} else if (request.includes('/check-runs?')) {
+  response = [{ check_runs: [] }];
+} else if (request.includes('/status?')) {
+  response = [{ statuses: [{ id: 7, context: 'DeepSource', state: 'success', target_url: 'https://github.com/qnbs/WorldScript-Studio' }] }];
+} else if (request.includes('/issues/779/comments') || request.includes('/pulls/779/comments') || request.includes('/pulls/779/reviews')) {
+  response = [];
+} else if (request.includes('/pulls/779')) {
+  response = { head: { sha: 'test-head' }, state: 'open', merged: false, base: { ref: 'main' } };
+} else {
+  response = [];
+}
+process.stdout.write(JSON.stringify(response));
+`,
+    );
+    chmodSync(fakeGh, 0o755);
+
+    try {
+      const result = spawnSync(process.execPath, [reviewerStatusScript, '--pr', '779'], {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        env: { ...process.env, PATH: `${tempDirectory}:${process.env['PATH'] ?? ''}` },
+      });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('commitStatuses total=1');
+      expect(result.stdout).toContain('context="DeepSource"');
+    } finally {
+      rmSync(tempDirectory, { recursive: true, force: true });
+    }
   });
 });

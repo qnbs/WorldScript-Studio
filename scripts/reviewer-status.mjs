@@ -75,7 +75,8 @@ function fetchCheckRuns(path) {
 }
 
 function fetchCommitStatuses(path) {
-  return fetchPages(path);
+  const pages = flatPages(ghJson(['--paginate', '--slurp', path]));
+  return pages.flatMap((page) => page?.statuses ?? []);
 }
 
 function writeLine(line) {
