@@ -94,7 +94,7 @@ if (request.includes('graphql')) {
     },
   }];
 } else if (request.includes('/check-runs?')) {
-  response = [{ check_runs: [] }];
+  response = [{ check_runs: [{ name: 'Provider\\nInjected', status: 'completed', conclusion: 'failure' }] }];
 } else if (request.includes('/status?')) {
   response = [{ statuses: [{ id: 7, context: 'DeepSource', state: 'success', target_url: 'https://github.com/qnbs/WorldScript-Studio' }] }];
 } else if (request.includes('/issues/779/comments') || request.includes('/pulls/779/comments') || request.includes('/pulls/779/reviews')) {
@@ -119,6 +119,7 @@ process.stdout.write(JSON.stringify(response));
       expect(result.stdout).toContain('commitStatuses total=1');
       expect(result.stdout).toContain('context="DeepSource"');
       expect(result.stdout).toContain('rootCommentId=42');
+      expect(result.stdout).toContain('checkName="Provider\\nInjected"');
     } finally {
       rmSync(tempDirectory, { recursive: true, force: true });
     }

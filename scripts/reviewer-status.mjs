@@ -173,7 +173,9 @@ try {
   );
   writeLine('checks:');
   for (const check of checks)
-    writeLine(`  ${check.name}\t${check.status}/${check.conclusion ?? 'pending'}`);
+    writeLine(
+      `  checkName=${terminalValue(check.name)} status=${check.status}/${check.conclusion ?? 'pending'}`,
+    );
   writeLine(`commitStatuses total=${commitStatuses.length}`);
   for (const status of commitStatuses) {
     writeLine(

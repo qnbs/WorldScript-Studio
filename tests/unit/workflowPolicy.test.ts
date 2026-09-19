@@ -48,6 +48,7 @@ const tauriManifestSource = readFileSync(tauriManifestPath, 'utf8');
 describe('CI workflow policy', () => {
   it('keeps the reviewer trust guard base-owned and data-only', () => {
     expect(reviewerTrustWorkflowSource).toContain('pull_request_target:');
+    expect(reviewerTrustWorkflowSource).toContain('edited');
     expect(reviewerTrustWorkflowSource).toContain('git archive');
     expect(reviewerTrustWorkflowSource).toContain('git ls-tree');
     expect(reviewerTrustWorkflowSource).toContain('120000');
