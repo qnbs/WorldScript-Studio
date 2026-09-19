@@ -132,6 +132,22 @@ describe('classifyRawProjectVersion', () => {
     expect(classifyRawProjectVersion('{"schemaVersion": 9007199254740991.4}')).toBe('MALFORMED');
   });
 
+  it.each(['9007199254740993', '9007199254740993.0', '9007199254740993e0', '1e999'])(
+    'rejects unsafe integer-valued literal %s',
+    (literal) => {
+      expect(classifyRawProjectVersion(`{"schemaVersion": ${literal}}`)).toBe('MALFORMED');
+    },
+  );
+
+  it.each([
+    ['9007199254740991', 'FUTURE'],
+    ['9007199254740991.0', 'FUTURE'],
+    ['9.5', 'MALFORMED'],
+    ['1e2', 'FUTURE'],
+  ] as const)('preserves the classification of safe/control literal %s', (literal, expected) => {
+    expect(classifyRawProjectVersion(`{"schemaVersion": ${literal}}`)).toBe(expected);
+  });
+
   it('classifies schemaVersion one past the JS-safe-integer boundary as MALFORMED', () => {
     // QNBS-v3: beyond 2^53-1, f64/Number can no longer represent every integer exactly, so TS and Rust could silently disagree - reject rather than risk divergence.
     expect(classifyRawProjectVersion('{"schemaVersion": 9007199254740992}')).toBe('MALFORMED');

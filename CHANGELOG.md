@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Canonical autosave lifecycle writer for Slice 2A:** adds create-if-absent and bounded
+  ABSENT/LEGACY_UNVERSIONED/CURRENT handling through the canonical IndexedDB authority, with
+  fail-closed non-admitted states and no legacy dual-write fallback. Standalone and not yet wired
+  into the production autosave path. Part of #553. PR #778.
+- **Security dependency floor for PR #778:** raises the transitive `adm-zip` resolution from
+  vulnerable 0.6.0 to patched 0.6.1 for `GHSA-7q85-xj36-vmfc`, while retaining the
+  `onnxruntime-node` build-script denial.
 - **A full-snapshot-to-owned-edit autosave bridge:** `services/projectAutosaveEditBridge.ts`
   converts autosave's full `ProjectData` snapshot into the `OwnedProjectEdit` shape
   `commitOwnedProjectEdit` (#773) and the IDB canonical authority (#775, #776) expect --

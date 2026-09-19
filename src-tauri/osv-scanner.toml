@@ -1,6 +1,6 @@
 # osv-scanner ignore list for src-tauri/Cargo.lock + pnpm-lock.yaml
 # All entries have been evaluated and accepted by the maintainer.
-# Reviewed: 2026-05-17 (Rust) / 2026-09-08 (npm)
+# Reviewed: 2026-05-17 (Rust) / 2026-09-19 (npm)
 
 # ─── GTK3 Rust bindings (Linux WebKit stack) ────────────────────────────────
 # webkit2gtk 2.0.2 (required by wry 0.55.x / Tauri 2.x for Linux) depends on
@@ -128,47 +128,17 @@ reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; 
 # overrides.lighthouse now forces @lhci/cli's Lighthouse/Puppeteer chain to a
 # version whose @puppeteer/browsers dependency replaced extract-zip with
 # modern-tar, eliminating the package from the resolved graph entirely — see
-# AUDIT.md's 2026-09-10 entry. One documented ignore remains below — no fixed
-# version exists to override to for it.
+# AUDIT.md's 2026-09-10 entry. The former adm-zip ignore was removed on 2026-09-19
+# after pnpm audit was clean and the resolved 0.6.1 version was outside the GHSA-vwc7
+# vulnerable range (the GitHub API still leaves its first_patched_version unset). The current
+# advisory set is GHSA-xcpc-8h2w-3j85 (fixed in 0.6.0), GHSA-7q85-xj36-vmfc (0.6.1), and
+# GHSA-vwc7-r8mq-g2x9 (direct 0.6.1 tarball extraction guard); the workspace floor covers all three.
+# The `allowBuilds: { onnxruntime-node: false }` control remains in force as
+# defense-in-depth for the transitive package's install-time lifecycle script. npm registry
+# metadata dates 0.6.1 to 2026-09-11; a direct 0.6.0/0.6.1 tarball comparison confirmed the
+# extraction fix's `assertPathSafe`/`lstat` rejection of pre-existing symlink components.
 
-# adm-zip@0.6.0 (CVE-2026-76845 / GHSA-vwc7-r8mq-g2x9, CVSS 6.8): symlink-following
-# path traversal on extraction with overwrite enabled, when an attacker can
-# pre-place a symlink at the extraction destination. No patched version exists
-# yet (GitHub's advisory API reports first_patched_version: null) — the
-# `adm-zip: ">=0.6.0"` pnpm override is a floor, not a pin: it permits any
-# future adm-zip release from 0.6.0 upward, and the lockfile currently resolves
-# the range to 0.6.0 because that is still the newest published version. No
-# upgrade path exists either: @huggingface/transformers@4.2.0 (latest stable)
-# hard-pins onnxruntime-node to an exact, mandatory (non-optional) "1.24.3",
-# and even onnxruntime-node@1.29.0 (latest stable, 2026-09-10) still depends on
-# adm-zip@^0.6.0 — this is not a stale-pin problem an upgrade solves. adm-zip
-# is a dependency of onnxruntime-node's own postinstall/build script (which
-# extracts its prebuilt native binary into
-# `path.join(os.tmpdir(), 'onnxruntime-node-pkgs_<timestamp>')` — a shared,
-# timestamp-named system temp directory, NOT a project-local one — verified
-# directly against onnxruntime-node@1.24.3's own install-utils.js). The SOLE
-# mitigation for that install-time extraction is `pnpm-workspace.yaml`'s
-# `allowBuilds: { onnxruntime-node: false }`, which denies this package's
-# lifecycle scripts outright, so the postinstall extraction never runs during
-# a normal `pnpm install` in this repo, in CI, or in the shipped app — Vite's
-# bundling behavior below is a separate fact about a different question and
-# does NOT independently protect against this install-time script, since
-# `pnpm install`'s lifecycle-script phase runs before Vite or any bundler ever
-# resolves anything. Separately, verified 2026-09-10: even the shipped app's
-# own JS code never imports the onnxruntime-node module this postinstall
-# extracts a binary for — `vite.config.ts`'s `resolve.alias` hardcodes
-# `@huggingface/transformers` to `dist/transformers.web.js` for every
-# bundler/browser consumer (the PWA build and the Tauri WebView frontend
-# alike), bypassing the package's own conditional `exports` map entirely, and
-# that file contains zero real reference to onnxruntime-node (confirmed by
-# inspecting the published package) — this repo's own test suite reinforces
-# the same boundary by explicitly mocking that exact web-build path rather
-# than letting real module resolution occur. If that `allowBuilds` entry is
-# ever relaxed/removed, this exposure model must be re-evaluated — the
-# temp-directory extraction target is not inherently safe on its own, and the
-# Vite-alias fact does not substitute for it.
-
-[[IgnoredVulns]]
-id = "GHSA-vwc7-r8mq-g2x9"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "adm-zip 0.6.0: symlink-following path traversal on overwrite-enabled extraction; latest release, no fixed version exists; mitigated by pnpm-workspace.yaml's allowBuilds: onnxruntime-node=false denying its postinstall/build script outright (not by the extraction path itself, which uses a shared system temp directory) — re-evaluate if that allowBuilds entry ever changes"
+# Historical note: the 2026-09-10 investigation found no patched release for
+# GHSA-vwc7-r8mq-g2x9 at that time. The 2026-09-19 `pnpm audit --json` output
+# reports no vulnerabilities for the resolved graph, so no npm ignore is needed here; the
+# workspace build denial remains defense-in-depth.
