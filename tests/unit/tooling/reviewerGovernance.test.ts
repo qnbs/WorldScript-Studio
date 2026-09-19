@@ -7,7 +7,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  hasEnabledAutoReview,
   hasValidPathInstructionShape,
+  hasValidReviewerRole,
   isForbiddenDynamicKey,
 } from '../../../scripts/check-reviewer-config.mjs';
 
@@ -29,6 +31,18 @@ describe('reviewer governance validators', () => {
     expect(hasValidPathInstructionShape({ path: '   ', instructions: 'why' })).toBe(false);
     expect(hasValidPathInstructionShape({ path: 'services/**', instructions: 'why' })).toBe(true);
     expect(hasValidPathInstructionShape({ instructions: 'why' })).toBe(false);
+  });
+
+  it('requires typed non-empty reviewer roles and boolean CodeRabbit auto-review', () => {
+    expect(hasValidReviewerRole('semantic-ai-review')).toBe(true);
+    expect(hasValidReviewerRole('  ')).toBe(false);
+    expect(hasValidReviewerRole({})).toBe(false);
+    expect(
+      hasEnabledAutoReview({ auto_review: { enabled: true, auto_incremental_review: true } }),
+    ).toBe(true);
+    expect(
+      hasEnabledAutoReview({ auto_review: { enabled: 'false', auto_incremental_review: true } }),
+    ).toBe(false);
   });
 });
 
@@ -61,7 +75,24 @@ describe('reviewer-status CLI validation', () => {
 const request = process.argv.slice(2).join(' ');
 let response;
 if (request.includes('graphql')) {
-  response = [{ data: { repository: { pullRequest: { reviewThreads: { nodes: [] } } } } }];
+  response = [{
+    data: {
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            nodes: [{
+              id: 'thread-1',
+              isResolved: false,
+              isOutdated: false,
+              path: 'scripts/example.mjs',
+              line: 1,
+              comments: { nodes: [{ databaseId: 42, author: { login: 'reviewer' }, body: 'metadata' }] },
+            }],
+          },
+        },
+      },
+    },
+  }];
 } else if (request.includes('/check-runs?')) {
   response = [{ check_runs: [] }];
 } else if (request.includes('/status?')) {
@@ -87,6 +118,7 @@ process.stdout.write(JSON.stringify(response));
       expect(result.status).toBe(0);
       expect(result.stdout).toContain('commitStatuses total=1');
       expect(result.stdout).toContain('context="DeepSource"');
+      expect(result.stdout).toContain('rootCommentId=42');
     } finally {
       rmSync(tempDirectory, { recursive: true, force: true });
     }

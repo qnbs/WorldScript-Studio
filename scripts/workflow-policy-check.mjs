@@ -120,14 +120,26 @@ function validateReviewerGovernanceGateStep(fileName, gateStep, failures) {
 
 function validateReviewerGovernanceGateRun(fileName, gateStep, doc, failures) {
   const run = nodeValue(gateStep.get('run', true), doc);
-  if (typeof run !== 'string' || !run.includes('scripts/check-reviewer-config.mjs')) {
+  if (
+    typeof run !== 'string' ||
+    !/node\s+"\$TRUSTED_BASE_WORKSPACE\/scripts\/check-reviewer-config\.mjs"/.test(run)
+  ) {
     failures.push({
       file: fileName,
       message:
-        'Reviewer governance configuration gate must invoke scripts/check-reviewer-config.mjs',
+        'Reviewer governance configuration gate must invoke the exact trusted base checker command',
     });
   }
-  if (typeof run !== 'string' || !run.includes('REVIEWER_DEPENDENCY_ROOT')) {
+  if (
+    typeof run !== 'string' ||
+    !/REVIEWER_CONFIG_ROOT="\$\{\{\s*github\.workspace\s*\}\}"/.test(run)
+  ) {
+    failures.push({
+      file: fileName,
+      message: 'Reviewer governance configuration gate must use the exact PR workspace root',
+    });
+  }
+  if (typeof run !== 'string' || !/REVIEWER_DEPENDENCY_ROOT="\$TRUSTED_BASE_WORKSPACE"/.test(run)) {
     failures.push({
       file: fileName,
       message: 'Reviewer governance configuration gate must use trusted dependency resolution',
@@ -137,12 +149,24 @@ function validateReviewerGovernanceGateRun(fileName, gateStep, doc, failures) {
 
 function validateReviewerGovernanceGateEnvironment(fileName, gateStep, doc, failures) {
   const environment = nodeValue(gateStep.get('env', true), doc);
-  if (!environment || typeof environment.REVIEWER_CONFIG_ROOT !== 'string') {
+  const expectedWorkspace = '$' + '{{ github.workspace }}';
+  if (environment?.REVIEWER_CONFIG_ROOT !== expectedWorkspace) {
     failures.push({
       file: fileName,
       message:
         'Reviewer governance configuration gate must pin REVIEWER_CONFIG_ROOT to the PR workspace',
     });
+  }
+}
+
+function validateReviewerGovernanceGateOverrides(fileName, gateStep, failures) {
+  for (const field of ['if', 'continue-on-error', 'shell', 'working-directory']) {
+    if (gateStep.get(field, true) !== undefined) {
+      failures.push({
+        file: fileName,
+        message: `Reviewer governance configuration gate must not override ${field}`,
+      });
+    }
   }
 }
 
@@ -153,6 +177,63 @@ export function checkReviewerGovernanceGate(fileName, doc, failures) {
   if (!validateReviewerGovernanceGateStep(fileName, gateStep, failures)) return;
   validateReviewerGovernanceGateRun(fileName, gateStep, doc, failures);
   validateReviewerGovernanceGateEnvironment(fileName, gateStep, doc, failures);
+  validateReviewerGovernanceGateOverrides(fileName, gateStep, failures);
+}
+
+function isPullRequestTargetOnlyTrigger(triggers) {
+  if (!triggers) return false;
+  if (typeof triggers !== 'object') return false;
+  const triggerKeys = Object.keys(triggers);
+  if (!triggerKeys.includes('pull_request_target')) return false;
+  return triggerKeys.every((key) => key === 'pull_request_target');
+}
+
+function getWorkflowTriggerNode(doc) {
+  const namedTrigger = doc.get('on', true);
+  if (namedTrigger !== undefined) return namedTrigger;
+  return doc.get(true, true);
+}
+
+function validateReviewerGovernanceTrustTrigger(fileName, doc, failures) {
+  const triggerNode = getWorkflowTriggerNode(doc);
+  const triggers = nodeValue(triggerNode, doc);
+  if (!isPullRequestTargetOnlyTrigger(triggers)) {
+    failures.push({
+      file: fileName,
+      message: 'reviewer governance trust workflow must be pull_request_target-only',
+    });
+  }
+}
+
+function validateReviewerGovernanceTrustExecution(fileName, doc, failures) {
+  const job = jobMap(doc).get('reviewer-governance-trust');
+  const steps = resolveSteps(job?.get?.('steps', true), doc);
+  const validationStep = steps.find(
+    (step) =>
+      nodeValue(step?.get?.('name', true), doc) ===
+      'Validate PR reviewer governance as untrusted data',
+  );
+  const run = nodeValue(validationStep?.get?.('run', true), doc);
+  const requiredFragments = [
+    'git fetch --no-tags origin',
+    'git archive',
+    'REVIEWER_CONFIG_ROOT="$PR_ROOT"',
+    'REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE"',
+    'node scripts/check-reviewer-config.mjs',
+  ];
+  if (typeof run !== 'string' || requiredFragments.some((fragment) => !run.includes(fragment))) {
+    failures.push({
+      file: fileName,
+      message:
+        'reviewer governance trust workflow must validate only an archived PR with trusted base code',
+    });
+  }
+}
+
+export function checkReviewerGovernanceTrustWorkflow(fileName, doc, failures) {
+  if (fileName !== 'reviewer-governance-trust.yml') return;
+  validateReviewerGovernanceTrustTrigger(fileName, doc, failures);
+  validateReviewerGovernanceTrustExecution(fileName, doc, failures);
 }
 
 // QNBS-v3: resolves a needs: node (possibly aliased, e.g. shared via &deps/*deps) to a string array.
@@ -542,6 +623,7 @@ export function checkWorkflowFile(filePath, dependencies = {}) {
   checkAggregatorNeeds(fileName, doc, failures);
   checkPublishingBoundary(fileName, doc, failures);
   checkReviewerGovernanceGate(fileName, doc, failures);
+  checkReviewerGovernanceTrustWorkflow(fileName, doc, failures);
   return failures;
 }
 

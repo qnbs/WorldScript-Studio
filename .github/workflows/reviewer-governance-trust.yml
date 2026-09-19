@@ -42,6 +42,12 @@ jobs:
             echo "::error::fetched PR ref does not match the event head SHA"
             exit 1
           fi
+          SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk '$1 == "120000" { print $0 }')"
+          if [ -n "$SYMLINKS" ]; then
+            echo "::error::PR archive contains symlinks; refusing to follow untrusted archive links"
+            printf '%s\n' "$SYMLINKS"
+            exit 1
+          fi
           PR_ROOT="$(mktemp -d)"
           git archive "refs/remotes/origin/pr/${PR_NUMBER}" | tar -x -C "$PR_ROOT"
           if [ ! -f scripts/check-reviewer-config.mjs ]; then

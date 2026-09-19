@@ -184,7 +184,7 @@ try {
     `reviewThreads total=${threads.length} unresolved=${threads.filter((thread) => !thread.isResolved).length}`,
   );
   for (const thread of threads) {
-    const comment = thread.comments?.[0];
+    const comment = thread.comments?.nodes?.[0] ?? thread.comments?.[0];
     writeLine(
       `  inlineThread id=${terminalValue(thread.id)} rootCommentId=${terminalValue(comment?.databaseId)} provider=${terminalValue(comment?.author?.login)} resolved=${thread.isResolved} outdated=${thread.isOutdated} path=${terminalValue(thread.path)} line=${terminalValue(thread.line ?? 'unknown')} bodyAvailable=${Boolean(comment?.body)}`,
     );

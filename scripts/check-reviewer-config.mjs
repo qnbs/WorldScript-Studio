@@ -164,9 +164,13 @@ function validateReviewerConfig(reviewer, prefix, configs) {
 }
 
 function validateReviewerOwnership(reviewer, prefix) {
-  if (!reviewer.role) fail(prefix + '.role is required');
+  if (!hasValidReviewerRole(reviewer.role)) fail(prefix + '.role must be a non-empty string');
   if (!['repository', 'dashboard', 'live-service'].includes(reviewer.configurationOwner))
     fail(prefix + '.configurationOwner is invalid');
+}
+
+export function hasValidReviewerRole(role) {
+  return typeof role === 'string' && role.trim().length > 0;
 }
 
 function validateReviewerMutationBoundary(reviewer, prefix) {
@@ -224,9 +228,13 @@ function validateCodeRabbitReviewPolicy(reviews) {
 }
 
 function validateCodeRabbitAutoReview(reviews) {
-  const autoReview = reviews?.auto_review;
-  if (!autoReview?.enabled || autoReview.auto_incremental_review !== true)
+  if (!hasEnabledAutoReview(reviews))
     fail('.coderabbit.yaml: automatic incremental review must be explicit and enabled');
+}
+
+export function hasEnabledAutoReview(reviews) {
+  const autoReview = reviews?.auto_review;
+  return autoReview?.enabled === true && autoReview.auto_incremental_review === true;
 }
 
 function validateCodeRabbitFinishingTouches(reviews) {

@@ -49,6 +49,8 @@ describe('CI workflow policy', () => {
   it('keeps the reviewer trust guard base-owned and data-only', () => {
     expect(reviewerTrustWorkflowSource).toContain('pull_request_target:');
     expect(reviewerTrustWorkflowSource).toContain('git archive');
+    expect(reviewerTrustWorkflowSource).toContain('git ls-tree');
+    expect(reviewerTrustWorkflowSource).toContain('120000');
     expect(reviewerTrustWorkflowSource).toContain('REVIEWER_CONFIG_ROOT="$PR_ROOT"');
     expect(reviewerTrustWorkflowSource).toContain('REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE"');
     expect(reviewerTrustWorkflowSource).not.toContain('pull_request:');

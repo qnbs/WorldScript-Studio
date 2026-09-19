@@ -11,6 +11,7 @@ import {
   checkNeedsGraph,
   checkPublishingBoundary,
   checkReviewerGovernanceGate,
+  checkReviewerGovernanceTrustWorkflow,
   checkTopLevelPermissions,
   checkWorkflowFile,
   getTriggers,
@@ -65,7 +66,9 @@ jobs:
         env:
           REVIEWER_CONFIG_ROOT: \${{ github.workspace }}
         run: |
-          REVIEWER_DEPENDENCY_ROOT=/tmp/base node /tmp/base/scripts/check-reviewer-config.mjs
+          REVIEWER_CONFIG_ROOT="\${{ github.workspace }}" \\
+          REVIEWER_DEPENDENCY_ROOT="$TRUSTED_BASE_WORKSPACE" \\
+          node "$TRUSTED_BASE_WORKSPACE/scripts/check-reviewer-config.mjs"
 `),
       failures,
     );
@@ -80,6 +83,65 @@ jobs:
       failures,
     );
     expect(failures.some((failure) => failure.message.includes('must retain'))).toBe(true);
+  });
+
+  it('rejects redirected, tolerated, conditional, or substring-only gate variants', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkReviewerGovernanceGate(
+      'ci.yml',
+      doc(`
+jobs:
+  workflow-policy:
+    steps:
+      - name: Reviewer governance configuration gate
+        if: \${{ always() }}
+        continue-on-error: true
+        working-directory: /tmp
+        run: node /tmp/check-reviewer-config.mjs
+`),
+      failures,
+    );
+    expect(failures.map((failure) => failure.message).join('\n')).toMatch(
+      /exact trusted base checker|exact PR workspace root|must not override if|must not override continue-on-error|must not override working-directory/,
+    );
+  });
+});
+
+describe('checkReviewerGovernanceTrustWorkflow', () => {
+  it('requires the base-owned pull-request target data-only shape', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkReviewerGovernanceTrustWorkflow(
+      'reviewer-governance-trust.yml',
+      doc(`
+on:
+  pull_request_target:
+    types: [opened]
+permissions:
+  contents: read
+jobs:
+  reviewer-governance-trust:
+    steps:
+      - name: Validate PR reviewer governance as untrusted data
+        run: |
+          git fetch --no-tags origin refs/pull/1/head
+          git archive refs/remotes/origin/pr/1 | tar -x
+          REVIEWER_CONFIG_ROOT="$PR_ROOT" REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" node scripts/check-reviewer-config.mjs
+`),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it('fails when the trust workflow is changed into an ordinary pull-request workflow', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkReviewerGovernanceTrustWorkflow(
+      'reviewer-governance-trust.yml',
+      doc('on: [pull_request]\njobs: {}\n'),
+      failures,
+    );
+    expect(failures.some((failure) => failure.message.includes('pull_request_target-only'))).toBe(
+      true,
+    );
   });
 });
 
