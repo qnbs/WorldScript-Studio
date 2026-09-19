@@ -5,7 +5,8 @@
  * Vendor schemas remain vendor-owned. This checker validates repository relationships and
  * non-negotiable governance invariants without network access or credentials.
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
 import process from 'node:process';
@@ -90,6 +91,14 @@ function readJson(path) {
   }
 }
 
+export function isRegularReviewerConfigFile(path) {
+  try {
+    return lstatSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 function visitKeys(value, location = '$') {
   if (!value || typeof value !== 'object') return;
   for (const [key, child] of Object.entries(value)) {
@@ -160,7 +169,10 @@ function validateReviewerConfig(reviewer, prefix, configs) {
   configs.add(path);
   if (!approvedReviewerConfigPaths.has(path))
     fail(prefix + '.repoConfig is not an approved reviewer config path');
-  if (!existsSync(join(root, path))) fail(prefix + '.repoConfig does not exist: ' + path);
+  const absolutePath = join(root, path);
+  if (!existsSync(absolutePath)) fail(prefix + '.repoConfig does not exist: ' + path);
+  else if (!isRegularReviewerConfigFile(absolutePath))
+    fail(prefix + '.repoConfig must be a regular file: ' + path);
 }
 
 function validateReviewerOwnership(reviewer, prefix) {
@@ -190,7 +202,10 @@ function validateReviewer(reviewer, index, ids, configs) {
 
 function validateRegisteredConfigCoverage(configs) {
   for (const path of approvedReviewerConfigPaths) {
-    if (existsSync(join(root, path)) && !configs.has(path))
+    const absolutePath = join(root, path);
+    if (existsSync(absolutePath) && !isRegularReviewerConfigFile(absolutePath))
+      fail(path + ': configured reviewer config must be a regular file');
+    if (isRegularReviewerConfigFile(absolutePath) && !configs.has(path))
       fail(path + ': configured reviewer config is missing from the registry');
   }
 }
@@ -312,15 +327,33 @@ function validateCodeRabbitPathPolicy(reviews) {
   validateCodeRabbitPathInstructions(reviews?.path_instructions);
 }
 
-function listRepositoryFiles(directory = root) {
+function listTrackedRepositoryFiles() {
+  try {
+    return execFileSync('git', ['-C', root, 'ls-files', '--cached', '--full-name', '-z'], {
+      encoding: 'utf8',
+    })
+      .split('\0')
+      .filter(Boolean);
+  } catch (error) {
+    fail(`git ls-files failed while enumerating reviewer paths: ${error.message}`);
+    return [];
+  }
+}
+
+function listArchiveRepositoryFiles(directory = root) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (entry.name === '.git' || entry.name === 'node_modules') continue;
     const absolutePath = join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...listRepositoryFiles(absolutePath));
+    if (entry.isDirectory()) files.push(...listArchiveRepositoryFiles(absolutePath));
     else if (entry.isFile()) files.push(relative(root, absolutePath).replaceAll('\\', '/'));
   }
   return files;
+}
+
+function listRepositoryFiles() {
+  return existsSync(join(root, '.git'))
+    ? listTrackedRepositoryFiles()
+    : listArchiveRepositoryFiles();
 }
 
 function globToRegExp(pattern) {

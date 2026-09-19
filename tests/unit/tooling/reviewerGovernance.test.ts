@@ -11,6 +11,7 @@ import {
   hasValidPathInstructionShape,
   hasValidReviewerRole,
   isForbiddenDynamicKey,
+  isRegularReviewerConfigFile,
 } from '../../../scripts/check-reviewer-config.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -43,6 +44,11 @@ describe('reviewer governance validators', () => {
     expect(
       hasEnabledAutoReview({ auto_review: { enabled: 'false', auto_incremental_review: true } }),
     ).toBe(false);
+  });
+
+  it('accepts only regular reviewer configuration files', () => {
+    expect(isRegularReviewerConfigFile(join(repositoryRoot, '.coderabbit.yaml'))).toBe(true);
+    expect(isRegularReviewerConfigFile(join(repositoryRoot, 'scripts'))).toBe(false);
   });
 });
 

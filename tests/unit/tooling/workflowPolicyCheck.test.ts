@@ -19,6 +19,11 @@ import {
 } from '../../../scripts/workflow-policy-check.mjs';
 
 const doc = (yaml: string) => parseDocument(yaml, { uniqueKeys: true });
+const checkTrustWorkflow = (yaml: string) => {
+  const failures: WorkflowPolicyFailure[] = [];
+  checkReviewerGovernanceTrustWorkflow('reviewer-governance-trust.yml', doc(yaml), failures);
+  return failures;
+};
 // QNBS-v3: the unescaped `${{ ${expr} }}` form Biome's own autofix suggests is a JS SyntaxError — `\$` escapes the literal dollar so only the inner `${expr}` interpolates.
 const githubExpression = (expression: string) => `\${{ ${expression} }}`;
 
@@ -109,13 +114,10 @@ jobs:
 
 describe('checkReviewerGovernanceTrustWorkflow', () => {
   it('requires the base-owned pull-request target data-only shape', () => {
-    const failures: WorkflowPolicyFailure[] = [];
-    checkReviewerGovernanceTrustWorkflow(
-      'reviewer-governance-trust.yml',
-      doc(`
+    const failures = checkTrustWorkflow(`
 on:
   pull_request_target:
-    types: [opened]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 permissions:
   contents: read
 jobs:
@@ -126,19 +128,24 @@ jobs:
           git fetch --no-tags origin refs/pull/1/head
           git archive refs/remotes/origin/pr/1 | tar -x
           REVIEWER_CONFIG_ROOT="$PR_ROOT" REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" node scripts/check-reviewer-config.mjs
-`),
-      failures,
-    );
+`);
     expect(failures).toEqual([]);
   });
 
   it('fails when the trust workflow is changed into an ordinary pull-request workflow', () => {
-    const failures: WorkflowPolicyFailure[] = [];
-    checkReviewerGovernanceTrustWorkflow(
-      'reviewer-governance-trust.yml',
-      doc('on: [pull_request]\njobs: {}\n'),
-      failures,
+    const failures = checkTrustWorkflow('on: [pull_request]\njobs: {}\n');
+    expect(failures.some((failure) => failure.message.includes('pull_request_target-only'))).toBe(
+      true,
     );
+  });
+
+  it('fails when synchronization activity is omitted from the trust workflow', () => {
+    const failures = checkTrustWorkflow(`
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, edited]
+jobs: {}
+`);
     expect(failures.some((failure) => failure.message.includes('pull_request_target-only'))).toBe(
       true,
     );

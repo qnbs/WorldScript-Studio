@@ -185,7 +185,17 @@ function isPullRequestTargetOnlyTrigger(triggers) {
   if (typeof triggers !== 'object') return false;
   const triggerKeys = Object.keys(triggers);
   if (!triggerKeys.includes('pull_request_target')) return false;
-  return triggerKeys.every((key) => key === 'pull_request_target');
+  if (!triggerKeys.every((key) => key === 'pull_request_target')) return false;
+  return hasRequiredReviewerTrustActivities(triggers.pull_request_target);
+}
+
+function hasRequiredReviewerTrustActivities(targetTrigger) {
+  if (!targetTrigger) return false;
+  if (typeof targetTrigger !== 'object') return false;
+  const types = targetTrigger.types;
+  if (!Array.isArray(types)) return false;
+  const requiredTypes = ['opened', 'synchronize', 'reopened', 'ready_for_review', 'edited'];
+  return requiredTypes.every((type) => types.includes(type));
 }
 
 function getWorkflowTriggerNode(doc) {
