@@ -113,7 +113,10 @@ export function buildAutosaveOwnedProjectEdit(
   currentRaw: CanonicalProjectRawText,
 ): OwnedProjectEdit {
   const { characters, worlds, ...rest } = newData;
-  const fields = Object.fromEntries(Object.entries(rest).filter(isDefinedEntry));
+  // QNBS-v3: schemaVersion is admission-owned, never autosave-owned -- appBootstrap spreads the persisted payload into the runtime ProjectData, so a CURRENT payload can carry a runtime-extra schemaVersion here, and commitOwnedProjectEdit intentionally rejects an owned schemaVersion edit.
+  const fields = Object.fromEntries(
+    Object.entries(rest).filter(([key, value]) => key !== 'schemaVersion' && value !== undefined),
+  );
   const parsedCurrent: unknown = parseCanonicalRawPreservingUnsafeIntegers(currentRaw);
   const newCharacters = entityStateToCoreArray(characters, 'characters');
   const newWorlds = entityStateToCoreArray(worlds, 'worlds');

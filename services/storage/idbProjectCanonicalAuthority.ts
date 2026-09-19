@@ -103,6 +103,12 @@ export type CommitLegacyToV1MigrationResult =
   // QNBS-v3: distinct from NOT_ADMITTED_FOR_WRITE -- this path exists specifically for LEGACY_UNVERSIONED sources, so an already-CURRENT (or FUTURE/MALFORMED) document is "not eligible for migration", not "refused write authority".
   | { status: 'NOT_ELIGIBLE'; classification: string };
 
+export type CreateCanonicalProjectResult =
+  | { status: 'CREATED'; generation: ProjectSourceGeneration }
+  | { status: 'CONFLICT' }
+  | { status: 'VERIFICATION_FAILED'; reason: string }
+  | { status: 'MALFORMED_SOURCE'; reason: string };
+
 interface StoredProjectEnvelope {
   data?: Record<string, unknown>;
   present?: { data: Record<string, unknown> };
@@ -511,6 +517,52 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
         newGeneration,
         encoded.encodedPayload,
       );
+    });
+  }
+
+  /**
+   * Atomically establishes the canonical CURRENT record for a first-ever save (an ABSENT
+   * 'project' key), through the SAME raw-bytes fence and protected-write admission discipline as
+   * commitCanonicalProjectEdit/commitLegacyToV1Migration -- never a bootstrap via the legacy
+   * (non-fenced) saveSlice path, which would persist a schemaVersion-less LEGACY_UNVERSIONED
+   * record in a schema-aware build. The candidate is the INNER CURRENT project payload; this
+   * method validates it against PROJECT_SCHEMA_V1 (§2.4 step-4 revalidation), re-wraps it into
+   * the browser envelope ({ data: ... }) the existing cold-boot readers expect, and writes it
+   * only if the record is still absent -- a concurrent creator or writer resolves CONFLICT.
+   */
+  async createCanonicalProjectIfAbsent(params: {
+    currentRaw: CanonicalProjectRawText;
+  }): Promise<CreateCanonicalProjectResult> {
+    const admission = admitCanonicalProjectDocument(params.currentRaw, importedProjectJsonSchema);
+    if (admission.status !== 'CURRENT') {
+      return {
+        status: 'MALFORMED_SOURCE',
+        reason: `initial canonical payload is not a valid CURRENT document (classification: ${admission.source.classification})`,
+      };
+    }
+    const currentPayload = JSON.parse(params.currentRaw) as Record<string, unknown>;
+    const newPayload = rewrapProjectEnvelope(currentPayload, {
+      kind: 'data',
+      originalEnvelope: {},
+    });
+    // QNBS-v3: IDB stores the parsed payload, so hash its persisted JSON form rather than caller-only whitespace; the marker must equal the ordinary reload admission generation.
+    const newGeneration = computeProjectSourceGeneration(JSON.stringify(currentPayload));
+
+    return withProtectedWriteAdmission(async () => {
+      const encoded = await this.encodeVerifiedPayload(newPayload);
+      if (encoded.status === 'VERIFICATION_FAILED') return encoded;
+      // QNBS-v3: expectedRawRecord undefined -- the fence's raw-bytes CAS against "no record" IS create-if-absent; any concurrently created record mismatches and resolves CONFLICT.
+      const committed = await this.commitGenerationFencedWrite(
+        undefined,
+        newGeneration,
+        encoded.encodedPayload,
+      );
+      // QNBS-v3: NOT_ADMITTED_FOR_WRITE here means a concurrent actor landed a non-CURRENT record where ours was absent -- the create-if-absent precondition is gone, so it resolves CONFLICT like any other raw-bytes mismatch, not as a classification refusal (the caller re-evaluates against the now-present record).
+      if (committed.status === 'COMMITTED') {
+        return { status: 'CREATED', generation: committed.generation };
+      }
+      if (committed.status === 'NOT_ADMITTED_FOR_WRITE') return { status: 'CONFLICT' };
+      return committed;
     });
   }
 
