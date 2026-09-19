@@ -277,6 +277,23 @@ describe('saveAutosaveSnapshotCanonical', () => {
     expect(authority.commitCanonicalProjectEdit).toHaveBeenCalledTimes(1);
   });
 
+  it('maps an edit-time generation contradiction to a typed refusal', async () => {
+    const authority = makeScriptedAuthority({
+      admissions: [scriptedCurrentAdmission()],
+      edits: [
+        {
+          status: 'NOT_ADMITTED_FOR_WRITE',
+          classification: 'GENERATION_CONTRADICTION:CURRENT',
+        },
+      ],
+    });
+
+    await expect(saveAutosaveSnapshotCanonical(snapshot(), authority)).resolves.toEqual({
+      status: 'REFUSED',
+      reason: 'GENERATION_CONTRADICTION',
+    });
+  });
+
   it('keeps migration conflict distinct and does not retry it', async () => {
     const authority = makeScriptedAuthority({
       admissions: [{ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' }],
@@ -308,6 +325,42 @@ describe('saveAutosaveSnapshotCanonical', () => {
     expect(authority.commitCanonicalProjectEdit).toHaveBeenCalledTimes(1);
   });
 
+  it('maps a migration refusal for a newly observed FUTURE source', async () => {
+    const authority = makeScriptedAuthority({
+      admissions: [{ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' }],
+      migrations: [{ status: 'NOT_ELIGIBLE', classification: 'FUTURE' }],
+    });
+
+    await expect(saveAutosaveSnapshotCanonical(snapshot(), authority)).resolves.toEqual({
+      status: 'REFUSED',
+      reason: 'FUTURE',
+    });
+  });
+
+  it('maps a migration write refusal without retrying the state transition', async () => {
+    const authority = makeScriptedAuthority({
+      admissions: [{ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' }],
+      migrations: [{ status: 'NOT_ADMITTED_FOR_WRITE', classification: 'MALFORMED' }],
+    });
+
+    await expect(saveAutosaveSnapshotCanonical(snapshot(), authority)).resolves.toEqual({
+      status: 'REFUSED',
+      reason: 'MALFORMED',
+    });
+  });
+
+  it('propagates a migration verification failure without changing its typed meaning', async () => {
+    const authority = makeScriptedAuthority({
+      admissions: [{ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' }],
+      migrations: [{ status: 'VERIFICATION_FAILED', reason: 'migration verify failed' }],
+    });
+
+    await expect(saveAutosaveSnapshotCanonical(snapshot(), authority)).resolves.toEqual({
+      status: 'VERIFICATION_FAILED',
+      reason: 'migration verify failed',
+    });
+  });
+
   it('requires CURRENT after a successful migration and refuses a second state transition', async () => {
     const authority = makeScriptedAuthority({
       admissions: [
@@ -322,6 +375,34 @@ describe('saveAutosaveSnapshotCanonical', () => {
     expect(result).toEqual({ status: 'REFUSED', reason: 'FUTURE' });
     expect(authority.loadCanonicalProjectAdmission).toHaveBeenCalledTimes(2);
     expect(authority.commitCanonicalProjectEdit).not.toHaveBeenCalled();
+  });
+
+  it('refuses a generation contradiction after migration before editing', async () => {
+    const authority = makeScriptedAuthority({
+      admissions: [
+        { status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' },
+        { status: 'GENERATION_CONTRADICTION', classification: 'LEGACY_UNVERSIONED' },
+      ],
+      migrations: [{ status: 'COMMITTED', generation: 'migrated-generation' }],
+    });
+
+    await expect(saveAutosaveSnapshotCanonical(snapshot(), authority)).resolves.toEqual({
+      status: 'REFUSED',
+      reason: 'GENERATION_CONTRADICTION',
+    });
+  });
+
+  it('propagates a typed create verification failure without a second admission', async () => {
+    const authority = makeScriptedAuthority({
+      admissions: [{ status: 'ABSENT' }],
+      creates: [{ status: 'VERIFICATION_FAILED', reason: 'create verify failed' }],
+    });
+
+    await expect(saveAutosaveSnapshotCanonical(snapshot(), authority)).resolves.toEqual({
+      status: 'VERIFICATION_FAILED',
+      reason: 'create verify failed',
+    });
+    expect(authority.loadCanonicalProjectAdmission).toHaveBeenCalledTimes(1);
   });
 
   it.each([

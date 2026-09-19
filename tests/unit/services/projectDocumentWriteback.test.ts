@@ -45,6 +45,7 @@ function commitEdit(edit: OwnedProjectEdit, raw: string = baseDocument()) {
 describe('projectDocumentWriteback (#553)', () => {
   it.each([
     ['plain unsafe integer', '9007199254740993'],
+    ['negative unsafe integer', '-9007199254740993'],
     ['unsafe integer with exponent', '9007199254740993e0'],
     ['unsafe integer with decimal point', '9007199254740993.0'],
     ['overflowing positive exponent', '1e999'],
@@ -58,6 +59,11 @@ describe('projectDocumentWriteback (#553)', () => {
       expect(containsUnsafeIntegerLiteral(`{"opaque":${literal}}`)).toBe(false);
     },
   );
+
+  it('accepts a negative safe integer and ignores digits inside JSON strings', () => {
+    expect(containsUnsafeIntegerLiteral('{"opaque":-9007199254740991}')).toBe(false);
+    expect(containsUnsafeIntegerLiteral('{"opaque":"9007199254740993"}')).toBe(false);
+  });
 
   it('commits when there is no concurrent change', () => {
     const result = commitEdit({ fields: { title: 'Renamed Story' } });

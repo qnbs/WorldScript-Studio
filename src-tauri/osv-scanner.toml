@@ -129,7 +129,10 @@ reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; 
 # version whose @puppeteer/browsers dependency replaced extract-zip with
 # modern-tar, eliminating the package from the resolved graph entirely — see
 # AUDIT.md's 2026-09-10 entry. The former adm-zip ignore was removed on 2026-09-19
-# after pnpm audit confirmed that adm-zip 0.6.1 patches both recorded npm advisories.
+# after pnpm audit was clean and the resolved 0.6.1 version was outside the GHSA-vwc7
+# vulnerable range (the GitHub API still leaves its first_patched_version unset). The current
+# advisory set is GHSA-xcpc-8h2w-3j85 (fixed in 0.6.0), GHSA-7q85-xj36-vmfc (0.6.1), and
+# GHSA-vwc7-r8mq-g2x9 (direct 0.6.1 tarball extraction guard); the workspace floor covers all three.
 # The `allowBuilds: { onnxruntime-node: false }` control remains in force as
 # defense-in-depth for the transitive package's install-time lifecycle script. npm registry
 # metadata dates 0.6.1 to 2026-09-11; a direct 0.6.0/0.6.1 tarball comparison confirmed the
@@ -137,6 +140,5 @@ reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; 
 
 # Historical note: the 2026-09-10 investigation found no patched release for
 # GHSA-vwc7-r8mq-g2x9 at that time. The 2026-09-19 `pnpm audit --json` output
-# reports both GHSA-vwc7-r8mq-g2x9 and GHSA-7q85-xj36-vmfc as patched by
-# adm-zip >=0.6.1, so no npm ignore is needed here; the workspace build denial
-# remains defense-in-depth.
+# reports no vulnerabilities for the resolved graph, so no npm ignore is needed here; the
+# workspace build denial remains defense-in-depth.

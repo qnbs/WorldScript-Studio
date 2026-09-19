@@ -102,38 +102,70 @@ class RawNumberLiteral {
 
 const MAX_SAFE_INTEGER_DECIMAL = '9007199254740991';
 
-// QNBS-v3: normalize integer-valued decimal/exponent literals without converting opaque raw text through the imprecise JS number type.
-function isUnsafeIntegerLiteral(literal: string): boolean {
+type RawIntegerLiteralParts = {
+  digits: string;
+  decimalIndex: bigint;
+};
+
+type NormalizedRawIntegerLiteral =
+  | { kind: 'integer'; digits: string }
+  | { kind: 'too-many-digits' };
+
+function parseRawIntegerLiteral(literal: string): RawIntegerLiteralParts | null {
   const match = /^-?(0|[1-9]\d*)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(literal);
-  if (!match) return false;
+  if (!match) return null;
 
   const integerPart = match[1] ?? '';
   const fractionPart = match[2] ?? '';
-  const digits = `${integerPart}${fractionPart}`;
-  const decimalIndex = BigInt(integerPart.length) + BigInt(match[3] ?? '0');
+  return {
+    digits: `${integerPart}${fractionPart}`,
+    decimalIndex: BigInt(integerPart.length) + BigInt(match[3] ?? '0'),
+  };
+}
 
-  if (decimalIndex <= 0n) return false;
+function normalizeRawIntegerLiteral(
+  parts: RawIntegerLiteralParts,
+): NormalizedRawIntegerLiteral | null {
+  if (parts.decimalIndex <= 0n) return null;
 
-  let integerDigits: string;
-  if (decimalIndex >= BigInt(digits.length)) {
-    const significantDigits = digits.replace(/^0+/, '');
-    if (significantDigits.length === 0) return false;
+  if (parts.decimalIndex >= BigInt(parts.digits.length)) {
+    const significantDigits = parts.digits.replace(/^0+/, '');
+    if (significantDigits.length === 0) return null;
 
-    const trailingZeroCount = decimalIndex - BigInt(digits.length);
+    const trailingZeroCount = parts.decimalIndex - BigInt(parts.digits.length);
     const totalDigits = BigInt(significantDigits.length) + trailingZeroCount;
-    if (totalDigits > BigInt(MAX_SAFE_INTEGER_DECIMAL.length)) return true;
-    integerDigits = `${significantDigits}${'0'.repeat(Number(trailingZeroCount))}`;
-  } else {
-    const splitIndex = Number(decimalIndex);
-    if (/[^0]/.test(digits.slice(splitIndex))) return false;
-    integerDigits = digits.slice(0, splitIndex).replace(/^0+/, '');
-    if (integerDigits.length === 0) return false;
+    if (totalDigits > BigInt(MAX_SAFE_INTEGER_DECIMAL.length)) {
+      return { kind: 'too-many-digits' };
+    }
+    return {
+      kind: 'integer',
+      digits: `${significantDigits}${'0'.repeat(Number(trailingZeroCount))}`,
+    };
   }
 
+  const splitIndex = Number(parts.decimalIndex);
+  if (/[^0]/.test(parts.digits.slice(splitIndex))) return null;
+  const integerDigits = parts.digits.slice(0, splitIndex).replace(/^0+/, '');
+  return integerDigits.length === 0 ? null : { kind: 'integer', digits: integerDigits };
+}
+
+function exceedsSafeIntegerDomain(integerDigits: string): boolean {
   return (
     integerDigits.length > MAX_SAFE_INTEGER_DECIMAL.length ||
     (integerDigits.length === MAX_SAFE_INTEGER_DECIMAL.length &&
       integerDigits > MAX_SAFE_INTEGER_DECIMAL)
+  );
+}
+
+// QNBS-v3: normalize integer-valued decimal/exponent literals without converting opaque raw text through the imprecise JS number type.
+function isUnsafeIntegerLiteral(literal: string): boolean {
+  const parts = parseRawIntegerLiteral(literal);
+  if (!parts) return false;
+
+  const normalized = normalizeRawIntegerLiteral(parts);
+  return (
+    normalized?.kind === 'too-many-digits' ||
+    (normalized?.kind === 'integer' && exceedsSafeIntegerDomain(normalized.digits))
   );
 }
 

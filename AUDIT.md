@@ -2,9 +2,12 @@
 
 **2026-09-19 security follow-up (PR #778):** `adm-zip@0.6.1` became available after the dated
 `GHSA-vwc7-r8mq-g2x9` investigation below. The transitive override now uses `>=0.6.1`, removing
-vulnerable `0.6.0` and addressing both recorded advisories: `GHSA-7q85-xj36-vmfc` (high) and
-`GHSA-vwc7-r8mq-g2x9` (moderate). The historical ignore was removed after `pnpm audit --json`
-confirmed its patched range; `allowBuilds: onnxruntime-node=false` is retained. npm registry
+vulnerable `0.6.0` and covering the three relevant advisories: `GHSA-xcpc-8h2w-3j85` (high,
+fixed in 0.6.0), `GHSA-7q85-xj36-vmfc` (high, first patched in 0.6.1), and
+`GHSA-vwc7-r8mq-g2x9` (moderate, vulnerable range ends at 0.6.0). GitHub's current API still
+leaves `first_patched_version` unset for the latter, so its retirement is based on the resolved
+version being outside that range plus the direct 0.6.1 extraction-source evidence below; `pnpm
+audit --json` is clean. `allowBuilds: onnxruntime-node=false` is retained. npm registry
 metadata dates 0.6.1 to 2026-09-11, satisfying the seven-day minimum release-age gate on this
 2026-09-19 review. A direct 0.6.0/0.6.1 tarball comparison shows the relevant extraction fix:
 0.6.1 adds `assertPathSafe`/`lstat` guards at extraction write paths to reject pre-existing
