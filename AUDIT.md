@@ -1855,7 +1855,8 @@ IDs below were re-verified against the GitHub Advisory Database on 2026-06-13, e
 `@xmldom/xmldom`, `fast-uri`, and `qs` rows, re-verified 2026-09-02 (Dependabot alert #79
 and two `pnpm audit` sweeps) after all three floors were found to no longer exclude the
 then-currently-resolved vulnerable version, and the `fflate` row, added 2026-09-03 the same
-day its advisory was elevated to GitHub-reviewed status. Floors are intentionally conservative
+day its advisory was elevated to GitHub-reviewed status, and the `adm-zip` row, added
+2026-09-19 after `adm-zip@0.6.1` became the qualified transitive floor. Floors are intentionally conservative
 (set at or above the patched version) as preventive supply-chain pins; several apply only to
 dev/test transitive deps and are never shipped to users.
 
