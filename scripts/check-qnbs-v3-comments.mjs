@@ -7,6 +7,9 @@
  * content from the exact revision the diff was computed against (the index for --staged, HEAD
  * for --range) so a partially staged or working-tree-ahead-of-HEAD file can't desync line
  * numbers from content. Reports only — never rewrites source.
+ * This checker validates the physical-line form of QNBS-v3 rationales that are present; it does
+ * not require every governed source or test change to contain one. Presence is governed by
+ * AGENTS.md's genuinely-non-obvious-rationale rule, including its explicit obvious-test exception.
  *
  * Run: node scripts/check-qnbs-v3-comments.mjs --staged   (pre-commit: git diff --cached)
  *      node scripts/check-qnbs-v3-comments.mjs --range <ref>  (ci:prepush: git diff <ref>...HEAD)

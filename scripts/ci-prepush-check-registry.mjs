@@ -59,6 +59,18 @@ const admissionCheckRegistry = Object.freeze([
       'scripts/check-qnbs-v3-comments.mjs',
     ]),
   },
+  {
+    name: 'reviewerConfig',
+    matches: (file) =>
+      file === '.coderabbit.yaml' ||
+      file === 'config/reviewer-registry.json' ||
+      file === 'docs/REVIEWER-GOVERNANCE.md' ||
+      file === 'scripts/check-reviewer-config.mjs' ||
+      file === 'scripts/reviewer-status.mjs' ||
+      file === 'package.json' ||
+      file === '.github/workflows/ci.yml',
+    implementationFiles: new Set([routingAuthority, runnerAuthority]),
+  },
 ]);
 
 export function shouldRunAdmissionCheck(name, files) {

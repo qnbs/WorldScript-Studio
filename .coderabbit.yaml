@@ -1,0 +1,125 @@
+language: "en-US"
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  review_status: true
+  review_details: false
+  review_progress: true
+  commit_status: true
+  fail_commit_status: false
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  assess_linked_issues: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: false
+  auto_apply_labels: false
+  suggested_reviewers: false
+  auto_assign_reviewers: false
+  in_progress_fortune: false
+  poem: false
+  enable_prompt_for_ai_agents: false
+
+  path_filters:
+    - "!dist/**"
+    - "!build/**"
+    - "!coverage/**"
+    - "!reports/**"
+    - "!public/locales/**"
+    - "!graphify-out/**"
+    - "!.codegraph/**"
+    - "!playwright-report/**"
+    - "!test-results/**"
+    - "!storybook-static/**"
+
+  path_instructions:
+    - path: "tests/**"
+      instructions: |
+        Do not require a QNBS-v3 comment merely because a test is new, substantive,
+        regression-critical, security-sensitive, or persistence-sensitive. AGENTS.md
+        requires a rationale in tests only for a genuinely non-obvious harness, setup,
+        fixture, order, timing, mock, suppression, or compatibility choice not already
+        explained by the test name, inputs, and assertions. Focus on behavioral coverage,
+        race edges, and false-positive/false-negative test design. Do not demand docstrings
+        for test helpers solely to satisfy a generic documentation threshold.
+    - path: "services/storage/**"
+      instructions: |
+        Apply preserve-first persistence review. Unknown, malformed, future, or unsupported
+        data must be preserved and refused, not silently normalized, dropped, or granted write
+        authority. Check raw numeric fidelity, concurrency/fence behavior, readable-versus-
+        writable capability separation, and absence of fallback dual-writes after refusal.
+    - path: "services/*Project*"
+      instructions: |
+        Treat canonical project authority, schema/version admission, migration, generation,
+        and verification as data-integrity boundaries. Check same-ID/new-incarnation and
+        latest-wins hazards without broadening the slice into production autosave wiring.
+    - path: "features/project/**"
+      instructions: |
+        Check schema ownership, forward compatibility, malformed-data refusal, and whether
+        runtime-only fields can accidentally become persistence authority.
+    - path: ".github/**"
+      instructions: |
+        Preserve fail-closed workflow policy, signed-commit and branch-protection governance,
+        least-privilege permissions, and SHA-pinned actions. Do not recommend bypasses or
+        unpinned tools.
+    - path: "scripts/**"
+      instructions: |
+        Prefer bounded, deterministic, read-only tooling. Do not turn a diagnostic into a
+        mutating command, weaken a checker, or add a new suppression to silence a finding.
+    - path: "config/**"
+      instructions: |
+        Keep configuration ownership explicit and machine-checkable. Do not store live quota,
+        billing, provider-availability, latest-SHA, or current-green state as durable config.
+    - path: "services/security/**"
+      instructions: |
+        Review against the actual threat model and fail-closed behavior. Never weaken CSP,
+        encryption, storage boundaries, or secret handling.
+    - path: "src-tauri/**"
+      instructions: |
+        Preserve the approved desktop capability boundary and native security controls. Do
+        not introduce direct first-party @tauri-apps imports or weaken permissions.
+    - path: "crates/**"
+      instructions: |
+        Review Rust Core changes for authority, serialization, error, and security boundaries;
+        do not infer product-roadmap authorization from a narrow maintenance diff.
+    - path: "docs/audit/**"
+      instructions: |
+        Distinguish current authority from historical audit evidence. Do not rewrite a dated
+        historical observation merely because the current state has since changed.
+    - path: "docs/history/**"
+      instructions: |
+        Treat dated history as evidence unless the document explicitly declares current
+        authority. Flag only contradictions in current-facing claims.
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 5
+    drafts: false
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+    autofix:
+      enabled: false
+    fix_ci:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
+
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    title:
+      mode: "off"
+    description:
+      mode: "off"
+    issue_assessment:
+      mode: "off"

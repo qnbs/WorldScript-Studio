@@ -82,6 +82,9 @@ async function main() {
   }
   report('Dependency state', 'PASS');
 
+  if (shouldRunAdmissionCheck('reviewerConfig', classification.files) || full)
+    await runCheck('Reviewer config', () => runNodeScript('scripts/check-reviewer-config.mjs'));
+
   const budgetStatus = await runNodeScript('scripts/pr-budget.mjs', ['--prepush']);
   if (budgetStatus === PR_BUDGET_EXIT_CODES.OK) report('PR budget', 'PASS');
   else if (budgetStatus === PR_BUDGET_EXIT_CODES.UNRESOLVED_BASE) {

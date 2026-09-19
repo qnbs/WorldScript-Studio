@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "authority": "docs/REVIEWER-GOVERNANCE.md",
+  "reviewers": [
+    {
+      "id": "coderabbit",
+      "role": "semantic-ai-review",
+      "repoConfig": ".coderabbit.yaml",
+      "configurationOwner": "repository",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "cubic",
+      "role": "semantic-ai-review",
+      "repoConfig": null,
+      "configurationOwner": "dashboard",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "codeant",
+      "role": "semantic-ai-review",
+      "repoConfig": null,
+      "configurationOwner": "dashboard",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "codescene",
+      "role": "maintainability-review",
+      "repoConfig": null,
+      "configurationOwner": "dashboard",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "deepsource",
+      "role": "static-analysis",
+      "repoConfig": ".deepsource.toml",
+      "configurationOwner": "repository",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "sourcery",
+      "role": "semantic-ai-review",
+      "repoConfig": null,
+      "configurationOwner": "dashboard",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "graphite",
+      "role": "semantic-ai-review",
+      "repoConfig": null,
+      "configurationOwner": "dashboard",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "chatgpt-codex-connector",
+      "role": "semantic-ai-review",
+      "repoConfig": null,
+      "configurationOwner": "live-service",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "qodo",
+      "role": "semantic-ai-review",
+      "repoConfig": null,
+      "configurationOwner": "live-service",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "codecov",
+      "role": "coverage-evidence",
+      "repoConfig": "codecov.yml",
+      "configurationOwner": "repository",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "codeql",
+      "role": "security-static-analysis",
+      "repoConfig": ".github/workflows/codeql.yml",
+      "configurationOwner": "repository",
+      "mayMutateBranch": false,
+      "blockingAuthority": true,
+      "statusSource": "live"
+    },
+    {
+      "id": "semgrep",
+      "role": "security-static-analysis",
+      "repoConfig": ".github/workflows/ci.yml",
+      "configurationOwner": "repository",
+      "mayMutateBranch": false,
+      "blockingAuthority": true,
+      "statusSource": "live"
+    },
+    {
+      "id": "gitguardian",
+      "role": "secret-detection",
+      "repoConfig": ".gitguardian.yaml",
+      "configurationOwner": "repository",
+      "mayMutateBranch": false,
+      "blockingAuthority": true,
+      "statusSource": "live"
+    },
+    {
+      "id": "socket",
+      "role": "supply-chain-security",
+      "repoConfig": null,
+      "configurationOwner": "dashboard",
+      "mayMutateBranch": false,
+      "blockingAuthority": true,
+      "statusSource": "live"
+    }
+  ]
+}

@@ -57,6 +57,9 @@ jobs:
       # QNBS-v3: node directly — pnpm run's own pre-run check rejects an --ignore-pnpmfile install.
       - name: Workflow-policy structural gate (permissions, needs graph, action pins)
         run: node scripts/workflow-policy-check.mjs
+      # QNBS-v3: reviewer config is a lightweight local-policy adapter; vendor availability remains live-derived.
+      - name: Reviewer governance configuration gate
+        run: node scripts/check-reviewer-config.mjs
 
   # ----------------------------------------------------------
   # 0. SECURITY: pnpm audit + gitleaks + dependency review
