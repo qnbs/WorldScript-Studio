@@ -41,6 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       # QNBS-v3: pnpm/setup instead of pnpm/action-setup, mirroring .github/actions/setup/action.yml (duplicated because this job predates the trust boundary it validates and can't use that composite).
       - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
@@ -57,6 +58,35 @@ jobs:
       # QNBS-v3: node directly — pnpm run's own pre-run check rejects an --ignore-pnpmfile install.
       - name: Workflow-policy structural gate (permissions, needs graph, action pins)
         run: node scripts/workflow-policy-check.mjs
+      # QNBS-v3: use the trusted base checker for PRs; config and checker remain the PR workspace.
+      - name: Reviewer governance configuration gate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          REVIEWER_CONFIG_ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "$BASE_SHA" ]; then
+            mkdir -p /tmp/base-reviewer-check
+            base_checker_path="$(git ls-tree -r --name-only "$BASE_SHA" -- scripts/check-reviewer-config.mjs)" || {
+              echo "::error::unable to inspect the base reviewer checker"
+              exit 1
+            }
+            if [ "$base_checker_path" = "scripts/check-reviewer-config.mjs" ]; then
+              if ! git archive "$BASE_SHA" package.json pnpm-lock.yaml scripts/check-reviewer-config.mjs \
+                | tar -x -C /tmp/base-reviewer-check; then
+                echo "::error::unable to materialize the base reviewer checker dependencies"
+                exit 1
+              fi
+              pnpm --dir /tmp/base-reviewer-check install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+              REVIEWER_DEPENDENCY_ROOT=/tmp/base-reviewer-check \
+                node /tmp/base-reviewer-check/scripts/check-reviewer-config.mjs
+            else
+              echo "::notice::check-reviewer-config.mjs is absent on the base ref (bootstrap); using the PR copy."
+              node scripts/check-reviewer-config.mjs
+            fi
+          else
+            node scripts/check-reviewer-config.mjs
+          fi
 
   # ----------------------------------------------------------
   # 0. SECURITY: pnpm audit + gitleaks + dependency review
