@@ -127,6 +127,15 @@ entirely; that file has zero real reference to `onnxruntime-node`, reinforced by
 test suite explicitly mocking that exact web-build path. See `src-tauri/osv-scanner.toml`'s
 expanded comment for the full evidence trail.
 
+**2026-09-19 follow-up:** `adm-zip@0.6.1` became available after the investigation above. PR #778
+raises the transitive override to `>=0.6.1`, removing `adm-zip@0.6.0` and fixing both recorded
+advisories (`GHSA-7q85-xj36-vmfc` high and `GHSA-vwc7-r8mq-g2x9` moderate). The historical
+`GHSA-vwc7-r8mq-g2x9` ignore was removed after `pnpm audit --json` confirmed its patched range;
+`allowBuilds: onnxruntime-node=false` remains retained defense-in-depth. npm registry metadata
+dates 0.6.1 to 2026-09-11 (over seven days before this 2026-09-19 review); the published
+0.6.1 tarball adds `assertPathSafe`/`lstat` checks at extraction write paths to reject pre-existing
+symlink components.
+
 ## Special-attention dependencies
 
 These need more than a changelog skim because of documented quirks elsewhere in this repo:

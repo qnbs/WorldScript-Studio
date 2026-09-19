@@ -100,11 +100,41 @@ class RawNumberLiteral {
   constructor(public readonly text: string) {}
 }
 
-// QNBS-v3: no try/catch -- the ^-?\d+$ guard above admits only plain-digit text, which BigInt() can never fail to parse.
+const MAX_SAFE_INTEGER_DECIMAL = '9007199254740991';
+
+// QNBS-v3: normalize integer-valued decimal/exponent literals without converting opaque raw text through the imprecise JS number type.
 function isUnsafeIntegerLiteral(literal: string): boolean {
-  if (!/^-?\d+$/.test(literal)) return false;
-  const value = BigInt(literal);
-  return value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER);
+  const match = /^-?(0|[1-9]\d*)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(literal);
+  if (!match) return false;
+
+  const integerPart = match[1] ?? '';
+  const fractionPart = match[2] ?? '';
+  const digits = `${integerPart}${fractionPart}`;
+  const decimalIndex = BigInt(integerPart.length) + BigInt(match[3] ?? '0');
+
+  if (decimalIndex <= 0n) return false;
+
+  let integerDigits: string;
+  if (decimalIndex >= BigInt(digits.length)) {
+    const significantDigits = digits.replace(/^0+/, '');
+    if (significantDigits.length === 0) return false;
+
+    const trailingZeroCount = decimalIndex - BigInt(digits.length);
+    const totalDigits = BigInt(significantDigits.length) + trailingZeroCount;
+    if (totalDigits > BigInt(MAX_SAFE_INTEGER_DECIMAL.length)) return true;
+    integerDigits = `${significantDigits}${'0'.repeat(Number(trailingZeroCount))}`;
+  } else {
+    const splitIndex = Number(decimalIndex);
+    if (/[^0]/.test(digits.slice(splitIndex))) return false;
+    integerDigits = digits.slice(0, splitIndex).replace(/^0+/, '');
+    if (integerDigits.length === 0) return false;
+  }
+
+  return (
+    integerDigits.length > MAX_SAFE_INTEGER_DECIMAL.length ||
+    (integerDigits.length === MAX_SAFE_INTEGER_DECIMAL.length &&
+      integerDigits > MAX_SAFE_INTEGER_DECIMAL)
+  );
 }
 
 type RawScanStep = { text: string; nextIndex: number };

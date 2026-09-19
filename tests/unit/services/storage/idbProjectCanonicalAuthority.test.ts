@@ -918,21 +918,24 @@ describe('IdbProjectCanonicalAuthority#createCanonicalProjectIfAbsent', () => {
     expect(await readGenerationRecord(authority)).toBeUndefined();
   });
 
-  it('fails verification instead of rounding an unsafe integer literal during create', async () => {
-    const authority = new IdbProjectCanonicalAuthority();
-    const currentRaw = `${validCurrentRaw().slice(0, -1)},"opaqueUnsafe":9007199254740993}`;
-    const result = await authority.createCanonicalProjectIfAbsent({
-      currentRaw,
-    });
+  it.each(['9007199254740993', '9007199254740993e0', '9007199254740993.0', '1e999'])(
+    'fails verification instead of rounding unsafe integer literal %s during create',
+    async (literal) => {
+      const authority = new IdbProjectCanonicalAuthority();
+      const currentRaw = `${validCurrentRaw().slice(0, -1)},"opaqueUnsafe":${literal}}`;
+      const result = await authority.createCanonicalProjectIfAbsent({
+        currentRaw,
+      });
 
-    expect(result).toEqual({
-      status: 'VERIFICATION_FAILED',
-      reason:
-        'Canonical payload contains an unsafe integer literal that the IDB envelope cannot round-trip losslessly.',
-    });
-    expect(await authority.loadCanonicalProjectAdmission()).toEqual({ status: 'ABSENT' });
-    expect(await readGenerationRecord(authority)).toBeUndefined();
-  });
+      expect(result).toEqual({
+        status: 'VERIFICATION_FAILED',
+        reason:
+          'Canonical payload contains an unsafe integer literal that the IDB envelope cannot round-trip losslessly.',
+      });
+      expect(await authority.loadCanonicalProjectAdmission()).toEqual({ status: 'ABSENT' });
+      expect(await readGenerationRecord(authority)).toBeUndefined();
+    },
+  );
 
   it('does not overwrite a present undefined project record during create', async () => {
     const authority = new IdbProjectCanonicalAuthority();

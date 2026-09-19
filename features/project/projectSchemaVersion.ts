@@ -225,7 +225,7 @@ type RawSchemaVersionNumber = {
   isNegative: boolean;
   significantDigits: string;
   fractionalDigitsLength: number;
-  exponent: number;
+  exponent: bigint;
 };
 
 function parseRawSchemaVersionNumber(token: string): RawSchemaVersionNumber {
@@ -241,29 +241,28 @@ function parseRawSchemaVersionNumber(token: string): RawSchemaVersionNumber {
     isNegative,
     significantDigits: `${integerDigits}${fractionalDigits}`.replace(/^0+/, ''),
     fractionalDigitsLength: fractionalDigits.length,
-    exponent: exponentText === '' ? 0 : Number(exponentText),
+    exponent: exponentText === '' ? 0n : BigInt(exponentText),
   };
 }
 
 function normalizeRawSchemaVersionInteger(parts: RawSchemaVersionNumber): string | null {
-  const decimalShift = parts.exponent - parts.fractionalDigitsLength;
+  const decimalShift = parts.exponent - BigInt(parts.fractionalDigitsLength);
   const maxSafeIntegerText = String(Number.MAX_SAFE_INTEGER);
 
   if (decimalShift >= 0) {
-    if (
-      !Number.isFinite(decimalShift) ||
-      parts.significantDigits.length + decimalShift > maxSafeIntegerText.length
-    ) {
+    if (BigInt(parts.significantDigits.length) + decimalShift > BigInt(maxSafeIntegerText.length)) {
       return null;
     }
-    return `${parts.significantDigits}${'0'.repeat(decimalShift)}`;
+    return `${parts.significantDigits}${'0'.repeat(Number(decimalShift))}`;
   }
-  if (!Number.isFinite(decimalShift)) return null;
   const requiredTrailingZeros = -decimalShift;
   const trailingZeros =
     parts.significantDigits.length - parts.significantDigits.replace(/0+$/, '').length;
-  if (requiredTrailingZeros > trailingZeros) return null;
-  return parts.significantDigits.slice(0, parts.significantDigits.length - requiredTrailingZeros);
+  if (requiredTrailingZeros > BigInt(trailingZeros)) return null;
+  return parts.significantDigits.slice(
+    0,
+    parts.significantDigits.length - Number(requiredTrailingZeros),
+  );
 }
 
 function isWithinSchemaVersionSafeIntegerDomain(normalizedInteger: string): boolean {
@@ -275,7 +274,7 @@ function isWithinSchemaVersionSafeIntegerDomain(normalizedInteger: string): bool
   );
 }
 
-// QNBS-v3: reject mathematically fractional raw tokens before IEEE-754 rounding can make them look integral.
+// QNBS-v3: exact exponent arithmetic rejects unsafe raw tokens before IEEE-754 rounding can make them look integral.
 function isMathematicallyNonNegativeIntegerToken(token: string): boolean {
   const parts = parseRawSchemaVersionNumber(token);
   if (parts.significantDigits.length === 0) return true;
