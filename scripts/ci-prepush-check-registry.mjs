@@ -6,6 +6,25 @@ const i18nPolicyFiles = new Set([
   'scripts/build-i18n.mjs',
   'scripts/i18n-quality-report.mjs',
 ]);
+const reviewerConfigPaths = new Set([
+  '.coderabbit.yaml',
+  'cubic.yaml',
+  '.codeant/instructions.json',
+  '.codeant/review.json',
+  '.codescene/code-health-rules.json',
+  '.deepsource.toml',
+  'codecov.yml',
+  'src-tauri/osv-scanner.toml',
+  '.pr_agent.toml',
+  '.gitguardian.yaml',
+  '.github/workflows/ci.yml',
+  '.github/workflows/codeql.yml',
+  'config/reviewer-registry.json',
+  'docs/REVIEWER-GOVERNANCE.md',
+  'scripts/check-reviewer-config.mjs',
+  'scripts/reviewer-status.mjs',
+  'package.json',
+]);
 
 // QNBS-v3: not exported — shouldRunAdmissionCheck is the public API, nothing else consumes this.
 const admissionCheckRegistry = Object.freeze([
@@ -61,15 +80,13 @@ const admissionCheckRegistry = Object.freeze([
   },
   {
     name: 'reviewerConfig',
-    matches: (file) =>
-      file === '.coderabbit.yaml' ||
-      file === 'config/reviewer-registry.json' ||
-      file === 'docs/REVIEWER-GOVERNANCE.md' ||
-      file === 'scripts/check-reviewer-config.mjs' ||
-      file === 'scripts/reviewer-status.mjs' ||
-      file === 'package.json' ||
-      file === '.github/workflows/ci.yml',
-    implementationFiles: new Set([routingAuthority, runnerAuthority]),
+    matches: (file) => reviewerConfigPaths.has(file),
+    implementationFiles: new Set([
+      routingAuthority,
+      runnerAuthority,
+      'scripts/ci-prepush-classifier.mjs',
+      'scripts/ci-prepush-range-resolver.mjs',
+    ]),
   },
 ]);
 

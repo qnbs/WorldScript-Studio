@@ -41,6 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       # QNBS-v3: pnpm/setup instead of pnpm/action-setup, mirroring .github/actions/setup/action.yml (duplicated because this job predates the trust boundary it validates and can't use that composite).
       - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
@@ -57,9 +58,24 @@ jobs:
       # QNBS-v3: node directly — pnpm run's own pre-run check rejects an --ignore-pnpmfile install.
       - name: Workflow-policy structural gate (permissions, needs graph, action pins)
         run: node scripts/workflow-policy-check.mjs
-      # QNBS-v3: reviewer config is a lightweight local-policy adapter; vendor availability remains live-derived.
+      # QNBS-v3: use the trusted base checker for PRs; config and checker remain the PR workspace.
       - name: Reviewer governance configuration gate
-        run: node scripts/check-reviewer-config.mjs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          REVIEWER_CONFIG_ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "$BASE_SHA" ]; then
+            mkdir -p /tmp/base-reviewer-check
+            if git show "$BASE_SHA:scripts/check-reviewer-config.mjs" > /tmp/base-reviewer-check/check-reviewer-config.mjs 2>/dev/null; then
+              node /tmp/base-reviewer-check/check-reviewer-config.mjs
+            else
+              echo "::notice::check-reviewer-config.mjs is absent on the base ref (bootstrap); using the PR copy."
+              node scripts/check-reviewer-config.mjs
+            fi
+          else
+            node scripts/check-reviewer-config.mjs
+          fi
 
   # ----------------------------------------------------------
   # 0. SECURITY: pnpm audit + gitleaks + dependency review

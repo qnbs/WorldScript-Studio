@@ -6,28 +6,45 @@
 import { execFileSync } from 'node:child_process';
 import process from 'node:process';
 
+process.stdout.on('error', (error) => {
+  if (error.code === 'EPIPE') process.exit(0);
+  throw error;
+});
+
 function argument(name) {
   const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : undefined;
+  if (index < 0) return undefined;
+  const value = process.argv[index + 1];
+  if (!value || value.startsWith('--')) throw new Error(name + ' requires a value');
+  return value;
 }
 
-const pr = argument('--pr');
-if (!pr || !/^\d+$/.test(pr)) {
+function parseRepository(value) {
+  if (!/^[^/\s]+\/[^/\s]+$/.test(value)) throw new Error('--repo must be exactly owner/name');
+  const [owner, name] = value.split('/');
+  return { fullName: value, owner, name };
+}
+
+let pr;
+let repo;
+try {
+  pr = argument('--pr');
+  if (!pr || !/^\d+$/.test(pr)) throw new Error('--pr must be a numeric pull request number');
+  repo = parseRepository(
+    argument('--repo') ?? process.env.GITHUB_REPOSITORY ?? 'qnbs/WorldScript-Studio',
+  );
+} catch (error) {
+  console.error('[reviewers] ' + error.message);
   console.error('Usage: pnpm run reviewers:status -- --pr <number> [--repo owner/name]');
   process.exit(2);
 }
-
-const repo = argument('--repo') ?? process.env.GITHUB_REPOSITORY ?? 'qnbs/WorldScript-Studio';
-const ghEnvironment = { ...process.env };
-delete ghEnvironment.GH_TOKEN;
-delete ghEnvironment.GITHUB_TOKEN;
 
 function ghJson(args) {
   try {
     const output = execFileSync('gh', ['api', ...args], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: ghEnvironment,
+      maxBuffer: 8 * 1024 * 1024,
     });
     return JSON.parse(output);
   } catch (error) {
@@ -41,17 +58,40 @@ function flatPages(value) {
   return Array.isArray(value) ? value.flat() : value;
 }
 
-function firstLine(body) {
-  return String(body ?? '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 220);
+function fetchCheckRuns(path) {
+  const pages = flatPages(ghJson(['--paginate', '--slurp', path]));
+  return pages.flatMap((page) => page?.check_runs ?? []);
 }
 
-function safeEvidence(body) {
-  return firstLine(body)
-    .replace(/\[vc\]:\s*\S+/gi, '[vc]: [REDACTED]')
-    .replace(/(token|cookie|authorization|secret|password)=\S+/gi, '$1=[REDACTED]');
+function writeLine(line) {
+  process.stdout.write(line + '\n');
+}
+
+function safeUrl(value) {
+  return typeof value === 'string' && value.startsWith('https://github.com/')
+    ? value
+    : 'unavailable';
+}
+
+function evidenceLine(channel, item) {
+  const provider = item.user?.login ?? item.author?.login ?? 'unknown';
+  const id = item.id ?? item.database_id ?? item.node_id ?? 'unknown';
+  const state = item.state ?? item.review ?? item.conclusion ?? 'unknown';
+  const bodyAvailable = typeof item.body === 'string' && item.body.length > 0;
+  return (
+    '  ' +
+    channel +
+    ' provider=' +
+    provider +
+    ' id=' +
+    id +
+    ' state=' +
+    state +
+    ' bodyAvailable=' +
+    bodyAvailable +
+    ' url=' +
+    safeUrl(item.html_url ?? item.url)
+  );
 }
 
 function providerCounts(items) {
@@ -67,12 +107,13 @@ function fetchPages(path) {
 }
 
 try {
-  const pull = ghJson([`repos/${repo}/pulls/${pr}`]);
-  const checks =
-    ghJson([`repos/${repo}/commits/${pull.head.sha}/check-runs?per_page=100`]).check_runs ?? [];
-  const issueComments = fetchPages(`repos/${repo}/issues/${pr}/comments?per_page=100`);
-  const inlineComments = fetchPages(`repos/${repo}/pulls/${pr}/comments?per_page=100`);
-  const reviews = fetchPages(`repos/${repo}/pulls/${pr}/reviews?per_page=100`);
+  const pull = ghJson([`repos/${repo.fullName}/pulls/${pr}`]);
+  const checks = fetchCheckRuns(
+    `repos/${repo.fullName}/commits/${pull.head.sha}/check-runs?per_page=100`,
+  );
+  const issueComments = fetchPages(`repos/${repo.fullName}/issues/${pr}/comments?per_page=100`);
+  const inlineComments = fetchPages(`repos/${repo.fullName}/pulls/${pr}/comments?per_page=100`);
+  const reviews = fetchPages(`repos/${repo.fullName}/pulls/${pr}/reviews?per_page=100`);
   const query =
     'query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){nodes{id isResolved isOutdated path line comments(first:1){nodes{databaseId author{login} body}}} pageInfo{hasNextPage endCursor}}}}}';
   const threadPages = ghJson([
@@ -80,9 +121,9 @@ try {
     '--paginate',
     '--slurp',
     '-f',
-    `owner=${repo.split('/')[0]}`,
+    `owner=${repo.owner}`,
     '-f',
-    `name=${repo.split('/')[1]}`,
+    `name=${repo.name}`,
     '-F',
     `number=${pr}`,
     '-f',
@@ -91,28 +132,39 @@ try {
   const threads = flatPages(threadPages).flatMap(
     (page) => page?.data?.repository?.pullRequest?.reviewThreads?.nodes ?? [],
   );
+  const finalPull = ghJson([`repos/${repo.fullName}/pulls/${pr}`]);
+  if (finalPull.head?.sha !== pull.head?.sha)
+    throw new Error(
+      'pull request head changed during evidence collection; rerun for one exact head',
+    );
 
-  console.log(`reviewers:status repo=${repo} pr=${pr} head=${pull.head.sha}`);
-  console.log(`state=${pull.state} merged=${pull.merged} base=${pull.base.ref}`);
-  console.log('checks:');
+  writeLine('reviewers:status repo=' + repo.fullName + ' pr=' + pr + ' head=' + finalPull.head.sha);
+  writeLine(
+    'state=' + finalPull.state + ' merged=' + finalPull.merged + ' base=' + finalPull.base.ref,
+  );
+  writeLine('checks:');
   for (const check of checks)
-    console.log(`  ${check.name}\t${check.status}/${check.conclusion ?? 'pending'}`);
-  console.log(
+    writeLine(`  ${check.name}\t${check.status}/${check.conclusion ?? 'pending'}`);
+  writeLine(
     `reviewThreads total=${threads.length} unresolved=${threads.filter((thread) => !thread.isResolved).length}`,
   );
-  console.log(
+  for (const thread of threads) {
+    const comment = thread.comments?.[0];
+    writeLine(
+      `  inlineThread id=${thread.id} provider=${comment?.author?.login ?? 'unknown'} resolved=${thread.isResolved} outdated=${thread.isOutdated} path=${thread.path ?? 'unknown'} line=${thread.line ?? 'unknown'} bodyAvailable=${Boolean(comment?.body)}`,
+    );
+  }
+  writeLine(
     `topLevelComments total=${issueComments.length} by=${JSON.stringify(providerCounts(issueComments))}`,
   );
-  console.log(
+  writeLine(
     `inlineComments total=${inlineComments.length} by=${JSON.stringify(providerCounts(inlineComments))}`,
   );
-  console.log(`reviewBodies total=${reviews.length} by=${JSON.stringify(providerCounts(reviews))}`);
-  console.log('reviewEvidence:');
-  for (const item of [...issueComments, ...inlineComments, ...reviews]) {
-    const login = item.user?.login ?? 'unknown';
-    const body = safeEvidence(item.body);
-    if (body) console.log(`  ${login}: ${body}`);
-  }
+  writeLine(`reviewBodies total=${reviews.length} by=${JSON.stringify(providerCounts(reviews))}`);
+  writeLine('reviewEvidence:');
+  for (const item of issueComments) writeLine(evidenceLine('topLevelComment', item));
+  for (const item of inlineComments) writeLine(evidenceLine('inlineComment', item));
+  for (const item of reviews) writeLine(evidenceLine('reviewBody', item));
 } catch (error) {
   console.error(`[reviewers] UNKNOWN — ${error.message}`);
   process.exitCode = 1;

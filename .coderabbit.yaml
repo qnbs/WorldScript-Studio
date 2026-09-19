@@ -51,7 +51,7 @@ reviews:
         data must be preserved and refused, not silently normalized, dropped, or granted write
         authority. Check raw numeric fidelity, concurrency/fence behavior, readable-versus-
         writable capability separation, and absence of fallback dual-writes after refusal.
-    - path: "services/*Project*"
+    - path: "services/project*"
       instructions: |
         Treat canonical project authority, schema/version admission, migration, generation,
         and verification as data-integrity boundaries. Check same-ID/new-incarnation and
@@ -73,10 +73,10 @@ reviews:
       instructions: |
         Keep configuration ownership explicit and machine-checkable. Do not store live quota,
         billing, provider-availability, latest-SHA, or current-green state as durable config.
-    - path: "services/security/**"
+    - path: "services/network/**"
       instructions: |
-        Review against the actual threat model and fail-closed behavior. Never weaken CSP,
-        encryption, storage boundaries, or secret handling.
+        Review network/privacy boundaries against the actual threat model and fail-closed
+        behavior. Never weaken CSP, endpoint validation, privacy gates, or secret handling.
     - path: "src-tauri/**"
       instructions: |
         Preserve the approved desktop capability boundary and native security controls. Do

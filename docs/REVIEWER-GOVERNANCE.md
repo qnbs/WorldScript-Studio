@@ -18,6 +18,12 @@ The sources of truth are ordered as follows:
 The machine-readable durable role registry is [`config/reviewer-registry.json`](../config/reviewer-registry.json).
 Vendor adapters are narrow implementations of this policy, not competing policy documents.
 
+The CI reviewer-governance gate is a trust-boundary check: on pull requests it executes the
+base-ref copy of `scripts/check-reviewer-config.mjs` against the PR workspace, with a one-time
+head-copy fallback only when the checker is first introduced. Pushes and manual runs execute the
+checked-out copy. This prevents a later PR from weakening the checker and its governed invariants
+in the same change.
+
 ## Provider roles and configuration ownership
 
 | Provider | Durable role | Repository surface | Current state source |
@@ -32,7 +38,11 @@ Vendor adapters are narrow implementations of this policy, not competing policy 
 | chatgpt-codex-connector | optional semantic review channel | service configuration only | live connector output and quota state |
 | Qodo | optional semantic review channel | no config until activation is proven | live provider state |
 | Codecov | patch/full coverage evidence | `codecov.yml` plus CI artifacts | current check and CI-generated reports |
-| CodeQL, Semgrep, GitGuardian, Socket, OSV | security/static/supply-chain evidence | existing workflows/config | current checks and artifacts |
+| CodeQL | security-static-analysis | `.github/workflows/codeql.yml` | current checks and artifacts |
+| Semgrep | advisory external security-static-analysis signal | live Semgrep service; no repository config claimed | current checks and provider state |
+| GitGuardian | secret-detection | `.gitguardian.yaml` | current checks and artifacts |
+| Socket | supply-chain-security | dashboard/live service | current checks and provider state |
+| OSV | enforced supply-chain-security gate | `src-tauri/osv-scanner.toml` plus CI invocation | current CI check and artifacts |
 
 Provider silence is never equivalent to a clean review. Quota exhaustion, rate limiting, billing
 blocks, provider suspension, skipped execution, and transient failure are separate live states.

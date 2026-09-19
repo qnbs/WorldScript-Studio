@@ -104,7 +104,16 @@
     {
       "id": "semgrep",
       "role": "security-static-analysis",
-      "repoConfig": ".github/workflows/ci.yml",
+      "repoConfig": null,
+      "configurationOwner": "live-service",
+      "mayMutateBranch": false,
+      "blockingAuthority": false,
+      "statusSource": "live"
+    },
+    {
+      "id": "osv",
+      "role": "supply-chain-security",
+      "repoConfig": "src-tauri/osv-scanner.toml",
       "configurationOwner": "repository",
       "mayMutateBranch": false,
       "blockingAuthority": true,
