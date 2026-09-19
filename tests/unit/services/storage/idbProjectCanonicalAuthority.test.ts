@@ -3,6 +3,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_DATA_STORE } from '../../../../services/dbConstants';
+import { _resetDbForTest } from '../../../../services/storage';
 import { IdbProjectCanonicalAuthority } from '../../../../services/storage/idbProjectCanonicalAuthority';
 import * as storageEncryptionService from '../../../../services/storage/storageEncryptionService';
 import {
@@ -35,6 +36,7 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 
 beforeEach(() => {
   globalThis.indexedDB = new IDBFactory();
+  _resetDbForTest();
   localStorageMock.clear();
   clearIdbEncryptionKey();
 });
@@ -55,6 +57,18 @@ function baseProjectPayload(overrides: Record<string, unknown> = {}): Record<str
     worlds: { ids: [], entities: {} },
     ...overrides,
   };
+}
+
+function validCurrentRaw(): string {
+  return JSON.stringify({
+    schemaVersion: 1,
+    title: 'My Story',
+    logline: 'A logline.',
+    characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice' } } },
+    worlds: { ids: [], entities: {} },
+    outline: [],
+    manuscript: [],
+  });
 }
 
 /** Seeds the raw 'project' IDB record directly, bypassing the canonical authority's own admission/commit path (simulates the existing, non-fenced saveSlice path or an old cached build). */
@@ -105,6 +119,16 @@ describe('IdbProjectCanonicalAuthority#loadCanonicalProjectAdmission', () => {
   it('returns ABSENT when no project record exists', async () => {
     const authority = new IdbProjectCanonicalAuthority();
     await expect(authority.loadCanonicalProjectAdmission()).resolves.toEqual({ status: 'ABSENT' });
+  });
+
+  it('treats a present project key with an undefined value as MALFORMED, not ABSENT', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, undefined);
+
+    await expect(authority.loadCanonicalProjectAdmission()).resolves.toEqual({
+      status: 'NOT_ADMITTED',
+      classification: 'MALFORMED',
+    });
   });
 
   it('returns CURRENT for a valid schema-current record, read-only (no write)', async () => {
@@ -891,6 +915,38 @@ describe('IdbProjectCanonicalAuthority#createCanonicalProjectIfAbsent', () => {
 
     expect(result.status).toBe('MALFORMED_SOURCE');
     expect(await authority.loadCanonicalProjectAdmission()).toEqual({ status: 'ABSENT' });
+    expect(await readGenerationRecord(authority)).toBeUndefined();
+  });
+
+  it('fails verification instead of rounding an unsafe integer literal during create', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    const currentRaw = `${validCurrentRaw().slice(0, -1)},"opaqueUnsafe":9007199254740993}`;
+    const result = await authority.createCanonicalProjectIfAbsent({
+      currentRaw,
+    });
+
+    expect(result).toEqual({
+      status: 'VERIFICATION_FAILED',
+      reason:
+        'Canonical payload contains an unsafe integer literal that the IDB envelope cannot round-trip losslessly.',
+    });
+    expect(await authority.loadCanonicalProjectAdmission()).toEqual({ status: 'ABSENT' });
+    expect(await readGenerationRecord(authority)).toBeUndefined();
+  });
+
+  it('does not overwrite a present undefined project record during create', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, undefined);
+
+    const result = await authority.createCanonicalProjectIfAbsent({
+      currentRaw: validCurrentRaw(),
+    });
+
+    expect(result).toEqual({ status: 'CONFLICT' });
+    expect(await authority.loadCanonicalProjectAdmission()).toEqual({
+      status: 'NOT_ADMITTED',
+      classification: 'MALFORMED',
+    });
     expect(await readGenerationRecord(authority)).toBeUndefined();
   });
 

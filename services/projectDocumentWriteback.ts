@@ -434,6 +434,13 @@ export function parseCanonicalRawPreservingUnsafeIntegers(raw: CanonicalProjectR
   return reviveRawNumberMarkers(JSON.parse(protectUnsafeIntegers(raw, marker)), marker);
 }
 
+// QNBS-v3: reject exact numeric literals before an object-based IDB codec can round opaque data that the raw-carrier writer would preserve byte-for-byte.
+/** Reports whether a raw carrier contains an integer literal the JS number type cannot represent exactly. */
+export function containsUnsafeIntegerLiteral(raw: CanonicalProjectRawText): boolean {
+  const marker = createUniqueProtectionMarker(raw);
+  return protectUnsafeIntegers(raw, marker) !== raw;
+}
+
 function isEntityStateShaped(value: unknown): value is EntityState<EntityLike, string> {
   return (
     value !== null &&

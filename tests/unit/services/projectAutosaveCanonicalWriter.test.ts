@@ -6,6 +6,7 @@ import type { ProjectData } from '../../../features/project/projectState';
 import { getPersistedProjectPayload } from '../../../services/appBootstrap';
 import { APP_DATA_STORE } from '../../../services/dbConstants';
 import { saveAutosaveSnapshotCanonical } from '../../../services/projectAutosaveCanonicalWriter';
+import { _resetDbForTest } from '../../../services/storage';
 import type {
   CanonicalProjectAdmission,
   CommitCanonicalProjectEditResult,
@@ -48,6 +49,7 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 
 beforeEach(() => {
   globalThis.indexedDB = new IDBFactory();
+  _resetDbForTest();
   localStorageMock.clear();
   clearIdbEncryptionKey();
 });
@@ -95,6 +97,18 @@ async function seedProjectRecord(
   });
 }
 
+async function readProjectRecord(authority: IdbProjectCanonicalAuthority): Promise<unknown> {
+  const store = await (authority as unknown as StoreWithObjectStoreAccess).getObjectStore(
+    APP_DATA_STORE,
+    'readonly',
+  );
+  return new Promise((resolve, reject) => {
+    const request = store.get('project');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 const SCRIPTED_CURRENT_RAW = JSON.stringify({
   schemaVersion: 1,
   title: 'Persisted Story',
@@ -123,7 +137,8 @@ function makeScriptedAuthority(input: {
   commitCanonicalProjectEdit: ReturnType<typeof vi.fn>;
 } {
   const next = <T>(values: readonly T[], index: { value: number }): T => {
-    const value = values[Math.min(index.value++, values.length - 1)];
+    if (index.value >= values.length) throw new Error('scripted authority ran out of results');
+    const value = values[index.value++];
     if (value === undefined) throw new Error('scripted authority ran out of results');
     return value;
   };
@@ -368,6 +383,7 @@ describe('saveAutosaveSnapshotCanonical', () => {
     const result = await saveAutosaveSnapshotCanonical(snapshot(), authority);
 
     expect(result).toEqual({ status: 'REFUSED', reason });
+    expect(await readProjectRecord(authority)).toEqual(seeded);
     const store = await (authority as unknown as StoreWithObjectStoreAccess).getObjectStore(
       APP_DATA_STORE,
       'readonly',
