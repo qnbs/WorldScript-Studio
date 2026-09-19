@@ -103,7 +103,7 @@ export type CommitCanonicalProjectEditResult =
   | { status: 'NOT_ADMITTED_FOR_WRITE'; classification: string };
 
 export type CommitLegacyToV1MigrationResult =
-  | CommitCanonicalProjectEditResult
+  | Exclude<CommitCanonicalProjectEditResult, { status: 'NOT_ADMITTED_FOR_WRITE' }>
   // QNBS-v3: distinct from NOT_ADMITTED_FOR_WRITE -- this path exists specifically for LEGACY_UNVERSIONED sources, so an already-CURRENT (or FUTURE/MALFORMED) document is "not eligible for migration", not "refused write authority".
   | { status: 'NOT_ELIGIBLE'; classification: string };
 
@@ -562,11 +562,14 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
     return withProtectedWriteAdmission(async () => {
       const encoded = await this.encodeVerifiedPayload(newPayload);
       if (encoded.status === 'VERIFICATION_FAILED') return encoded;
-      return this.commitGenerationFencedWrite(
+      const committed = await this.commitGenerationFencedWrite(
         rawRecordSnapshot,
         newGeneration,
         encoded.encodedPayload,
       );
+      // QNBS-v3: a fenced migration cannot lose write admission after its preflight, so preserve the migration contract by treating any future expansion of that shared result as a fence conflict.
+      if (committed.status === 'NOT_ADMITTED_FOR_WRITE') return { status: 'CONFLICT' };
+      return committed;
     });
   }
 

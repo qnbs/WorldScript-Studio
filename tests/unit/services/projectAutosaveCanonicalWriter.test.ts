@@ -294,18 +294,35 @@ describe('saveAutosaveSnapshotCanonical', () => {
     });
   });
 
-  it('keeps migration conflict distinct and does not retry it', async () => {
-    const authority = makeScriptedAuthority({
-      admissions: [{ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' }],
-      migrations: [{ status: 'CONFLICT' }],
-    });
+  it.each([
+    ['CONFLICT without retrying', { status: 'CONFLICT' }, { status: 'CONFLICT' }, 1, 1],
+    [
+      'FUTURE as a typed refusal',
+      { status: 'NOT_ELIGIBLE', classification: 'FUTURE' },
+      { status: 'REFUSED', reason: 'FUTURE' },
+      1,
+      1,
+    ],
+    [
+      'VERIFICATION_FAILED without changing its typed meaning',
+      { status: 'VERIFICATION_FAILED', reason: 'migration verify failed' },
+      { status: 'VERIFICATION_FAILED', reason: 'migration verify failed' },
+      1,
+      1,
+    ],
+  ] as const)(
+    'keeps a terminal migration result explicit: %s',
+    async (_scenario, migration, expected, expectedAdmissionCalls, expectedMigrationCalls) => {
+      const authority = makeScriptedAuthority({
+        admissions: [{ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' }],
+        migrations: [migration],
+      });
 
-    const result = await saveAutosaveSnapshotCanonical(snapshot(), authority);
-
-    expect(result).toEqual({ status: 'CONFLICT' });
-    expect(authority.loadCanonicalProjectAdmission).toHaveBeenCalledTimes(1);
-    expect(authority.commitLegacyToV1Migration).toHaveBeenCalledTimes(1);
-  });
+      await expect(saveAutosaveSnapshotCanonical(snapshot(), authority)).resolves.toEqual(expected);
+      expect(authority.loadCanonicalProjectAdmission).toHaveBeenCalledTimes(expectedAdmissionCalls);
+      expect(authority.commitLegacyToV1Migration).toHaveBeenCalledTimes(expectedMigrationCalls);
+    },
+  );
 
   it('uses one re-evaluation when migration observes benign CURRENT progression', async () => {
     const authority = makeScriptedAuthority({
@@ -323,42 +340,6 @@ describe('saveAutosaveSnapshotCanonical', () => {
     expect(authority.loadCanonicalProjectAdmission).toHaveBeenCalledTimes(2);
     expect(authority.commitLegacyToV1Migration).toHaveBeenCalledTimes(1);
     expect(authority.commitCanonicalProjectEdit).toHaveBeenCalledTimes(1);
-  });
-
-  it('maps a migration refusal for a newly observed FUTURE source', async () => {
-    const authority = makeScriptedAuthority({
-      admissions: [{ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' }],
-      migrations: [{ status: 'NOT_ELIGIBLE', classification: 'FUTURE' }],
-    });
-
-    await expect(saveAutosaveSnapshotCanonical(snapshot(), authority)).resolves.toEqual({
-      status: 'REFUSED',
-      reason: 'FUTURE',
-    });
-  });
-
-  it('maps a migration write refusal without retrying the state transition', async () => {
-    const authority = makeScriptedAuthority({
-      admissions: [{ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' }],
-      migrations: [{ status: 'NOT_ADMITTED_FOR_WRITE', classification: 'MALFORMED' }],
-    });
-
-    await expect(saveAutosaveSnapshotCanonical(snapshot(), authority)).resolves.toEqual({
-      status: 'REFUSED',
-      reason: 'MALFORMED',
-    });
-  });
-
-  it('propagates a migration verification failure without changing its typed meaning', async () => {
-    const authority = makeScriptedAuthority({
-      admissions: [{ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' }],
-      migrations: [{ status: 'VERIFICATION_FAILED', reason: 'migration verify failed' }],
-    });
-
-    await expect(saveAutosaveSnapshotCanonical(snapshot(), authority)).resolves.toEqual({
-      status: 'VERIFICATION_FAILED',
-      reason: 'migration verify failed',
-    });
   });
 
   it('requires CURRENT after a successful migration and refuses a second state transition', async () => {

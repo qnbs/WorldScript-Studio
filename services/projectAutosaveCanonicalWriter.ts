@@ -121,9 +121,6 @@ async function handleLegacyUnversioned(
     if (migrated.classification === 'CURRENT') return reevaluate();
     return final(resultForNonAdmittedClassification(migrated.classification));
   }
-  if (migrated.status === 'NOT_ADMITTED_FOR_WRITE') {
-    return final(resultForNonAdmittedClassification(migrated.classification));
-  }
   return final(migrated);
 }
 
