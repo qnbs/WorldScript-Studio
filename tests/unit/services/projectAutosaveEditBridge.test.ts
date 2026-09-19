@@ -78,6 +78,22 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     expect(edit.fields).not.toHaveProperty('author');
   });
 
+  it('never emits an owned schemaVersion field, even when the runtime snapshot carries one as an extra', () => {
+    // QNBS-v3: appBootstrap spreads the persisted payload into the runtime projection, so a CURRENT record's schemaVersion can ride along as a runtime-extra prop; schemaVersion is admission-owned and commitOwnedProjectEdit rejects any owned edit of it.
+    const data = baseProjectData({ schemaVersion: 1 });
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'x',
+      characters: { ids: [], entities: {} },
+      worlds: { ids: [], entities: {} },
+    });
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+
+    expect(edit.fields).not.toHaveProperty('schemaVersion');
+    expect(commitBridgeEdit(data, currentRaw).status).toBe('COMMITTED');
+  });
+
   it('upserts every current characters entity, in current order', () => {
     expectOrderedUpsert('characters', ['c2', 'c1'], {
       c1: { id: 'c1', name: 'Alice' },

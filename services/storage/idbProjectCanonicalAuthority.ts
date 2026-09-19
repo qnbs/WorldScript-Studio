@@ -44,8 +44,10 @@ import {
   type CanonicalProjectRawText,
   commitOwnedProjectEdit,
   computeProjectSourceGeneration,
+  containsUnsafeIntegerLiteral,
   type OwnedProjectEdit,
   type ProjectSourceGeneration,
+  parseCanonicalRawPreservingUnsafeIntegers,
 } from '../projectDocumentWriteback';
 import { importedProjectJsonSchema } from '../projectImportSchema';
 import { compressData, decompressData, IdbConnectionManager } from './idbCore';
@@ -60,6 +62,8 @@ import {
 
 const PROJECT_RECORD_KEY = 'project';
 const GENERATION_RECORD_KEY = '__idb_project_canonical_generation_v1__';
+const UNSAFE_INTEGER_VERIFICATION_REASON =
+  'Canonical payload contains an unsafe integer literal that the IDB envelope cannot round-trip losslessly.';
 
 interface ProjectGenerationRecord {
   generation: ProjectSourceGeneration;
@@ -99,9 +103,15 @@ export type CommitCanonicalProjectEditResult =
   | { status: 'NOT_ADMITTED_FOR_WRITE'; classification: string };
 
 export type CommitLegacyToV1MigrationResult =
-  | CommitCanonicalProjectEditResult
+  | Exclude<CommitCanonicalProjectEditResult, { status: 'NOT_ADMITTED_FOR_WRITE' }>
   // QNBS-v3: distinct from NOT_ADMITTED_FOR_WRITE -- this path exists specifically for LEGACY_UNVERSIONED sources, so an already-CURRENT (or FUTURE/MALFORMED) document is "not eligible for migration", not "refused write authority".
   | { status: 'NOT_ELIGIBLE'; classification: string };
+
+export type CreateCanonicalProjectResult =
+  | { status: 'CREATED'; generation: ProjectSourceGeneration }
+  | { status: 'CONFLICT' }
+  | { status: 'VERIFICATION_FAILED'; reason: string }
+  | { status: 'MALFORMED_SOURCE'; reason: string };
 
 interface StoredProjectEnvelope {
   data?: Record<string, unknown>;
@@ -159,6 +169,14 @@ function readKey(store: IDBObjectStore, key: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const request = store.get(key);
     request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function readKeyPresence(store: IDBObjectStore, key: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const request = store.getKey(key);
+    request.onsuccess = () => resolve(request.result !== undefined);
     request.onerror = () => reject(request.error);
   });
 }
@@ -306,6 +324,8 @@ interface CanonicalProjectSnapshot {
 interface DecodedProjectSnapshot {
   /** The exact raw (undecoded) value read from PROJECT_RECORD_KEY, for the raw-bytes CAS fence. */
   rawRecordSnapshot: unknown;
+  /** IndexedDB distinguishes a missing key from a present key whose stored value is undefined. */
+  projectRecordPresent: boolean;
   parsedGeneration: ProjectGenerationRecord | null;
   /** Null when the record is absent, not a recognized envelope, or its payload cannot be JSON-stringified. */
   decoded: {
@@ -323,39 +343,62 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
 
   private async readDecodedProjectSnapshot(): Promise<DecodedProjectSnapshot> {
     const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
-    const [rawRecord, generationRecordRaw] = await Promise.all([
+    const [rawRecord, projectRecordPresent, generationRecordRaw] = await Promise.all([
       readKey(store, PROJECT_RECORD_KEY),
+      readKeyPresence(store, PROJECT_RECORD_KEY),
       readKey(store, GENERATION_RECORD_KEY),
     ]);
     const parsedGeneration = parseGenerationRecord(generationRecordRaw);
-    if (rawRecord === undefined)
-      return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+    if (!projectRecordPresent)
+      return {
+        rawRecordSnapshot: rawRecord,
+        projectRecordPresent,
+        parsedGeneration,
+        decoded: null,
+      };
 
     const decodedValue = await idbReadSecure<unknown>(rawRecord);
     const unwrapped = unwrapProjectEnvelope(decodedValue);
-    if (!unwrapped) return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+    if (!unwrapped)
+      return {
+        rawRecordSnapshot: rawRecord,
+        projectRecordPresent,
+        parsedGeneration,
+        decoded: null,
+      };
 
     try {
       const currentRaw = JSON.stringify(unwrapped.payload);
       // QNBS-v3: JSON.stringify silently blanks a Map/Set/RegExp field to `{}` and drops undefined-valued keys instead of throwing -- round-trip and structurally compare so a payload this text representation can't faithfully carry is classified MALFORMED, the same outcome a cyclic value inside `data` already gets from the throw above, instead of being silently truncated on the next commit.
       const roundTripped = JSON.parse(currentRaw) as Record<string, unknown>;
       if (!deepStructuredEqual(roundTripped, unwrapped.payload)) {
-        return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+        return {
+          rawRecordSnapshot: rawRecord,
+          projectRecordPresent,
+          parsedGeneration,
+          decoded: null,
+        };
       }
       return {
         rawRecordSnapshot: rawRecord,
+        projectRecordPresent,
         parsedGeneration,
         decoded: { payload: unwrapped.payload, envelope: unwrapped.envelope, currentRaw },
       };
     } catch {
-      return { rawRecordSnapshot: rawRecord, parsedGeneration, decoded: null };
+      return {
+        rawRecordSnapshot: rawRecord,
+        projectRecordPresent,
+        parsedGeneration,
+        decoded: null,
+      };
     }
   }
 
   private async readCanonicalProjectSnapshot(): Promise<CanonicalProjectSnapshot> {
-    const { rawRecordSnapshot, parsedGeneration, decoded } =
+    const { rawRecordSnapshot, projectRecordPresent, parsedGeneration, decoded } =
       await this.readDecodedProjectSnapshot();
-    if (rawRecordSnapshot === undefined) {
+    if (!projectRecordPresent) {
       return { admission: { status: 'ABSENT' }, rawRecordSnapshot };
     }
     if (!decoded) {
@@ -415,10 +458,17 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
     });
     if (applied.status !== 'COMMITTED') return applied;
 
-    const newPayload = rewrapProjectEnvelope(
-      JSON.parse(applied.raw) as Record<string, unknown>,
-      admission.envelope,
-    );
+    if (containsUnsafeIntegerLiteral(applied.raw)) {
+      return { status: 'VERIFICATION_FAILED', reason: UNSAFE_INTEGER_VERIFICATION_REASON };
+    }
+    const parsedPayload = parseCanonicalRawPreservingUnsafeIntegers(applied.raw);
+    if (!isRecord(parsedPayload)) {
+      return {
+        status: 'MALFORMED_SOURCE',
+        reason: 'Updated canonical payload is not an object after preserve-first parsing.',
+      };
+    }
+    const newPayload = rewrapProjectEnvelope(parsedPayload, admission.envelope);
     return withProtectedWriteAdmission(async () => {
       const encoded = await this.encodeVerifiedPayload(newPayload);
       if (encoded.status === 'VERIFICATION_FAILED') return encoded;
@@ -473,10 +523,9 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
    * supersede the already-migrated canonical generation.
    */
   async commitLegacyToV1Migration(): Promise<CommitLegacyToV1MigrationResult> {
-    const { rawRecordSnapshot, parsedGeneration, decoded } =
+    const { rawRecordSnapshot, projectRecordPresent, parsedGeneration, decoded } =
       await this.readDecodedProjectSnapshot();
-    if (rawRecordSnapshot === undefined)
-      return { status: 'NOT_ELIGIBLE', classification: 'ABSENT' };
+    if (!projectRecordPresent) return { status: 'NOT_ELIGIBLE', classification: 'ABSENT' };
     if (!decoded) return { status: 'NOT_ELIGIBLE', classification: 'MALFORMED' };
 
     const classification = classifyRawProjectVersionFromParsed(decoded.currentRaw, decoded.payload);
@@ -497,20 +546,89 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
     }
 
     const migratedRaw = admission.canonical.raw;
-    const newPayload = rewrapProjectEnvelope(
-      JSON.parse(migratedRaw) as Record<string, unknown>,
-      decoded.envelope,
-    );
+    if (containsUnsafeIntegerLiteral(migratedRaw)) {
+      return { status: 'VERIFICATION_FAILED', reason: UNSAFE_INTEGER_VERIFICATION_REASON };
+    }
+    const parsedPayload = parseCanonicalRawPreservingUnsafeIntegers(migratedRaw);
+    if (!isRecord(parsedPayload)) {
+      return {
+        status: 'MALFORMED_SOURCE',
+        reason: 'Migrated canonical payload is not an object after preserve-first parsing.',
+      };
+    }
+    const newPayload = rewrapProjectEnvelope(parsedPayload, decoded.envelope);
     const newGeneration = computeProjectSourceGeneration(migratedRaw);
 
     return withProtectedWriteAdmission(async () => {
       const encoded = await this.encodeVerifiedPayload(newPayload);
       if (encoded.status === 'VERIFICATION_FAILED') return encoded;
-      return this.commitGenerationFencedWrite(
+      const committed = await this.commitGenerationFencedWrite(
         rawRecordSnapshot,
         newGeneration,
         encoded.encodedPayload,
       );
+      // QNBS-v3: a fenced migration cannot lose write admission after its preflight, so preserve the migration contract by treating any future expansion of that shared result as a fence conflict.
+      if (committed.status === 'NOT_ADMITTED_FOR_WRITE') return { status: 'CONFLICT' };
+      return committed;
+    });
+  }
+
+  /**
+   * Atomically establishes the canonical CURRENT record for a first-ever save (an ABSENT
+   * 'project' key), through the SAME raw-bytes fence and protected-write admission discipline as
+   * commitCanonicalProjectEdit/commitLegacyToV1Migration -- never a bootstrap via the legacy
+   * (non-fenced) saveSlice path, which would persist a schemaVersion-less LEGACY_UNVERSIONED
+   * record in a schema-aware build. The candidate is the INNER CURRENT project payload; this
+   * method validates it against PROJECT_SCHEMA_V1 (§2.4 step-4 revalidation), re-wraps it into
+   * the browser envelope ({ data: ... }) the existing cold-boot readers expect, and writes it
+   * only if the record is still absent -- a concurrent creator or writer resolves CONFLICT.
+   */
+  async createCanonicalProjectIfAbsent(params: {
+    currentRaw: CanonicalProjectRawText;
+  }): Promise<CreateCanonicalProjectResult> {
+    const admission = admitCanonicalProjectDocument(params.currentRaw, importedProjectJsonSchema);
+    if (admission.status !== 'CURRENT') {
+      return {
+        status: 'MALFORMED_SOURCE',
+        reason: `initial canonical payload is not a valid CURRENT document (classification: ${admission.source.classification})`,
+      };
+    }
+    if (containsUnsafeIntegerLiteral(params.currentRaw)) {
+      return {
+        status: 'VERIFICATION_FAILED',
+        reason: UNSAFE_INTEGER_VERIFICATION_REASON,
+      };
+    }
+    const parsedPayload = parseCanonicalRawPreservingUnsafeIntegers(params.currentRaw);
+    if (!isRecord(parsedPayload)) {
+      return {
+        status: 'MALFORMED_SOURCE',
+        reason: 'Initial canonical payload is not an object after preserve-first parsing.',
+      };
+    }
+    const currentPayload = parsedPayload;
+    const newPayload = rewrapProjectEnvelope(currentPayload, {
+      kind: 'data',
+      originalEnvelope: {},
+    });
+    // QNBS-v3: IDB stores the parsed payload, so hash its persisted JSON form rather than caller-only whitespace; the marker must equal the ordinary reload admission generation.
+    const newGeneration = computeProjectSourceGeneration(JSON.stringify(currentPayload));
+
+    return withProtectedWriteAdmission(async () => {
+      const encoded = await this.encodeVerifiedPayload(newPayload);
+      if (encoded.status === 'VERIFICATION_FAILED') return encoded;
+      // QNBS-v3: expectedRawRecord undefined -- the fence's raw-bytes CAS against "no record" IS create-if-absent; any concurrently created record mismatches and resolves CONFLICT.
+      const committed = await this.commitGenerationFencedWrite(
+        undefined,
+        newGeneration,
+        encoded.encodedPayload,
+      );
+      // QNBS-v3: NOT_ADMITTED_FOR_WRITE here means a concurrent actor landed a non-CURRENT record where ours was absent -- the create-if-absent precondition is gone, so it resolves CONFLICT like any other raw-bytes mismatch, not as a classification refusal (the caller re-evaluates against the now-present record).
+      if (committed.status === 'COMMITTED') {
+        return { status: 'CREATED', generation: committed.generation };
+      }
+      if (committed.status === 'NOT_ADMITTED_FOR_WRITE') return { status: 'CONFLICT' };
+      return committed;
     });
   }
 
@@ -526,9 +644,17 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
           const transaction = store.transaction;
           let writeQueued = false;
           const projectRequest = store.get(PROJECT_RECORD_KEY);
-          projectRequest.onerror = () => reject(projectRequest.error);
-          projectRequest.onsuccess = () => {
-            if (!rawStoredValuesEqual(projectRequest.result, expectedRawRecord)) {
+          const projectKeyRequest = store.getKey(PROJECT_RECORD_KEY);
+          let projectRecordPresent = false;
+          let projectReadComplete = false;
+          let projectKeyReadComplete = false;
+          const admitProjectWrite = () => {
+            if (!projectReadComplete || !projectKeyReadComplete) return;
+            // QNBS-v3: get() returns undefined for both a missing key and a present undefined value; the key-presence read keeps create CAS from overwriting malformed data.
+            if (
+              (projectRecordPresent && expectedRawRecord === undefined) ||
+              !rawStoredValuesEqual(projectRequest.result, expectedRawRecord)
+            ) {
               resolve({ status: 'CONFLICT' });
               return;
             }
@@ -541,6 +667,17 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
             putGenRequest.onerror = () => reject(putGenRequest.error);
             putProjectRequest.onerror = () => reject(putProjectRequest.error);
             writeQueued = true;
+          };
+          projectRequest.onerror = () => reject(projectRequest.error);
+          projectRequest.onsuccess = () => {
+            projectReadComplete = true;
+            admitProjectWrite();
+          };
+          projectKeyRequest.onerror = () => reject(projectKeyRequest.error);
+          projectKeyRequest.onsuccess = () => {
+            projectRecordPresent = projectKeyRequest.result !== undefined;
+            projectKeyReadComplete = true;
+            admitProjectWrite();
           };
           transaction.oncomplete = () => {
             if (writeQueued) resolve({ status: 'COMMITTED', generation: newGeneration });

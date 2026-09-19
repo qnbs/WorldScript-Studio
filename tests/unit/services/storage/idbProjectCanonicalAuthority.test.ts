@@ -3,10 +3,12 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_DATA_STORE } from '../../../../services/dbConstants';
+import { _resetDbForTest } from '../../../../services/storage';
 import { IdbProjectCanonicalAuthority } from '../../../../services/storage/idbProjectCanonicalAuthority';
 import * as storageEncryptionService from '../../../../services/storage/storageEncryptionService';
 import {
   clearIdbEncryptionKey,
+  idbReadSecure,
   initIdbEncryption,
 } from '../../../../services/storage/storageEncryptionService';
 
@@ -34,6 +36,7 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 
 beforeEach(() => {
   globalThis.indexedDB = new IDBFactory();
+  _resetDbForTest();
   localStorageMock.clear();
   clearIdbEncryptionKey();
 });
@@ -54,6 +57,18 @@ function baseProjectPayload(overrides: Record<string, unknown> = {}): Record<str
     worlds: { ids: [], entities: {} },
     ...overrides,
   };
+}
+
+function validCurrentRaw(): string {
+  return JSON.stringify({
+    schemaVersion: 1,
+    title: 'My Story',
+    logline: 'A logline.',
+    characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice' } } },
+    worlds: { ids: [], entities: {} },
+    outline: [],
+    manuscript: [],
+  });
 }
 
 /** Seeds the raw 'project' IDB record directly, bypassing the canonical authority's own admission/commit path (simulates the existing, non-fenced saveSlice path or an old cached build). */
@@ -87,10 +102,33 @@ async function readGenerationRecord(authority: IdbProjectCanonicalAuthority): Pr
   });
 }
 
+/** Reads the stored 'project' record exactly as written (encrypted/compressed), for decode-and-compare assertions. */
+async function readRawProjectRecord(authority: IdbProjectCanonicalAuthority): Promise<unknown> {
+  const store = await (authority as unknown as StoreWithObjectStoreAccess).getObjectStore(
+    APP_DATA_STORE,
+    'readonly',
+  );
+  return new Promise((resolve, reject) => {
+    const request = store.get('project');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 describe('IdbProjectCanonicalAuthority#loadCanonicalProjectAdmission', () => {
   it('returns ABSENT when no project record exists', async () => {
     const authority = new IdbProjectCanonicalAuthority();
     await expect(authority.loadCanonicalProjectAdmission()).resolves.toEqual({ status: 'ABSENT' });
+  });
+
+  it('treats a present project key with an undefined value as MALFORMED, not ABSENT', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, undefined);
+
+    await expect(authority.loadCanonicalProjectAdmission()).resolves.toEqual({
+      status: 'NOT_ADMITTED',
+      classification: 'MALFORMED',
+    });
   });
 
   it('returns CURRENT for a valid schema-current record, read-only (no write)', async () => {
@@ -810,5 +848,159 @@ describe('IdbProjectCanonicalAuthority#commitLegacyToV1Migration', () => {
     expect(admission).toEqual({ status: 'NOT_ADMITTED', classification: 'LEGACY_UNVERSIONED' });
     const result = await authority.commitLegacyToV1Migration();
     expect(result.status).toBe('COMMITTED');
+  });
+});
+
+describe('IdbProjectCanonicalAuthority#createCanonicalProjectIfAbsent', () => {
+  it('creates a browser { data } envelope record that reloads as CURRENT, stamped schemaVersion 1', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+
+    const result = await authority.createCanonicalProjectIfAbsent({
+      currentRaw: JSON.stringify(
+        {
+          schemaVersion: 1,
+          title: 'My Story',
+          logline: 'A logline.',
+          characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice' } } },
+          worlds: { ids: [], entities: {} },
+          outline: [],
+          manuscript: [],
+        },
+        null,
+        2,
+      ),
+    });
+
+    expect(result.status).toBe('CREATED');
+    const stored = await idbReadSecure(await readRawProjectRecord(authority));
+    expect(stored).toMatchObject({ data: { schemaVersion: 1, title: 'My Story' } });
+    const admission = await authority.loadCanonicalProjectAdmission();
+    expect(admission.status).toBe('CURRENT');
+    if (admission.status !== 'CURRENT') return;
+    expect(await readGenerationRecord(authority)).toEqual({
+      generation: admission.generation,
+      migrated: true,
+    });
+  });
+
+  it('resolves CONFLICT without writing when a record already exists', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    const seeded = { data: baseProjectPayload({ title: 'Pre-existing' }) };
+    await seedProjectRecord(authority, seeded);
+
+    const result = await authority.createCanonicalProjectIfAbsent({
+      currentRaw: JSON.stringify({
+        schemaVersion: 1,
+        title: 'My Story',
+        logline: 'A logline.',
+        characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice' } } },
+        worlds: { ids: [], entities: {} },
+        outline: [],
+        manuscript: [],
+      }),
+    });
+
+    expect(result).toEqual({ status: 'CONFLICT' });
+    expect(await idbReadSecure(await readRawProjectRecord(authority))).toEqual(seeded);
+    expect(await readGenerationRecord(authority)).toBeUndefined();
+  });
+
+  it('rejects an invalid candidate as MALFORMED_SOURCE without writing anything', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    const { title: _title, ...invalid } = baseProjectPayload();
+
+    const result = await authority.createCanonicalProjectIfAbsent({
+      currentRaw: JSON.stringify(invalid),
+    });
+
+    expect(result.status).toBe('MALFORMED_SOURCE');
+    expect(await authority.loadCanonicalProjectAdmission()).toEqual({ status: 'ABSENT' });
+    expect(await readGenerationRecord(authority)).toBeUndefined();
+  });
+
+  it.each(['9007199254740993', '9007199254740993e0', '9007199254740993.0', '1e999'])(
+    'fails verification instead of rounding unsafe integer literal %s during create',
+    async (literal) => {
+      const authority = new IdbProjectCanonicalAuthority();
+      const currentRaw = `${validCurrentRaw().slice(0, -1)},"opaqueUnsafe":${literal}}`;
+      const result = await authority.createCanonicalProjectIfAbsent({
+        currentRaw,
+      });
+
+      expect(result).toEqual({
+        status: 'VERIFICATION_FAILED',
+        reason:
+          'Canonical payload contains an unsafe integer literal that the IDB envelope cannot round-trip losslessly.',
+      });
+      expect(await authority.loadCanonicalProjectAdmission()).toEqual({ status: 'ABSENT' });
+      expect(await readGenerationRecord(authority)).toBeUndefined();
+    },
+  );
+
+  it('does not overwrite a present undefined project record during create', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, undefined);
+
+    const result = await authority.createCanonicalProjectIfAbsent({
+      currentRaw: validCurrentRaw(),
+    });
+
+    expect(result).toEqual({ status: 'CONFLICT' });
+    expect(await authority.loadCanonicalProjectAdmission()).toEqual({
+      status: 'NOT_ADMITTED',
+      classification: 'MALFORMED',
+    });
+    expect(await readGenerationRecord(authority)).toBeUndefined();
+  });
+
+  it('fails closed (CONFLICT) when a concurrent writer lands during the async encrypt window', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    const spy = vi
+      .spyOn(storageEncryptionService, 'resolveProtectedWriteKey')
+      .mockImplementationOnce(async () => {
+        await seedProjectRecord(authority, { data: baseProjectPayload({ title: 'Raced In' }) });
+        return null;
+      });
+
+    const result = await authority.createCanonicalProjectIfAbsent({
+      currentRaw: JSON.stringify({
+        schemaVersion: 1,
+        title: 'My Story',
+        logline: 'A logline.',
+        characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice' } } },
+        worlds: { ids: [], entities: {} },
+        outline: [],
+        manuscript: [],
+      }),
+    });
+
+    spy.mockRestore();
+    expect(result.status).toBe('CONFLICT');
+    expect(await authority.loadCanonicalProjectAdmission()).toMatchObject({
+      status: 'CURRENT',
+    });
+  });
+
+  it('round-trips correctly when at-rest encryption is active', async () => {
+    await initIdbEncryption('test-pass');
+    const authority = new IdbProjectCanonicalAuthority();
+
+    const result = await authority.createCanonicalProjectIfAbsent({
+      currentRaw: JSON.stringify({
+        schemaVersion: 1,
+        title: 'My Story',
+        logline: 'A logline.',
+        characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice' } } },
+        worlds: { ids: [], entities: {} },
+        outline: [],
+        manuscript: [],
+      }),
+    });
+
+    expect(result.status).toBe('CREATED');
+    const admission = await authority.loadCanonicalProjectAdmission();
+    expect(admission.status).toBe('CURRENT');
+    if (admission.status !== 'CURRENT') return;
+    expect(JSON.parse(admission.currentRaw)).toMatchObject({ schemaVersion: 1, title: 'My Story' });
   });
 });

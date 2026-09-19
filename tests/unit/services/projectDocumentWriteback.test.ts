@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   commitOwnedProjectEdit,
   computeProjectSourceGeneration,
+  containsUnsafeIntegerLiteral,
   type EntityCollectionEdit,
   type OwnedProjectEdit,
 } from '../../../services/projectDocumentWriteback';
@@ -42,6 +43,28 @@ function commitEdit(edit: OwnedProjectEdit, raw: string = baseDocument()) {
 }
 
 describe('projectDocumentWriteback (#553)', () => {
+  it.each([
+    ['plain unsafe integer', '9007199254740993'],
+    ['negative unsafe integer', '-9007199254740993'],
+    ['unsafe integer with exponent', '9007199254740993e0'],
+    ['unsafe integer with decimal point', '9007199254740993.0'],
+    ['overflowing positive exponent', '1e999'],
+  ])('detects %s before object-based persistence', (_label, literal) => {
+    expect(containsUnsafeIntegerLiteral(`{"opaque":${literal}}`)).toBe(true);
+  });
+
+  it.each(['9007199254740991', '9007199254740991e0', '9007199254740991.0', '1e3'])(
+    'accepts safe integer-valued literal %s',
+    (literal) => {
+      expect(containsUnsafeIntegerLiteral(`{"opaque":${literal}}`)).toBe(false);
+    },
+  );
+
+  it('accepts a negative safe integer and ignores digits inside JSON strings', () => {
+    expect(containsUnsafeIntegerLiteral('{"opaque":-9007199254740991}')).toBe(false);
+    expect(containsUnsafeIntegerLiteral('{"opaque":"9007199254740993"}')).toBe(false);
+  });
+
   it('commits when there is no concurrent change', () => {
     const result = commitEdit({ fields: { title: 'Renamed Story' } });
 
