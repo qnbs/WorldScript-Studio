@@ -29,7 +29,7 @@ let pr;
 let repo;
 try {
   pr = argument('--pr');
-  if (!pr || !/^\d+$/.test(pr)) throw new Error('--pr must be a numeric pull request number');
+  if (!pr || !/^[1-9]\d*$/.test(pr)) throw new Error('--pr must be a positive pull request number');
   repo = parseRepository(
     argument('--repo') ?? process.env.GITHUB_REPOSITORY ?? 'qnbs/WorldScript-Studio',
   );
@@ -71,6 +71,10 @@ function safeUrl(value) {
   return typeof value === 'string' && value.startsWith('https://github.com/')
     ? value
     : 'unavailable';
+}
+
+function terminalValue(value) {
+  return JSON.stringify(value ?? 'unknown');
 }
 
 function evidenceLine(channel, item) {
@@ -151,7 +155,7 @@ try {
   for (const thread of threads) {
     const comment = thread.comments?.[0];
     writeLine(
-      `  inlineThread id=${thread.id} provider=${comment?.author?.login ?? 'unknown'} resolved=${thread.isResolved} outdated=${thread.isOutdated} path=${thread.path ?? 'unknown'} line=${thread.line ?? 'unknown'} bodyAvailable=${Boolean(comment?.body)}`,
+      `  inlineThread id=${thread.id} provider=${terminalValue(comment?.author?.login)} resolved=${thread.isResolved} outdated=${thread.isOutdated} path=${terminalValue(thread.path)} line=${thread.line ?? 'unknown'} bodyAvailable=${Boolean(comment?.body)}`,
     );
   }
   writeLine(

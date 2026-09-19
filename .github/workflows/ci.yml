@@ -67,8 +67,19 @@ jobs:
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "$BASE_SHA" ]; then
             mkdir -p /tmp/base-reviewer-check
-            if git show "$BASE_SHA:scripts/check-reviewer-config.mjs" > /tmp/base-reviewer-check/check-reviewer-config.mjs 2>/dev/null; then
-              node /tmp/base-reviewer-check/check-reviewer-config.mjs
+            base_checker_path="$(git ls-tree -r --name-only "$BASE_SHA" -- scripts/check-reviewer-config.mjs)" || {
+              echo "::error::unable to inspect the base reviewer checker"
+              exit 1
+            }
+            if [ "$base_checker_path" = "scripts/check-reviewer-config.mjs" ]; then
+              if ! git archive "$BASE_SHA" package.json pnpm-lock.yaml scripts/check-reviewer-config.mjs \
+                | tar -x -C /tmp/base-reviewer-check; then
+                echo "::error::unable to materialize the base reviewer checker dependencies"
+                exit 1
+              fi
+              pnpm --dir /tmp/base-reviewer-check install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+              REVIEWER_DEPENDENCY_ROOT=/tmp/base-reviewer-check \
+                node /tmp/base-reviewer-check/scripts/check-reviewer-config.mjs
             else
               echo "::notice::check-reviewer-config.mjs is absent on the base ref (bootstrap); using the PR copy."
               node scripts/check-reviewer-config.mjs

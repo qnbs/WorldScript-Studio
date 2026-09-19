@@ -5,15 +5,16 @@
  * Vendor schemas remain vendor-owned. This checker validates repository relationships and
  * non-negotiable governance invariants without network access or credentials.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const defaultRoot = fileURLToPath(new URL('..', import.meta.url));
 const root = process.env.REVIEWER_CONFIG_ROOT || defaultRoot;
-const require = createRequire(join(root, 'package.json'));
+const dependencyRoot = process.env.REVIEWER_DEPENDENCY_ROOT || defaultRoot;
+const require = createRequire(join(dependencyRoot, 'package.json'));
 const { parseDocument } = require('yaml');
 const registryPath = join(root, 'config/reviewer-registry.json');
 const approvedReviewerConfigPaths = new Set([
@@ -38,18 +39,32 @@ const requiredFinishingTouches = [
   'resolve_merge_conflict',
 ];
 const requiredPreMergeChecks = ['docstrings', 'title', 'description', 'issue_assessment'];
+const regexMetaCharacters = new Set(['\\', '.', '+', '^', '$', '{', '}', '(', ')', '|', '[', ']']);
+const requiredPathInstructions = [
+  'tests/**',
+  'services/storage/**',
+  'services/project*',
+  'features/project/**',
+  '.github/**',
+  'scripts/**',
+  'config/**',
+  'services/network/**',
+  'src-tauri/**',
+  'crates/**',
+  'docs/audit/**',
+  'docs/history/**',
+];
 // QNBS-v3: live quota, billing, and current-provider state must never become durable registry data.
-const forbiddenDynamicKeys = new Set([
-  'quota',
-  'ratelimit',
-  'availability',
-  'latestsha',
-  'billing',
-  'currentstate',
-  'lastreviewedsha',
-  'headsha',
-  'currentgreen',
-]);
+const forbiddenDynamicKeyPatterns = [
+  /quota/,
+  /ratelimit/,
+  /availability/,
+  /latest(?:sha|commit)/,
+  /billing/,
+  /current(?:state|status|green|sha|commit)/,
+  /lastreviewedsha/,
+  /headsha/,
+];
 
 const errors = [];
 
@@ -59,6 +74,11 @@ function fail(message) {
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isForbiddenDynamicKey(key) {
+  const normalized = key.replaceAll('_', '').replaceAll('-', '').toLowerCase();
+  return forbiddenDynamicKeyPatterns.some((pattern) => pattern.test(normalized));
 }
 
 function readJson(path) {
@@ -73,7 +93,7 @@ function readJson(path) {
 function visitKeys(value, location = '$') {
   if (!value || typeof value !== 'object') return;
   for (const [key, child] of Object.entries(value)) {
-    if (forbiddenDynamicKeys.has(key.replaceAll('_', '').toLowerCase()))
+    if (isForbiddenDynamicKey(key))
       fail(`${location}.${key}: live provider state is not durable registry data`);
     visitKeys(child, `${location}.${key}`);
   }
@@ -114,10 +134,20 @@ function validateReviewerShape(reviewer, prefix, ids) {
     fail(prefix + ' must be an object');
     return false;
   }
-  if (typeof reviewer.id !== 'string' || reviewer.id.length === 0 || ids.has(reviewer.id))
-    fail(prefix + '.id must be unique and non-empty');
-  else ids.add(reviewer.id);
+  validateReviewerId(reviewer.id, prefix, ids);
   return true;
+}
+
+function validateReviewerId(id, prefix, ids) {
+  if (typeof id !== 'string' || id.length === 0) {
+    fail(prefix + '.id must be non-empty');
+    return;
+  }
+  if (ids.has(id)) {
+    fail(prefix + '.id must be unique');
+    return;
+  }
+  ids.add(id);
 }
 
 function validateReviewerConfig(reviewer, prefix, configs) {
@@ -167,15 +197,30 @@ function validateRegistry(registry) {
   const ids = new Set();
   for (const [index, reviewer] of registry.reviewers.entries())
     validateReviewer(reviewer, index, ids, configs);
+  validateCanonicalReviewer(registry.reviewers);
   validateRegisteredConfigCoverage(configs);
 }
 
-function validateCodeRabbitReviewPolicy(reviews) {
+function validateCanonicalReviewer(reviewers) {
+  const codeRabbit = reviewers.find((reviewer) => reviewer?.id === 'coderabbit');
+  if (codeRabbit?.repoConfig !== '.coderabbit.yaml')
+    fail(registryPath + ': canonical coderabbit reviewer entry is required');
+}
+
+function validateCodeRabbitProfile(reviews) {
+  if (reviews?.profile !== 'chill') fail('.coderabbit.yaml: reviews.profile must be chill');
+}
+
+function validateCodeRabbitMutationPolicy(reviews) {
   if (reviews?.request_changes_workflow !== false)
     fail('.coderabbit.yaml: reviews.request_changes_workflow must be false');
-  if (reviews?.profile !== 'chill') fail('.coderabbit.yaml: reviews.profile must be chill');
   if (reviews?.auto_apply_labels !== false || reviews?.auto_assign_reviewers !== false)
     fail('.coderabbit.yaml: automatic label/reviewer mutation must remain disabled');
+}
+
+function validateCodeRabbitReviewPolicy(reviews) {
+  validateCodeRabbitProfile(reviews);
+  validateCodeRabbitMutationPolicy(reviews);
 }
 
 function validateCodeRabbitAutoReview(reviews) {
@@ -204,11 +249,76 @@ function validateCodeRabbitPreMergeChecks(reviews) {
   }
 }
 
-function validateCodeRabbitPathPolicy(reviews) {
-  if (!Array.isArray(reviews?.path_filters) || reviews.path_filters.length === 0)
+function validateCodeRabbitPathFilters(pathFilters) {
+  if (!Array.isArray(pathFilters) || pathFilters.length === 0)
     fail('.coderabbit.yaml: path_filters must be a non-empty array');
-  if (!Array.isArray(reviews?.path_instructions) || reviews.path_instructions.length === 0)
+  if (Array.isArray(pathFilters) && pathFilters.includes('!**'))
+    fail('.coderabbit.yaml: path_filters must not exclude the entire repository');
+}
+
+function validateCodeRabbitPathInstructions(pathInstructions) {
+  if (!Array.isArray(pathInstructions) || pathInstructions.length === 0) {
     fail('.coderabbit.yaml: path_instructions must be a non-empty array');
+    return;
+  }
+  const instructionPaths = new Set();
+  for (const instruction of pathInstructions) {
+    if (!isRecord(instruction) || typeof instruction.path !== 'string') continue;
+    instructionPaths.add(instruction.path);
+    if (
+      typeof instruction.instructions !== 'string' ||
+      instruction.instructions.trim().length === 0
+    )
+      fail('.coderabbit.yaml: every path instruction must contain non-empty instructions');
+  }
+  for (const path of requiredPathInstructions) {
+    if (!instructionPaths.has(path))
+      fail('.coderabbit.yaml: required path instruction is missing: ' + path);
+  }
+  validatePathInstructionTargets(pathInstructions);
+}
+
+function validateCodeRabbitPathPolicy(reviews) {
+  validateCodeRabbitPathFilters(reviews?.path_filters);
+  validateCodeRabbitPathInstructions(reviews?.path_instructions);
+}
+
+function listRepositoryFiles(directory = root) {
+  const files = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name === '.git' || entry.name === 'node_modules') continue;
+    const absolutePath = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...listRepositoryFiles(absolutePath));
+    else if (entry.isFile()) files.push(relative(root, absolutePath).replaceAll('\\', '/'));
+  }
+  return files;
+}
+
+function globToRegExp(pattern) {
+  let expression = '';
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === '*' && pattern[index + 1] === '*') {
+      expression += '.*';
+      index += 1;
+    } else if (character === '*') {
+      expression += '[^/]*';
+    } else if (regexMetaCharacters.has(character)) {
+      expression += '\\' + character;
+    } else {
+      expression += character;
+    }
+  }
+  return new RegExp('^' + expression + '$');
+}
+
+function validatePathInstructionTargets(pathInstructions) {
+  const repositoryFiles = listRepositoryFiles();
+  for (const instruction of pathInstructions) {
+    if (!isRecord(instruction) || typeof instruction.path !== 'string') continue;
+    if (!repositoryFiles.some((file) => globToRegExp(instruction.path).test(file)))
+      fail('.coderabbit.yaml: path instruction matches no repository files: ' + instruction.path);
+  }
 }
 
 function validateCodeRabbit() {
@@ -220,7 +330,10 @@ function validateCodeRabbit() {
   validateCodeRabbitFinishingTouches(reviews);
   validateCodeRabbitPreMergeChecks(reviews);
   validateCodeRabbitPathPolicy(reviews);
-  if (reviews?.post_merge_actions?.length)
+  if (
+    reviews?.post_merge_actions !== undefined &&
+    (!Array.isArray(reviews.post_merge_actions) || reviews.post_merge_actions.length > 0)
+  )
     fail('.coderabbit.yaml: post_merge_actions must remain empty');
 }
 
