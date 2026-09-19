@@ -19,6 +19,7 @@ const reviewerConfigPaths = new Set([
   '.gitguardian.yaml',
   '.github/workflows/ci.yml',
   '.github/workflows/codeql.yml',
+  '.github/workflows/reviewer-governance-trust.yml',
   'config/reviewer-registry.json',
   'docs/REVIEWER-GOVERNANCE.md',
   'scripts/check-reviewer-config.mjs',

@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { LineCounter, isAlias, parseDocument } from 'yaml';
+import { isAlias, LineCounter, parseDocument } from 'yaml';
 
 function resolveProjectRoot() {
   try {
@@ -11,7 +11,9 @@ function resolveProjectRoot() {
     return process.cwd();
   }
 }
-const projectRoot = resolveProjectRoot();
+const projectRoot = process.env.WORKFLOW_POLICY_ROOT
+  ? resolve(process.env.WORKFLOW_POLICY_ROOT)
+  : resolveProjectRoot();
 
 // QNBS-v3: exempts only these exact job/write-key pairs from the no-unallowlisted-write policy.
 const WRITE_SCOPE_ALLOWLIST = {
@@ -91,6 +93,66 @@ function resolveSteps(stepsNode, doc) {
   const resolved = resolveNode(stepsNode, doc);
   const items = resolved?.items ?? [];
   return items.map((item) => resolveNode(item, doc));
+}
+
+function nodeValue(node, doc) {
+  const resolved = resolveNode(node, doc);
+  return resolved?.toJSON?.() ?? resolved?.value;
+}
+
+function findReviewerGovernanceGateStep(doc) {
+  const workflowPolicyJob = jobMap(doc).get('workflow-policy');
+  const steps = resolveSteps(workflowPolicyJob?.get?.('steps', true), doc);
+  return steps.find(
+    (step) =>
+      nodeValue(step?.get?.('name', true), doc) === 'Reviewer governance configuration gate',
+  );
+}
+
+function validateReviewerGovernanceGateStep(fileName, gateStep, failures) {
+  if (gateStep) return true;
+  failures.push({
+    file: fileName,
+    message: 'workflow-policy must retain the Reviewer governance configuration gate step',
+  });
+  return false;
+}
+
+function validateReviewerGovernanceGateRun(fileName, gateStep, doc, failures) {
+  const run = nodeValue(gateStep.get('run', true), doc);
+  if (typeof run !== 'string' || !run.includes('scripts/check-reviewer-config.mjs')) {
+    failures.push({
+      file: fileName,
+      message:
+        'Reviewer governance configuration gate must invoke scripts/check-reviewer-config.mjs',
+    });
+  }
+  if (typeof run !== 'string' || !run.includes('REVIEWER_DEPENDENCY_ROOT')) {
+    failures.push({
+      file: fileName,
+      message: 'Reviewer governance configuration gate must use trusted dependency resolution',
+    });
+  }
+}
+
+function validateReviewerGovernanceGateEnvironment(fileName, gateStep, doc, failures) {
+  const environment = nodeValue(gateStep.get('env', true), doc);
+  if (!environment || typeof environment.REVIEWER_CONFIG_ROOT !== 'string') {
+    failures.push({
+      file: fileName,
+      message:
+        'Reviewer governance configuration gate must pin REVIEWER_CONFIG_ROOT to the PR workspace',
+    });
+  }
+}
+
+// QNBS-v3: the base-ref checker must reject removal or neutralization of the governance gate itself.
+export function checkReviewerGovernanceGate(fileName, doc, failures) {
+  if (fileName !== 'ci.yml') return;
+  const gateStep = findReviewerGovernanceGateStep(doc);
+  if (!validateReviewerGovernanceGateStep(fileName, gateStep, failures)) return;
+  validateReviewerGovernanceGateRun(fileName, gateStep, doc, failures);
+  validateReviewerGovernanceGateEnvironment(fileName, gateStep, doc, failures);
 }
 
 // QNBS-v3: resolves a needs: node (possibly aliased, e.g. shared via &deps/*deps) to a string array.
@@ -182,7 +244,10 @@ export function checkNeedsGraph(fileName, doc, failures) {
         });
       }
     }
-    needsOf.set(jobName, needs.filter((dependency) => jobNames.has(dependency)));
+    needsOf.set(
+      jobName,
+      needs.filter((dependency) => jobNames.has(dependency)),
+    );
   }
   const visiting = new Set();
   const visited = new Set();
@@ -253,7 +318,10 @@ function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, fai
   }
   const atIndex = ref.indexOf('@');
   if (atIndex === -1) {
-    failures.push({ file: fileName, message: `${loc}action reference "${ref}" is missing an @ pin` });
+    failures.push({
+      file: fileName,
+      message: `${loc}action reference "${ref}" is missing an @ pin`,
+    });
     return;
   }
   const pin = ref.slice(atIndex + 1);
@@ -266,7 +334,9 @@ function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, fai
   }
   // QNBS-v3: an alias's comment can live at the anchor definition or the use site — accept either.
   const comment =
-    usesNode.comment ?? resolvedNode.comment ?? (containerNode?.flow ? containerNode.comment : undefined);
+    usesNode.comment ??
+    resolvedNode.comment ??
+    (containerNode?.flow ? containerNode.comment : undefined);
   if (!comment || !/\S/.test(comment)) {
     failures.push({
       file: fileName,
@@ -297,7 +367,14 @@ export function checkActionPins(fileName, doc, failures, options = {}) {
     const runsNode = resolveNode(doc.get('runs', true), doc);
     const imageNode = runsNode?.get?.('image', true);
     if (imageNode) {
-      checkUsesRef({ usesNode: imageNode, containerNode: runsNode, doc, fileName, lineCounter, failures });
+      checkUsesRef({
+        usesNode: imageNode,
+        containerNode: runsNode,
+        doc,
+        fileName,
+        lineCounter,
+        failures,
+      });
     }
   }
 }
@@ -464,6 +541,7 @@ export function checkWorkflowFile(filePath, dependencies = {}) {
   checkActionPins(fileName, doc, failures, { fileKind: 'workflow', lineCounter });
   checkAggregatorNeeds(fileName, doc, failures);
   checkPublishingBoundary(fileName, doc, failures);
+  checkReviewerGovernanceGate(fileName, doc, failures);
   return failures;
 }
 
@@ -483,7 +561,8 @@ export function checkActionFile(filePath, dependencies = {}) {
 }
 
 export function checkAllWorkflows(root = projectRoot, dependencies = {}) {
-  const workflowFiles = dependencies.listWorkflowFiles?.(root) ?? listWorkflowFiles(root, dependencies);
+  const workflowFiles =
+    dependencies.listWorkflowFiles?.(root) ?? listWorkflowFiles(root, dependencies);
   // QNBS-v3: fail-closed — a rejected symlink must surface as a failure, never crash the whole check.
   let actionFiles;
   try {
@@ -501,7 +580,7 @@ export function checkAllWorkflows(root = projectRoot, dependencies = {}) {
 }
 
 export function main() {
-  const failures = checkAllWorkflows();
+  const failures = checkAllWorkflows(projectRoot);
   if (failures.length > 0) {
     console.error('Workflow-policy check failed:');
     for (const failure of failures) console.error(`- [${failure.file}] ${failure.message}`);

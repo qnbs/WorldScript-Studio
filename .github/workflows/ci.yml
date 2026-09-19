@@ -55,9 +55,32 @@ jobs:
       # QNBS-v3: no lifecycle/.pnpmfile.cjs hooks — install must not run repo code before the gate.
       - name: Install dependencies (no lifecycle scripts)
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      # QNBS-v3: materialize the complete base workspace before governance; workspace:* packages and pinned patches are part of frozen resolution.
+      - name: Prepare trusted base governance workspace
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "$BASE_SHA^{commit}"; then
+            echo "::error::base SHA is unavailable for trusted governance checks"
+            exit 1
+          fi
+          BASE_WORKSPACE="$(mktemp -d)"
+          git archive "$BASE_SHA" | tar -x -C "$BASE_WORKSPACE"
+          pnpm --dir "$BASE_WORKSPACE" install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+          echo "TRUSTED_BASE_WORKSPACE=$BASE_WORKSPACE" >> "$GITHUB_ENV"
       # QNBS-v3: node directly — pnpm run's own pre-run check rejects an --ignore-pnpmfile install.
       - name: Workflow-policy structural gate (permissions, needs graph, action pins)
-        run: node scripts/workflow-policy-check.mjs
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "${TRUSTED_BASE_WORKSPACE:-}" ] \
+             && [ -f "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs" ]; then
+            WORKFLOW_POLICY_ROOT="${{ github.workspace }}" \
+              node "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs"
+          else
+            node scripts/workflow-policy-check.mjs
+          fi
       # QNBS-v3: use the trusted base checker for PRs; config and checker remain the PR workspace.
       - name: Reviewer governance configuration gate
         env:
@@ -65,26 +88,13 @@ jobs:
           REVIEWER_CONFIG_ROOT: ${{ github.workspace }}
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "$BASE_SHA" ]; then
-            mkdir -p /tmp/base-reviewer-check
-            base_checker_path="$(git ls-tree -r --name-only "$BASE_SHA" -- scripts/check-reviewer-config.mjs)" || {
-              echo "::error::unable to inspect the base reviewer checker"
-              exit 1
-            }
-            if [ "$base_checker_path" = "scripts/check-reviewer-config.mjs" ]; then
-              if ! git archive "$BASE_SHA" package.json pnpm-lock.yaml scripts/check-reviewer-config.mjs \
-                | tar -x -C /tmp/base-reviewer-check; then
-                echo "::error::unable to materialize the base reviewer checker dependencies"
-                exit 1
-              fi
-              pnpm --dir /tmp/base-reviewer-check install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
-              REVIEWER_DEPENDENCY_ROOT=/tmp/base-reviewer-check \
-                node /tmp/base-reviewer-check/scripts/check-reviewer-config.mjs
-            else
-              echo "::notice::check-reviewer-config.mjs is absent on the base ref (bootstrap); using the PR copy."
-              node scripts/check-reviewer-config.mjs
-            fi
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "${TRUSTED_BASE_WORKSPACE:-}" ] \
+             && [ -f "$TRUSTED_BASE_WORKSPACE/scripts/check-reviewer-config.mjs" ]; then
+            REVIEWER_CONFIG_ROOT="${{ github.workspace }}" \
+              REVIEWER_DEPENDENCY_ROOT="$TRUSTED_BASE_WORKSPACE" \
+              node "$TRUSTED_BASE_WORKSPACE/scripts/check-reviewer-config.mjs"
           else
+            echo "::notice::base reviewer checker is absent (bootstrap); using the PR copy this one time."
             node scripts/check-reviewer-config.mjs
           fi
 

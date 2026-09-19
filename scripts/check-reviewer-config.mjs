@@ -61,7 +61,7 @@ const forbiddenDynamicKeyPatterns = [
   /availability/,
   /latest(?:sha|commit)/,
   /billing/,
-  /current(?:state|status|green|sha|commit)/,
+  /current(?:provider)?(?:state|status|green|sha|commit)/,
   /lastreviewedsha/,
   /headsha/,
 ];
@@ -76,7 +76,7 @@ function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isForbiddenDynamicKey(key) {
+export function isForbiddenDynamicKey(key) {
   const normalized = key.replaceAll('_', '').replaceAll('-', '').toLowerCase();
   return forbiddenDynamicKeyPatterns.some((pattern) => pattern.test(normalized));
 }
@@ -256,25 +256,46 @@ function validateCodeRabbitPathFilters(pathFilters) {
     fail('.coderabbit.yaml: path_filters must not exclude the entire repository');
 }
 
+export function hasValidPathInstructionShape(instruction) {
+  return (
+    isRecord(instruction) &&
+    typeof instruction.path === 'string' &&
+    instruction.path.trim().length > 0
+  );
+}
+
+function validatePathInstruction(instruction, index, instructionPaths) {
+  const prefix = `.coderabbit.yaml: path_instructions[${index}]`;
+  if (!hasValidPathInstructionShape(instruction)) {
+    fail(prefix + ' must be a mapping with a non-empty string path');
+    return;
+  }
+  instructionPaths.add(instruction.path);
+  if (typeof instruction.instructions !== 'string' || instruction.instructions.trim().length === 0)
+    fail(prefix + ' must contain non-empty instructions');
+}
+
+function collectPathInstructionPaths(pathInstructions) {
+  const instructionPaths = new Set();
+  for (const [index, instruction] of pathInstructions.entries())
+    validatePathInstruction(instruction, index, instructionPaths);
+  return instructionPaths;
+}
+
+function validateRequiredPathInstructions(instructionPaths) {
+  for (const path of requiredPathInstructions) {
+    if (!instructionPaths.has(path))
+      fail('.coderabbit.yaml: required path instruction is missing: ' + path);
+  }
+}
+
 function validateCodeRabbitPathInstructions(pathInstructions) {
   if (!Array.isArray(pathInstructions) || pathInstructions.length === 0) {
     fail('.coderabbit.yaml: path_instructions must be a non-empty array');
     return;
   }
-  const instructionPaths = new Set();
-  for (const instruction of pathInstructions) {
-    if (!isRecord(instruction) || typeof instruction.path !== 'string') continue;
-    instructionPaths.add(instruction.path);
-    if (
-      typeof instruction.instructions !== 'string' ||
-      instruction.instructions.trim().length === 0
-    )
-      fail('.coderabbit.yaml: every path instruction must contain non-empty instructions');
-  }
-  for (const path of requiredPathInstructions) {
-    if (!instructionPaths.has(path))
-      fail('.coderabbit.yaml: required path instruction is missing: ' + path);
-  }
+  const instructionPaths = collectPathInstructionPaths(pathInstructions);
+  validateRequiredPathInstructions(instructionPaths);
   validatePathInstructionTargets(pathInstructions);
 }
 
@@ -315,10 +336,20 @@ function globToRegExp(pattern) {
 function validatePathInstructionTargets(pathInstructions) {
   const repositoryFiles = listRepositoryFiles();
   for (const instruction of pathInstructions) {
-    if (!isRecord(instruction) || typeof instruction.path !== 'string') continue;
+    if (!hasValidPathInstructionShape(instruction)) {
+      fail('.coderabbit.yaml: malformed path instruction cannot pass target validation');
+      continue;
+    }
     if (!repositoryFiles.some((file) => globToRegExp(instruction.path).test(file)))
       fail('.coderabbit.yaml: path instruction matches no repository files: ' + instruction.path);
   }
+}
+
+function validateCodeRabbitPostMergeActions(reviews) {
+  const actions = reviews?.post_merge_actions;
+  if (actions === undefined) return;
+  if (!Array.isArray(actions) || actions.length > 0)
+    fail('.coderabbit.yaml: post_merge_actions must remain empty');
 }
 
 function validateCodeRabbit() {
@@ -330,11 +361,7 @@ function validateCodeRabbit() {
   validateCodeRabbitFinishingTouches(reviews);
   validateCodeRabbitPreMergeChecks(reviews);
   validateCodeRabbitPathPolicy(reviews);
-  if (
-    reviews?.post_merge_actions !== undefined &&
-    (!Array.isArray(reviews.post_merge_actions) || reviews.post_merge_actions.length > 0)
-  )
-    fail('.coderabbit.yaml: post_merge_actions must remain empty');
+  validateCodeRabbitPostMergeActions(reviews);
 }
 
 function validate() {

@@ -10,6 +10,7 @@ import {
   checkJobWriteScopeAllowlist,
   checkNeedsGraph,
   checkPublishingBoundary,
+  checkReviewerGovernanceGate,
   checkTopLevelPermissions,
   checkWorkflowFile,
   getTriggers,
@@ -46,6 +47,39 @@ describe('checkTopLevelPermissions', () => {
     checkTopLevelPermissions('x.yml', doc('jobs: {}\n'), failures);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/missing/);
+  });
+});
+
+describe('checkReviewerGovernanceGate', () => {
+  it('requires the reviewer gate step and trusted checker inputs', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkReviewerGovernanceGate(
+      'ci.yml',
+      doc(`
+permissions:
+  contents: read
+jobs:
+  workflow-policy:
+    steps:
+      - name: Reviewer governance configuration gate
+        env:
+          REVIEWER_CONFIG_ROOT: \${{ github.workspace }}
+        run: |
+          REVIEWER_DEPENDENCY_ROOT=/tmp/base node /tmp/base/scripts/check-reviewer-config.mjs
+`),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it('fails closed when a PR removes the reviewer gate step', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkReviewerGovernanceGate(
+      'ci.yml',
+      doc('jobs:\n  workflow-policy:\n    steps: []\n'),
+      failures,
+    );
+    expect(failures.some((failure) => failure.message.includes('must retain'))).toBe(true);
   });
 });
 

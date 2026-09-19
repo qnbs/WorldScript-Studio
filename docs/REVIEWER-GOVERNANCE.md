@@ -18,11 +18,16 @@ The sources of truth are ordered as follows:
 The machine-readable durable role registry is [`config/reviewer-registry.json`](../config/reviewer-registry.json).
 Vendor adapters are narrow implementations of this policy, not competing policy documents.
 
-The CI reviewer-governance gate is a trust-boundary check: on pull requests it executes the
-base-ref copy of `scripts/check-reviewer-config.mjs` against the PR workspace, with a one-time
-head-copy fallback only when the checker is first introduced. Pushes and manual runs execute the
-checked-out copy. This prevents a later PR from weakening the checker and its governed invariants
-in the same change.
+The CI reviewer-governance gate has two layers. The ordinary `pull_request` workflow materializes
+the complete base workspace (including workspace packages and pinned patches), then executes the
+base-ref copies of `workflow-policy-check.mjs` and `check-reviewer-config.mjs` against the PR tree
+as data. It has a one-time head-copy fallback only while the checker is first introduced. In
+addition, `.github/workflows/reviewer-governance-trust.yml` is a base-owned
+`pull_request_target` guard: it executes only trusted base code, fetches the PR head as an archive,
+and validates that archive without running PR scripts or dependencies. This second layer prevents
+a later PR from deleting or neutralizing the invocation step in the ordinary PR workflow. The
+initial introduction is necessarily bootstrap-validated because the base ref predates both the
+checker and the base-owned target workflow. Pushes and manual runs execute the checked-out copy.
 
 ## Provider roles and configuration ownership
 

@@ -19,6 +19,16 @@ function argument(name) {
   return value;
 }
 
+const MAX_PULL_REQUEST_NUMBER = '2147483647';
+
+function isValidPullRequestNumber(value) {
+  return (
+    /^[1-9]\d*$/.test(value) &&
+    (value.length < MAX_PULL_REQUEST_NUMBER.length ||
+      (value.length === MAX_PULL_REQUEST_NUMBER.length && value <= MAX_PULL_REQUEST_NUMBER))
+  );
+}
+
 function parseRepository(value) {
   if (!/^[^/\s]+\/[^/\s]+$/.test(value)) throw new Error('--repo must be exactly owner/name');
   const [owner, name] = value.split('/');
@@ -29,7 +39,8 @@ let pr;
 let repo;
 try {
   pr = argument('--pr');
-  if (!pr || !/^[1-9]\d*$/.test(pr)) throw new Error('--pr must be a positive pull request number');
+  if (!pr || !isValidPullRequestNumber(pr))
+    throw new Error('--pr must be a positive pull request number within GraphQL Int range');
   repo = parseRepository(
     argument('--repo') ?? process.env.GITHUB_REPOSITORY ?? 'qnbs/WorldScript-Studio',
   );
@@ -63,6 +74,10 @@ function fetchCheckRuns(path) {
   return pages.flatMap((page) => page?.check_runs ?? []);
 }
 
+function fetchCommitStatuses(path) {
+  return fetchPages(path);
+}
+
 function writeLine(line) {
   process.stdout.write(line + '\n');
 }
@@ -86,11 +101,17 @@ function evidenceLine(channel, item) {
     '  ' +
     channel +
     ' provider=' +
-    provider +
+    terminalValue(provider) +
     ' id=' +
-    id +
+    terminalValue(id) +
     ' state=' +
-    state +
+    terminalValue(state) +
+    ' path=' +
+    terminalValue(item.path ?? 'none') +
+    ' line=' +
+    terminalValue(item.line ?? item.original_line ?? 'unknown') +
+    ' inReplyTo=' +
+    terminalValue(item.in_reply_to_id ?? 'none') +
     ' bodyAvailable=' +
     bodyAvailable +
     ' url=' +
@@ -114,6 +135,9 @@ try {
   const pull = ghJson([`repos/${repo.fullName}/pulls/${pr}`]);
   const checks = fetchCheckRuns(
     `repos/${repo.fullName}/commits/${pull.head.sha}/check-runs?per_page=100`,
+  );
+  const commitStatuses = fetchCommitStatuses(
+    `repos/${repo.fullName}/commits/${pull.head.sha}/status?per_page=100`,
   );
   const issueComments = fetchPages(`repos/${repo.fullName}/issues/${pr}/comments?per_page=100`);
   const inlineComments = fetchPages(`repos/${repo.fullName}/pulls/${pr}/comments?per_page=100`);
@@ -149,13 +173,19 @@ try {
   writeLine('checks:');
   for (const check of checks)
     writeLine(`  ${check.name}\t${check.status}/${check.conclusion ?? 'pending'}`);
+  writeLine(`commitStatuses total=${commitStatuses.length}`);
+  for (const status of commitStatuses) {
+    writeLine(
+      `  commitStatus id=${terminalValue(status.id)} context=${terminalValue(status.context)} state=${terminalValue(status.state)} descriptionAvailable=${Boolean(status.description)} url=${safeUrl(status.target_url)}`,
+    );
+  }
   writeLine(
     `reviewThreads total=${threads.length} unresolved=${threads.filter((thread) => !thread.isResolved).length}`,
   );
   for (const thread of threads) {
     const comment = thread.comments?.[0];
     writeLine(
-      `  inlineThread id=${thread.id} provider=${terminalValue(comment?.author?.login)} resolved=${thread.isResolved} outdated=${thread.isOutdated} path=${terminalValue(thread.path)} line=${thread.line ?? 'unknown'} bodyAvailable=${Boolean(comment?.body)}`,
+      `  inlineThread id=${terminalValue(thread.id)} rootCommentId=${terminalValue(comment?.databaseId)} provider=${terminalValue(comment?.author?.login)} resolved=${thread.isResolved} outdated=${thread.isOutdated} path=${terminalValue(thread.path)} line=${terminalValue(thread.line ?? 'unknown')} bodyAvailable=${Boolean(comment?.body)}`,
     );
   }
   writeLine(

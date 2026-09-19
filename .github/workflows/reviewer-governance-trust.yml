@@ -1,0 +1,53 @@
+name: Reviewer Governance Trust Boundary
+
+on:
+  # QNBS-v3: this workflow is read from the base ref and never executes the PR workspace.
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  reviewer-governance-trust:
+    name: Reviewer Governance Trust Boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # QNBS-v3: checkout is the trusted base workflow/repository; the PR is fetched only as data.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+        with:
+          version: 11.22.0
+          install: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install trusted base dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      - name: Validate PR reviewer governance as untrusted data
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "refs/pull/${PR_NUMBER}/head:refs/remotes/origin/pr/${PR_NUMBER}"
+          FETCHED_HEAD="$(git rev-parse "refs/remotes/origin/pr/${PR_NUMBER}")"
+          if [ "$FETCHED_HEAD" != "$PR_HEAD_SHA" ]; then
+            echo "::error::fetched PR ref does not match the event head SHA"
+            exit 1
+          fi
+          PR_ROOT="$(mktemp -d)"
+          git archive "refs/remotes/origin/pr/${PR_NUMBER}" | tar -x -C "$PR_ROOT"
+          if [ ! -f scripts/check-reviewer-config.mjs ]; then
+            echo "::notice::reviewer checker is absent on the base ref; the introducing PR is validated by the bootstrap path."
+            exit 0
+          fi
+          REVIEWER_CONFIG_ROOT="$PR_ROOT" \
+            REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \
+            node scripts/check-reviewer-config.mjs

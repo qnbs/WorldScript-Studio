@@ -24,6 +24,11 @@ async function runCheck(name, run) {
   if (status !== 0) process.exit(status ?? 1);
 }
 
+async function runReviewerConfigAdmission(classification, full) {
+  if (shouldRunAdmissionCheck('reviewerConfig', classification.files) || full)
+    await runCheck('Reviewer config', () => runNodeScript('scripts/check-reviewer-config.mjs'));
+}
+
 async function main() {
   const evidenceIndex = process.argv.indexOf('--prepush-evidence-file');
   const evidenceFile = evidenceIndex >= 0 ? process.argv[evidenceIndex + 1] : undefined;
@@ -82,8 +87,7 @@ async function main() {
   }
   report('Dependency state', 'PASS');
 
-  if (shouldRunAdmissionCheck('reviewerConfig', classification.files) || full)
-    await runCheck('Reviewer config', () => runNodeScript('scripts/check-reviewer-config.mjs'));
+  await runReviewerConfigAdmission(classification, full);
 
   const budgetStatus = await runNodeScript('scripts/pr-budget.mjs', ['--prepush']);
   if (budgetStatus === PR_BUDGET_EXIT_CODES.OK) report('PR budget', 'PASS');
