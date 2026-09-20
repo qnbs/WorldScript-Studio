@@ -112,9 +112,9 @@ readme = readme.replace(
   `$1${keyCount} keys × ${localeCount} locales$2`,
 );
 if (testCount != null) {
-  // Line ~454: "Vitest 4.x (5 475+ tests / 449 files)"
+  // Line ~454: "Vitest 5.x (5 475+ tests / 449 files)"
   readme = readme.replace(
-    new RegExp(`(Vitest 4\\.x \\()${NUM}\\+ tests / ${NUM}files\\)`),
+    new RegExp(`(Vitest 5\\.x \\()${NUM}\\+ tests / ${NUM}files\\)`),
     `$1${testCount}+ tests / ${fileCount} files)`,
   );
   // Line ~491: "Vitest unit tests (5 475+ tests, 449 files)"

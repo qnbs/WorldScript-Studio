@@ -161,7 +161,7 @@ export function scanReadmeTestMetrics(readme) {
   const patterns = [
     /Tests-(\d+)%2B_%2F_(\d+)_files/g,
     /(\d+)\+ tests \/ (\d+) files/g,
-    /Vitest 4\.x \((\d+)\+ tests \/ (\d+) files\)/g,
+    /Vitest 5\.x \((\d+)\+ tests \/ (\d+) files\)/g,
     /Vitest unit tests \((\d+)\+ tests, (\d+) files\)/g,
     /\*\*(\d+)\+ unit tests\*\* across \*\*(\d+) test files\*\*/g,
   ];
