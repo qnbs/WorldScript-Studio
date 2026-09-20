@@ -270,6 +270,11 @@ describe('performShortcutAction — save', () => {
         (c[0] as { payload?: { type?: string } })?.payload?.type === 'error',
     );
     expect(errorCalls.length).toBeGreaterThan(0);
+    expect(errorCalls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({ description: 'error.db.invalidState' }),
+      }),
+    );
   });
 
   it('dispatches error notification when no project data is present', async () => {

@@ -156,7 +156,8 @@ async function flushProjectSave(
       statusActions.addNotification({
         type: 'error',
         title: translate('palette.shortcut.saveFailedTitle'),
-        description: error instanceof Error ? error.message : String(error),
+        // QNBS-v3 (#553): technical persistence details stay in the sanitized log; the UI exposes only localized recovery guidance.
+        description: translate('error.db.invalidState'),
       }),
     );
   }
