@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Canonical autosave authority documentation now matches production truth:** records that web/PWA autosave, lifecycle flush, and manual-save paths use the canonical persistence seam while Tauri remains on its deliberate filesystem boundary. Part of #553. PR #801.
 - **Mutation aggregation now rejects zero-test survived evidence:** raw Stryker file reports
   fail closed when a Vitest 5 per-test filter produces a survived mutant without any completed
   tests, preventing empty test selections from contaminating mutation results. Part of #764.
