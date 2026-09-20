@@ -170,7 +170,7 @@ describe('Stryker report aggregation', () => {
             mutants: [
               { status: 'Killed' },
               { status: 'Timeout' },
-              { status: 'Survived' },
+              { status: 'Survived', testsCompleted: 1 },
               { status: 'NoCoverage' },
               { status: 'RuntimeError' },
               { status: 'CompileError' },
@@ -201,5 +201,26 @@ describe('Stryker report aggregation', () => {
       totalMutants: 8,
     });
     expect(result.mutationScore).toBe(50);
+  });
+
+  it('rejects survived mutants without completed test evidence', async () => {
+    const root = createReportRoot();
+    const reportDirectory = join(root, 'stryker-report-services-commands');
+    mkdirSync(reportDirectory, { recursive: true });
+    writeFileSync(
+      join(reportDirectory, 'mutation.json'),
+      JSON.stringify({
+        files: {
+          'services/commands/example.ts': {
+            mutants: [{ status: 'Survived', testsCompleted: 0 }],
+          },
+        },
+      }),
+    );
+    const { selectMutationModules } = await import('../../../scripts/stryker-scope.mjs');
+
+    expect(() => aggregateStrykerReports(root, selectMutationModules('services-commands'))).toThrow(
+      'survived mutant with no completed tests',
+    );
   });
 });
