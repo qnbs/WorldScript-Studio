@@ -24,6 +24,10 @@ updates:
           - '@types/react-dom'
       # Group dev-tooling updates together to reduce PR noise
       dev-tooling:
+        # Keep breaking migrations as independently reviewable PRs; omitted majors remain discoverable.
+        update-types:
+          - 'minor'
+          - 'patch'
         patterns:
           - 'vitest*'
           - '@vitest/*'
