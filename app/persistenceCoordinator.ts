@@ -18,7 +18,7 @@ export class PersistenceCoordinator {
   private waiters: Waiter[] = [];
   private idleWaiters: Array<() => void> = [];
 
-  // QNBS-v3: rejectThrough fires immediately on failure without waiting for a superseding queued operation — idle() lets a caller wait for the coordinator to genuinely finish before doing something destructive (e.g. reload).
+  // QNBS-v3: settle failed waiters immediately; older waiters become superseded when a queued successor exists, while idle() still waits for that successor before destructive work (e.g. reload).
   idle(): Promise<void> {
     if (!this.active && !this.queued) return Promise.resolve();
     return new Promise((resolve) => this.idleWaiters.push(resolve));
@@ -48,8 +48,14 @@ export class PersistenceCoordinator {
       try {
         await current.operation();
       } catch (error) {
-        this.rejectThrough(current.generation, error);
-        this.active = this.queued;
+        const next = this.queued;
+        if (next) {
+          // QNBS-v3: a failed snapshot is not user-visible when a newer queued snapshot will take over; rejecting it would clear the shared saving state and show a false failure while the successor is still running.
+          this.resolveThrough(current.generation, true);
+        } else {
+          this.rejectThrough(current.generation, error);
+        }
+        this.active = next;
         this.queued = null;
         continue;
       }
@@ -69,11 +75,11 @@ export class PersistenceCoordinator {
     for (const resolve of idleWaiters) resolve();
   }
 
-  private resolveThrough(generation: number): void {
+  private resolveThrough(generation: number, superseded = false): void {
     const remaining: Waiter[] = [];
     for (const waiter of this.waiters) {
       if (waiter.generation <= generation) {
-        waiter.resolve({ superseded: waiter.generation < generation });
+        waiter.resolve({ superseded: superseded || waiter.generation < generation });
       } else {
         remaining.push(waiter);
       }

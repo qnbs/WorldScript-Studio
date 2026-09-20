@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Manual Ctrl/Cmd-S saves now use the same coordinated canonical persistence path as autosave:** web/PWA saves honor canonical IndexedDB admission and generation fencing, while Tauri retains its existing filesystem backend. A superseded manual operation cannot claim success before durable persistence. Part of #553. PR #798.
 - **Closed #773's post-merge patch-coverage gap on the canonical writeback primitive:** 6 new
   tests cover previously-unexercised, genuinely reachable branches in
   `services/projectDocumentWriteback.ts` (an upserted entity with an explicit `undefined` field,
