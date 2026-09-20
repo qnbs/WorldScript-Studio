@@ -11,8 +11,7 @@ import {
 /**
  * Bridges autosave's full-snapshot ProjectData input into an OwnedProjectEdit (#553 Phase D3).
  *
- * Standalone and pure -- not yet wired into app/listenerMiddleware.ts's autosave effect or any
- * production writer. commitOwnedProjectEdit (#773) and the IDB canonical authority
+ * Pure bridge consumed by the production web/PWA autosave route. commitOwnedProjectEdit (#773) and the IDB canonical authority
  * (services/storage/idbProjectCanonicalAuthority.ts, #553 Phase D1/D2) both operate on an
  * OwnedProjectEdit describing what one writer intends to change; autosave instead always holds a
  * full ProjectData snapshot (the entire current Redux state), never a partial edit. This module is
