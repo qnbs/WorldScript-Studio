@@ -59,7 +59,7 @@ describe('PersistenceCoordinator', () => {
     expect(thirdResult).toEqual({ superseded: false });
   });
 
-  it('rejects the failed generation without hiding later queued work', async () => {
+  it('resolves a failed generation as superseded without hiding later queued work', async () => {
     const coordinator = new PersistenceCoordinator();
     const failure = new Error('disk full');
     const gate = deferred();
@@ -74,13 +74,24 @@ describe('PersistenceCoordinator', () => {
     });
 
     gate.resolve();
-    await expect(first).rejects.toBe(failure);
+    await expect(first).resolves.toEqual({ superseded: true });
     await expect(second).resolves.toEqual({ superseded: false });
     expect(saved).toEqual(['second']);
   });
 
-  // QNBS-v3: rejectThrough settles the failed generation's own promise immediately, but the coordinator keeps running a superseding queued operation in the background — idle() must wait for that too.
-  it('idle() waits for a superseding queued operation to finish even after the current one rejects', async () => {
+  it('rejects the latest failed generation when no successor is queued', async () => {
+    const coordinator = new PersistenceCoordinator();
+    const failure = new Error('disk full');
+
+    const latest = coordinator.enqueue(async () => {
+      throw failure;
+    });
+
+    await expect(latest).rejects.toBe(failure);
+  });
+
+  // QNBS-v3: a failed superseded waiter settles immediately, but the coordinator keeps running the queued successor in the background — idle() must wait for that too.
+  it('idle() waits for a superseding queued operation to finish after the current one fails', async () => {
     const coordinator = new PersistenceCoordinator();
     const failure = new Error('disk full');
     const gate = deferred();
@@ -98,9 +109,9 @@ describe('PersistenceCoordinator', () => {
     });
 
     gate.resolve();
-    await expect(first).rejects.toBe(failure);
-    // The failed generation's own promise has already settled, but the superseding second
-    // generation is now running in the background — idle() must not resolve until it finishes too.
+    await expect(first).resolves.toEqual({ superseded: true });
+    // The failed superseded waiter has already settled, but the second generation is now
+    // running in the background — idle() must not resolve until it finishes too.
     expect(saved).toEqual(['second:start']);
 
     let idleResolved = false;

@@ -1,3 +1,4 @@
+import { projectPersistenceCoordinator } from '../../app/persistenceCoordinator';
 import type { AppDispatch, RootState } from '../../app/store';
 import type { ProjectData } from '../../features/project/projectSlice';
 import { projectActions } from '../../features/project/projectSlice';
@@ -6,8 +7,7 @@ import { statusActions } from '../../features/status/statusSlice';
 import type { View } from '../../types';
 import type { I18nTranslate } from '../commands/commandTypes';
 import { logger } from '../logger';
-import { saveEnvelopeFromProjectData } from '../storageBackend';
-import { storageService } from '../storageService';
+import { persistProjectAutosaveSnapshot } from '../projectAutosavePersistence';
 import { eventMatchesShortcutKeys } from './matchShortcut';
 
 type ProjectStateShape = {
@@ -128,7 +128,14 @@ async function flushProjectSave(
         currentBranchId: state.versionControl.currentBranchId,
       },
     };
-    await storageService.saveProject(saveEnvelopeFromProjectData(enriched));
+    // QNBS-v3 (#553): manual saves share the same generation-fenced authority as autosave, so a delayed shortcut cannot bypass canonical admission or race a newer snapshot; superseded flushes still clear their transient UI state.
+    const result = await projectPersistenceCoordinator.enqueue(() =>
+      persistProjectAutosaveSnapshot(enriched),
+    );
+    if (result.superseded) {
+      dispatch(statusActions.setSavingStatus('idle'));
+      return;
+    }
     dispatch(statusActions.setSavingStatus('saved'));
     dispatch(
       statusActions.addNotification({
@@ -149,7 +156,8 @@ async function flushProjectSave(
       statusActions.addNotification({
         type: 'error',
         title: translate('palette.shortcut.saveFailedTitle'),
-        description: error instanceof Error ? error.message : String(error),
+        // QNBS-v3 (#553): technical persistence details stay in the sanitized log; the UI exposes only localized recovery guidance.
+        description: translate('error.db.invalidState'),
       }),
     );
   }
