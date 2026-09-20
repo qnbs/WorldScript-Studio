@@ -12,14 +12,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RootState } from '../../app/store';
 
 const h = vi.hoisted(() => ({
-  saveProject: vi.fn(async (_envelope: { envelope: Record<string, unknown> }) => {}),
+  persistProjectAutosaveSnapshot: vi.fn(async (_snapshot: unknown) => {}),
   saveSettings: vi.fn(async (_settings: unknown) => {}),
   isFactoryResetInProgress: vi.fn(() => false),
 }));
 
 vi.mock('../../services/storageService', () => ({
-  storageService: { saveProject: h.saveProject, saveSettings: h.saveSettings },
-  saveEnvelopeFromProjectData: (data: unknown) => ({ envelope: data }),
+  storageService: { saveSettings: h.saveSettings },
+}));
+
+vi.mock('../../services/projectAutosavePersistence', () => ({
+  persistProjectAutosaveSnapshot: (snapshot: unknown) => h.persistProjectAutosaveSnapshot(snapshot),
 }));
 
 vi.mock('../../services/factoryResetService', () => ({
@@ -50,7 +53,7 @@ function buildState(overrides: Partial<RootState> = {}): RootState {
 
 describe('flushPersistedState', () => {
   beforeEach(() => {
-    h.saveProject.mockClear();
+    h.persistProjectAutosaveSnapshot.mockClear();
     h.saveSettings.mockClear();
     h.isFactoryResetInProgress.mockReturnValue(false);
   });
@@ -59,7 +62,7 @@ describe('flushPersistedState', () => {
   it('skips the flush entirely while a factory reset is in progress', async () => {
     h.isFactoryResetInProgress.mockReturnValue(true);
     await flushPersistedState(buildState());
-    expect(h.saveProject).not.toHaveBeenCalled();
+    expect(h.persistProjectAutosaveSnapshot).not.toHaveBeenCalled();
     expect(h.saveSettings).not.toHaveBeenCalled();
   });
 
@@ -67,10 +70,17 @@ describe('flushPersistedState', () => {
     const state = buildState();
     await flushPersistedState(state);
 
-    expect(h.saveProject).toHaveBeenCalledTimes(1);
-    const [savedArg] = h.saveProject.mock.calls[0] ?? [];
-    expect(savedArg?.envelope['id']).toBe('proj-1');
-    expect(savedArg?.envelope['persistedVersionControl']).toEqual({
+    expect(h.persistProjectAutosaveSnapshot).toHaveBeenCalledTimes(1);
+    const [savedArg] = h.persistProjectAutosaveSnapshot.mock.calls[0] ?? [];
+    expect(savedArg && typeof savedArg === 'object' && 'id' in savedArg && savedArg.id).toBe(
+      'proj-1',
+    );
+    expect(
+      savedArg &&
+        typeof savedArg === 'object' &&
+        'persistedVersionControl' in savedArg &&
+        savedArg.persistedVersionControl,
+    ).toEqual({
       branches: [{ id: 'main' }],
       snapshots: [],
       currentBranchId: 'main',
@@ -84,12 +94,12 @@ describe('flushPersistedState', () => {
       project: { present: { data: undefined } } as unknown as RootState['project'],
     });
     await flushPersistedState(state);
-    expect(h.saveProject).not.toHaveBeenCalled();
+    expect(h.persistProjectAutosaveSnapshot).not.toHaveBeenCalled();
     expect(h.saveSettings).toHaveBeenCalledWith(state.settings);
   });
 
-  it('propagates a rejection when saveProject fails (fail-closed, not swallowed)', async () => {
-    h.saveProject.mockRejectedValueOnce(new Error('disk full'));
+  it('propagates a rejection when canonical autosave fails (fail-closed, not swallowed)', async () => {
+    h.persistProjectAutosaveSnapshot.mockRejectedValueOnce(new Error('disk full'));
     await expect(flushPersistedState(buildState())).rejects.toThrow('disk full');
   });
 
@@ -101,7 +111,7 @@ describe('flushPersistedState', () => {
   // QNBS-v3: an immediate-reload caller must never tear down the page while the other save is still in flight.
   it('waits for the other save to settle before rejecting, instead of rejecting as soon as one fails', async () => {
     const order: string[] = [];
-    h.saveProject.mockImplementation(async () => {
+    h.persistProjectAutosaveSnapshot.mockImplementation(async () => {
       order.push('project-rejected');
       throw new Error('project save failed');
     });
