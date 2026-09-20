@@ -132,6 +132,14 @@ function fetchPages(path) {
   return flatPages(ghJson(['--paginate', '--slurp', path]));
 }
 
+function hasPullRequestContextChanged(initialPull, finalPull) {
+  return (
+    finalPull.head?.sha !== initialPull.head?.sha ||
+    finalPull.base?.ref !== initialPull.base?.ref ||
+    finalPull.base?.sha !== initialPull.base?.sha
+  );
+}
+
 try {
   const pull = ghJson([`repos/${repo.fullName}/pulls/${pr}`]);
   const checks = fetchCheckRuns(
@@ -162,9 +170,9 @@ try {
     (page) => page?.data?.repository?.pullRequest?.reviewThreads?.nodes ?? [],
   );
   const finalPull = ghJson([`repos/${repo.fullName}/pulls/${pr}`]);
-  if (finalPull.head?.sha !== pull.head?.sha)
+  if (hasPullRequestContextChanged(pull, finalPull))
     throw new Error(
-      'pull request head changed during evidence collection; rerun for one exact head',
+      'pull request head or base changed during evidence collection; rerun for one exact snapshot',
     );
 
   writeLine('reviewers:status repo=' + repo.fullName + ' pr=' + pr + ' head=' + finalPull.head.sha);

@@ -224,20 +224,45 @@ function validateReviewerGovernanceTrustExecution(fileName, doc, failures) {
       'Validate PR reviewer governance as untrusted data',
   );
   const run = nodeValue(validationStep?.get?.('run', true), doc);
-  const requiredFragments = [
-    'git fetch --no-tags origin',
-    'git archive',
-    'REVIEWER_CONFIG_ROOT="$PR_ROOT"',
-    'REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE"',
-    'node scripts/check-reviewer-config.mjs',
-  ];
-  if (typeof run !== 'string' || requiredFragments.some((fragment) => !run.includes(fragment))) {
+  validateReviewerGovernanceTrustControls(fileName, job, validationStep, failures);
+  if (!hasTrustedReviewerArchiveCommands(run)) {
     failures.push({
       file: fileName,
       message:
         'reviewer governance trust workflow must validate only an archived PR with trusted base code',
     });
   }
+}
+
+function validateReviewerGovernanceTrustControls(fileName, job, validationStep, failures) {
+  validateReviewerGovernanceTrustNodeControls(fileName, 'job', job, failures);
+  validateReviewerGovernanceTrustNodeControls(fileName, 'step', validationStep, failures);
+}
+
+function validateReviewerGovernanceTrustNodeControls(fileName, scope, node, failures) {
+  if (!node) return;
+  for (const field of ['if', 'continue-on-error']) {
+    if (node.get(field, true) === undefined) continue;
+    failures.push({
+      file: fileName,
+      message: `reviewer governance trust ${scope} must not override ${field}`,
+    });
+  }
+}
+
+function hasTrustedReviewerArchiveCommands(run) {
+  if (typeof run !== 'string') return false;
+  const lines = run.split(/\r?\n/).map((line) => line.trim());
+  const prExpression = '$' + '{PR_NUMBER}';
+  const requiredCommands = [
+    'git fetch --no-tags origin \\',
+    `"refs/pull/${prExpression}/head:refs/remotes/origin/pr/${prExpression}"`,
+    `git archive "refs/remotes/origin/pr/${prExpression}" | tar -x -C "$PR_ROOT"`,
+    'REVIEWER_CONFIG_ROOT="$PR_ROOT" \\',
+    'REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \\',
+    'node scripts/check-reviewer-config.mjs',
+  ];
+  return requiredCommands.every((command) => lines.includes(command));
 }
 
 export function checkReviewerGovernanceTrustWorkflow(fileName, doc, failures) {
@@ -655,17 +680,30 @@ export function checkActionFile(filePath, dependencies = {}) {
 export function checkAllWorkflows(root = projectRoot, dependencies = {}) {
   const workflowFiles =
     dependencies.listWorkflowFiles?.(root) ?? listWorkflowFiles(root, dependencies);
+  const requiredWorkflow = join(root, '.github/workflows/reviewer-governance-trust.yml');
+  const requiredWorkflowFailures = workflowFiles.some(
+    (filePath) => resolve(filePath) === resolve(requiredWorkflow),
+  )
+    ? []
+    : [
+        {
+          file: 'reviewer-governance-trust.yml',
+          message: 'required reviewer governance trust workflow must remain present',
+        },
+      ];
   // QNBS-v3: fail-closed — a rejected symlink must surface as a failure, never crash the whole check.
   let actionFiles;
   try {
     actionFiles = dependencies.listActionFiles?.(root) ?? listActionFiles(root, dependencies);
   } catch (error) {
     return [
+      ...requiredWorkflowFailures,
       ...workflowFiles.flatMap((filePath) => checkWorkflowFile(filePath, dependencies)),
       { file: '.github/actions', message: error.message },
     ];
   }
   return [
+    ...requiredWorkflowFailures,
     ...workflowFiles.flatMap((filePath) => checkWorkflowFile(filePath, dependencies)),
     ...actionFiles.flatMap((filePath) => checkActionFile(filePath, dependencies)),
   ];

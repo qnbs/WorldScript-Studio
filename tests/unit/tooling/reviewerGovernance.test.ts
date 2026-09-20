@@ -130,4 +130,57 @@ process.stdout.write(JSON.stringify(response));
       rmSync(tempDirectory, { recursive: true, force: true });
     }
   });
+
+  it('rejects evidence when the pull-request base changes during collection', () => {
+    const tempDirectory = mkdtempSync(join(tmpdir(), 'reviewer-status-base-'));
+    const fakeGh = join(tempDirectory, 'gh');
+    const stateFile = join(tempDirectory, 'pull-count');
+    writeFileSync(
+      fakeGh,
+      `#!/usr/bin/env node
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+const request = process.argv.slice(2).join(' ');
+const stateFile = process.env.REVIEWER_STATUS_STATE_FILE;
+let response;
+if (request.includes('graphql')) {
+  response = [{ data: { repository: { pullRequest: { reviewThreads: { nodes: [] } } } } }];
+} else if (request.includes('/check-runs?')) {
+  response = [{ check_runs: [] }];
+} else if (request.includes('/status?')) {
+  response = [{ statuses: [] }];
+} else if (request.includes('/issues/779/comments') || request.includes('/pulls/779/comments') || request.includes('/pulls/779/reviews')) {
+  response = [];
+} else if (request.includes('/pulls/779')) {
+  const count = (existsSync(stateFile) ? Number(readFileSync(stateFile, 'utf8')) : 0) + 1;
+  writeFileSync(stateFile, String(count));
+  response = {
+    head: { sha: 'test-head' },
+    state: 'open',
+    merged: false,
+    base: count === 1 ? { ref: 'main', sha: 'base-one' } : { ref: 'release', sha: 'base-two' },
+  };
+} else {
+  response = [];
+}
+process.stdout.write(JSON.stringify(response));
+`,
+    );
+    chmodSync(fakeGh, 0o755);
+
+    try {
+      const result = spawnSync(process.execPath, [reviewerStatusScript, '--pr', '779'], {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${tempDirectory}:${process.env['PATH'] ?? ''}`,
+          REVIEWER_STATUS_STATE_FILE: stateFile,
+        },
+      });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('head or base changed');
+    } finally {
+      rmSync(tempDirectory, { recursive: true, force: true });
+    }
+  });
 });

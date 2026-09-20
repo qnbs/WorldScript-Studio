@@ -125,9 +125,12 @@ jobs:
     steps:
       - name: Validate PR reviewer governance as untrusted data
         run: |
-          git fetch --no-tags origin refs/pull/1/head
-          git archive refs/remotes/origin/pr/1 | tar -x
-          REVIEWER_CONFIG_ROOT="$PR_ROOT" REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" node scripts/check-reviewer-config.mjs
+          git fetch --no-tags origin \\
+            "refs/pull/\${PR_NUMBER}/head:refs/remotes/origin/pr/\${PR_NUMBER}"
+          git archive "refs/remotes/origin/pr/\${PR_NUMBER}" | tar -x -C "$PR_ROOT"
+          REVIEWER_CONFIG_ROOT="$PR_ROOT" \\
+            REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \\
+            node scripts/check-reviewer-config.mjs
 `);
     expect(failures).toEqual([]);
   });
@@ -149,6 +152,39 @@ jobs: {}
     expect(failures.some((failure) => failure.message.includes('pull_request_target-only'))).toBe(
       true,
     );
+  });
+
+  it('rejects inert trust commands and neutralizing execution controls', () => {
+    const failures = checkTrustWorkflow(`
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+jobs:
+  reviewer-governance-trust:
+    if: false
+    steps:
+      - name: Validate PR reviewer governance as untrusted data
+        if: false
+        continue-on-error: true
+        run: |
+          echo "git fetch --no-tags origin"
+          echo 'git archive "refs/remotes/origin/pr/\${PR_NUMBER}" | tar -x -C "$PR_ROOT"'
+          echo 'REVIEWER_CONFIG_ROOT="$PR_ROOT"'
+          echo 'REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE"'
+          echo 'node scripts/check-reviewer-config.mjs'
+`);
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+    expect(
+      failures.some((failure) => failure.message.includes('trust job must not override if')),
+    ).toBe(true);
+    expect(
+      failures.some((failure) => failure.message.includes('trust step must not override if')),
+    ).toBe(true);
+    expect(
+      failures.some((failure) =>
+        failure.message.includes('trust step must not override continue-on-error'),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -864,6 +900,19 @@ describe('listActionFiles', () => {
 });
 
 describe('checkAllWorkflows', () => {
+  it('requires the canonical reviewer governance trust workflow', () => {
+    const failures = checkAllWorkflows('/repo', {
+      listWorkflowFiles: () => [],
+      listActionFiles: () => [],
+    });
+    expect(failures).toEqual([
+      {
+        file: 'reviewer-governance-trust.yml',
+        message: 'required reviewer governance trust workflow must remain present',
+      },
+    ]);
+  });
+
   it('aggregates failures across multiple injected workflow files', () => {
     const files = new Map<string, string>([
       ['/repo/.github/workflows/a.yml', 'jobs: {}\n'],
@@ -878,8 +927,8 @@ describe('checkAllWorkflows', () => {
         return content;
       },
     });
-    expect(failures).toHaveLength(1);
-    expect(failures[0]?.file).toBe('a.yml');
+    expect(failures.some((failure) => failure.file === 'a.yml')).toBe(true);
+    expect(failures.some((failure) => failure.file === 'reviewer-governance-trust.yml')).toBe(true);
   });
 
   it('also aggregates failures from injected composite action files', () => {
@@ -899,9 +948,11 @@ describe('checkAllWorkflows', () => {
         return content;
       },
     });
-    expect(failures).toHaveLength(1);
-    expect(failures[0]?.file).toBe('action.yml');
-    expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
+    expect(failures.some((failure) => failure.file === 'reviewer-governance-trust.yml')).toBe(true);
+    expect(failures.some((failure) => failure.file === 'action.yml')).toBe(true);
+    expect(failures.find((failure) => failure.file === 'action.yml')?.message).toMatch(
+      /40-hex-char SHA/,
+    );
   });
 
   // QNBS-v3: a thrown symlink rejection must surface as a failure, never crash the whole check.
@@ -912,7 +963,8 @@ describe('checkAllWorkflows', () => {
         throw new Error('symlink not allowed under .github/actions: /repo/.github/actions/setup');
       },
     });
-    expect(failures).toHaveLength(1);
-    expect(failures[0]?.message).toMatch(/symlink/i);
+    expect(failures).toHaveLength(2);
+    expect(failures.some((failure) => failure.file === 'reviewer-governance-trust.yml')).toBe(true);
+    expect(failures.some((failure) => /symlink/i.test(failure.message))).toBe(true);
   });
 });
