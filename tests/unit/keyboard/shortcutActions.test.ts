@@ -9,18 +9,24 @@ import {
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockSaveProject = vi.fn().mockResolvedValue(undefined);
+const mockPersistProjectAutosaveSnapshot = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('../../../services/storageService', () => ({
-  storageService: { saveProject: (...a: unknown[]) => mockSaveProject(...a) },
+vi.mock('../../../app/persistenceCoordinator', () => ({
+  projectPersistenceCoordinator: {
+    enqueue: (operation: () => Promise<void>) => operation().then(() => ({ superseded: false })),
+  },
 }));
 
-vi.mock('../../../services/storageBackend', () => ({
-  saveEnvelopeFromProjectData: vi.fn((data: unknown) => data),
+vi.mock('../../../services/projectAutosavePersistence', () => ({
+  persistProjectAutosaveSnapshot: (...a: unknown[]) => mockPersistProjectAutosaveSnapshot(...a),
+}));
+
+vi.mock('../../../services/storageService', () => ({
+  storageService: { saveProject: vi.fn() },
 }));
 
 vi.mock('../../../services/logger', () => ({
-  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
   // QNBS-v3: routingLogger.ts (pulled in transitively via aiThunkUtils.ts's policy pre-check) calls createLogger() and sanitizeLogContext() at module scope, so this mock must cover both or the import throws.
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
   sanitizeLogContext: (ctx: unknown) => ctx,
@@ -60,6 +66,7 @@ function makeApi(overrides: Partial<ShortcutRuntimeApi> = {}): ShortcutRuntimeAp
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockPersistProjectAutosaveSnapshot.mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -215,15 +222,15 @@ describe('performShortcutAction — toggleTheme', () => {
 // performShortcutAction — save
 // ---------------------------------------------------------------------------
 describe('performShortcutAction — save', () => {
-  it('calls storageService.saveProject on success', async () => {
-    mockSaveProject.mockResolvedValue(undefined);
+  it('routes the save through the coordinated project persistence service', async () => {
     const api = makeApi();
     await performShortcutAction('save', api);
-    expect(mockSaveProject).toHaveBeenCalled();
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'p1', title: 'My Novel' }),
+    );
   });
 
   it('dispatches setSavingStatus("saved") after successful save', async () => {
-    mockSaveProject.mockResolvedValue(undefined);
     const api = makeApi();
     await performShortcutAction('save', api);
     expect(api.dispatch).toHaveBeenCalledWith(
@@ -232,7 +239,7 @@ describe('performShortcutAction — save', () => {
   });
 
   it('dispatches error notification when save fails', async () => {
-    mockSaveProject.mockRejectedValue(new Error('Storage full'));
+    mockPersistProjectAutosaveSnapshot.mockRejectedValue(new Error('Storage full'));
     const api = makeApi();
     await performShortcutAction('save', api);
     const errorCalls = (api.dispatch as ReturnType<typeof vi.fn>).mock.calls.filter(
@@ -253,8 +260,8 @@ describe('performShortcutAction — save', () => {
       })) as unknown as ShortcutRuntimeApi['getState'],
     });
     await performShortcutAction('save', api);
-    // saveProject should not be called when project is missing
-    expect(mockSaveProject).not.toHaveBeenCalled();
+    // The canonical persistence service should not be called when project data is missing.
+    expect(mockPersistProjectAutosaveSnapshot).not.toHaveBeenCalled();
   });
 });
 
