@@ -1,7 +1,7 @@
 // tests/setup.ts
-// Globale Test-Setup für Vitest 4 + React Testing Library + Node 24/25+ Kompatibilität
+// Globale Test-Setup für Vitest 4/5 + React Testing Library + Node 24/25+ Kompatibilität
 // QNBS-v3: Robuste Polyfills für Node 24+ native Web Storage API, die jsdom überschreibt
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 // Wichtiger Import für vollwertiges IndexedDB (besser als der minimale Mock)
