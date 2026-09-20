@@ -11,8 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Canonical autosave lifecycle writer for Slice 2A:** adds create-if-absent and bounded
   ABSENT/LEGACY_UNVERSIONED/CURRENT handling through the canonical IndexedDB authority, with
-  fail-closed non-admitted states and no legacy dual-write fallback. Standalone and not yet wired
-  into the production autosave path. Part of #553. PR #778.
+  fail-closed non-admitted states and no legacy dual-write fallback. The web/PWA production
+  autosave route now consumes this writer through the Slice 2B seam; Tauri remains on its
+  filesystem backend. Part of #553. PRs #778 and #796 (superseded); corrected in #797.
+- **Production web/PWA autosave now uses the canonical project authority:** the debounced listener
+  and visibility/quit flush route full snapshots through the autosave edit bridge and canonical
+  IndexedDB writer, reject non-committing admission results, and run indexing/analytics success
+  effects only after durable success. Desktop filesystem autosave and future Core authority
+  transitions remain explicitly out of scope. Part of #553. PR #797 (superseding #796).
 - **Security dependency floor for PR #778:** raises the transitive `adm-zip` resolution from
   vulnerable 0.6.0 to patched 0.6.1 for `GHSA-7q85-xj36-vmfc`, while retaining the
   `onnxruntime-node` build-script denial.
@@ -21,16 +27,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `commitOwnedProjectEdit` (#773) and the IDB canonical authority (#775, #776) expect --
   non-collection fields are treated as owned; `characters`/`worlds` merge by stable id (`upsert`
   the current list, `remove` the set difference against the currently-committed carrier, `order`
-  the current declared order). Standalone and pure; not yet wired into any production writer. Part
-  of #553. PR #777.
+  the current declared order). Initially standalone and pure; consumed by the web/PWA production
+  autosave route in PR #797 (superseding #796). Part of #553. PR #777.
 - **A generation-fenced canonical writeback primitive for the persisted project document:**
   `services/projectDocumentWriteback.ts` overlays an owned-path edit onto the raw project carrier
   and verifies it two-sided: unowned top-level scalar fields stay byte-identical (never
   re-serialized), and every entity-collection value -- touched and untouched alike -- is confirmed
   value-equal to its pre-edit or intended content (contract §4's semantic, not byte-exact, no-loss
   standard). Fails closed on a concurrent source-generation change instead of silently overwriting
-  it; entity collections merge by stable id, never array position. Not yet wired into any production
-  writer. Part of #553. PR #773.
+  it; entity collections merge by stable id, never array position. The web/PWA autosave route now
+  reaches this primitive through PR #797 (superseding #796); desktop/Core authority remains out of scope. Part of
+  #553. PR #773.
 - **The IndexedDB-specific canonical admission and durable-commit boundary for the persisted
   project record:** `services/storage/idbProjectCanonicalAuthority.ts` establishes one authoritative
   persisted generation for the `project` record. The fence compares the raw (undecoded) stored
@@ -44,8 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transaction can never be auto-committed out from under an in-flight write. Detects the contract's
   §2.7 downgrade contradiction (a stale pre-contract-shaped write superseding an already-migrated
   canonical generation) and refuses to treat it as ordinary editable state. Built directly on
-  `commitOwnedProjectEdit` (#773) as its IDB backend adapter. Not yet wired into the production
-  autosave path. Part of #553. PR #775.
+  `commitOwnedProjectEdit` (#773) as its IDB backend adapter and now consumed by the web/PWA
+  autosave path through PR #797 (superseding #796). Part of #553. PR #775.
 - **Durable `LEGACY_TO_V1` migration through the same IndexedDB canonical authority:**
   `commitLegacyToV1Migration` recognizes a legacy (unversioned) stored project, reuses
   `services/projectDocument.ts`'s existing in-memory recognize/verify/stamp/revalidate admission

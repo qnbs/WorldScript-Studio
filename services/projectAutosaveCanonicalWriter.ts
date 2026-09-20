@@ -8,8 +8,8 @@ import {
 } from './storage/idbProjectCanonicalAuthority';
 
 /**
- * Canonical IDB autosave lifecycle (#553 Phase D3, slice 2A) -- standalone and NOT yet wired
- * into app/listenerMiddleware.ts.
+ * Canonical IDB autosave lifecycle (#553 Phase D3, slice 2B) -- used by the web/PWA autosave
+ * route through projectAutosavePersistence.ts; desktop autosave stays on its filesystem backend.
  *
  * Reconciles one full-snapshot autosave input with the canonical authority's real persisted
  * state, so that ordinary autosave never depends on the record already being a CURRENT canonical
@@ -50,6 +50,21 @@ export type CanonicalAutosaveResult =
   | { status: 'CONFLICT' }
   | { status: 'VERIFICATION_FAILED'; reason: string }
   | { status: 'MALFORMED_SOURCE'; reason: string };
+
+/**
+ * Converts every non-committing authority result into a rejected persistence operation.
+ */
+export function assertCanonicalAutosaveSucceeded(result: CanonicalAutosaveResult): void {
+  switch (result.status) {
+    case 'SAVED':
+    case 'CREATED':
+    case 'MIGRATED_AND_SAVED':
+      return;
+    default:
+      // QNBS-v3: a refusal must reject the coordinator operation so indexing, analytics, and the UI success state cannot claim durability after canonical admission failed.
+      throw new Error(`Canonical autosave did not commit (${result.status})`);
+  }
+}
 
 type Evaluation =
   | { outcome: 'FINAL'; result: CanonicalAutosaveResult }

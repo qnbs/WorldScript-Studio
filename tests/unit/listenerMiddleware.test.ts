@@ -26,7 +26,7 @@ import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionSe
 // Service mocks
 // ---------------------------------------------------------------------------
 
-const mockSaveProject = vi.fn().mockResolvedValue(undefined);
+const mockPersistProjectAutosaveSnapshot = vi.fn().mockResolvedValue(undefined);
 const mockSaveSettings = vi.fn().mockResolvedValue(undefined);
 const mockSaveStoryCodex = vi.fn().mockResolvedValue(undefined);
 const mockExtractStoryCodex = vi.fn().mockReturnValue({ entries: [] });
@@ -40,9 +40,13 @@ const mockRunCodexExcerptEncryptionMigration = vi
 
 vi.mock('../../services/storageService', () => ({
   storageService: {
-    saveProject: (...args: unknown[]) => mockSaveProject(...args),
     saveSettings: (...args: unknown[]) => mockSaveSettings(...args),
   },
+}));
+
+vi.mock('../../services/projectAutosavePersistence', () => ({
+  persistProjectAutosaveSnapshot: (...args: unknown[]) =>
+    mockPersistProjectAutosaveSnapshot(...args),
 }));
 
 const mockIsFactoryResetInProgress = vi.fn(() => false);
@@ -221,6 +225,7 @@ function getNotifications(store: MinimalStore) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockPersistProjectAutosaveSnapshot.mockResolvedValue(undefined);
   // QNBS-v3: clearAllMocks resets call history, not a mockReturnValue override -- an assertion failure mid-test must not leave this true for every later test in the file.
   mockIsFactoryResetInProgress.mockReturnValue(false);
   // QNBS-v3 (cubic): same rationale -- a test that overrides this to false for its own scenario must not leave every later local-first test in the file silently taking the persistProjectDoc branch instead of the default encryption-ready NOOP branch.
@@ -371,7 +376,7 @@ describe('auto-save project listener', () => {
     store.dispatch(projectActions.updateTitle('New Title'));
     // Advance past debounce delay
     await vi.advanceTimersByTimeAsync(1500);
-    expect(mockSaveProject).toHaveBeenCalled();
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenCalled();
   });
 
   it('dispatches saving/saved/idle status cycle on success', async () => {
@@ -381,11 +386,11 @@ describe('auto-save project listener', () => {
     // After save, status should move toward idle (timers run fully)
     await vi.advanceTimersByTimeAsync(3000);
     // At least one save should have occurred
-    expect(mockSaveProject).toHaveBeenCalled();
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenCalled();
   });
 
   it('dispatches error notification when saveProject throws', async () => {
-    mockSaveProject.mockRejectedValueOnce(new Error('Disk full'));
+    mockPersistProjectAutosaveSnapshot.mockRejectedValueOnce(new Error('Disk full'));
     const store = makeFullStore();
     store.dispatch(projectActions.updateTitle('Failing Save'));
     await vi.advanceTimersByTimeAsync(1500);
@@ -401,7 +406,7 @@ describe('auto-save project listener', () => {
     const store = makeFullStore();
     store.dispatch(projectActions.updateTitle('Should Never Save'));
     await vi.advanceTimersByTimeAsync(1500);
-    expect(mockSaveProject).not.toHaveBeenCalled();
+    expect(mockPersistProjectAutosaveSnapshot).not.toHaveBeenCalled();
   });
 
   // QNBS-v3: the shared addDebouncedListener guard passes once before this effect's own checkStorageHealth() await -- a reset starting during that gap must still be caught by the re-check immediately before enqueue().
@@ -422,13 +427,13 @@ describe('auto-save project listener', () => {
     resolveHealth({ ok: true, warning: null });
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(mockSaveProject).not.toHaveBeenCalled();
+    expect(mockPersistProjectAutosaveSnapshot).not.toHaveBeenCalled();
   });
 
   // QNBS-v3: enqueue() resolving already clears the coordinator's own active slot, so a reset starting right after is invisible to wipeAllAppData()'s drain -- the post-save writes need their own re-check.
   it('skips the cross-project index update when a factory reset starts right after the save resolves', async () => {
     let resolveSave: (value?: undefined) => void = () => {};
-    mockSaveProject.mockReturnValueOnce(
+    mockPersistProjectAutosaveSnapshot.mockReturnValueOnce(
       new Promise<void>((resolve) => {
         resolveSave = resolve;
       }),
@@ -437,7 +442,7 @@ describe('auto-save project listener', () => {
     store.dispatch(projectActions.updateTitle('Post-Save Race'));
     await vi.advanceTimersByTimeAsync(1000);
     // QNBS-v3: the effect is now suspended awaiting the coordinator's enqueue(), which is itself awaiting this pending save.
-    expect(mockSaveProject).toHaveBeenCalled();
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenCalled();
 
     mockIsFactoryResetInProgress.mockReturnValue(true);
     resolveSave();
@@ -587,7 +592,7 @@ describe('debounce stress tests', () => {
       store.dispatch(projectActions.updateTitle(`Title ${i}`));
     }
     await vi.advanceTimersByTimeAsync(1500);
-    expect(mockSaveProject).toHaveBeenCalledTimes(1);
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenCalledTimes(1);
   });
 
   // QNBS-v3: 50 rapid settings changes → exactly 1 saveSettings call.

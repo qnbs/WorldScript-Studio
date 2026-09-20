@@ -1,6 +1,7 @@
 import type { ProjectData } from '../features/project/projectSlice';
 import { isFactoryResetInProgress } from '../services/factoryResetService';
-import { saveEnvelopeFromProjectData, storageService } from '../services/storageService';
+import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersistence';
+import { storageService } from '../services/storageService';
 import {
   projectPersistenceCoordinator,
   settingsPersistenceCoordinator,
@@ -33,9 +34,7 @@ export async function flushPersistedState(state: RootState): Promise<void> {
       },
     };
     saves.push(
-      projectPersistenceCoordinator.enqueue(() =>
-        storageService.saveProject(saveEnvelopeFromProjectData(enriched)),
-      ),
+      projectPersistenceCoordinator.enqueue(() => persistProjectAutosaveSnapshot(enriched)),
     );
   }
   // QNBS-v3: allSettled, not Promise.all — its fail-fast let a caller reload before the other save finished; both must settle first, still failing closed if either rejected.
