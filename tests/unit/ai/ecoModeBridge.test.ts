@@ -147,8 +147,8 @@ describe('applyAdaptiveMode() — battery API back-sync to Redux', () => {
     ecoModeService._setBatteryLevelForTest(0.15);
     if (levelChangeCallback) (levelChangeCallback as () => void)();
 
-    // Allow dynamic imports in the levelchange handler to resolve.
-    await new Promise((r) => setTimeout(r, 50));
+    // Wait for the handler's dynamic imports and their promise continuations.
+    await vi.dynamicImportSettled();
 
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'settings/setAiMode', payload: 'eco' }),

@@ -33,20 +33,24 @@ budgets per bench are intentionally small (~250 ms) to keep total runtime and RA
 | `analytics: full word count` | Progress tracker / analytics recompute | Stat-panel jank |
 | `proforge: intake assembly` | ProForge proof/diagnostic text assembly before any AI call | Slow pipeline start |
 
-## Recording & comparing baselines
+## Recording & comparing results
 
 The fixture is **deterministic** (seeded LCG, fixed lexicon — no `Math.random`/`Date.now`), so
 `hz`/mean are comparable run-to-run on the same machine. Numbers are machine-specific, so we do **not**
-commit a baseline value into git; instead, record one per environment when you need a comparison:
+commit a baseline value into git. When a machine-readable result is useful, use Vitest 5's reporter
+and output-file options:
 
 ```bash
-pnpm exec vitest bench --run tests/bench --outputJson tests/bench/baseline/local.json
-# …make a change (e.g. the Y.Doc shadow-doc), then compare:
-pnpm exec vitest bench --run tests/bench --compare tests/bench/baseline/local.json
+pnpm exec vitest bench --run tests/bench --reporter=json --outputFile=tests/bench/baseline/local.json
 ```
 
-`tests/bench/baseline/` is git-ignored (see repo `.gitignore`). In CI, capture the JSON as a build
-artifact for trend tracking rather than gating on absolute numbers first.
+The former CLI `--outputJson`/`--compare` baseline workflow is not the current Vitest 5 contract.
+Vitest 5 instead exposes persisted benchmark comparison through its benchmark APIs, including
+`writeResult`, `bench.from()` and `bench.compare()` where an application chooses to build that
+workflow. This repository does not add a committed baseline, machine-normalisation logic, or CI
+benchmark gate here; any such comparison infrastructure remains separate follow-up work.
+
+`tests/bench/baseline/` is git-ignored (see repo `.gitignore`).
 
 ## Tuning the fixture
 
