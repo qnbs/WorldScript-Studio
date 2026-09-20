@@ -41,6 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       # QNBS-v3: pnpm/setup instead of pnpm/action-setup, mirroring .github/actions/setup/action.yml (duplicated because this job predates the trust boundary it validates and can't use that composite).
       - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
@@ -54,9 +55,48 @@ jobs:
       # QNBS-v3: no lifecycle/.pnpmfile.cjs hooks — install must not run repo code before the gate.
       - name: Install dependencies (no lifecycle scripts)
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      # QNBS-v3: materialize the complete base workspace before governance; workspace:* packages and pinned patches are part of frozen resolution.
+      - name: Prepare trusted base governance workspace
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "$BASE_SHA^{commit}"; then
+            echo "::error::base SHA is unavailable for trusted governance checks"
+            exit 1
+          fi
+          BASE_WORKSPACE="$(mktemp -d)"
+          git archive "$BASE_SHA" | tar -x -C "$BASE_WORKSPACE"
+          pnpm --dir "$BASE_WORKSPACE" install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+          echo "TRUSTED_BASE_WORKSPACE=$BASE_WORKSPACE" >> "$GITHUB_ENV"
       # QNBS-v3: node directly — pnpm run's own pre-run check rejects an --ignore-pnpmfile install.
       - name: Workflow-policy structural gate (permissions, needs graph, action pins)
-        run: node scripts/workflow-policy-check.mjs
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "${TRUSTED_BASE_WORKSPACE:-}" ] \
+             && [ -f "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs" ]; then
+            WORKFLOW_POLICY_ROOT="${{ github.workspace }}" \
+              node "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs"
+          else
+            node scripts/workflow-policy-check.mjs
+          fi
+      # QNBS-v3: use the trusted base checker for PRs; config and checker remain the PR workspace.
+      - name: Reviewer governance configuration gate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          REVIEWER_CONFIG_ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "${TRUSTED_BASE_WORKSPACE:-}" ] \
+             && [ -f "$TRUSTED_BASE_WORKSPACE/scripts/check-reviewer-config.mjs" ]; then
+            REVIEWER_CONFIG_ROOT="${{ github.workspace }}" \
+              REVIEWER_DEPENDENCY_ROOT="$TRUSTED_BASE_WORKSPACE" \
+              node "$TRUSTED_BASE_WORKSPACE/scripts/check-reviewer-config.mjs"
+          else
+            echo "::notice::base reviewer checker is absent (bootstrap); using the PR copy this one time."
+            node scripts/check-reviewer-config.mjs
+          fi
 
   # ----------------------------------------------------------
   # 0. SECURITY: pnpm audit + gitleaks + dependency review

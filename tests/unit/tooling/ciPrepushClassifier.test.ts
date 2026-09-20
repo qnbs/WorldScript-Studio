@@ -93,6 +93,11 @@ describe('change-aware local admission classifier', () => {
     expect(shouldRunAdmissionCheck('contentGuard', ['scripts/ci-prepush-range-resolver.mjs'])).toBe(
       true,
     );
+    expect(
+      shouldRunAdmissionCheck('reviewerConfig', [
+        '.github/workflows/reviewer-governance-trust.yml',
+      ]),
+    ).toBe(true);
   });
 
   it('routes governed source paths and the checker itself to the QNBS-v3 comment policy', () => {

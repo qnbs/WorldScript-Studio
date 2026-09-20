@@ -57,8 +57,14 @@ needs their detail. Dynamic facts belong in `package.json`, `.nvmrc`, scripts, o
   CI-only on this machine. Do not invent scattered `if (true)` feature gates.
 - For non-trivial TypeScript/TSX/CSS changes, add one short physical-line `QNBS-v3:` rationale
   comment only when the reason is genuinely non-obvious (security, persistence, concurrency,
-  native boundary, or compatibility). No QNBS comment is needed for obvious tests, fixtures,
-  generated files, locale JSON, or mechanical renames. Config JSON/YAML has no inline comment.
+  native boundary, or compatibility). A test being new, substantive, regression-critical,
+  security-sensitive, or persistence-sensitive does not by itself require a QNBS-v3 comment. In
+  test/fixture files, add one only when a non-obvious harness, setup, fixture, order, timing, mock,
+  suppression, or compatibility choice needs rationale beyond what the test name, inputs, and
+  assertions already explain. Straightforward regression cases whose names, fixtures, and
+  assertions state the invariant require no QNBS-v3 comment. No QNBS comment is needed for
+  obvious tests, fixtures, generated files, locale JSON, or mechanical renames. Config JSON/YAML
+  has no inline comment.
   `pnpm run qnbs-comments:check` (staged/diff-aware; wired into pre-commit and `ci:prepush`)
   mechanically enforces the one-physical-line part of this rule — see `docs/CI.md` for the full
   risk-routed local admission matrix.

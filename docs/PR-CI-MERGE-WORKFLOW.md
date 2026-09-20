@@ -51,13 +51,14 @@ not satisfy it. Never print tokens, environment values, or creator emails.
 
 **CodeRabbit trigger semantics — evidence-based, not a ritual (confirmed on PR #537):** `@coderabbitai review` requests an **incremental** review of changes CodeRabbit hasn't seen yet; it explicitly does **not** re-review commits it has already reviewed. A push normally **auto-triggers** that incremental review on its own — post the manual comment only when automatic review is paused/disabled, or when CodeRabbit's own reply says the manual trigger is what applies right now. Do **not** post `@coderabbitai review` reflexively after every fix push as a "get a fresh 0-comment review" ritual — once CodeRabbit has already consumed the current head, doing so either does nothing or gets a reply that no new incremental diff exists, and treating that as "must wait for a review that will happen eventually" produces an unresolvable stall. `@coderabbitai full review` requests a **complete from-scratch** re-review and is **exceptional**, not routine — reserve it for a genuinely large invalidating rewrite, a cross-cutting final delta that plausibly invalidates earlier review coverage, or an explicit maintainer ask; never spend it chasing a mechanical "freshness" feeling.
 
-**`.coderabbit.yaml` — deliberately absent (current decision):** this repo has no explicit CodeRabbit
-project config and relies on the default automatic-incremental-review behavior described above. For a
-solo repo whose correction loop already works without one, an explicit
-`reviews.auto_review.enabled`/`auto_incremental_review`/`auto_pause_after_reviewed_commits` config adds
-a second version-drift-prone source of truth for no proven benefit. Revisit only if a real
-predictability gap shows up in practice (e.g. automatic review silently not firing on a real new
-diff) — add the minimal config needed to fix that specific gap, not a speculative full config.
+**`.coderabbit.yaml` — now explicit after a real predictability gap:** the repository previously
+relied on CodeRabbit defaults. PR #778 demonstrated a concrete policy-misread: CodeRabbit treated
+the QNBS-v3 rule as a blanket requirement for substantive new tests even though `AGENTS.md` exempts
+obvious tests and the checker validates marker form rather than marker presence. The tracked adapter
+now makes the high-signal profile, incremental review controls, generated-output filters, test and
+persistence path instructions, and branch-mutating finishing-touch defaults explicit. Its canonical
+semantics and vendor-role boundaries live in [`REVIEWER-GOVERNANCE.md`](REVIEWER-GOVERNANCE.md);
+the adapter is not a competing copy of `AGENTS.md`.
 
 **Reviewer states — track these explicitly, never collapse them:** `REVIEWED_CLEAN` (a review ran and found nothing), `AUTO_INCREMENTAL_REVIEWED` (automatic incremental review consumed the current diff), `NO_NEW_INCREMENTAL_DIFF` (CodeRabbit says there's nothing new to review — a legitimate terminal state, not a failure), `AUTO_REVIEW_PAUSED` (automatic review is off — a manual trigger applies here), `RATE_LIMITED`, `QUOTA_EXHAUSTED`, `BILLING_BLOCKED`, `REVIEWER_UNAVAILABLE` (all four mean "no signal," never "clean" — check the bot's actual review history via its API before trusting a live status badge), `FULL_REVIEW_EXPLICIT` (a deliberately-requested full review, logged with its justification). Never report `RATE_LIMITED`/`QUOTA_EXHAUSTED`/`BILLING_BLOCKED`/`REVIEWER_UNAVAILABLE` as `REVIEWED_CLEAN`.
 

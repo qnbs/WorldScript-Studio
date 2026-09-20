@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { LineCounter, isAlias, parseDocument } from 'yaml';
+import { isAlias, LineCounter, parseDocument } from 'yaml';
 
 function resolveProjectRoot() {
   try {
@@ -11,7 +11,9 @@ function resolveProjectRoot() {
     return process.cwd();
   }
 }
-const projectRoot = resolveProjectRoot();
+const projectRoot = process.env.WORKFLOW_POLICY_ROOT
+  ? resolve(process.env.WORKFLOW_POLICY_ROOT)
+  : resolveProjectRoot();
 
 // QNBS-v3: exempts only these exact job/write-key pairs from the no-unallowlisted-write policy.
 const WRITE_SCOPE_ALLOWLIST = {
@@ -91,6 +93,401 @@ function resolveSteps(stepsNode, doc) {
   const resolved = resolveNode(stepsNode, doc);
   const items = resolved?.items ?? [];
   return items.map((item) => resolveNode(item, doc));
+}
+
+function nodeValue(node, doc) {
+  const resolved = resolveNode(node, doc);
+  return resolved?.toJSON?.() ?? resolved?.value;
+}
+
+function findReviewerGovernanceGateStep(doc) {
+  const workflowPolicyJob = jobMap(doc).get('workflow-policy');
+  const steps = resolveSteps(workflowPolicyJob?.get?.('steps', true), doc);
+  return steps.find(
+    (step) =>
+      nodeValue(step?.get?.('name', true), doc) === 'Reviewer governance configuration gate',
+  );
+}
+
+function validateReviewerGovernanceGateStep(fileName, gateStep, failures) {
+  if (gateStep) return true;
+  failures.push({
+    file: fileName,
+    message: 'workflow-policy must retain the Reviewer governance configuration gate step',
+  });
+  return false;
+}
+
+function validateReviewerGovernanceGateRun(fileName, gateStep, doc, failures) {
+  const run = nodeValue(gateStep.get('run', true), doc);
+  if (
+    typeof run !== 'string' ||
+    !/node\s+"\$TRUSTED_BASE_WORKSPACE\/scripts\/check-reviewer-config\.mjs"/.test(run)
+  ) {
+    failures.push({
+      file: fileName,
+      message:
+        'Reviewer governance configuration gate must invoke the exact trusted base checker command',
+    });
+  }
+  if (
+    typeof run !== 'string' ||
+    !/REVIEWER_CONFIG_ROOT="\$\{\{\s*github\.workspace\s*\}\}"/.test(run)
+  ) {
+    failures.push({
+      file: fileName,
+      message: 'Reviewer governance configuration gate must use the exact PR workspace root',
+    });
+  }
+  if (typeof run !== 'string' || !/REVIEWER_DEPENDENCY_ROOT="\$TRUSTED_BASE_WORKSPACE"/.test(run)) {
+    failures.push({
+      file: fileName,
+      message: 'Reviewer governance configuration gate must use trusted dependency resolution',
+    });
+  }
+}
+
+function validateReviewerGovernanceGateEnvironment(fileName, gateStep, doc, failures) {
+  const environment = nodeValue(gateStep.get('env', true), doc);
+  const expectedWorkspace = '$' + '{{ github.workspace }}';
+  if (environment?.REVIEWER_CONFIG_ROOT !== expectedWorkspace) {
+    failures.push({
+      file: fileName,
+      message:
+        'Reviewer governance configuration gate must pin REVIEWER_CONFIG_ROOT to the PR workspace',
+    });
+  }
+}
+
+function validateReviewerGovernanceGateOverrides(fileName, gateStep, failures) {
+  for (const field of ['if', 'continue-on-error', 'shell', 'working-directory']) {
+    if (gateStep.get(field, true) !== undefined) {
+      failures.push({
+        file: fileName,
+        message: `Reviewer governance configuration gate must not override ${field}`,
+      });
+    }
+  }
+}
+
+// QNBS-v3: the base-ref checker must reject removal or neutralization of the governance gate itself.
+export function checkReviewerGovernanceGate(fileName, doc, failures) {
+  if (fileName !== 'ci.yml') return;
+  const gateStep = findReviewerGovernanceGateStep(doc);
+  if (!validateReviewerGovernanceGateStep(fileName, gateStep, failures)) return;
+  validateReviewerGovernanceGateRun(fileName, gateStep, doc, failures);
+  validateReviewerGovernanceGateEnvironment(fileName, gateStep, doc, failures);
+  validateReviewerGovernanceGateOverrides(fileName, gateStep, failures);
+}
+
+function isPullRequestTargetOnlyTrigger(triggers) {
+  if (!triggers) return false;
+  if (typeof triggers !== 'object') return false;
+  const triggerKeys = Object.keys(triggers);
+  if (!triggerKeys.includes('pull_request_target')) return false;
+  if (!triggerKeys.every((key) => key === 'pull_request_target')) return false;
+  return hasRequiredReviewerTrustActivities(triggers.pull_request_target);
+}
+
+function hasRequiredReviewerTrustActivities(targetTrigger) {
+  if (!targetTrigger) return false;
+  if (typeof targetTrigger !== 'object') return false;
+  if (!Object.keys(targetTrigger).every((key) => key === 'types')) return false;
+  const types = targetTrigger.types;
+  if (!Array.isArray(types)) return false;
+  const requiredTypes = ['opened', 'synchronize', 'reopened', 'ready_for_review', 'edited'];
+  return requiredTypes.every((type) => types.includes(type));
+}
+
+function getWorkflowTriggerNode(doc) {
+  const namedTrigger = doc.get('on', true);
+  if (namedTrigger !== undefined) return namedTrigger;
+  return doc.get(true, true);
+}
+
+function validateReviewerGovernanceTrustTrigger(fileName, doc, failures) {
+  const triggerNode = getWorkflowTriggerNode(doc);
+  const triggers = nodeValue(triggerNode, doc);
+  if (!isPullRequestTargetOnlyTrigger(triggers)) {
+    failures.push({
+      file: fileName,
+      message: 'reviewer governance trust workflow must be pull_request_target-only',
+    });
+  }
+}
+
+function validateReviewerGovernanceTrustExecution(fileName, doc, failures) {
+  const job = jobMap(doc).get('reviewer-governance-trust');
+  const steps = resolveSteps(job?.get?.('steps', true), doc);
+  const validationStep = steps.find(
+    (step) =>
+      nodeValue(step?.get?.('name', true), doc) ===
+      'Validate PR reviewer governance as untrusted data',
+  );
+  const run = nodeValue(validationStep?.get?.('run', true), doc);
+  validateReviewerGovernanceTrustCheckout({ fileName, steps, validationStep, doc, failures });
+  validateReviewerGovernanceTrustControls(fileName, job, validationStep, failures);
+  validateReviewerGovernanceTrustShellDefaults(fileName, job, doc, failures);
+  validateReviewerGovernanceTrustPreparation({
+    fileName,
+    steps,
+    validationStep,
+    doc,
+    failures,
+  });
+  validateReviewerGovernanceTrustEnvironment(fileName, validationStep, doc, failures);
+  if (!hasTrustedReviewerArchiveCommands(run)) {
+    failures.push({
+      file: fileName,
+      message:
+        'reviewer governance trust workflow must validate only an archived PR with trusted base code',
+    });
+  }
+}
+
+function validateReviewerGovernanceTrustShellDefaults(fileName, job, doc, failures) {
+  for (const [scope, node] of [
+    ['workflow', doc],
+    ['job', job],
+  ]) {
+    const defaults = nodeValue(node?.get?.('defaults', true), doc);
+    if (defaults?.run?.shell === undefined) continue;
+    failures.push({
+      file: fileName,
+      message: `reviewer governance trust ${scope} must not define a run.shell default`,
+    });
+  }
+}
+
+function isCanonicalReviewerGovernanceTrustAction(uses) {
+  return (
+    typeof uses === 'string' &&
+    ['actions/checkout@', 'pnpm/setup@', 'actions/setup-node@'].some((prefix) =>
+      uses.startsWith(prefix),
+    )
+  );
+}
+
+function isCanonicalReviewerGovernanceTrustInstall(step, doc) {
+  return (
+    nodeValue(step?.get?.('name', true), doc) === 'Install trusted base dependencies' &&
+    nodeValue(step?.get?.('run', true), doc) ===
+      'pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile'
+  );
+}
+
+function isCanonicalReviewerGovernanceTrustPreparationStep(step, doc) {
+  return (
+    isCanonicalReviewerGovernanceTrustAction(nodeValue(step?.get?.('uses', true), doc)) ||
+    isCanonicalReviewerGovernanceTrustInstall(step, doc)
+  );
+}
+
+function validateReviewerGovernanceTrustPreparation({
+  fileName,
+  steps,
+  validationStep,
+  doc,
+  failures,
+}) {
+  const validationIndex = steps.indexOf(validationStep);
+  if (validationIndex < 0) return;
+  if (
+    steps
+      .slice(0, validationIndex)
+      .every((step) => isCanonicalReviewerGovernanceTrustPreparationStep(step, doc))
+  )
+    return;
+  failures.push({
+    file: fileName,
+    message:
+      'reviewer governance trust must use only canonical preparation steps before validation',
+  });
+}
+
+function findReviewerGovernanceTrustCheckouts(steps, doc) {
+  return steps.flatMap((step, index) => {
+    const uses = nodeValue(step?.get?.('uses', true), doc);
+    return typeof uses === 'string' && uses.startsWith('actions/checkout@')
+      ? [{ index, step }]
+      : [];
+  });
+}
+
+function getReviewerGovernanceTrustCheckoutFailure(checkouts, validationIndex) {
+  if (checkouts.length !== 1) {
+    return 'reviewer governance trust must contain exactly one checkout before validation';
+  }
+  if (checkouts[0].index >= validationIndex) {
+    return 'reviewer governance trust must checkout the trusted base before validation';
+  }
+  return undefined;
+}
+
+function validateReviewerGovernanceTrustCheckout({
+  fileName,
+  steps,
+  validationStep,
+  doc,
+  failures,
+}) {
+  const checkouts = findReviewerGovernanceTrustCheckouts(steps, doc);
+  const validationIndex = steps.indexOf(validationStep);
+  const checkoutFailure = getReviewerGovernanceTrustCheckoutFailure(checkouts, validationIndex);
+  if (checkoutFailure !== undefined) {
+    failures.push({
+      file: fileName,
+      message: checkoutFailure,
+    });
+    return;
+  }
+  const [checkout] = checkouts;
+  validateReviewerGovernanceTrustCheckoutOptions({
+    fileName,
+    checkoutStep: checkout.step,
+    doc,
+    failures,
+  });
+}
+
+function validateReviewerGovernanceTrustCheckoutOptions({ fileName, checkoutStep, doc, failures }) {
+  const checkoutOptions = nodeValue(checkoutStep?.get?.('with', true), doc);
+  for (const field of ['ref', 'repository']) {
+    if (checkoutOptions?.[field] === undefined) continue;
+    failures.push({
+      file: fileName,
+      message: `reviewer governance trust checkout must not override ${field}`,
+    });
+  }
+}
+
+function validateReviewerGovernanceTrustEnvironment(fileName, validationStep, doc, failures) {
+  const environment = nodeValue(validationStep?.get?.('env', true), doc);
+  validateReviewerGovernanceTrustEnvironmentValue({
+    fileName,
+    name: 'PR_NUMBER',
+    actual: environment?.PR_NUMBER,
+    expected: '$' + '{{ github.event.pull_request.number }}',
+    failures,
+  });
+  validateReviewerGovernanceTrustEnvironmentValue({
+    fileName,
+    name: 'PR_BASE_SHA',
+    actual: environment?.PR_BASE_SHA,
+    expected: '$' + '{{ github.event.pull_request.base.sha }}',
+    failures,
+  });
+  validateReviewerGovernanceTrustEnvironmentValue({
+    fileName,
+    name: 'PR_HEAD_SHA',
+    actual: environment?.PR_HEAD_SHA,
+    expected: '$' + '{{ github.event.pull_request.head.sha }}',
+    failures,
+  });
+}
+
+function validateReviewerGovernanceTrustEnvironmentValue({
+  fileName,
+  name,
+  actual,
+  expected,
+  failures,
+}) {
+  if (actual === expected) return;
+  failures.push({
+    file: fileName,
+    message: `reviewer governance trust step must bind ${name} to the exact pull_request event expression`,
+  });
+}
+
+function validateReviewerGovernanceTrustControls(fileName, job, validationStep, failures) {
+  validateReviewerGovernanceTrustNodeControls({
+    fileName,
+    scope: 'job',
+    node: job,
+    failures,
+    fields: ['if', 'continue-on-error'],
+  });
+  validateReviewerGovernanceTrustNodeControls({
+    fileName,
+    scope: 'step',
+    node: validationStep,
+    failures,
+    fields: ['if', 'continue-on-error', 'shell'],
+  });
+}
+
+function validateReviewerGovernanceTrustNodeControls({ fileName, scope, node, failures, fields }) {
+  if (!node) return;
+  for (const field of fields) {
+    if (node.get(field, true) === undefined) continue;
+    failures.push({
+      file: fileName,
+      message: `reviewer governance trust ${scope} must not override ${field}`,
+    });
+  }
+}
+
+function hasTrustedReviewerFailFastPreamble(lines) {
+  return lines.find((line) => line.length > 0) === 'set -euo pipefail';
+}
+
+function hasRequiredCommandsInOrder(lines, requiredCommands) {
+  let previousIndex = -1;
+  for (const command of requiredCommands) {
+    const index = lines.indexOf(command, previousIndex + 1);
+    if (index === -1) return false;
+    previousIndex = index;
+  }
+  return true;
+}
+
+function hasNoSuccessfulReviewerTrustEscape(lines) {
+  return !lines.some((line) => /\b(?:exit|return)\s+0\b|\bcontinue\b/.test(line));
+}
+
+function hasOnlyCanonicalReviewerTrustControlFlow(lines) {
+  const allowed = new Set([
+    'if [ "$FETCHED_HEAD" != "$PR_HEAD_SHA" ]; then',
+    'if [ -n "$SYMLINKS" ]; then',
+    'fi',
+  ]);
+  return !lines.some((line) => {
+    if (!/^(?:if|then|else|elif|fi|for|while|case|esac)\b/.test(line)) return false;
+    return !allowed.has(line);
+  });
+}
+
+function hasTrustedReviewerArchiveCommands(run) {
+  if (typeof run !== 'string') return false;
+  const lines = run.split(/\r?\n/).map((line) => line.trim());
+  const prExpression = '$' + '{PR_NUMBER}';
+  const requiredCommands = [
+    'git fetch --no-tags origin \\',
+    `"refs/pull/${prExpression}/head:refs/remotes/origin/pr/${prExpression}"`,
+    'git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1',
+    'SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk \'$1 == "120000" { print $0 }\')"',
+    'if [ -n "$SYMLINKS" ]; then',
+    'exit 1',
+    `git archive "refs/remotes/origin/pr/${prExpression}" | tar -x -C "$PR_ROOT"`,
+    'WORKFLOW_POLICY_ROOT="$PR_ROOT" \\',
+    'node "$GITHUB_WORKSPACE/scripts/workflow-policy-check.mjs"',
+    'REVIEWER_CONFIG_ROOT="$PR_ROOT" \\',
+    'REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \\',
+    'node scripts/check-reviewer-config.mjs',
+  ];
+  return (
+    hasTrustedReviewerFailFastPreamble(lines) &&
+    hasRequiredCommandsInOrder(lines, requiredCommands) &&
+    hasNoSuccessfulReviewerTrustEscape(lines) &&
+    hasOnlyCanonicalReviewerTrustControlFlow(lines)
+  );
+}
+
+export function checkReviewerGovernanceTrustWorkflow(fileName, doc, failures) {
+  if (fileName !== 'reviewer-governance-trust.yml') return;
+  validateReviewerGovernanceTrustTrigger(fileName, doc, failures);
+  validateReviewerGovernanceTrustExecution(fileName, doc, failures);
 }
 
 // QNBS-v3: resolves a needs: node (possibly aliased, e.g. shared via &deps/*deps) to a string array.
@@ -182,7 +579,10 @@ export function checkNeedsGraph(fileName, doc, failures) {
         });
       }
     }
-    needsOf.set(jobName, needs.filter((dependency) => jobNames.has(dependency)));
+    needsOf.set(
+      jobName,
+      needs.filter((dependency) => jobNames.has(dependency)),
+    );
   }
   const visiting = new Set();
   const visited = new Set();
@@ -253,7 +653,10 @@ function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, fai
   }
   const atIndex = ref.indexOf('@');
   if (atIndex === -1) {
-    failures.push({ file: fileName, message: `${loc}action reference "${ref}" is missing an @ pin` });
+    failures.push({
+      file: fileName,
+      message: `${loc}action reference "${ref}" is missing an @ pin`,
+    });
     return;
   }
   const pin = ref.slice(atIndex + 1);
@@ -266,7 +669,9 @@ function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, fai
   }
   // QNBS-v3: an alias's comment can live at the anchor definition or the use site — accept either.
   const comment =
-    usesNode.comment ?? resolvedNode.comment ?? (containerNode?.flow ? containerNode.comment : undefined);
+    usesNode.comment ??
+    resolvedNode.comment ??
+    (containerNode?.flow ? containerNode.comment : undefined);
   if (!comment || !/\S/.test(comment)) {
     failures.push({
       file: fileName,
@@ -297,7 +702,14 @@ export function checkActionPins(fileName, doc, failures, options = {}) {
     const runsNode = resolveNode(doc.get('runs', true), doc);
     const imageNode = runsNode?.get?.('image', true);
     if (imageNode) {
-      checkUsesRef({ usesNode: imageNode, containerNode: runsNode, doc, fileName, lineCounter, failures });
+      checkUsesRef({
+        usesNode: imageNode,
+        containerNode: runsNode,
+        doc,
+        fileName,
+        lineCounter,
+        failures,
+      });
     }
   }
 }
@@ -464,6 +876,8 @@ export function checkWorkflowFile(filePath, dependencies = {}) {
   checkActionPins(fileName, doc, failures, { fileKind: 'workflow', lineCounter });
   checkAggregatorNeeds(fileName, doc, failures);
   checkPublishingBoundary(fileName, doc, failures);
+  checkReviewerGovernanceGate(fileName, doc, failures);
+  checkReviewerGovernanceTrustWorkflow(fileName, doc, failures);
   return failures;
 }
 
@@ -483,25 +897,41 @@ export function checkActionFile(filePath, dependencies = {}) {
 }
 
 export function checkAllWorkflows(root = projectRoot, dependencies = {}) {
-  const workflowFiles = dependencies.listWorkflowFiles?.(root) ?? listWorkflowFiles(root, dependencies);
+  const workflowFiles =
+    dependencies.listWorkflowFiles?.(root) ?? listWorkflowFiles(root, dependencies);
+  const requiredWorkflows = [
+    [
+      'reviewer-governance-trust.yml',
+      'required reviewer governance trust workflow must remain present',
+    ],
+    ['ci.yml', 'canonical CI workflow must remain present for reviewer governance'],
+  ];
+  const requiredWorkflowFailures = requiredWorkflows
+    .filter(([fileName]) => {
+      const requiredWorkflow = join(root, '.github/workflows', fileName);
+      return !workflowFiles.some((filePath) => resolve(filePath) === resolve(requiredWorkflow));
+    })
+    .map(([file, message]) => ({ file, message }));
   // QNBS-v3: fail-closed — a rejected symlink must surface as a failure, never crash the whole check.
   let actionFiles;
   try {
     actionFiles = dependencies.listActionFiles?.(root) ?? listActionFiles(root, dependencies);
   } catch (error) {
     return [
+      ...requiredWorkflowFailures,
       ...workflowFiles.flatMap((filePath) => checkWorkflowFile(filePath, dependencies)),
       { file: '.github/actions', message: error.message },
     ];
   }
   return [
+    ...requiredWorkflowFailures,
     ...workflowFiles.flatMap((filePath) => checkWorkflowFile(filePath, dependencies)),
     ...actionFiles.flatMap((filePath) => checkActionFile(filePath, dependencies)),
   ];
 }
 
 export function main() {
-  const failures = checkAllWorkflows();
+  const failures = checkAllWorkflows(projectRoot);
   if (failures.length > 0) {
     console.error('Workflow-policy check failed:');
     for (const failure of failures) console.error(`- [${failure.file}] ${failure.message}`);
