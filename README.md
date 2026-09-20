@@ -809,7 +809,7 @@ The normal web PR pipeline is not the complete native release qualification surf
 | DOCX | `docx` + JSZip | Word-compatible export |
 | PWA | Service Worker + Web App Manifest | Offline shell/installability |
 | i18n | Custom React i18n context | 2942 keys × 19 locales |
-| Testing | Vitest 4.x (8102+ tests / 616 files) + Playwright | Unit/integration/E2E |
+| Testing | Vitest 5.x (8102+ tests / 616 files) + Playwright | Unit/integration/E2E |
 | Quality | Biome + tsgo + CodeQL/security tooling | Static and CI gates |
 | Desktop | Tauri 2 | Current native shell |
 
