@@ -10,10 +10,11 @@ import {
 // ---------------------------------------------------------------------------
 
 const mockPersistProjectAutosaveSnapshot = vi.fn().mockResolvedValue(undefined);
+const mockPersistenceResult = { superseded: false };
 
 vi.mock('../../../app/persistenceCoordinator', () => ({
   projectPersistenceCoordinator: {
-    enqueue: (operation: () => Promise<void>) => operation().then(() => ({ superseded: false })),
+    enqueue: (operation: () => Promise<void>) => operation().then(() => mockPersistenceResult),
   },
 }));
 
@@ -67,6 +68,7 @@ function makeApi(overrides: Partial<ShortcutRuntimeApi> = {}): ShortcutRuntimeAp
 beforeEach(() => {
   vi.clearAllMocks();
   mockPersistProjectAutosaveSnapshot.mockResolvedValue(undefined);
+  mockPersistenceResult.superseded = false;
 });
 
 // ---------------------------------------------------------------------------
@@ -234,6 +236,20 @@ describe('performShortcutAction — save', () => {
     const api = makeApi();
     await performShortcutAction('save', api);
     expect(api.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'status/setSavingStatus', payload: 'saved' }),
+    );
+  });
+
+  it('clears the transient status when a newer coordinated save supersedes the manual save', async () => {
+    mockPersistenceResult.superseded = true;
+    const api = makeApi();
+
+    await performShortcutAction('save', api);
+
+    expect(api.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'status/setSavingStatus', payload: 'idle' }),
+    );
+    expect(api.dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'status/setSavingStatus', payload: 'saved' }),
     );
   });

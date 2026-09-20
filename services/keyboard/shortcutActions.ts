@@ -128,11 +128,14 @@ async function flushProjectSave(
         currentBranchId: state.versionControl.currentBranchId,
       },
     };
-    // QNBS-v3 (#553): manual saves share the same generation-fenced authority as autosave, so a delayed shortcut cannot bypass canonical admission or race a newer snapshot.
+    // QNBS-v3 (#553): manual saves share the same generation-fenced authority as autosave, so a delayed shortcut cannot bypass canonical admission or race a newer snapshot; superseded flushes still clear their transient UI state.
     const result = await projectPersistenceCoordinator.enqueue(() =>
       persistProjectAutosaveSnapshot(enriched),
     );
-    if (result.superseded) return;
+    if (result.superseded) {
+      dispatch(statusActions.setSavingStatus('idle'));
+      return;
+    }
     dispatch(statusActions.setSavingStatus('saved'));
     dispatch(
       statusActions.addNotification({
