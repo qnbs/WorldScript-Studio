@@ -16,7 +16,7 @@
 
 import type { AnyAction } from '@reduxjs/toolkit';
 import undoable, { ActionCreators, type StateWithHistory } from 'redux-undo';
-import { bench, describe } from 'vitest';
+import { test } from 'vitest';
 import projectReducer, { projectActions } from '../../features/project/projectSlice';
 import type { ProjectData } from '../../features/project/projectState';
 import { buildLargeManuscript, totalWordCount } from './fixtures/largeManuscript';
@@ -71,55 +71,32 @@ const warmState: UndoableProjectState = (() => {
 
 const BENCH_OPTS = { time: 250, warmupTime: 100, warmupIterations: 3 } as const;
 
-describe('large manuscript (~120k words) — main-thread hot paths', () => {
+// QNBS-v3: Vitest 5 exposes benchmark registration through the test context; run options preserve the measured budgets.
+test('large manuscript (~120k words) — main-thread hot paths', async ({ bench }) => {
   // Each iteration is independent: it starts from the same warm (history-full) state and applies one
   // edit. This isolates the per-keystroke cost (immer produce + redux-undo past push, capped at 100).
-  bench(
-    'typing: updateManuscriptSection through redux-undo (steady state)',
-    () => {
-      undoableProjectReducer(warmState, editAction());
-    },
-    BENCH_OPTS,
-  );
+  await bench('typing: updateManuscriptSection through redux-undo (steady state)', () => {
+    undoableProjectReducer(warmState, editAction());
+  }).run(BENCH_OPTS);
 
-  bench(
-    'undo: ActionCreators.undo() from full history',
-    () => {
-      undoableProjectReducer(warmState, ActionCreators.undo());
-    },
-    BENCH_OPTS,
-  );
+  await bench('undo: ActionCreators.undo() from full history', () => {
+    undoableProjectReducer(warmState, ActionCreators.undo());
+  }).run(BENCH_OPTS);
 
-  bench(
-    'save: JSON.stringify(project) — IDB persist payload',
-    () => {
-      JSON.stringify(fixture);
-    },
-    BENCH_OPTS,
-  );
+  await bench('save: JSON.stringify(project) — IDB persist payload', () => {
+    JSON.stringify(fixture);
+  }).run(BENCH_OPTS);
 
-  bench(
-    'snapshot: structuredClone(project) — per-keystroke snapshot cost',
-    () => {
-      structuredClone(fixture);
-    },
-    BENCH_OPTS,
-  );
+  await bench('snapshot: structuredClone(project) — per-keystroke snapshot cost', () => {
+    structuredClone(fixture);
+  }).run(BENCH_OPTS);
 
-  bench(
-    'analytics: full-manuscript word count',
-    () => {
-      totalWordCount(fixture);
-    },
-    BENCH_OPTS,
-  );
+  await bench('analytics: full-manuscript word count', () => {
+    totalWordCount(fixture);
+  }).run(BENCH_OPTS);
 
-  bench(
-    'proforge: intake text assembly (no AI)',
-    () => {
-      // Mirrors services/proForge/pipelineAgents/proofAgent.ts intake assembly.
-      fixture.manuscript.map((s) => `### ${s.title}\n${s.content ?? ''}`).join('\n\n');
-    },
-    BENCH_OPTS,
-  );
+  await bench('proforge: intake text assembly (no AI)', () => {
+    // Mirrors services/proForge/pipelineAgents/proofAgent.ts intake assembly.
+    fixture.manuscript.map((s) => `### ${s.title}\n${s.content ?? ''}`).join('\n\n');
+  }).run(BENCH_OPTS);
 });
