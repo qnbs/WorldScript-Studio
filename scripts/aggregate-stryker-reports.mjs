@@ -30,6 +30,28 @@ function readMetric(report, metricName) {
   return value;
 }
 
+function validateMutationMutantEvidence(mutant, reportPath) {
+  if (!mutant || typeof mutant !== 'object') {
+    throw new Error(`Stryker report has an invalid mutant record: ${reportPath}`);
+  }
+  // QNBS-v3: A zero-test survivor is an empty per-test filter result, not valid mutation evidence.
+  if (mutant.status !== 'Survived') return;
+  if (Number.isInteger(mutant.testsCompleted) && mutant.testsCompleted >= 1) return;
+  throw new Error(`Stryker report has a survived mutant with no completed tests: ${reportPath}`);
+}
+
+function validateMutationFileEvidence(file, reportPath) {
+  if (!file || !Array.isArray(file.mutants)) {
+    throw new Error(`Stryker report has an invalid mutants list: ${reportPath}`);
+  }
+  for (const mutant of file.mutants) validateMutationMutantEvidence(mutant, reportPath);
+}
+
+function validateMutationExecutionEvidence(report, reportPath) {
+  if (!report.files || typeof report.files !== 'object') return;
+  for (const file of Object.values(report.files)) validateMutationFileEvidence(file, reportPath);
+}
+
 function deriveMetricsFromMutants(report, reportPath) {
   if (!report.files || typeof report.files !== 'object') {
     throw new Error(`Stryker report has neither metrics nor files: ${reportPath}`);
@@ -77,6 +99,7 @@ function deriveMetricsFromMutants(report, reportPath) {
 }
 
 function readReportMetrics(report, reportPath) {
+  validateMutationExecutionEvidence(report, reportPath);
   if (report.metrics && typeof report.metrics === 'object') {
     return Object.fromEntries(metricNames.map((name) => [name, readMetric(report, name)]));
   }
