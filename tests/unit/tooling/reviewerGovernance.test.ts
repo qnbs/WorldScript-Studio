@@ -8,8 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   hasEnabledAutoReview,
+  hasIncludedPathFilterTarget,
   hasValidPathInstructionShape,
   hasValidReviewerRole,
+  isCanonicalReviewerConfigPath,
   isForbiddenDynamicKey,
   isRegularReviewerConfigFile,
   normalizeReviewerId,
@@ -33,6 +35,19 @@ describe('reviewer governance validators', () => {
     expect(hasValidPathInstructionShape({ path: '   ', instructions: 'why' })).toBe(false);
     expect(hasValidPathInstructionShape({ path: 'services/**', instructions: 'why' })).toBe(true);
     expect(hasValidPathInstructionShape({ instructions: 'why' })).toBe(false);
+  });
+
+  it('rejects repository-wide negated path filters, including the equivalent broad glob', () => {
+    expect(hasIncludedPathFilterTarget(['!**'], ['README.md', 'src/index.ts'])).toBe(false);
+    expect(hasIncludedPathFilterTarget(['!**/*'], ['README.md', 'src/index.ts'])).toBe(false);
+    expect(hasIncludedPathFilterTarget(['!coverage/**'], ['README.md', 'src/index.ts'])).toBe(true);
+  });
+
+  it('binds repository config paths to their canonical reviewer', () => {
+    expect(isCanonicalReviewerConfigPath('.deepsource.toml', 'deepsource')).toBe(true);
+    expect(isCanonicalReviewerConfigPath('codecov.yml', 'codecov')).toBe(true);
+    expect(isCanonicalReviewerConfigPath('.deepsource.toml', 'codecov')).toBe(false);
+    expect(isCanonicalReviewerConfigPath('codecov.yml', 'deepsource')).toBe(false);
   });
 
   it('requires typed non-empty reviewer roles and boolean CodeRabbit auto-review', () => {

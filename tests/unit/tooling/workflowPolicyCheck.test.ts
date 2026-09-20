@@ -48,11 +48,17 @@ jobs:
       - name: Validate PR reviewer governance as untrusted data
         env:
           PR_NUMBER: ${githubExpression('github.event.pull_request.number')}
+          PR_BASE_SHA: ${githubExpression('github.event.pull_request.base.sha')}
           PR_HEAD_SHA: ${githubExpression('github.event.pull_request.head.sha')}
         run: |
           set -euo pipefail
           git fetch --no-tags origin \\
             "refs/pull/\${PR_NUMBER}/head:refs/remotes/origin/pr/\${PR_NUMBER}"
+          git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1
+          SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk '$1 == "120000" { print $0 }')"
+          if [ -n "$SYMLINKS" ]; then
+            exit 1
+          fi
           git archive "refs/remotes/origin/pr/\${PR_NUMBER}" | tar -x -C "$PR_ROOT"
 ${canonicalWorkflowPolicyCommand}          REVIEWER_CONFIG_ROOT="$PR_ROOT" \\
             REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \\
@@ -215,6 +221,10 @@ jobs:
     const failures = checkTrustWorkflow(
       canonicalTrustWorkflow
         .replace(
+          `PR_BASE_SHA: ${githubExpression('github.event.pull_request.base.sha')}`,
+          'PR_BASE_SHA: fixed-base-sha',
+        )
+        .replace(
           `PR_NUMBER: ${githubExpression('github.event.pull_request.number')}`,
           'PR_NUMBER: 1',
         )
@@ -225,12 +235,41 @@ jobs:
     );
     expect(
       failures.filter((failure) => failure.message.includes('exact pull_request event expression')),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
+  });
+
+  it('rejects a custom shell on the trusted validation step', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace('        run: |', '        shell: cat {0}\n        run: |'),
+    );
+    expect(
+      failures.some((failure) => failure.message.includes('step must not override shell')),
+    ).toBe(true);
   });
 
   it('requires the trusted base workflow-policy checker command', () => {
     const failures = checkTrustWorkflow(
       canonicalTrustWorkflow.replace(canonicalWorkflowPolicyCommand, ''),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+  });
+
+  it('requires checker implementations to remain identical to the trusted base', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        '          git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1\n',
+        '',
+      ),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+  });
+
+  it('requires the trusted symlink scan before archive extraction', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        '          SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk \'$1 == "120000" { print $0 }\')"\n',
+        '',
+      ),
     );
     expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
   });
@@ -987,6 +1026,10 @@ describe('checkAllWorkflows', () => {
         file: 'reviewer-governance-trust.yml',
         message: 'required reviewer governance trust workflow must remain present',
       },
+      {
+        file: 'ci.yml',
+        message: 'canonical CI workflow must remain present for reviewer governance',
+      },
     ]);
   });
 
@@ -1040,7 +1083,7 @@ describe('checkAllWorkflows', () => {
         throw new Error('symlink not allowed under .github/actions: /repo/.github/actions/setup');
       },
     });
-    expect(failures).toHaveLength(2);
+    expect(failures).toHaveLength(3);
     expect(failures.some((failure) => failure.file === 'reviewer-governance-trust.yml')).toBe(true);
     expect(failures.some((failure) => /symlink/i.test(failure.message))).toBe(true);
   });

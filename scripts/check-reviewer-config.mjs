@@ -31,6 +31,19 @@ const approvedReviewerConfigPaths = new Set([
   '.gitguardian.yaml',
   '.github/workflows/codeql.yml',
 ]);
+const canonicalReviewerByConfigPath = new Map([
+  ['.coderabbit.yaml', 'coderabbit'],
+  ['cubic.yaml', 'cubic'],
+  ['.codeant/instructions.json', 'codeant'],
+  ['.codeant/review.json', 'codeant'],
+  ['.codescene/code-health-rules.json', 'codescene'],
+  ['.deepsource.toml', 'deepsource'],
+  ['codecov.yml', 'codecov'],
+  ['src-tauri/osv-scanner.toml', 'osv'],
+  ['.pr_agent.toml', 'qodo'],
+  ['.gitguardian.yaml', 'gitguardian'],
+  ['.github/workflows/codeql.yml', 'codeql'],
+]);
 const requiredFinishingTouches = [
   'docstrings',
   'unit_tests',
@@ -167,7 +180,7 @@ export function normalizeReviewerId(id) {
   return typeof id === 'string' ? id.trim() : undefined;
 }
 
-function validateReviewerConfig(reviewer, prefix, configs) {
+function validateReviewerConfig(reviewer, prefix, configs, reviewerId) {
   const path = reviewer.repoConfig;
   if (path === null || path === undefined) return;
   if (typeof path !== 'string' || path.startsWith('/')) {
@@ -177,10 +190,18 @@ function validateReviewerConfig(reviewer, prefix, configs) {
   configs.add(path);
   if (!approvedReviewerConfigPaths.has(path))
     fail(prefix + '.repoConfig is not an approved reviewer config path');
+  const canonicalReviewerId = canonicalReviewerByConfigPath.get(path);
+  if (!isCanonicalReviewerConfigPath(path, reviewerId))
+    fail(prefix + `.repoConfig must belong to reviewer ${canonicalReviewerId}`);
   const absolutePath = join(root, path);
   if (!existsSync(absolutePath)) fail(prefix + '.repoConfig does not exist: ' + path);
   else if (!isRegularReviewerConfigFile(absolutePath))
     fail(prefix + '.repoConfig must be a regular file: ' + path);
+}
+
+export function isCanonicalReviewerConfigPath(path, reviewerId) {
+  const canonicalReviewerId = canonicalReviewerByConfigPath.get(path);
+  return canonicalReviewerId === undefined || canonicalReviewerId === reviewerId;
 }
 
 function validateReviewerOwnership(reviewer, prefix) {
@@ -203,7 +224,7 @@ function validateReviewerMutationBoundary(reviewer, prefix) {
 function validateReviewer(reviewer, index, ids, configs) {
   const prefix = registryPath + ': reviewers[' + index + ']';
   if (!validateReviewerShape(reviewer, prefix, ids)) return;
-  validateReviewerConfig(reviewer, prefix, configs);
+  validateReviewerConfig(reviewer, prefix, configs, normalizeReviewerId(reviewer.id));
   validateReviewerOwnership(reviewer, prefix);
   validateReviewerMutationBoundary(reviewer, prefix);
 }
@@ -283,8 +304,11 @@ function validateCodeRabbitPreMergeChecks(reviews) {
 function validateCodeRabbitPathFilters(pathFilters) {
   if (!Array.isArray(pathFilters) || pathFilters.length === 0)
     fail('.coderabbit.yaml: path_filters must be a non-empty array');
-  if (Array.isArray(pathFilters) && pathFilters.includes('!**'))
-    fail('.coderabbit.yaml: path_filters must not exclude the entire repository');
+  if (
+    Array.isArray(pathFilters) &&
+    !hasIncludedPathFilterTarget(pathFilters, listRepositoryFiles())
+  )
+    fail('.coderabbit.yaml: path_filters must leave at least one repository file included');
 }
 
 export function hasValidPathInstructionShape(instruction) {
@@ -365,6 +389,7 @@ function listRepositoryFiles() {
 }
 
 function globToRegExp(pattern) {
+  if (pattern === '**/*') return /^.*$/;
   let expression = '';
   for (let index = 0; index < pattern.length; index += 1) {
     const character = pattern[index];
@@ -380,6 +405,20 @@ function globToRegExp(pattern) {
     }
   }
   return new RegExp('^' + expression + '$');
+}
+
+export function hasIncludedPathFilterTarget(pathFilters, repositoryFiles) {
+  const hasPositiveFilter = pathFilters.some((filter) => !filter.startsWith('!'));
+  return repositoryFiles.some((file) => {
+    let included = !hasPositiveFilter;
+    for (const filter of pathFilters) {
+      const negative = filter.startsWith('!');
+      const pattern = negative ? filter.slice(1) : filter;
+      if (!globToRegExp(pattern).test(file)) continue;
+      included = !negative;
+    }
+    return included;
+  });
 }
 
 function validatePathInstructionTargets(pathInstructions) {

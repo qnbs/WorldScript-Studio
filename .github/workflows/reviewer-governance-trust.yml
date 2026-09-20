@@ -32,6 +32,7 @@ jobs:
       - name: Validate PR reviewer governance as untrusted data
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
@@ -42,6 +43,7 @@ jobs:
             echo "::error::fetched PR ref does not match the event head SHA"
             exit 1
           fi
+          git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1
           SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk '$1 == "120000" { print $0 }')"
           if [ -n "$SYMLINKS" ]; then
             echo "::error::PR archive contains symlinks; refusing to follow untrusted archive links"

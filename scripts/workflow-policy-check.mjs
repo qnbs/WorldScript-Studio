@@ -304,6 +304,13 @@ function validateReviewerGovernanceTrustEnvironment(fileName, validationStep, do
   });
   validateReviewerGovernanceTrustEnvironmentValue({
     fileName,
+    name: 'PR_BASE_SHA',
+    actual: environment?.PR_BASE_SHA,
+    expected: '$' + '{{ github.event.pull_request.base.sha }}',
+    failures,
+  });
+  validateReviewerGovernanceTrustEnvironmentValue({
+    fileName,
     name: 'PR_HEAD_SHA',
     actual: environment?.PR_HEAD_SHA,
     expected: '$' + '{{ github.event.pull_request.head.sha }}',
@@ -326,13 +333,25 @@ function validateReviewerGovernanceTrustEnvironmentValue({
 }
 
 function validateReviewerGovernanceTrustControls(fileName, job, validationStep, failures) {
-  validateReviewerGovernanceTrustNodeControls(fileName, 'job', job, failures);
-  validateReviewerGovernanceTrustNodeControls(fileName, 'step', validationStep, failures);
+  validateReviewerGovernanceTrustNodeControls({
+    fileName,
+    scope: 'job',
+    node: job,
+    failures,
+    fields: ['if', 'continue-on-error'],
+  });
+  validateReviewerGovernanceTrustNodeControls({
+    fileName,
+    scope: 'step',
+    node: validationStep,
+    failures,
+    fields: ['if', 'continue-on-error', 'shell'],
+  });
 }
 
-function validateReviewerGovernanceTrustNodeControls(fileName, scope, node, failures) {
+function validateReviewerGovernanceTrustNodeControls({ fileName, scope, node, failures, fields }) {
   if (!node) return;
-  for (const field of ['if', 'continue-on-error']) {
+  for (const field of fields) {
     if (node.get(field, true) === undefined) continue;
     failures.push({
       file: fileName,
@@ -366,6 +385,10 @@ function hasTrustedReviewerArchiveCommands(run) {
   const requiredCommands = [
     'git fetch --no-tags origin \\',
     `"refs/pull/${prExpression}/head:refs/remotes/origin/pr/${prExpression}"`,
+    'git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1',
+    'SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk \'$1 == "120000" { print $0 }\')"',
+    'if [ -n "$SYMLINKS" ]; then',
+    'exit 1',
     `git archive "refs/remotes/origin/pr/${prExpression}" | tar -x -C "$PR_ROOT"`,
     'WORKFLOW_POLICY_ROOT="$PR_ROOT" \\',
     'node "$GITHUB_WORKSPACE/scripts/workflow-policy-check.mjs"',
@@ -795,17 +818,19 @@ export function checkActionFile(filePath, dependencies = {}) {
 export function checkAllWorkflows(root = projectRoot, dependencies = {}) {
   const workflowFiles =
     dependencies.listWorkflowFiles?.(root) ?? listWorkflowFiles(root, dependencies);
-  const requiredWorkflow = join(root, '.github/workflows/reviewer-governance-trust.yml');
-  const requiredWorkflowFailures = workflowFiles.some(
-    (filePath) => resolve(filePath) === resolve(requiredWorkflow),
-  )
-    ? []
-    : [
-        {
-          file: 'reviewer-governance-trust.yml',
-          message: 'required reviewer governance trust workflow must remain present',
-        },
-      ];
+  const requiredWorkflows = [
+    [
+      'reviewer-governance-trust.yml',
+      'required reviewer governance trust workflow must remain present',
+    ],
+    ['ci.yml', 'canonical CI workflow must remain present for reviewer governance'],
+  ];
+  const requiredWorkflowFailures = requiredWorkflows
+    .filter(([fileName]) => {
+      const requiredWorkflow = join(root, '.github/workflows', fileName);
+      return !workflowFiles.some((filePath) => resolve(filePath) === resolve(requiredWorkflow));
+    })
+    .map(([file, message]) => ({ file, message }));
   // QNBS-v3: fail-closed — a rejected symlink must surface as a failure, never crash the whole check.
   let actionFiles;
   try {
