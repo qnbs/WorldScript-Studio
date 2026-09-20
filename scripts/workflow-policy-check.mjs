@@ -192,6 +192,7 @@ function isPullRequestTargetOnlyTrigger(triggers) {
 function hasRequiredReviewerTrustActivities(targetTrigger) {
   if (!targetTrigger) return false;
   if (typeof targetTrigger !== 'object') return false;
+  if (!Object.keys(targetTrigger).every((key) => key === 'types')) return false;
   const types = targetTrigger.types;
   if (!Array.isArray(types)) return false;
   const requiredTypes = ['opened', 'synchronize', 'reopened', 'ready_for_review', 'edited'];
@@ -224,6 +225,7 @@ function validateReviewerGovernanceTrustExecution(fileName, doc, failures) {
       'Validate PR reviewer governance as untrusted data',
   );
   const run = nodeValue(validationStep?.get?.('run', true), doc);
+  validateReviewerGovernanceTrustCheckout({ fileName, steps, validationStep, doc, failures });
   validateReviewerGovernanceTrustControls(fileName, job, validationStep, failures);
   validateReviewerGovernanceTrustEnvironment(fileName, validationStep, doc, failures);
   if (!hasTrustedReviewerArchiveCommands(run)) {
@@ -231,6 +233,52 @@ function validateReviewerGovernanceTrustExecution(fileName, doc, failures) {
       file: fileName,
       message:
         'reviewer governance trust workflow must validate only an archived PR with trusted base code',
+    });
+  }
+}
+
+function findReviewerGovernanceTrustCheckout(steps, doc) {
+  return steps.findIndex((step) => {
+    const uses = nodeValue(step?.get?.('uses', true), doc);
+    return typeof uses === 'string' && uses.startsWith('actions/checkout@');
+  });
+}
+
+function isTrustedCheckoutBeforeValidation(checkoutIndex, validationIndex) {
+  return checkoutIndex >= 0 && validationIndex >= 0 && checkoutIndex < validationIndex;
+}
+
+function validateReviewerGovernanceTrustCheckout({
+  fileName,
+  steps,
+  validationStep,
+  doc,
+  failures,
+}) {
+  const checkoutIndex = findReviewerGovernanceTrustCheckout(steps, doc);
+  const validationIndex = steps.indexOf(validationStep);
+  if (!isTrustedCheckoutBeforeValidation(checkoutIndex, validationIndex)) {
+    failures.push({
+      file: fileName,
+      message: 'reviewer governance trust must checkout the trusted base before validation',
+    });
+    return;
+  }
+  validateReviewerGovernanceTrustCheckoutOptions({
+    fileName,
+    checkoutStep: steps[checkoutIndex],
+    doc,
+    failures,
+  });
+}
+
+function validateReviewerGovernanceTrustCheckoutOptions({ fileName, checkoutStep, doc, failures }) {
+  const checkoutOptions = nodeValue(checkoutStep?.get?.('with', true), doc);
+  for (const field of ['ref', 'repository']) {
+    if (checkoutOptions?.[field] === undefined) continue;
+    failures.push({
+      file: fileName,
+      message: `reviewer governance trust checkout must not override ${field}`,
     });
   }
 }
@@ -297,7 +345,13 @@ function hasTrustedReviewerArchiveCommands(run) {
     'REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \\',
     'node scripts/check-reviewer-config.mjs',
   ];
-  return requiredCommands.every((command) => lines.includes(command));
+  let previousIndex = -1;
+  for (const command of requiredCommands) {
+    const index = lines.indexOf(command, previousIndex + 1);
+    if (index === -1) return false;
+    previousIndex = index;
+  }
+  return !lines.some((line) => /\b(?:exit|return)\s+0\b|\bcontinue\b/.test(line));
 }
 
 export function checkReviewerGovernanceTrustWorkflow(fileName, doc, failures) {

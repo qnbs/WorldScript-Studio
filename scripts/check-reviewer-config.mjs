@@ -148,15 +148,23 @@ function validateReviewerShape(reviewer, prefix, ids) {
 }
 
 function validateReviewerId(id, prefix, ids) {
-  if (typeof id !== 'string' || id.length === 0) {
-    fail(prefix + '.id must be non-empty');
+  const normalizedId = normalizeReviewerId(id);
+  if (normalizedId === undefined || normalizedId.length === 0) {
+    fail(prefix + '.id must be a non-empty, trimmed string');
     return;
   }
-  if (ids.has(id)) {
+  if (id !== normalizedId) {
+    fail(prefix + '.id must not contain surrounding whitespace');
+  }
+  if (ids.has(normalizedId)) {
     fail(prefix + '.id must be unique');
     return;
   }
-  ids.add(id);
+  ids.add(normalizedId);
+}
+
+export function normalizeReviewerId(id) {
+  return typeof id === 'string' ? id.trim() : undefined;
 }
 
 function validateReviewerConfig(reviewer, prefix, configs) {

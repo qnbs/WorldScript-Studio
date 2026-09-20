@@ -12,6 +12,7 @@ import {
   hasValidReviewerRole,
   isForbiddenDynamicKey,
   isRegularReviewerConfigFile,
+  normalizeReviewerId,
 } from '../../../scripts/check-reviewer-config.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -44,6 +45,13 @@ describe('reviewer governance validators', () => {
     expect(
       hasEnabledAutoReview({ auto_review: { enabled: 'false', auto_incremental_review: true } }),
     ).toBe(false);
+  });
+
+  it('normalizes reviewer IDs without accepting surrounding whitespace as identity', () => {
+    expect(normalizeReviewerId('codeant')).toBe('codeant');
+    expect(normalizeReviewerId(' codeant ')).toBe('codeant');
+    expect(normalizeReviewerId('   ')).toBe('');
+    expect(normalizeReviewerId(null)).toBeUndefined();
   });
 
   it('accepts only regular reviewer configuration files', () => {

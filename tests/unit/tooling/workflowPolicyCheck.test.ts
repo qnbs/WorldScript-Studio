@@ -24,6 +24,12 @@ const checkTrustWorkflow = (yaml: string) => {
   checkReviewerGovernanceTrustWorkflow('reviewer-governance-trust.yml', doc(yaml), failures);
   return failures;
 };
+const trustTriggerWorkflow = (types: string, additionalTrigger = '') => `
+on:
+  pull_request_target:
+    types: [${types}]
+${additionalTrigger ? `${additionalTrigger}\n` : ''}jobs: {}
+`;
 // QNBS-v3: the unescaped `${{ ${expr} }}` form Biome's own autofix suggests is a JS SyntaxError — `\$` escapes the literal dollar so only the inner `${expr}` interpolates.
 const githubExpression = (expression: string) => `\${{ ${expression} }}`;
 const canonicalWorkflowPolicyCommand = `          WORKFLOW_POLICY_ROOT="$PR_ROOT" \\
@@ -38,6 +44,7 @@ permissions:
 jobs:
   reviewer-governance-trust:
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate PR reviewer governance as untrusted data
         env:
           PR_NUMBER: ${githubExpression('github.event.pull_request.number')}
@@ -150,12 +157,21 @@ describe('checkReviewerGovernanceTrustWorkflow', () => {
   });
 
   it('fails when synchronization activity is omitted from the trust workflow', () => {
-    const failures = checkTrustWorkflow(`
-on:
-  pull_request_target:
-    types: [opened, reopened, ready_for_review, edited]
-jobs: {}
-`);
+    const failures = checkTrustWorkflow(
+      trustTriggerWorkflow('opened, reopened, ready_for_review, edited'),
+    );
+    expect(failures.some((failure) => failure.message.includes('pull_request_target-only'))).toBe(
+      true,
+    );
+  });
+
+  it('rejects trigger filters that can suppress the trusted workflow', () => {
+    const failures = checkTrustWorkflow(
+      trustTriggerWorkflow(
+        'opened, synchronize, reopened, ready_for_review, edited',
+        "    branches-ignore: ['**']",
+      ),
+    );
     expect(failures.some((failure) => failure.message.includes('pull_request_target-only'))).toBe(
       true,
     );
@@ -214,6 +230,16 @@ jobs:
   it('requires the trusted base workflow-policy checker command', () => {
     const failures = checkTrustWorkflow(
       canonicalTrustWorkflow.replace(canonicalWorkflowPolicyCommand, ''),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+  });
+
+  it('rejects a successful early exit before ordered trust commands', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        'git fetch --no-tags origin \\\n',
+        'exit 0\n          git fetch --no-tags origin \\\n',
+      ),
     );
     expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
   });

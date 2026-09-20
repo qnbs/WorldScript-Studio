@@ -7,3 +7,5 @@ export function hasValidReviewerRole(role: unknown): boolean;
 export function hasEnabledAutoReview(reviews: unknown): boolean;
 
 export function isRegularReviewerConfigFile(path: string): boolean;
+
+export function normalizeReviewerId(id: unknown): string | undefined;

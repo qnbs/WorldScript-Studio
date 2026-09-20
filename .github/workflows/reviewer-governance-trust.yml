@@ -50,10 +50,6 @@ jobs:
           fi
           PR_ROOT="$(mktemp -d)"
           git archive "refs/remotes/origin/pr/${PR_NUMBER}" | tar -x -C "$PR_ROOT"
-          if [ ! -f scripts/check-reviewer-config.mjs ]; then
-            echo "::notice::reviewer checker is absent on the base ref; the introducing PR is validated by the bootstrap path."
-            exit 0
-          fi
           WORKFLOW_POLICY_ROOT="$PR_ROOT" \
             node "$GITHUB_WORKSPACE/scripts/workflow-policy-check.mjs"
           REVIEWER_CONFIG_ROOT="$PR_ROOT" \
