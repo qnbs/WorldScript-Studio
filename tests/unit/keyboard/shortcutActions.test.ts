@@ -252,6 +252,12 @@ describe('performShortcutAction — save', () => {
     expect(api.dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'status/setSavingStatus', payload: 'saved' }),
     );
+    expect(api.dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'status/addNotification',
+        payload: expect.objectContaining({ type: 'success' }),
+      }),
+    );
   });
 
   it('dispatches error notification when save fails', async () => {
