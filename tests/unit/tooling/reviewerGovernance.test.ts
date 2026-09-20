@@ -21,6 +21,53 @@ const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const reviewerStatusScript = fileURLToPath(
   new URL('../../../scripts/reviewer-status.mjs', import.meta.url),
 );
+const reviewerStatusHappyPathScript = `#!/usr/bin/env node
+const request = process.argv.slice(2).join(' ');
+let response;
+if (request.includes('graphql')) {
+  response = [{
+    data: {
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            nodes: [{
+              id: 'thread-1',
+              isResolved: false,
+              isOutdated: false,
+              path: 'scripts/example.mjs',
+              line: 1,
+              comments: { nodes: [{ databaseId: 42, author: { login: 'reviewer' }, body: 'metadata' }] },
+            }],
+          },
+        },
+        object: {
+          checkSuites: {
+            nodes: [{
+              id: 'suite-1',
+              status: 'QUEUED',
+              conclusion: null,
+              app: { name: 'Renovate', slug: 'renovate' },
+            }],
+          },
+        },
+      },
+    },
+  }];
+} else if (request.includes('/check-runs?')) {
+  response = [{ check_runs: [{ name: 'Provider\\nInjected', status: 'completed', conclusion: 'failure' }] }];
+} else if (request.includes('/status?')) {
+  response = [{ statuses: [{ id: 7, context: 'DeepSource', state: 'success', target_url: 'https://github.com/qnbs/WorldScript-Studio' }] }];
+} else if (request.includes('/issues/779/comments') || request.includes('/pulls/779/reviews')) {
+  response = [];
+} else if (request.includes('/pulls/779/comments')) {
+  response = [{ id: 42, in_reply_to_id: 7, user: { login: 'reviewer' }, path: 'scripts/example.mjs', line: 1 }];
+} else if (request.includes('/pulls/779')) {
+  response = { head: { sha: 'test-head' }, state: 'open', merged: false, base: { ref: 'main' } };
+} else {
+  response = [];
+}
+process.stdout.write(JSON.stringify(response));
+`;
 
 describe('reviewer governance validators', () => {
   it('rejects compound current-provider state keys in every separator/case form', () => {
@@ -98,44 +145,7 @@ describe('reviewer-status CLI validation', () => {
   it('collects commit statuses from paginated status response objects', () => {
     const tempDirectory = mkdtempSync(join(tmpdir(), 'reviewer-status-gh-'));
     const fakeGh = join(tempDirectory, 'gh');
-    writeFileSync(
-      fakeGh,
-      `#!/usr/bin/env node
-const request = process.argv.slice(2).join(' ');
-let response;
-if (request.includes('graphql')) {
-  response = [{
-    data: {
-      repository: {
-        pullRequest: {
-          reviewThreads: {
-            nodes: [{
-              id: 'thread-1',
-              isResolved: false,
-              isOutdated: false,
-              path: 'scripts/example.mjs',
-              line: 1,
-              comments: { nodes: [{ databaseId: 42, author: { login: 'reviewer' }, body: 'metadata' }] },
-            }],
-          },
-        },
-      },
-    },
-  }];
-} else if (request.includes('/check-runs?')) {
-  response = [{ check_runs: [{ name: 'Provider\\nInjected', status: 'completed', conclusion: 'failure' }] }];
-} else if (request.includes('/status?')) {
-  response = [{ statuses: [{ id: 7, context: 'DeepSource', state: 'success', target_url: 'https://github.com/qnbs/WorldScript-Studio' }] }];
-} else if (request.includes('/issues/779/comments') || request.includes('/pulls/779/comments') || request.includes('/pulls/779/reviews')) {
-  response = [];
-} else if (request.includes('/pulls/779')) {
-  response = { head: { sha: 'test-head' }, state: 'open', merged: false, base: { ref: 'main' } };
-} else {
-  response = [];
-}
-process.stdout.write(JSON.stringify(response));
-`,
-    );
+    writeFileSync(fakeGh, reviewerStatusHappyPathScript);
     chmodSync(fakeGh, 0o755);
 
     try {
@@ -148,6 +158,11 @@ process.stdout.write(JSON.stringify(response));
       expect(result.stdout).toContain('commitStatuses total=1');
       expect(result.stdout).toContain('context="DeepSource"');
       expect(result.stdout).toContain('rootCommentId=42');
+      expect(result.stdout).toContain('restCommentId=42');
+      expect(result.stdout).toContain('inReplyTo=7');
+      expect(result.stdout).toContain('checkSuites total=1');
+      expect(result.stdout).toContain('status="QUEUED"');
+      expect(result.stdout).toContain('app="renovate"');
       expect(result.stdout).toContain('checkName="Provider\\nInjected"');
     } finally {
       rmSync(tempDirectory, { recursive: true, force: true });
@@ -166,7 +181,7 @@ const request = process.argv.slice(2).join(' ');
 const stateFile = process.env.REVIEWER_STATUS_STATE_FILE;
 let response;
 if (request.includes('graphql')) {
-  response = [{ data: { repository: { pullRequest: { reviewThreads: { nodes: [] } } } } }];
+  response = [{ data: { repository: { pullRequest: { reviewThreads: { nodes: [] } }, object: { checkSuites: { nodes: [] } } } } }];
 } else if (request.includes('/check-runs?')) {
   response = [{ check_runs: [] }];
 } else if (request.includes('/status?')) {

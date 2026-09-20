@@ -227,6 +227,14 @@ function validateReviewerGovernanceTrustExecution(fileName, doc, failures) {
   const run = nodeValue(validationStep?.get?.('run', true), doc);
   validateReviewerGovernanceTrustCheckout({ fileName, steps, validationStep, doc, failures });
   validateReviewerGovernanceTrustControls(fileName, job, validationStep, failures);
+  validateReviewerGovernanceTrustShellDefaults(fileName, job, doc, failures);
+  validateReviewerGovernanceTrustPreparation({
+    fileName,
+    steps,
+    validationStep,
+    doc,
+    failures,
+  });
   validateReviewerGovernanceTrustEnvironment(fileName, validationStep, doc, failures);
   if (!hasTrustedReviewerArchiveCommands(run)) {
     failures.push({
@@ -235,6 +243,66 @@ function validateReviewerGovernanceTrustExecution(fileName, doc, failures) {
         'reviewer governance trust workflow must validate only an archived PR with trusted base code',
     });
   }
+}
+
+function validateReviewerGovernanceTrustShellDefaults(fileName, job, doc, failures) {
+  for (const [scope, node] of [
+    ['workflow', doc],
+    ['job', job],
+  ]) {
+    const defaults = nodeValue(node?.get?.('defaults', true), doc);
+    if (defaults?.run?.shell === undefined) continue;
+    failures.push({
+      file: fileName,
+      message: `reviewer governance trust ${scope} must not define a run.shell default`,
+    });
+  }
+}
+
+function isCanonicalReviewerGovernanceTrustAction(uses) {
+  return (
+    typeof uses === 'string' &&
+    ['actions/checkout@', 'pnpm/setup@', 'actions/setup-node@'].some((prefix) =>
+      uses.startsWith(prefix),
+    )
+  );
+}
+
+function isCanonicalReviewerGovernanceTrustInstall(step, doc) {
+  return (
+    nodeValue(step?.get?.('name', true), doc) === 'Install trusted base dependencies' &&
+    nodeValue(step?.get?.('run', true), doc) ===
+      'pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile'
+  );
+}
+
+function isCanonicalReviewerGovernanceTrustPreparationStep(step, doc) {
+  return (
+    isCanonicalReviewerGovernanceTrustAction(nodeValue(step?.get?.('uses', true), doc)) ||
+    isCanonicalReviewerGovernanceTrustInstall(step, doc)
+  );
+}
+
+function validateReviewerGovernanceTrustPreparation({
+  fileName,
+  steps,
+  validationStep,
+  doc,
+  failures,
+}) {
+  const validationIndex = steps.indexOf(validationStep);
+  if (validationIndex < 0) return;
+  if (
+    steps
+      .slice(0, validationIndex)
+      .every((step) => isCanonicalReviewerGovernanceTrustPreparationStep(step, doc))
+  )
+    return;
+  failures.push({
+    file: fileName,
+    message:
+      'reviewer governance trust must use only canonical preparation steps before validation',
+  });
 }
 
 function findReviewerGovernanceTrustCheckouts(steps, doc) {
@@ -378,6 +446,18 @@ function hasNoSuccessfulReviewerTrustEscape(lines) {
   return !lines.some((line) => /\b(?:exit|return)\s+0\b|\bcontinue\b/.test(line));
 }
 
+function hasOnlyCanonicalReviewerTrustControlFlow(lines) {
+  const allowed = new Set([
+    'if [ "$FETCHED_HEAD" != "$PR_HEAD_SHA" ]; then',
+    'if [ -n "$SYMLINKS" ]; then',
+    'fi',
+  ]);
+  return !lines.some((line) => {
+    if (!/^(?:if|then|else|elif|fi|for|while|case|esac)\b/.test(line)) return false;
+    return !allowed.has(line);
+  });
+}
+
 function hasTrustedReviewerArchiveCommands(run) {
   if (typeof run !== 'string') return false;
   const lines = run.split(/\r?\n/).map((line) => line.trim());
@@ -399,7 +479,8 @@ function hasTrustedReviewerArchiveCommands(run) {
   return (
     hasTrustedReviewerFailFastPreamble(lines) &&
     hasRequiredCommandsInOrder(lines, requiredCommands) &&
-    hasNoSuccessfulReviewerTrustEscape(lines)
+    hasNoSuccessfulReviewerTrustEscape(lines) &&
+    hasOnlyCanonicalReviewerTrustControlFlow(lines)
   );
 }
 

@@ -79,6 +79,27 @@ function fetchCommitStatuses(path) {
   return pages.flatMap((page) => page?.statuses ?? []);
 }
 
+function fetchCheckSuites(repo, headSha) {
+  const query =
+    'query($owner:String!,$name:String!,$expression:String!,$endCursor:String){repository(owner:$owner,name:$name){object(expression:$expression){... on Commit{checkSuites(first:100,after:$endCursor){nodes{id status conclusion app{name slug}} pageInfo{hasNextPage endCursor}}}}}}';
+  const pages = ghJson([
+    'graphql',
+    '--paginate',
+    '--slurp',
+    '-f',
+    `owner=${repo.owner}`,
+    '-f',
+    `name=${repo.name}`,
+    '-f',
+    `expression=${headSha}`,
+    '-f',
+    `query=${query}`,
+  ]);
+  return flatPages(pages).flatMap(
+    (page) => page?.data?.repository?.object?.checkSuites?.nodes ?? [],
+  );
+}
+
 function writeLine(line) {
   process.stdout.write(line + '\n');
 }
@@ -148,6 +169,7 @@ try {
   const commitStatuses = fetchCommitStatuses(
     `repos/${repo.fullName}/commits/${pull.head.sha}/status?per_page=100`,
   );
+  const checkSuites = fetchCheckSuites(repo, pull.head.sha);
   const issueComments = fetchPages(`repos/${repo.fullName}/issues/${pr}/comments?per_page=100`);
   const inlineComments = fetchPages(`repos/${repo.fullName}/pulls/${pr}/comments?per_page=100`);
   const reviews = fetchPages(`repos/${repo.fullName}/pulls/${pr}/reviews?per_page=100`);
@@ -190,13 +212,21 @@ try {
       `  commitStatus id=${terminalValue(status.id)} context=${terminalValue(status.context)} state=${terminalValue(status.state)} descriptionAvailable=${Boolean(status.description)} url=${safeUrl(status.target_url)}`,
     );
   }
+  writeLine(`checkSuites total=${checkSuites.length}`);
+  for (const suite of checkSuites) {
+    writeLine(
+      `  checkSuite id=${terminalValue(suite.id)} app=${terminalValue(suite.app?.slug ?? suite.app?.name)} status=${terminalValue(suite.status)} conclusion=${terminalValue(suite.conclusion)}`,
+    );
+  }
   writeLine(
     `reviewThreads total=${threads.length} unresolved=${threads.filter((thread) => !thread.isResolved).length}`,
   );
   for (const thread of threads) {
     const comment = thread.comments?.nodes?.[0] ?? thread.comments?.[0];
+    const rootCommentId = comment?.databaseId;
+    const restComment = inlineComments.find((item) => String(item.id) === String(rootCommentId));
     writeLine(
-      `  inlineThread id=${terminalValue(thread.id)} rootCommentId=${terminalValue(comment?.databaseId)} provider=${terminalValue(comment?.author?.login)} resolved=${thread.isResolved} outdated=${thread.isOutdated} path=${terminalValue(thread.path)} line=${terminalValue(thread.line ?? 'unknown')} bodyAvailable=${Boolean(comment?.body)}`,
+      `  inlineThread id=${terminalValue(thread.id)} rootCommentId=${terminalValue(rootCommentId)} restCommentId=${terminalValue(restComment?.id ?? rootCommentId)} inReplyTo=${terminalValue(restComment?.in_reply_to_id ?? 'none')} provider=${terminalValue(comment?.author?.login)} resolved=${thread.isResolved} outdated=${thread.isOutdated} path=${terminalValue(thread.path)} line=${terminalValue(thread.line ?? 'unknown')} bodyAvailable=${Boolean(comment?.body)}`,
     );
   }
   writeLine(

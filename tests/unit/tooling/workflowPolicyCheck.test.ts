@@ -247,6 +247,30 @@ jobs:
     ).toBe(true);
   });
 
+  it('rejects inherited workflow and job shell defaults', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        'permissions:',
+        'defaults:\n  run:\n    shell: cat {0}\npermissions:',
+      ),
+    );
+    expect(
+      failures.some((failure) => failure.message.includes('workflow must not define a run.shell')),
+    ).toBe(true);
+  });
+
+  it('rejects arbitrary workspace-mutating steps before trust validation', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        '      - name: Validate PR reviewer governance as untrusted data',
+        '      - name: Mutate trusted workspace\n        run: cp attacker.mjs scripts/check-reviewer-config.mjs\n      - name: Validate PR reviewer governance as untrusted data',
+      ),
+    );
+    expect(
+      failures.some((failure) => failure.message.includes('canonical preparation steps')),
+    ).toBe(true);
+  });
+
   it('requires the trusted base workflow-policy checker command', () => {
     const failures = checkTrustWorkflow(
       canonicalTrustWorkflow.replace(canonicalWorkflowPolicyCommand, ''),
@@ -299,6 +323,21 @@ jobs:
         'git fetch --no-tags origin \\\n',
         'exit 0\n          git fetch --no-tags origin \\\n',
       ),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+  });
+
+  it('rejects control-flow wrappers around the trusted commands', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow
+        .replace(
+          '          git fetch --no-tags origin \\\n',
+          '          if false; then\n          git fetch --no-tags origin \\\n',
+        )
+        .replace(
+          '            node scripts/check-reviewer-config.mjs\n',
+          '            node scripts/check-reviewer-config.mjs\n          fi\n',
+        ),
     );
     expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
   });
