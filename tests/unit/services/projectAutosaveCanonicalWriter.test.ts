@@ -5,7 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectData } from '../../../features/project/projectState';
 import { getPersistedProjectPayload } from '../../../services/appBootstrap';
 import { APP_DATA_STORE } from '../../../services/dbConstants';
-import { saveAutosaveSnapshotCanonical } from '../../../services/projectAutosaveCanonicalWriter';
+import type { CanonicalAutosaveResult } from '../../../services/projectAutosaveCanonicalWriter';
+import {
+  assertCanonicalAutosaveSucceeded,
+  saveAutosaveSnapshotCanonical,
+} from '../../../services/projectAutosaveCanonicalWriter';
 import { _resetDbForTest } from '../../../services/storage';
 import type {
   CanonicalProjectAdmission,
@@ -165,6 +169,17 @@ function makeScriptedAuthority(input: {
 }
 
 describe('saveAutosaveSnapshotCanonical', () => {
+  it.each([
+    { status: 'REFUSED', reason: 'FUTURE' },
+    { status: 'CONFLICT' },
+    { status: 'VERIFICATION_FAILED', reason: 'round-trip failed' },
+    { status: 'MALFORMED_SOURCE', reason: 'invalid carrier' },
+  ] satisfies CanonicalAutosaveResult[])('rejects non-committing result %o', (result) => {
+    expect(() => assertCanonicalAutosaveSucceeded(result)).toThrow(
+      `Canonical autosave did not commit (${result.status})`,
+    );
+  });
+
   it('ABSENT: atomically creates the canonical CURRENT record in the browser { data } envelope', async () => {
     const authority = new IdbProjectCanonicalAuthority();
 

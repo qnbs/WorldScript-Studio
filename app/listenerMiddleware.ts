@@ -25,7 +25,7 @@ import {
 } from '../services/duckdb/duckdbListenerLoader';
 import { isFactoryResetInProgress } from '../services/factoryResetService';
 import { logger } from '../services/logger';
-import { saveEnvelopeFromProjectData } from '../services/storageBackend';
+import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersistence';
 import { storageService } from '../services/storageService';
 import type { Character, StorySection, World } from '../types';
 import { isAnalyticsPersistenceAllowed } from './analyticsGate';
@@ -221,10 +221,8 @@ addDebouncedListener(
         },
       };
 
-      const projectDataToSave = saveEnvelopeFromProjectData(enriched);
-
       try {
-        const serialized = JSON.stringify(projectDataToSave);
+        const serialized = JSON.stringify(enriched);
         if (serialized.length > 5 * 1024 * 1024) {
           logger.warn(
             `Auto-save: Project size is ${(serialized.length / 1024 / 1024).toFixed(1)} MB. Consider exporting and archiving.`,
@@ -242,7 +240,7 @@ addDebouncedListener(
       }
       // QNBS-v3 (#332): skip stale indexing after a newer project snapshot supersedes this save.
       const projectSaveResult = await projectPersistenceCoordinator.enqueue(() =>
-        storageService.saveProject(projectDataToSave),
+        persistProjectAutosaveSnapshot(enriched),
       );
       if (projectSaveResult.superseded) return;
 
