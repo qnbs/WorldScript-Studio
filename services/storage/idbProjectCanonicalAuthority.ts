@@ -19,11 +19,11 @@
  *
  * This is the IDB-specific backend adapter services/projectDocumentWriteback.ts's own module doc
  * anticipated: it re-reads the current raw carrier, calls commitOwnedProjectEdit, and persists the
- * result inside one atomic IDB operation. It is NOT yet wired into the production autosave path
- * (app/listenerMiddleware.ts) -- a later slice (#553 Phase D3) bridges the full-snapshot
- * ProjectData autosave input into an OwnedProjectEdit and routes it through
- * commitCanonicalProjectEdit. The existing (non-fenced) saveSlice/saveProject path is untouched by
- * this module and keeps working exactly as before.
+ * result inside one atomic IDB operation. The production web/PWA autosave, lifecycle flush, and
+ * manual-save paths now reach this authority through services/projectAutosavePersistence.ts and
+ * the full-snapshot autosave bridge. Tauri intentionally remains on its existing filesystem
+ * backend until that backend has an equivalent admitted generation-fenced writer; the legacy
+ * saveSlice/saveProject path remains available for that desktop boundary.
  *
  * commitLegacyToV1Migration (#553 Phase D2) durably commits the contract's §2.4 LEGACY_TO_V1 step
  * (recognize -> verify against PROJECT_SCHEMA_V1's field set -> stamp schemaVersion -> revalidate)
