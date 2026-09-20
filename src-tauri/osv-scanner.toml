@@ -1,6 +1,6 @@
 # osv-scanner ignore list for src-tauri/Cargo.lock + pnpm-lock.yaml
 # All entries have been evaluated and accepted by the maintainer.
-# Reviewed: 2026-05-17 (Rust) / 2026-09-19 (npm)
+# Reviewed: 2026-09-20 (Rust) / 2026-09-19 (npm)
 
 # ─── GTK3 Rust bindings (Linux WebKit stack) ────────────────────────────────
 # webkit2gtk 2.0.2 (required by wry 0.55.x / Tauri 2.x for Linux) depends on
@@ -10,55 +10,11 @@
 # breaking change in Tauri's Linux WebView stack (webkit2gtk → webkit2gtk-4.1).
 # These crates only affect Linux desktop builds; the PWA is unaffected.
 
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0411"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "gdkwayland-sys 0.18.x: unmaintained GTK3 Wayland sys binding; no fix available without upgrading WebKit stack on Linux"
+## RUSTSEC-2024-0411..0420 were removed on 2026-09-20 after the exact CI
+## OSV invocation reported them as unused ignores against all three lockfiles.
+## The GTK3 crates remain in Cargo.lock, but the current scanner no longer
+## matches those advisory IDs. RUSTSEC-2024-0429 below remains active.
 
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0412"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "gdk 0.18.x: unmaintained GTK3 Rust binding; no fix available without upgrading WebKit stack on Linux"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0413"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "atk 0.18.x: unmaintained GTK3 accessibility binding; no fix available without upgrading WebKit stack on Linux"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0414"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "gdkx11-sys 0.18.x: unmaintained GTK3 X11 sys binding; no fix available without upgrading WebKit stack on Linux"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0415"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "gtk 0.18.x: unmaintained GTK3 Rust binding; no fix available without upgrading WebKit stack on Linux"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0416"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "atk-sys 0.18.x: unmaintained GTK3 accessibility sys binding; no fix available without upgrading WebKit stack on Linux"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0417"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "gdkx11 0.18.x: unmaintained GTK3 X11 Rust binding; no fix available without upgrading WebKit stack on Linux"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0418"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "gdk-sys 0.18.x: unmaintained GTK3 sys binding; no fix available without upgrading WebKit stack on Linux"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0419"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "gtk3-macros 0.18.x: unmaintained GTK3 macro crate; no fix available without upgrading WebKit stack on Linux"
-
-[[IgnoredVulns]]
-id = "RUSTSEC-2024-0420"
-ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "gtk-sys 0.18.x: unmaintained GTK3 sys binding; no fix available without upgrading WebKit stack on Linux"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0429"
