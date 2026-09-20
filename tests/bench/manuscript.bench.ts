@@ -71,32 +71,41 @@ const warmState: UndoableProjectState = (() => {
 
 const BENCH_OPTS = { time: 250, warmupTime: 100, warmupIterations: 3 } as const;
 
+// QNBS-v3: consume each measured result so an optimizing runtime cannot erase the benchmarked workload as dead code.
+function consumeBenchmarkResult<T>(result: T): void {
+  if (result === undefined) {
+    throw new Error('Benchmark result must be observable');
+  }
+}
+
 // QNBS-v3: Vitest 5 exposes benchmark registration through the test context; run options preserve the measured budgets.
 test('large manuscript (~120k words) — main-thread hot paths', async ({ bench }) => {
   // Each iteration is independent: it starts from the same warm (history-full) state and applies one
   // edit. This isolates the per-keystroke cost (immer produce + redux-undo past push, capped at 100).
   await bench('typing: updateManuscriptSection through redux-undo (steady state)', () => {
-    undoableProjectReducer(warmState, editAction());
+    consumeBenchmarkResult(undoableProjectReducer(warmState, editAction()));
   }).run(BENCH_OPTS);
 
   await bench('undo: ActionCreators.undo() from full history', () => {
-    undoableProjectReducer(warmState, ActionCreators.undo());
+    consumeBenchmarkResult(undoableProjectReducer(warmState, ActionCreators.undo()));
   }).run(BENCH_OPTS);
 
   await bench('save: JSON.stringify(project) — IDB persist payload', () => {
-    JSON.stringify(fixture);
+    consumeBenchmarkResult(JSON.stringify(fixture));
   }).run(BENCH_OPTS);
 
   await bench('snapshot: structuredClone(project) — per-keystroke snapshot cost', () => {
-    structuredClone(fixture);
+    consumeBenchmarkResult(structuredClone(fixture));
   }).run(BENCH_OPTS);
 
   await bench('analytics: full-manuscript word count', () => {
-    totalWordCount(fixture);
+    consumeBenchmarkResult(totalWordCount(fixture));
   }).run(BENCH_OPTS);
 
   await bench('proforge: intake text assembly (no AI)', () => {
     // Mirrors services/proForge/pipelineAgents/proofAgent.ts intake assembly.
-    fixture.manuscript.map((s) => `### ${s.title}\n${s.content ?? ''}`).join('\n\n');
+    consumeBenchmarkResult(
+      fixture.manuscript.map((s) => `### ${s.title}\n${s.content ?? ''}`).join('\n\n'),
+    );
   }).run(BENCH_OPTS);
 });
