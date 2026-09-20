@@ -156,7 +156,11 @@ const COMPRESS_THRESHOLD = 10_240;
 const LZ_PREFIX = '\x00lz1\x00';
 
 export function compressData<T>(data: T): string {
-  const json = JSON.stringify(data);
+  return compressJsonText(JSON.stringify(data));
+}
+
+/** Compresses already-serialized JSON without parsing or reserializing its raw tokens. */
+export function compressJsonText(json: string): string {
   if (json.length < COMPRESS_THRESHOLD) return json;
   return LZ_PREFIX + LZString.compressToUTF16(json);
 }

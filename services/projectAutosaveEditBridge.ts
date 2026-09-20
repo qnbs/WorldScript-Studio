@@ -1,5 +1,6 @@
 import { entityStateToCoreArray } from '../features/project/coreBoundaryAdapter';
 import type { ProjectData } from '../features/project/projectState';
+import type { StoryProject } from '../types';
 import {
   type CanonicalProjectRawText,
   type EntityCollectionEdit,
@@ -108,7 +109,7 @@ function isDefinedEntry([, value]: readonly [string, unknown]): boolean {
  * content.
  */
 export function buildAutosaveOwnedProjectEdit(
-  newData: ProjectData,
+  newData: ProjectData | StoryProject,
   currentRaw: CanonicalProjectRawText,
 ): OwnedProjectEdit {
   const { characters, worlds, ...rest } = newData;
@@ -117,8 +118,10 @@ export function buildAutosaveOwnedProjectEdit(
     Object.entries(rest).filter(([key, value]) => key !== 'schemaVersion' && value !== undefined),
   );
   const parsedCurrent: unknown = parseCanonicalRawPreservingUnsafeIntegers(currentRaw);
-  const newCharacters = entityStateToCoreArray(characters, 'characters');
-  const newWorlds = entityStateToCoreArray(worlds, 'worlds');
+  const newCharacters = Array.isArray(characters)
+    ? characters
+    : entityStateToCoreArray(characters, 'characters');
+  const newWorlds = Array.isArray(worlds) ? worlds : entityStateToCoreArray(worlds, 'worlds');
   return {
     fields,
     collections: {

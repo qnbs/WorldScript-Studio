@@ -58,7 +58,7 @@ vi.mock('../../../../services/i18n/staticTranslate', () => ({
 }));
 
 import { appStoreRef } from '../../../../app/storeRef';
-import { compressData, decompressData } from '../../../../services/fs/fsCore';
+import { compressData, decompressData, decompressJsonText } from '../../../../services/fs/fsCore';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 
@@ -207,6 +207,26 @@ describe('FsProjectStore — projects', () => {
       fake.text.get('/app/projects/p1/project.json') as string,
     );
     expect(persisted['schemaVersion']).toBe(1);
+  });
+
+  // QNBS-v3 (#553): the Tauri filesystem writer must preserve opaque project data and exact raw numeric tokens when editing a CURRENT carrier.
+  it('updates a current filesystem project through raw-carrier writeback', async () => {
+    const source =
+      '{"schemaVersion":1,"id":"p1","title":"Original","logline":"A tale","manuscript":[],"characters":[{"id":"c1","name":"Ada","opaqueNumber":9007199254740993,"opaque":{"keep":true}}],"worlds":[],"opaqueTop":{"numeric":9007199254740993}}';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/p1/project.json', source);
+
+    await store.saveProject({
+      ...project,
+      title: 'Updated',
+      characters: [{ id: 'c1', name: 'Ada updated' }],
+    } as never);
+
+    const savedRaw = decompressJsonText(fake.text.get('/app/projects/p1/project.json') as string);
+    expect(JSON.parse(savedRaw)).toMatchObject({ title: 'Updated' });
+    expect(savedRaw).toContain('"opaqueNumber":9007199254740993');
+    expect(savedRaw).toContain('"opaque":{"keep":true}');
+    expect(savedRaw).toContain('"opaqueTop":{"numeric":9007199254740993}');
   });
 
   it('returns null for a missing project and [] when no projects dir', async () => {

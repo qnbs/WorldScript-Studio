@@ -13,10 +13,15 @@ import {
 import type { Character, StoryProject, World } from '../../types';
 import { getStaticTranslation } from '../i18n/staticTranslate';
 import { logger } from '../logger';
+import { buildAutosaveOwnedProjectEdit } from '../projectAutosaveEditBridge';
 import {
   admitCanonicalProjectDocument,
   type CanonicalProjectSchemaResult,
 } from '../projectDocument';
+import {
+  commitOwnedProjectEdit,
+  computeProjectSourceGeneration,
+} from '../projectDocumentWriteback';
 import { importedProjectJsonSchema, parseImportedProjectJson } from '../projectImportSchema';
 import {
   normalizeSaveProjectInputToStoryProject,
@@ -27,6 +32,7 @@ import {
 import { FsAssetStore } from './assetFsStore';
 import {
   compressData,
+  compressJsonText,
   decompressData,
   decompressJsonText,
   retryFs,
@@ -74,6 +80,19 @@ export class ProjectWritebackError extends Error {
       `Project "${projectId}" was loaded from an unversioned legacy source and cannot be saved until durable migration fencing is available.`,
     );
     this.name = 'ProjectWritebackError';
+  }
+}
+
+// QNBS-v3 (#553): preserve the safe-save error boundary without exposing raw admission or generation details to UI callers.
+export class ProjectCanonicalWritebackError extends Error {
+  constructor(
+    public readonly projectId: string,
+    public readonly detail: string,
+  ) {
+    super(
+      'Project save was refused to preserve the stored data. Reload the project and try again.',
+    );
+    this.name = 'ProjectCanonicalWritebackError';
   }
 }
 
@@ -756,7 +775,46 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
+    const sourceExists = await apis.exists(projectFile);
+    if (!sourceExists) {
+      await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
+    } else {
+      // QNBS-v3 (#553): existing Tauri saves update the admitted raw carrier so opaque fields and exact numeric tokens survive the filesystem boundary.
+      let currentRaw: string;
+      try {
+        currentRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+      } catch (error) {
+        throw new ProjectCanonicalWritebackError(
+          projectId,
+          `filesystem source read failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      const admission = admitCanonicalProjectDocument(currentRaw, storedProjectSchema);
+      if (admission.status !== 'CURRENT' || admission.canonical === null) {
+        throw new ProjectCanonicalWritebackError(
+          projectId,
+          `filesystem source is not admitted: ${admission.source.classification}`,
+        );
+      }
+      const writeback = commitOwnedProjectEdit({
+        expectedGeneration: computeProjectSourceGeneration(admission.canonical.raw),
+        currentRaw: admission.canonical.raw,
+        edit: buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw),
+      });
+      if (writeback.status !== 'COMMITTED') {
+        throw new ProjectCanonicalWritebackError(
+          projectId,
+          `filesystem canonical writeback refused: ${
+            writeback.status === 'CONFLICT'
+              ? 'source generation changed'
+              : writeback.status === 'NOT_ADMITTED_FOR_WRITE'
+                ? writeback.classification
+                : writeback.reason
+          }`,
+        );
+      }
+      await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw));
+    }
     this.clearLegacyPoliciesTargetingProject(projectId);
     // QNBS-v3 (#332): documented best-effort abort — the project data above already saved; a failed marker write only degrades the next cold-boot's project selection, not worth failing this save over.
     await this.setActiveProjectId(projectId).catch((error) => {
