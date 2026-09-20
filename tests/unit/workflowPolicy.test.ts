@@ -27,12 +27,16 @@ const cloudflareWorkflowPath = fileURLToPath(
 const scheduledSecurityWorkflowPath = fileURLToPath(
   new URL('../../.github/workflows/security-scheduled.yml', import.meta.url),
 );
+const reviewerTrustWorkflowPath = fileURLToPath(
+  new URL('../../.github/workflows/reviewer-governance-trust.yml', import.meta.url),
+);
 const tauriManifestPath = fileURLToPath(new URL('../../src-tauri/Cargo.toml', import.meta.url));
 const workflowSource = readFileSync(workflowPath, 'utf8');
 const tauriWorkflowSource = readFileSync(tauriWorkflowPath, 'utf8');
 const setupActionSource = readFileSync(setupActionPath, 'utf8');
 const cloudflareWorkflowSource = readFileSync(cloudflareWorkflowPath, 'utf8');
 const scheduledSecurityWorkflowSource = readFileSync(scheduledSecurityWorkflowPath, 'utf8');
+const reviewerTrustWorkflowSource = readFileSync(reviewerTrustWorkflowPath, 'utf8');
 const packageJson = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
 ) as {
@@ -42,6 +46,18 @@ const tauriManifestSource = readFileSync(tauriManifestPath, 'utf8');
 
 // QNBS-v3: Keep CI path and deployment authority policy executable against the real workflow files.
 describe('CI workflow policy', () => {
+  it('keeps the reviewer trust guard base-owned and data-only', () => {
+    expect(reviewerTrustWorkflowSource).toContain('pull_request_target:');
+    expect(reviewerTrustWorkflowSource).toContain('edited');
+    expect(reviewerTrustWorkflowSource).toContain('git archive');
+    expect(reviewerTrustWorkflowSource).toContain('git ls-tree');
+    expect(reviewerTrustWorkflowSource).toContain('120000');
+    expect(reviewerTrustWorkflowSource).toContain('REVIEWER_CONFIG_ROOT="$PR_ROOT"');
+    expect(reviewerTrustWorkflowSource).toContain('REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE"');
+    expect(reviewerTrustWorkflowSource).not.toContain('pull_request:');
+    expect(reviewerTrustWorkflowSource).not.toContain('pull-requests: write');
+  });
+
   // QNBS-v3: the first package-manager binary must be patched and explicit before repository caching/install.
   it('bootstraps the exact secure pnpm before setup-node cache or install', () => {
     const expectedVersion = packageJson.packageManager.replace('pnpm@', '');

@@ -10,6 +10,8 @@ import {
   checkJobWriteScopeAllowlist,
   checkNeedsGraph,
   checkPublishingBoundary,
+  checkReviewerGovernanceGate,
+  checkReviewerGovernanceTrustWorkflow,
   checkTopLevelPermissions,
   checkWorkflowFile,
   getTriggers,
@@ -17,8 +19,51 @@ import {
 } from '../../../scripts/workflow-policy-check.mjs';
 
 const doc = (yaml: string) => parseDocument(yaml, { uniqueKeys: true });
+const checkTrustWorkflow = (yaml: string) => {
+  const failures: WorkflowPolicyFailure[] = [];
+  checkReviewerGovernanceTrustWorkflow('reviewer-governance-trust.yml', doc(yaml), failures);
+  return failures;
+};
+const trustTriggerWorkflow = (types: string, additionalTrigger = '') => `
+on:
+  pull_request_target:
+    types: [${types}]
+${additionalTrigger ? `${additionalTrigger}\n` : ''}jobs: {}
+`;
 // QNBS-v3: the unescaped `${{ ${expr} }}` form Biome's own autofix suggests is a JS SyntaxError — `\$` escapes the literal dollar so only the inner `${expr}` interpolates.
 const githubExpression = (expression: string) => `\${{ ${expression} }}`;
+const canonicalWorkflowPolicyCommand = `          WORKFLOW_POLICY_ROOT="$PR_ROOT" \\
+            node "$GITHUB_WORKSPACE/scripts/workflow-policy-check.mjs"
+`;
+const canonicalTrustWorkflow = `
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+permissions:
+  contents: read
+jobs:
+  reviewer-governance-trust:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate PR reviewer governance as untrusted data
+        env:
+          PR_NUMBER: ${githubExpression('github.event.pull_request.number')}
+          PR_BASE_SHA: ${githubExpression('github.event.pull_request.base.sha')}
+          PR_HEAD_SHA: ${githubExpression('github.event.pull_request.head.sha')}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \\
+            "refs/pull/\${PR_NUMBER}/head:refs/remotes/origin/pr/\${PR_NUMBER}"
+          git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1
+          SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk '$1 == "120000" { print $0 }')"
+          if [ -n "$SYMLINKS" ]; then
+            exit 1
+          fi
+          git archive "refs/remotes/origin/pr/\${PR_NUMBER}" | tar -x -C "$PR_ROOT"
+${canonicalWorkflowPolicyCommand}          REVIEWER_CONFIG_ROOT="$PR_ROOT" \\
+            REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \\
+            node scripts/check-reviewer-config.mjs
+`;
 
 // QNBS-v3: contents:read is the only safe top-level default — every other form is a policy gap.
 describe('checkTopLevelPermissions', () => {
@@ -46,6 +91,255 @@ describe('checkTopLevelPermissions', () => {
     checkTopLevelPermissions('x.yml', doc('jobs: {}\n'), failures);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/missing/);
+  });
+});
+
+describe('checkReviewerGovernanceGate', () => {
+  it('requires the reviewer gate step and trusted checker inputs', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkReviewerGovernanceGate(
+      'ci.yml',
+      doc(`
+permissions:
+  contents: read
+jobs:
+  workflow-policy:
+    steps:
+      - name: Reviewer governance configuration gate
+        env:
+          REVIEWER_CONFIG_ROOT: \${{ github.workspace }}
+        run: |
+          REVIEWER_CONFIG_ROOT="\${{ github.workspace }}" \\
+          REVIEWER_DEPENDENCY_ROOT="$TRUSTED_BASE_WORKSPACE" \\
+          node "$TRUSTED_BASE_WORKSPACE/scripts/check-reviewer-config.mjs"
+`),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it('fails closed when a PR removes the reviewer gate step', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkReviewerGovernanceGate(
+      'ci.yml',
+      doc('jobs:\n  workflow-policy:\n    steps: []\n'),
+      failures,
+    );
+    expect(failures.some((failure) => failure.message.includes('must retain'))).toBe(true);
+  });
+
+  it('rejects redirected, tolerated, conditional, or substring-only gate variants', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkReviewerGovernanceGate(
+      'ci.yml',
+      doc(`
+jobs:
+  workflow-policy:
+    steps:
+      - name: Reviewer governance configuration gate
+        if: \${{ always() }}
+        continue-on-error: true
+        working-directory: /tmp
+        run: node /tmp/check-reviewer-config.mjs
+`),
+      failures,
+    );
+    expect(failures.map((failure) => failure.message).join('\n')).toMatch(
+      /exact trusted base checker|exact PR workspace root|must not override if|must not override continue-on-error|must not override working-directory/,
+    );
+  });
+});
+
+describe('checkReviewerGovernanceTrustWorkflow', () => {
+  it('requires the base-owned pull-request target data-only shape', () => {
+    const failures = checkTrustWorkflow(canonicalTrustWorkflow);
+    expect(failures).toEqual([]);
+  });
+
+  it('fails when the trust workflow is changed into an ordinary pull-request workflow', () => {
+    const failures = checkTrustWorkflow('on: [pull_request]\njobs: {}\n');
+    expect(failures.some((failure) => failure.message.includes('pull_request_target-only'))).toBe(
+      true,
+    );
+  });
+
+  it('fails when synchronization activity is omitted from the trust workflow', () => {
+    const failures = checkTrustWorkflow(
+      trustTriggerWorkflow('opened, reopened, ready_for_review, edited'),
+    );
+    expect(failures.some((failure) => failure.message.includes('pull_request_target-only'))).toBe(
+      true,
+    );
+  });
+
+  it('rejects trigger filters that can suppress the trusted workflow', () => {
+    const failures = checkTrustWorkflow(
+      trustTriggerWorkflow(
+        'opened, synchronize, reopened, ready_for_review, edited',
+        "    branches-ignore: ['**']",
+      ),
+    );
+    expect(failures.some((failure) => failure.message.includes('pull_request_target-only'))).toBe(
+      true,
+    );
+  });
+
+  it('rejects inert trust commands and neutralizing execution controls', () => {
+    const failures = checkTrustWorkflow(`
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+jobs:
+  reviewer-governance-trust:
+    if: false
+    steps:
+      - name: Validate PR reviewer governance as untrusted data
+        if: false
+        continue-on-error: true
+        run: |
+          echo "git fetch --no-tags origin"
+          echo 'git archive "refs/remotes/origin/pr/\${PR_NUMBER}" | tar -x -C "$PR_ROOT"'
+          echo 'REVIEWER_CONFIG_ROOT="$PR_ROOT"'
+          echo 'REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE"'
+          echo 'node scripts/check-reviewer-config.mjs'
+`);
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+    expect(
+      failures.some((failure) => failure.message.includes('trust job must not override if')),
+    ).toBe(true);
+    expect(
+      failures.some((failure) => failure.message.includes('trust step must not override if')),
+    ).toBe(true);
+    expect(
+      failures.some((failure) =>
+        failure.message.includes('trust step must not override continue-on-error'),
+      ),
+    ).toBe(true);
+  });
+
+  it('requires the trust step to bind the event PR identity exactly', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow
+        .replace(
+          `PR_BASE_SHA: ${githubExpression('github.event.pull_request.base.sha')}`,
+          'PR_BASE_SHA: fixed-base-sha',
+        )
+        .replace(
+          `PR_NUMBER: ${githubExpression('github.event.pull_request.number')}`,
+          'PR_NUMBER: 1',
+        )
+        .replace(
+          `PR_HEAD_SHA: ${githubExpression('github.event.pull_request.head.sha')}`,
+          'PR_HEAD_SHA: fixed-sha',
+        ),
+    );
+    expect(
+      failures.filter((failure) => failure.message.includes('exact pull_request event expression')),
+    ).toHaveLength(3);
+  });
+
+  it('rejects a custom shell on the trusted validation step', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace('        run: |', '        shell: cat {0}\n        run: |'),
+    );
+    expect(
+      failures.some((failure) => failure.message.includes('step must not override shell')),
+    ).toBe(true);
+  });
+
+  it('rejects inherited workflow and job shell defaults', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        'permissions:',
+        'defaults:\n  run:\n    shell: cat {0}\npermissions:',
+      ),
+    );
+    expect(
+      failures.some((failure) => failure.message.includes('workflow must not define a run.shell')),
+    ).toBe(true);
+  });
+
+  it('rejects arbitrary workspace-mutating steps before trust validation', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        '      - name: Validate PR reviewer governance as untrusted data',
+        '      - name: Mutate trusted workspace\n        run: cp attacker.mjs scripts/check-reviewer-config.mjs\n      - name: Validate PR reviewer governance as untrusted data',
+      ),
+    );
+    expect(
+      failures.some((failure) => failure.message.includes('canonical preparation steps')),
+    ).toBe(true);
+  });
+
+  it('requires the trusted base workflow-policy checker command', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(canonicalWorkflowPolicyCommand, ''),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+  });
+
+  it('requires checker implementations to remain identical to the trusted base', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        '          git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1\n',
+        '',
+      ),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+  });
+
+  it('requires the trusted symlink scan before archive extraction', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        '          SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk \'$1 == "120000" { print $0 }\')"\n',
+        '',
+      ),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+  });
+
+  it('rejects a second checkout in the trusted validation job', () => {
+    const secondCheckout =
+      '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n';
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        '      - name: Validate PR reviewer governance as untrusted data',
+        `${secondCheckout}      - name: Validate PR reviewer governance as untrusted data`,
+      ),
+    );
+    expect(failures.some((failure) => failure.message.includes('exactly one checkout'))).toBe(true);
+  });
+
+  it('requires the trust script to start with fail-fast shell controls', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace('          set -euo pipefail\n', ''),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+  });
+
+  it('rejects a successful early exit before ordered trust commands', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        'git fetch --no-tags origin \\\n',
+        'exit 0\n          git fetch --no-tags origin \\\n',
+      ),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+  });
+
+  it('rejects control-flow wrappers around the trusted commands', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow
+        .replace(
+          '          git fetch --no-tags origin \\\n',
+          '          if false; then\n          git fetch --no-tags origin \\\n',
+        )
+        .replace(
+          '            node scripts/check-reviewer-config.mjs\n',
+          '            node scripts/check-reviewer-config.mjs\n          fi\n',
+        ),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
   });
 });
 
@@ -761,6 +1055,23 @@ describe('listActionFiles', () => {
 });
 
 describe('checkAllWorkflows', () => {
+  it('requires the canonical reviewer governance trust workflow', () => {
+    const failures = checkAllWorkflows('/repo', {
+      listWorkflowFiles: () => [],
+      listActionFiles: () => [],
+    });
+    expect(failures).toEqual([
+      {
+        file: 'reviewer-governance-trust.yml',
+        message: 'required reviewer governance trust workflow must remain present',
+      },
+      {
+        file: 'ci.yml',
+        message: 'canonical CI workflow must remain present for reviewer governance',
+      },
+    ]);
+  });
+
   it('aggregates failures across multiple injected workflow files', () => {
     const files = new Map<string, string>([
       ['/repo/.github/workflows/a.yml', 'jobs: {}\n'],
@@ -775,8 +1086,8 @@ describe('checkAllWorkflows', () => {
         return content;
       },
     });
-    expect(failures).toHaveLength(1);
-    expect(failures[0]?.file).toBe('a.yml');
+    expect(failures.some((failure) => failure.file === 'a.yml')).toBe(true);
+    expect(failures.some((failure) => failure.file === 'reviewer-governance-trust.yml')).toBe(true);
   });
 
   it('also aggregates failures from injected composite action files', () => {
@@ -796,9 +1107,11 @@ describe('checkAllWorkflows', () => {
         return content;
       },
     });
-    expect(failures).toHaveLength(1);
-    expect(failures[0]?.file).toBe('action.yml');
-    expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
+    expect(failures.some((failure) => failure.file === 'reviewer-governance-trust.yml')).toBe(true);
+    expect(failures.some((failure) => failure.file === 'action.yml')).toBe(true);
+    expect(failures.find((failure) => failure.file === 'action.yml')?.message).toMatch(
+      /40-hex-char SHA/,
+    );
   });
 
   // QNBS-v3: a thrown symlink rejection must surface as a failure, never crash the whole check.
@@ -809,7 +1122,8 @@ describe('checkAllWorkflows', () => {
         throw new Error('symlink not allowed under .github/actions: /repo/.github/actions/setup');
       },
     });
-    expect(failures).toHaveLength(1);
-    expect(failures[0]?.message).toMatch(/symlink/i);
+    expect(failures).toHaveLength(3);
+    expect(failures.some((failure) => failure.file === 'reviewer-governance-trust.yml')).toBe(true);
+    expect(failures.some((failure) => /symlink/i.test(failure.message))).toBe(true);
   });
 });

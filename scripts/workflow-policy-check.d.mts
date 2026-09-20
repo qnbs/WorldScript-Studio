@@ -87,6 +87,18 @@ export function checkPublishingBoundary(
   failures: WorkflowPolicyFailure[],
 ): void;
 
+export function checkReviewerGovernanceGate(
+  fileName: string,
+  doc: Document,
+  failures: WorkflowPolicyFailure[],
+): void;
+
+export function checkReviewerGovernanceTrustWorkflow(
+  fileName: string,
+  doc: Document,
+  failures: WorkflowPolicyFailure[],
+): void;
+
 export interface WorkflowTriggers {
   workflowDispatch: boolean;
   tagPush: boolean;
