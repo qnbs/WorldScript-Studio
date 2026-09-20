@@ -26,6 +26,30 @@ const checkTrustWorkflow = (yaml: string) => {
 };
 // QNBS-v3: the unescaped `${{ ${expr} }}` form Biome's own autofix suggests is a JS SyntaxError — `\$` escapes the literal dollar so only the inner `${expr}` interpolates.
 const githubExpression = (expression: string) => `\${{ ${expression} }}`;
+const canonicalWorkflowPolicyCommand = `          WORKFLOW_POLICY_ROOT="$PR_ROOT" \\
+            node "$GITHUB_WORKSPACE/scripts/workflow-policy-check.mjs"
+`;
+const canonicalTrustWorkflow = `
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+permissions:
+  contents: read
+jobs:
+  reviewer-governance-trust:
+    steps:
+      - name: Validate PR reviewer governance as untrusted data
+        env:
+          PR_NUMBER: ${githubExpression('github.event.pull_request.number')}
+          PR_HEAD_SHA: ${githubExpression('github.event.pull_request.head.sha')}
+        run: |
+          git fetch --no-tags origin \\
+            "refs/pull/\${PR_NUMBER}/head:refs/remotes/origin/pr/\${PR_NUMBER}"
+          git archive "refs/remotes/origin/pr/\${PR_NUMBER}" | tar -x -C "$PR_ROOT"
+${canonicalWorkflowPolicyCommand}          REVIEWER_CONFIG_ROOT="$PR_ROOT" \\
+            REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \\
+            node scripts/check-reviewer-config.mjs
+`;
 
 // QNBS-v3: contents:read is the only safe top-level default — every other form is a policy gap.
 describe('checkTopLevelPermissions', () => {
@@ -114,24 +138,7 @@ jobs:
 
 describe('checkReviewerGovernanceTrustWorkflow', () => {
   it('requires the base-owned pull-request target data-only shape', () => {
-    const failures = checkTrustWorkflow(`
-on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review, edited]
-permissions:
-  contents: read
-jobs:
-  reviewer-governance-trust:
-    steps:
-      - name: Validate PR reviewer governance as untrusted data
-        run: |
-          git fetch --no-tags origin \\
-            "refs/pull/\${PR_NUMBER}/head:refs/remotes/origin/pr/\${PR_NUMBER}"
-          git archive "refs/remotes/origin/pr/\${PR_NUMBER}" | tar -x -C "$PR_ROOT"
-          REVIEWER_CONFIG_ROOT="$PR_ROOT" \\
-            REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \\
-            node scripts/check-reviewer-config.mjs
-`);
+    const failures = checkTrustWorkflow(canonicalTrustWorkflow);
     expect(failures).toEqual([]);
   });
 
@@ -185,6 +192,30 @@ jobs:
         failure.message.includes('trust step must not override continue-on-error'),
       ),
     ).toBe(true);
+  });
+
+  it('requires the trust step to bind the event PR identity exactly', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow
+        .replace(
+          `PR_NUMBER: ${githubExpression('github.event.pull_request.number')}`,
+          'PR_NUMBER: 1',
+        )
+        .replace(
+          `PR_HEAD_SHA: ${githubExpression('github.event.pull_request.head.sha')}`,
+          'PR_HEAD_SHA: fixed-sha',
+        ),
+    );
+    expect(
+      failures.filter((failure) => failure.message.includes('exact pull_request event expression')),
+    ).toHaveLength(2);
+  });
+
+  it('requires the trusted base workflow-policy checker command', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(canonicalWorkflowPolicyCommand, ''),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
   });
 });
 

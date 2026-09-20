@@ -225,6 +225,7 @@ function validateReviewerGovernanceTrustExecution(fileName, doc, failures) {
   );
   const run = nodeValue(validationStep?.get?.('run', true), doc);
   validateReviewerGovernanceTrustControls(fileName, job, validationStep, failures);
+  validateReviewerGovernanceTrustEnvironment(fileName, validationStep, doc, failures);
   if (!hasTrustedReviewerArchiveCommands(run)) {
     failures.push({
       file: fileName,
@@ -232,6 +233,38 @@ function validateReviewerGovernanceTrustExecution(fileName, doc, failures) {
         'reviewer governance trust workflow must validate only an archived PR with trusted base code',
     });
   }
+}
+
+function validateReviewerGovernanceTrustEnvironment(fileName, validationStep, doc, failures) {
+  const environment = nodeValue(validationStep?.get?.('env', true), doc);
+  validateReviewerGovernanceTrustEnvironmentValue({
+    fileName,
+    name: 'PR_NUMBER',
+    actual: environment?.PR_NUMBER,
+    expected: '$' + '{{ github.event.pull_request.number }}',
+    failures,
+  });
+  validateReviewerGovernanceTrustEnvironmentValue({
+    fileName,
+    name: 'PR_HEAD_SHA',
+    actual: environment?.PR_HEAD_SHA,
+    expected: '$' + '{{ github.event.pull_request.head.sha }}',
+    failures,
+  });
+}
+
+function validateReviewerGovernanceTrustEnvironmentValue({
+  fileName,
+  name,
+  actual,
+  expected,
+  failures,
+}) {
+  if (actual === expected) return;
+  failures.push({
+    file: fileName,
+    message: `reviewer governance trust step must bind ${name} to the exact pull_request event expression`,
+  });
 }
 
 function validateReviewerGovernanceTrustControls(fileName, job, validationStep, failures) {
@@ -258,6 +291,8 @@ function hasTrustedReviewerArchiveCommands(run) {
     'git fetch --no-tags origin \\',
     `"refs/pull/${prExpression}/head:refs/remotes/origin/pr/${prExpression}"`,
     `git archive "refs/remotes/origin/pr/${prExpression}" | tar -x -C "$PR_ROOT"`,
+    'WORKFLOW_POLICY_ROOT="$PR_ROOT" \\',
+    'node "$GITHUB_WORKSPACE/scripts/workflow-policy-check.mjs"',
     'REVIEWER_CONFIG_ROOT="$PR_ROOT" \\',
     'REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \\',
     'node scripts/check-reviewer-config.mjs',
