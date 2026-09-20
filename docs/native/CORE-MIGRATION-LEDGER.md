@@ -29,6 +29,10 @@ scope shifts — it is a living decision record, not a one-time snapshot.
   production web/PWA autosave, lifecycle flush, and manual-save integration is now wired through
   the canonical authority, while the Tauri/filesystem writer and remaining universal ingress/egress
   paths are still incomplete.
+- **Row 9 desktop routing qualification:** Tauri autosave normally uses the existing filesystem
+  writer selected by storageService. If filesystem initialization or legacy-key cleanup fails,
+  storageService retains its existing non-canonical IndexedDB dbService fallback; neither desktop
+  route uses the generation-fenced canonical writer yet.
 - **Wave 2 first slice touches only rows 1-3**, narrowly: project schema, validation, and a
   plaintext (no compression, no atomicity guarantee) fs load/save round-trip. This is deliberately
   the smallest slice that satisfies Wave 2's stated exit criterion ("representative project
