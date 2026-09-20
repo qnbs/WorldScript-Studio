@@ -237,15 +237,23 @@ function validateReviewerGovernanceTrustExecution(fileName, doc, failures) {
   }
 }
 
-function findReviewerGovernanceTrustCheckout(steps, doc) {
-  return steps.findIndex((step) => {
+function findReviewerGovernanceTrustCheckouts(steps, doc) {
+  return steps.flatMap((step, index) => {
     const uses = nodeValue(step?.get?.('uses', true), doc);
-    return typeof uses === 'string' && uses.startsWith('actions/checkout@');
+    return typeof uses === 'string' && uses.startsWith('actions/checkout@')
+      ? [{ index, step }]
+      : [];
   });
 }
 
-function isTrustedCheckoutBeforeValidation(checkoutIndex, validationIndex) {
-  return checkoutIndex >= 0 && validationIndex >= 0 && checkoutIndex < validationIndex;
+function getReviewerGovernanceTrustCheckoutFailure(checkouts, validationIndex) {
+  if (checkouts.length !== 1) {
+    return 'reviewer governance trust must contain exactly one checkout before validation';
+  }
+  if (checkouts[0].index >= validationIndex) {
+    return 'reviewer governance trust must checkout the trusted base before validation';
+  }
+  return undefined;
 }
 
 function validateReviewerGovernanceTrustCheckout({
@@ -255,18 +263,20 @@ function validateReviewerGovernanceTrustCheckout({
   doc,
   failures,
 }) {
-  const checkoutIndex = findReviewerGovernanceTrustCheckout(steps, doc);
+  const checkouts = findReviewerGovernanceTrustCheckouts(steps, doc);
   const validationIndex = steps.indexOf(validationStep);
-  if (!isTrustedCheckoutBeforeValidation(checkoutIndex, validationIndex)) {
+  const checkoutFailure = getReviewerGovernanceTrustCheckoutFailure(checkouts, validationIndex);
+  if (checkoutFailure !== undefined) {
     failures.push({
       file: fileName,
-      message: 'reviewer governance trust must checkout the trusted base before validation',
+      message: checkoutFailure,
     });
     return;
   }
+  const [checkout] = checkouts;
   validateReviewerGovernanceTrustCheckoutOptions({
     fileName,
-    checkoutStep: steps[checkoutIndex],
+    checkoutStep: checkout.step,
     doc,
     failures,
   });
@@ -331,6 +341,24 @@ function validateReviewerGovernanceTrustNodeControls(fileName, scope, node, fail
   }
 }
 
+function hasTrustedReviewerFailFastPreamble(lines) {
+  return lines.find((line) => line.length > 0) === 'set -euo pipefail';
+}
+
+function hasRequiredCommandsInOrder(lines, requiredCommands) {
+  let previousIndex = -1;
+  for (const command of requiredCommands) {
+    const index = lines.indexOf(command, previousIndex + 1);
+    if (index === -1) return false;
+    previousIndex = index;
+  }
+  return true;
+}
+
+function hasNoSuccessfulReviewerTrustEscape(lines) {
+  return !lines.some((line) => /\b(?:exit|return)\s+0\b|\bcontinue\b/.test(line));
+}
+
 function hasTrustedReviewerArchiveCommands(run) {
   if (typeof run !== 'string') return false;
   const lines = run.split(/\r?\n/).map((line) => line.trim());
@@ -345,13 +373,11 @@ function hasTrustedReviewerArchiveCommands(run) {
     'REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE" \\',
     'node scripts/check-reviewer-config.mjs',
   ];
-  let previousIndex = -1;
-  for (const command of requiredCommands) {
-    const index = lines.indexOf(command, previousIndex + 1);
-    if (index === -1) return false;
-    previousIndex = index;
-  }
-  return !lines.some((line) => /\b(?:exit|return)\s+0\b|\bcontinue\b/.test(line));
+  return (
+    hasTrustedReviewerFailFastPreamble(lines) &&
+    hasRequiredCommandsInOrder(lines, requiredCommands) &&
+    hasNoSuccessfulReviewerTrustEscape(lines)
+  );
 }
 
 export function checkReviewerGovernanceTrustWorkflow(fileName, doc, failures) {

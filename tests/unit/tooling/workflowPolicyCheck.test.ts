@@ -50,6 +50,7 @@ jobs:
           PR_NUMBER: ${githubExpression('github.event.pull_request.number')}
           PR_HEAD_SHA: ${githubExpression('github.event.pull_request.head.sha')}
         run: |
+          set -euo pipefail
           git fetch --no-tags origin \\
             "refs/pull/\${PR_NUMBER}/head:refs/remotes/origin/pr/\${PR_NUMBER}"
           git archive "refs/remotes/origin/pr/\${PR_NUMBER}" | tar -x -C "$PR_ROOT"
@@ -230,6 +231,25 @@ jobs:
   it('requires the trusted base workflow-policy checker command', () => {
     const failures = checkTrustWorkflow(
       canonicalTrustWorkflow.replace(canonicalWorkflowPolicyCommand, ''),
+    );
+    expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
+  });
+
+  it('rejects a second checkout in the trusted validation job', () => {
+    const secondCheckout =
+      '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n';
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace(
+        '      - name: Validate PR reviewer governance as untrusted data',
+        `${secondCheckout}      - name: Validate PR reviewer governance as untrusted data`,
+      ),
+    );
+    expect(failures.some((failure) => failure.message.includes('exactly one checkout'))).toBe(true);
+  });
+
+  it('requires the trust script to start with fail-fast shell controls', () => {
+    const failures = checkTrustWorkflow(
+      canonicalTrustWorkflow.replace('          set -euo pipefail\n', ''),
     );
     expect(failures.some((failure) => failure.message.includes('archived PR'))).toBe(true);
   });
