@@ -294,6 +294,24 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.get(sourcePath)).toBe(original);
   });
 
+  it('does not create an auto-snapshot when canonical filesystem save is refused', async () => {
+    const { schemaVersion: _schemaVersion, ...legacyProject } = project;
+    const sourcePath = '/app/projects/p1/project.json';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, compressData(legacyProject));
+    const snapshotSpy = vi.spyOn(store, 'saveSnapshot');
+
+    await expect(
+      store.saveProject({ ...project, title: 'Updated' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+    });
+    await Promise.resolve();
+
+    expect(snapshotSpy).not.toHaveBeenCalled();
+    expect([...fake.text.keys()].some((path) => path.startsWith('/app/snapshots/'))).toBe(false);
+  });
+
   it('fails closed with a stable public error when the current source cannot be read', async () => {
     const sourcePath = '/app/projects/p1/project.json';
     const original = compressData(project);

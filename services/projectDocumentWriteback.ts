@@ -330,6 +330,47 @@ function stringifyPreservingRawNumbers(value: unknown): string {
   return handler.stringify(value);
 }
 
+/** Merges a typed projection over its raw JSON counterpart without discarding opaque descendants. */
+export function mergeRawCarrierValue(value: unknown, rawValue: unknown): unknown {
+  if (typeof value === 'number' && rawValue instanceof RawNumberLiteral) {
+    return Number(rawValue.text) === value ? rawValue : value;
+  }
+
+  if (Array.isArray(value)) {
+    const rawArray = Array.isArray(rawValue) ? rawValue : [];
+    const rawById = new Map<string, unknown>();
+    for (const rawEntry of rawArray) {
+      if (rawEntry === null || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) continue;
+      const rawId = (rawEntry as Record<string, unknown>)['id'];
+      if (typeof rawId === 'string') rawById.set(rawId, rawEntry);
+    }
+
+    return value.map((entry, index) => {
+      if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+        return mergeRawCarrierValue(entry, rawArray[index]);
+      }
+      const entryId = (entry as Record<string, unknown>)['id'];
+      const prior = typeof entryId === 'string' ? rawById.get(entryId) : rawArray[index];
+      return mergeRawCarrierValue(entry, prior);
+    });
+  }
+
+  if (value !== null && typeof value === 'object') {
+    const rawRecord =
+      rawValue !== null && typeof rawValue === 'object' && !Array.isArray(rawValue)
+        ? (rawValue as Record<string, unknown>)
+        : {};
+    const merged = { ...rawRecord };
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (entry === undefined) delete merged[key];
+      else merged[key] = mergeRawCarrierValue(entry, merged[key]);
+    }
+    return merged;
+  }
+
+  return value;
+}
+
 function rawNumberLiteralsEqual(left: unknown, right: unknown): boolean | null {
   if (left instanceof RawNumberLiteral && right instanceof RawNumberLiteral)
     return left.text === right.text;
@@ -427,7 +468,7 @@ function collectFieldReplacements(
     replacements.push({
       start: range.start,
       end: range.end,
-      text: JSON.stringify(fields[member.key]),
+      text: stringifyPreservingRawNumbers(fields[member.key]),
     });
   }
   return { replacements, seenKeys };
@@ -452,7 +493,7 @@ function insertNewTopLevelFields(
   while (/\s/.test(raw[firstMember] ?? '')) firstMember++;
   const isEmptyObject = raw[firstMember] === '}';
   const insertion = newKeys
-    .map((key) => `${JSON.stringify(key)}:${JSON.stringify(fields[key])}`)
+    .map((key) => `${JSON.stringify(key)}:${stringifyPreservingRawNumbers(fields[key])}`)
     .join(',');
   const separator = isEmptyObject ? '' : ',';
   return `${raw.slice(0, objectStart + 1)}${insertion}${separator}${raw.slice(objectStart + 1)}`;

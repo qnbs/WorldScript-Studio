@@ -5,6 +5,7 @@ import {
   type CanonicalProjectRawText,
   type EntityCollectionEdit,
   type EntityLike,
+  mergeRawCarrierValue,
   type OwnedProjectEdit,
   parseCanonicalRawPreservingUnsafeIntegers,
 } from './projectDocumentWriteback';
@@ -210,7 +211,7 @@ function mergeKnownNestedObject(
       const nestedFields = nestedObjectFields[key];
       merged[key] = nestedFields
         ? mergeKnownNestedObject(value[key], merged[key], nestedFields, new Set())
-        : value[key];
+        : mergeRawCarrierValue(value[key], merged[key]);
     } else if (removableFields.has(key)) {
       delete merged[key];
     }
@@ -246,7 +247,9 @@ function mergeKnownEntityFields(
   const rawRecord = isRecord(rawEntity) ? rawEntity : {};
   for (const [key, value] of Object.entries(fields)) {
     const rule = nestedArrayRules[key];
-    if (rule) fields[key] = mergeKnownNestedArray(value, rawRecord[key], rule);
+    fields[key] = rule
+      ? mergeKnownNestedArray(value, rawRecord[key], rule)
+      : mergeRawCarrierValue(value, rawRecord[key]);
   }
   return fields;
 }
@@ -336,8 +339,11 @@ export function buildAutosaveOwnedProjectEdit(
   const { characters, worlds, ...rest } = newData;
   const parsedCurrent: unknown = parseCanonicalRawPreservingUnsafeIntegers(currentRaw);
   // QNBS-v3: schemaVersion and unknown bootstrap-spread properties stay admission/opaque-owned, never autosave-owned.
-  const fields = definedKnownFields(rest, OWNED_TOP_LEVEL_FIELDS);
   const currentRecord = isRecord(parsedCurrent) ? parsedCurrent : null;
+  const fields = mergeKnownEntityFields(
+    currentRecord,
+    definedKnownFields(rest, OWNED_TOP_LEVEL_FIELDS),
+  );
   const removeFields = currentRecord
     ? [...REMOVABLE_TOP_LEVEL_FIELDS].filter(
         (key) => Object.hasOwn(currentRecord, key) && !Object.hasOwn(fields, key),

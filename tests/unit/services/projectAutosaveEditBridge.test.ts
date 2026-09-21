@@ -144,6 +144,36 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     expect(result.raw).toContain(`"opaqueTop":${UNSAFE_INTEGER_LITERAL}`);
   });
 
+  it('preserves opaque descendants of an owned top-level collection', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      manuscript: [
+        {
+          id: 's1',
+          title: 'Original',
+          content: 'old content',
+          pluginNumber: '__UNSAFE_INT__',
+          pluginMeta: { source: 'extension' },
+        },
+      ],
+      characters: [],
+      worlds: [],
+    }).replace('"__UNSAFE_INT__"', UNSAFE_INTEGER_LITERAL);
+    const data = baseProjectData({
+      manuscript: [{ id: 's1', title: 'Updated', content: 'new content' }],
+    });
+
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain(`"pluginNumber":${UNSAFE_INTEGER_LITERAL}`);
+    expect(result.raw).toContain('"pluginMeta":{"source":"extension"}');
+    expect(result.raw).toContain('"title":"Updated"');
+    expect(result.raw).toContain('"content":"new content"');
+  });
+
   it('removes an owned optional field when the full snapshot no longer carries it', () => {
     const currentRaw = currentRawFor({
       schemaVersion: 1,
@@ -238,6 +268,54 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     expect(result.raw).toContain(`"opaqueNumber":${UNSAFE_INTEGER_LITERAL}`);
     expect(result.raw).toContain(`"opaqueLocation":{"source":"plugin"}`);
     expect(result.raw).not.toContain('"population"');
+  });
+
+  it('preserves an unchanged modeled unsafe numeric token in a nested world field', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [],
+      worlds: [
+        {
+          id: 'w1',
+          name: 'Aldoria',
+          locations: [
+            {
+              id: 'loc-1',
+              name: 'Capital',
+              type: 'city',
+              population: '__UNSAFE_INT__',
+            },
+          ],
+        },
+      ],
+    }).replace('"__UNSAFE_INT__"', UNSAFE_INTEGER_LITERAL);
+    const data = baseProjectData({
+      worlds: {
+        ids: ['w1'],
+        entities: {
+          w1: {
+            id: 'w1',
+            name: 'Aldoria',
+            locations: [
+              {
+                id: 'loc-1',
+                name: 'Capital',
+                type: 'city',
+                population: Number(UNSAFE_INTEGER_LITERAL),
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain(`"population":${UNSAFE_INTEGER_LITERAL}`);
+    expect(result.raw).not.toContain('9007199254740992');
   });
 
   it('removes omitted top-level outline data from the current raw carrier', () => {

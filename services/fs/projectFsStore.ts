@@ -829,20 +829,6 @@ export class FsProjectStore extends FsAssetStore {
 
     projectToPersist = withCurrentSchemaVersion(projectToPersist);
 
-    // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
-    if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
-      this.lastAutoSnapshotTime = Date.now();
-      this.saveSnapshot('auto', projectToPersist)
-        .then(() => this.pruneAutoSnapshots())
-        .catch((error) => {
-          // QNBS-v3: auto-snapshot failure stays non-fatal while remaining visible for recovery diagnostics.
-          logger.warn('Auto-snapshot failed (project save itself is unaffected)', {
-            projectId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
-    }
-
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
     if (!(await apis.exists(projectPath))) {
@@ -865,6 +851,19 @@ export class FsProjectStore extends FsAssetStore {
       await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
     } else {
       await this.persistExistingCanonicalProject(apis, projectFile, projectId, projectToPersist);
+    }
+    // QNBS-v3 (#553): capture recovery state only after authoritative replacement succeeds, so a refused save cannot mutate snapshot history.
+    if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
+      this.lastAutoSnapshotTime = Date.now();
+      this.saveSnapshot('auto', projectToPersist)
+        .then(() => this.pruneAutoSnapshots())
+        .catch((error) => {
+          // QNBS-v3: auto-snapshot failure stays non-fatal while remaining visible for recovery diagnostics.
+          logger.warn('Auto-snapshot failed (project save itself is unaffected)', {
+            projectId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
     }
     this.clearLegacyPoliciesTargetingProject(projectId);
     // QNBS-v3 (#332): documented best-effort abort — the project data above already saved; a failed marker write only degrades the next cold-boot's project selection, not worth failing this save over.
