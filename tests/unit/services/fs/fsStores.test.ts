@@ -313,6 +313,29 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.get(sourcePath)).toBe(original);
   });
 
+  it('fails closed with a stable public error when source existence cannot be inspected', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const original = compressData(project);
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, original);
+    const originalExists = fake.apis.exists;
+    fake.apis.exists = (path: string) =>
+      path === sourcePath
+        ? Promise.reject(new Error('source existence unavailable'))
+        : originalExists(path);
+
+    await expect(
+      store.saveProject({ ...project, title: 'Updated' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      message:
+        'Project save was refused to preserve the stored data. Reload the project and try again.',
+      detail: expect.stringContaining('source existence unavailable'),
+    });
+    expect(fake.text.get(sourcePath)).toBe(original);
+  });
+
   it('fails closed with a stable public error when atomic replacement fails', async () => {
     const sourcePath = '/app/projects/p1/project.json';
     const original = compressData(project);

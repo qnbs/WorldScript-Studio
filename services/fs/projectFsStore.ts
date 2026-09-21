@@ -850,7 +850,17 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    const sourceExists = await apis.exists(projectFile);
+    let sourceExists: boolean;
+    try {
+      sourceExists = await apis.exists(projectFile);
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem source inspection failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    // QNBS-v3 (#553): create absent project files directly; preserve the admitted raw carrier when replacing an existing source.
     if (!sourceExists) {
       await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
     } else {
