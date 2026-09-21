@@ -828,6 +828,8 @@
   "error.startup.recoveryUnknown": "La préservation du projet n’a pas pu être confirmée. Rechargez l’application et réessayez.",
   "error.startup.recoveryAlreadyPreserved": "Le projet semble avoir été préservé par une autre tentative de récupération. Rechargez l’application pour continuer.",
   "error.startup.resetWarning": "La réinitialisation de la base de données supprimera tous les projets et réglages locaux.",
+  "error.startup.safeOpen": "Ouvrir WorldScript Studio sans ce projet",
+  "error.startup.safeOpenNotice": "Ce projet reste sur le disque exactement tel quel. Il ne sera ni ouvert ni modifié pendant cette session, de sorte qu'une version compatible pourra encore l'ouvrir plus tard.",
   "copilot.annotationCount": "{{count}} insight for this chapter",
   "copilot.announceClosed": "Copilot IA fermé",
   "copilot.announceOpened": "Copilot IA ouvert",

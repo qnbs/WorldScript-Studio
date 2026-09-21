@@ -828,6 +828,8 @@
   "error.startup.recoveryUnknown": "Project preservation could not be confirmed. Reload and try again.",
   "error.startup.recoveryAlreadyPreserved": "The project appears to have been preserved by another recovery attempt. Reload to continue.",
   "error.startup.resetWarning": "Resetting the database will delete all local projects and settings.",
+  "error.startup.safeOpen": "Ireki WorldScript Studio proiektu hau gabe",
+  "error.startup.safeOpenNotice": "Proiektu hau diskoan dagoen bezala geratzen da. Saio honetan ez da irekiko ez aldatuko, beraz, bertsio bateragarri batek geroago ireki ahal izango du.",
   "copilot.annotationCount": "{{count}} kapitulu honetarako ikuspegia",
   "copilot.announceClosed": "AI Copilot itxita",
   "copilot.announceOpened": "AI Copilot ireki da",

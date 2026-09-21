@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite 8">
   <img src="https://img.shields.io/badge/TypeScript-tsgo_native_preview-3178C6?logo=typescript&logoColor=white" alt="TypeScript native preview (tsgo)">
   <img src="https://img.shields.io/badge/Desktop-Tauri_2-FFC131?logo=tauri&logoColor=black" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/i18n-19_locales-2942_keys-0EA5E9" alt="19 locales — 2942 keys">
+  <img src="https://img.shields.io/badge/i18n-19_locales-2944_keys-0EA5E9" alt="19 locales — 2944 keys">
   <img src="https://img.shields.io/badge/Tests-8147%2B_%2F_617_files-22C55E" alt="8147+ tests / 617 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github&label=CI" alt="CI status">
@@ -666,7 +666,7 @@ Signaling endpoints are configurable; self-hosting guidance is documented in the
 
 ## Internationalization
 
-Shipped UI locales with **2942 i18n keys** across **19 locales**:
+Shipped UI locales with **2944 i18n keys** across **19 locales**:
 
 - German (`de`)
 - English (`en`)
@@ -809,7 +809,7 @@ The normal web PR pipeline is not the complete native release qualification surf
 | PDF | jsPDF | PDF generation |
 | DOCX | `docx` + JSZip | Word-compatible export |
 | PWA | Service Worker + Web App Manifest | Offline shell/installability |
-| i18n | Custom React i18n context | 2942 keys × 19 locales |
+| i18n | Custom React i18n context | 2944 keys × 19 locales |
 | Testing | Vitest 5.x (8147+ tests / 617 files) + Playwright | Unit/integration/E2E |
 | Quality | Biome + tsgo + CodeQL/security tooling | Static and CI gates |
 | Desktop | Tauri 2 | Current native shell |
@@ -1033,7 +1033,7 @@ Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendo
 Current source-synchronized README metrics:
 
 - **8147+ unit tests** across **617 test files**
-- i18n: **2942 keys × 19 locales**
+- i18n: **2944 keys × 19 locales**
 
 CI remains authoritative for actual pass/fail and live coverage.
 

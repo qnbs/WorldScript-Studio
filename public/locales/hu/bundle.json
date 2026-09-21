@@ -828,6 +828,8 @@
   "error.startup.recoveryUnknown": "Project preservation could not be confirmed. Reload and try again.",
   "error.startup.recoveryAlreadyPreserved": "The project appears to have been preserved by another recovery attempt. Reload to continue.",
   "error.startup.resetWarning": "Resetting the database will delete all local projects and settings.",
+  "error.startup.safeOpen": "A WorldScript Studio megnyitása ez a projekt nélkül",
+  "error.startup.safeOpenNotice": "Ez a projekt pontosan úgy marad a lemezen, ahogy van. Ebben a munkamenetben nem nyílik meg és nem módosul, így egy kompatibilis verzió később még megnyithatja.",
   "copilot.annotationCount": "{{count}} betekintést nyújt ehhez a fejezethez",
   "copilot.announceClosed": "Az AI másodpilóta zárva",
   "copilot.announceOpened": "Az AI másodpilóta megnyílt",

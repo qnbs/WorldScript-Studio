@@ -828,6 +828,8 @@
   "error.startup.recoveryUnknown": "Project preservation could not be confirmed. Reload and try again.",
   "error.startup.recoveryAlreadyPreserved": "The project appears to have been preserved by another recovery attempt. Reload to continue.",
   "error.startup.resetWarning": "Resetting the database will delete all local projects and settings.",
+  "error.startup.safeOpen": "Opna WorldScript Studio án þessa verkefnis",
+  "error.startup.safeOpenNotice": "Þetta verkefni helst á disknum nákvæmlega eins og það er. Það verður hvorki opnað né breytt í þessari lotu, þannig að samhæf útgáfa getur enn opnað það síðar.",
   "copilot.annotationCount": "{{count}} innsýn fyrir þennan kafla",
   "copilot.announceClosed": "AI Copilot lokað",
   "copilot.announceOpened": "AI Copilot opnaður",

@@ -711,5 +711,7 @@
   "error.startup.recoveryFailed": "Project preservation failed. The original project was not deleted. Reload and try again.",
   "error.startup.recoveryUnknown": "Project preservation could not be confirmed. Reload and try again.",
   "error.startup.recoveryAlreadyPreserved": "The project appears to have been preserved by another recovery attempt. Reload to continue.",
-  "error.startup.resetWarning": "Resetting the database will delete all local projects and settings."
+  "error.startup.resetWarning": "Resetting the database will delete all local projects and settings.",
+  "error.startup.safeOpen": "Открыть WorldScript Studio без этого проекта",
+  "error.startup.safeOpenNotice": "Этот проект останется на диске в точности как есть. В этом сеансе он не будет открыт или изменён, поэтому совместимая версия сможет открыть его позже."
 }

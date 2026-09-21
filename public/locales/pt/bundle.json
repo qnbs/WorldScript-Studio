@@ -828,6 +828,8 @@
   "error.startup.recoveryUnknown": "Project preservation could not be confirmed. Reload and try again.",
   "error.startup.recoveryAlreadyPreserved": "The project appears to have been preserved by another recovery attempt. Reload to continue.",
   "error.startup.resetWarning": "Resetting the database will delete all local projects and settings.",
+  "error.startup.safeOpen": "Abrir o WorldScript Studio sem este projeto",
+  "error.startup.safeOpenNotice": "Este projeto permanece no disco exatamente como está. Ele não será aberto nem alterado nesta sessão, para que uma versão compatível ainda possa abri-lo mais tarde.",
   "copilot.annotationCount": "{{count}} visão para este capítulo",
   "copilot.announceClosed": "Copiloto AI fechado",
   "copilot.announceOpened": "Copiloto AI aberto",
