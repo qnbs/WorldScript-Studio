@@ -7,6 +7,7 @@ import { importProjectThunk } from '../features/project/thunks/projectManagement
 import { statusActions } from '../features/status/statusSlice';
 import type { PortalExitOptions } from '../hooks/useApp';
 import { useTranslation } from '../hooks/useTranslation';
+import { establishSafeSessionProject, isSafeSessionActive } from '../services/startupSafeSession';
 import { storageService } from '../services/storageService';
 import type { View } from '../types';
 import { Button } from './ui/Button';
@@ -66,17 +67,30 @@ const FeatureHighlight: React.FC<{
   </div>
 );
 
-export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
+export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit: exitPortal }) => {
   const { t, language, setLanguage } = useTranslation();
   const dispatch = useAppDispatch();
   const [view, setView] = useState<PortalView>('main');
   const importFileRef = useRef<HTMLInputElement>(null);
   const [hasExistingSession, setHasExistingSession] = useState(false);
 
+  // QNBS-v3: leaving the portal is the explicit "start or open a project" act in a safe session — the live project is re-keyed to a fresh identity (thunk = synchronous read of the just-replaced state) BEFORE the fence lifts and the portal closes.
+  const onExit: WelcomePortalProps['onExit'] = (exitView, options) => {
+    if (isSafeSessionActive()) {
+      dispatch((thunkDispatch, getState) => {
+        establishSafeSessionProject(getState().project.present?.data.id, (projectId) => {
+          thunkDispatch(projectActions.assignProjectIdentity(projectId));
+        });
+      });
+    }
+    exitPortal(exitView, options);
+  };
+
   useEffect(() => {
     const checkDb = async () => {
       const hasData = await storageService.hasSavedData();
-      setHasExistingSession(hasData);
+      // QNBS-v3: the refused project is not a session to continue — offering "Continue" would open an empty in-memory project under its name.
+      setHasExistingSession(hasData && !isSafeSessionActive());
     };
     checkDb();
   }, []);

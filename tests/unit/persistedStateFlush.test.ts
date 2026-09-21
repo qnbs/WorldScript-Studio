@@ -30,6 +30,11 @@ vi.mock('../../services/factoryResetService', () => ({
 }));
 
 import { flushPersistedState } from '../../app/persistedStateFlush';
+import {
+  _resetSafeSessionForTest,
+  enterSafeSession,
+  establishSafeSessionProject,
+} from '../../services/startupSafeSession';
 
 function buildState(overrides: Partial<RootState> = {}): RootState {
   return {
@@ -56,6 +61,40 @@ describe('flushPersistedState', () => {
     h.persistProjectAutosaveSnapshot.mockClear();
     h.saveSettings.mockClear();
     h.isFactoryResetInProgress.mockReturnValue(false);
+    _resetSafeSessionForTest();
+  });
+
+  // QNBS-v3: quitApp aborts on any flush rejection, so a safe-session fence must skip the project (settings still flush) rather than reject and strand the window.
+  it('skips the fenced safe-session project without rejecting, while settings still flush', async () => {
+    enterSafeSession('refused-dir');
+    const state = buildState();
+
+    await expect(flushPersistedState(state)).resolves.toBeUndefined();
+
+    expect(h.persistProjectAutosaveSnapshot).not.toHaveBeenCalled();
+    expect(h.saveSettings).toHaveBeenCalledWith(state.settings);
+  });
+
+  it('persists only a session-established identity and never the refused one', async () => {
+    enterSafeSession('proj-1');
+    await flushPersistedState(buildState());
+    expect(h.persistProjectAutosaveSnapshot).not.toHaveBeenCalled();
+
+    let minted = '';
+    establishSafeSessionProject('proj-1', (projectId) => {
+      minted = projectId;
+    });
+    await flushPersistedState(buildState());
+    expect(h.persistProjectAutosaveSnapshot).not.toHaveBeenCalled();
+
+    await flushPersistedState(
+      buildState({
+        project: {
+          present: { data: { id: minted, title: 'New' } },
+        } as unknown as RootState['project'],
+      }),
+    );
+    expect(h.persistProjectAutosaveSnapshot).toHaveBeenCalledTimes(1);
   });
 
   // QNBS-v3: window.location.reload() fires visibilitychange before the page actually unloads -- a factory reset's own reload must not race this flush into recreating the just-deleted database.

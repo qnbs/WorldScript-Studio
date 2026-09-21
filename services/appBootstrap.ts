@@ -39,6 +39,16 @@ export async function loadPersistedRootState(): Promise<PersistedRootState | und
   return result;
 }
 
+/**
+ * Safe Open bootstrap: settings only. Deliberately never lists, selects, or reads a project — the
+ * refused project is neither re-admitted nor touched, and the active-project marker is not consulted.
+ * Project persistence stays fenced by `startupSafeSession` until the user explicitly establishes one.
+ */
+export async function loadSafeOpenRootState(): Promise<PersistedRootState | undefined> {
+  const settings = await storageService.loadSettings();
+  return settings ? { settings } : undefined;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

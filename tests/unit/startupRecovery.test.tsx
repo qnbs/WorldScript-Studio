@@ -24,6 +24,8 @@ const { mockRoot, mockReset, mockBackendKind, mockQuarantine, mockCopy, loggerEr
       recoveryUnknown: 'recovery unknown',
       recoveryAlreadyPreserved: 'already preserved',
       resetWarning: 'reset warning',
+      safeOpen: 'safe open',
+      safeOpenNotice: 'safe open notice',
     },
     loggerError: vi.fn(),
   }),
@@ -84,6 +86,7 @@ type RecoveryScreenProps = {
   onReset?: () => Promise<void>;
   onRecover?: () => Promise<void>;
   onRetry?: () => void;
+  onSafeOpen?: () => Promise<void> | void;
 };
 
 function renderedScreenProps(): RecoveryScreenProps {
@@ -179,5 +182,61 @@ describe('startup recovery rendering', () => {
     expect(props.onRecover).toBeUndefined();
     expect(props.onReset).toBeUndefined();
     expect(props.onRetry).toEqual(expect.any(Function));
+  });
+
+  // QNBS-v3: Safe Open is a continuation callback owned by the bootstrap — it must carry the exact refused ID and never touch quarantine, reset, or deletion.
+  it.each([
+    ['FUTURE', 'project-unsupported'],
+    ['UNSUPPORTED_OLDER', 'project-migration-gap'],
+  ] as const)(
+    'offers Safe Open for a %s refusal alongside Retry, without destructive calls',
+    async (classification, failureKind) => {
+      mockBackendKind.mockResolvedValue('filesystem');
+      const onSafeOpen = vi.fn().mockResolvedValue(undefined);
+      await renderProjectInitializationFailure(
+        mockRoot as never,
+        new ProjectLoadError('unsupported-version', 'refused', 'p1', classification),
+        { onSafeOpen },
+      );
+
+      const props = renderedScreenProps();
+      expect(props.failureKind).toBe(failureKind);
+      expect(props.onRetry).toEqual(expect.any(Function));
+      expect(props.onSafeOpen).toEqual(expect.any(Function));
+      expect(props.onRecover).toBeUndefined();
+      expect(props.onReset).toBeUndefined();
+
+      await props.onSafeOpen?.();
+      expect(onSafeOpen).toHaveBeenCalledExactlyOnceWith('p1');
+      expect(mockQuarantine).not.toHaveBeenCalled();
+      expect(mockReset).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not offer Safe Open without a bootstrap continuation, or for corrupt, I/O, and storage failures', async () => {
+    const onSafeOpen = vi.fn();
+
+    mockBackendKind.mockResolvedValue('filesystem');
+    await renderProjectInitializationFailure(
+      mockRoot as never,
+      new ProjectLoadError('unsupported-version', 'future', 'p1', 'FUTURE'),
+    );
+    expect(renderedScreenProps().onSafeOpen).toBeUndefined();
+
+    for (const error of [
+      new ProjectLoadError('corrupt', 'corrupt', 'p1'),
+      new ProjectLoadError('io-error', 'io', 'p1'),
+      new Error('EACCES /projects/p1'),
+    ]) {
+      await renderProjectInitializationFailure(mockRoot as never, error, { onSafeOpen });
+      expect(renderedScreenProps().onSafeOpen).toBeUndefined();
+    }
+
+    mockBackendKind.mockResolvedValue('indexeddb');
+    await renderProjectInitializationFailure(mockRoot as never, new Error('QuotaExceededError'), {
+      onSafeOpen,
+    });
+    expect(renderedScreenProps().onSafeOpen).toBeUndefined();
+    expect(onSafeOpen).not.toHaveBeenCalled();
   });
 });

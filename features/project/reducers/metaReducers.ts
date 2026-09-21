@@ -25,6 +25,10 @@ export const metaReducers = {
       }
     }
   },
+  // QNBS-v3: re-keys the live project under a safe-session identity so it can never share a directory with the refused project; the root reducer clears undo history so Undo cannot restore the old identity.
+  assignProjectIdentity: (state: ProjectSliceState, action: PayloadAction<string>) => {
+    state.data.id = action.payload;
+  },
   resetProject: (
     state: ProjectSliceState,
     // QNBS-v3: chapter1Title is required and supplied localized by callers (t('initialProject.chapter1'))

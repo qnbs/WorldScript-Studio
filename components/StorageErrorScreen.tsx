@@ -21,6 +21,8 @@ export interface StorageErrorCopy {
   recoveryUnknown: string;
   recoveryAlreadyPreserved: string;
   resetWarning: string;
+  safeOpen: string;
+  safeOpenNotice: string;
 }
 
 export const STARTUP_COPY_FALLBACKS: StorageErrorCopy = {
@@ -46,6 +48,9 @@ export const STARTUP_COPY_FALLBACKS: StorageErrorCopy = {
   recoveryAlreadyPreserved:
     'The project appears to have been preserved by another recovery attempt. Reload to continue.',
   resetWarning: 'Resetting the database will delete all local projects and settings.',
+  safeOpen: 'Open WorldScript Studio without this project',
+  safeOpenNotice:
+    'This project stays on disk exactly as it is. It will not be opened or changed in this session, so a compatible build can still open it later.',
 };
 
 async function startupTranslation(key: string, fallback: string): Promise<string> {
@@ -72,6 +77,8 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     recoveryUnknown,
     recoveryAlreadyPreserved,
     resetWarning,
+    safeOpen,
+    safeOpenNotice,
   ] = await Promise.all([
     startupTranslation('error.startup.description', STARTUP_COPY_FALLBACKS.description),
     startupTranslation(
@@ -107,6 +114,8 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
       STARTUP_COPY_FALLBACKS.recoveryAlreadyPreserved,
     ),
     startupTranslation('error.startup.resetWarning', STARTUP_COPY_FALLBACKS.resetWarning),
+    startupTranslation('error.startup.safeOpen', STARTUP_COPY_FALLBACKS.safeOpen),
+    startupTranslation('error.startup.safeOpenNotice', STARTUP_COPY_FALLBACKS.safeOpenNotice),
   ]);
   return {
     description,
@@ -125,6 +134,8 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     recoveryUnknown,
     recoveryAlreadyPreserved,
     resetWarning,
+    safeOpen,
+    safeOpenNotice,
   };
 }
 
@@ -198,6 +209,52 @@ function RetryButton({
     >
       {isProjectIo ? copy.retry : copy.reload}
     </button>
+  );
+}
+
+const SAFE_OPEN_NOTICE_ID = 'startup-safe-open-notice';
+
+function isRefusedProjectFailure(failureKind: StartupRecoveryFailureKind): boolean {
+  return failureKind === 'project-unsupported' || failureKind === 'project-migration-gap';
+}
+
+// QNBS-v3: Safe Open is the non-destructive escape from a refused project — styled as the primary path, never as destructive recovery, and it never replaces Retry.
+function SafeOpenButton({
+  onClick,
+  isOpening,
+  copy,
+}: {
+  onClick: () => void;
+  isOpening: boolean;
+  copy: StorageErrorCopy;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={isOpening}
+      aria-describedby={SAFE_OPEN_NOTICE_ID}
+      style={{
+        ...buttonBaseStyle,
+        border: 'none',
+        background: '#2563eb',
+        color: '#fff',
+        cursor: isOpening ? 'wait' : 'pointer',
+      }}
+    >
+      {copy.safeOpen}
+    </button>
+  );
+}
+
+function SafeOpenNotice({ copy }: { copy: StorageErrorCopy }) {
+  return (
+    <p
+      id={SAFE_OPEN_NOTICE_ID}
+      style={{ fontSize: '0.75rem', color: '#94a3b8', maxWidth: '32rem' }}
+    >
+      {copy.safeOpenNotice}
+    </p>
   );
 }
 
@@ -319,6 +376,7 @@ export function StorageErrorScreen({
   onReset,
   onRecover,
   onRetry,
+  onSafeOpen,
   failureKind,
 }: {
   copy: StorageErrorCopy;
@@ -326,9 +384,27 @@ export function StorageErrorScreen({
   onReset?: () => void;
   onRecover?: () => Promise<void>;
   onRetry?: () => void;
+  onSafeOpen?: () => Promise<void> | void;
 }) {
   const [recoveryStatus, setRecoveryStatus] = React.useState<RecoveryStatus>(null);
   const [isRecovering, setIsRecovering] = React.useState(false);
+  const [isOpening, setIsOpening] = React.useState(false);
+  const canSafeOpen = onSafeOpen !== undefined && isRefusedProjectFailure(failureKind);
+
+  const handleSafeOpen = async () => {
+    if (!onSafeOpen || isOpening) return;
+    setIsOpening(true);
+    try {
+      await onSafeOpen();
+    } catch (error) {
+      logger.error('Safe open failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      // QNBS-v3: a failed boot re-renders this same screen instance, so the busy flag must clear or Safe Open would stay disabled.
+      setIsOpening(false);
+    }
+  };
 
   const handleRecover = async () => {
     if (!onRecover || failureKind !== 'project-corrupt') return;
@@ -395,6 +471,9 @@ export function StorageErrorScreen({
           copy={copy}
           onClick={handleRetry}
         />
+        {canSafeOpen && (
+          <SafeOpenButton onClick={() => void handleSafeOpen()} isOpening={isOpening} copy={copy} />
+        )}
         <RecoverButton
           failureKind={failureKind}
           onRecover={onRecover}
@@ -409,6 +488,7 @@ export function StorageErrorScreen({
           copy={copy}
         />
       </div>
+      {canSafeOpen && <SafeOpenNotice copy={copy} />}
       <RecoveryNotice
         failureKind={failureKind}
         onRecover={onRecover}
