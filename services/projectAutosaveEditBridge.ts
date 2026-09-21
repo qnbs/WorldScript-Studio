@@ -18,11 +18,10 @@ import {
  * full ProjectData snapshot (the entire current Redux state), never a partial edit. This module is
  * the "smallest reusable bridge" between the two, not a Redux/storage redesign.
  *
- * Every non-collection top-level field is treated as owned by this edit -- autosave persists the
- * complete current project, so every field it carries is, by construction, its intended value.
- * An explicitly-undefined-valued field is dropped rather than forwarded: `undefined` is not a
- * valid JSON value, and a genuinely absent field is otherwise indistinguishable from one the
- * caller means to omit as unowned.
+ * The bridge owns only the declared ProjectData fields. Runtime projections can carry opaque
+ * top-level or entity fields from a newer/foreign producer; those remain raw-carrier data rather
+ * than becoming accidental overwrite authority. An explicitly-undefined-valued owned field is
+ * omitted and removes a previously persisted optional field, while an unknown field is preserved.
  *
  * `characters`/`worlds` route through `collections` instead, matching commitOwnedProjectEdit's
  * stable-id merge-by-id semantics rather than a positional array replacement: `remove` is the set
@@ -44,12 +43,100 @@ interface RawCollectionState {
   entities: Readonly<Record<string, unknown>>;
 }
 
+// QNBS-v3 (#553): whitelist the current projection contract so bootstrap-spread opaque fields never become autosave write authority.
+const OWNED_TOP_LEVEL_FIELDS = new Set([
+  'id',
+  'title',
+  'logline',
+  'author',
+  'outline',
+  'manuscript',
+  'relationships',
+  'projectGoals',
+  'writingHistory',
+  'writingSessions',
+  'writingGoals',
+  'sceneBoardLayout',
+  'binderNodes',
+  'compileProfile',
+  'persistedVersionControl',
+  'plotConnections',
+  'plotSubplots',
+  'plotTensionOverrides',
+  'aiPreset',
+  'storyObjects',
+  'objectGroups',
+  'mindMaps',
+  'characterInterviews',
+]);
+
+const REMOVABLE_TOP_LEVEL_FIELDS = new Set([
+  'author',
+  'relationships',
+  'projectGoals',
+  'writingHistory',
+  'writingSessions',
+  'writingGoals',
+  'sceneBoardLayout',
+  'binderNodes',
+  'compileProfile',
+  'persistedVersionControl',
+  'plotConnections',
+  'plotSubplots',
+  'plotTensionOverrides',
+  'aiPreset',
+  'storyObjects',
+  'objectGroups',
+  'mindMaps',
+  'characterInterviews',
+]);
+
+const CHARACTER_FIELDS = new Set([
+  'id',
+  'name',
+  'backstory',
+  'motivation',
+  'appearance',
+  'personalityTraits',
+  'flaws',
+  'notes',
+  'hasAvatar',
+  'characterArc',
+  'relationships',
+]);
+
+const WORLD_FIELDS = new Set([
+  'id',
+  'name',
+  'description',
+  'geography',
+  'magicSystem',
+  'culture',
+  'notes',
+  'hasAmbianceImage',
+  'timeline',
+  'locations',
+  'relationships',
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isIdBearing(value: unknown): value is { id: string } {
   return isRecord(value) && typeof value['id'] === 'string';
+}
+
+function definedKnownFields(
+  value: unknown,
+  ownedFields: ReadonlySet<string>,
+): Record<string, unknown> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([key, entryValue]) => ownedFields.has(key) && entryValue !== undefined,
+    ),
+  );
 }
 
 // QNBS-v3: the Core boundary (features/project/coreBoundaryAdapter.ts) round-trips characters/worlds as a plain array outside Redux/IDB (filesystem, import/export); a raw carrier written through that path stores this shape, not {ids, entities}.
@@ -80,25 +167,22 @@ function readRawCollection(
 function buildCollectionEdit(
   newEntities: readonly { id: string }[],
   currentRaw: RawCollectionState,
+  ownedFields: ReadonlySet<string>,
 ): EntityCollectionEdit {
   const newIds = newEntities.map((entity) => entity.id);
   const newIdSet = new Set(newIds);
   const removedIds = currentRaw.ids.filter((id) => !newIdSet.has(id));
   const upsert = newEntities.map((entity) => {
     // QNBS-v3: same rule as top-level fields -- an explicitly-undefined typed property means "unowned" and must not clobber an opaque prior raw value in the merge.
-    const definedEntity = Object.fromEntries(Object.entries(entity).filter(isDefinedEntry));
-    const priorRaw = currentRaw.entities[entity.id];
-    return isRecord(priorRaw) ? { ...priorRaw, ...definedEntity } : definedEntity;
+    const definedEntity = definedKnownFields(entity, ownedFields);
+    return definedEntity;
   });
   return {
     upsert: upsert as unknown as readonly EntityLike[],
+    preserveExistingFields: true,
     ...(removedIds.length > 0 ? { remove: removedIds } : {}),
     order: newIds,
   };
-}
-
-function isDefinedEntry([, value]: readonly [string, unknown]): boolean {
-  return value !== undefined;
 }
 
 /**
@@ -113,11 +197,15 @@ export function buildAutosaveOwnedProjectEdit(
   currentRaw: CanonicalProjectRawText,
 ): OwnedProjectEdit {
   const { characters, worlds, ...rest } = newData;
-  // QNBS-v3: schemaVersion is admission-owned, never autosave-owned -- appBootstrap spreads the persisted payload into the runtime ProjectData, so a CURRENT payload can carry a runtime-extra schemaVersion here, and commitOwnedProjectEdit intentionally rejects an owned schemaVersion edit.
-  const fields = Object.fromEntries(
-    Object.entries(rest).filter(([key, value]) => key !== 'schemaVersion' && value !== undefined),
-  );
   const parsedCurrent: unknown = parseCanonicalRawPreservingUnsafeIntegers(currentRaw);
+  // QNBS-v3: schemaVersion and unknown bootstrap-spread properties stay admission/opaque-owned, never autosave-owned.
+  const fields = definedKnownFields(rest, OWNED_TOP_LEVEL_FIELDS);
+  const currentRecord = isRecord(parsedCurrent) ? parsedCurrent : null;
+  const removeFields = currentRecord
+    ? [...REMOVABLE_TOP_LEVEL_FIELDS].filter(
+        (key) => Object.hasOwn(currentRecord, key) && !Object.hasOwn(fields, key),
+      )
+    : [];
   const newCharacters = Array.isArray(characters)
     ? characters
     : entityStateToCoreArray(characters, 'characters');
@@ -128,8 +216,14 @@ export function buildAutosaveOwnedProjectEdit(
       characters: buildCollectionEdit(
         newCharacters,
         readRawCollection(parsedCurrent, 'characters'),
+        CHARACTER_FIELDS,
       ),
-      worlds: buildCollectionEdit(newWorlds, readRawCollection(parsedCurrent, 'worlds')),
+      worlds: buildCollectionEdit(
+        newWorlds,
+        readRawCollection(parsedCurrent, 'worlds'),
+        WORLD_FIELDS,
+      ),
     },
+    ...(removeFields.length > 0 ? { removeFields } : {}),
   };
 }

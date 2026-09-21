@@ -108,7 +108,7 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     });
   });
 
-  it('preserves an opaque field the raw carrier holds but the typed entity does not model', () => {
+  it('preserves an opaque field the raw carrier holds but the typed entity does not own', () => {
     const currentRaw = currentRawFor({
       characters: {
         ids: ['c1'],
@@ -122,9 +122,45 @@ describe('buildAutosaveOwnedProjectEdit', () => {
 
     const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
 
-    expect(edit.collections?.characters?.upsert).toEqual([
-      { id: 'c1', name: 'Alice Renamed', pluginNote: 'from an older build' },
-    ]);
+    expect(edit.collections?.characters?.upsert).toEqual([{ id: 'c1', name: 'Alice Renamed' }]);
+  });
+
+  it('preserves an opaque top-level number when the runtime projection carries a rounded value', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [],
+      worlds: [],
+      opaqueTop: '__UNSAFE_INT__',
+    }).replace('"__UNSAFE_INT__"', UNSAFE_INTEGER_LITERAL);
+    const data = baseProjectData({ opaqueTop: Number(UNSAFE_INTEGER_LITERAL) });
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(edit.fields).not.toHaveProperty('opaqueTop');
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain(`"opaqueTop":${UNSAFE_INTEGER_LITERAL}`);
+  });
+
+  it('removes an owned optional field when the full snapshot no longer carries it', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [],
+      worlds: [],
+      aiPreset: { model: 'legacy-model' },
+    });
+    const data = baseProjectData();
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(edit.removeFields).toEqual(['aiPreset']);
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).not.toContain('"aiPreset"');
   });
 
   it('lets an explicitly-undefined typed entity prop defer to the opaque raw value (end-to-end through writeback)', () => {
@@ -204,6 +240,34 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     expect(result.raw).not.toContain('9007199254740992');
   });
 
+  it('preserves opaque fractional and exponent tokens byte-exactly through writeback', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [
+        {
+          id: 'c1',
+          name: 'Alice',
+          opaqueFraction: '__FRACTION__',
+          opaqueExponent: '__EXPONENT__',
+        },
+      ],
+      worlds: [],
+    })
+      .replace('"__FRACTION__"', '0.1234567890123456789')
+      .replace('"__EXPONENT__"', '1e+3');
+    const data = baseProjectData({
+      characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice Renamed' } } },
+    });
+
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain('"opaqueFraction":0.1234567890123456789');
+    expect(result.raw).toContain('"opaqueExponent":1e+3');
+  });
+
   it('reads prior ids/entities from a plain-array-shaped raw collection (the Core boundary/filesystem on-disk shape)', () => {
     const currentRaw = currentRawFor({
       characters: [
@@ -219,9 +283,7 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
 
     expect(edit.collections?.characters?.remove).toEqual(['c2']);
-    expect(edit.collections?.characters?.upsert).toEqual([
-      { id: 'c1', name: 'Alice', pluginNote: 'kept' },
-    ]);
+    expect(edit.collections?.characters?.upsert).toEqual([{ id: 'c1', name: 'Alice' }]);
   });
 
   it('treats prototype-named ids as ordinary entities in a plain-array raw collection', () => {
@@ -248,8 +310,8 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
 
     expect(edit.collections?.characters?.upsert).toEqual([
-      { id: '__proto__', name: 'Renamed Proto', pluginNote: 'opaque-proto' },
-      { id: 'constructor', name: 'Renamed Ctor', pluginNote: 'opaque-ctor' },
+      { id: '__proto__', name: 'Renamed Proto' },
+      { id: 'constructor', name: 'Renamed Ctor' },
     ]);
     expect(edit.collections?.characters?.remove).toBeUndefined();
   });

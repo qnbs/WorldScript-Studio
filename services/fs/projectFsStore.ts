@@ -733,10 +733,20 @@ export class FsProjectStore extends FsAssetStore {
         `filesystem source is not admitted: ${admission.source.classification}`,
       );
     }
+    const autosaveEdit = buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw);
+    const projectRecord = projectToPersist as unknown as Record<string, unknown>;
+    const backendMetadata = Object.fromEntries(
+      [LEGACY_PROJECT_DIRECTORY_METADATA_KEY, LEGACY_AUXILIARY_METADATA_KEY]
+        .filter((key) => Object.hasOwn(projectRecord, key) && projectRecord[key] !== undefined)
+        .map((key) => [key, projectRecord[key]]),
+    );
     const writeback = commitOwnedProjectEdit({
       expectedGeneration: computeProjectSourceGeneration(admission.canonical.raw),
       currentRaw: admission.canonical.raw,
-      edit: buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw),
+      edit: {
+        ...autosaveEdit,
+        fields: { ...autosaveEdit.fields, ...backendMetadata },
+      },
     });
     if (writeback.status !== 'COMMITTED') {
       throw new ProjectCanonicalWritebackError(
@@ -745,7 +755,14 @@ export class FsProjectStore extends FsAssetStore {
       );
     }
     try {
-      await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw));
+      const expectedGeneration = computeProjectSourceGeneration(admission.canonical.raw);
+      await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw), async () => {
+        // QNBS-v3 (#553): re-read immediately before rename so an external writer cannot be silently overwritten between admission and replacement.
+        const latestRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+        if (computeProjectSourceGeneration(latestRaw) !== expectedGeneration) {
+          throw new Error('source generation changed before atomic replacement');
+        }
+      });
     } catch (error) {
       throw new ProjectCanonicalWritebackError(
         projectId,

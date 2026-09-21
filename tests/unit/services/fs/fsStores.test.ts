@@ -58,7 +58,12 @@ vi.mock('../../../../services/i18n/staticTranslate', () => ({
 }));
 
 import { appStoreRef } from '../../../../app/storeRef';
-import { compressData, decompressData, decompressJsonText } from '../../../../services/fs/fsCore';
+import {
+  compressData,
+  compressJsonText,
+  decompressData,
+  decompressJsonText,
+} from '../../../../services/fs/fsCore';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 
@@ -227,6 +232,47 @@ describe('FsProjectStore — projects', () => {
     expect(savedRaw).toContain('"opaqueNumber":9007199254740993');
     expect(savedRaw).toContain('"opaque":{"keep":true}');
     expect(savedRaw).toContain('"opaqueTop":{"numeric":9007199254740993}');
+  });
+
+  it('removes an owned optional field from the current filesystem raw carrier when the snapshot omits it', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const source = JSON.stringify({
+      ...project,
+      aiPreset: { model: 'legacy-model' },
+    });
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, source);
+
+    await store.saveProject(project as never);
+
+    expect(decompressJsonText(fake.text.get(sourcePath) as string)).not.toContain('"aiPreset"');
+  });
+
+  it('refuses an external source generation change before atomic filesystem replacement', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const concurrentRaw = JSON.stringify({
+      ...project,
+      title: 'Concurrent writer',
+    });
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (path: string, content: string) => {
+      if (path.startsWith(`${sourcePath}.tmp-`)) {
+        fake.text.set(sourcePath, compressJsonText(concurrentRaw));
+      }
+      return originalWriteTextFile(path, content);
+    };
+
+    await expect(
+      store.saveProject({ ...project, title: 'Local writer' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      detail: expect.stringContaining('source generation changed before atomic replacement'),
+    });
+    expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(concurrentRaw);
+    expect([...fake.text.keys()].some((path) => path.startsWith(`${sourcePath}.tmp-`))).toBe(false);
   });
 
   it('refuses non-current filesystem writeback without changing the stored source', async () => {

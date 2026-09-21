@@ -95,7 +95,7 @@ async function writeAndReplace(
   apis: TauriApis,
   path: string,
   write: (temporary: string) => Promise<void>,
-  beforeReplace?: () => void,
+  beforeReplace?: () => void | Promise<void>,
 ): Promise<void> {
   const previous = atomicWriteTails.get(path);
   const current = (previous?.catch(() => undefined) ?? Promise.resolve()).then(async () => {
@@ -104,7 +104,7 @@ async function writeAndReplace(
       await retryFs(() => write(temporary));
       await retryFs(async () => {
         // QNBS-v3: admit immediately before every irreversible rename attempt, including retries after a transient filesystem failure.
-        beforeReplace?.();
+        await beforeReplace?.();
         await apis.rename(temporary, path);
       });
     } catch (error) {
@@ -135,7 +135,7 @@ export function writeTextFileAtomic(
   apis: TauriApis,
   path: string,
   content: string,
-  beforeReplace?: () => void,
+  beforeReplace?: () => void | Promise<void>,
 ): Promise<void> {
   return writeAndReplace(
     apis,
