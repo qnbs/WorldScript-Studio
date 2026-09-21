@@ -13,10 +13,16 @@ import {
 import type { Character, StoryProject, World } from '../../types';
 import { getStaticTranslation } from '../i18n/staticTranslate';
 import { logger } from '../logger';
+import { buildAutosaveOwnedProjectEdit } from '../projectAutosaveEditBridge';
 import {
   admitCanonicalProjectDocument,
   type CanonicalProjectSchemaResult,
 } from '../projectDocument';
+import {
+  commitOwnedProjectEdit,
+  computeProjectSourceGeneration,
+  type ProjectWritebackResult,
+} from '../projectDocumentWriteback';
 import { importedProjectJsonSchema, parseImportedProjectJson } from '../projectImportSchema';
 import {
   normalizeSaveProjectInputToStoryProject,
@@ -27,6 +33,7 @@ import {
 import { FsAssetStore } from './assetFsStore';
 import {
   compressData,
+  compressJsonText,
   decompressData,
   decompressJsonText,
   retryFs,
@@ -74,6 +81,19 @@ export class ProjectWritebackError extends Error {
       `Project "${projectId}" was loaded from an unversioned legacy source and cannot be saved until durable migration fencing is available.`,
     );
     this.name = 'ProjectWritebackError';
+  }
+}
+
+// QNBS-v3 (#553): preserve the safe-save error boundary without exposing raw admission or generation details to UI callers.
+export class ProjectCanonicalWritebackError extends Error {
+  constructor(
+    public readonly projectId: string,
+    public readonly detail: string,
+  ) {
+    super(
+      'Project save was refused to preserve the stored data. Reload the project and try again.',
+    );
+    this.name = 'ProjectCanonicalWritebackError';
   }
 }
 
@@ -208,6 +228,19 @@ function withCurrentSchemaVersion(project: StoryProject): StoryProject {
     projection['schemaVersion'] = CURRENT_PROJECT_SCHEMA_VERSION;
   }
   return projection as unknown as StoryProject;
+}
+
+function canonicalWritebackRefusalDetail(
+  writeback: Exclude<ProjectWritebackResult, { status: 'COMMITTED' }>,
+): string {
+  switch (writeback.status) {
+    case 'CONFLICT':
+      return 'source generation changed';
+    case 'NOT_ADMITTED_FOR_WRITE':
+      return writeback.classification;
+    default:
+      return writeback.reason;
+  }
 }
 
 type LegacyAdmissionRecord = {
@@ -677,6 +710,67 @@ export class FsProjectStore extends FsAssetStore {
     return this.withLegacyRoutingOperation(() => this.saveProjectUnlocked(project));
   }
 
+  private async persistExistingCanonicalProject(
+    apis: TauriApis,
+    projectFile: string,
+    projectId: string,
+    projectToPersist: StoryProject,
+  ): Promise<void> {
+    // QNBS-v3 (#553): keep existing-project writeback as one preserve-first raw-carrier transaction boundary.
+    let currentRaw: string;
+    try {
+      currentRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem source read failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    const admission = admitCanonicalProjectDocument(currentRaw, storedProjectSchema);
+    if (admission.status !== 'CURRENT' || admission.canonical === null) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem source is not admitted: ${admission.source.classification}`,
+      );
+    }
+    const autosaveEdit = buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw);
+    const projectRecord = projectToPersist as unknown as Record<string, unknown>;
+    const backendMetadata = Object.fromEntries(
+      [LEGACY_PROJECT_DIRECTORY_METADATA_KEY, LEGACY_AUXILIARY_METADATA_KEY]
+        .filter((key) => Object.hasOwn(projectRecord, key) && projectRecord[key] !== undefined)
+        .map((key) => [key, projectRecord[key]]),
+    );
+    const writeback = commitOwnedProjectEdit({
+      expectedGeneration: computeProjectSourceGeneration(admission.canonical.raw),
+      currentRaw: admission.canonical.raw,
+      edit: {
+        ...autosaveEdit,
+        fields: { ...autosaveEdit.fields, ...backendMetadata },
+      },
+    });
+    if (writeback.status !== 'COMMITTED') {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem canonical writeback refused: ${canonicalWritebackRefusalDetail(writeback)}`,
+      );
+    }
+    try {
+      const expectedGeneration = computeProjectSourceGeneration(admission.canonical.raw);
+      await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw), async () => {
+        // QNBS-v3 (#553): re-read immediately before rename so an external writer cannot be silently overwritten between admission and replacement.
+        const latestRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+        if (computeProjectSourceGeneration(latestRaw) !== expectedGeneration) {
+          throw new Error('source generation changed before atomic replacement');
+        }
+      });
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem canonical replacement failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   private async saveProjectUnlocked(project: SaveProjectInput): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
     const rawProjectId = (flat as unknown as Record<string, unknown>)['id'];
@@ -735,7 +829,30 @@ export class FsProjectStore extends FsAssetStore {
 
     projectToPersist = withCurrentSchemaVersion(projectToPersist);
 
-    // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
+    const projectPath = await apis.join(appDataPath, 'projects', projectId);
+
+    if (!(await apis.exists(projectPath))) {
+      await apis.mkdir(projectPath, { recursive: true });
+    }
+
+    const projectFile = await apis.join(projectPath, 'project.json');
+    let sourceExists: boolean;
+    try {
+      sourceExists = await apis.exists(projectFile);
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem source inspection failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    // QNBS-v3 (#553): create absent project files directly; preserve the admitted raw carrier when replacing an existing source.
+    if (!sourceExists) {
+      await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
+    } else {
+      await this.persistExistingCanonicalProject(apis, projectFile, projectId, projectToPersist);
+    }
+    // QNBS-v3 (#553): capture recovery state only after authoritative replacement succeeds, so a refused save cannot mutate snapshot history.
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       this.lastAutoSnapshotTime = Date.now();
       this.saveSnapshot('auto', projectToPersist)
@@ -748,15 +865,6 @@ export class FsProjectStore extends FsAssetStore {
           });
         });
     }
-
-    const projectPath = await apis.join(appDataPath, 'projects', projectId);
-
-    if (!(await apis.exists(projectPath))) {
-      await apis.mkdir(projectPath, { recursive: true });
-    }
-
-    const projectFile = await apis.join(projectPath, 'project.json');
-    await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
     this.clearLegacyPoliciesTargetingProject(projectId);
     // QNBS-v3 (#332): documented best-effort abort — the project data above already saved; a failed marker write only degrades the next cold-boot's project selection, not worth failing this save over.
     await this.setActiveProjectId(projectId).catch((error) => {

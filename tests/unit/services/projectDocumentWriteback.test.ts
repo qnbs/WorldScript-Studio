@@ -355,6 +355,15 @@ describe('projectDocumentWriteback (#553)', () => {
     expectVerificationFailedContaining(result, 'schemaVersion cannot be set');
   });
 
+  it('refuses an owned-field edit that attempts to remove schemaVersion', () => {
+    const result = commitEdit({
+      removeFields: ['schemaVersion'],
+      fields: { title: 'Should never land' },
+    });
+
+    expectVerificationFailedContaining(result, 'schemaVersion cannot be removed');
+  });
+
   it('reports VERIFICATION_FAILED when an upserted entity has an explicit undefined field', () => {
     // QNBS-v3: JSON has no undefined -- the dropped property would silently differ from the caller's literal intended value; the primitive must detect and refuse this, not accept the narrowed result.
     const characters: EntityCollectionEdit = {
