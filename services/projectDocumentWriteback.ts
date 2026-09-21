@@ -11,6 +11,7 @@ import {
   skipRawJsonString,
   skipRawJsonValue,
   skipRawJsonWhitespace,
+  stripTopLevelObjectKeys,
 } from './projectDocument';
 
 /**
@@ -41,15 +42,21 @@ export type EntityLike = { id: string; [key: string]: unknown };
 export interface EntityCollectionEdit<T extends EntityLike = EntityLike> {
   /** Entities to insert or replace, by id. */
   upsert?: readonly T[];
+  /** Merge upsert fields over existing entities so omitted opaque fields remain untouched. */
+  preserveExistingFields?: boolean;
   /** Ids to remove entirely, including all opaque sub-fields on that entity. */
   remove?: readonly string[];
   /** Explicit full declared order after this edit (ids). Omitted: existing order is kept, upserts appended. */
   order?: readonly string[];
+  /** Per-entity owned fields to remove when a full snapshot omits optional properties. */
+  removeFields?: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface OwnedProjectEdit {
   /** Top-level scalar/object field replacements this writer owns and intends to set. */
   fields?: Readonly<Record<string, unknown>>;
+  /** Top-level fields this full-snapshot writer owns and intends to remove. */
+  removeFields?: readonly string[];
   /** Identity-bearing top-level collections (characters/worlds) to merge by stable id, never position. */
   collections?: Readonly<Partial<Record<CoreCollection, EntityCollectionEdit>>>;
 }
@@ -169,6 +176,11 @@ function isUnsafeIntegerLiteral(literal: string): boolean {
   );
 }
 
+// QNBS-v3 (#553): preserve any numeric token whose JSON round-trip would change its exact source text, not only unsafe integers.
+function isNonRoundTrippingNumberLiteral(literal: string): boolean {
+  return isUnsafeIntegerLiteral(literal) || JSON.stringify(Number(literal)) !== literal;
+}
+
 type RawScanStep = { text: string; nextIndex: number };
 type RawScanPosition = { raw: string; index: number };
 
@@ -193,24 +205,33 @@ function matchNumberLiteralAt(position: RawScanPosition): string | null {
   return matchedAtIndex ? (match?.[0] ?? null) : null;
 }
 
-function protectNumberToken(position: RawScanPosition, marker: string): RawScanStep | null {
+function protectNumberToken(
+  position: RawScanPosition,
+  marker: string,
+  shouldProtect: (literal: string) => boolean,
+): RawScanStep | null {
   const { raw, index } = position;
   if (!isNumberLiteralStart(raw[index])) return null;
   const literal = matchNumberLiteralAt(position);
   if (literal === null) return null;
-  const text = isUnsafeIntegerLiteral(literal) ? `"${marker}${literal}"` : literal;
+  const text = shouldProtect(literal) ? `"${marker}${literal}"` : literal;
   return { text, nextIndex: index + literal.length };
 }
 
-/** Rewrites any unsafe-integer literal outside a JSON string as a quoted, marker-prefixed sentinel. */
-function protectUnsafeIntegers(raw: string, marker: string): string {
+function protectRawNumbers(
+  raw: string,
+  marker: string,
+  shouldProtect: (literal: string) => boolean,
+): string {
   let result = '';
   let index = 0;
   while (index < raw.length) {
     const character = raw[index];
     const position: RawScanPosition = { raw, index };
     const step =
-      character === '"' ? protectStringToken(position) : protectNumberToken(position, marker);
+      character === '"'
+        ? protectStringToken(position)
+        : protectNumberToken(position, marker, shouldProtect);
     if (step) {
       result += step.text;
       index = step.nextIndex;
@@ -220,6 +241,16 @@ function protectUnsafeIntegers(raw: string, marker: string): string {
     index++;
   }
   return result;
+}
+
+/** Rewrites unsafe-integer literals outside strings as marker-prefixed sentinels. */
+function protectUnsafeIntegers(raw: string, marker: string): string {
+  return protectRawNumbers(raw, marker, isUnsafeIntegerLiteral);
+}
+
+/** Rewrites every numeric literal whose JSON round-trip would alter its exact source token. */
+function protectNonRoundTrippingNumbers(raw: string, marker: string): string {
+  return protectRawNumbers(raw, marker, isNonRoundTrippingNumberLiteral);
 }
 
 function reviveRawNumberMarkersInObject(value: object, marker: string): Record<string, unknown> {
@@ -297,6 +328,63 @@ function stringifyPreservingRawNumbers(value: unknown): string {
   if (!handler)
     throw new Error(`projectDocumentWriteback: cannot stringify value of type ${typeof value}`);
   return handler.stringify(value);
+}
+
+/** Merges a typed projection over its raw JSON counterpart without discarding opaque descendants. */
+function isRawCarrierRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function indexRawCarrierEntries(rawArray: readonly unknown[]): Map<string, unknown> {
+  const rawById = new Map<string, unknown>();
+  for (const rawEntry of rawArray) {
+    if (!isRawCarrierRecord(rawEntry)) continue;
+    const rawId = rawEntry['id'];
+    if (typeof rawId !== 'string') continue;
+    rawById.set(rawId, rawEntry);
+  }
+  return rawById;
+}
+
+function mergeRawCarrierArrayEntry(
+  entry: unknown,
+  index: number,
+  rawArray: readonly unknown[],
+  rawById: ReadonlyMap<string, unknown>,
+): unknown {
+  if (!isRawCarrierRecord(entry)) return mergeRawCarrierValue(entry, rawArray[index]);
+  const entryId = entry['id'];
+  const prior = typeof entryId === 'string' ? rawById.get(entryId) : rawArray[index];
+  return mergeRawCarrierValue(entry, prior);
+}
+
+function mergeRawCarrierArray(value: readonly unknown[], rawValue: unknown): unknown[] {
+  const rawArray = Array.isArray(rawValue) ? rawValue : [];
+  const rawById = indexRawCarrierEntries(rawArray);
+  return value.map((entry, index) => mergeRawCarrierArrayEntry(entry, index, rawArray, rawById));
+}
+
+function mergeRawCarrierObject(
+  value: Record<string, unknown>,
+  rawValue: unknown,
+): Record<string, unknown> {
+  const rawRecord = isRawCarrierRecord(rawValue) ? rawValue : {};
+  const merged = { ...rawRecord };
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === undefined) delete merged[key];
+    else merged[key] = mergeRawCarrierValue(entry, merged[key]);
+  }
+  return merged;
+}
+
+// QNBS-v3 (#553): keep raw-carrier array/object branches separate so this persistence merge remains auditable without changing its recursive preservation rules.
+export function mergeRawCarrierValue(value: unknown, rawValue: unknown): unknown {
+  if (typeof value === 'number' && rawValue instanceof RawNumberLiteral) {
+    return Number(rawValue.text) === value ? rawValue : value;
+  }
+  if (Array.isArray(value)) return mergeRawCarrierArray(value, rawValue);
+  if (isRawCarrierRecord(value)) return mergeRawCarrierObject(value, rawValue);
+  return value;
 }
 
 function rawNumberLiteralsEqual(left: unknown, right: unknown): boolean | null {
@@ -396,7 +484,7 @@ function collectFieldReplacements(
     replacements.push({
       start: range.start,
       end: range.end,
-      text: JSON.stringify(fields[member.key]),
+      text: stringifyPreservingRawNumbers(fields[member.key]),
     });
   }
   return { replacements, seenKeys };
@@ -421,7 +509,7 @@ function insertNewTopLevelFields(
   while (/\s/.test(raw[firstMember] ?? '')) firstMember++;
   const isEmptyObject = raw[firstMember] === '}';
   const insertion = newKeys
-    .map((key) => `${JSON.stringify(key)}:${JSON.stringify(fields[key])}`)
+    .map((key) => `${JSON.stringify(key)}:${stringifyPreservingRawNumbers(fields[key])}`)
     .join(',');
   const separator = isEmptyObject ? '' : ',';
   return `${raw.slice(0, objectStart + 1)}${insertion}${separator}${raw.slice(objectStart + 1)}`;
@@ -476,7 +564,7 @@ function parseEntityCollectionValue(
   const sourceText = raw.slice(valueRange.start, valueRange.end);
   const marker = createUniqueProtectionMarker(sourceText);
   try {
-    const parsed = JSON.parse(protectUnsafeIntegers(sourceText, marker));
+    const parsed = JSON.parse(protectNonRoundTrippingNumbers(sourceText, marker));
     return { value: reviveRawNumberMarkers(parsed, marker) };
   } catch {
     return { error: `collection "${key}" is not valid JSON` };
@@ -493,7 +581,7 @@ function parseEntityCollectionValue(
  */
 export function parseCanonicalRawPreservingUnsafeIntegers(raw: CanonicalProjectRawText): unknown {
   const marker = createUniqueProtectionMarker(raw);
-  return reviveRawNumberMarkers(JSON.parse(protectUnsafeIntegers(raw, marker)), marker);
+  return reviveRawNumberMarkers(JSON.parse(protectNonRoundTrippingNumbers(raw, marker)), marker);
 }
 
 // QNBS-v3: reject exact numeric literals before an object-based IDB codec can round opaque data that the raw-carrier writer would preserve byte-for-byte.
@@ -597,7 +685,18 @@ function applyEntityCollectionEdit(
 ): { entities: EntityLike[] } | { error: string } {
   const byId = new Map<string, EntityLike>(entities.map((entity) => [entity.id, entity]));
   for (const id of edit.remove ?? []) byId.delete(id);
-  for (const entity of edit.upsert ?? []) byId.set(entity.id, entity);
+  for (const entity of edit.upsert ?? []) {
+    const existing = byId.get(entity.id);
+    const merged = edit.preserveExistingFields && existing ? { ...existing, ...entity } : entity;
+    const removeFields = edit.removeFields?.[entity.id] ?? [];
+    if (removeFields.length === 0) {
+      byId.set(entity.id, merged);
+      continue;
+    }
+    const withoutRemovedFields = { ...merged };
+    for (const field of removeFields) delete withoutRemovedFields[field];
+    byId.set(entity.id, withoutRemovedFields);
+  }
 
   const orderResult = edit.order
     ? resolveExplicitOrder(byId, edit.order)
@@ -678,11 +777,26 @@ function verifyEntityCollectionValues(
   updatedEntities: readonly EntityLike[],
   originalById: ReadonlyMap<string, EntityLike>,
   upsertMap: ReadonlyMap<string, EntityLike>,
+  preserveExistingFields: boolean,
+  removeFields: Readonly<Record<string, readonly string[]>> | undefined,
 ): { ok: true } | { ok: false; reason: string } {
   for (const entity of updatedEntities) {
     const intended = upsertMap.get(entity.id);
     if (intended) {
+      const removed = removeFields?.[entity.id] ?? [];
+      if (removed.some((field) => Object.hasOwn(entity, field))) {
+        return {
+          ok: false,
+          reason: `collection "${key}" entity "${entity.id}" retained an intended removed field`,
+        };
+      }
       if (!deepEqual(entity, intended)) {
+        if (
+          preserveExistingFields &&
+          Object.entries(intended).every(([key, value]) => deepEqual(entity[key], value))
+        ) {
+          continue;
+        }
         return {
           ok: false,
           reason: `collection "${key}" entity "${entity.id}" does not match the intended upsert value`,
@@ -724,7 +838,14 @@ function verifyEntityCollectionApplied(
 
   const originalById = new Map(original.entities.map((entity) => [entity.id, entity]));
   const upsertMap = new Map((edit.upsert ?? []).map((entity) => [entity.id, entity]));
-  return verifyEntityCollectionValues(key, updated.entities, originalById, upsertMap);
+  return verifyEntityCollectionValues(
+    key,
+    updated.entities,
+    originalById,
+    upsertMap,
+    edit.preserveExistingFields ?? false,
+    edit.removeFields,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -743,6 +864,7 @@ function verifyOwnedEditApplied(
 
   const touchedKeys = new Set<string>([
     ...Object.keys(edit.fields ?? {}),
+    ...(edit.removeFields ?? []),
     ...Object.keys(edit.collections ?? {}),
   ]);
   const originalByKey = new Map(originalMembers.map((member) => [member.key, member]));
@@ -753,6 +875,9 @@ function verifyOwnedEditApplied(
 
   const ownedFields = verifyOwnedFieldsMatchIntent(raws.newRaw, newByKey, edit.fields ?? {});
   if (!ownedFields.ok) return ownedFields;
+
+  const removedFields = verifyOwnedFieldsRemoved(newByKey, edit.removeFields ?? []);
+  if (!removedFields.ok) return removedFields;
 
   for (const [key, collectionEdit] of Object.entries(edit.collections ?? {})) {
     const verification = verifyEntityCollectionApplied(
@@ -841,6 +966,18 @@ function verifyOwnedFieldsMatchIntent(
   return { ok: true };
 }
 
+function verifyOwnedFieldsRemoved(
+  newByKey: ReadonlyMap<string, CanonicalRawObjectMember>,
+  removeFields: readonly string[],
+): { ok: true } | { ok: false; reason: string } {
+  for (const key of removeFields) {
+    if (newByKey.has(key)) {
+      return { ok: false, reason: `owned field "${key}" remained after removal` };
+    }
+  }
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
@@ -906,14 +1043,43 @@ function rejectsSchemaVersionField(
     : null;
 }
 
+function rejectsSchemaVersionRemoval(
+  removeFields: readonly string[] | undefined,
+): { status: 'VERIFICATION_FAILED'; reason: string } | null {
+  return removeFields?.includes('schemaVersion')
+    ? {
+        status: 'VERIFICATION_FAILED',
+        reason: 'schemaVersion cannot be removed through an owned-field edit',
+      }
+    : null;
+}
+
 function applyOwnedFieldsStep(
   raw: string,
   fields: Readonly<Record<string, unknown>> | undefined,
+  removeFields: readonly string[] | undefined,
 ): EditApplication {
-  if (!fields || Object.keys(fields).length === 0) return { ok: true, raw };
-  const rejection = rejectsSchemaVersionField(fields);
-  if (rejection) return { ok: false, result: rejection };
-  const overlaid = overlayTopLevelFields(raw, fields);
+  const hasFields = Boolean(fields && Object.keys(fields).length > 0);
+  const hasRemovals = Boolean(removeFields && removeFields.length > 0);
+  if (!hasFields && !hasRemovals) return { ok: true, raw };
+  if (fields) {
+    const rejection = rejectsSchemaVersionField(fields);
+    if (rejection) return { ok: false, result: rejection };
+  }
+  const removalRejection = rejectsSchemaVersionRemoval(removeFields);
+  if (removalRejection) return { ok: false, result: removalRejection };
+  const stripped = hasRemovals ? stripTopLevelObjectKeys(raw, new Set(removeFields)) : raw;
+  if (stripped === null) {
+    return {
+      ok: false,
+      result: {
+        status: 'MALFORMED_SOURCE',
+        reason: 'failed to remove owned fields from the raw payload',
+      },
+    };
+  }
+  if (!hasFields) return { ok: true, raw: stripped };
+  const overlaid = overlayTopLevelFields(stripped, fields ?? {});
   return overlaid === null
     ? {
         ok: false,
@@ -971,7 +1137,11 @@ export function commitOwnedProjectEdit(params: {
   const admission = admitCurrentDocumentForWrite(params);
   if (!admission.ok) return admission.result;
 
-  const fieldsStep = applyOwnedFieldsStep(params.currentRaw, params.edit.fields);
+  const fieldsStep = applyOwnedFieldsStep(
+    params.currentRaw,
+    params.edit.fields,
+    params.edit.removeFields,
+  );
   if (!fieldsStep.ok) return fieldsStep.result;
 
   const collectionsStep = applyOwnedCollectionsStep(fieldsStep.raw, params.edit.collections);

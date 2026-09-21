@@ -63,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **CURRENT Tauri filesystem project saves now preserve opaque fields and exact numeric tokens:**
+  existing admitted project carriers use the canonical owned-edit writeback boundary instead of
+  reserializing only the typed projection; non-CURRENT sources remain fail-closed. Part of #553.
+  PR #802.
 - **Canonical autosave authority documentation now matches production truth:** records that web/PWA autosave, lifecycle flush, and manual-save paths use the canonical persistence seam while Tauri normally uses its deliberate filesystem boundary and retains the existing non-canonical IndexedDB fallback if filesystem initialization or legacy-key cleanup fails. Part of #553. PR #801.
 - **Mutation aggregation now rejects zero-test survived evidence:** raw Stryker file reports
   fail closed when a Vitest 5 per-test filter produces a survived mutant without any completed

@@ -108,7 +108,7 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     });
   });
 
-  it('preserves an opaque field the raw carrier holds but the typed entity does not model', () => {
+  it('preserves an opaque field the raw carrier holds but the typed entity does not own', () => {
     const currentRaw = currentRawFor({
       characters: {
         ids: ['c1'],
@@ -122,9 +122,219 @@ describe('buildAutosaveOwnedProjectEdit', () => {
 
     const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
 
-    expect(edit.collections?.characters?.upsert).toEqual([
-      { id: 'c1', name: 'Alice Renamed', pluginNote: 'from an older build' },
-    ]);
+    expect(edit.collections?.characters?.upsert).toEqual([{ id: 'c1', name: 'Alice Renamed' }]);
+  });
+
+  it('preserves an opaque top-level number when the runtime projection carries a rounded value', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [],
+      worlds: [],
+      opaqueTop: '__UNSAFE_INT__',
+    }).replace('"__UNSAFE_INT__"', UNSAFE_INTEGER_LITERAL);
+    const data = baseProjectData({ opaqueTop: Number(UNSAFE_INTEGER_LITERAL) });
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(edit.fields).not.toHaveProperty('opaqueTop');
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain(`"opaqueTop":${UNSAFE_INTEGER_LITERAL}`);
+  });
+
+  it('preserves opaque descendants of an owned top-level collection', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      manuscript: [
+        {
+          id: 's1',
+          title: 'Original',
+          content: 'old content',
+          pluginNumber: '__UNSAFE_INT__',
+          pluginMeta: { source: 'extension' },
+        },
+      ],
+      characters: [],
+      worlds: [],
+    }).replace('"__UNSAFE_INT__"', UNSAFE_INTEGER_LITERAL);
+    const data = baseProjectData({
+      manuscript: [{ id: 's1', title: 'Updated', content: 'new content' }],
+    });
+
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain(`"pluginNumber":${UNSAFE_INTEGER_LITERAL}`);
+    expect(result.raw).toContain('"pluginMeta":{"source":"extension"}');
+    expect(result.raw).toContain('"title":"Updated"');
+    expect(result.raw).toContain('"content":"new content"');
+  });
+
+  it('removes an owned optional field when the full snapshot no longer carries it', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [],
+      worlds: [],
+      aiPreset: { model: 'legacy-model' },
+    });
+    const data = baseProjectData();
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(edit.removeFields).toEqual(['aiPreset']);
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).not.toContain('"aiPreset"');
+  });
+
+  it('removes omitted optional entity fields while preserving opaque nested descendants', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [],
+      worlds: [
+        {
+          id: 'w1',
+          name: 'Aldoria',
+          hasAmbianceImage: true,
+          timeline: [
+            {
+              id: 'event-1',
+              era: 'old',
+              title: 'Founding',
+              description: 'The city begins.',
+              opaqueNumber: '__UNSAFE_INT__',
+            },
+          ],
+          locations: [
+            {
+              id: 'loc-1',
+              name: 'Capital',
+              description: 'A city.',
+              type: 'city',
+              population: '__POPULATION__',
+              coordinates: {
+                lat: 1,
+                lng: 2,
+                opaqueNumber: '__UNSAFE_INT__',
+              },
+              opaqueLocation: { source: 'plugin' },
+            },
+          ],
+          relationships: [
+            {
+              id: 'rel-1',
+              fromCharacterId: 'c1',
+              toCharacterId: 'c2',
+              type: 'friend',
+              strength: 3,
+            },
+          ],
+        },
+      ],
+    })
+      .replaceAll('"__UNSAFE_INT__"', UNSAFE_INTEGER_LITERAL)
+      .replace('"__POPULATION__"', '12345678901234567890');
+    const data = baseProjectData({
+      worlds: {
+        ids: ['w1'],
+        entities: {
+          w1: {
+            id: 'w1',
+            name: 'Aldoria Updated',
+            timeline: [
+              { id: 'event-1', era: 'new', title: 'Founding', description: 'The city begins.' },
+            ],
+            locations: [
+              { id: 'loc-1', name: 'Capital Renamed', description: 'A city.', type: 'city' },
+            ],
+          },
+        },
+      },
+    });
+
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).not.toContain('"hasAmbianceImage"');
+    expect(result.raw).not.toContain('"relationships"');
+    expect(result.raw).toContain(`"opaqueNumber":${UNSAFE_INTEGER_LITERAL}`);
+    expect(result.raw).toContain(`"opaqueLocation":{"source":"plugin"}`);
+    expect(result.raw).not.toContain('"population"');
+  });
+
+  it('preserves an unchanged modeled unsafe numeric token in a nested world field', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [],
+      worlds: [
+        {
+          id: 'w1',
+          name: 'Aldoria',
+          locations: [
+            {
+              id: 'loc-1',
+              name: 'Capital',
+              type: 'city',
+              population: '__UNSAFE_INT__',
+            },
+          ],
+        },
+      ],
+    }).replace('"__UNSAFE_INT__"', UNSAFE_INTEGER_LITERAL);
+    const data = baseProjectData({
+      worlds: {
+        ids: ['w1'],
+        entities: {
+          w1: {
+            id: 'w1',
+            name: 'Aldoria',
+            locations: [
+              {
+                id: 'loc-1',
+                name: 'Capital',
+                type: 'city',
+                population: Number(UNSAFE_INTEGER_LITERAL),
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain(`"population":${UNSAFE_INTEGER_LITERAL}`);
+    expect(result.raw).not.toContain('9007199254740992');
+  });
+
+  it('removes omitted top-level outline data from the current raw carrier', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      outline: [{ id: 'old-outline' }],
+      characters: [],
+      worlds: [],
+    });
+    const data = baseProjectData({ outline: undefined });
+
+    const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(edit.removeFields).toContain('outline');
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).not.toContain('"outline"');
   });
 
   it('lets an explicitly-undefined typed entity prop defer to the opaque raw value (end-to-end through writeback)', () => {
@@ -204,6 +414,34 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     expect(result.raw).not.toContain('9007199254740992');
   });
 
+  it('preserves opaque fractional and exponent tokens byte-exactly through writeback', () => {
+    const currentRaw = currentRawFor({
+      schemaVersion: 1,
+      title: 'My Story',
+      characters: [
+        {
+          id: 'c1',
+          name: 'Alice',
+          opaqueFraction: '__FRACTION__',
+          opaqueExponent: '__EXPONENT__',
+        },
+      ],
+      worlds: [],
+    })
+      .replace('"__FRACTION__"', '0.1234567890123456789')
+      .replace('"__EXPONENT__"', '1e+3');
+    const data = baseProjectData({
+      characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Alice Renamed' } } },
+    });
+
+    const result = commitBridgeEdit(data, currentRaw);
+
+    expect(result.status).toBe('COMMITTED');
+    if (result.status !== 'COMMITTED') return;
+    expect(result.raw).toContain('"opaqueFraction":0.1234567890123456789');
+    expect(result.raw).toContain('"opaqueExponent":1e+3');
+  });
+
   it('reads prior ids/entities from a plain-array-shaped raw collection (the Core boundary/filesystem on-disk shape)', () => {
     const currentRaw = currentRawFor({
       characters: [
@@ -219,9 +457,7 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
 
     expect(edit.collections?.characters?.remove).toEqual(['c2']);
-    expect(edit.collections?.characters?.upsert).toEqual([
-      { id: 'c1', name: 'Alice', pluginNote: 'kept' },
-    ]);
+    expect(edit.collections?.characters?.upsert).toEqual([{ id: 'c1', name: 'Alice' }]);
   });
 
   it('treats prototype-named ids as ordinary entities in a plain-array raw collection', () => {
@@ -248,8 +484,8 @@ describe('buildAutosaveOwnedProjectEdit', () => {
     const edit = buildAutosaveOwnedProjectEdit(data, currentRaw);
 
     expect(edit.collections?.characters?.upsert).toEqual([
-      { id: '__proto__', name: 'Renamed Proto', pluginNote: 'opaque-proto' },
-      { id: 'constructor', name: 'Renamed Ctor', pluginNote: 'opaque-ctor' },
+      { id: '__proto__', name: 'Renamed Proto' },
+      { id: 'constructor', name: 'Renamed Ctor' },
     ]);
     expect(edit.collections?.characters?.remove).toBeUndefined();
   });

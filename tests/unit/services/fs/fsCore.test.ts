@@ -95,6 +95,22 @@ describe('writeTextFileAtomic', () => {
     expect(apis.remove).not.toHaveBeenCalled();
   });
 
+  it('keeps synchronous admission adjacent to rename without a microtask gap', async () => {
+    const events: string[] = [];
+    const apis = makeApis({
+      rename: vi.fn().mockImplementation(async () => {
+        events.push('rename');
+      }),
+    });
+
+    await writeTextFileAtomic(apis, '/data/project.json', 'x', () => {
+      events.push('admission');
+      queueMicrotask(() => events.push('microtask'));
+    });
+
+    expect(events.slice(0, 2)).toEqual(['admission', 'rename']);
+  });
+
   it('removes the orphaned temp file and rethrows the original error when the write fails', async () => {
     const apis = makeApis({ writeTextFile: vi.fn().mockRejectedValue(new Error('disk full')) });
 

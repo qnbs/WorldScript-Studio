@@ -58,7 +58,12 @@ vi.mock('../../../../services/i18n/staticTranslate', () => ({
 }));
 
 import { appStoreRef } from '../../../../app/storeRef';
-import { compressData, decompressData } from '../../../../services/fs/fsCore';
+import {
+  compressData,
+  compressJsonText,
+  decompressData,
+  decompressJsonText,
+} from '../../../../services/fs/fsCore';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 
@@ -207,6 +212,169 @@ describe('FsProjectStore — projects', () => {
       fake.text.get('/app/projects/p1/project.json') as string,
     );
     expect(persisted['schemaVersion']).toBe(1);
+  });
+
+  // QNBS-v3 (#553): the Tauri filesystem writer must preserve opaque project data and exact raw numeric tokens when editing a CURRENT carrier.
+  it('updates a current filesystem project through raw-carrier writeback', async () => {
+    const source =
+      '{"schemaVersion":1,"id":"p1","title":"Original","logline":"A tale","manuscript":[],"characters":[{"id":"c1","name":"Ada","opaqueNumber":9007199254740993,"opaque":{"keep":true}}],"worlds":[],"opaqueTop":{"numeric":9007199254740993}}';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/p1/project.json', source);
+
+    await store.saveProject({
+      ...project,
+      title: 'Updated',
+      characters: [{ id: 'c1', name: 'Ada updated' }],
+    } as never);
+
+    const savedRaw = decompressJsonText(fake.text.get('/app/projects/p1/project.json') as string);
+    expect(JSON.parse(savedRaw)).toMatchObject({ title: 'Updated' });
+    expect(savedRaw).toContain('"opaqueNumber":9007199254740993');
+    expect(savedRaw).toContain('"opaque":{"keep":true}');
+    expect(savedRaw).toContain('"opaqueTop":{"numeric":9007199254740993}');
+  });
+
+  it('removes an owned optional field from the current filesystem raw carrier when the snapshot omits it', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const source = JSON.stringify({
+      ...project,
+      aiPreset: { model: 'legacy-model' },
+    });
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, source);
+
+    await store.saveProject(project as never);
+
+    expect(decompressJsonText(fake.text.get(sourcePath) as string)).not.toContain('"aiPreset"');
+  });
+
+  it('refuses an external source generation change before atomic filesystem replacement', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const concurrentRaw = JSON.stringify({
+      ...project,
+      title: 'Concurrent writer',
+    });
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (path: string, content: string) => {
+      if (path.startsWith(`${sourcePath}.tmp-`)) {
+        fake.text.set(sourcePath, compressJsonText(concurrentRaw));
+      }
+      return originalWriteTextFile(path, content);
+    };
+
+    await expect(
+      store.saveProject({ ...project, title: 'Local writer' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      detail: expect.stringContaining('source generation changed before atomic replacement'),
+    });
+    expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(concurrentRaw);
+    expect([...fake.text.keys()].some((path) => path.startsWith(`${sourcePath}.tmp-`))).toBe(false);
+  });
+
+  it('refuses non-current filesystem writeback without changing the stored source', async () => {
+    const { schemaVersion: _schemaVersion, ...legacyProject } = project;
+    const sourcePath = '/app/projects/p1/project.json';
+    const original = compressData(legacyProject);
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, original);
+
+    await expect(
+      store.saveProject({ ...project, title: 'Updated' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      message:
+        'Project save was refused to preserve the stored data. Reload the project and try again.',
+      detail: expect.stringContaining('LEGACY_UNVERSIONED'),
+    });
+    expect(fake.text.get(sourcePath)).toBe(original);
+  });
+
+  it('does not create an auto-snapshot when canonical filesystem save is refused', async () => {
+    const { schemaVersion: _schemaVersion, ...legacyProject } = project;
+    const sourcePath = '/app/projects/p1/project.json';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, compressData(legacyProject));
+    const snapshotSpy = vi.spyOn(store, 'saveSnapshot');
+
+    await expect(
+      store.saveProject({ ...project, title: 'Updated' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+    });
+    await Promise.resolve();
+
+    expect(snapshotSpy).not.toHaveBeenCalled();
+    expect([...fake.text.keys()].some((path) => path.startsWith('/app/snapshots/'))).toBe(false);
+  });
+
+  it('fails closed with a stable public error when the current source cannot be read', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const original = compressData(project);
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, original);
+    fake.apis.readTextFile = () => Promise.reject(new Error('disk unavailable'));
+
+    await expect(
+      store.saveProject({ ...project, title: 'Updated' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      message:
+        'Project save was refused to preserve the stored data. Reload the project and try again.',
+      detail: expect.stringContaining('disk unavailable'),
+    });
+    expect(fake.text.get(sourcePath)).toBe(original);
+  });
+
+  it('fails closed with a stable public error when source existence cannot be inspected', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const original = compressData(project);
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, original);
+    const originalExists = fake.apis.exists;
+    fake.apis.exists = (path: string) =>
+      path === sourcePath
+        ? Promise.reject(new Error('source existence unavailable'))
+        : originalExists(path);
+
+    await expect(
+      store.saveProject({ ...project, title: 'Updated' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      message:
+        'Project save was refused to preserve the stored data. Reload the project and try again.',
+      detail: expect.stringContaining('source existence unavailable'),
+    });
+    expect(fake.text.get(sourcePath)).toBe(original);
+  });
+
+  it('fails closed with a stable public error when atomic replacement fails', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const original = compressData(project);
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, original);
+    const originalRename = fake.apis.rename;
+    fake.apis.rename = (from: string, to: string) =>
+      to === sourcePath
+        ? Promise.reject(new Error('atomic replacement unavailable'))
+        : originalRename(from, to);
+
+    await expect(
+      store.saveProject({ ...project, title: 'Updated' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      message:
+        'Project save was refused to preserve the stored data. Reload the project and try again.',
+      detail: expect.stringContaining('atomic replacement unavailable'),
+    });
+    expect(fake.text.get(sourcePath)).toBe(original);
   });
 
   it('returns null for a missing project and [] when no projects dir', async () => {
@@ -1780,7 +1948,13 @@ describe('FsProjectStore — projects', () => {
 
     await expect(
       store.saveProject({ ...project, title: 'Should not replace' } as never),
-    ).rejects.toThrow('disk full');
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      message:
+        'Project save was refused to preserve the stored data. Reload the project and try again.',
+      detail: expect.stringContaining('disk full'),
+    });
     expect((await store.loadProject('p1'))?.title).toBe('My Novel');
     expect([...fake.text.keys()].some((path) => path.includes('.tmp-'))).toBe(false);
   });

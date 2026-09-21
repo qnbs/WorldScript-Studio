@@ -95,7 +95,7 @@ async function writeAndReplace(
   apis: TauriApis,
   path: string,
   write: (temporary: string) => Promise<void>,
-  beforeReplace?: () => void,
+  beforeReplace?: () => void | Promise<void>,
 ): Promise<void> {
   const previous = atomicWriteTails.get(path);
   const current = (previous?.catch(() => undefined) ?? Promise.resolve()).then(async () => {
@@ -104,7 +104,9 @@ async function writeAndReplace(
       await retryFs(() => write(temporary));
       await retryFs(async () => {
         // QNBS-v3: admit immediately before every irreversible rename attempt, including retries after a transient filesystem failure.
-        beforeReplace?.();
+        const admission = beforeReplace?.();
+        // QNBS-v3: keep synchronous image admission adjacent to rename; only an asynchronous filesystem check may yield here.
+        if (admission instanceof Promise) await admission;
         await apis.rename(temporary, path);
       });
     } catch (error) {
@@ -135,7 +137,7 @@ export function writeTextFileAtomic(
   apis: TauriApis,
   path: string,
   content: string,
-  beforeReplace?: () => void,
+  beforeReplace?: () => void | Promise<void>,
 ): Promise<void> {
   return writeAndReplace(
     apis,
@@ -156,7 +158,11 @@ const COMPRESS_THRESHOLD = 10_240;
 const LZ_PREFIX = '\x00lz1\x00';
 
 export function compressData<T>(data: T): string {
-  const json = JSON.stringify(data);
+  return compressJsonText(JSON.stringify(data));
+}
+
+/** Compresses already-serialized JSON without parsing or reserializing its raw tokens. */
+export function compressJsonText(json: string): string {
   if (json.length < COMPRESS_THRESHOLD) return json;
   return LZ_PREFIX + LZString.compressToUTF16(json);
 }
