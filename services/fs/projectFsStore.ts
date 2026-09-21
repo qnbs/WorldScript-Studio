@@ -744,7 +744,14 @@ export class FsProjectStore extends FsAssetStore {
         `filesystem canonical writeback refused: ${canonicalWritebackRefusalDetail(writeback)}`,
       );
     }
-    await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw));
+    try {
+      await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw));
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem canonical replacement failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   private async saveProjectUnlocked(project: SaveProjectInput): Promise<void> {

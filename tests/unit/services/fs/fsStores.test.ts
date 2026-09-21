@@ -267,6 +267,29 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.get(sourcePath)).toBe(original);
   });
 
+  it('fails closed with a stable public error when atomic replacement fails', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const original = compressData(project);
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, original);
+    const originalRename = fake.apis.rename;
+    fake.apis.rename = (from: string, to: string) =>
+      to === sourcePath
+        ? Promise.reject(new Error('atomic replacement unavailable'))
+        : originalRename(from, to);
+
+    await expect(
+      store.saveProject({ ...project, title: 'Updated' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      message:
+        'Project save was refused to preserve the stored data. Reload the project and try again.',
+      detail: expect.stringContaining('atomic replacement unavailable'),
+    });
+    expect(fake.text.get(sourcePath)).toBe(original);
+  });
+
   it('returns null for a missing project and [] when no projects dir', async () => {
     expect(await store.loadProject('nope')).toBeNull();
     expect(await store.listProjects()).toEqual([]);
@@ -1838,7 +1861,13 @@ describe('FsProjectStore — projects', () => {
 
     await expect(
       store.saveProject({ ...project, title: 'Should not replace' } as never),
-    ).rejects.toThrow('disk full');
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      message:
+        'Project save was refused to preserve the stored data. Reload the project and try again.',
+      detail: expect.stringContaining('disk full'),
+    });
     expect((await store.loadProject('p1'))?.title).toBe('My Novel');
     expect([...fake.text.keys()].some((path) => path.includes('.tmp-'))).toBe(false);
   });
