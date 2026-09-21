@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Release candidate reference: PR #803.
+
+## [1.28.7] — 2026-09-21
+
 <!-- release-candidate: v1.28.7 -->
 - **v1.28.7 release candidate:** synchronizes version and release truth for the explicitly
   authorized early cut; full AI/local-AI qualification remains open and is not claimed as PASS.
   PR #803.
-## [1.28.7] — 2026-09-21
 
 ### Added
 
