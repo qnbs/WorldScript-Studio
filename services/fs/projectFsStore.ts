@@ -21,6 +21,7 @@ import {
 import {
   commitOwnedProjectEdit,
   computeProjectSourceGeneration,
+  type ProjectWritebackResult,
 } from '../projectDocumentWriteback';
 import { importedProjectJsonSchema, parseImportedProjectJson } from '../projectImportSchema';
 import {
@@ -227,6 +228,19 @@ function withCurrentSchemaVersion(project: StoryProject): StoryProject {
     projection['schemaVersion'] = CURRENT_PROJECT_SCHEMA_VERSION;
   }
   return projection as unknown as StoryProject;
+}
+
+function canonicalWritebackRefusalDetail(
+  writeback: Exclude<ProjectWritebackResult, { status: 'COMMITTED' }>,
+): string {
+  switch (writeback.status) {
+    case 'CONFLICT':
+      return 'source generation changed';
+    case 'NOT_ADMITTED_FOR_WRITE':
+      return writeback.classification;
+    default:
+      return writeback.reason;
+  }
 }
 
 type LegacyAdmissionRecord = {
@@ -696,6 +710,43 @@ export class FsProjectStore extends FsAssetStore {
     return this.withLegacyRoutingOperation(() => this.saveProjectUnlocked(project));
   }
 
+  private async persistExistingCanonicalProject(
+    apis: TauriApis,
+    projectFile: string,
+    projectId: string,
+    projectToPersist: StoryProject,
+  ): Promise<void> {
+    // QNBS-v3 (#553): keep existing-project writeback as one preserve-first raw-carrier transaction boundary.
+    let currentRaw: string;
+    try {
+      currentRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem source read failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    const admission = admitCanonicalProjectDocument(currentRaw, storedProjectSchema);
+    if (admission.status !== 'CURRENT' || admission.canonical === null) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem source is not admitted: ${admission.source.classification}`,
+      );
+    }
+    const writeback = commitOwnedProjectEdit({
+      expectedGeneration: computeProjectSourceGeneration(admission.canonical.raw),
+      currentRaw: admission.canonical.raw,
+      edit: buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw),
+    });
+    if (writeback.status !== 'COMMITTED') {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem canonical writeback refused: ${canonicalWritebackRefusalDetail(writeback)}`,
+      );
+    }
+    await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw));
+  }
+
   private async saveProjectUnlocked(project: SaveProjectInput): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
     const rawProjectId = (flat as unknown as Record<string, unknown>)['id'];
@@ -779,41 +830,7 @@ export class FsProjectStore extends FsAssetStore {
     if (!sourceExists) {
       await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
     } else {
-      // QNBS-v3 (#553): existing Tauri saves update the admitted raw carrier so opaque fields and exact numeric tokens survive the filesystem boundary.
-      let currentRaw: string;
-      try {
-        currentRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
-      } catch (error) {
-        throw new ProjectCanonicalWritebackError(
-          projectId,
-          `filesystem source read failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-      const admission = admitCanonicalProjectDocument(currentRaw, storedProjectSchema);
-      if (admission.status !== 'CURRENT' || admission.canonical === null) {
-        throw new ProjectCanonicalWritebackError(
-          projectId,
-          `filesystem source is not admitted: ${admission.source.classification}`,
-        );
-      }
-      const writeback = commitOwnedProjectEdit({
-        expectedGeneration: computeProjectSourceGeneration(admission.canonical.raw),
-        currentRaw: admission.canonical.raw,
-        edit: buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw),
-      });
-      if (writeback.status !== 'COMMITTED') {
-        throw new ProjectCanonicalWritebackError(
-          projectId,
-          `filesystem canonical writeback refused: ${
-            writeback.status === 'CONFLICT'
-              ? 'source generation changed'
-              : writeback.status === 'NOT_ADMITTED_FOR_WRITE'
-                ? writeback.classification
-                : writeback.reason
-          }`,
-        );
-      }
-      await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw));
+      await this.persistExistingCanonicalProject(apis, projectFile, projectId, projectToPersist);
     }
     this.clearLegacyPoliciesTargetingProject(projectId);
     // QNBS-v3 (#332): documented best-effort abort — the project data above already saved; a failed marker write only degrades the next cold-boot's project selection, not worth failing this save over.

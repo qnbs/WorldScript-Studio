@@ -229,6 +229,44 @@ describe('FsProjectStore — projects', () => {
     expect(savedRaw).toContain('"opaqueTop":{"numeric":9007199254740993}');
   });
 
+  it('refuses non-current filesystem writeback without changing the stored source', async () => {
+    const { schemaVersion: _schemaVersion, ...legacyProject } = project;
+    const sourcePath = '/app/projects/p1/project.json';
+    const original = compressData(legacyProject);
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, original);
+
+    await expect(
+      store.saveProject({ ...project, title: 'Updated' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      message:
+        'Project save was refused to preserve the stored data. Reload the project and try again.',
+      detail: expect.stringContaining('LEGACY_UNVERSIONED'),
+    });
+    expect(fake.text.get(sourcePath)).toBe(original);
+  });
+
+  it('fails closed with a stable public error when the current source cannot be read', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const original = compressData(project);
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, original);
+    fake.apis.readTextFile = () => Promise.reject(new Error('disk unavailable'));
+
+    await expect(
+      store.saveProject({ ...project, title: 'Updated' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
+      message:
+        'Project save was refused to preserve the stored data. Reload the project and try again.',
+      detail: expect.stringContaining('disk unavailable'),
+    });
+    expect(fake.text.get(sourcePath)).toBe(original);
+  });
+
   it('returns null for a missing project and [] when no projects dir', async () => {
     expect(await store.loadProject('nope')).toBeNull();
     expect(await store.listProjects()).toEqual([]);
