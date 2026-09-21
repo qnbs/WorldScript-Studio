@@ -72,6 +72,7 @@ const OWNED_TOP_LEVEL_FIELDS = new Set([
 
 const REMOVABLE_TOP_LEVEL_FIELDS = new Set([
   'author',
+  'outline',
   'relationships',
   'projectGoals',
   'writingHistory',
@@ -119,6 +120,62 @@ const WORLD_FIELDS = new Set([
   'relationships',
 ]);
 
+const REMOVABLE_CHARACTER_FIELDS = new Set(['hasAvatar']);
+const REMOVABLE_WORLD_FIELDS = new Set(['hasAmbianceImage', 'relationships']);
+
+const WORLD_LOCATION_FIELDS = new Set([
+  'id',
+  'name',
+  'description',
+  'coordinates',
+  'type',
+  'population',
+  'significance',
+]);
+const WORLD_LOCATION_REMOVABLE_FIELDS = new Set(['coordinates', 'population', 'significance']);
+const WORLD_TIMELINE_FIELDS = new Set([
+  'id',
+  'era',
+  'year',
+  'title',
+  'description',
+  'date',
+  'locationId',
+  'characterIds',
+]);
+const WORLD_TIMELINE_REMOVABLE_FIELDS = new Set(['year', 'date', 'locationId', 'characterIds']);
+const WORLD_RELATIONSHIP_FIELDS = new Set([
+  'id',
+  'fromCharacterId',
+  'toCharacterId',
+  'type',
+  'description',
+  'strength',
+]);
+const WORLD_RELATIONSHIP_REMOVABLE_FIELDS = new Set(['description']);
+
+type NestedArrayRule = {
+  fields: ReadonlySet<string>;
+  removableFields: ReadonlySet<string>;
+  nestedObjectFields?: Readonly<Record<string, ReadonlySet<string>>>;
+};
+
+const WORLD_NESTED_ARRAY_RULES: Readonly<Record<string, NestedArrayRule>> = {
+  locations: {
+    fields: WORLD_LOCATION_FIELDS,
+    removableFields: WORLD_LOCATION_REMOVABLE_FIELDS,
+    nestedObjectFields: { coordinates: new Set(['lat', 'lng']) },
+  },
+  timeline: {
+    fields: WORLD_TIMELINE_FIELDS,
+    removableFields: WORLD_TIMELINE_REMOVABLE_FIELDS,
+  },
+  relationships: {
+    fields: WORLD_RELATIONSHIP_FIELDS,
+    removableFields: WORLD_RELATIONSHIP_REMOVABLE_FIELDS,
+  },
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -137,6 +194,82 @@ function definedKnownFields(
       ([key, entryValue]) => ownedFields.has(key) && entryValue !== undefined,
     ),
   );
+}
+
+function mergeKnownNestedObject(
+  value: unknown,
+  rawValue: unknown,
+  fields: ReadonlySet<string>,
+  removableFields: ReadonlySet<string>,
+  nestedObjectFields: Readonly<Record<string, ReadonlySet<string>>> = {},
+): Record<string, unknown> {
+  const merged = isRecord(rawValue) ? { ...rawValue } : {};
+  if (!isRecord(value)) return merged;
+  for (const key of fields) {
+    if (Object.hasOwn(value, key) && value[key] !== undefined) {
+      const nestedFields = nestedObjectFields[key];
+      merged[key] = nestedFields
+        ? mergeKnownNestedObject(value[key], merged[key], nestedFields, new Set())
+        : value[key];
+    } else if (removableFields.has(key)) {
+      delete merged[key];
+    }
+  }
+  return merged;
+}
+
+function mergeKnownNestedArray(value: unknown, rawValue: unknown, rule: NestedArrayRule): unknown {
+  if (!Array.isArray(value)) return value;
+  const rawById = new Map<string, unknown>();
+  if (Array.isArray(rawValue)) {
+    for (const rawEntry of rawValue) {
+      if (isIdBearing(rawEntry)) rawById.set(rawEntry.id, rawEntry);
+    }
+  }
+  return value.map((entry) => {
+    if (!isIdBearing(entry)) return entry;
+    return mergeKnownNestedObject(
+      entry,
+      rawById.get(entry.id),
+      rule.fields,
+      rule.removableFields,
+      rule.nestedObjectFields,
+    );
+  });
+}
+
+function mergeKnownEntityFields(
+  rawEntity: unknown,
+  fields: Record<string, unknown>,
+  nestedArrayRules: Readonly<Record<string, NestedArrayRule>> = {},
+): Record<string, unknown> {
+  const rawRecord = isRecord(rawEntity) ? rawEntity : {};
+  for (const [key, value] of Object.entries(fields)) {
+    const rule = nestedArrayRules[key];
+    if (rule) fields[key] = mergeKnownNestedArray(value, rawRecord[key], rule);
+  }
+  return fields;
+}
+
+function collectEntityFieldRemovals(
+  entities: readonly { id: string }[],
+  currentRaw: RawCollectionState,
+  removableFields: ReadonlySet<string>,
+): Readonly<Record<string, readonly string[]>> {
+  const removals = Object.fromEntries(
+    entities.flatMap((entity) => {
+      const rawEntity = currentRaw.entities[entity.id];
+      if (!isRecord(rawEntity)) return [];
+      const entityRecord = entity as unknown as Record<string, unknown>;
+      const fields = [...removableFields].filter(
+        (key) =>
+          Object.hasOwn(rawEntity, key) &&
+          (!Object.hasOwn(entityRecord, key) || entityRecord[key] === undefined),
+      );
+      return fields.length > 0 ? [[entity.id, fields] as const] : [];
+    }),
+  );
+  return removals;
 }
 
 // QNBS-v3: the Core boundary (features/project/coreBoundaryAdapter.ts) round-trips characters/worlds as a plain array outside Redux/IDB (filesystem, import/export); a raw carrier written through that path stores this shape, not {ids, entities}.
@@ -168,6 +301,8 @@ function buildCollectionEdit(
   newEntities: readonly { id: string }[],
   currentRaw: RawCollectionState,
   ownedFields: ReadonlySet<string>,
+  removableFields: ReadonlySet<string>,
+  nestedArrayRules: Readonly<Record<string, NestedArrayRule>> = {},
 ): EntityCollectionEdit {
   const newIds = newEntities.map((entity) => entity.id);
   const newIdSet = new Set(newIds);
@@ -175,12 +310,14 @@ function buildCollectionEdit(
   const upsert = newEntities.map((entity) => {
     // QNBS-v3: same rule as top-level fields -- an explicitly-undefined typed property means "unowned" and must not clobber an opaque prior raw value in the merge.
     const definedEntity = definedKnownFields(entity, ownedFields);
-    return definedEntity;
+    return mergeKnownEntityFields(currentRaw.entities[entity.id], definedEntity, nestedArrayRules);
   });
+  const removeFields = collectEntityFieldRemovals(newEntities, currentRaw, removableFields);
   return {
     upsert: upsert as unknown as readonly EntityLike[],
     preserveExistingFields: true,
     ...(removedIds.length > 0 ? { remove: removedIds } : {}),
+    ...(Object.keys(removeFields).length > 0 ? { removeFields } : {}),
     order: newIds,
   };
 }
@@ -217,11 +354,14 @@ export function buildAutosaveOwnedProjectEdit(
         newCharacters,
         readRawCollection(parsedCurrent, 'characters'),
         CHARACTER_FIELDS,
+        REMOVABLE_CHARACTER_FIELDS,
       ),
       worlds: buildCollectionEdit(
         newWorlds,
         readRawCollection(parsedCurrent, 'worlds'),
         WORLD_FIELDS,
+        REMOVABLE_WORLD_FIELDS,
+        WORLD_NESTED_ARRAY_RULES,
       ),
     },
     ...(removeFields.length > 0 ? { removeFields } : {}),

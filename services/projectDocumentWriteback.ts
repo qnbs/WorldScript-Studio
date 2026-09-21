@@ -48,6 +48,8 @@ export interface EntityCollectionEdit<T extends EntityLike = EntityLike> {
   remove?: readonly string[];
   /** Explicit full declared order after this edit (ids). Omitted: existing order is kept, upserts appended. */
   order?: readonly string[];
+  /** Per-entity owned fields to remove when a full snapshot omits optional properties. */
+  removeFields?: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface OwnedProjectEdit {
@@ -628,10 +630,15 @@ function applyEntityCollectionEdit(
   for (const id of edit.remove ?? []) byId.delete(id);
   for (const entity of edit.upsert ?? []) {
     const existing = byId.get(entity.id);
-    byId.set(
-      entity.id,
-      edit.preserveExistingFields && existing ? { ...existing, ...entity } : entity,
-    );
+    const merged = edit.preserveExistingFields && existing ? { ...existing, ...entity } : entity;
+    const removeFields = edit.removeFields?.[entity.id] ?? [];
+    if (removeFields.length === 0) {
+      byId.set(entity.id, merged);
+      continue;
+    }
+    const withoutRemovedFields = { ...merged };
+    for (const field of removeFields) delete withoutRemovedFields[field];
+    byId.set(entity.id, withoutRemovedFields);
   }
 
   const orderResult = edit.order
@@ -714,10 +721,18 @@ function verifyEntityCollectionValues(
   originalById: ReadonlyMap<string, EntityLike>,
   upsertMap: ReadonlyMap<string, EntityLike>,
   preserveExistingFields: boolean,
+  removeFields: Readonly<Record<string, readonly string[]>> | undefined,
 ): { ok: true } | { ok: false; reason: string } {
   for (const entity of updatedEntities) {
     const intended = upsertMap.get(entity.id);
     if (intended) {
+      const removed = removeFields?.[entity.id] ?? [];
+      if (removed.some((field) => Object.hasOwn(entity, field))) {
+        return {
+          ok: false,
+          reason: `collection "${key}" entity "${entity.id}" retained an intended removed field`,
+        };
+      }
       if (!deepEqual(entity, intended)) {
         if (
           preserveExistingFields &&
@@ -772,6 +787,7 @@ function verifyEntityCollectionApplied(
     originalById,
     upsertMap,
     edit.preserveExistingFields ?? false,
+    edit.removeFields,
   );
 }
 
@@ -970,6 +986,17 @@ function rejectsSchemaVersionField(
     : null;
 }
 
+function rejectsSchemaVersionRemoval(
+  removeFields: readonly string[] | undefined,
+): { status: 'VERIFICATION_FAILED'; reason: string } | null {
+  return removeFields?.includes('schemaVersion')
+    ? {
+        status: 'VERIFICATION_FAILED',
+        reason: 'schemaVersion cannot be removed through an owned-field edit',
+      }
+    : null;
+}
+
 function applyOwnedFieldsStep(
   raw: string,
   fields: Readonly<Record<string, unknown>> | undefined,
@@ -982,6 +1009,8 @@ function applyOwnedFieldsStep(
     const rejection = rejectsSchemaVersionField(fields);
     if (rejection) return { ok: false, result: rejection };
   }
+  const removalRejection = rejectsSchemaVersionRemoval(removeFields);
+  if (removalRejection) return { ok: false, result: removalRejection };
   const stripped = hasRemovals ? stripTopLevelObjectKeys(raw, new Set(removeFields)) : raw;
   if (stripped === null) {
     return {

@@ -104,7 +104,9 @@ async function writeAndReplace(
       await retryFs(() => write(temporary));
       await retryFs(async () => {
         // QNBS-v3: admit immediately before every irreversible rename attempt, including retries after a transient filesystem failure.
-        await beforeReplace?.();
+        const admission = beforeReplace?.();
+        // QNBS-v3: keep synchronous image admission adjacent to rename; only an asynchronous filesystem check may yield here.
+        if (admission instanceof Promise) await admission;
         await apis.rename(temporary, path);
       });
     } catch (error) {
