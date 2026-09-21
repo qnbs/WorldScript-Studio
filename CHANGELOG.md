@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- release-candidate: v1.28.7 -->
+## [1.28.7] — 2026-09-21
+
 ### Added
 
 - **Canonical autosave lifecycle writer for Slice 2A:** adds create-if-absent and bounded
