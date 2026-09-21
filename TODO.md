@@ -8,9 +8,12 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Current Sprint — v1.28.6 corrected release cut: Tauri desktop release-build recovery (2026-09-09)
+## Current Sprint — v1.28.7 exceptional release cut under AI qualification exception (2026-09-21)
 
-> **Status: ✅ done.** The authoritative native sequence remains
+> **Status: 🔄 in progress.** This release is intentionally advanced under a one-time maintainer
+> exception documented in issue #743. The exception waives AI/local-AI qualification completeness
+> timing only; it does not mark #743 passed or waive CI, CodeQL, security, signing, version,
+> Tauri parity, desktop qualification, updater, or artifact verification. The authoritative native sequence remains
 > [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md), with the
 > next Rust-Core capability choice recorded in [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md).
 > R-15 implementation stays blocked behind the still-open Wave 2 prerequisite (ledger row 9). No
@@ -45,6 +48,12 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   `v1.28.6` and its GitHub Release (full desktop installer/updater asset set, all platforms) are
   published; the tag-triggered Tauri/CI/Docker workflows and the post-release `AUDIT.md` evidence
   entry (PR #681) are complete.
+- 🔄 `v1.28.7` exceptional release cut in progress: version/`CHANGELOG.md`/`TODO.md`/`README.md`
+  reconciliation for the verified post-#802 main line. #743 remains OPEN / NOT PASS; its
+  incomplete local-runtime and hardware qualification owners continue post-release. Tag, GitHub
+  Release, release artifacts, and post-release `AUDIT.md` evidence remain pending until the
+  release PR merges, resulting-main CI/CodeQL are green, and exact-SHA Windows/Ubuntu/macOS ARM
+  `tauri-build.yml` qualification passes. Intel macOS is not claimed.
 - ✅ PR #674 merged (2026-09-09): the CHANGELOG completeness gate upgraded from accepting any
   non-empty `[Unreleased]` section forever to requiring every governed commit to be individually
   referenced by PR number or subject slug; backfilled 13 previously-undocumented entries. The

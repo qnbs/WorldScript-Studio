@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "WorldScript Studio",
-  "version": "1.28.6",
+  "version": "1.28.7",
   "identifier": "com.worldscript.studio",
   "build": {
     "frontendDist": "../dist",
