@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockUseApp, mockProjectBootstrapEffect, mockDispatch, mockStore, selectorState, project } =
   vi.hoisted(() => ({
@@ -174,5 +174,34 @@ describe('App seed-authority wiring', () => {
         allowInitialMetadataSeed: true,
       }),
     );
+  });
+});
+
+// QNBS-v3 (Visual Maturity #A): locks the body-class toggle that scopes Aurora/noise to isPortalActive instead of every whole-app view.
+describe('portal-active body class (Aurora/noise scope)', () => {
+  afterEach(() => {
+    document.body.classList.remove('portal-active');
+  });
+
+  // QNBS-v3: one render per test — a second synchronous render inside one test hits an unrelated AnalyticsBootstrap/duckdb singleton issue; RTL's between-test cleanup keeps separate tests safe.
+  it('adds portal-active while the welcome portal is showing', () => {
+    mockUseApp.mockReturnValue({
+      currentView: 'dashboard',
+      previousView: 'dashboard',
+      handleNavigate: vi.fn(),
+      handlePortalExit: vi.fn(),
+      isPortalActive: true,
+      isInitialLoad: true,
+      allowInitialMetadataSeed: true,
+      isSidebarOpen: false,
+      setIsSidebarOpen: vi.fn(),
+    });
+    render(<App isNewUser={true} allowInitialMetadataSeed={true} />);
+    expect(document.body.classList.contains('portal-active')).toBe(true);
+  });
+
+  it('never sets portal-active for an ordinary (non-portal) boot', () => {
+    render(<App isNewUser={false} allowInitialMetadataSeed={false} />);
+    expect(document.body.classList.contains('portal-active')).toBe(false);
   });
 });

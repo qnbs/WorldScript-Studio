@@ -274,6 +274,11 @@ const App: FC<AppProps> = ({ isNewUser, allowInitialMetadataSeed: initialSeedAut
   }, [settings.appearancePreset]);
 
   useEffect(() => {
+    // QNBS-v3 (Visual Maturity #A): Aurora/noise are a Welcome Portal brand moment, not a global whole-app ambience.
+    document.body.classList.toggle('portal-active', isPortalActive);
+  }, [isPortalActive]);
+
+  useEffect(() => {
     // QNBS-v3: Decorative fixed layers are opt-out so long-form writers can keep a neutral canvas.
     document.body.classList.toggle(
       'writing-surface-plain',
