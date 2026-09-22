@@ -17,27 +17,18 @@ export const Card: React.FC<CardProps> = ({
   return (
     <Component
       type={isInteractive ? 'button' : undefined}
+      // QNBS-v3 (Visual Maturity #B, DS-6): a solid surface + semantic elevation/radius roles replace the glass-panel treatment — a card reads as a document panel, not a floating glass tile; interactive affordance is border/shadow only, no hover lift or scale.
       className={`
-        relative group rounded-sc-xl
-        bg-[var(--sc-surface-raised)]/60 backdrop-blur-3xl
-        border border-[var(--glass-border)]
-        shadow-[var(--sc-shadow-lg)]
-        transition-all duration-sc-normal ease-out
-        ${isInteractive ? 'hover:-translate-y-1 hover:shadow-[var(--sc-shadow-xl)] hover:bg-[var(--sc-surface-raised)]/80 cursor-pointer active:scale-[0.99]' : ''} 
+        relative group rounded-[var(--sc-radius-panel)]
+        bg-[var(--sc-surface-raised)]
+        border border-[var(--sc-border-subtle)]
+        shadow-[var(--sc-elevation-surface)]
+        transition-colors duration-sc-normal ease-out
+        ${isInteractive ? 'hover:border-[var(--sc-border-strong)] hover:shadow-[var(--sc-elevation-popover)] cursor-pointer' : ''}
         ${className ?? ''}
       `}
       {...props}
     >
-      {/* Inner Border Gradient - gives a subtle high-end look */}
-      <div className="absolute inset-0 rounded-sc-xl border border-[var(--glass-border)] pointer-events-none" />
-      <div className="absolute inset-0 rounded-sc-xl border border-transparent group-hover:border-[var(--sc-accent)]/20 transition-colors duration-500 pointer-events-none" />
-
-      {/* Specular Highlight - Simulates light hitting the top edge of glass */}
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--glass-highlight)] to-transparent opacity-50 pointer-events-none" />
-
-      {/* Spotlight Effect */}
-      <div className="absolute inset-0 bg-gradient-to-r from-[var(--sc-accent)]/0 via-[var(--sc-accent)]/5 to-[var(--sc-accent)]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-lg pointer-events-none" />
-
       <div className="relative z-10 h-full flex flex-col">{children}</div>
     </Component>
   );

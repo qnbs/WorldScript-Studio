@@ -48,14 +48,16 @@ export const RadioGroup = React.memo(
                   checked={checked}
                   onChange={() => onChange(option.value)}
                   disabled={option.disabled}
+                  // QNBS-v3 (Visual Maturity #B, DS-6): a solid surface token replaces the blurred glass panel, and checked:hover: (higher specificity than either variant alone) keeps the accent fill on hover while checked, regardless of Tailwind's variant emission order.
                   className={`
                     peer h-5 w-5 appearance-none rounded-full
                     border border-[var(--sc-border-subtle)]
-                    bg-[var(--glass-bg)] backdrop-blur-sm
+                    bg-[var(--sc-surface-overlay)]
                     checked:border-[var(--sc-accent)] checked:bg-[var(--sc-accent)]
+                    checked:hover:border-[var(--sc-accent)] checked:hover:bg-[var(--sc-accent)]
                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--sc-surface-base)]
                     transition-all duration-sc-fast cursor-pointer
-                    hover:border-[var(--sc-border-strong)] hover:bg-[var(--glass-bg-hover)]
+                    hover:border-[var(--sc-border-strong)] hover:bg-[var(--sc-surface-raised)]
                     disabled:opacity-50 disabled:cursor-not-allowed
                   `}
                 />

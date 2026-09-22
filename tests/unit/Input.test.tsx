@@ -104,4 +104,12 @@ describe('Input', () => {
     const btn = screen.getByRole('button');
     expect(btn.className).toContain('animate-pulse');
   });
+
+  // QNBS-v3 (Visual Maturity #B): locks the solid-surface treatment — no blurred glass panel.
+  it('renders on a solid surface token, without backdrop-blur', () => {
+    render(<Input data-testid="glass-check" />);
+    const className = screen.getByTestId('glass-check').className;
+    expect(className).toContain('bg-[var(--sc-surface-overlay)]');
+    expect(className).not.toContain('backdrop-blur');
+  });
 });

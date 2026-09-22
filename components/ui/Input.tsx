@@ -3,15 +3,16 @@ import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { useTranslation } from '../../hooks/useTranslation';
 import { Icon } from './Icon';
 
+// QNBS-v3 (Visual Maturity #B, DS-6): a solid surface token replaces the blurred glass panel — an input reads as an opaque form control, not a translucent overlay.
 const inputBaseClasses = `
   flex h-11 w-full appearance-none rounded-sc-lg
   border border-[var(--sc-border-subtle)]
-  bg-[var(--glass-bg)] backdrop-blur-md
+  bg-[var(--sc-surface-overlay)]
   px-4 py-2 text-sm
   text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)]
   shadow-sm transition-all duration-sc-fast
-  focus-visible:outline-none focus-visible:border-[var(--border-interactive)] focus-visible:ring-4 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:bg-[var(--sc-surface-raised)]/50
-  hover:border-[var(--sc-border-strong)] hover:bg-[var(--glass-bg-hover)]
+  focus-visible:outline-none focus-visible:border-[var(--border-interactive)] focus-visible:ring-4 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:bg-[var(--sc-surface-raised)]
+  hover:border-[var(--sc-border-strong)] hover:bg-[var(--sc-surface-raised)]
   disabled:opacity-50 disabled:cursor-not-allowed
 `;
 

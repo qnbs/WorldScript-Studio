@@ -63,4 +63,20 @@ describe('RadioGroup', () => {
     render(<RadioGroup options={OPTIONS} value="a" onChange={vi.fn()} name="choices" />);
     expect(screen.getByRole('radiogroup').className).toContain('flex-col');
   });
+
+  // QNBS-v3 (Visual Maturity #B): locks the solid-surface treatment — no blurred glass panel.
+  it('renders each radio on a solid surface token, without backdrop-blur', () => {
+    render(<RadioGroup options={OPTIONS} value="a" onChange={vi.fn()} name="choices" />);
+    const className = screen.getByRole('radio', { name: 'Option A' }).className;
+    expect(className).toContain('bg-[var(--sc-surface-overlay)]');
+    expect(className).not.toContain('backdrop-blur');
+  });
+
+  // QNBS-v3 (CodeAnt, Visual Maturity #B): locks the checked:hover: compound variant so an opaque hover background can never visually un-fill a checked radio, regardless of Tailwind's variant emission order.
+  it('keeps the accent fill on hover for the checked option', () => {
+    render(<RadioGroup options={OPTIONS} value="a" onChange={vi.fn()} name="choices" />);
+    const className = screen.getByRole('radio', { name: 'Option A' }).className;
+    expect(className).toContain('checked:hover:bg-[var(--sc-accent)]');
+    expect(className).toContain('checked:hover:border-[var(--sc-accent)]');
+  });
 });

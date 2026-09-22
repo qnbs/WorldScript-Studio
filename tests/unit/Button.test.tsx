@@ -68,4 +68,11 @@ describe('Button', () => {
     render(<Button size="lg">Groß</Button>);
     expect(screen.getByRole('button').className).toMatch(/px-8/);
   });
+
+  // QNBS-v3 (Visual Maturity #B): locks the removal of the primary variant's gloss gradient overlay div.
+  it('does not render a gloss gradient overlay on the primary variant', () => {
+    render(<Button>Primary</Button>);
+    const btn = screen.getByRole('button');
+    expect(btn.querySelector('[class*="gradient-to-b"]')).not.toBeInTheDocument();
+  });
 });

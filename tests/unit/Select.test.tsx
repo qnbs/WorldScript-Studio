@@ -73,4 +73,12 @@ describe('Select', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
+
+  // QNBS-v3 (Visual Maturity #B): locks the solid-surface treatment on the trigger — no glass background.
+  it('renders the trigger on a solid surface token, without a glass background', () => {
+    render(<Select value="a" onChange={vi.fn()} options={OPTIONS} />);
+    const className = screen.getByRole('button').className;
+    expect(className).toContain('bg-[var(--sc-surface-overlay)]');
+    expect(className).not.toContain('glass-bg');
+  });
 });

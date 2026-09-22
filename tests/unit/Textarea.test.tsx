@@ -175,10 +175,13 @@ describe('Textarea', () => {
     });
   });
 
-  describe('variant="default" (unchanged regression guard)', () => {
-    it('still includes backdrop-blur and renders the mic button', () => {
+  // QNBS-v3 (Visual Maturity #B): default variant is now a solid surface, not a blurred glass panel — this guard flips with it.
+  describe('variant="default" (solid surface, no glass)', () => {
+    it('renders on a solid surface token, without backdrop-blur, and still shows the mic button', () => {
       render(<Textarea data-testid="ta" />);
-      expect(screen.getByTestId('ta').className).toContain('backdrop-blur-md');
+      const className = screen.getByTestId('ta').className;
+      expect(className).not.toContain('backdrop-blur');
+      expect(className).toContain('bg-[var(--sc-surface-overlay)]');
       expect(screen.getByRole('button')).toBeInTheDocument();
     });
   });

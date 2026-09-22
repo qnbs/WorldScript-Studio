@@ -166,7 +166,8 @@ export const Select = React.memo(
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           aria-label={ariaLabel}
-          className="flex items-center justify-between w-full px-4 py-2.5 text-sm rounded-sc-lg bg-[var(--glass-bg)] hover:bg-[var(--glass-bg-hover)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          // QNBS-v3 (Visual Maturity #B, DS-6): a solid surface token replaces the glass background, matching Input/Textarea's default — the open dropdown panel below already uses a solid surface.
+          className="flex items-center justify-between w-full px-4 py-2.5 text-sm rounded-sc-lg bg-[var(--sc-surface-overlay)] hover:bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           <span className={selectedLabel ? '' : 'text-[var(--sc-text-muted)]'}>
             {selectedLabel ?? placeholder ?? ''}

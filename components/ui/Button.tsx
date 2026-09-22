@@ -14,6 +14,7 @@ export const Button = React.memo(
         'relative inline-flex items-center justify-center rounded-sc-lg font-medium transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sc-surface-base)] disabled:opacity-50 disabled:pointer-events-none active:scale-[0.96] select-none tracking-tight overflow-hidden';
 
       const variantClasses = {
+        // QNBS-v3 (Visual Maturity #B): the gloss gradient overlay is removed — the accent fill, hover shade, and shadow tokens already carry the affordance without a fake light-hit layer.
         primary:
           // QNBS-v3: Include legacy utility name `background-interactive` for test compatibility;
           // all real colors are now token-driven via --sc-button-primary-* and --sc-text-on-accent.
@@ -46,10 +47,6 @@ export const Button = React.memo(
           <span className="relative z-10 flex items-center justify-center gap-2 w-full">
             {children}
           </span>
-          {/* Gloss Effect for Primary to give depth */}
-          {variant === 'primary' && (
-            <div className="absolute inset-0 bg-gradient-to-b from-[var(--glass-bg-hover)] to-transparent pointer-events-none" />
-          )}
         </button>
       );
     },
