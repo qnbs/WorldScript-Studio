@@ -10,12 +10,12 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ## Current Sprint — v1.28.8 desktop startup-recovery patch release (2026-09-22)
 
-> **Status: 🔄 in progress.** `#743`'s prior one-time maintainer exception was explicitly for
+> **Status: ✅ released.** `#743`'s prior one-time maintainer exception was explicitly for
 > v1.28.7 and does not carry forward. v1.28.8 instead relies on the durable governance
 > reconciliation recorded on `#743` (2026-09-22): the qualification tracker (Gates A/B/C/…, still
 > open, no boxes checked) is separated from the Release invariant (the concrete "must not
 > knowingly ship" list), which is re-verified per release and was re-verified clean against this
-> candidate. It does not waive CI, CodeQL, security, signing, version, Tauri parity, desktop
+> release. It does not waive CI, CodeQL, security, signing, version, Tauri parity, desktop
 > qualification, updater, or artifact verification. The authoritative native sequence remains
 > [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md), with the
 > next Rust-Core capability choice recorded in [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md).
@@ -55,13 +55,13 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   with the full desktop installer/updater asset set (Linux .deb/.rpm/.AppImage + `.sig`, Windows
   `.exe`/`.msi` + `.sig`, macOS ARM `.dmg`/updater `.tar.gz` + `.sig`, `latest.json`). Intel macOS
   was not claimed. #743 remained OPEN / NOT PASS under its one-time v1.28.7-only exception.
-- 🔄 `v1.28.8` release cut in progress: version/`CHANGELOG.md`/`TODO.md`/`README.md`
-  reconciliation for the verified post-#807 main line, carrying the Desktop Safe Open
-  startup-recovery fix (#804/#807). #743 remains OPEN / NOT PASS; the durable governance
-  reconciliation above (not a reused exception) re-verified the Release invariant clean for this
-  candidate. Tag, GitHub Release, release artifacts, and post-release `AUDIT.md` evidence remain
-  pending until the release PR merges, resulting-main CI/CodeQL are green, and exact-SHA
-  Windows/Ubuntu/macOS ARM `tauri-build.yml` qualification passes. Intel macOS is not claimed.
+- ✅ `v1.28.8` released (PR #808, 2026-09-22): tag `v1.28.8` and its GitHub Release are published
+  with the full desktop installer/updater asset set (Linux .deb/.rpm/.AppImage + `.sig`, Windows
+  `.exe`/`.msi` + `.sig`, macOS ARM `.dmg`/updater `.tar.gz` + `.sig`, `latest.json`). Intel macOS
+  was not claimed. Pre-tag exact-SHA Tauri qualification additionally included a real-artifact
+  Linux Safe Open runtime check (isolated `XDG_*` profile, headless AppImage launch, real
+  click-through) against `FUTURE` and `UNSUPPORTED_OLDER` fixtures — see `AUDIT.md`. #743 remained
+  OPEN / NOT PASS under the durable governance reconciliation above, not a reused exception.
 - ✅ PR #674 merged (2026-09-09): the CHANGELOG completeness gate upgraded from accepting any
   non-empty `[Unreleased]` section forever to requiring every governed commit to be individually
   referenced by PR number or subject slug; backfilled 13 previously-undocumented entries. The

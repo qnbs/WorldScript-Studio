@@ -7,14 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Post-release v1.28.8 truth sync: release-candidate markers and evidence reconciliation
+  (see `## [1.28.8]` below).
+
 ## [1.28.8] — 2026-09-22
 
-<!-- release-candidate: v1.28.8 -->
-- **v1.28.8 release candidate:** desktop startup-recovery hotfix; no tag, GitHub Release, or
-  published artifacts exist yet. #743's Release invariant was re-verified against this candidate
-  (no concrete blocker); the qualification tracker itself remains open and unaffected — see the
-  reconciliation comment on #743. PR #808. The post-release truth sync will finalize this entry to
-  "released" once the tag and assets are published.
+- **v1.28.8 released:** desktop startup-recovery patch release. #743's Release invariant was
+  re-verified against this release (no concrete blocker); the qualification tracker itself
+  remains open and unaffected — see the reconciliation comment on #743. PR #808.
+- **Post-release v1.28.8 truth sync:** removed the now-stale release-candidate markers from
+  README.md and CHANGELOG.md now that the `v1.28.8` tag and GitHub Release are published, and
+  recorded real release-gate evidence in AUDIT.md (main CI/CD run, CodeQL, the pre-tag exact-SHA
+  Tauri qualification including a real-artifact Linux Safe Open runtime check, tag-triggered
+  Tauri/CI/Docker runs, published release assets).
 
 ### Fixed
 
