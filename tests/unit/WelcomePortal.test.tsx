@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WelcomePortal } from '../../components/WelcomePortal';
+import { _resetSafeSessionForTest, enterSafeSession } from '../../services/startupSafeSession';
+import { storageService } from '../../services/storageService';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -40,6 +42,10 @@ vi.mock('../../constants', () => ({
 vi.mock('../../features/project/projectSlice', () => ({
   projectActions: {
     createNewProject: vi.fn(() => ({ type: 'project/createNewProject' })),
+    assignProjectIdentity: vi.fn((projectId: string) => ({
+      type: 'project/assignProjectIdentity',
+      payload: projectId,
+    })),
   },
 }));
 
@@ -158,5 +164,76 @@ describe('WelcomePortal', () => {
     await waitFor(() =>
       expect(onExit).toHaveBeenCalledWith('manuscript', { allowInitialMetadataSeed: false }),
     );
+  });
+});
+
+// QNBS-v3: in a safe session leaving the portal is the explicit "start a project" act — it must re-key the live project BEFORE the portal closes, and must never offer to "continue" the refused one.
+describe('WelcomePortal in a safe session', () => {
+  const liveState = { project: { present: { data: { id: 'default' } } } };
+
+  beforeEach(() => {
+    mockDispatch.mockImplementation((action: unknown) =>
+      typeof action === 'function'
+        ? action(mockDispatch, () => liveState)
+        : Promise.resolve({ type: 'project/importProject/fulfilled' }),
+    );
+  });
+
+  afterEach(() => {
+    _resetSafeSessionForTest();
+    mockDispatch.mockReset();
+  });
+
+  it('offers Continue for an ordinary existing session but never for the refused project', async () => {
+    vi.mocked(storageService.hasSavedData).mockResolvedValueOnce(true);
+    const { unmount } = render(<WelcomePortal onExit={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: 'portal.welcome.continue' })).toBeTruthy();
+    unmount();
+
+    enterSafeSession('refused-dir');
+    vi.mocked(storageService.hasSavedData).mockResolvedValueOnce(true);
+    render(<WelcomePortal onExit={vi.fn()} />);
+    await waitFor(() => expect(storageService.hasSavedData).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('button', { name: 'portal.welcome.continue' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'portal.welcome.tryDemo' })).toBeTruthy();
+  });
+
+  it('re-keys the live project to a fresh identity before the portal exits', async () => {
+    enterSafeSession('default');
+    const onExit = vi.fn();
+    const user = userEvent.setup();
+    render(<WelcomePortal onExit={onExit} />);
+
+    await user.click(screen.getByRole('button', { name: 'portal.welcome.tryDemo' }));
+
+    await waitFor(() => expect(onExit).toHaveBeenCalledOnce());
+    const assign = mockDispatch.mock.calls
+      .map(([action], index) => ({ action, order: mockDispatch.mock.invocationCallOrder[index] }))
+      .find(
+        ({ action }) => (action as { type?: string })?.type === 'project/assignProjectIdentity',
+      );
+    const assignedIdentity = (assign?.action as { payload?: string } | undefined)?.payload;
+    expect(assign?.action).toEqual({
+      type: 'project/assignProjectIdentity',
+      payload: expect.stringMatching(/^project-.+/),
+    });
+    expect(assignedIdentity).not.toBe('default');
+    expect(assign?.order).toBeLessThan(onExit.mock.invocationCallOrder[0] ?? 0);
+    expect(onExit).toHaveBeenCalledWith('manuscript', { allowInitialMetadataSeed: false });
+  });
+
+  it('never re-keys outside a safe session', async () => {
+    const onExit = vi.fn();
+    const user = userEvent.setup();
+    render(<WelcomePortal onExit={onExit} />);
+
+    await user.click(screen.getByRole('button', { name: 'portal.welcome.tryDemo' }));
+
+    await waitFor(() => expect(onExit).toHaveBeenCalledOnce());
+    expect(
+      mockDispatch.mock.calls.some(
+        ([action]) => (action as { type?: string })?.type === 'project/assignProjectIdentity',
+      ),
+    ).toBe(false);
   });
 });

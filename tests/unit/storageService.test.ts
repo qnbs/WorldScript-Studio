@@ -31,6 +31,10 @@ const mockDb = {
   saveRagVectors: vi.fn().mockResolvedValue(undefined),
   getRagVectors: vi.fn().mockResolvedValue([]),
   deleteRagVectors: vi.fn().mockResolvedValue(undefined),
+  deleteQualifiedImage: vi.fn().mockResolvedValue(undefined),
+  saveBinderAsset: vi.fn().mockResolvedValue(undefined),
+  deleteBinderAsset: vi.fn().mockResolvedValue(undefined),
+  deleteAllBinderAssetsForProject: vi.fn().mockResolvedValue(undefined),
 };
 
 vi.mock('../../services/dbService', () => ({ dbService: mockDb }));
@@ -195,5 +199,107 @@ describe('storageService (IndexedDB backend in browser)', () => {
 
   it('reports indexeddb storage backend in web context', async () => {
     await expect(storageService.getStorageBackendKind()).resolves.toBe('indexeddb');
+  });
+});
+
+// QNBS-v3: a refused desktop project must stay untouched through EVERY project-scoped write — not only the project document — so the fence lives at the storage boundary itself.
+describe('storageService safe-session fence', () => {
+  let storageService: Awaited<typeof import('../../services/storageService')>['storageService'];
+  let session: typeof import('../../services/startupSafeSession');
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    delete (window as { __TAURI__?: unknown }).__TAURI__;
+    session = await import('../../services/startupSafeSession');
+    storageService = (await import('../../services/storageService')).storageService;
+  });
+
+  const projectOf = (id: string) =>
+    saveEnvelopeFromProjectData({
+      id,
+      title: 'T',
+      logline: 'L',
+      characters: charactersAdapter.getInitialState(),
+      worlds: worldsAdapter.getInitialState(),
+      outline: [],
+      manuscript: [],
+    });
+
+  // [label, invoke, backend spy] — every entry targets the refused namespace ('default'), directly or by an unset projectId.
+  const refusedWrites: Array<
+    [string, (s: typeof storageService) => Promise<unknown>, () => ReturnType<typeof vi.fn>]
+  > = [
+    ['saveProject', (s) => s.saveProject(projectOf('default')), () => mockDb.saveProject],
+    ['deleteProject', (s) => s.deleteProject('default'), () => mockDb.deleteProject],
+    ['saveImage (explicit)', (s) => s.saveImage('i', 'b', 'default'), () => mockDb.saveImage],
+    ['saveImage (unset id => default)', (s) => s.saveImage('i', 'b'), () => mockDb.saveImage],
+    ['deleteImage (unset id => default)', (s) => s.deleteImage('i'), () => mockDb.deleteImage],
+    [
+      'deleteQualifiedImage',
+      (s) => s.deleteQualifiedImage('i', 'default'),
+      () => mockDb.deleteQualifiedImage,
+    ],
+    [
+      'saveStoryCodex',
+      (s) => s.saveStoryCodex({ projectId: 'default' } as never),
+      () => mockDb.saveStoryCodex,
+    ],
+    ['deleteStoryCodex', (s) => s.deleteStoryCodex('default'), () => mockDb.deleteStoryCodex],
+    ['saveRagVectors', (s) => s.saveRagVectors('default', []), () => mockDb.saveRagVectors],
+    ['deleteRagVectors', (s) => s.deleteRagVectors('default'), () => mockDb.deleteRagVectors],
+    [
+      'saveBinderAsset',
+      (s) => s.saveBinderAsset('default', 'a', new ArrayBuffer(1), {} as never),
+      () => mockDb.saveBinderAsset,
+    ],
+    [
+      'deleteBinderAsset',
+      (s) => s.deleteBinderAsset('default', 'a'),
+      () => mockDb.deleteBinderAsset,
+    ],
+    [
+      'deleteAllBinderAssetsForProject',
+      (s) => s.deleteAllBinderAssetsForProject('default'),
+      () => mockDb.deleteAllBinderAssetsForProject,
+    ],
+  ];
+
+  it('passes every project-scoped write straight through outside a safe session', async () => {
+    await storageService.saveImage('i', 'b', 'default');
+    await storageService.deleteProject('default');
+    expect(mockDb.saveImage).toHaveBeenCalledOnce();
+    expect(mockDb.deleteProject).toHaveBeenCalledOnce();
+  });
+
+  it.each(refusedWrites)(
+    'never lets %s reach the refused namespace in a safe session',
+    async (_label, invoke, spy) => {
+      session.enterSafeSession('default');
+      await expect(invoke(storageService)).rejects.toBeInstanceOf(
+        session.ProjectPersistenceFencedError,
+      );
+      expect(spy()).not.toHaveBeenCalled();
+    },
+  );
+
+  it('admits the session identity for namespace writes, and its project document only once established', async () => {
+    session.enterSafeSession('default');
+    const identity = session.getSafeSessionProjectId() ?? '';
+
+    await storageService.saveImage('i', 'b', identity);
+    expect(mockDb.saveImage).toHaveBeenCalledWith('i', 'b', identity);
+
+    await expect(storageService.saveProject(projectOf(identity))).rejects.toBeInstanceOf(
+      session.ProjectPersistenceFencedError,
+    );
+    expect(mockDb.saveProject).not.toHaveBeenCalled();
+
+    session.establishSafeSessionProject(identity, () => undefined);
+    await storageService.saveProject(projectOf(identity));
+    expect(mockDb.saveProject).toHaveBeenCalledOnce();
+    await expect(storageService.saveProject(projectOf('default'))).rejects.toBeInstanceOf(
+      session.ProjectPersistenceFencedError,
+    );
   });
 });

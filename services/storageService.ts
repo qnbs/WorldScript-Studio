@@ -32,6 +32,11 @@ export {
 import { dbService } from './dbService';
 import { fileSystemService } from './fileSystemService';
 import { logger } from './logger';
+import {
+  assertProjectNamespaceWriteAdmitted,
+  assertProjectPersistenceAdmitted,
+} from './startupSafeSession';
+import { normalizeSaveProjectInputToStoryProject as flatProjectOf } from './storageBackend';
 import { isTauriRuntime } from './tauriRuntime';
 
 // QNBS-v3: re-exporting the narrow storage contracts keeps callers on one backend-independent type boundary.
@@ -79,6 +84,9 @@ class StorageManager {
 
   // Delegate all methods to the current backend
   async saveProject(project: SaveProjectInput): Promise<void> {
+    // QNBS-v3: StoryProject has no typed id, but persisted envelopes carry one -- a non-string id counts as unset, which a safe session refuses.
+    const projectId = (flatProjectOf(project) as unknown as Record<string, unknown>)['id'];
+    assertProjectPersistenceAdmitted(typeof projectId === 'string' ? projectId : undefined);
     const backend = await this.getBackend();
     return backend.saveProject(project);
   }
@@ -113,6 +121,7 @@ class StorageManager {
   }
 
   async deleteProject(projectId: string): Promise<void> {
+    assertProjectNamespaceWriteAdmitted(projectId);
     const backend = await this.getBackend();
     return backend.deleteProject(projectId);
   }
@@ -124,6 +133,8 @@ class StorageManager {
     projectId?: string,
     writeAdmission?: ImageWriteAdmission,
   ): Promise<void> {
+    // QNBS-v3: an unset projectId resolves to the backend's 'default' namespace, which is exactly where a refused project may live.
+    assertProjectNamespaceWriteAdmitted(projectId ?? 'default');
     const backend = await this.getBackend();
     // QNBS-v3: preserve the legacy call shape while forwarding write authority at the persistence boundary.
     return writeAdmission
@@ -143,6 +154,7 @@ class StorageManager {
   }
 
   async deleteQualifiedImage(id: string, projectId?: string): Promise<void> {
+    assertProjectNamespaceWriteAdmitted(projectId ?? 'default');
     const backend = await this.getBackend();
     return backend.deleteQualifiedImage(id, projectId);
   }
@@ -217,6 +229,7 @@ class StorageManager {
     projectId?: string,
     deleteAdmission?: ImageDeleteAdmission,
   ): Promise<void> {
+    assertProjectNamespaceWriteAdmitted(projectId ?? 'default');
     const backend = await this.getBackend();
     return deleteAdmission
       ? backend.deleteImage(id, projectId, deleteAdmission)
@@ -229,6 +242,7 @@ class StorageManager {
   }
 
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
+    assertProjectNamespaceWriteAdmitted(codex.projectId);
     const backend = await this.getBackend();
     return backend.saveStoryCodex(codex);
   }
@@ -239,11 +253,13 @@ class StorageManager {
   }
 
   async deleteStoryCodex(projectId: string): Promise<void> {
+    assertProjectNamespaceWriteAdmitted(projectId);
     const backend = await this.getBackend();
     return backend.deleteStoryCodex(projectId);
   }
 
   async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
+    assertProjectNamespaceWriteAdmitted(projectId);
     const backend = await this.getBackend();
     return backend.saveRagVectors(projectId, vectors);
   }
@@ -254,6 +270,7 @@ class StorageManager {
   }
 
   async deleteRagVectors(projectId: string): Promise<void> {
+    assertProjectNamespaceWriteAdmitted(projectId);
     const backend = await this.getBackend();
     return backend.deleteRagVectors(projectId);
   }
@@ -264,6 +281,7 @@ class StorageManager {
     data: ArrayBuffer,
     meta: BinderAssetMeta,
   ): Promise<void> {
+    assertProjectNamespaceWriteAdmitted(projectId);
     const backend = await this.getBackend();
     return backend.saveBinderAsset(projectId, assetId, data, meta);
   }
@@ -274,6 +292,7 @@ class StorageManager {
   }
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
+    assertProjectNamespaceWriteAdmitted(projectId);
     const backend = await this.getBackend();
     return backend.deleteBinderAsset(projectId, assetId);
   }
@@ -284,6 +303,7 @@ class StorageManager {
   }
 
   async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
+    assertProjectNamespaceWriteAdmitted(projectId);
     const backend = await this.getBackend();
     return backend.deleteAllBinderAssetsForProject(projectId);
   }

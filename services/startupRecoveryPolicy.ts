@@ -12,6 +12,7 @@ export interface StartupRecoveryActions {
   failureKind: StartupRecoveryFailureKind;
   canQuarantine: boolean;
   canReset: boolean;
+  canSafeOpen: boolean;
 }
 
 // QNBS-v3: separate project I/O retry UX from corruption so non-destructive failures never gain quarantine authority.
@@ -34,5 +35,10 @@ export function getStartupRecoveryActions(
     failureKind,
     canQuarantine: failureKind === 'project-corrupt' && backend === 'filesystem',
     canReset: failureKind === 'storage' && backend === 'indexeddb',
+    // QNBS-v3: Safe Open is non-destructive and only meaningful for a refused desktop project — never for I/O, corrupt, or IndexedDB failures.
+    canSafeOpen:
+      projectLoadError !== null &&
+      backend === 'filesystem' &&
+      (failureKind === 'project-unsupported' || failureKind === 'project-migration-gap'),
   };
 }

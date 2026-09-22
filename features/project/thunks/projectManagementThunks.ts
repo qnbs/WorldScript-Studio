@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '../../../app/store';
 import { logger } from '../../../services/logger';
 import { parseImportedProjectJson } from '../../../services/projectImportSchema';
+import { getSafeSessionProjectId } from '../../../services/startupSafeSession';
 import { storageService } from '../../../services/storageService';
 import type { Character, World } from '../../../types';
 import { createPrototypeSafeEntityState } from '../adapters';
@@ -86,7 +87,9 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
   }
 
   // QNBS-v3: images are project-qualified in storage now -- resolve the imported project's own id up front so both save loops use the same namespace the returned ProjectData below is assigned. A present-but-empty id is treated identically to a missing one (`||`, not `??`) and gets its own fresh generated id, not the shared 'default' fallback used elsewhere for "no active project" -- two independent no-id imports must land in two distinct namespaces, not silently collapse into the same one.
-  const importedProjectId = projectDataJson.id || crypto.randomUUID();
+  // QNBS-v3: a safe session adopts its own identity up front — an exported file usually carries the default ID, which may name the refused project's namespace, so its images must never be written there.
+  const importedProjectId =
+    getSafeSessionProjectId() ?? (projectDataJson.id || crypto.randomUUID());
 
   // QNBS-v3: a failed import must restore exactly the pre-import persistent QUALIFIED image state, not just delete whatever this attempt wrote -- re-importing into an EXISTING project id can overwrite an already-present qualified image, and a plain delete-on-failure would permanently destroy it instead of just undoing this attempt. getQualifiedImage/deleteQualifiedImage (unlike getImage/deleteImage) never consult the legacy fallback and never collapse a genuine read failure into "absent", so a snapshot taken here is provably the exact pre-mutation state of the exact key saveImage is about to overwrite; a snapshot read failure throws here and aborts before any write happens.
   const imageRollbackLog: { id: string; snapshot: QualifiedImageSnapshot }[] = [];

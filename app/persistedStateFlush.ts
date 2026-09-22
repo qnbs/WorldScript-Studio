@@ -1,6 +1,7 @@
 import type { ProjectData } from '../features/project/projectSlice';
 import { isFactoryResetInProgress } from '../services/factoryResetService';
 import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersistence';
+import { isProjectPersistenceAdmitted } from '../services/startupSafeSession';
 import { storageService } from '../services/storageService';
 import {
   projectPersistenceCoordinator,
@@ -24,7 +25,8 @@ export async function flushPersistedState(state: RootState): Promise<void> {
   const saves: Promise<unknown>[] = [
     settingsPersistenceCoordinator.enqueue(() => storageService.saveSettings(state.settings)),
   ];
-  if (presentData) {
+  // QNBS-v3: a fenced safe-session project is skipped, never rejected — quitApp aborts on any flush rejection, so a fence must not make the window unquittable.
+  if (presentData && isProjectPersistenceAdmitted(presentData.id)) {
     const enriched: ProjectData = {
       ...presentData,
       persistedVersionControl: {

@@ -24,18 +24,28 @@ export async function renderStorageInitializationFailure(root: Root): Promise<vo
   );
 }
 
+export interface ProjectInitializationFailureOptions {
+  /** Continues startup without the refused project; owned by the bootstrap that can mount the app. */
+  onSafeOpen?: (refusedProjectId: string) => Promise<void> | void;
+}
+
 // QNBS-v3: filesystem failures get preserve-first actions while only IndexedDB failures retain destructive reset authority.
 export async function renderProjectInitializationFailure(
   root: Root,
   error: unknown,
+  options: ProjectInitializationFailureOptions = {},
 ): Promise<void> {
   logger.error('Failed to initialize the application:', error);
   const projectLoadError = error instanceof ProjectLoadError ? error : null;
   const backendKind = await storageService.getStorageBackendKind();
   const copy = await loadStorageErrorCopy();
-  const { canQuarantine, canReset, failureKind } = getStartupRecoveryActions(error, backendKind);
+  const { canQuarantine, canReset, canSafeOpen, failureKind } = getStartupRecoveryActions(
+    error,
+    backendKind,
+  );
   const corruptProjectId =
     projectLoadError?.reason === 'corrupt' ? projectLoadError.projectId : null;
+  const safeOpen = options.onSafeOpen;
   root.render(
     <React.StrictMode>
       <StorageErrorScreen
@@ -55,6 +65,9 @@ export async function renderProjectInitializationFailure(
         failureKind === 'project-unsupported' ||
         failureKind === 'project-migration-gap'
           ? { onRetry: () => window.location.reload() }
+          : {})}
+        {...(canSafeOpen && projectLoadError && safeOpen
+          ? { onSafeOpen: () => safeOpen(projectLoadError.projectId) }
           : {})}
         {...(canReset
           ? {
