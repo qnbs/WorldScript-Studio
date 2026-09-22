@@ -66,12 +66,11 @@ const ToastItem: FC<{
     return () => clearTimeout(timer);
   }, [message.id, onDismiss]);
 
-  // QNBS-v3: Alpha-bg pattern replaces dark: prefixes — semantic colors visible on all appearance presets.
+  // QNBS-v3 (CodeAnt, Visual Maturity #C): no bg-* here — a low-alpha tint token and the solid card background below are two competing bg-* utilities on the same element, and which one wins depends on Tailwind's generated stylesheet order, not source order. The tint was only ever meant to combine with a backdrop behind it (the glass panel this file no longer has); border + icon + text color already carry the per-type signal unambiguously.
   const typeClasses = {
-    success:
-      'bg-[var(--sc-success-bg)] border-[var(--sc-success-fg)]/30 text-[var(--sc-success-fg)]',
-    error: 'bg-[var(--sc-danger-bg)] border-[var(--sc-danger-fg)]/30 text-[var(--sc-danger-fg)]',
-    info: 'bg-[var(--sc-info-bg)] border-[var(--sc-info-fg)]/30 text-[var(--sc-info-fg)]',
+    success: 'border-[var(--sc-success-fg)]/30 text-[var(--sc-success-fg)]',
+    error: 'border-[var(--sc-danger-fg)]/30 text-[var(--sc-danger-fg)]',
+    info: 'border-[var(--sc-info-fg)]/30 text-[var(--sc-info-fg)]',
   };
 
   const progressClasses = {
@@ -87,8 +86,9 @@ const ToastItem: FC<{
   };
 
   return (
+    // QNBS-v3 (Visual Maturity #C, DS-6): a toast is a small floating card, not a backdrop scrim over obscured content — it gets the same solid-surface treatment as Card (PR B), not the glass panel it had before.
     <div
-      className={`relative w-full max-w-sm rounded-sc-md shadow-2xl bg-[var(--sc-surface-raised)]/80 backdrop-blur-md border animate-toast-slide-up overflow-hidden ${typeClasses[message.type]}`}
+      className={`relative w-full max-w-sm rounded-sc-md shadow-2xl bg-[var(--sc-surface-raised)] border animate-toast-slide-up overflow-hidden ${typeClasses[message.type]}`}
     >
       <div className="p-4">
         <div className="flex items-start">
