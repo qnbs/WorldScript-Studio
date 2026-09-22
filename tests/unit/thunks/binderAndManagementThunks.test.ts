@@ -37,6 +37,11 @@ import statusReducer from '../../../features/status/statusSlice';
 import versionControlReducer from '../../../features/versionControl/versionControlSlice';
 import writerReducer from '../../../features/writer/writerSlice';
 import { parseImportedProjectJson } from '../../../services/projectImportSchema';
+import {
+  _resetSafeSessionForTest,
+  enterSafeSession,
+  getSafeSessionProjectId,
+} from '../../../services/startupSafeSession';
 import { storageService } from '../../../services/storageService';
 import type { BinderNode } from '../../../types';
 
@@ -344,6 +349,36 @@ describe('importProjectThunk', () => {
     const character = Object.values(payload.characters.entities)[0];
     expect(character?.hasAvatar).toBe(true);
     expect(character?.avatarBase64).toBeUndefined();
+  });
+
+  // QNBS-v3: a safe session adopts its own identity up front — an exported file usually carries the default ID, which may name the refused project's namespace, so its images must never be written there.
+  it('writes imported images under the safe-session identity, never the imported file id', async () => {
+    enterSafeSession('default');
+    try {
+      const projectWithAvatar = {
+        ...minimalProject,
+        id: 'default',
+        characters: [{ id: 'c9', name: 'Zed', avatarBase64: 'sessionimg' }],
+      };
+      vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithAvatar as never);
+
+      const store = makeStore();
+      const action = await store.dispatch(
+        importProjectThunk(new File(['{}'], 'novel.json', { type: 'application/json' })),
+      );
+
+      const sessionId = getSafeSessionProjectId();
+      expect(sessionId).not.toBeNull();
+      expect(sessionId).not.toBe('default');
+      expect(storageService.saveImage).toHaveBeenCalledExactlyOnceWith(
+        'c9',
+        'sessionimg',
+        sessionId,
+      );
+      expect((action as { payload: { id: string } }).payload.id).toBe(sessionId);
+    } finally {
+      _resetSafeSessionForTest();
+    }
   });
 
   // QNBS-v3: `||`, not `??`, treats a present-but-empty id identically to a genuinely missing one -- both take the fresh-generated-id branch below, rather than an empty id alone diverging into its own '' namespace.
