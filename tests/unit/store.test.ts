@@ -133,4 +133,30 @@ describe('rootReducer', () => {
     expect(state).toBeTruthy();
     expect(state.settings).toBeTruthy();
   });
+
+  // QNBS-v3: a safe-session re-key must clear undo history, otherwise Undo could restore the pre-re-key identity — the refused project's ID.
+  it('re-keys the live project without leaving undo history that could restore the old identity', async () => {
+    const { rootReducer } = await import('../../app/store');
+    const { projectActions } = await import('../../features/project/projectSlice');
+    let state = rootReducer(undefined, { type: '@@INIT' });
+    state = rootReducer(state, projectActions.updateTitle('Edited before re-key'));
+    expect(state.project.past.length).toBeGreaterThan(0);
+    expect(state.project.present.data.id).toBe('default');
+
+    state = rootReducer(state, projectActions.assignProjectIdentity('project-session-1'));
+
+    expect(state.project.present.data.id).toBe('project-session-1');
+    expect(state.project.present.data.title).toBe('Edited before re-key');
+    expect(state.project.past).toEqual([]);
+    expect(state.project.future).toEqual([]);
+
+    // QNBS-v3: even after a later edit, Undo may only step back within the new identity — never to the refused project's ID.
+    const { ActionCreators } = await import('redux-undo');
+    state = rootReducer(state, projectActions.updateTitle('After re-key'));
+    state = rootReducer(state, ActionCreators.undo());
+    expect(state.project.present.data.id).toBe('project-session-1');
+    expect(state.project.present.data.title).toBe('Edited before re-key');
+    state = rootReducer(state, ActionCreators.undo());
+    expect(state.project.present.data.id).toBe('project-session-1');
+  });
 });

@@ -11,11 +11,13 @@ describe('startup recovery action policy', () => {
       failureKind: 'project-corrupt',
       canQuarantine: true,
       canReset: false,
+      canSafeOpen: false,
     });
     expect(getStartupRecoveryActions(error, 'indexeddb')).toEqual({
       failureKind: 'project-corrupt',
       canQuarantine: false,
       canReset: false,
+      canSafeOpen: false,
     });
   });
 
@@ -24,6 +26,7 @@ describe('startup recovery action policy', () => {
       failureKind: 'project-io',
       canQuarantine: false,
       canReset: false,
+      canSafeOpen: false,
     });
     expect(
       getStartupRecoveryActions(new ProjectLoadError('io-error', 'io', 'project-1'), 'filesystem'),
@@ -31,10 +34,11 @@ describe('startup recovery action policy', () => {
       failureKind: 'project-io',
       canQuarantine: false,
       canReset: false,
+      canSafeOpen: false,
     });
   });
 
-  it('keeps unsupported project versions non-quarantinable and retryable', () => {
+  it('keeps unsupported project versions non-quarantinable, retryable, and safely openable', () => {
     expect(
       getStartupRecoveryActions(
         new ProjectLoadError('unsupported-version', 'future', 'project-1', 'FUTURE'),
@@ -44,6 +48,7 @@ describe('startup recovery action policy', () => {
       failureKind: 'project-unsupported',
       canQuarantine: false,
       canReset: false,
+      canSafeOpen: true,
     });
   });
 
@@ -58,7 +63,27 @@ describe('startup recovery action policy', () => {
       failureKind: 'project-migration-gap',
       canQuarantine: false,
       canReset: false,
+      canSafeOpen: true,
     });
+  });
+
+  // QNBS-v3: Safe Open must never widen to transient I/O, corruption, or the IndexedDB backend, whose refusal semantics differ.
+  it('offers Safe Open only for refused projects on the filesystem backend', () => {
+    expect(
+      getStartupRecoveryActions(
+        new ProjectLoadError('unsupported-version', 'future', 'project-1', 'FUTURE'),
+        'indexeddb',
+      ).canSafeOpen,
+    ).toBe(false);
+    expect(
+      getStartupRecoveryActions(
+        new ProjectLoadError('unsupported-version', 'older', 'project-1', 'UNSUPPORTED_OLDER'),
+        'indexeddb',
+      ).canSafeOpen,
+    ).toBe(false);
+    expect(
+      getStartupRecoveryActions(new Error('unsupported-version'), 'filesystem').canSafeOpen,
+    ).toBe(false);
   });
 
   it('retains database reset for non-project failures from IndexedDB', () => {
@@ -66,6 +91,7 @@ describe('startup recovery action policy', () => {
       failureKind: 'storage',
       canQuarantine: false,
       canReset: true,
+      canSafeOpen: false,
     });
   });
 
@@ -76,6 +102,7 @@ describe('startup recovery action policy', () => {
       failureKind: 'project-io',
       canQuarantine: false,
       canReset: false,
+      canSafeOpen: false,
     });
   });
 });

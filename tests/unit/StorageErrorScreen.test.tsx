@@ -204,4 +204,122 @@ describe('StorageErrorScreen', () => {
     expect(onRecover).not.toHaveBeenCalled();
     expect(onReset).not.toHaveBeenCalled();
   });
+
+  // QNBS-v3: a refused project must not be an endless dead end — Safe Open sits beside Retry, is accessible, and is never a destructive action.
+  it.each(['project-unsupported', 'project-migration-gap'] as const)(
+    'offers an accessible non-destructive Safe Open beside Retry for %s',
+    async (failureKind) => {
+      const user = userEvent.setup();
+      const onRetry = vi.fn();
+      const onSafeOpen = vi.fn().mockResolvedValue(undefined);
+      const onRecover = vi.fn();
+      const onReset = vi.fn();
+
+      render(
+        <StorageErrorScreen
+          copy={STARTUP_COPY_FALLBACKS}
+          failureKind={failureKind}
+          onRetry={onRetry}
+          onSafeOpen={onSafeOpen}
+          onRecover={onRecover}
+          onReset={onReset}
+        />,
+      );
+
+      const safeOpen = screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.safeOpen });
+      expect(
+        screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.retry }),
+      ).toBeInTheDocument();
+      expect(safeOpen).toHaveAccessibleDescription(STARTUP_COPY_FALLBACKS.safeOpenNotice);
+      expect(
+        screen.queryByRole('button', { name: STARTUP_COPY_FALLBACKS.recover }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }),
+      ).not.toBeInTheDocument();
+
+      safeOpen.focus();
+      await user.keyboard('{Enter}');
+
+      await waitFor(() => expect(onSafeOpen).toHaveBeenCalledOnce());
+      expect(onRetry).not.toHaveBeenCalled();
+      expect(onRecover).not.toHaveBeenCalled();
+      expect(onReset).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps Safe Open busy while starting and clears it if startup re-renders the same screen', async () => {
+    const user = userEvent.setup();
+    let finishStartup: () => void = () => undefined;
+    const onSafeOpen = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishStartup = resolve;
+        }),
+    );
+    render(
+      <StorageErrorScreen
+        copy={STARTUP_COPY_FALLBACKS}
+        failureKind="project-unsupported"
+        onSafeOpen={onSafeOpen}
+      />,
+    );
+    const safeOpen = screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.safeOpen });
+
+    await user.click(safeOpen);
+    await user.click(safeOpen);
+    expect(safeOpen).toBeDisabled();
+    expect(onSafeOpen).toHaveBeenCalledOnce();
+
+    finishStartup();
+    await waitFor(() => expect(safeOpen).toBeEnabled());
+  });
+
+  it('logs a sanitized error and re-enables Safe Open when the continuation itself fails', async () => {
+    const user = userEvent.setup();
+    const onSafeOpen = vi.fn().mockRejectedValue(new Error('boom'));
+    render(
+      <StorageErrorScreen
+        copy={STARTUP_COPY_FALLBACKS}
+        failureKind="project-migration-gap"
+        onSafeOpen={onSafeOpen}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.safeOpen }));
+
+    await waitFor(() =>
+      expect(loggerError).toHaveBeenCalledWith('Safe open failed', { error: 'boom' }),
+    );
+    expect(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.safeOpen })).toBeEnabled();
+  });
+
+  it('never shows Safe Open for corrupt, I/O, or storage failures, or without a continuation', () => {
+    const onSafeOpen = vi.fn();
+    const { rerender } = render(
+      <StorageErrorScreen
+        copy={STARTUP_COPY_FALLBACKS}
+        failureKind="project-corrupt"
+        onSafeOpen={onSafeOpen}
+      />,
+    );
+    for (const failureKind of ['project-io', 'storage'] as const) {
+      rerender(
+        <StorageErrorScreen
+          copy={STARTUP_COPY_FALLBACKS}
+          failureKind={failureKind}
+          onSafeOpen={onSafeOpen}
+        />,
+      );
+    }
+    rerender(
+      <StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} failureKind="project-unsupported" />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: STARTUP_COPY_FALLBACKS.safeOpen }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(STARTUP_COPY_FALLBACKS.safeOpenNotice)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.retry })).toBeInTheDocument();
+  });
 });

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - Release candidate reference: PR #803.
+- **Desktop startup no longer dead-ends on an unsupported project:** when the persisted active
+  project uses a schema this build cannot edit, the recovery screen now offers an explicit,
+  non-destructive Safe Open beside Retry. It reads settings only, keeps the refused project
+  byte-preserved and the active-project marker untouched, and fences project persistence until the
+  user explicitly starts or imports a project under a fresh identity. PR #804 (behavior and write
+  fence) and PR #807 (localized copy).
 
 ## [1.28.7] — 2026-09-21
 

@@ -10,6 +10,7 @@ import { versionControlActions } from './features/versionControl/versionControlS
 import { DEFAULT_OPENROUTER_MODEL_ID } from './services/ai/cloudModelCatalog';
 import {
   loadPersistedRootState,
+  loadSafeOpenRootState,
   normalizePersistedProjectForStore,
   shouldAllowInitialMetadataSeed,
 } from './services/appBootstrap';
@@ -19,6 +20,7 @@ import {
   renderProjectInitializationFailure,
   renderStorageInitializationFailure,
 } from './services/startupRecovery';
+import { enterSafeSession } from './services/startupSafeSession';
 import { IdbStorageLockedError } from './services/storage/storageEncryptionService';
 /* ── Self-hosted fonts (@fontsource) ── */
 import '@fontsource/inter/300.css';
@@ -122,10 +124,20 @@ async function bootApp(): Promise<void> {
     return;
   }
 
-  try {
-    const preloadedState = await loadPersistedRootState();
+  await mountApp();
+}
 
-    const isNewUser = !preloadedState;
+// QNBS-v3: split from bootApp so Safe Open can continue startup without re-initializing storage; a refused project ID means "open the shell without it", never "load it another way".
+async function mountApp(safeOpenRefusedProjectId?: string): Promise<void> {
+  const isSafeOpen = safeOpenRefusedProjectId !== undefined;
+  try {
+    // QNBS-v3: the write fence must exist before any store, autosave listener, or flush can run; Safe Open reads settings only and starts portal-first because no project holds write authority yet.
+    if (isSafeOpen) enterSafeSession(safeOpenRefusedProjectId);
+    const preloadedState = isSafeOpen
+      ? await loadSafeOpenRootState()
+      : await loadPersistedRootState();
+
+    const isNewUser = isSafeOpen || !preloadedState;
 
     // --- CRITICAL HYDRATION LOGIC ---
     // The middleware saves only the 'present' state to save space/time.
@@ -205,7 +217,9 @@ async function bootApp(): Promise<void> {
       );
       return;
     }
-    await renderProjectInitializationFailure(root, error);
+    await renderProjectInitializationFailure(root, error, {
+      onSafeOpen: (refusedProjectId) => mountApp(refusedProjectId),
+    });
   }
 }
 

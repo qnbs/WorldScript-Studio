@@ -139,6 +139,22 @@ export const rootReducer: Reducer<ReturnType<typeof combinedReducer>, AnyAction>
 
   const reduced = combinedReducer(nextState, action);
 
+  // QNBS-v3: a safe-session re-key is not an undoable edit — redux-undo would push the pre-re-key state (the refused project's ID) into `past`, so history is collapsed around the new identity after reducing.
+  if (action.type === projectActions.assignProjectIdentity.type) {
+    const { present } = reduced.project;
+    return {
+      ...reduced,
+      project: {
+        ...reduced.project,
+        past: [],
+        future: [],
+        index: 0,
+        limit: 1,
+        _latestUnfiltered: present,
+      },
+    };
+  }
+
   if (action.type === importProjectThunk.fulfilled.type) {
     // QNBS-v3: AnyAction ohne payload-Typ — nach fulfilled casten, damit VC aus Import-Payload gemerged werden kann.
     const payload = (action as unknown as { payload: ProjectData }).payload;

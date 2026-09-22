@@ -62,6 +62,7 @@ vi.mock('../../../services/storageService', () => ({
 import {
   getPersistedProjectPayload,
   loadPersistedRootState,
+  loadSafeOpenRootState,
   normalizePersistedProjectForStore,
   shouldAllowInitialMetadataSeed,
 } from '../../../services/appBootstrap';
@@ -450,5 +451,41 @@ describe('shouldAllowInitialMetadataSeed', () => {
     });
     expect(normalized?.present?.data.outline).toEqual([]);
     expect(normalized?._latestUnfiltered).toEqual({ data: normalized?.present?.data });
+  });
+});
+
+// QNBS-v3: Safe Open must be provably read-free for projects — the refused project and the active-project marker are neither re-admitted nor consulted.
+describe('loadSafeOpenRootState', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h.isTauri.value = true;
+    h.loadSettings.mockResolvedValue(null);
+  });
+
+  it('returns settings only and never lists, reads, or selects a project', async () => {
+    h.loadSettings.mockResolvedValue({ theme: 'sepia' });
+    h.listProjects.mockResolvedValue(['refused-dir']);
+    h.getActiveProjectId.mockResolvedValue('refused-dir');
+
+    const result = await loadSafeOpenRootState();
+
+    expect(result).toEqual({ settings: { theme: 'sepia' } });
+    expect(result).not.toHaveProperty('project');
+    expect(h.listProjects).not.toHaveBeenCalled();
+    expect(h.getActiveProjectId).not.toHaveBeenCalled();
+    expect(h.loadProject).not.toHaveBeenCalled();
+    expect(h.loadProjectForEditing).not.toHaveBeenCalled();
+    expect(h.dbLoadState).not.toHaveBeenCalled();
+  });
+
+  it('returns undefined when no settings exist, still without touching any project', async () => {
+    await expect(loadSafeOpenRootState()).resolves.toBeUndefined();
+    expect(h.listProjects).not.toHaveBeenCalled();
+    expect(h.loadProjectForEditing).not.toHaveBeenCalled();
+  });
+
+  it('propagates a settings failure instead of swallowing it', async () => {
+    h.loadSettings.mockRejectedValue(new Error('EACCES'));
+    await expect(loadSafeOpenRootState()).rejects.toThrow('EACCES');
   });
 });
