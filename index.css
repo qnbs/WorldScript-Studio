@@ -18,6 +18,15 @@
   --sc-z-command: 150;
   --sc-z-modal: 200;
   --sc-z-toast: 300;
+  /* QNBS-v3 (DS-6): semantic elevation roles aliased to the per-theme --sc-shadow-* scale via live var() indirection — one definition covers every theme; flat surfaces carry little/no shadow, only popovers/modals carry real elevation. */
+  --sc-elevation-flat: none;
+  --sc-elevation-surface: var(--sc-shadow-xs);
+  --sc-elevation-popover: var(--sc-shadow-md);
+  --sc-elevation-modal: var(--sc-shadow-xl);
+  /* QNBS-v3 (DS-6): semantic radius roles aliased to the Tailwind v4 @theme radius scale below — compact controls stay tight, panels get the current default, hero/rare contexts opt into the large radius explicitly. */
+  --sc-radius-control: var(--radius-sc-sm);
+  --sc-radius-panel: var(--radius-sc-md);
+  --sc-radius-hero: var(--radius-sc-xl);
   --font-ui: "Inter", system-ui, -apple-system, sans-serif;
   --font-editor: "Merriweather", Georgia, "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -596,7 +605,18 @@ body {
   animation-delay: -15s;
 }
 
-/* QNBS-v3: A plain writing surface removes decorative fixed layers without clipping content or changing layout. */
+/* QNBS-v3 (Visual Maturity #A): Aurora/noise are a Welcome Portal brand moment, not a default whole-app ambience — hidden unless body carries .portal-active (toggled by App.tsx from isPortalActive). */
+.aurora-container,
+.noise-overlay {
+  display: none;
+}
+/* QNBS-v3: :not(.writing-surface-plain) makes the plain-surface opt-out win by specificity, not by being declared later — two equal-specificity descendant selectors would otherwise depend on source order if this rule ever moved. */
+body.portal-active:not(.writing-surface-plain) .aurora-container,
+body.portal-active:not(.writing-surface-plain) .noise-overlay {
+  display: block;
+}
+
+/* QNBS-v3: a plain writing surface keeps the neutral canvas even during the portal — explicit user opt-out always wins over the default portal-active decoration. */
 .writing-surface-plain .noise-overlay,
 .writing-surface-plain .aurora-container {
   display: none;
