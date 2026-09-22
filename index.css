@@ -610,8 +610,9 @@ body {
 .noise-overlay {
   display: none;
 }
-body.portal-active .aurora-container,
-body.portal-active .noise-overlay {
+/* QNBS-v3: :not(.writing-surface-plain) makes the plain-surface opt-out win by specificity, not by being declared later — two equal-specificity descendant selectors would otherwise depend on source order if this rule ever moved. */
+body.portal-active:not(.writing-surface-plain) .aurora-container,
+body.portal-active:not(.writing-surface-plain) .noise-overlay {
   display: block;
 }
 

@@ -47,7 +47,7 @@ import { VoiceIndicator } from './components/voice/VoiceIndicator';
 import { AppContext } from './contexts/AppContext';
 import { CommandExecutorProvider } from './contexts/CommandExecutorContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
-import { I18nProvider, RTL_LOCALES } from './contexts/I18nContext';
+import { I18nProvider } from './contexts/I18nContext';
 import { LiveRegionProvider, useAnnounce } from './contexts/LiveRegionContext';
 import { featureFlagsActions, selectFeatureFlags } from './features/featureFlags/featureFlagsSlice';
 import {
@@ -57,6 +57,7 @@ import {
 } from './features/project/projectSelectors';
 import { statusActions } from './features/status/statusSlice';
 import { useApp } from './hooks/useApp';
+import { useAppearanceBodyClasses } from './hooks/useAppearanceBodyClasses';
 import { useGlobalKeyboardShortcuts } from './hooks/useGlobalKeyboardShortcuts';
 import { useIdbUnlockStartupGuard } from './hooks/useIdbUnlockStartupGuard';
 import { useNativeNotifications } from './hooks/useNativeNotifications';
@@ -225,135 +226,17 @@ const App: FC<AppProps> = ({ isNewUser, allowInitialMetadataSeed: initialSeedAut
     recoveryJournalRef.current = recoveryJournal;
   }, [recoveryJournal]);
 
-  useEffect(() => {
-    const applyTheme = (isDark: boolean) => {
-      document.body.classList.remove('light-theme', 'dark-theme');
-      document.body.classList.add(isDark ? 'dark-theme' : 'light-theme');
-      const themeColorMeta = document.querySelector('meta[name="theme-color"]');
-      if (themeColorMeta) {
-        // QNBS-v3: Sepia has distinct dark/light surface colors; reflect them in the
-        // mobile browser chrome so the status bar matches the app shell.
-        const themeColor =
-          settings.appearancePreset === 'sepia'
-            ? isDark
-              ? '#1c1308'
-              : '#f4ecd8'
-            : isDark
-              ? '#020617'
-              : '#ffffff';
-        themeColorMeta.setAttribute('content', themeColor);
-      }
-      try {
-        localStorage.setItem('worldscript-theme', isDark ? 'dark' : 'light');
-      } catch {
-        // localStorage may be unavailable (SSR, quota exceeded)
-      }
-    };
+  useAppearanceBodyClasses({
+    settings,
+    isPortalActive,
+    language,
+    enableRtlLayout: featureFlags.enableRtlLayout,
+  });
 
-    if (settings.theme === 'auto') {
-      // Read system preference
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      applyTheme(mq.matches);
-
-      // React to changes in the system preference
-      const handler = (e: MediaQueryListEvent) => applyTheme(e.matches);
-      mq.addEventListener('change', handler);
-      return () => mq.removeEventListener('change', handler);
-    } else {
-      applyTheme(settings.theme === 'dark');
-    }
-    return undefined;
-  }, [settings.theme, settings.appearancePreset]);
-
-  // QNBS-v3: Appearance presets → body class (pairs with index.css tokens).
-  useEffect(() => {
-    document.body.classList.remove('appearance-sepia');
-    if (settings.appearancePreset === 'sepia') {
-      document.body.classList.add('appearance-sepia');
-    }
-  }, [settings.appearancePreset]);
-
-  useEffect(() => {
-    // QNBS-v3 (Visual Maturity #A): Aurora/noise are a Welcome Portal brand moment, not a global whole-app ambience.
-    document.body.classList.toggle('portal-active', isPortalActive);
-  }, [isPortalActive]);
-
-  useEffect(() => {
-    // QNBS-v3: Decorative fixed layers are opt-out so long-form writers can keep a neutral canvas.
-    document.body.classList.toggle(
-      'writing-surface-plain',
-      settings.writingSurfaceStyle === 'plain',
-    );
-  }, [settings.writingSurfaceStyle]);
-
-  useEffect(() => {
-    document.body.classList.toggle(
-      'accessibility-high-contrast',
-      settings.accessibility.highContrast,
-    );
-  }, [settings.accessibility.highContrast]);
-
-  // QNBS-v3: Tag the body for desktop-scoped styling (is-desktop + data-os). Tauri-ness is constant
-  // for the session, so this runs once; no-op on the web. Pairs with the `.is-desktop` CSS layer.
+  // QNBS-v3: Tag the body for desktop-scoped styling (is-desktop + data-os); Tauri-ness is constant for the session, so this runs once, no-op on the web.
   useEffect(() => {
     applyDesktopRuntimeFlags();
   }, []);
-
-  useEffect(() => {
-    document.body.classList.toggle(
-      'worldscript-reduced-motion',
-      settings.accessibility.reducedMotion,
-    );
-  }, [settings.accessibility.reducedMotion]);
-
-  // QNBS-v3 (#332/D4): manual relief valve for backdrop-blur GPU cost, mirroring reducedMotion above — covers OS/DE setups (some Linux/Wayland) that don't expose prefers-reduced-transparency.
-  useEffect(() => {
-    document.body.classList.toggle(
-      'worldscript-reduced-transparency',
-      settings.accessibility.reducedTransparency,
-    );
-  }, [settings.accessibility.reducedTransparency]);
-
-  // QNBS-v3: Barrierefreiheits-Toggles → dokumentweite Klassen (Tokens in index.css).
-  useEffect(() => {
-    document.documentElement.classList.toggle(
-      'worldscript-large-text',
-      settings.accessibility.largeText,
-    );
-    document.body.classList.toggle(
-      'worldscript-screen-reader',
-      settings.accessibility.screenReader,
-    );
-    document.body.classList.toggle(
-      'worldscript-focus-indicators',
-      settings.accessibility.focusIndicators,
-    );
-    document.body.classList.toggle(
-      'accessibility-comfortable-targets',
-      settings.accessibility.comfortableTargets,
-    );
-  }, [
-    settings.accessibility.largeText,
-    settings.accessibility.screenReader,
-    settings.accessibility.focusIndicators,
-    settings.accessibility.comfortableTargets,
-  ]);
-
-  useEffect(() => {
-    const mode = settings.accessibility.colorBlindMode;
-    if (mode === 'none') {
-      document.documentElement.removeAttribute('data-colorblind');
-    } else {
-      document.documentElement.setAttribute('data-colorblind', mode);
-    }
-  }, [settings.accessibility.colorBlindMode]);
-
-  // QNBS-v3: HTML lang + dir — locale drives direction; enableRtlLayout flag overrides for manual RTL testing.
-  useEffect(() => {
-    document.documentElement.lang = language;
-    const localeDir = RTL_LOCALES.has(language) ? 'rtl' : 'ltr';
-    document.documentElement.dir = featureFlags.enableRtlLayout ? 'rtl' : localeDir;
-  }, [language, featureFlags.enableRtlLayout]);
 
   // QNBS-v3: Sync enablePluginSystem flag into pluginRegistry so execute/executeAsync/loadPlugin
   // are properly gated without the registry needing direct Redux access.

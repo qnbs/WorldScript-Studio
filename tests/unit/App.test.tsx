@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockUseApp, mockProjectBootstrapEffect, mockDispatch, mockStore, selectorState, project } =
   vi.hoisted(() => ({
@@ -177,12 +177,8 @@ describe('App seed-authority wiring', () => {
   });
 });
 
-// QNBS-v3 (Visual Maturity #A): locks the body-class toggle that scopes Aurora/noise to isPortalActive instead of every whole-app view.
+// QNBS-v3 (Visual Maturity #A): locks the body-class toggle that scopes Aurora/noise to isPortalActive instead of every whole-app view. No manual afterEach needed — the hook's own unmount cleanup (see useAppearanceBodyClasses.test.ts) plus RTL's automatic between-test unmount keep this isolated.
 describe('portal-active body class (Aurora/noise scope)', () => {
-  afterEach(() => {
-    document.body.classList.remove('portal-active');
-  });
-
   // QNBS-v3: one render per test — a second synchronous render inside one test hits an unrelated AnalyticsBootstrap/duckdb singleton issue; RTL's between-test cleanup keeps separate tests safe.
   it('adds portal-active while the welcome portal is showing', () => {
     mockUseApp.mockReturnValue({

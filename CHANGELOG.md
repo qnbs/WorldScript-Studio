@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Post-release v1.28.8 truth sync: release-candidate markers and evidence reconciliation
   (see `## [1.28.8]` below).
+- **Visual Maturity remediation, PR A (editorial foundation):** Aurora/noise ambient decoration no
+  longer renders on every product view by default — scoped to the Welcome Portal brand moment
+  (`body.portal-active`); the existing "plain writing surface" opt-out is unchanged. Adds semantic
+  `--sc-elevation-*`/`--sc-radius-*` token aliases as the foundation for the next remediation PR's
+  primitive de-glass work. PR #810.
 
 ## [1.28.8] — 2026-09-22
 
