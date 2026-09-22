@@ -116,7 +116,12 @@ export const BottomSheet: FC<BottomSheetProps> = ({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" onClick={onClose} />
+      {/* QNBS-v3 (Visual Maturity #C, DS-6): the semantic backdrop token replaces a hardcoded black/40 — matches Modal's/Drawer's scrim and adapts per theme instead of a fixed opacity. */}
+      <div
+        className="fixed inset-0 z-40 bg-[var(--sc-backdrop-strong)]"
+        aria-hidden="true"
+        onClick={onClose}
+      />
 
       {/* Sheet */}
       <div

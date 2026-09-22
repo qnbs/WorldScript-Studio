@@ -43,8 +43,8 @@ describe('BottomSheet', () => {
 
   it('calls onClose when backdrop is clicked', () => {
     const { onClose } = renderSheet();
-    // The backdrop has aria-hidden; find it by its onClick behaviour
-    const backdrop = document.querySelector('.bg-black\\/40') as HTMLElement;
+    // QNBS-v3 (Visual Maturity #C): select by the structural viewport-covering class + aria-hidden, not the styling color class that can change independently of the backdrop's identity — the drag handle also carries aria-hidden, so aria-hidden alone would be ambiguous.
+    const backdrop = document.querySelector('.fixed.inset-0[aria-hidden="true"]') as HTMLElement;
     expect(backdrop).not.toBeNull();
     fireEvent.click(backdrop!);
     expect(onClose).toHaveBeenCalledOnce();

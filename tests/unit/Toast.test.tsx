@@ -124,6 +124,37 @@ describe('ToastProvider', () => {
     expect(screen.getByText('FYI')).toBeTruthy();
   });
 
+  // QNBS-v3 (Visual Maturity #C): a toast is a small floating card, not a backdrop scrim — locks the solid-surface treatment, no blurred glass panel.
+  it('renders the toast card on a solid surface token, without backdrop-blur', () => {
+    const toast: ToastMsg = { id: '4', type: 'success', title: 'Solid' };
+    mockNotifications.mockReturnValue([toast]);
+    render(
+      <ToastProvider>
+        <span />
+      </ToastProvider>,
+    );
+    const card = screen.getByText('Solid').closest('div[class*="rounded-sc-md"]');
+    expect(card?.className).toContain('bg-[var(--sc-surface-raised)]');
+    expect(card?.className).not.toContain('backdrop-blur');
+  });
+
+  // QNBS-v3 (CodeAnt, Visual Maturity #C): locks that no per-type tint bg-* class competes with the card's own solid bg-* on the same element — only one bg-* wins in Tailwind's generated stylesheet, so a second one here is never safe to reintroduce.
+  it.each([
+    ['success', 'sc-success-bg'],
+    ['error', 'sc-danger-bg'],
+    ['info', 'sc-info-bg'],
+  ] as const)('does not add a competing %s tint background', (type, tintVar) => {
+    const toast: ToastMsg = { id: `t-${type}`, type, title: `T-${type}` };
+    mockNotifications.mockReturnValue([toast]);
+    render(
+      <ToastProvider>
+        <span />
+      </ToastProvider>,
+    );
+    const card = screen.getByText(`T-${type}`).closest('div[class*="rounded-sc-md"]');
+    expect(card?.className).not.toContain(`bg-[var(--${tintVar})]`);
+  });
+
   it('dispatches removeNotification when close button is clicked', () => {
     const toast: ToastMsg = { id: 'close-me', type: 'info', title: 'Info' };
     mockNotifications.mockReturnValue([toast]);
