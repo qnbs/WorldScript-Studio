@@ -48,6 +48,16 @@ describe('Card', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Click me' }));
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
+
+  // QNBS-v3 (Visual Maturity #B): locks the solid-surface treatment — no blurred glass panel, no hover lift/scale.
+  it('renders on a solid surface token, without backdrop-blur or a hover lift/scale', () => {
+    const { container } = render(<Card as="button">Click me</Card>);
+    const className = (container.firstChild as HTMLElement).className;
+    expect(className).toContain('bg-[var(--sc-surface-raised)]');
+    expect(className).not.toContain('backdrop-blur');
+    expect(className).not.toContain('translate-y');
+    expect(className).not.toContain('scale-[');
+  });
 });
 
 describe('CardContent', () => {
