@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Release candidate reference: PR #803.
+## [1.28.8] — 2026-09-22
+
+<!-- release-candidate: v1.28.8 -->
+- **v1.28.8 release candidate:** desktop startup-recovery hotfix; no tag, GitHub Release, or
+  published artifacts exist yet. #743's Release invariant was re-verified against this candidate
+  (no concrete blocker); the qualification tracker itself remains open and unaffected — see the
+  reconciliation comment on #743. PR #808. The post-release truth sync will finalize this entry to
+  "released" once the tag and assets are published.
+
+### Fixed
+
 - **Desktop startup no longer dead-ends on an unsupported project:** when the persisted active
   project uses a schema this build cannot edit, the recovery screen now offers an explicit,
   non-destructive Safe Open beside Retry. It reads settings only, keeps the refused project

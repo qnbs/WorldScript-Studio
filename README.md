@@ -14,8 +14,8 @@
   <a href="https://qnbs.github.io/WorldScript-Studio/"><img src="https://img.shields.io/badge/Launch-GitHub_Pages-22C55E?logo=github&logoColor=white" alt="Launch on GitHub Pages"></a>
   <a href="https://worldscript-studio.vercel.app/"><img src="https://img.shields.io/badge/Launch-Vercel-000000?logo=vercel&logoColor=white" alt="Launch on Vercel"></a>
   <a href="https://qnbs.gitbook.io/worldscript-studio/"><img src="https://img.shields.io/badge/Docs-GitBook-346DDB?logo=gitbook&logoColor=white" alt="WorldScript Studio documentation on GitBook"></a>
-  <!-- release-candidate: v1.28.7 -->
-  <img src="https://img.shields.io/badge/Release-v1.28.7-6366F1" alt="Release v1.28.7">
+  <!-- release-candidate: v1.28.8 -->
+  <img src="https://img.shields.io/badge/Release-v1.28.8-6366F1" alt="Release v1.28.8">
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
   <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite 8">
   <img src="https://img.shields.io/badge/TypeScript-tsgo_native_preview-3178C6?logo=typescript&logoColor=white" alt="TypeScript native preview (tsgo)">
