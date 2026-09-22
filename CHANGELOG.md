@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overlay layers (inner border gradient, specular highlight, spotlight glow) and Button's primary
   gloss gradient overlay. Visual-only: no functional, accessibility, i18n, or component API change
   (the lift/scale/gloss removals are the intended visual change, not a regression). PR #811.
+- **Visual Maturity remediation, PR C (overlays):** Toast no longer renders its card on a
+  translucent, blurred glass panel — it gets the same solid `--sc-surface-raised` treatment as
+  Card and the other primitives (PR B). BottomSheet's backdrop now uses the shared
+  `--sc-backdrop-strong` token instead of a hardcoded `black/40`, matching Modal's and Drawer's
+  scrim and adapting per theme. Modal's, Drawer's, and BottomSheet's backdrop blur is unchanged —
+  a transient scrim while an overlay is open is the "explicit, rare, transient" glass use DS-6
+  reserves, not the ambient default PR A/B removed elsewhere. Visual-only: no functional,
+  accessibility, i18n, or component API change. PR #812.
 
 ## [1.28.8] — 2026-09-22
 
