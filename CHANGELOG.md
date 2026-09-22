@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`body.portal-active`); the existing "plain writing surface" opt-out is unchanged. Adds semantic
   `--sc-elevation-*`/`--sc-radius-*` token aliases as the foundation for the next remediation PR's
   primitive de-glass work. PR #810.
+- **Visual Maturity remediation, PR B (core primitives de-glass):** Card, Button, Input, Textarea
+  (default variant), Select, Checkbox, and RadioGroup no longer render as translucent, blurred
+  glass panels by default — each now sits on a solid `--sc-surface-*` token, adopting PR A's
+  `--sc-elevation-*`/`--sc-radius-*` roles (Card uses `--sc-elevation-surface`/`--sc-radius-panel`
+  at rest, `--sc-elevation-popover` on hover). Removes Card's hover lift/scale and three decorative
+  overlay layers (inner border gradient, specular highlight, spotlight glow) and Button's primary
+  gloss gradient overlay. Visual-only: no functional, accessibility, i18n, or component API change
+  (the lift/scale/gloss removals are the intended visual change, not a regression). PR #811.
 
 ## [1.28.8] — 2026-09-22
 

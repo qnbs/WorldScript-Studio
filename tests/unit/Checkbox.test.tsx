@@ -59,4 +59,20 @@ describe('Checkbox', () => {
     render(<Checkbox ref={ref} />);
     expect(ref.current).toBeInstanceOf(HTMLInputElement);
   });
+
+  // QNBS-v3 (Visual Maturity #B): locks the solid-surface treatment — no blurred glass panel.
+  it('renders on a solid surface token, without backdrop-blur', () => {
+    render(<Checkbox />);
+    const className = screen.getByRole('checkbox').className;
+    expect(className).toContain('bg-[var(--sc-surface-overlay)]');
+    expect(className).not.toContain('backdrop-blur');
+  });
+
+  // QNBS-v3 (CodeAnt, Visual Maturity #B): locks the checked:hover: compound variant so an opaque hover background can never visually un-fill a checked box, regardless of Tailwind's variant emission order.
+  it('keeps the accent fill on hover while checked', () => {
+    render(<Checkbox checked onChange={vi.fn()} />);
+    const className = screen.getByRole('checkbox').className;
+    expect(className).toContain('checked:hover:bg-[var(--sc-accent)]');
+    expect(className).toContain('checked:hover:border-[var(--sc-accent)]');
+  });
 });

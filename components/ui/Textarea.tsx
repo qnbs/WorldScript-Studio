@@ -16,15 +16,16 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
   variant?: 'default' | 'overlay';
 }
 
+// QNBS-v3 (Visual Maturity #B, DS-6): a solid surface token replaces the blurred glass panel, matching Input's default — the 'overlay' variant below stays fully transparent for its own separate reason (sitting over a visible text-mirror layer).
 const DEFAULT_CLASSES = `
     flex min-h-[120px] w-full rounded-sc-lg
     border border-[var(--sc-border-subtle)]
-    bg-[var(--glass-bg)] backdrop-blur-md
+    bg-[var(--sc-surface-overlay)]
     px-4 py-3 pb-12 text-sm
     text-[var(--sc-text-primary)] placeholder:text-[var(--sc-text-muted)]
     shadow-sm transition-all duration-sc-fast
-    focus-visible:outline-none focus-visible:border-[var(--border-interactive)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:bg-[var(--sc-surface-raised)]/50
-    hover:border-[var(--sc-border-strong)] hover:bg-[var(--glass-bg-hover)]
+    focus-visible:outline-none focus-visible:border-[var(--border-interactive)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] focus-visible:bg-[var(--sc-surface-raised)]
+    hover:border-[var(--sc-border-strong)] hover:bg-[var(--sc-surface-raised)]
     disabled:opacity-50 disabled:cursor-not-allowed
     scrollbar-thin scrollbar-thumb-rounded-md
 `;
