@@ -378,7 +378,7 @@ describe('Tauri release workflow policy', () => {
       const jobBlock = extractJobBlock(workflowSource, job);
       const uploadStep = extractStepBlock(jobBlock, step);
       expect(uploadStep).toContain(
-        'uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f',
+        'uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4',
       );
       expect(uploadStep).toContain(`if: \${{ !cancelled() }}`);
       expect(uploadStep).toContain('report_type: test_results');
