@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a transient scrim while an overlay is open is the "explicit, rare, transient" glass use DS-6
   reserves, not the ambient default PR A/B removed elsewhere. Visual-only: no functional,
   accessibility, i18n, or component API change. PR #812.
+- **Visual Maturity remediation, PR D (product identity, header slice):** the app header — shown
+  on every screen, the opposite of a rare/transient overlay — no longer renders on an always-on
+  translucent, blurred glass bar. It gets the same solid `--sc-surface-raised` treatment as the
+  other primitives, and its decorative specular-highlight strip (the same anti-pattern PR B removed
+  from Card) is gone. The command palette trigger button moves from a translucent to a solid
+  `--sc-surface-overlay` background (hover now shifts to `--sc-surface-raised` for visible contrast,
+  since the header behind it is no longer blurred) and adopts the token-driven radius scale.
+  Visual-only: no functional, accessibility, i18n, or component API change. PR #813.
 
 ## [1.28.8] — 2026-09-22
 

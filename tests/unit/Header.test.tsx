@@ -131,4 +131,12 @@ describe('Header', () => {
     await user.click(screen.getByLabelText('common.undo'));
     expect(mockDispatch).toHaveBeenCalled();
   });
+
+  it('renders the header bar on a solid surface token, without backdrop-blur', () => {
+    const { container } = render(<Header {...defaultProps} />);
+    const className = container.querySelector('header')?.className ?? '';
+    // QNBS-v3: an exact token match (not a substring check) — a substring check would also pass for the translucent bg-[var(--sc-surface-raised)]/80 this test exists to rule out.
+    expect(className.split(/\s+/)).toContain('bg-[var(--sc-surface-raised)]');
+    expect(className).not.toContain('backdrop-blur');
+  });
 });
