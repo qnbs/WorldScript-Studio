@@ -8,6 +8,7 @@ Runtime styling is **CSS-first** (`index.css`); TypeScript mirrors live in `@dom
 - **No `dark:` Tailwind prefix in components**: WorldScript uses body-class theming (`.light-theme` / `.dark-theme`), not Tailwind's `dark:` media-query mechanism. Using `dark:` bypasses appearance presets and can break the active creative palette.
 - **Accessibility**: High contrast uses `.accessibility-high-contrast` on `body`; reduced motion uses `.worldscript-reduced-motion` plus `prefers-reduced-motion`.
 - **Internationalization**: User-facing labels for presets live in locale bundles (`settings.appearance.preset*`).
+- **Editorial workspace, not AI dashboard** (DS-6, Visual Maturity remediation): solid semantic surfaces are the default; glass/blur is an explicit, rare, transient effect, not a primitive default. Elevation is tied to real layer hierarchy via `--sc-elevation-*` (flat surfaces carry little/no shadow; only popovers/modals carry real elevation), and radius via `--sc-radius-*` expresses intent (compact control vs. panel vs. rare hero) rather than one soft radius everywhere. Ambient decoration (Aurora/noise) is scoped to the Welcome Portal brand moment (`body.portal-active`), not mounted for every product view.
 
 ## Semantic tokens (overview)
 
@@ -19,7 +20,8 @@ Runtime styling is **CSS-first** (`index.css`); TypeScript mirrors live in `@dom
 | Border / focus | `--sc-border-subtle`, `--sc-border-strong`, `--sc-ring-focus` |
 | Semantic status | `--sc-danger-{bg,fg,border}`, `--sc-success-{bg,fg}`, `--sc-warning-{bg,fg}`, `--sc-info-{bg,fg}` |
 | Data-viz | `--sc-data-1` … `--sc-data-8` (categorical), `--sc-heat-0` … `--sc-heat-4` (sequential) |
-| Elevation | `--sc-shadow-xs` … `--sc-shadow-xl` |
+| Elevation | `--sc-shadow-xs` … `--sc-shadow-xl` (raw scale); `--sc-elevation-{flat,surface,popover,modal}` (semantic roles, DS-6) |
+| Radius | `--radius-sc-{sm,md,lg,xl}` (Tailwind v4 `@theme` scale); `--sc-radius-{control,panel,hero}` (semantic roles, DS-6) |
 | Motion | `--sc-duration-fast` (150ms), `--sc-duration-normal` (280ms), `--sc-ease-standard`, `--sc-ease-emphasized` |
 | Typography | `--font-ui`, `--font-editor`, `--font-mono`, `--sc-prose-measure` |
 | Z-index | `--sc-z-docked` (10) → `--sc-z-sticky` (100) → `--sc-z-command` (150) → `--sc-z-modal` (200) → `--sc-z-toast` (300) |

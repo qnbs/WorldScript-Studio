@@ -42,10 +42,23 @@ export const designTokens = {
     xl: 'var(--sc-shadow-xl)',
     accentGlow: 'var(--sc-accent-glow)',
   },
+  /** DS-6 (Visual Maturity): semantic elevation roles — prefer these over raw `shadow.*` in new code. */
+  elevation: {
+    flat: 'var(--sc-elevation-flat)',
+    surface: 'var(--sc-elevation-surface)',
+    popover: 'var(--sc-elevation-popover)',
+    modal: 'var(--sc-elevation-modal)',
+  },
   radius: {
     sm: 'var(--radius-sc-sm)',
     md: 'var(--radius-sc-md)',
     lg: 'var(--radius-sc-lg)',
+  },
+  /** DS-6 (Visual Maturity): semantic radius roles — prefer these over raw `radius.*` in new code. */
+  radiusRole: {
+    control: 'var(--sc-radius-control)',
+    panel: 'var(--sc-radius-panel)',
+    hero: 'var(--sc-radius-hero)',
   },
   spacing: {
     xs: 'var(--spacing-sc-xs)',
