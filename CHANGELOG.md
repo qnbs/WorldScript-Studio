@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.28.8] — 2026-09-22
 
 - **v1.28.8 released:** desktop startup-recovery patch release. #743's Release invariant was
-  re-verified against this candidate (no concrete blocker); the qualification tracker itself
+  re-verified against this release (no concrete blocker); the qualification tracker itself
   remains open and unaffected — see the reconciliation comment on #743. PR #808.
 - **Post-release v1.28.8 truth sync:** removed the now-stale release-candidate markers from
   README.md and CHANGELOG.md now that the `v1.28.8` tag and GitHub Release are published, and
