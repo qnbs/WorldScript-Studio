@@ -711,5 +711,7 @@
   "error.startup.recoveryFailed": "La preservación del proyecto falló. El proyecto original no se eliminó. Recarga la aplicación e inténtalo de nuevo.",
   "error.startup.recoveryUnknown": "No se pudo confirmar la preservación del proyecto. Recarga la aplicación e inténtalo de nuevo.",
   "error.startup.recoveryAlreadyPreserved": "Parece que otro intento de recuperación ya ha preservado el proyecto. Recarga la aplicación para continuar.",
-  "error.startup.resetWarning": "Restablecer la base de datos eliminará todos los proyectos y la configuración locales."
+  "error.startup.resetWarning": "Restablecer la base de datos eliminará todos los proyectos y la configuración locales.",
+  "error.startup.safeOpen": "Abrir WorldScript Studio sin este proyecto",
+  "error.startup.safeOpenNotice": "Este proyecto permanece en el disco exactamente como está. No se abrirá ni se modificará en esta sesión, por lo que una versión compatible podrá abrirlo más adelante."
 }
