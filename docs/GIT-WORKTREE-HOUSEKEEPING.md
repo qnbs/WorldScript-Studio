@@ -1,0 +1,1455 @@
+# Git worktree & local branch housekeeping
+
+This repo's development pattern — one `git worktree` per feature/fix/investigation branch,
+sometimes dozens deep across a long multi-session program — accumulates local state that
+`git fetch`/`git pull` never cleans up on its own. This doc explains the recurring failure mode
+it causes, how to diagnose it safely, and the exact commands used to fix it (verified against
+this repo's real state on 2026-08-27/28, when this doc was written after a 14→2 worktree and
+78→14 local-branch cleanup; re-verified and extended 2026-09-23 during a post-#817 cleanup pass
+that removed 5 more worktrees and classified 30 local branches — see Revision history at the
+end).
+
+## Reading this repo's git output: locale matters
+
+`git status --short --branch` and `git branch -vv` print their relationship words in whatever
+locale the shell is configured for — on this machine that's German, not English. Misreading
+these strings looks like a normal typo but produces the opposite conclusion (e.g. mistaking
+"behind" for "ahead"), so translate before reasoning about any output you see:
+
+| String you may see | Meaning | English equivalent |
+|---|---|---|
+| `entfernt` | remote-tracking ref has no corresponding remote branch anymore (GitHub already deleted it, e.g. via a PR's own delete-branch) | `gone` |
+| `voraus N` | N commits ahead of the compared ref | `ahead N` |
+| `hinterher N` | N commits behind the compared ref | `behind N` |
+| `## HEAD (kein Branch)` | detached HEAD state | `## HEAD (no branch)` |
+| `Bereite Arbeitsverzeichnis vor` / `Aktualisiere Dateien: N%` | `git worktree add`/`checkout` progress output while materializing files | `Preparing worktree` / `Updating files: N%` |
+
+`voraus N, hinterher M` together (e.g. `[origin/main: 2 voraus, 33 hinterher]`) means the branch
+diverged from its comparison ref in both directions — it has its own unpushed commits *and*
+missed later upstream commits. That combination on a branch with no open PR is a strong signal of
+**active, not-yet-submitted local work** — do not delete it under the "no PR found" heuristic
+below without first checking `rev-list --count` in both directions.
+
+## The recurring symptom
+
+```
+$ gh pr merge <N> --squash --delete-branch
+failed to run git: fatal: 'main' is already used by worktree at '/path/to/.worktrees/<name>'
+```
+
+**Root cause:** `gh pr merge` (like several git plumbing operations) tries to update the local
+`refs/heads/main` ref after merging. Git refuses if `main` is *currently checked out* in any
+worktree other than the one you're running the command from — and a worktree can be left on
+`main` (instead of a feature branch) indefinitely if it was used for one-off release-prep or
+inspection work and never switched off before being abandoned.
+
+**This is not a git bug and not something to route around every time.** `gh pr merge`'s own
+remote-side merge on GitHub *always succeeds* despite this error — verify with
+`gh pr view <N> --json state,mergedAt,mergeCommit` — but leaving the root cause in place means
+every future merge attempt from every worktree hits the same wall.
+
+**The durable fix does not update `refs/heads/main` from outside at all.** Every raw-ref approach
+to that — a hand-rolled ancestry-check-then-`update-ref` compare-and-swap, or even `git fetch
+<remote> <src>:<dst>` — turned out to only protect the ref's *value*, not the moment-to-moment
+state of whichever worktree ends up holding it. **Confirmed empirically (2026-09-23, git 2.45.1)
+with a `reference-transaction` hook that pauses `git fetch origin main:main` mid-transaction:** a
+second worktree can still check out `main` in the gap between the fetch's own occupancy check and
+its reference-transaction commit, leaving that worktree's files/index at the old commit under a
+branch ref that has already moved — the exact race the fetch-based approach was supposed to close,
+just moved one layer down. No script-level check-then-write sequence, and no fetch-based shortcut,
+can fully close this from *outside* the worktree that holds the branch — only git's own
+worktree/index machinery, running *inside* that worktree, actually keeps the ref and the checkout
+coherent as one operation.
+
+**So update `main` from inside whichever worktree holds it, using normal porcelain — never from
+outside, and never with ref plumbing:**
+
+```bash
+git worktree list --porcelain | grep -B2 '^branch refs/heads/main$'   # find the one holding main
+```
+
+- **If that's your designated canonical main worktree** (this repo's convention: `.worktrees/main`
+  — the one this playbook otherwise assumes throughout), go there and update it in place:
+
+  ```bash
+  cd <canonical-main-worktree>
+  set -o pipefail   # a failed `create` below must not be silently followed by a fetch that then
+                     # runs without any snapshot actually in place
+  # snapshot refs/remotes/origin/* as REAL refs first, not a text file — a fetch runs git's own
+  # auto-maintenance afterward, which can GC an object the instant nothing reachable points to
+  # it, and a plain text-file record of a SHA string doesn't keep anything reachable (see the
+  # full explanation, and the ref-cleanup step, under "Remote branch cleanup" below). Namespaced
+  # under a per-invocation run_id, not a fixed path — two housekeeping sessions running this flow
+  # concurrently would otherwise collide on `create` (which refuses to overwrite an existing ref),
+  # and worse, a leftover snapshot from a session that never reached its own cleanup step would
+  # make every later invocation fail indefinitely with no way to tell "another session is actively
+  # using this" from "this is stale debris" — a run_id makes every invocation's own snapshot set
+  # unambiguous and independently cleanable, closing the ownership question rather than papering
+  # over just the `create` failure:
+  run_id="$$-$(date +%s)"
+  git for-each-ref --format="create refs/pre-fetch-snapshot/$run_id/%(refname:lstrip=3) %(objectname)" \
+    refs/remotes/origin | git update-ref --stdin ||
+    { echo "pre-fetch snapshot failed" >&2; exit 1; }
+  git fetch --no-prune --no-auto-maintenance origin ||   # a plain `fetch origin` still prunes under
+    { echo "fetch failed — aborting main update" >&2; exit 1; }
+                                 # fetch.prune/remote.origin.prune config — be explicit here too;
+                                 # `--no-auto-maintenance` matters too: fetch runs `maintenance
+                                 # --auto` by default, and `git gc` (which that can invoke) calls
+                                 # `git worktree prune --expire 3.months.ago` on its own — confirmed
+                                 # via `git help gc`'s `gc.worktreePruneExpire` documentation — so
+                                 # an unrescued prunable worktree could be destroyed by this fetch
+                                 # alone, before this doc's own rescue steps ever run; this refreshes
+                                 # ALL of origin/*, not just main, so a non-main branch can be
+                                 # force-pushed by this fetch too — classify any changed ref the
+                                 # same way as "Remote branch cleanup" below. Without an explicit
+                                 # check, and with this block never enabling `errexit`, a failed
+                                 # fetch would let the shell continue straight into a merge against
+                                 # a stale `origin/main` with nothing to catch it (confirmed against
+                                 # CodeRabbit's review of wave 10's own diff)
+  [ "$(git branch --show-current)" = "main" ] ||
+    { echo "no longer on main — something switched this worktree, abort" >&2; exit 1; }
+  git merge --ff-only origin/main ||
+    { echo "fast-forward merge failed — main diverged from origin/main, resolve before retrying" >&2; exit 1; }
+  git rev-parse HEAD origin/main   # confirm both now match
+  ```
+
+  `merge --ff-only` refuses to do anything if the merge wouldn't be a clean fast-forward — the
+  same non-destructive guarantee the old CAS/fetch approaches were reaching for — but it runs as
+  an ordinary checkout-aware git operation *on the worktree that already holds the branch*, so
+  there is no separate ref to move out from under anyone: this worktree's own index and files are
+  what's being advanced, by the one process actually doing it. **That guarantee depends on `main`
+  still being what's checked out here at the moment of the merge** — if anything switches this
+  specific worktree to a different branch in the gap between the fetch and the merge, `merge
+  --ff-only origin/main` fast-forwards *whatever's currently checked out* to `origin/main`'s tip,
+  not `main` itself (confirmed reproducible: an unrelated ancestor branch gets silently advanced
+  while `main` stays stale). The explicit check above narrows that gap to as small as plain git
+  porcelain allows — but **it does not fully close it**, and no further mechanical check would:
+  `git merge` binds to whatever `HEAD` resolves to *at the moment it runs*, not to a name checked
+  a command earlier, and plain git has no atomic "merge only if still on branch X" primitive to
+  bind the two together as one operation. This is a genuinely narrower, harder-to-hit window than
+  every prior version of this race (it requires another process to run `git switch`/`checkout` in
+  *this exact worktree* in the single-command gap between the check and the merge — not just any
+  ref update anywhere in the repo), and is accepted as a residual for that reason, the same way
+  the local-branch-deletion section above accepts a residual around `git update-ref -d` rather
+  than overclaiming full atomicity it can't actually deliver.
+
+- **If some *other* worktree holds `main` instead** (the actual "recurring symptom" case above —
+  a rogue worktree left on `main` after one-off work), repoint that one away first — it's not
+  supposed to be there:
+
+  ```bash
+  git -C <rogue-worktree-path> switch --detach   # or switch to its own real branch
+  ```
+
+  Git will not let you check `main` out anywhere *else* while that worktree still holds it (this
+  is the same protection that produced the original `gh pr merge` error, and it's confirmed to
+  hold even across worktrees: attempting to check the same branch out in a second worktree while
+  the first still has it fails closed with `fatal: 'main' is already used by worktree at
+  '<path>'`). Once it's repointed, check `main` out in your canonical main worktree if it isn't
+  already, then proceed with the `fetch` + `merge --ff-only` above.
+
+This isn't a narrower patch on the previous mechanism — it replaces it, because the previous one's
+core claim (that `fetch <src>:<dst>` gives an atomic checked-out-branch guarantee) turned out to be
+false under a slow/paused transaction, not just theoretically incomplete.
+
+## Before removing *any* worktree: prove it's safe
+
+Never remove a worktree — or delete the branch it points at — without checking all of these
+first. A worktree removal only deletes the *checkout*; the branch ref (and its commits) survive
+until you explicitly delete the branch too, so the checks below matter most before that second
+step.
+
+```bash
+# 1. Uncommitted TRACKED changes?
+git -C <worktree-path> status --porcelain=v2 -b
+# non-empty output (beyond the branch.* lines) = STOP, something is mid-edit
+
+# 2. Unique commits never pushed/merged anywhere?
+git -C <worktree-path> rev-list --count origin/main..<branch>
+# > 0 means real, potentially unrecoverable-elsewhere work exists on this branch
+```
+
+**These two checks are not sufficient by themselves — ignored files are part of the inventory
+too.** `git status --porcelain=v2 -b` never reports gitignored paths, but `git worktree remove`
+deletes the *entire* directory regardless of `.gitignore` — including a freshly-ignored `.env`
+with real local secrets (exactly what this doc's own `.gitignore` change adds), a local database,
+a handoff/evidence file, provider/project metadata, or any other irreplaceable local-only content.
+A clean `status` result proves nothing about that content; inventory it explicitly:
+
+```bash
+git -C <worktree-path> status --porcelain=v2 --untracked-files=all
+git -C <worktree-path> ls-files --others --ignored --exclude-standard
+```
+
+**Neither command above is exhaustive if a tracked file has a concealment bit set on it in the
+index.** `assume-unchanged` and `skip-worktree` both make git stop comparing a tracked path
+against the working tree at all — an edit to that path produces no output from either command
+above, clean or not. Confirmed empirically: marking a tracked file with `git update-index
+--assume-unchanged <path>`, then editing it, left both commands silent, and a plain `git worktree
+remove` proceeded and destroyed that edit with no warning. Check for either flag before trusting
+a clean result from the two commands above:
+
+```bash
+git -C <worktree-path> ls-files -v | grep -E '^[a-z]|^S'
+# lowercase letter = assume-unchanged bit set; `S` = skip-worktree bit set
+```
+
+Any hit here means the inventory above cannot be trusted as-is — either clear the flag
+(`git update-index --no-assume-unchanged`/`--no-skip-worktree <path>`) and rescan, or diff that
+specific path directly against its committed blob before proceeding.
+
+Classify every ignored path this turns up — "ignored" means "not for git," not "disposable":
+
+| Classification | Meaning | Disposition |
+|---|---|---|
+| `REGENERABLE` | Build output, caches, lockfile-derived state — reproducible from a clean checkout | Safe to discard |
+| `LOCAL_SECRET` | `.env`, keys, tokens, local credentials | Preserve, or discard only with explicit confirmation it's throwaway |
+| `EVIDENCE` | Handoff notes, audit logs, review evidence, anything documenting a decision | Preserve |
+| `UNIQUE_WORK` | Local-only data, exports, or state with no other copy | Preserve |
+| `CACHE` | Tool-local scratch state with no evidentiary or reproducibility value | Safe to discard |
+| `UNKNOWN` | Anything you can't confidently place above | **Stop** — do not remove until resolved |
+
+Only remove the worktree once every ignored path found has a disposition other than `UNKNOWN`.
+
+A worktree/branch is safe to remove only when **all** of the above come back clean: no
+uncommitted tracked diff, no unresolved ignored content, and either zero unique commits *or*
+every commit is reachable via a real PR (see below).
+
+**This inventory and the actual `git worktree remove` are two separate operations — git provides
+no lock to bind them into one atomic step.** Anything else touching this exact worktree between
+the inventory above and the removal (an editor autosave, another terminal, a background process)
+can add or change data that the inventory never saw, and `git worktree remove` would then delete
+it along with everything already reviewed. There is no git-native primitive that inspects and
+removes as a single operation, so this is a genuine, non-eliminable residual absent exclusive
+operator control over that specific worktree for the duration of the sweep — the same kind of
+honest disclosure this doc already gives for `git update-ref -d`'s occupancy-check gap and the
+canonical-main-worktree merge's branch-check gap above. The bounded mitigation is to revalidate
+immediately before the removal and abort on any drift, which narrows the window to as small as
+plain shell allows without overclaiming atomicity it can't deliver:
+
+```bash
+inventory_before=$(git -C <path> status --porcelain=v2 --untracked-files=all;
+  git -C <path> ls-files --others --ignored --exclude-standard)
+# ... reflog inspection, classification, and any rescue-ref work happens here ...
+inventory_now=$(git -C <path> status --porcelain=v2 --untracked-files=all;
+  git -C <path> ls-files --others --ignored --exclude-standard)
+[ "$inventory_now" = "$inventory_before" ] ||
+  { echo "<path> changed since its inventory — reclassify before removing" >&2; exit 1; }
+git worktree remove <path>
+```
+
+**Next check: has a past session already left a classification — and does it still apply?**
+Search for ledger/handoff/reconciliation evidence before applying any default heuristic below.
+Two real examples found in this repo (2026-09-23) prove this evidence is **not** reliably
+co-located with the worktree it describes: `.pr747-orchestration-wip-inventory.md` and
+`.pr747-split-ledger.md` sat in the *main* worktree's root while classifying dirty state in a
+*different*, still-dirty worktree; `LOCAL-WIP-RECONCILIATION.md` sat inside the
+`takeover-convergence-20260912` worktree while pre-classifying *three other* worktrees as
+`EVIDENCE_ONLY` / `PARTIALLY_VALID`, each with an explicit "Recovery: Worktree, branch, and
+handoff bundle" instruction. **Search every registered worktree's root, not just the candidate's
+own directory:**
+
+```bash
+set -o pipefail   # without this, `cmd | while read ...` exits with the LOOP's status (which
+                   # "succeeds" even on zero iterations), so a failed `cmd` looks identical to a
+                   # cmd that genuinely found nothing — every pipeline below, and everywhere else
+                   # in this doc that pipes a git command into a `while read` loop, needs this set
+                   # in the same shell first
+set -e             # `pipefail` alone only changes what a pipeline's exit status IS — bash still
+                   # only ever ACTS on a nonzero status when `-e` (errexit) is also set; without
+                   # it, this doc's own quick-reference sweep would keep running into a worktree
+                   # remove or a branch/ref delete after a preceding safety check had already
+                   # failed. The one command in this doc that exits nonzero on purpose — `diff`,
+                   # signaling "found differences," not an error — needs its own explicit
+                   # `|| true` (or an `if`/`case` on `$?`) wherever it's used, precisely so a
+                   # blanket `-e` doesn't treat that expected, meaningful nonzero as a crash
+
+# NUL-safe worktree-path extraction, reused by every check in this doc that needs to iterate
+# registered worktree paths: a legal path can contain a space (breaks `for x in $(...)` word
+# splitting) or even a literal newline (breaks a line-oriented `awk`/`read` pipeline, which
+# truncates at the embedded newline as if it were a real record boundary) — `-z` plus a
+# NUL-delimited `read` loop is the only parse that survives either:
+list_worktree_paths() {
+  git worktree list --porcelain -z | while IFS= read -r -d '' line; do
+    case "$line" in "worktree "*) printf '%s\0' "${line#worktree }" ;; esac
+  done
+}
+
+list_worktree_paths | while IFS= read -r -d '' path; do
+  find "$path" -maxdepth 1 -iname '*ledger*' -o -iname '*handoff*' -o -iname '*reconciliation*' \
+    -o -iname '*inventory*' -o -iname '*wip*' -o -iname '*recovery*' 2>/dev/null
+done
+```
+
+Confirmed empirically: a worktree path containing a literal embedded newline (`$'tree\npath'`,
+via `git worktree add`) is preserved intact through `list_worktree_paths` above, where the
+earlier `awk substr($0,10)` version — correct for spaces, but still line-oriented — silently
+truncated it at the newline.
+
+Don't blindly trust every markdown file this turns up as authoritative — read each candidate and
+correlate it against the specific branch/worktree/PR you're evaluating before it changes any
+decision.
+
+**A ledger's disposition is only as current as the state it actually describes — bind it to that
+state before trusting it, every time:**
+
+1. Note the ledger's own date/anchor (commit SHA, branch, worktree path) as written.
+2. Re-capture the worktree's *current* state (tracked, untracked, **and ignored** — see above).
+3. Check whether anything — a new commit, a new uncommitted hunk, a new ignored file — has
+   appeared since the ledger was written.
+4. Only the specific work the ledger actually enumerated inherits its disposition. Material the
+   ledger never saw gets no free pass from it, however authoritative the ledger otherwise reads.
+5. On any divergence, reclassify the new material from scratch using the checks in this doc —
+   never extend the old disposition to cover it by assumption.
+
+Where practical, bind the ledger's own evidence to something independently checkable (a SHA, a
+diff, a branch tip) rather than trusting its prose alone — that's what let the two real examples
+above support a `--force` removal safely instead of on faith. **A ledger's explicit, still-current
+disposition overrides the default heuristics in this doc, in both directions** — it can pre-clear
+a removal the default checks alone wouldn't justify, or block one the default checks alone would
+otherwise allow. A *stale* ledger overrides nothing beyond what it actually still covers.
+
+## Cross-referencing branches against real PR history
+
+Linear `git merge-base --is-ancestor <branch> origin/main` **under-counts** in any repo using
+squash-merge (this one does) — a squash-merged PR's original commits are never literal ancestors
+of `main`, since squashing creates one new commit with a different SHA. The correct signal is
+GitHub's own PR state, not git ancestry — but `headRefName` alone is not a safe join key: a
+fork's PR can use the exact same branch name as a local branch that has nothing to do with it, and
+matching on name only would classify that unrelated local branch as `MERGED`/`CLOSED` and clear it
+for deletion. Include the PR's head repository in the match so only a PR that actually belongs to
+*this* repository can classify a local branch:
+
+```bash
+repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner | ascii_downcase')
+gh pr list --state all --limit 1000 --json headRefName,state,number,headRepository \
+  --jq '.[] | "\(.headRefName)\t\((.headRepository.nameWithOwner // "") | ascii_downcase)\t\(.state)\t#\(.number)"' \
+  | sort > /tmp/pr-heads.tsv
+
+for b in $(git branch --format='%(refname:short)' | grep -v '^main$'); do
+  match=$(awk -F'\t' -v b="$b" -v repo="$repo" '$1==b && $2==repo {print $3, $4}' /tmp/pr-heads.tsv)
+  echo "$b -> ${match:-NO PR FOUND}"
+done
+```
+
+A branch name present in `pr-heads.tsv` under a *different* `headRepository` is not a match at
+all — treat it exactly like `NO PR FOUND` for that local branch.
+
+This sorts every local branch into three buckets — but the label alone is historical metadata,
+not present-tense proof, in every one of the three:
+
+- **`MERGED #N`** — content is permanently preserved in `main`'s history via the squashed commit
+  (this repo squash-merges — see above; there is no separate two-parent merge commit to look for).
+  **This record is historical, not current — verify the tip you're about to delete is actually
+  what merged before deleting it.** A branch can gain new commits after its PR merged, get reused
+  for unrelated work, diverge locally, or be recreated remotely under the same name; none of that
+  changes what `gh pr list` reports, since it only ever recorded the head at merge time. The
+  ordinary ancestry check gives a **false negative** here too — a squash-merged branch's own
+  commits are never literal ancestors of `main`, so `git merge-base --is-ancestor <branch> main`
+  is not a substitute for this verification. Use whichever of these actually fits the branch in
+  front of you:
+  - fetch the PR's real merge/squash commit (`gh pr view <N> --json mergeCommit --jq
+    '.mergeCommit.oid'`) and confirm `git diff <branch-tip> <that-sha>` is empty, or that every
+    hunk it does show is something you've separately confirmed safe to lose;
+  - `git cherry <base> <branch>` for patch-equivalence when the history is more than one clean
+    squash-shaped diff;
+  - a direct content/patch comparison against `main`'s current tree for the affected paths;
+  - a ledger that dispositions exactly *this* branch's *current* tip (bound per the staleness
+    check above) — not an older or unrelated commit on the same branch.
+
+  Only once the current tip itself is accounted for — not just the branch name and a historical
+  PR record — is it safe to delete locally and remotely.
+- **`CLOSED #N`** (never merged) — this means exactly one thing: **not merged.** It does **not**
+  by itself mean abandoned, superseded, or safe to delete. A PR gets closed for rework-and-reopen,
+  for a scope split, or for reasons that leave its branch's current tip as the only copy of real
+  work anywhere — the state this doc's own safety principles exist to protect. Treat a `CLOSED`
+  branch as **no safer than the "No PR at all" bucket below** unless you can additionally show one
+  of:
+  - explicit, current evidence that it was abandoned or superseded — not inferred from the close
+    event alone;
+  - the current tip carries no unique work beyond what's already reachable elsewhere, verified
+    the same way as the `MERGED` case above (diff/cherry/content comparison — not name or timing);
+  - the content demonstrably exists under another solid authority — a merged sibling PR, but only
+    once *content* evidence confirms it (see the same-day-sibling case just below), never a
+    similar name alone;
+  - a ledger that dispositions exactly this branch's *current* tip (bound per the staleness check
+    above).
+
+  Absent one of those, flag it for human review instead of deleting. **Reflog is not a
+  preservation contract.** It's a local, tool-internal, time-bounded safety net, and the default
+  window is shorter than it looks: `gc.reflogExpire` (90 days) applies only to entries still
+  *reachable* from some ref; the moment you delete the branch, its entries become *unreachable*
+  and fall under `gc.reflogExpireUnreachable` — 30 days by default, not 90 — and either can be
+  configured shorter. Never cite "reflog covers it" as the reason a deletion is fine; it covers
+  accidental *git* mistakes within that window, not a considered decision to discard someone's
+  only copy of real work.
+  - **Same-day sibling retry, a common sub-case of the "another solid authority" proof above — but
+    branch-name similarity is a lead, never proof on its own:** a `CLOSED` (unmerged) PR is often
+    an immediate retry under a renamed branch — check for a sibling branch name (typically `-v2`,
+    `-corrected`, `-2`, or a later date stamp) whose PR **is** `MERGED`, often within hours of the
+    close. That similarity only tells you where to *look*; it does not by itself establish that
+    the merged sibling's diff actually contains the closed PR's changes — a similarly-named PR can
+    be a narrower rewrite, a different-scope redo, or only a partial overlap, and deleting on
+    name/timing alone can destroy the only copy of work the sibling never actually carried. Get
+    the same explicit content evidence required above: diff the closed branch against the merged
+    sibling (`git diff <closed-branch> <merged-sibling-tip>` — or against the sibling's own
+    pre-squash branch tip if it still exists — should show no meaningful unique hunks left in the
+    closed branch), or find a ledger/reconciliation note (see the check above) that already
+    recorded the supersession from an actual review. Two real examples from this repo
+    (2026-09-20) where the name/timing lead turned out to hold up under that stronger check:
+    `feat/553-autosave-canonical-wiring-20260920` (PR closed unmerged) was superseded by
+    `feat/553-autosave-canonical-wiring-20260920-corrected` (merged the same day);
+    `feat/553-universal-ingress-admission` (closed unmerged, twice, under PR numbers from two
+    different weeks) was superseded by `feat/553-universal-ingress-admission-v2` (merged). Treat
+    the lead as a starting point for verification, not as the verification itself.
+- **No PR at all** — this is the dangerous bucket. It means the branch's commits (if any exist
+  beyond `origin/main`) were never reviewed or landed anywhere. **Always** run the
+  `rev-list --count` check from the previous section before touching these. A branch with zero
+  unique commits (e.g. a disposable diagnostic branch created to isolate a bug) is trivially
+  safe; a branch with real commits is exactly the kind of undocumented work-in-progress this repo's
+  own safety principles say to preserve, not guess about.
+
+### Before the actual `git branch -D`: the branch's own reflog, and binding to the verified tip
+
+Everything above verifies the branch's *current tip*. That doesn't account for commits the branch
+**used to** point at — if it was ever `reset` or force-rebased after creating a real commit, that
+discarded commit can pass every content/PR check here cleanly (the current tip looks fine) while
+surviving *only* in `refs/heads/<branch>`'s own reflog. `git branch -D` deletes that reflog along
+with the ref, in the same action, with no separate warning — this is the exact detached-worktree
+reflog risk from above, just for an ordinary named branch instead of a detached checkout, and it
+has never been covered by the worktree-removal reflog check because a to-be-deleted branch often
+has no worktree at all. Inspect it the same way before deleting — **without** a `--` before the
+ref, which turns it into a pathspec filter instead of the ref argument and silently produces no
+output at all (confirmed empirically: `git reflog show --all -- refs/heads/other` printed
+nothing for a branch with real reset-away commits in its reflog; `git reflog show refs/heads/other`
+— no `--` — correctly showed them):
+
+```bash
+git reflog show refs/heads/<branch>
+```
+
+For anything that turns up beyond the current tip, apply the same reachable-elsewhere check as
+the detached-worktree case above (output-inspected, not exit-code-chained) — **but exclude the
+branch being deleted from its own check**, not just the reflog-entry's own self-match that
+`reachable_elsewhere` already guards against:
+
+```bash
+hits=$(reachable_elsewhere "$sha" "refs/heads/<branch>")
+```
+
+If the branch added unique work and later reverted it, its *current* tip is a descendant of that
+earlier commit — `git for-each-ref --contains` reports exactly this branch as containing it, which
+reads as "reachable elsewhere" right up until the moment this same branch is deleted, at which
+point that "elsewhere" evaporates. Passing `refs/heads/<branch>` as the exclusion closes that
+false-negative before it can rescue-skip a commit that is, in truth, about to become unreachable.
+Rescue anything the exclusion-aware check still finds unreachable before proceeding.
+
+**Then bind the actual deletion to the exact tip you verified — a bare `git branch -D <branch>`
+has no such binding, and this doc's own remote-side fix for that exact gap (the `--force-with-lease`
+change) never covered the local case.** If another process renames a different branch onto this
+name, or fast-forwards it, between your verification and the delete, a name-only `git branch -D`
+removes whatever is there *now*, not what you checked. Git's plumbing delete supports exactly this
+as a first-class case:
+
+```bash
+git worktree list --porcelain | grep -q "^branch refs/heads/<branch>\$" && { echo "<branch> is checked out in a worktree — resolve that first" >&2; exit 1; }
+git update-ref -d refs/heads/<branch> "$verified_sha"
+```
+
+(`git worktree list --porcelain` already covers every worktree, including whichever one you're
+running this from — no separate "am I on it right now" check is needed on top of it.)
+
+**Read this precisely, because it does not give the same guarantee as `git branch -D` on its
+own:** confirmed empirically that `git update-ref -d <ref> <old>` *does* fail closed if `<ref>`
+no longer equals `<old>` (a real compare-and-swap on the value) — but *not* if `<ref>` is
+currently checked out in a worktree; unlike `git branch -D`, it deletes an actively-checked-out
+branch without complaint, corrupting that worktree's index/files-vs-HEAD relationship exactly like
+the earlier `main`-ref races. That is why the explicit occupancy check above is not optional
+decoration — it restores the protection `git branch -D` would have given for free, at the cost of
+a narrow (not fully atomic) gap between the check and the delete. For a branch that's already
+been classified as safe to delete by everything above, that gap is far narrower than the
+active-and-constantly-advancing `main` case; it is a real, accepted residual, not a closed one. If
+that residual isn't acceptable for a given branch, use plain `git branch -D <branch>` instead —
+it keeps the checked-out-branch guarantee natively and simply skips the SHA-binding refinement.
+
+## Categories to never touch without explicit instruction
+
+Regardless of merge status, leave these alone during routine housekeeping — they're deliberately
+preserved, not forgotten:
+
+- **`archive/*`** — explicit historical preservation (e.g. `archive/pr477-pre-rewrite-<sha>`).
+- **`backup/*`** — safety-net snapshots created during past incidents or risky rewrites (e.g.
+  `backup/signing-hardening-contaminated-<sha>`, `backup/pr491-recovery-<date>-<sha>`). These
+  exist *specifically* to survive housekeeping sweeps.
+- **`release/vX.Y.Z`** marker branches — even when their PR is merged and the same point is also
+  captured by a git tag, treat these as intentional release-history references, not disposable
+  feature work.
+- Any branch with real unique commits and no PR (see above) — flag it for human review instead of
+  guessing whether it's abandoned or still wanted.
+
+## Worktrees nested inside other worktrees
+
+This repo's actual convention isn't just "one `.worktrees/` directory under the repo root" — a
+worktree can itself contain its own `.worktrees/` subdirectory holding further worktrees one
+level deeper (e.g. `<repo>/.worktrees/main/.worktrees/<name>`, confirmed 2026-09-23: four
+worktrees lived there simultaneously, nested under the canonical `main` worktree rather than
+under the repo root). `git worktree list --porcelain` already reports every registered worktree
+regardless of nesting depth — it's one flat registry keyed off the shared `.git` directory, not
+a directory-tree walk — so nothing is hidden from that command. The thing that *does* need
+extra care is the **orphan-directory check**: run it against **every** directory that currently
+holds nested worktrees, not just the repo root's own container.
+
+```bash
+# repo-root container
+find <repo>/.worktrees -mindepth 1 -maxdepth 1 -type d
+# any worktree that itself holds nested worktrees (check each one you find in `git worktree list`)
+find <repo>/.worktrees/main/.worktrees -mindepth 1 -maxdepth 1 -type d
+# cross-reference both listings against `git worktree list --porcelain` paths
+```
+
+A directory present on disk but absent from the porcelain listing at *either* level is an orphan
+candidate — inspect it (source changes, untracked files, a stray `.git` file) before deleting.
+
+**Removal order matters here too: leaves before parents.** If a candidate path is itself a
+worktree that *contains* other registered worktrees (i.e. it's a prefix of another entry in
+`git worktree list --porcelain`), removing it — especially with `--force` — doesn't just delete
+the outer checkout; a real filesystem `rm` of that directory takes the nested checkout down with
+it, while only the outer worktree gets properly deregistered (the inner one is left merely
+prunable, not actually reviewed). Checking the outer branch's own safety says nothing about the
+inner one's uncommitted or unique-commit state. Before removing any worktree, confirm no other
+registered worktree path starts with it — **as a literal path prefix, not a regex**: a candidate
+path containing a character that's meaningful to `grep` (`[`, `]`, `.`, `*`, `+`, `?`, `(`, `)` —
+none of which are exotic in a real branch-derived directory name) would otherwise make the check
+silently pass when it should have found a nested worktree, e.g. `/tmp/tree[1]` failing to match
+its own child `/tmp/tree[1]/child` because `[1]` gets read as a character class instead of literal
+text:
+
+```bash
+list_worktree_paths | while IFS= read -r -d '' other; do   # see list_worktree_paths above
+  [ "$other" = "<path>" ] && continue
+  case "$other" in
+    "<path>"/*) echo "$other" ;;   # literal prefix match — no regex, no word-splitting
+  esac
+done
+```
+
+(`case`'s pattern matching is a shell glob, not a regex — `[`, `.`, `*`, etc. inside the quoted
+`"<path>"` portion are matched literally; only the trailing unquoted `/*` acts as a wildcard.
+Confirmed empirically against `/tmp/tree[1]` vs. `/tmp/tree[1]/child` — correctly matched — and
+against `/tmp/tree[12]/child` — correctly *not* matched, unlike a naive `grep "^<path>/"`.) Any
+output here means `<path>` has a nested worktree inside it — classify and remove that one first
+(recursing into this same check), never the outer path while an inner one is unreviewed.
+
+### Every worktree's own `HEAD` reflog, not just detached ones
+
+Every worktree — **whether currently detached or attached to a real branch** — has its own `HEAD`
+reflog (`.git/worktrees/<name>/logs/HEAD` for a linked worktree), and it can hold commits that are
+unreachable from anywhere else. This is not exclusive to the detached case: a worktree can have
+been detached earlier in its life, created a real commit there, then switched back to a normal
+named branch — `symbolic-ref` on it now succeeds and nothing about its *current* attachment hints
+that an earlier commit is stranded. Treat full-reflog inspection as mandatory for **every**
+worktree removal, not conditional on whatever `HEAD` happens to point at right now:
+
+```bash
+git -C <path> reflog show --all              # full history, not just -5, regardless of attachment
+```
+
+**The `HEAD` reflog is not the only place a worktree can privately hold a commit.** A linked
+worktree also has its own per-worktree refs and pseudorefs — `refs/worktree/*` (real refs, not
+reflog entries, resolvable only from inside that worktree) and pseudorefs like `ORIG_HEAD` left
+behind by a reset/rebase in that worktree. Confirmed empirically (2026-09-23): creating
+`refs/worktree/keep` at a unique commit in a worktree, then removing that worktree, left
+`git worktree prune` deleting `.git/worktrees/<id>/refs/worktree/keep` along with the rest of the
+administrative directory — a commit reachable only through a worktree-private ref, never a
+reflog entry, with no HEAD-reflog inspection anywhere in this doc ever seeing it. Enumerate and
+rescue these too, before either a live removal or a real prune:
+
+```bash
+git -C <path> for-each-ref refs/worktree              # per-worktree private refs, if any
+git -C <path> rev-parse --verify -q ORIG_HEAD          # per-worktree pseudoref from a past reset/rebase
+```
+
+Classify and rescue any commit these turn up exactly like a `HEAD`-reflog entry above.
+
+**A reusable reachability check**, defined once and used everywhere in this doc that needs it —
+`git for-each-ref`, not `git branch --all`/`git tag`, specifically because `branch --all` prints a
+synthetic `* (kein Branch)` / `* (no branch)` pseudo-entry whenever *any* worktree elsewhere in the
+repo happens to be detached, which is non-empty output that would falsely register as "reachable"
+even though it isn't a real ref pointing at anything (confirmed empirically); and because
+`for-each-ref`'s output is never ANSI-colorized in the first place, sidestepping the
+`color.branch`/`color.ui` issue from wave 5 entirely instead of needing `--no-color`:
+
+```bash
+reachable_elsewhere() {   # $1 = sha; $2 = optional refname(s) to exclude, one per line. A single
+                          # self-match exclusion is enough when only one candidate is in play, but
+                          # a batch with several simultaneous prune candidates must pass ALL of
+                          # them here — see the remote-tracking cleanup section below for why.
+  git for-each-ref --contains="$1" refs/heads refs/remotes refs/tags |
+    awk -v exclude="${2:-}" '
+      BEGIN { n = split(exclude, ex, "\n"); for (i = 1; i <= n; i++) skip[ex[i]] = 1 }
+      !($NF in skip)'
+}
+```
+
+For each distinct commit SHA the reflog turns up, check it — **by inspecting actual output, not
+by chaining on exit codes:** every one of `branch --contains`/`tag --contains`/`for-each-ref
+--contains` exits `0` even when it finds *nothing* (confirmed empirically), so an `A || B` chain
+built on any of them never reports "not found" — it silently treats an empty result as success:
+
+```bash
+sha=<sha>
+if git -C <path> merge-base --is-ancestor "$sha" origin/main; then
+  echo "reachable via origin/main ancestry"
+else
+  hits=$(reachable_elsewhere "$sha")   # define the function in this shell first; refs/heads,
+                                        # refs/remotes, and refs/tags are shared repo-wide, so
+                                        # this doesn't need `-C <path>` even though the reflog
+                                        # scan above does
+  if [ -n "$hits" ]; then
+    printf 'reachable via:\n%s\n' "$hits"
+  else
+    echo "UNREACHABLE elsewhere — preserve before removing the worktree"
+  fi
+fi
+```
+
+If the last branch runs, the commit exists *only* in this worktree's reflog — preserve it with an
+explicit ref before removing the worktree — `git update-ref "refs/rescue/$sha" "$sha"` (**the
+full SHA, never a shortened one** — two different commits can share a short-prefix, and
+`update-ref` overwrites an existing ref at that name with no old-value check unless you give it
+one) in the main repository — rather than relying on the reflog's own time-bounded retention (see
+the `CLOSED` bucket above: reflog is not a preservation contract). Only once every reflog entry
+from every worktree involved is accounted for this way is "clean and a plain ancestor" actually
+sufficient — and this isn't a license to rescue-ref every routine checkout/rebase entry forever:
+the contract is to protect unique, otherwise-unreachable work, not to accumulate permanent refs
+for ordinary history. Confirmed real example (2026-09-23): `desktop-startup-safe-open-20260922`
+was detached at an old `origin/main` point corresponding to a version-bump release commit; its
+originating branch's PR had already merged, and the reflog showed the exact `checkout: moving
+from fix/desktop-startup-safe-open-i18n-20260922 to origin/main` transition that produced the
+detached state, with no other commits in the reflog to account for.
+
+**Fail closed if any of these commands themselves fail, not just if they find nothing.** A `while
+read` loop consuming a failed `git` command's (empty, because it errored) output looks identical
+to a loop consuming a successful command's genuinely-empty output — both just don't iterate. Check
+the upstream command's own exit status before treating an empty result as "nothing to rescue":
+
+```bash
+set -o pipefail   # a `cmd | while read ...` pipeline's exit status is the LAST command's by
+                   # default (usually the loop, which "succeeds" even if `cmd` failed) — this
+                   # makes it reflect `cmd`'s failure instead, so a broken git invocation aborts
+                   # the script rather than being silently treated as "found nothing"
+```
+
+### `git worktree prune` deletes administrative reflog data even when the checkout is already gone
+
+The reflog check above assumes the worktree's checkout directory still exists (`git -C <path>
+reflog show --all` needs a real path to run against). A `git worktree prune` *candidate* is, by
+definition, the opposite case: its administrative entry survives in the shared `.git` even though
+the actual checkout directory is already missing or inaccessible — that mismatch is exactly what
+makes it prunable. The administrative data for that entry, including its `HEAD` reflog, lives
+independently under the shared git directory and is fully readable *without* the checkout
+directory — until the real prune runs, which deletes that administrative directory outright, with
+no separate warning about what was in it:
+
+```bash
+set -o pipefail   # this pipeline pipes into a `while read` loop too — see the pipefail note above
+common_git_dir=$(git rev-parse --git-common-dir)
+git worktree prune --dry-run --verbose
+# each line names the administrative directory being removed, e.g.
+# "Removing worktrees/<name>: gitdir file points to non-existent location" — extract <name>:
+git worktree prune --dry-run --verbose 2>&1 | grep -o 'worktrees/[^:]*' | while IFS= read -r rel; do
+  echo "=== $rel ==="
+  GIT_DIR="$common_git_dir/$rel" git reflog show HEAD
+done
+```
+
+Confirmed empirically (2026-09-23): `GIT_DIR=<admin-dir> git reflog show HEAD` correctly returns
+the full reflog — including a commit created and then abandoned by a later `reset`/checkout —
+*after* the worktree's own checkout directory has already been deleted; running the real
+`git worktree prune --verbose` afterward removes that entire administrative directory, and the
+same command then returns nothing at all. Classify every entry the same way as the live-worktree
+detached-HEAD case above, rescue anything unreachable with `refs/rescue/<sha>`, and only then run
+the real prune.
+
+**The real prune should not be a second, broader `git worktree prune --verbose` call, for the
+same reason a second `git remote prune origin` call is wrong for remote-tracking refs below:**
+it re-scans the *current* set of prunable worktrees at the moment it runs, not the specific
+candidates the dry-run actually showed you — if another checkout becomes prunable in the gap
+between the dry-run and this step (confirmed reproducible with `gc.worktreePruneExpire=now`:
+deleting a second checkout after reviewing only the first dry run causes a real `git worktree
+prune` to remove both, including the second one's never-reviewed reflog and private refs), the
+unscoped call prunes that unreviewed entry too. Bind the real removal to exactly the reviewed
+set — `git worktree remove --force` accepts a single registered worktree even when its checkout
+directory is already gone (confirmed empirically: it removed only that one administrative entry,
+leaving a second, unrelated worktree fully intact), which is what actually scopes this the way
+the per-ref `git update-ref -d` scoping does for remote-tracking refs:
+
+```bash
+# cross-reference each dry-run <name> against `git worktree list --porcelain` — it still reports
+# a missing-checkout worktree's original registered path, since that registration is exactly
+# what made the dry-run able to flag it as prunable in the first place
+git worktree remove --force "<reviewed-candidate-path>"   # once per reviewed candidate — never a
+                                                             # second, unscoped `git worktree prune`
+```
+
+## Running this playbook inside Claude Code: the harness's own permission gate
+
+Both `git worktree remove` (even clean, even without `--force`) and `git branch -D` (even with a
+fully evidence-backed justification written out beforehand) can be denied by Claude Code's
+auto-mode classifier as generically "dangerous" or "Irreversible Local Destruction," independent
+of how much analysis preceded the command — confirmed 2026-09-23, both denials fired on
+commands this doc itself would call safe. This is a per-session permission gate, not a signal
+that the plan is wrong. **Do not try to route around it with a different tool or a manual
+filesystem delete** — that defeats the point of the gate and loses the safety net it provides for
+a genuinely destructive slip. Instead: present the full candidate list (worktree paths / branch
+names + the one-line justification for each) to the user in one message, get one explicit
+approval covering the whole batch, then re-issue the *exact same command* — it succeeds once a
+human has approved it in-session.
+
+**Separately, a `git worktree remove` (or a chain of several) can exceed a foreground command's
+timeout on this hardware** and get automatically moved to a background task rather than failing —
+confirmed 2026-09-23 on a chain of five removals. This is not an error; wait for the completion
+notification (or read the task's output file once notified) instead of re-issuing the command or
+concluding it hung.
+
+## Remote branch cleanup — a narrower bar than local
+
+Deleting a *remote* branch is visible to every collaborator and (outside a short GitHub recovery
+window) harder to undo than a local `git branch -D`. Apply a narrower rule than local cleanup:
+only delete remote branches with a **confirmed `MERGED` PR** — their content's permanence doesn't
+depend on the branch ref surviving. That confirmation is the *same* current-tip verification as
+the local `MERGED` bucket above, not just the historical PR record — a remote ref can just as
+easily have gained commits, been reused, or been recreated since the PR merged, and remote
+deletion is the higher-stakes side of that mistake. Never delete a remote branch on the historical
+PR-state record alone.
+
+**Before deleting, get an accurate picture of what's actually gone — but don't prune blindly to
+get it.** Local `origin/*` remote-tracking refs are a cache; if you never refresh it, branches
+GitHub already auto-deleted (via a PR's own `--delete-branch` flag) still show up locally as
+phantom entries. The reflex fix — `git fetch origin --prune` — mutates before anything has been
+classified, which is exactly the same preserve-first violation this doc calls out for worktree
+pruning: if a collaborator deleted an *unmerged* remote branch outside any process this doc
+tracks, and no local branch or tag references its tip either, that stale `origin/<branch>`
+remote-tracking ref can be the **last reachable pointer** to real commits — pruning it first and
+asking questions later means a later `git gc` can make that work permanently unrecoverable, not
+just relocate it. Fetch without pruning, get a dry-run inventory, classify every candidate, then
+prune:
+
+**Even a non-pruning fetch can silently discard the last pointer to a real commit — not by
+deleting a ref, but by *force-updating* it.** `--no-prune` only stops a ref from being *removed*
+when it's absent upstream; if a collaborator **force-pushed** an existing branch, an ordinary
+fetch still moves `origin/<branch>` from its old value straight to the new one, and the old value
+— potentially the last reference to real work — is gone the instant the fetch completes, before
+any inventory or classification runs at all (confirmed empirically: `git fetch --no-prune`
+reports a forced update exactly like a normal fetch would).
+
+**A snapshot must be a real git ref, not just a text file recording a SHA string.** `git fetch`
+runs `git maintenance --auto` after fetching by default, and any GC (that or a separate one) can
+collect an object the instant nothing reachable points to it — a string in a file doesn't keep
+anything reachable, so the very object you meant to protect can already be gone by the time your
+later classification step tries to inspect it (confirmed empirically: an object still resolvable
+via a real snapshot ref after the exact same fetch that force-updated it away). **Snapshot
+canonical `sha_pre_fetch_snapshot()`:**
+
+**Namespaced under a per-invocation `run_id`, not a fixed path.** Two housekeeping sessions
+running this flow concurrently would otherwise collide on `create` (which refuses to overwrite an
+existing ref), and a leftover snapshot from a session that never reached its own cleanup step
+(below) would make every later invocation fail indefinitely with no way to tell "another session
+is actively using this" from "this is stale debris." A `run_id` makes every invocation's own
+snapshot set unambiguous and independently cleanable — this closes the ownership question rather
+than only handling the `create` failure:
+
+```bash
+run_id="$$-$(date +%s)"
+sha_pre_fetch_snapshot() {   # run before every fetch that touches refs/remotes/origin
+  git for-each-ref --format="create refs/pre-fetch-snapshot/$run_id/%(refname:lstrip=3) %(objectname)" \
+    refs/remotes/origin | git update-ref --stdin
+}
+sha_pre_fetch_snapshot || { echo "pre-fetch snapshot failed" >&2; exit 1; }
+git fetch --no-prune --no-auto-maintenance origin   # refresh without pruning — a plain `git fetch
+                                        # origin` can still prune if fetch.prune/remote.origin.prune
+                                        # is set repo-wide, confirmed by `git fetch -h`; be explicit.
+                                        # `--no-auto-maintenance` too: fetch's default post-fetch
+                                        # maintenance run can invoke `git gc`, which calls `git
+                                        # worktree prune --expire 3.months.ago` on its own — see the
+                                        # canonical-main-worktree flow above for the full citation
+git remote prune origin --dry-run      # confirmed non-mutating: reports candidates, changes nothing
+```
+
+Compare the snapshot against current state — **checking real exit statuses, not a blanket `||
+true`**, which would swallow a genuine `for-each-ref`/`diff` failure (an unreadable object
+database, a corrupted snapshot) exactly as readily as the expected "no changes" outcome, letting
+the sweep continue past step's own worth with an inventory that never actually completed:
+
+```bash
+refs_before=$(mktemp) refs_after=$(mktemp) refs_diff=$(mktemp)   # unique per invocation — a fixed
+                                                                    # /tmp/refs-*.txt name would let
+                                                                    # two concurrent housekeeping
+                                                                    # sessions clobber each other's
+                                                                    # snapshot/diff and classify
+                                                                    # against the wrong data
+git for-each-ref --format="%(refname:lstrip=3) %(objectname)" "refs/pre-fetch-snapshot/$run_id" > "$refs_before"
+git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/remotes/origin > "$refs_after"
+# both sides now use the same lstrip count: run_id adds exactly the one path component that
+# `refs/pre-fetch-snapshot/<name>` was previously missing relative to `refs/remotes/origin/<name>`
+# — see the revision history below for the mismatch this replaced
+diff_status=0
+diff "$refs_before" "$refs_after" > "$refs_diff" || diff_status=$?
+case "$diff_status" in 0|1) ;; *) echo "remote-ref comparison failed" >&2; exit "$diff_status" ;; esac
+grep_status=0
+grep '^[<>]' "$refs_diff" || grep_status=$?
+[ "$grep_status" -le 1 ] || exit "$grep_status"
+```
+
+(`diff` exits `0`=identical/`1`=differences found — both expected outcomes, not failures — and
+anything `2` or higher is a real error worth stopping for; `grep` follows the same `0`/`1`/`2+`
+split. Checking the *specific* status this way, instead of `|| true`, is what CodeRabbit and
+Codex both asked for after wave 7's blanket suppression.)
+
+For any ref whose value *changed* (not just the ones the dry-run flagged as absent — the `<` line
+in `$refs_diff` gives its OLD objectname), treat its **old** value the same as a prune
+candidate — it may have just been silently orphaned by the fetch itself, not by anything this
+doc's own process decided. `$refs_diff` (and `$refs_before`/`$refs_after`/`$run_id`) stay valid
+for this as long as you're still in the same shell session that created them — that's the same
+assumption this doc already relies on for `reachable_elsewhere()` and the other shell functions
+defined above.
+
+Once every changed ref has been classified and anything unreachable has its own `refs/rescue/`
+entry (see below), the snapshot itself can be cleaned up, along with the temp files — scoped to
+exactly this invocation's own `run_id`, never the whole `refs/pre-fetch-snapshot` namespace, which
+would delete another concurrently-running session's still-in-progress snapshot too:
+
+```bash
+git for-each-ref --format='delete %(refname)' "refs/pre-fetch-snapshot/$run_id" | git update-ref --stdin
+rm -f "$refs_before" "$refs_after" "$refs_diff"
+```
+
+For every candidate — from the dry-run *and* from a force-updated old value — capture its tip and
+check whether it's reachable from anywhere durable, **excluding the candidate ref itself**, using
+the same `reachable_elsewhere` helper defined above (`git for-each-ref`, not `git branch
+--all`/`git tag` — avoids both the detached-`HEAD` pseudo-entry and the `color.branch` escaping
+problem by construction, and inspects actual output rather than chaining on exit codes, which
+`branch --contains`/`tag --contains` both return `0` for even when they find nothing):
+
+**Capture the full pending-candidate set once per dry-run batch, before checking any individual
+one.** Excluding only the one ref currently being checked is not enough: if two stale
+remote-tracking refs in the *same* dry-run both happen to contain the same otherwise-unique
+commit (e.g. one is a stale duplicate of the other), checking either one while the other still
+exists reports that other candidate as a durable "hit" — both can end up marked reachable via
+each other and both get pruned, leaving the commit unreachable and both reflogs gone. Exclude
+every ref in the batch, not just the one under test:
+
+```bash
+# LC_ALL=C on the parsed command, not the whole shell — git 2.45.1 marks this "would prune"
+# marker for translation (confirmed against git's own source), so under a non-English locale
+# (this repo's shell is German — see "Reading this repo's git output" at the top) the real
+# string is different (e.g. "würde veralteten Branch entfernen"), the sed pattern matches
+# nothing, pending_refs comes back empty, and the whole point of this exclusion — two
+# candidates in the same batch proving each other reachable — silently stops working:
+pending_refs=$(LC_ALL=C git remote prune origin --dry-run |
+  sed -n 's/^ \* \[would prune\] origin\//refs\/remotes\/origin\//p')
+
+sha=$(git rev-parse "origin/<candidate-branch>")   # or the old objectname for a force-updated ref
+if git merge-base --is-ancestor "$sha" origin/main; then
+  echo "reachable via origin/main ancestry"
+else
+  hits=$(reachable_elsewhere "$sha" "$pending_refs")
+  if [ -n "$hits" ]; then
+    printf 'reachable via:\n%s\n' "$hits"
+  else
+    echo "UNREACHABLE elsewhere — preserve before pruning"
+  fi
+fi
+```
+
+Before deciding a candidate's *current* tip is the whole story, also check the ref's **own
+reflog** — a remote-tracking ref that was previously force-updated can have an older unique
+commit surviving only in `refs/remotes/origin/<branch>@{1}` (etc.), and the deletion below removes
+the ref's reflog in the same action, with no separate warning (confirmed empirically: an old
+commit visible only via that reflog entry, gone the moment the ref was deleted):
+
+```bash
+git reflog show "refs/remotes/origin/<candidate-branch>"
+```
+
+If a candidate is unreachable elsewhere — whether from the dry-run, a force-update, or its own
+reflog — preserve it explicitly before pruning, the same way as an unreachable detached-worktree
+reflog entry above:
+
+```bash
+git update-ref "refs/rescue/$sha" "$sha"     # always the FULL sha — see above
+```
+
+Only once every candidate is either confirmed reachable elsewhere or explicitly preserved does the
+real removal run — **and it should not be a second, broader `git remote prune origin` call.**
+That command re-scans the *current* remote state at the moment you run it, not the specific
+candidate set the dry-run actually showed you — if another branch was deleted upstream in the
+gap between the dry-run and this step, an unscoped `git remote prune origin` prunes that ref too,
+even though it was never inventoried or classified. Delete only the exact refs you reviewed,
+each bound to the tip you actually checked:
+
+```bash
+git update-ref -d "refs/remotes/origin/<candidate-branch>" "$sha"   # once per reviewed candidate
+git branch -r --format='%(refname:short)' | grep -v '^origin$\|^origin/main$'
+# cross-reference the survivors against pr-heads.tsv exactly as above, verify each one's CURRENT
+# tip the same way as the MERGED bucket above, then re-verify immediately before the delete —
+# `--force-with-lease` is not available here: AGENTS.md reserves that flag for the canonical PR
+# recovery procedure after a controlled rebase, and ordinary housekeeping deletion is not that
+# flow, so using it to self-authorize a lease here would itself be the kind of unapproved
+# exception this repo's governance forbids. A bare `git push origin --delete <branch>` has no
+# lease at all, so this doc accepts the same kind of narrow, documented residual it already
+# accepts around `git update-ref -d` and the canonical-main-worktree merge above, rather than
+# reach for a flag that isn't governance-approved for this flow just to paper over the gap:
+verified_sha=$(git rev-parse "origin/<branch>")
+pnpm run ci:prepush   # required before every push per AGENTS.md, including a ref-only deletion
+current_sha=$(git rev-parse "origin/<branch>")
+[ "$current_sha" = "$verified_sha" ] ||
+  { echo "origin/<branch> moved since verification ($verified_sha -> $current_sha) — reclassify" >&2; exit 1; }
+git push origin --delete <branch>
+```
+
+Re-verifying immediately beforehand narrows the window in which a collaborator's new commits
+could land and be silently discarded by the delete — but, without a lease, does not close it
+completely; that residual gap is accepted explicitly rather than reached around with a flag
+governance doesn't authorize for this flow.
+
+**Multi-ref push caveat, confirmed the hard way:** a single `git push origin --delete a b c`
+where some refs are stale (already gone) reports per-ref errors but can silently **fail to apply
+even the refs that would have succeeded** — the overall command exits non-zero and at least one
+genuinely-deletable branch was left untouched despite not appearing in the error list. This is a
+reason to push each deletion individually anyway, not batched. Verify afterward with a
+ref-safe check rather than building a URL by hand — a branch name can contain `/`
+(`feature/foo`), and interpolating that directly into `gh api repos/<owner>/<repo>/branches/<name>`
+addresses the wrong route and can report a false "still exists":
+
+```bash
+git ls-remote --exit-code --refs origin "refs/heads/<branch>"
+# exit code 2 (no matching refs) = confirmed gone; exit code 0 = still there, retry
+```
+
+## `git gc` — real, but hardware-gated
+
+After a large branch-deletion sweep, loose objects accumulate fast (this repo went from ~5,780
+loose objects after deleting 60+ branches). `git gc` (non-`--aggressive`) is the right tool, but
+**confirmed to exceed a 3-minute timeout on this project's 2-core/~3.7 GB reference low-end
+machine** under normal load (load average ~2.9, ~385 MB free RAM at time of testing). Do not run
+it interactively as a "quick cleanup" step when hardware is already under load — it will either
+time out or contend with whatever else is running.
+
+**If a `git gc` run gets killed mid-repack**, it leaves a genuinely-safe-to-delete artifact behind
+— but never assume `.git` is the real git directory to clean up. In any *linked* worktree (every
+one this doc targets except the original clone), `.git` is a one-line text file pointing at the
+shared directory, not a directory itself — `find .git/objects/pack ...` there just fails with
+"not a directory" and the actual leftover temp pack goes untouched. Resolve the real, shared
+location first:
+
+```bash
+common_git_dir=$(git rev-parse --git-common-dir)
+git count-objects -v
+# a "garbage: N" / "size-garbage: N" line means an incomplete temp pack survived the kill
+find "$common_git_dir/objects/pack" -name 'tmp_pack_*'
+rm -f "$common_git_dir"/objects/pack/tmp_pack_*   # git's own count-objects already told you this is garbage
+```
+
+This is safe because an interrupted `git gc`'s temp pack was never linked into any real ref — it
+is by definition unreferenced, incomplete data, not a partially-written *real* object. It's the
+same shared object store regardless of which worktree you resolve it from, which is exactly why
+guessing a path relative to the wrong `.git` silently misses it.
+
+**Recommendation:** run `git gc` (never `--aggressive` on this hardware) during a genuinely idle
+period — not mid-session, not while other heavy shells (vitest/tsc/vite/build) might run
+concurrently, per this repo's standing low-end-hardware shell-execution discipline. A stale-object
+backlog is a disk-efficiency concern, not a correctness one — it's fine to defer.
+
+## Quick reference: full housekeeping sweep
+
+```bash
+# 0. Inventory every worktree container, not just the repo root (nested worktrees exist here —
+#    see above) — and read output assuming it may be in German (entfernt/voraus/hinterher).
+find <repo>/.worktrees -mindepth 1 -maxdepth 1 -type d
+find <repo>/.worktrees/*/.worktrees -mindepth 1 -maxdepth 1 -type d 2>/dev/null
+
+set -o pipefail   # a piped command's failure must not look identical to "found nothing" — see above
+set -e            # `pipefail` alone doesn't ABORT on a failure, only changes what the exit status
+                  # IS — without `-e` too, this sweep would keep running into a real removal/delete
+                  # after an earlier safety check had already failed. Every command below that
+                  # exits nonzero on its own *normal*, expected outcome (`diff`/`grep -v`/`git
+                  # ls-remote --exit-code`) is marked `|| true` for exactly that reason — don't
+                  # remove those, and don't run this sweep without `-e` either
+
+# 1. Inventory — fetch WITHOUT --prune here; pruning is a classified decision in step 5, not a
+#    side effect of taking inventory. Snapshot remote-tracking refs as REAL refs first (a text
+#    file doesn't survive fetch's own auto-GC — see "Remote branch cleanup" above), since even
+#    --no-prune can't stop a force-push from silently overwriting a ref's old value in the fetch.
+git worktree list --porcelain
+git branch --format='%(refname:short)' | wc -l
+run_id="$$-$(date +%s)"   # namespaces this invocation's snapshot refs so a concurrent housekeeping
+                          # session can't collide on `create` or have its still-in-progress
+                          # snapshot deleted by this session's own cleanup in step 5a — see
+                          # "Remote branch cleanup" above for the full rationale
+git for-each-ref --format="create refs/pre-fetch-snapshot/$run_id/%(refname:lstrip=3) %(objectname)" \
+  refs/remotes/origin | git update-ref --stdin ||
+  { echo "pre-fetch snapshot failed" >&2; exit 1; }
+git fetch --no-prune --no-auto-maintenance origin ||   # plain `fetch origin` can still prune under
+  { echo "fetch failed — aborting sweep" >&2; exit 1; }
+                                      # fetch.prune/remote.origin.prune config — be explicit.
+                                      # `--no-auto-maintenance` too: this fetch runs BEFORE step 3's
+                                      # worktree rescue, and fetch's default post-fetch maintenance
+                                      # can invoke `git gc`, which calls its own `git worktree prune
+                                      # --expire 3.months.ago` — see the canonical-main-worktree
+                                      # flow above for the full citation
+refs_before=$(mktemp) refs_after=$(mktemp) refs_diff=$(mktemp)   # unique per invocation — a fixed
+                                      # /tmp/refs-*.txt name would let two concurrent housekeeping
+                                      # sessions clobber each other's snapshot/diff and classify
+                                      # against the wrong data
+git for-each-ref --format="%(refname:lstrip=3) %(objectname)" "refs/pre-fetch-snapshot/$run_id" > "$refs_before"
+git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/remotes/origin > "$refs_after"
+diff_status=0
+diff "$refs_before" "$refs_after" > "$refs_diff" || diff_status=$?
+case "$diff_status" in 0|1) ;; *) echo "remote-ref comparison failed" >&2; exit "$diff_status" ;; esac
+grep_status=0
+grep '^[<>]' "$refs_diff" || grep_status=$?
+[ "$grep_status" -le 1 ] || exit "$grep_status"   # changed ref → classify per step 5a; $refs_diff
+                                                    # is read again there — see step 5a
+git remote prune origin --dry-run   # non-mutating candidate count; real prune happens in step 5
+git branch -r --format='%(refname:short)' | wc -l
+
+# 2. Build the fork-safe PR-state cross-reference (see above — headRefName + headRepository,
+#    never headRefName alone), and search EVERY registered worktree's root (not just the
+#    candidate's) for ledger/handoff/reconciliation/inventory/wip/recovery evidence before
+#    trusting any default heuristic below
+
+# 3. Per worktree holding a to-be-deleted branch, IN THIS ORDER:
+#    a. topology: refuse if any OTHER registered worktree path nests under this one — literal
+#       prefix match (a `case` glob, not `grep`/regex — a path with `[`, `.`, `*` etc. otherwise
+#       silently defeats the check), classify and remove that leaf first (see above)
+nested=$(list_worktree_paths | while IFS= read -r -d '' other; do [ "$other" = "<path>" ] && continue; case "$other" in "<path>"/*) printf '%s\n' "$other";; esac; done)
+[ -z "$nested" ] || { printf 'nested worktree(s) under <path> — remove leaf(s) first:\n%s\n' "$nested" >&2; exit 1; }
+#    b. tracked-status + ignored-files inventory (classify every hit — UNKNOWN means stop)
+inventory_before=$(git -C <path> status --porcelain=v2 --untracked-files=all;
+  git -C <path> ls-files --others --ignored --exclude-standard)
+printf '%s\n' "$inventory_before"
+#    c. inspect the FULL HEAD reflog UNCONDITIONALLY (not just when currently detached — an
+#       attached worktree can have stranded commits from an earlier detached phase too — see
+#       above), classify each entry with reachable_elsewhere(), rescue-ref anything unreachable
+git -C <path> symbolic-ref -q HEAD >/dev/null || echo DETACHED   # diagnostic only, not the gate
+git -C <path> reflog show --all
+#    d. only once a–c all pass, revalidate immediately before removing and abort on any drift —
+#       this narrows, but cannot close, the window since step b ran (no git-native lock exists to
+#       bind inventory and removal into one atomic operation; see "Before removing any worktree"
+#       above for the full residual this accepts, which requires the operator not run anything
+#       else against this exact worktree for the duration of the sweep). main/root worktree can't
+#       be removed this way, repoint it instead (see "The recurring symptom" above)
+inventory_now=$(git -C <path> status --porcelain=v2 --untracked-files=all;
+  git -C <path> ls-files --others --ignored --exclude-standard)
+[ "$inventory_now" = "$inventory_before" ] ||
+  { echo "<path> changed since its inventory — reclassify before removing" >&2; exit 1; }
+git worktree remove <path>              # add --force only if you've confirmed clean + safe
+#    e. dry-run and real prune are two separate steps, not one chained command; each dry-run
+#       candidate's administrative reflog must be rescued before the real prune destroys it,
+#       since its checkout is already gone by definition — see the dedicated section above. The
+#       real removal is bound per-candidate, never a second unscoped `git worktree prune`, which
+#       re-scans current state and can also remove a worktree that became prunable after the
+#       dry run — see the dedicated section above
+git worktree prune --dry-run --verbose
+# ...for each candidate, GIT_DIR=<admin-dir> git reflog show HEAD, classify, rescue if unique...
+git worktree remove --force "<reviewed-candidate-path>"   # once per reviewed candidate
+
+# 4. Local branch deletion — MERGED and CLOSED both require the SAME current-tip verification
+#    (diff against the PR's real merge/squash SHA, git cherry, content comparison, or a ledger
+#    bound to this exact tip) before deleting; a historical PR-state record or a similarly-named
+#    merged sibling is a lead, never proof by itself. Also inspect the BRANCH'S OWN reflog (not
+#    just its current tip) for anything unreachable, same as a detached worktree — see above.
+#    No active worktree, not in the "never touch" categories above.
+git reflog show refs/heads/<branch>   # NO `--` before the ref — that turns it into a pathspec
+                                       # filter and silently returns nothing (see above)
+# ...classify any entry beyond the current tip, rescue-ref anything unreachable...
+verified_sha=$(git rev-parse <branch>)
+git worktree list --porcelain | grep -q "^branch refs/heads/<branch>\$" && { echo "checked out — resolve first" >&2; exit 1; }
+git update-ref -d refs/heads/<branch> "$verified_sha"
+# (accepts a narrow, non-atomic gap between the occupancy check and the delete — see above; use
+# plain `git branch -D <branch>` instead if that residual isn't acceptable for this branch)
+
+# 5a. Remote-tracking cache cleanup — candidates come from BOTH the dry-run AND step 1's
+#     before/after diff (a force-updated ref's old value is a candidate too). For each: check
+#     reachable_elsewhere() (excluding the candidate's own ref) AND the ref's own reflog (a
+#     previously force-updated ref can hide an older unique commit there) before pruning, not
+#     after. Delete only the exact reviewed refs — a second `git remote prune origin` call
+#     re-scans current state and can prune something new that was never classified.
+git remote prune origin --dry-run
+git reflog show "refs/remotes/origin/<candidate-branch>"   # check for a pre-force-update tip too
+# ...for each reported candidate: capture its SHA, check reachability, rescue-ref if unique...
+git update-ref -d "refs/remotes/origin/<candidate-branch>" "$sha"   # once per reviewed candidate
+# once every changed ref from step 1 is classified, clean up the snapshot and its temp files —
+# scoped to this invocation's own $run_id, never the whole refs/pre-fetch-snapshot namespace,
+# which would delete another concurrently-running session's still-in-progress snapshot too:
+git for-each-ref --format='delete %(refname)' "refs/pre-fetch-snapshot/$run_id" | git update-ref --stdin
+rm -f "$refs_before" "$refs_after" "$refs_diff"
+
+# 5b. Actual remote branch deletion — same current-tip verification as step 4, MERGED only, never
+#     on the historical PR-state record alone. `--force-with-lease` is NOT used here: AGENTS.md
+#     reserves it for the canonical PR recovery procedure after a controlled rebase, not ordinary
+#     housekeeping — re-verify immediately before a plain, lease-less delete instead, and accept
+#     the narrowed (not closed) gap as a documented residual, same as step 4's own — see above
+verified_sha=$(git rev-parse "origin/<branch>")
+pnpm run ci:prepush   # required before every push per AGENTS.md, including a ref-only deletion
+current_sha=$(git rev-parse "origin/<branch>")
+[ "$current_sha" = "$verified_sha" ] ||
+  { echo "origin/<branch> moved since verification — reclassify" >&2; exit 1; }
+git push origin --delete <branch>
+# verify each is actually gone (path-safe — a raw branch name in a REST URL breaks on `/`).
+# `--exit-code` returning 2 (confirmed gone) IS the success case — never let it hit a bare
+# statement under `set -e` above; the `if` form is exempt from errexit on its own condition:
+if git ls-remote --exit-code --refs origin "refs/heads/<branch>"; then
+  echo "still there — retry" >&2; exit 1
+else
+  status=$?
+  [ "$status" -eq 2 ] || { echo "unexpected ls-remote status $status — investigate" >&2; exit 1; }
+fi
+
+# 6. Loose-object compaction (only when hardware load is genuinely idle)
+git count-objects -v
+git gc   # NOT --aggressive on this hardware; expect it to take several minutes
+```
+
+**Running this from inside Claude Code:** expect steps 3 and 4 to each require one explicit
+human approval per batch (see the permission-gate section above) — gather the full evidence-backed
+list first, present it once, then execute. Do not attempt this sweep with parallel/background
+shells on this hardware; it's a `git`-only sweep, but heavy adjacent work (a build, `vitest`,
+`git gc`) should still never run concurrently with it — see the low-end-hardware shell-execution
+rules this repo's `CLAUDE.md`/`AGENTS.md` already document.
+
+## Revision history
+
+- **2026-08-27/28** — original version, written after a 14→2 worktree and 78→14 local-branch
+  cleanup pass.
+- **2026-09-23** — extended during a post-#817 cleanup pass (11→6 worktrees removed; 15 of 30
+  non-`main` local branches deleted after in-session approval, remote already fully pruned by
+  GitHub) with: locale-dependent git-output translation table; the pre-existing-ledger check as a
+  third worktree-safety gate; the same-day-superseded-sibling PR pattern; nested-worktree
+  containers and the detached-HEAD diagnostic; and the Claude Code auto-mode permission gate
+  (including its background-timeout behavior) encountered while running this exact playbook
+  interactively. All additions are first-hand findings from that pass, not speculative — see the
+  housekeeping session that produced this revision for the full worktree/branch/PR evidence trail.
+- **2026-09-23 (PR #820 review correction wave)** — the revision above shipped with ten review
+  findings across four reviewers (CodeAnt: 1 `Critical` race condition; Sourcery: 3; chatgpt-
+  codex-connector: 6), all confirmed real against one shared root cause and fixed together rather
+  than argued down or patched one comment at a time: **historical metadata (a branch name, a PR
+  state, an older ledger) was allowed to stand in for a current-state proof before authorizing a
+  deletion.** Specifically: (1) the `main` fast-forward's ancestry-check-then-`update-ref`
+  sequence was a TOCTOU race — rewritten as an explicit compare-and-swap via `update-ref`'s
+  three-argument form, still gated on no worktree holding `main`; (2) the PR/branch cross-
+  reference matched on `headRefName` alone, so a fork's PR with a colliding branch name could get
+  an unrelated local branch classified `MERGED`/`CLOSED` — added the PR's `headRepository` to the
+  join key; (3) a correctly-matched historical `MERGED`/`CLOSED` record was treated as proof about
+  the branch's *current* tip — added explicit current-tip verification (PR merge/squash SHA diff,
+  `git cherry`, content comparison, or a ledger bound to the current tip) before either bucket
+  authorizes deletion, and the same requirement was added to remote-branch deletion; (4) `CLOSED`
+  was described as automatically safe to delete with reflog as the safety net — rewritten so
+  `CLOSED` means only "not merged," is treated as no safer than the "no PR" bucket without one of
+  four explicit current-state proofs, and reflog is named as what it is (a time-bounded local
+  safety net, not a preservation contract); (5) the same-day-sibling heuristic stated branch-name/
+  timing similarity as sufficient deletion proof — downgraded to an investigative lead that still
+  requires explicit content evidence; (6) the ledger-override rule didn't check whether the ledger
+  predated later changes — added a five-step staleness-binding procedure so only the work a ledger
+  actually enumerated inherits its disposition; (7) the ledger search only looked inside the
+  candidate worktree, even though this doc's own two real examples show the relevant ledger can
+  live in a *different* worktree — search now covers every registered worktree's root; (8) the
+  worktree-safety checks never inventoried gitignored content, so `git worktree remove` could
+  silently destroy a local secret, evidence file, or other irreplaceable ignored data that a clean
+  `git status` never revealed — added an explicit ignored-files inventory with a mandatory
+  classification (`UNKNOWN` blocks removal); (9) the `git gc` recovery commands assumed `.git` was
+  a real directory, which is false in every linked worktree (it's a text file pointing at the
+  shared common dir) — resolved via `git rev-parse --git-common-dir` first; (10) "via the merge
+  commit" corrected to "via the squashed commit" to match this repo's actual squash-merge history.
+  None of these fixes loosen the preserve-first stance elsewhere in this doc — every one of them
+  closes a way the previous wording could have authorized deleting real, unrecoverable work.
+- **2026-09-23 (PR #820 review correction wave 2)** — the wave above still shipped with 11 further
+  findings on the exact-head diff (chatgpt-codex-connector: 6; CodeRabbit: 5), fixed together as a
+  second bundled root-cause pass rather than one push per comment: (1) `git worktree remove
+  --force` on an outer worktree could cascade-delete a nested worktree it contains without that
+  inner checkout ever being reviewed — added a topology check that refuses removal while any
+  registered worktree path nests under the candidate, leaves-first; (2) `git push origin --delete`
+  had no lease at all, so a collaborator's new commits landing between verification and deletion
+  were silently dropped — bound to `--force-with-lease=<branch>:<verified-sha>`; (3) the
+  ledger-search loop's `for path in $(... print $2 ...)` word-split any worktree path containing a
+  space, silently skipping its ledgers — fixed via `substr($0,10)` and a `read` loop that never
+  re-splits the path; (4) **the `update-ref` compare-and-swap itself was reconsidered, not just
+  patched with a caveat** — it protected the ref's *value* but not the checked-out state, so
+  another session checking out `main` between the occupancy scan and the write was still possible;
+  replaced entirely with `git fetch <remote> <src>:<dst>`, which git itself refuses atomically for
+  *both* "checked out elsewhere" and "non-fast-forward," confirmed empirically against a real
+  worktree and a real diverged branch (see above) rather than assumed; (5) a detached-worktree's
+  current `HEAD` being a clean ancestor said nothing about *other* commits stranded only in that
+  worktree's own reflog — added full-reflog inspection with reachability checks and a rescue ref
+  for anything found unreachable, bounded so it protects real unique work rather than accumulating
+  permanent refs for routine history; (6) `git worktree prune --dry-run --verbose && git worktree
+  prune --verbose` executed the real prune immediately after the dry-run with no actual review
+  step in between, defeating the point of a dry-run — split into two separate, individually
+  reviewed steps; (7) `docs/DEPENDABOT-TRIAGE.md`'s "wait for the fixing PR to land" allowed
+  resuming the dependency train on the merge event alone, without confirming that PR's own
+  push-triggered CI actually succeeded — tightened to require both; (8) the runbook told readers
+  to `git worktree remove` a worktree holding `main`, which git refuses unconditionally for the
+  original checkout — added the safe repoint (`switch --detach`) as the documented alternative;
+  (9) "~90 days by default" for reflog retention overstated the real window — git's default is 90
+  days for *reachable* entries but only 30 for *unreachable* ones (exactly the case right after a
+  branch deletion), now stated precisely; (10) the remote-branch-gone verification interpolated a
+  raw branch name into a GitHub REST URL, which breaks (and can falsely report "gone") for any
+  name containing `/` — replaced with `git ls-remote --exit-code --refs`. Same operating principle
+  as wave 1: every fix closes a way the previous wording could authorize losing real work: none of
+  them loosen it.
+- **2026-09-23 (PR #820 review correction wave 3)** — chatgpt-codex-connector reviewed wave 2's own
+  diff and found 3 further `CURRENT_REAL` findings, the first of which disproved wave 2's own
+  central claim rather than just narrowing it: (1) **`git fetch <remote> <src>:<dst>` does not
+  give an atomic checked-out-branch guarantee either** — reproduced with a `reference-transaction`
+  hook that pauses the fetch mid-transaction, during which a second worktree successfully checked
+  out `main`, leaving it with old files under a moved ref once the fetch completed. Rather than
+  patch this with a third variant of ref plumbing, the mechanism was replaced with a fundamentally
+  different approach: update `main` only from *inside* whichever worktree already holds it (via
+  ordinary `git fetch` + `git merge --ff-only`), repointing away any worktree that holds `main`
+  incorrectly first — this relies on git's own worktree-exclusivity guarantee (confirmed
+  empirically: checking the same branch out in a second worktree while a first still holds it
+  fails closed) rather than trying to update a ref from outside the worktree that has it checked
+  out, which is the actual source of every version of this race so far; (2) `git fetch origin
+  --prune` (used both as a "just get an accurate count" inventory step and before remote-branch
+  deletion) mutates before any candidate is classified — if an unmerged remote branch was already
+  deleted upstream by someone else and no local branch or tag reaches its tip, that remote-tracking
+  ref can be the last reachable pointer, and pruning it first makes a later `git gc` capable of
+  destroying the work outright; reordered to fetch-without-prune, dry-run inventory, per-candidate
+  reachability check, rescue-ref anything unreachable, *then* prune, matching this doc's own
+  worktree-prune discipline instead of contradicting it two sections later; (3) the nested-worktree
+  topology check used `grep "^<path>/"`, which reads `<path>` as a *regex*, not a literal string —
+  a real path containing `[`, `.`, `*`, or similar would silently fail to match its own child (e.g.
+  `/tmp/tree[1]` vs. `/tmp/tree[1]/child`), letting a `--force` removal cascade into an unreviewed
+  nested checkout exactly the way the topology check exists to prevent; replaced with a `case`-glob
+  literal-prefix match, confirmed empirically against exactly that path shape plus a
+  whitespace-containing one. The pattern across all three waves holds: each new finding disproved
+  or narrowed a *specific* prior safety claim through concrete evidence, and each fix is a
+  structural correction validated against real git behavior, not a rewording.
+- **2026-09-23 (PR #820 review correction wave 4)** — 6 further findings on wave 3's own diff
+  (chatgpt-codex-connector: 5; CodeRabbit: 1), two of which exposed the same underlying defect
+  from two independent angles: (1) a plain `git fetch origin` used for "just inventory, don't
+  prune" purposes still honors a repo-configured `fetch.prune`/`remote.origin.prune=true` and
+  prunes anyway — made explicit everywhere with `git fetch --no-prune origin`; (2) **the
+  remote-tracking reachability check was logically broken in two compounding ways, found
+  independently by Codex and CodeRabbit**: `git branch --contains`/`git tag --contains` both exit
+  `0` even when they find *nothing*, so the `A || B || C` chain never actually detected "not
+  found" — an empty result silently counted as success; and separately, checking containment
+  against `--all` (which includes remote-tracking refs) trivially "found" the very
+  `origin/<candidate-branch>` ref about to be pruned, since a ref always contains its own tip.
+  Rewritten to inspect actual command *output*, not exit codes, and to exclude the candidate's
+  own ref from the containment check — applied to both the remote-tracking check and the
+  structurally identical detached-worktree reflog check from wave 1, which had the same
+  exit-code defect (found independently while fixing the reported one); (3) the NUL-safe rewrite
+  in wave 3 fixed spaces but not a worktree path containing a literal embedded newline, which a
+  line-oriented `awk`/`read` pipeline still truncates — replaced with a genuinely NUL-delimited
+  `list_worktree_paths` helper (`git worktree list --porcelain -z` plus a `read -r -d ''` loop),
+  confirmed empirically against a real newline-containing path, and reused everywhere a worktree
+  path list was needed; (4) named-branch deletion (`git branch -D`) was never covered by the
+  reflog-inspection discipline wave 1 added for detached worktrees, even though the identical risk
+  applies — a branch that was reset or rebased can have discarded commits reachable only through
+  its own reflog, deleted in the same action as the branch itself; added the same inspect-and-
+  rescue step before deletion; (5) local branch deletion had no equivalent of the remote lease —
+  bound it to the verified SHA via `git update-ref -d`, but only after discovering empirically
+  that this command, unlike `git branch -D`, does **not** refuse to delete a branch checked out in
+  a worktree; documented that gap honestly (a narrow, non-atomic residual between an explicit
+  occupancy check and the delete) rather than presenting the SHA-binding as a strictly-safer
+  drop-in replacement, and kept plain `git branch -D` as the explicitly-offered alternative when
+  that residual isn't acceptable. Four waves in, the operating pattern hasn't changed: every fix
+  is validated against real git behavior before being written down, and no fix is allowed to quietly
+  regress a safety property an earlier wave already established.
+- **2026-09-23 (PR #820 review correction wave 5)** — 5 further findings from
+  chatgpt-codex-connector on wave 4's own diff, all confirmed empirically before being fixed:
+  (1) the canonical-main-worktree update flow's own `git fetch origin` was missed when
+  `--no-prune` was added everywhere else in wave 4 — made consistent; (2) the named-branch reflog
+  check used `git reflog show --all -- refs/heads/<branch>` — the `--` turns the ref into a
+  pathspec filter instead of the reflog argument, and the command silently returns nothing;
+  confirmed empirically (a branch with real reset-away commits produced zero output with `--`,
+  and the correct output without it) and fixed by dropping the `--`; (3) the "real prune" step
+  for remote-tracking refs was a second, broader `git remote prune origin` call, which re-scans
+  current remote state rather than acting only on the specific candidates the dry-run reviewed —
+  replaced with per-ref `git update-ref -d refs/remotes/origin/<branch> "$sha"`, bound to exactly
+  what was classified; (4) `git worktree prune`'s real run destroys a prunable candidate's
+  administrative directory — including its `HEAD` reflog — even though that data is independently
+  readable via `GIT_DIR=<admin-dir> git reflog show HEAD` right up until the prune runs; confirmed
+  empirically (a detached commit's reflog entry was readable after its checkout directory was
+  already deleted, then permanently gone once the real prune ran) and added as a dedicated rescue
+  step, parsing the dry-run's own output for each candidate's administrative directory name;
+  (5) the candidate-exclusion filter on `git branch --all --contains` used an anchored `grep -v`
+  that silently stopped matching under `color.branch=always`, since git appends an ANSI reset
+  sequence after the branch name; confirmed empirically (the candidate ref survived the filter as
+  non-empty output with color enabled, correctly excluded with `--no-color`) and fixed by adding
+  `--no-color` to both branch-containment checks in the doc. Five waves in: this round's findings
+  were almost entirely git-syntax and environment-configuration edge cases rather than architectural
+  gaps — a sign the underlying design (current-state proof, native git safety over raw plumbing,
+  preserve-before-mutate ordering) is holding, even as increasingly specific execution details keep
+  getting tightened under it.
+- **2026-09-23 (PR #820 review correction wave 6)** — 7 further findings on wave 5's own diff
+  (chatgpt-codex-connector: 4; CodeRabbit: 3), consolidated into one design change rather than
+  patched individually: **replaced `git branch --all`/`git tag` reachability checks everywhere in
+  this doc with a single `reachable_elsewhere()` helper built on `git for-each-ref`.** This fixes
+  two independent findings by construction instead of by exception: `branch --all` prints a
+  synthetic `* (kein Branch)`/`(no branch)` pseudo-entry for *any* detached worktree elsewhere in
+  the repo, which registered as false "reachable" output for a detached worktree's own unique
+  commit (confirmed empirically); and `for-each-ref`'s output is never ANSI-colorized, eliminating
+  wave 5's `color.branch` problem instead of patching around it with `--no-color`. Beyond that
+  consolidation: (1) the detached-HEAD reflog check was gated on *currently* being detached, but a
+  worktree attached to a real branch right now can still have stranded commits from an *earlier*
+  detached phase, invisible to that gate — made the full-reflog inspection unconditional for every
+  worktree removal; (2) `--no-prune` stops a ref from being *removed* but not from being
+  *force-updated* — an ordinary fetch still overwrites a force-pushed branch's old tracking value
+  before any classification runs, discarding it silently (confirmed empirically); added a
+  before/after snapshot of every `refs/remotes/origin/*` value around the fetch, treating any
+  changed ref's old value as its own candidate; (3) a remote-tracking ref that was itself
+  previously force-updated can hide an older unique commit in its own reflog
+  (`origin/<branch>@{1}`), deleted in the same action as the ref; added that inspection before
+  deletion; (4) rescue-ref names used a shortened SHA in one place despite the full SHA already
+  being used consistently elsewhere, risking a silent overwrite on a short-prefix collision —
+  unified on the full SHA everywhere; (5) every `cmd | while read` pipeline in this doc could make
+  a failed upstream git command look identical to "found nothing," since the loop's own exit
+  status (not the piped command's) is what a shell reports by default — added `set -o pipefail`
+  at each canonical definition. This wave's ratio (4 architectural/logic fixes, 3 narrower
+  syntax/config fixes) reverses wave 5's trend, suggesting the `for-each-ref` consolidation closed
+  a class of bug rather than just one instance of it.
+- **2026-09-23 (PR #820 review correction wave 7)** — 2 further findings from
+  chatgpt-codex-connector on wave 6's own diff: (1) `set -o pipefail`, added across wave 6, only
+  changes what a pipeline's exit *status* is — it does not, by itself, make bash *act* on that
+  status; only `set -e` (errexit) does that, and the quick-reference sweep never enabled it. Added
+  `set -e` to the sweep, together with an explicit `|| true` (or an explicit exit-status check for
+  `git ls-remote --exit-code`, whose *confirming* result is a nonzero exit) on every command in
+  that block whose normal, expected outcome is itself nonzero — `diff`, `grep -v`, `git ls-remote
+  --exit-code` — so `-e` aborts on a genuine failure without also aborting on the very outcomes
+  this doc's own checks are designed to detect; (2) the canonical-main-worktree update flow's own
+  `fetch --no-prune origin` (a full, unscoped fetch of `origin/*`) was still missing the
+  force-update snapshot wave 6 added for the other two fetches in this doc — added it here too,
+  noting explicitly that a main-focused fetch still refreshes every other remote-tracking ref in
+  the same call. Both fixes close specific residual gaps in wave 6's own additions rather than
+  finding new categories — a sign this correction loop is converging on the actual boundary of
+  the design rather than continuing to surface new classes of defect.
+- **2026-09-23 (PR #820 review correction wave 8)** — 5 further findings (chatgpt-codex-connector:
+  4; CodeRabbit: 1), the most architecturally significant being a flaw in wave 7's own remedy:
+  **wave 7's `|| true` on the snapshot-comparison pipeline suppressed every failure
+  indiscriminately, not just the expected "no changes"/"no match" outcomes — a genuine
+  `for-each-ref`/`diff` failure (unreadable object database, corrupted snapshot) would silently
+  let the sweep continue with an incomplete inventory** (found independently by Codex, via
+  `PIPESTATUS`, and CodeRabbit, via a discrete-file diff pattern with explicit status checks —
+  adopted the latter for portability, avoiding a bash-specific array). Replaced with explicit
+  status checks per command (`0`/`1` = expected outcomes for `diff`/`grep`, anything higher is a
+  real failure worth aborting for) everywhere the pattern was used. Separately, and more
+  fundamentally: **the snapshot itself was still wrong** — recording `refs/remotes/origin/*`
+  values in a text file doesn't keep the corresponding objects reachable, and `git fetch` runs
+  `git maintenance --auto` afterward by default, which can garbage-collect a force-updated-away
+  object before the later classification step ever gets a chance to create its `refs/rescue/`
+  entry. Replaced the text-file snapshot with real refs under `refs/pre-fetch-snapshot/`,
+  confirmed empirically to keep a force-reset-away commit resolvable through the exact fetch that
+  orphaned it, with an explicit cleanup step once classification completes. Two narrower fixes
+  alongside: `git ls-remote --exit-code`'s confirming result (exit `2`, "gone") is itself a
+  nonzero status that `set -e` (added in wave 7) would abort on before the check could even run —
+  moved it into an `if`/`else` form, which is exempt from errexit on its own condition; and the
+  canonical-main-worktree merge could fast-forward the wrong branch if something switched that
+  worktree away from `main` in the gap between the fetch and the merge — added an explicit
+  `git branch --show-current` check immediately before it. The pattern holds: this correction
+  loop keeps finding real defects in its own immediately-prior fixes, and keeps fixing them with
+  verified, git-native mechanisms rather than argument or plausibility.
+- **2026-09-23 (PR #820 review correction wave 9)** — 1 further finding from
+  chatgpt-codex-connector on wave 8's own diff: the `git branch --show-current` check added in
+  wave 8 narrows the window for the wrong-branch fast-forward race but is still a separate command
+  from the `merge` that follows it — another process switching *this exact worktree* in that gap
+  is still possible in principle. Rather than add a further mechanical check (which would face
+  the identical objection, since plain git has no atomic "merge only if still on branch X"
+  primitive to bind a check and a merge into one operation), **documented this as an accepted
+  residual**, explicitly and by name, the same way the local-branch-deletion section already
+  accepts one around `git update-ref -d` rather than claiming an atomicity plain git can't
+  actually provide — while noting precisely why it's narrower than every prior version of this
+  race: it requires another process to run a checkout in this one specific worktree inside a
+  single-command gap, not merely some ref changing anywhere in the repository. Nine waves in,
+  this is the first finding resolved by honest disclosure rather than a further mechanical
+  fix — which is itself consistent with the loop's own operating principle: not every gap has a
+  git-native closure, and pretending otherwise would be less honest than naming the boundary.
+- **2026-09-23 (PR #820 review correction wave 10)** — 11 further findings, all from
+  chatgpt-codex-connector, discovered together after a GraphQL pagination gap in this review
+  loop's own tooling (`first: 50` silently truncated the thread list once the PR's total thread
+  count passed 50) let two prior review passes go unseen until `gh pr merge` failed on branch
+  protection rather than the usual cache-lag pattern. All 11 were confirmed real and fixed in one
+  bundled wave: (1) the named-branch reflog reachability check didn't exclude the branch being
+  deleted from its own `reachable_elsewhere` call, so a branch that added and later reverted
+  unique work could "prove" that work reachable via itself, evaporating the instant the branch is
+  actually deleted — added the branch's own refname as an explicit exclusion; (2) the
+  quick-reference topology scan only echoed a nested-worktree hit instead of stopping, so `set -e`
+  carried straight into the removal command anyway — made it capture the output and `exit 1` on
+  any hit; (3) the canonical-main-worktree flow's snapshot `create` transaction could fail (e.g. a
+  leftover `refs/pre-fetch-snapshot/*` from an interrupted earlier run) with nothing checking its
+  exit status before the fetch that follows — added an explicit failure check that aborts before
+  fetching; (4) the remote-branch-deletion push (both the prose and quick-reference forms) never
+  ran `pnpm run ci:prepush`, which AGENTS.md requires before every push — added it; (5) more
+  fundamentally, that same deletion's use of `--force-with-lease` was found to directly contradict
+  AGENTS.md, which reserves that flag for the canonical PR recovery procedure after a controlled
+  rebase, not ordinary housekeeping — rather than self-authorize an exception, replaced it with an
+  immediate re-verification followed by a plain, lease-less delete, with the residual gap
+  documented honestly the same way this doc already does for `git update-ref -d` and the
+  canonical-main-worktree merge; (6) the remote-tracking reachability check excluded only the one
+  candidate ref under test, so two stale refs in the same dry-run batch that both contained the
+  same commit could "prove" each other reachable and both get pruned together, losing the commit
+  — extended `reachable_elsewhere()` to accept a full newline-separated exclusion list and now
+  pass the *entire* pending-candidate set, not just the one ref being checked; (7) the
+  `HEAD`-reflog-only inventory never covered `refs/worktree/*` (real per-worktree private refs)
+  or `ORIG_HEAD` (a per-worktree pseudoref) — confirmed empirically that `git worktree prune`
+  deletes these along with the rest of a worktree's administrative directory with no reflog entry
+  ever pointing at them — added explicit enumeration and rescue for both; (8) the ignored-files
+  inventory trusted `status`/`ls-files` unconditionally, but a tracked file with the
+  `assume-unchanged` or `skip-worktree` index bit produces clean output from both commands even
+  after being edited — confirmed empirically (an edited, flagged file was silently destroyed by a
+  plain `git worktree remove`) — added an explicit `git ls-files -v` flag check before trusting
+  either command; (9) the real worktree-prune step was a second, unscoped `git worktree prune
+  --verbose` call, which re-scans current state and can remove a worktree that became prunable
+  only after the dry run was reviewed (confirmed reproducible with `gc.worktreePruneExpire=now`)
+  — rebound to the exact reviewed set via `git worktree remove --force <path>` per candidate,
+  confirmed empirically to work on a missing-checkout worktree while leaving an unrelated worktree
+  untouched, mirroring the per-ref `update-ref -d` scoping already used for remote-tracking refs;
+  (10) every fetch in this doc's housekeeping flow runs before this doc's own worktree-rescue
+  step, yet none disabled fetch's default post-fetch maintenance run — confirmed via `git help
+  gc`'s own `gc.worktreePruneExpire` documentation that `git gc` calls `git worktree prune
+  --expire 3.months.ago` on its own, meaning an unrescued prunable worktree could be destroyed by
+  the fetch itself — added `--no-auto-maintenance` to every fetch in the sweep; (11) the
+  snapshot-vs-current-state comparison applied the same `lstrip=3` used for
+  `refs/remotes/origin/*` to `refs/pre-fetch-snapshot/*` as well, but that ref has one fewer path
+  component — `refs/pre-fetch-snapshot/main` lstripped by 3 becomes an empty name, and
+  `refs/pre-fetch-snapshot/feature/foo` becomes just `foo`, breaking the name-keyed match between
+  a branch and its own snapshot entry in both places this comparison appears — corrected to
+  `lstrip=2` for the snapshot side. Ten waves of real, empirically-verified findings later, the
+  operating pattern hasn't changed: every fix is validated against real git/AGENTS.md behavior
+  before being written down — including, this time, the review loop's own pagination blind spot
+  that let two waves' worth of findings go temporarily unseen.
+- **2026-09-23 (successor-branch correction wave)** — the wave-10 push into PR #820 immediately
+  triggered a further, genuinely new review pass (CodeAnt: 3 `Critical`; CodeRabbit: 2), landing
+  right as #820 reached this repo's absolute 15-commit ceiling (`pr:budget`: `SATURATED`/`FREEZE`).
+  Per `docs/PR-CI-MERGE-WORKFLOW.md`'s SATURATED-tier rule ("freeze the PR and create a clean
+  successor carrying the reviewed semantic net state" — never commit 16, never rewrite already-
+  reviewed history to manufacture capacity), #820 was frozen as-is and its reviewed content
+  carried forward onto this clean successor branch as one commit, with these 4 further validated
+  findings applied as a second: (1) the `sha_pre_fetch_snapshot()` helper's caller in "Remote
+  branch cleanup" never checked the helper's own exit status before the fetch that follows it —
+  inconsistent with the identical check wave 10 had already added to the canonical-main-worktree
+  flow's own snapshot creation, and to this same helper's third call site in the quick-reference
+  sweep, which had the same gap — added the same exit-status check everywhere the pattern occurs,
+  for consistency, not just at the one line flagged; (2) both places the snapshot-vs-current-state
+  comparison writes its working files used fixed `/tmp/refs-before.txt` / `refs-after.txt` /
+  `refs-diff.txt` names, so two concurrent housekeeping sessions could clobber each other's
+  snapshot or diff and classify against the wrong data — replaced with `mktemp`-generated unique
+  paths in both occurrences, with cleanup deferred to where the snapshot ref itself is already
+  cleaned up (the temp files must stay readable across the classification step that follows, the
+  same way `reachable_elsewhere()` and other shell functions this doc defines are assumed to stay
+  in scope for the rest of the same shell session); (3) the pending-remote-branch-prune parser
+  (`sed -n 's/^ \* \[would prune\] origin\//.../'`) depends on git's English-locale output, but
+  git 2.45.1 marks that exact marker for translation and this repo's own shell defaults to German
+  (see "Reading this repo's git output" at the top of this doc) — under that locale the pattern
+  matches nothing, silently defeating wave 10's own fix for two candidates proving each other
+  reachable — fixed with `LC_ALL=C` scoped to just the parsed command, found independently by both
+  reviewers; (4) the canonical-main-worktree fetch had no exit-status check and the block never
+  enables `errexit`, so a failed fetch could let the shell continue straight into `merge --ff-only`
+  against a stale `origin/main` with nothing to catch it — added an explicit check that aborts
+  before the merge. A fifth finding (CodeAnt, on the lease-less remote-branch delete added in wave
+  10) was not a new gap: it named exactly the residual this doc already discloses explicitly at
+  that same location, and was dispositioned by reply rather than a further mechanical patch, the
+  same as wave 9's own precedent. #820 remains open, unmerged, and untouched as the audit/review
+  evidence trail for waves 1 through 10; this branch supersedes it going forward.
