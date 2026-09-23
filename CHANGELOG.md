@@ -85,6 +85,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a tracked, visible ratchet instead of invisible debt that could silently regrow. No component
   behavior changed; this closes out the Visual Maturity remediation program's qualification pass.
   PR #816.
+- **Token-audit tooling closure (corpus + ratchet):** `scripts/audit-tokens.mjs` now derives its
+  scanned-file corpus from `git ls-files` instead of a hand-maintained directory allowlist, so a
+  newly added runtime directory is covered automatically. This brings `services/`, `constants/`,
+  `workers/`, `plugins/`, `i18n/`, `api/`, `functions/`, `public/sw.js`, and four `packages/*/src`
+  directories into scope for the first time (previously invisible to every rule, not just the
+  Visual Maturity ones); ambient `.d.ts` declaration files and `*.config.ts`/`*.config.js` build
+  config are now excluded by convention rather than by omission. Two files gain a permanent,
+  principled exclusion because they run in execution contexts with no CSSOM access at all:
+  `public/sw.js` (a service worker) and `services/epubApiService.ts` (generates a separate EPUB
+  document's stylesheet). The baseline ratchet is now a true monotonic per-rule comparison: a
+  rule's count must match its baselined count exactly — a decrease without an explicit
+  `--update-baseline` now fails too (`STALE_HIGH_BASELINE`), closing the gap where a stale-high
+  baseline could let a count silently regrow back up to the old ceiling later. Baseline internal
+  consistency (`total === sum(summary)`) is now verified for both the stored baseline and the live
+  audit, failing closed on mismatch. Baseline updated to 198 → 252 to disclose the newly-visible,
+  pre-existing debt this wider scan surfaced (+29 `raw-hex` in `services/plotBoardService.ts`'s
+  beat-sheet marker palette, +23 `raw-hex` in `constants/sections.tsx`'s per-section accent colors,
+  +2 `inline-svg` in `services/commands/commandDefinitions.tsx`) — all three are categorical/
+  identity colors or ordinary icon-migration debt already accepted elsewhere in this baseline, none
+  of it newly introduced by this PR. 15 new regression tests
+  (`tests/unit/scripts/auditTokens.test.ts`) cover the corpus classification and every ratchet
+  outcome (pass, regression, stale-high, malformed baseline/audit) as exported pure-function unit
+  tests. PR #TBD.
 
 ## [1.28.8] — 2026-09-22
 
