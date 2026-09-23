@@ -174,7 +174,9 @@ dependency just merged** (confirmed 2026-09-02: a cargo patch merge landed on a 
 Security Audit was already failing on a separately-tracked, in-flight npm vulnerability fix —
 correctly recognizing the failure as pre-existing and unrelated is not the same as permission to
 merge the next Dependabot PR anyway). Classify the root cause, restore a genuinely green `main`
-(or wait for the PR already fixing it to land), and only then continue the dependency train.
+(or wait for the PR already fixing it to land **and its own push-triggered `main` CI run to reach
+a terminal success** — merging the fix is not the same as confirming it worked), and only then
+continue the dependency train.
 
 ## Detecting future grouping candidates
 
