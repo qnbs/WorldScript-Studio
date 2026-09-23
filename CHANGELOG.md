@@ -48,6 +48,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   solid background, and the logline-suggestion card's hover background moves from a translucent tint
   to a solid one (the translucent version was fighting Card's own now-solid resting background from
   PR B). Visual-only: no functional, accessibility, i18n, or component API change. PR #814.
+- **Visual Maturity remediation, PR E (loading + trust surfaces):** Skeleton's loading placeholder
+  and EmptyState's panel moved from the raw `--glass-bg`/`--glass-bg-hover` tokens to the semantic
+  `--sc-surface-overlay` token — neither has a blur surface, so both belong in the app's ordinary
+  surface family rather than the glass-token family. PWAInstallBanner and PWAUpdateToast — the same
+  floating card-like notification pattern Toast (PR C) de-glassed — move from a translucent,
+  blurred surface to solid `--sc-surface-raised`; missed in PR C because they live in a different
+  file. OfflineIndicator's low-alpha `--sc-warning-bg` badge with `backdrop-blur-sm` is unchanged —
+  it is a semantic-color status badge that must stay legible over arbitrary page content, not an
+  ambient glass-card default, so it stays inside DS-6's "explicit, rare, transient" allowance.
+  Visual-only: no functional, accessibility, i18n, or component API change. PR #815.
 
 ## [1.28.8] — 2026-09-22
 
