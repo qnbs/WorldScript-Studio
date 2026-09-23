@@ -181,7 +181,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failure class the original ENOENT-skip fix (`1bed434`) was found to have. 39 regression tests
   total (was 37): `config/resolveViteBase.ts` (and a `config/runtime.ts`-shaped path) stay
   auditable while a `config/something.config.ts` file stays excluded via the basename rule; the
-  index-fallback failure now asserts a thrown error instead of a silent skip. PR #817.
+  index-fallback failure now asserts a thrown error instead of a silent skip. A further review
+  epoch on that exact head found three more real defects, all fixed together: `root` (and every
+  repo-relative authority derived from it — `EXCLUDED_FILES`, baseline/report paths, the git
+  subprocess `cwd`) is now resolved via a new `resolveModuleRoot(moduleUrl)` helper that
+  `fs.realpathSync`s the module path independent of which `import.meta.url` form was passed in —
+  `isDirectExecution` deliberately accepts the unresolved symlink URL for
+  `--preserve-symlinks-main` entry-point detection, but a symlink living outside the repository
+  under that flag would otherwise compute `root` outside the repository entirely. `hasValidCounts`
+  now explicitly rejects an array `summary` (`typeof [] === 'object'` in JS, and
+  `Object.values([])` is vacuously empty, so an empty-array summary previously passed as a valid
+  empty record). The tracked-source corpus and `isSourceFile` classification now share one
+  `SOURCE_EXTENSIONS` authority widened to include `.mts`/`.cts`/`.mjs`/`.cjs` (legitimate runtime
+  module extensions, not just `.ts`/`.tsx`/`.js`/`.jsx`); declaration-file exclusion now covers
+  `.d.mts`/`.d.cts` alongside `.d.ts`, and the `*.config.*` basename rule now covers `.mts`/`.cts`
+  too. Inventoried every currently-tracked `.mts`/`.cts`/`.mjs`/`.cjs` file before widening:
+  almost all are under already-excluded `scripts/`/`tests/` or are `.d.mts` declarations;
+  `.lighthouserc.cjs`/`.lighthouserc.desktop.cjs` (root-level, matching no other exclusion) get
+  their own explicit `EXCLUDED_FILES` entries. Audit output on the real repo is unchanged (252) —
+  none of the three fixes newly exposed a real violation. 48 regression tests total (was 39):
+  `resolveModuleRoot` with a symlink living outside the repo under simulated
+  `--preserve-symlinks-main`; array-`summary` rejection for both audit and baseline; the widened
+  extensions/declarations/config-basename/Lighthouse-exclusion cases; and an end-to-end
+  `resolveAuditableFiles` → `findViolations` scan of a synthetic tracked `.mts` file. PR #817.
 
 ## [1.28.8] — 2026-09-22
 

@@ -1,4 +1,5 @@
 export const root: string;
+export function resolveModuleRoot(moduleUrl: string): string;
 
 export interface AuditViolation {
   line: number;

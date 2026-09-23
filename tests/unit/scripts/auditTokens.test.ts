@@ -11,6 +11,7 @@ import {
   getTrackedSourceFiles,
   isDirectExecution,
   resolveAuditableFiles,
+  resolveModuleRoot,
   root,
 } from '../../../scripts/audit-tokens.mjs';
 
@@ -28,6 +29,40 @@ function initGitFixture(): string {
   git(dir, ['config', 'commit.gpgsign', 'false']);
   return dir;
 }
+
+describe('resolveModuleRoot (live review, PR #817: canonical repo-root authority independent of --preserve-symlinks-main)', () => {
+  it('resolves root from a symlinked entry point living OUTSIDE the real repo root, matching the real file location rather than the symlink’s', () => {
+    // QNBS-v3: simulates --preserve-symlinks-main by passing the unresolved symlink's own file URL as moduleUrl (the exact form import.meta.url takes under that flag) — resolveModuleRoot must still land on the real repo root, not a location derived from the symlink's (unrelated) directory.
+    const realRepoRoot = realpathSync(mkdtempSync(join(tmpdir(), 'audit-tokens-real-repo-')));
+    const outsideDir = realpathSync(mkdtempSync(join(tmpdir(), 'audit-tokens-outside-')));
+    try {
+      const realScriptsDir = join(realRepoRoot, 'scripts');
+      mkdirSync(realScriptsDir);
+      const realModule = join(realScriptsDir, 'audit-tokens.mjs');
+      writeFileSync(realModule, '// placeholder\n');
+      const symlinkOutsideRepo = join(outsideDir, 'audit-tokens-entry.mjs');
+      symlinkSync(realModule, symlinkOutsideRepo);
+      const resolved = resolveModuleRoot(pathToFileURL(symlinkOutsideRepo).href);
+      expect(resolved).toBe(realRepoRoot);
+    } finally {
+      rmSync(realRepoRoot, { recursive: true, force: true });
+      rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves root the same way from an already-resolved moduleUrl (the ordinary, non---preserve-symlinks-main case)', () => {
+    const realRepoRoot = realpathSync(mkdtempSync(join(tmpdir(), 'audit-tokens-real-repo-')));
+    try {
+      const realScriptsDir = join(realRepoRoot, 'scripts');
+      mkdirSync(realScriptsDir);
+      const realModule = join(realScriptsDir, 'audit-tokens.mjs');
+      writeFileSync(realModule, '// placeholder\n');
+      expect(resolveModuleRoot(pathToFileURL(realModule).href)).toBe(realRepoRoot);
+    } finally {
+      rmSync(realRepoRoot, { recursive: true, force: true });
+    }
+  });
+});
 
 // QNBS-v3: resolveAuditableFiles never touches the filesystem, so these candidate paths are synthetic and need not exist on disk.
 describe('resolveAuditableFiles (post-Visual qualification tranche, Section 3.1: git-tracked corpus resolution)', () => {
@@ -70,6 +105,31 @@ describe('resolveAuditableFiles (post-Visual qualification tranche, Section 3.1:
   it('still excludes a genuine build-config file even when it lives under config/, via the *.config.ts basename rule rather than a directory-wide exclusion', () => {
     const candidate = join(root, 'config', 'something.config.ts');
     expect(resolveAuditableFiles([candidate])).toEqual([]);
+  });
+
+  it('includes standard runtime module extensions beyond .ts/.tsx/.js/.jsx (Codex, PR #817): .mts, .cts, .mjs, .cjs are legitimate runtime-capable source', () => {
+    const candidates = [
+      join(root, 'services', 'example.mts'),
+      join(root, 'services', 'example.cts'),
+      join(root, 'services', 'example.mjs'),
+      join(root, 'services', 'example.cjs'),
+    ];
+    expect(resolveAuditableFiles(candidates)).toEqual(candidates);
+  });
+
+  it('excludes .d.mts and .d.cts declaration variants, not just .d.ts (Codex, PR #817)', () => {
+    const candidates = [join(root, 'types', 'example.d.mts'), join(root, 'types', 'example.d.cts')];
+    expect(resolveAuditableFiles(candidates)).toEqual([]);
+  });
+
+  it('excludes build config in the newly covered extensions too, via the widened *.config.{mts,cts} basename rule', () => {
+    const candidates = [join(root, 'something.config.mts'), join(root, 'something.config.cts')];
+    expect(resolveAuditableFiles(candidates)).toEqual([]);
+  });
+
+  it('excludes the root-level Lighthouse CI config files, which the widened .cjs coverage would otherwise newly pull into the corpus (Codex, PR #817): they do not match the *.config.* basename convention', () => {
+    const candidates = [join(root, '.lighthouserc.cjs'), join(root, '.lighthouserc.desktop.cjs')];
+    expect(resolveAuditableFiles(candidates)).toEqual([]);
   });
 
   it('excludes the explicitly listed permanent exemptions (service worker, generated EPUB stylesheet)', () => {
@@ -193,6 +253,25 @@ describe('evaluateBaseline (post-Visual qualification tranche, Section 3.2: true
     expect(verdict.reason).toBe('MALFORMED_BASELINE');
   });
 
+  it('fails as MALFORMED_BASELINE when summary is an array rather than a record (Codex, PR #817): arrays are typeof "object" in JS, and Object.values([]) is vacuously empty, so an empty array would otherwise silently pass as a valid empty summary', () => {
+    const malformedBaseline = { total: 0, summary: [] } as unknown as Parameters<
+      typeof evaluateBaseline
+    >[1];
+    const audit = { total: 0, summary: {} };
+    const verdict = evaluateBaseline(audit, malformedBaseline);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toBe('MALFORMED_BASELINE');
+  });
+
+  it('fails as MALFORMED_AUDIT when audit.summary is an array rather than a record (Codex, PR #817)', () => {
+    const malformedAudit = { total: 0, summary: [] } as unknown as Parameters<
+      typeof evaluateBaseline
+    >[0];
+    const verdict = evaluateBaseline(malformedAudit, baseline);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toBe('MALFORMED_AUDIT');
+  });
+
   // QNBS-v3 (Codex, PR #817): each case below is a value type sumSummary's '+' or the ratchet loop's '>'/'<' could otherwise coerce into silently matching — hasValidCounts must reject every one before any arithmetic runs.
   it.each([
     ['a string count', { 'raw-hex': '5' }, 5],
@@ -304,6 +383,17 @@ describe('findViolations (regression guards for the PR #816 comment/string-liter
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('scans a tracked .mts source file end to end via the full resolveAuditableFiles -> findViolations pipeline (Codex, PR #817)', () => {
+    dir = mkdtempSync(join(tmpdir(), 'audit-tokens-test-'));
+    const file = join(dir, 'runtime-example.mts');
+    writeFileSync(file, "export const bg = '#123456';\n");
+    const files = resolveAuditableFiles([file], dir);
+    expect(files).toEqual([file]);
+    const { summary, total } = findViolations(files);
+    expect(total).toBe(1);
+    expect(summary['raw-hex']).toBe(1);
   });
 
   it('does not treat a literal /* inside a quoted string/JSX attribute as opening a real block comment', () => {

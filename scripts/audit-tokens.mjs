@@ -33,10 +33,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// QNBS-v3 (live review, PR #817): resolves the canonical repo root from a module URL independent of whether that URL itself is symlink-resolved. isDirectExecution deliberately accepts BOTH the resolved and unresolved comparison (so `node --preserve-symlinks-main` is still recognized as direct execution), but repo-relative authority — root, baseline/report paths, the git subprocess cwd — must always anchor to the real file location: under --preserve-symlinks-main, import.meta.url stays the unresolved symlink path, and a symlink living outside the repository would otherwise compute a root outside it entirely. fs.realpathSync resolves the module path itself first, so this is correct regardless of which of the two import.meta.url forms was actually passed in. Exported so this exact scenario is testable without spawning a real --preserve-symlinks-main subprocess.
+export function resolveModuleRoot(moduleUrl) {
+  const modulePath = fs.realpathSync(fileURLToPath(moduleUrl));
+  return path.resolve(path.dirname(modulePath), '..');
+}
+
 // QNBS-v3: exported so tests can build the exact same absolute paths the module's own EXCLUDED_FILES set uses, without duplicating this resolution or touching the filesystem.
-export const root = path.resolve(__dirname, '..');
+export const root = resolveModuleRoot(import.meta.url);
 
 const REPORT_PATH = path.join(root, 'reports', 'token-audit.json');
 // QNBS-v3: baseline lives at repo root so it is committed (reports/ is gitignored).
@@ -46,7 +50,15 @@ const args = process.argv.slice(2);
 const updateBaseline = args.includes('--update-baseline');
 const showDetails = args.includes('--details');
 
-const SOURCE_EXTENSIONS = new Set(['.tsx', '.jsx', '.ts', '.js']);
+// QNBS-v3 (Codex, PR #817): the full set of standard JS/TS module extensions — .mts/.cts/.mjs/.cjs are legitimate runtime-capable source, not just .ts/.tsx/.js/.jsx, and their absence here was a corpus gap independent of every other fix in this file. This is the single authority both the git ls-files pathspec (via extensionGlobs) and isSourceFile's classification read from, so the two can never drift apart.
+const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts', '.mjs', '.cjs']);
+
+function extensionGlobs() {
+  return [...SOURCE_EXTENSIONS].map((ext) => `*${ext}`);
+}
+
+// QNBS-v3: ambient declaration files carry no runtime code — path.extname() alone can't detect these (it returns '.ts' for 'x.d.ts', '.mts' for 'x.d.mts', etc.), so each suffix is checked explicitly.
+const DECLARATION_SUFFIXES = ['.d.ts', '.d.mts', '.d.cts'];
 
 // QNBS-v3 (post-Visual qualification tranche, Section 3.1): directory segments that are dev tooling, generated output, or test/demo surfaces — never shipped product UI/source — excluded wherever they appear in a path, at any depth.
 const EXCLUDED_DIR_SEGMENTS = [
@@ -80,14 +92,16 @@ const EXCLUDED_FILES = new Set([
   path.join(root, 'packages', 'ui', 'src', 'tokens.ts'),
   // QNBS-v3: the Tailwind design-token preset defines the raw theme scale itself; same source-of-truth rationale.
   path.join(root, 'packages', 'ui', 'tailwind-preset.ts'),
+  // QNBS-v3 (Codex, PR #817): Lighthouse CI config at the repo root — the widened .cjs extension coverage would otherwise newly pull these into the corpus; they don't match the *.config.* basename convention (no "config" substring in the name) so need their own explicit exclusion, the same as every other named exemption in this set.
+  path.join(root, '.lighthouserc.cjs'),
+  path.join(root, '.lighthouserc.desktop.cjs'),
 ]);
 
 // QNBS-v3: matches vite.config.ts, vitest.config.ts, playwright.config.ts, etc. anywhere in the tree — an unambiguous, ecosystem-wide naming convention for build/tooling config, never a consuming UI surface.
-const BUILD_CONFIG_BASENAME = /\.config\.(ts|js|mjs|cjs)$/;
+const BUILD_CONFIG_BASENAME = /\.config\.(ts|js|mts|cts|mjs|cjs)$/;
 
 function isSourceFile(filePath) {
-  // QNBS-v3: ambient .d.ts declaration files carry no runtime code, so a raw-color example in a JSDoc comment (already comment-stripped anyway) is the only thing that could ever match here.
-  if (filePath.endsWith('.d.ts')) return false;
+  if (DECLARATION_SUFFIXES.some((suffix) => filePath.endsWith(suffix))) return false;
   if (BUILD_CONFIG_BASENAME.test(path.basename(filePath))) return false;
   return SOURCE_EXTENSIONS.has(path.extname(filePath));
 }
@@ -103,7 +117,7 @@ function isExcluded(filePath, repoRoot) {
 // QNBS-v3 (post-Visual qualification tranche, Section 3.1): derives the candidate corpus from git's own tracked-file list instead of a hand-maintained directory allowlist. Exported (not called from resolveAuditableFiles's default path in tests) so tests can inject a fixed file list rather than shelling out to git.
 // QNBS-v3 (Codex, PR #817): `-z` (NUL-delimited, unquoted) is required — git's default newline-delimited output C-quotes/octal-escapes any "unusual" filename (any non-ASCII byte by default, or an embedded space/newline), so a plain `\n`-split silently turned a real path like `sübdir/ünïcode-file.ts` into the literal, non-existent string `"s\303\274bdir/..."`, dropping it from the corpus entirely.
 export function getTrackedSourceFiles(repoRoot = root) {
-  const raw = execFileSync('git', ['ls-files', '-z', '--', '*.ts', '*.tsx', '*.js', '*.jsx'], {
+  const raw = execFileSync('git', ['ls-files', '-z', '--', ...extensionGlobs()], {
     cwd: repoRoot,
     encoding: 'utf-8',
   });
@@ -320,7 +334,13 @@ function isValidCount(value) {
 
 // QNBS-v3: validates both `total` and every `summary` value in one call, shared by the audit-side and baseline-side checks in evaluateBaseline so both are held to the identical numeric contract.
 function hasValidCounts(candidate) {
-  if (!candidate || typeof candidate.summary !== 'object' || candidate.summary === null) {
+  // QNBS-v3 (Codex, PR #817): summary must be a Record<string, number>, never an array — typeof [] === 'object' in JS, so without this explicit check an empty array (Object.values([]) is vacuously []) or an array shape entirely would silently pass as "valid" and reach sumSummary's arithmetic.
+  if (
+    !candidate ||
+    typeof candidate.summary !== 'object' ||
+    candidate.summary === null ||
+    Array.isArray(candidate.summary)
+  ) {
     return false;
   }
   if (!isValidCount(candidate.total)) return false;
