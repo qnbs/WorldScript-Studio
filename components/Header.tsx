@@ -49,19 +49,17 @@ export const Header: React.FC<HeaderProps> = ({
   const pageTitle = t(viewNavigationLabelKey(currentView));
 
   return (
+    // QNBS-v3 (Visual Maturity #D, DS-6): the header is persistent whole-app chrome shown on every screen, the opposite of the "rare, transient" case DS-6 reserves glass for — solid surface replaces the always-on blur, and the decorative specular-highlight strip (same anti-pattern PR B removed from Card) is gone.
     <header
       data-tour="app-header"
       className="
         fixed top-0 left-0 right-0 z-30 h-16
-        bg-[var(--sc-surface-raised)]/80 backdrop-blur-2xl
+        bg-[var(--sc-surface-raised)]
         border-b border-[var(--sc-border-subtle)]
         flex items-center justify-between px-4 sm:px-6
         transition-all duration-300
     "
     >
-      {/* Specular highlight at top */}
-      <div className="absolute inset-x-0 top-0 h-px bg-[var(--glass-bg-hover)] pointer-events-none" />
-
       <div className="flex items-center gap-4 flex-shrink-0">
         <button
           type="button"
@@ -92,7 +90,8 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             data-tour="command-palette-trigger"
             onClick={onOpenPalette}
-            className="w-full h-11 rounded-xl bg-[var(--sc-surface-overlay)]/50 border border-[var(--sc-border-subtle)] hover:border-[var(--border-interactive)] hover:bg-[var(--sc-surface-overlay)] hover:shadow-[var(--sc-shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--sc-text-muted)] group shadow-sm"
+            // QNBS-v3 (Visual Maturity #D, DS-6): solid --sc-surface-overlay replaces a translucent /50 bg now that the header behind it is opaque too; hover moves to --sc-surface-raised (a different token, not just full-alpha overlay) so hover still has visible contrast; rounded-sc-lg matches the token-driven radius scale instead of a raw Tailwind value.
+            className="w-full h-11 rounded-sc-lg bg-[var(--sc-surface-overlay)] border border-[var(--sc-border-subtle)] hover:border-[var(--border-interactive)] hover:bg-[var(--sc-surface-raised)] hover:shadow-[var(--sc-shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--sc-text-muted)] group shadow-sm"
           >
             {/* QNBS-v3: decorative palette glyph is hidden because the button has a text label. */}
             <CustomIcon
