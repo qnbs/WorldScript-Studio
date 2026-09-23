@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -240,7 +240,8 @@ describe('isDirectExecution (Sourcery, PR #817: platform/encoding-safe direct-en
   });
 
   it('recognizes direct execution through a symlink, where Node resolves import.meta.url to the real target but leaves argv[1] as the symlink path (Codex, PR #817)', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'audit-tokens-symlink-'));
+    // QNBS-v3 (CodeRabbit, PR #817): os.tmpdir() itself is a symlink on macOS (/tmp -> /private/tmp) — canonicalizing dir up front means `real`'s path already matches what fs.realpathSync(link) will produce, on every OS, rather than only on a platform where the OS temp dir happens not to be symlinked.
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'audit-tokens-symlink-')));
     try {
       const real = join(dir, 'real-script.mjs');
       const link = join(dir, 'script-link.mjs');
@@ -250,6 +251,38 @@ describe('isDirectExecution (Sourcery, PR #817: platform/encoding-safe direct-en
       expect(isDirectExecution(link, pathToFileURL(real).href)).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('recognizes direct execution through a symlink under --preserve-symlinks-main, where Node leaves import.meta.url as the unresolved symlink path too (live review, PR #817)', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'audit-tokens-symlink-')));
+    try {
+      const real = join(dir, 'real-script.mjs');
+      const link = join(dir, 'script-link.mjs');
+      writeFileSync(real, '// placeholder\n');
+      symlinkSync(real, link);
+      // QNBS-v3: under --preserve-symlinks-main, Node does NOT resolve the main module's symlink, so import.meta.url stays the symlink's own URL rather than the real target's — the opposite of the ordinary-resolution case above.
+      expect(isDirectExecution(link, pathToFileURL(link).href)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('recognizes direct execution when an ANCESTOR directory (not the script itself) is a symlink, matching the macOS /tmp -> /private/tmp pattern (CodeRabbit, PR #817)', () => {
+    const realParent = mkdtempSync(join(tmpdir(), 'audit-tokens-real-parent-'));
+    const ancestorLink = join(tmpdir(), `audit-tokens-ancestor-link-${process.pid}-${Date.now()}`);
+    try {
+      symlinkSync(realParent, ancestorLink, 'dir');
+      const scriptViaLink = join(ancestorLink, 'script.mjs');
+      const scriptViaReal = join(realParent, 'script.mjs');
+      writeFileSync(scriptViaReal, '// placeholder\n');
+      // QNBS-v3: argv1 traverses the symlinked ancestor directory (unresolved); moduleUrl is the fully canonical URL Node would actually produce — fs.realpathSync resolves every symlink in the path, not just a leaf component.
+      expect(
+        isDirectExecution(scriptViaLink, pathToFileURL(realpathSync(scriptViaReal)).href),
+      ).toBe(true);
+    } finally {
+      rmSync(ancestorLink, { force: true });
+      rmSync(realParent, { recursive: true, force: true });
     }
   });
 });

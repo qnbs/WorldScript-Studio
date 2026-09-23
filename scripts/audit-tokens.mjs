@@ -468,16 +468,16 @@ function main() {
 }
 
 // QNBS-v3 (Sourcery, PR #817): a raw `file://${argv[1]}` string comparison is not portable — argv[1] is an unencoded filesystem path (no URL-encoding of spaces/unicode, no Windows `file:///C:/...` drive-letter form), while import.meta.url always is; pathToFileURL performs that same platform-correct conversion before comparing. Exported so the comparison itself can be regression-tested without spawning the real CLI.
-// QNBS-v3 (Codex, PR #817): Node resolves import.meta.url through a symlink to its real target, but leaves argv[1] as the symlink path the CLI was actually invoked through — realpathSync resolves argv1 the same way before comparing, so running this script via a symlink (e.g. an npm-link'd/packaged bin entry) is still recognized as direct execution. Falls back to the unresolved path if argv1 doesn't exist on disk (not this function's problem to diagnose) rather than throwing.
+// QNBS-v3 (Codex + live review, PR #817): two legitimate Node semantics both need to match. Normally Node resolves import.meta.url through a symlink to its real target while leaving argv[1] as the invoked symlink path (checked via the realpathSync fallback below); under `node --preserve-symlinks-main`, Node does the opposite and leaves import.meta.url as the unresolved symlink path too (checked by the first, cheap comparison, which also covers the ordinary non-symlinked case). Accepting either means neither mode silently exits 0 without scanning.
 export function isDirectExecution(argv1, moduleUrl) {
   if (typeof argv1 !== 'string' || argv1.length === 0) return false;
-  let resolvedArgv1 = argv1;
+  if (moduleUrl === pathToFileURL(argv1).href) return true;
   try {
-    resolvedArgv1 = fs.realpathSync(argv1);
+    return moduleUrl === pathToFileURL(fs.realpathSync(argv1)).href;
   } catch {
-    // argv1 may not exist on disk (e.g. a synthetic test path) — comparing the unresolved path is still correct for a non-symlinked invocation.
+    // argv1 doesn't exist on disk (e.g. a synthetic test path) — the unresolved comparison above already covers that case.
+    return false;
   }
-  return moduleUrl === pathToFileURL(resolvedArgv1).href;
 }
 
 // QNBS-v3: only run the CLI when this file is executed directly — importing it (e.g. from a test file, for the exported pure helpers) must not trigger a report write or process.exit.

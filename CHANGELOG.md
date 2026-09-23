@@ -154,7 +154,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   calling `git show :<path>` — git's index pathspec syntax requires them on every OS, while
   `path.relative` returns OS-native separators, so on Windows the fallback would fail to resolve a
   real index entry and silently (and wrongly) treat it as gone from the index too. 35 regression
-  tests total (was 33): a real symlink round-trip and a nested-path index-fallback case. PR #817.
+  tests total (was 33): a real symlink round-trip and a nested-path index-fallback case. A final
+  review pass on that exact head found `isDirectExecution` only handled one of two legitimate Node
+  semantics: it checked the `fs.realpathSync`-resolved comparison but not the unresolved one, so
+  `node --preserve-symlinks-main` (where Node leaves `import.meta.url` as the unresolved symlink
+  path instead of resolving it) would silently exit 0 with no scan — the opposite failure mode from
+  the one just fixed. It now accepts either comparison. The same review also caught that the new
+  symlink test itself was unreliable on macOS, where `os.tmpdir()` is a symlink
+  (`/tmp` → `/private/tmp`): the fixture now canonicalizes its temp directory via
+  `fs.realpathSync` up front, so the test's expected URL already matches what `fs.realpathSync`
+  will produce regardless of whether the OS temp dir itself sits behind a symlink. 37 regression
+  tests total (was 35): the `--preserve-symlinks-main` case and an ancestor-directory-symlink case
+  (proving `fs.realpathSync` resolving a symlink anywhere in the path, not just the leaf file,
+  works the same way the macOS temp-dir case relies on). PR #817.
 
 ## [1.28.8] — 2026-09-22
 
