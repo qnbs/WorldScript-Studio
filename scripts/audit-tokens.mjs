@@ -7,6 +7,10 @@
  *   - Tailwind `dark:` prefixes
  *   - inline shadow utilities with hard-coded color channels
  *   - inline <svg> elements (duplicated icons should use the shared Icon component)
+ *   - raw --glass-* token usage (Visual Maturity #F, DS-6): the ambient glass tokens are reserved
+ *     for the rare, transient overlay case DS-6 describes, not a primitive surface default; the
+ *     baseline here discloses pre-existing feature-level usage the Visual Maturity program (PRs
+ *     A-E) did not reach, and ratchets against it growing further.
  *
  * Exits non-zero when violations are found and writes a JSON report to reports/token-audit.json.
  * Use `--update-baseline` to snapshot the current count for ratcheting.
@@ -31,6 +35,11 @@ const showDetails = args.includes('--details');
 // QNBS-v3: directories that contain source subject to the token-first rule.
 const SOURCE_DIRS = ['components', 'app', 'hooks', 'features', 'contexts'];
 
+// QNBS-v3 (Visual Maturity #F, CodeX): root-level runtime UI files sit outside SOURCE_DIRS and were invisible to every rule here, not just ambient-glass-token — App.tsx, index.tsx, register-sw.ts, and types.ts are the first-party root files with actual runtime code (not build/tooling config).
+const ROOT_FILES = ['App.tsx', 'index.tsx', 'register-sw.ts', 'types.ts'].map((f) =>
+  path.join(root, f),
+);
+
 // QNBS-v3: files that are allowed to contain raw colors / inline SVGs by design.
 const EXCLUDED_FILES = new Set([
   // The global token file is the single source of truth for raw values.
@@ -41,6 +50,8 @@ const EXCLUDED_FILES = new Set([
   path.join(root, 'components', 'ui', 'Icon.tsx'),
   // SectionIcon renders icons from the APP_SECTIONS central config, not duplicated inline SVGs.
   path.join(root, 'components', 'ui', 'SectionIcon.tsx'),
+  // QNBS-v3: this fatal-fallback inline HTML renders when React itself failed to boot, so it must stay token/CSS-independent by design — the same reason index.css itself is excluded above.
+  path.join(root, 'index.tsx'),
 ]);
 
 const SOURCE_EXTENSIONS = new Set(['.tsx', '.jsx', '.ts', '.js']);
@@ -86,6 +97,13 @@ const PATTERNS = [
     // Some legitimate inline SVGs remain until the icon migration is complete.
     shouldSkip: (file) => file.includes(path.join('components', 'ui', 'Icon.tsx')),
   },
+  {
+    id: 'ambient-glass-token',
+    label: 'Raw --glass-* token (Visual Maturity PR F, DS-6: ambient glass is not a primitive default)',
+    // QNBS-v3 (CodeRabbit/Codex): matches the bare "--glass-name" token itself, not any surrounding syntax — this also catches getComputedStyle(el).getPropertyValue('--glass-bg') (the established pattern this codebase already uses for --sc-* tokens in CharacterGraphView.tsx), not just var(...)/Tailwind's bg-(...) forms.
+    regex: /--glass-[\w-]+/g,
+    shouldSkip: (_file) => false,
+  },
 ];
 
 function isSourceFile(filePath) {
@@ -118,6 +136,11 @@ function walk(dir, files = []) {
   return files;
 }
 
+// QNBS-v3 (Codex): a literal /* or */ inside a quoted string or JSX attribute (e.g. accept="image/*") must never be mistaken for a real comment delimiter — this blanks quoted content (keeping its length, so column positions stay accurate) for comment-boundary detection only; pattern matching itself still runs against the original, un-blanked line.
+function blankStringLiterals(line) {
+  return line.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, (match) => ' '.repeat(match.length));
+}
+
 function findViolations(files) {
   const byFile = {};
   const summary = {};
@@ -138,24 +161,27 @@ function findViolations(files) {
       const rawLine = lines[lineIndex];
       if (rawLine.trim().startsWith('//')) continue; // skip line comments
 
-      // QNBS-v3: track /* ... */ block comments (including JSX {/* ... */}) so tokens
-      // mentioned inside explanatory comments are not counted as violations.
+      // QNBS-v3: tracks /* ... */ block comments (incl. JSX {/* ... */}) via scanLine (string literals blanked, so a literal /* inside a quoted attribute can't falsely open one) — line (unblanked) is what patterns actually match against.
       let line = rawLine;
+      let scanLine = blankStringLiterals(rawLine);
       if (inBlockComment) {
-        const endIdx = line.indexOf('*/');
+        const endIdx = scanLine.indexOf('*/');
         if (endIdx === -1) continue;
         line = line.slice(endIdx + 2);
+        scanLine = scanLine.slice(endIdx + 2);
         inBlockComment = false;
       }
-      while (line.includes('/*')) {
-        const startIdx = line.indexOf('/*');
-        const endIdx = line.indexOf('*/', startIdx + 2);
+      while (scanLine.includes('/*')) {
+        const startIdx = scanLine.indexOf('/*');
+        const endIdx = scanLine.indexOf('*/', startIdx + 2);
         if (endIdx === -1) {
           inBlockComment = true;
           line = line.slice(0, startIdx);
+          scanLine = scanLine.slice(0, startIdx);
           break;
         }
         line = line.slice(0, startIdx) + line.slice(endIdx + 2);
+        scanLine = scanLine.slice(0, startIdx) + scanLine.slice(endIdx + 2);
       }
       if (line.trim().length === 0) continue;
 
@@ -197,6 +223,12 @@ function loadBaseline() {
 
 function main() {
   const files = SOURCE_DIRS.flatMap((dir) => walk(path.join(root, dir)));
+  // QNBS-v3: same isSourceFile/isExcluded filter walk() applies to directory-discovered files, so an excluded root file (index.tsx) is skipped here too instead of bypassing that check.
+  for (const rootFile of ROOT_FILES) {
+    if (fs.existsSync(rootFile) && isSourceFile(rootFile) && !isExcluded(rootFile)) {
+      files.push(rootFile);
+    }
+  }
   const audit = findViolations(files);
 
   const report = {
@@ -244,6 +276,16 @@ function main() {
 
   const baseline = loadBaseline();
   if (baseline) {
+    // QNBS-v3 (Sourcery/CodeAnt/Codex): compare each rule's own count against its own baseline, not just the aggregate total — an aggregate-only check lets a new ambient-glass-token reference hide behind an unrelated fix elsewhere (e.g. one fewer inline-svg) that leaves the total unchanged.
+    const regressions = Object.entries(audit.summary)
+      .filter(([ruleId, count]) => count > (baseline.summary?.[ruleId] ?? 0))
+      .map(([ruleId, count]) => `${ruleId}: ${count} > ${baseline.summary?.[ruleId] ?? 0}`);
+    if (regressions.length > 0) {
+      console.error(
+        `[token-audit] FAIL: per-rule baseline exceeded — ${regressions.join(', ')}. Run with --update-baseline after intentional fixes.`,
+      );
+      process.exit(1);
+    }
     if (audit.total > baseline.total) {
       console.error(
         `[token-audit] FAIL: ${audit.total} violations exceeds baseline of ${baseline.total}. Run with --update-baseline after intentional fixes.`,

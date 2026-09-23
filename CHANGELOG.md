@@ -58,6 +58,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it is a semantic-color status badge that must stay legible over arbitrary page content, not an
   ambient glass-card default, so it stays inside DS-6's "explicit, rare, transient" allowance.
   Visual-only: no functional, accessibility, i18n, or component API change. PR #815.
+- **Visual Maturity remediation, PR F (qualification):** a full-codebase sweep found remaining raw
+  `--glass-*` token usages across ~20 feature-level files (settings panels, writing tools, the
+  language selector) that PRs A–E's primitive/product-identity/loading-surface passes didn't reach —
+  too broad and too low-leverage individually to fix safely in one PR. `scripts/audit-tokens.mjs`
+  gains a new `ambient-glass-token` rule matching the bare `--glass-name` token itself, independent
+  of any surrounding syntax — this counts a nested fallback reference
+  (`var(--glass-bg, var(--glass-highlight))`) as two matches instead of one consuming the other, and
+  it catches every real access pattern this codebase actually uses for CSS custom properties:
+  `var(...)`, Tailwind v4's `bg-(--glass-bg)` shorthand, and the
+  `getComputedStyle(el).getPropertyValue('--glass-bg')` runtime read already established for
+  `--sc-*` tokens elsewhere (`CharacterGraphView.tsx`). The baseline comparison
+  itself is fixed to check each rule's own count against its own baseline, not just the aggregate
+  total — an aggregate-only comparison let a new glass-token reference hide behind an unrelated fix
+  elsewhere (e.g. one fewer inline `<svg>`) that left the total unchanged. The scan now also covers
+  first-party root-level runtime files (`App.tsx`, `register-sw.ts`, `types.ts`); `index.tsx` is
+  excluded for the same reason `index.css` already is — its fatal-fallback inline HTML renders when
+  React itself has failed to boot, so it must stay token/CSS-independent by design. Separately, a
+  pre-existing comment-detection bug (predating this PR, affecting every rule) treated a literal
+  `/*` inside a quoted string or JSX attribute — e.g. `accept="image/*"` — as opening a real block
+  comment, silently swallowing everything until the next unrelated `*/`; fixed by detecting comment
+  boundaries against a string-literal-blanked view of each line while still matching patterns
+  against the original line. Baseline updated to reflect both the corrected scan and the now-visible
+  pre-existing debt this bug had been hiding (162 → 198 total: +29 ambient-glass-token, +7 inline-svg
+  recovered from the swallowed region — none of it newly introduced by this PR). The pattern is now
+  a tracked, visible ratchet instead of invisible debt that could silently regrow. No component
+  behavior changed; this closes out the Visual Maturity remediation program's qualification pass.
+  PR #816.
 
 ## [1.28.8] — 2026-09-22
 
