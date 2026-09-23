@@ -28,7 +28,7 @@ export interface BaselineVerdict {
 
 export function getTrackedSourceFiles(repoRoot?: string): string[];
 export function resolveAuditableFiles(candidateFiles: string[]): string[];
-export function findViolations(files: string[]): AuditResult;
+export function findViolations(files: string[], repoRoot?: string): AuditResult;
 export function evaluateBaseline(
   audit: Pick<AuditResult, 'summary' | 'total'>,
   baseline: AuditBaseline | null,

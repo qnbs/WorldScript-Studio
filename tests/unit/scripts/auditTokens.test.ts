@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,10 +8,26 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   evaluateBaseline,
   findViolations,
+  getTrackedSourceFiles,
   isDirectExecution,
   resolveAuditableFiles,
   root,
 } from '../../../scripts/audit-tokens.mjs';
+
+function git(cwd: string, args: string[]) {
+  return execFileSync('git', args, { cwd, encoding: 'utf-8' });
+}
+
+// QNBS-v3: a disposable git fixture, matching the pattern in checkQnbsV3Comments.test.ts, needed here because readTrackedFileContent's index fallback (git show :<path>) requires a real git repository to exercise meaningfully.
+function initGitFixture(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'audit-tokens-git-'));
+  git(dir, ['init', '-q']);
+  git(dir, ['config', 'user.email', 'test@example.com']);
+  git(dir, ['config', 'user.name', 'Test']);
+  // QNBS-v3: this repo enables commit.gpgsign globally; a fixture repo must not inherit that.
+  git(dir, ['config', 'commit.gpgsign', 'false']);
+  return dir;
+}
 
 // QNBS-v3: resolveAuditableFiles never touches the filesystem, so these candidate paths are synthetic and need not exist on disk.
 describe('resolveAuditableFiles (post-Visual qualification tranche, Section 3.1: git-tracked corpus resolution)', () => {
@@ -191,14 +208,38 @@ describe('findViolations (regression guards for the PR #816 comment/string-liter
     expect(summary['ambient-glass-token']).toBe(1);
   });
 
-  it('skips a tracked-but-deleted file instead of crashing (CodeAnt, PR #817: git ls-files lists the index, not the working tree)', () => {
+  it('skips a file missing from both the working tree and any git index instead of crashing (no git repo at all here, so the index fallback also fails)', () => {
     dir = mkdtempSync(join(tmpdir(), 'audit-tokens-test-'));
     const present = join(dir, 'Present.ts');
-    const missing = join(dir, 'DeletedButTracked.ts');
+    const missing = join(dir, 'NeverExisted.ts');
     writeFileSync(present, "export const bg = '#123456';\n");
-    // QNBS-v3: `missing` is deliberately never written — it stands in for a path git ls-files still returns for a file deleted from disk but not yet staged.
     const { summary, total } = findViolations([present, missing]);
     expect(total).toBe(1);
     expect(summary['raw-hex']).toBe(1);
+  });
+
+  it('reads a tracked file from the git index when it is deleted from the working tree but not staged, instead of silently skipping real content (live review, PR #817: git ls-files describes the index, not the working tree — an unstaged deletion still has real, trackable content that the next commit, and CI, would actually contain)', () => {
+    dir = initGitFixture();
+    const file = join(dir, 'Tracked.ts');
+    writeFileSync(file, "export const bg = '#123456'; // committed\n");
+    git(dir, ['add', '-A']);
+    git(dir, ['commit', '-q', '-m', 'add Tracked.ts']);
+    // QNBS-v3: stage a second, different violation before deleting the working-tree copy — proves the audit reads the INDEX's content (2 raw-hex), not the last commit's (1 raw-hex).
+    writeFileSync(file, "export const bg = '#123456'; export const fg = '#abcdef';\n");
+    git(dir, ['add', file]);
+    rmSync(file); // delete from the working tree WITHOUT staging the deletion
+    const { summary, total } = findViolations([file], dir);
+    expect(total).toBe(2);
+    expect(summary['raw-hex']).toBe(2);
+  });
+
+  it('excludes a staged deletion from the corpus entirely, rather than falling back to stale content (git ls-files never lists it once git rm has staged its removal)', () => {
+    dir = initGitFixture();
+    const file = join(dir, 'ToDelete.ts');
+    writeFileSync(file, "export const bg = '#123456';\n");
+    git(dir, ['add', '-A']);
+    git(dir, ['commit', '-q', '-m', 'add ToDelete.ts']);
+    git(dir, ['rm', '-q', file]);
+    expect(getTrackedSourceFiles(dir)).not.toContain(file);
   });
 });

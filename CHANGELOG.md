@@ -104,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   beat-sheet marker palette, +23 `raw-hex` in `constants/sections.tsx`'s per-section accent colors,
   +2 `inline-svg` in `services/commands/commandDefinitions.tsx`) — all three are categorical/
   identity colors or ordinary icon-migration debt already accepted elsewhere in this baseline, none
-  of it newly introduced by this PR. 22 regression tests (`tests/unit/scripts/auditTokens.test.ts`)
+  of it newly introduced by this PR. 24 regression tests (`tests/unit/scripts/auditTokens.test.ts`)
   cover the corpus classification and every ratchet outcome (pass, regression, stale-high,
   malformed baseline/audit) as exported pure-function unit tests. Review (Sourcery, Codex,
   CodeRabbit, CodeAnt) found four real defects from the same initial round, all fixed in one
@@ -114,9 +114,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one and ratcheted against; the CLI's direct-execution guard now compares `import.meta.url`
   against `pathToFileURL(process.argv[1]).href` (exported as `isDirectExecution`) instead of a raw
   `file://${argv[1]}` string, which was not portable to Windows drive-letter paths or paths
-  containing URL-encoded characters (e.g. spaces); and `findViolations` now skips a tracked file
-  that `git ls-files` still lists but that has been deleted from the working tree without being
-  staged, instead of crashing on `ENOENT`. PR #817.
+  containing URL-encoded characters (e.g. spaces); and `findViolations` no longer crashes on
+  `ENOENT` for a tracked file `git ls-files` lists but that is missing from the working tree.
+  Live review caught that the first ENOENT fix (skip + warn) was itself a content-resolution
+  authority regression: `git ls-files` describes the index, and an unstaged deletion still has
+  real, about-to-ship content there, so silently skipping it would audit something other than what
+  the next commit (and CI's always-clean checkout) actually contains — weakening local/CI parity
+  for exactly the reason this corpus deliberately moved to `git ls-files` in the first place.
+  `readTrackedFileContent` now falls back to the index's blob via `git show :<path>` before giving
+  up; a path gone from the index too (a staged deletion) is excluded from `git ls-files`'s own
+  output and never reaches this function at all. Verified empirically against the full
+  path/content divergence matrix (clean, modified-unstaged, modified-staged, newly-staged,
+  unstaged deletion, staged deletion, working-tree-only rename, path containing spaces) before
+  writing the contract down as a code comment. `findViolations` was also decomposed into
+  `readTrackedFileContent`/`scanFileForViolations` helpers to fix a CodeFactor "Complex Method"
+  flag the first ENOENT fix introduced — no behavior change. PR #817.
 
 ## [1.28.8] — 2026-09-22
 

@@ -173,13 +173,48 @@ function blankStringLiterals(line) {
   return line.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, (match) => ' '.repeat(match.length));
 }
 
-// QNBS-v3 (CodeAnt, PR #817): `git ls-files` lists the index, not the working tree — a file deleted locally but not yet staged (`git rm`/`git add`) still appears there. Returns null for that case instead of throwing, so the caller can skip it; there is no content left to scan for violations. Any other read error still propagates.
-function readFileOrNull(file) {
+/**
+ * QNBS-v3 (CodeAnt + live review, PR #817): the audit's content-resolution contract.
+ *
+ * The corpus (which paths are in scope) comes from `git ls-files` — the index, not the working
+ * tree. Content is read from the working tree when it exists there (the normal case, and the
+ * right one for a local run: a developer auditing their current draft wants THEIR edits checked,
+ * staged or not — same convention as eslint/tsc). Only when the working tree copy is missing
+ * (ENOENT) does this fall back to the index's blob via `git show :<path>`, rather than silently
+ * skipping — a bare skip would audit something other than what the next commit (and CI's
+ * always-clean checkout) actually contains, which is exactly the local/CI parity this corpus
+ * deliberately moved to git ls-files to protect.
+ *
+ * This resolves every real path-vs-content state without special-casing any of them individually:
+ *   - clean / modified-unstaged / modified-staged / newly-staged: working tree read succeeds — no
+ *     fallback involved.
+ *   - unstaged deletion: still in the index (still in `git ls-files`), gone from the working tree
+ *     → index fallback reads its real, about-to-ship-if-staged content.
+ *   - staged deletion (`git rm`/`git add` after `rm`): gone from the index too, so `git ls-files`
+ *     never lists it in the first place — this function is never even called for it.
+ *   - a working-tree-only rename is, at the index level, indistinguishable from an unstaged
+ *     deletion of the old path (handled above) plus an untracked new path (out of scope, same as
+ *     any file that was never `git add`ed).
+ *   - paths containing spaces or other shell-special characters: `execFileSync`'s argv array never
+ *     goes through a shell, so no escaping is needed or applied.
+ * Verified empirically against all of the above before this contract was written down.
+ */
+function readTrackedFileContent(file, repoRoot) {
   try {
     return fs.readFileSync(file, 'utf-8');
   } catch (error) {
-    if (error.code === 'ENOENT') return null;
-    throw error;
+    if (error.code !== 'ENOENT') throw error;
+    const relative = path.relative(repoRoot, file);
+    try {
+      // QNBS-v3: stderr is expected to be noisy on the (common, harmless) not-in-the-index case, so it's piped rather than inherited to keep normal audit runs and test output clean.
+      return execFileSync('git', ['show', `:${relative}`], {
+        cwd: repoRoot,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -237,7 +272,8 @@ function scanFileForViolations(file, content, summary) {
   return fileViolations;
 }
 
-export function findViolations(files) {
+// QNBS-v3: repoRoot defaults to this module's own root (real CLI usage) but is overridable so tests can point it at a disposable git fixture instead of the real repository.
+export function findViolations(files, repoRoot = root) {
   const byFile = {};
   const summary = {};
   let total = 0;
@@ -247,16 +283,18 @@ export function findViolations(files) {
   }
 
   for (const file of files) {
-    const content = readFileOrNull(file);
+    const content = readTrackedFileContent(file, repoRoot);
     if (content === null) {
-      console.warn(`[token-audit] skipping tracked-but-missing file: ${path.relative(root, file)}`);
+      console.warn(
+        `[token-audit] skipping file absent from both the working tree and the index: ${path.relative(repoRoot, file)}`,
+      );
       continue;
     }
 
     const fileViolations = scanFileForViolations(file, content, summary);
     total += fileViolations.length;
     if (fileViolations.length > 0) {
-      byFile[path.relative(root, file)] = fileViolations;
+      byFile[path.relative(repoRoot, file)] = fileViolations;
     }
   }
 
