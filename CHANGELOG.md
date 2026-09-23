@@ -85,6 +85,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a tracked, visible ratchet instead of invisible debt that could silently regrow. No component
   behavior changed; this closes out the Visual Maturity remediation program's qualification pass.
   PR #816.
+- **Token-audit tooling closure (corpus + ratchet):** `scripts/audit-tokens.mjs` now derives its
+  scanned-file corpus from `git ls-files` instead of a hand-maintained directory allowlist, so a
+  newly added runtime directory is covered automatically. This brings `services/`, `constants/`,
+  `workers/`, `plugins/`, `i18n/`, `api/`, `functions/`, `public/sw.js`, and four `packages/*/src`
+  directories into scope for the first time (previously invisible to every rule, not just the
+  Visual Maturity ones); ambient `.d.ts` declaration files and `*.config.ts`/`*.config.js` build
+  config are now excluded by convention rather than by omission. Two files gain a permanent,
+  principled exclusion because they run in execution contexts with no CSSOM access at all:
+  `public/sw.js` (a service worker) and `services/epubApiService.ts` (generates a separate EPUB
+  document's stylesheet). The baseline ratchet is now a true monotonic per-rule comparison: a
+  rule's count must match its baselined count exactly — a decrease without an explicit
+  `--update-baseline` now fails too (`STALE_HIGH_BASELINE`), closing the gap where a stale-high
+  baseline could let a count silently regrow back up to the old ceiling later. Baseline internal
+  consistency (`total === sum(summary)`) is now verified for both the stored baseline and the live
+  audit, failing closed on mismatch. Baseline updated to 198 → 252 to disclose the newly-visible,
+  pre-existing debt this wider scan surfaced (+29 `raw-hex` in `services/plotBoardService.ts`'s
+  beat-sheet marker palette, +23 `raw-hex` in `constants/sections.tsx`'s per-section accent colors,
+  +2 `inline-svg` in `services/commands/commandDefinitions.tsx`) — all three are categorical/
+  identity colors or ordinary icon-migration debt already accepted elsewhere in this baseline, none
+  of it newly introduced by this PR. 24 regression tests (`tests/unit/scripts/auditTokens.test.ts`)
+  cover the corpus classification and every ratchet outcome (pass, regression, stale-high,
+  malformed baseline/audit) as exported pure-function unit tests. Review (Sourcery, Codex,
+  CodeRabbit, CodeAnt) found four real defects from the same initial round, all fixed in one
+  bundled correction wave: the malformed-audit check now runs before the no-baseline branch so a
+  malformed live audit can never be masked by a missing baseline; a baseline with no `summary`
+  object now fails closed as `MALFORMED_BASELINE` instead of being silently normalized to an empty
+  one and ratcheted against; the CLI's direct-execution guard now compares `import.meta.url`
+  against `pathToFileURL(process.argv[1]).href` (exported as `isDirectExecution`) instead of a raw
+  `file://${argv[1]}` string, which was not portable to Windows drive-letter paths or paths
+  containing URL-encoded characters (e.g. spaces); and `findViolations` no longer crashes on
+  `ENOENT` for a tracked file `git ls-files` lists but that is missing from the working tree.
+  Live review caught that the first ENOENT fix (skip + warn) was itself a content-resolution
+  authority regression: `git ls-files` describes the index, and an unstaged deletion still has
+  real, about-to-ship content there, so silently skipping it would audit something other than what
+  the next commit (and CI's always-clean checkout) actually contains — weakening local/CI parity
+  for exactly the reason this corpus deliberately moved to `git ls-files` in the first place.
+  `readTrackedFileContent` now falls back to the index's blob via `git show :<path>` before giving
+  up; a path gone from the index too (a staged deletion) is excluded from `git ls-files`'s own
+  output and never reaches this function at all. Verified empirically against the full
+  path/content divergence matrix (clean, modified-unstaged, modified-staged, newly-staged,
+  unstaged deletion, staged deletion, working-tree-only rename, path containing spaces) before
+  writing the contract down as a code comment. `findViolations` was also decomposed into
+  `readTrackedFileContent`/`scanFileForViolations` helpers to fix a CodeFactor "Complex Method"
+  flag the first ENOENT fix introduced — no behavior change. A further bundled Codex wave fixed
+  three more real defects, each independently reproduced before mutation: `getTrackedSourceFiles`
+  now reads `git ls-files -z` (NUL-delimited, unquoted) instead of newline-splitting the default
+  output, which git C-quotes/octal-escapes for any non-ASCII filename — a plain `\n`-split silently
+  turned a real path like `sübdir/ünïcode-file.ts` into a literal, non-existent escaped string,
+  dropping it from the corpus entirely; `isExcluded`'s directory-segment check now runs against the
+  path relative to `repoRoot` instead of the absolute path, so a checkout whose ANCESTOR directory
+  happens to share a name with an excluded segment (e.g. `.../config/WorldScript-Studio`) can no
+  longer silently exclude real source under the repo's own unrelated directories; and
+  `evaluateBaseline` now validates that `total` and every `summary` value are finite non-negative
+  integers (`hasValidCounts`) before any arithmetic runs, so a malformed JSON value (a string,
+  NaN, a fraction, a negative number) in `token-audit-baseline.json` can never reach `sumSummary`'s
+  `+` or the ratchet loop's `>`/`<`, whose implicit coercion could otherwise let corrupted data
+  through as a false `EXACT_MATCH`. 33 regression tests total, up from 24 (unicode `git ls-files`
+  round-trip, ancestor-directory-collision, and four numeric-malformation cases). No source files
+  were newly discovered by the `-z` fix in the real repository (audit output unchanged at 252).
+  A second Codex pass, reviewed after full CI convergence on that wave, found two more real
+  defects in the index-vs-working-tree content-resolution contract itself, both verified
+  empirically before fixing: `isDirectExecution` now resolves `argv[1]` through `fs.realpathSync`
+  before comparing to `import.meta.url` — Node resolves the latter through a symlink to its real
+  target but leaves `argv[1]` as the symlink path actually invoked, so running the CLI through a
+  symlink (e.g. an npm-linked/packaged bin entry) previously exited 0 with no scan at all; and
+  `readTrackedFileContent`'s index fallback now normalizes the pathspec to forward slashes before
+  calling `git show :<path>` — git's index pathspec syntax requires them on every OS, while
+  `path.relative` returns OS-native separators, so on Windows the fallback would fail to resolve a
+  real index entry and silently (and wrongly) treat it as gone from the index too. 35 regression
+  tests total (was 33): a real symlink round-trip and a nested-path index-fallback case. A final
+  review pass on that exact head found `isDirectExecution` only handled one of two legitimate Node
+  semantics: it checked the `fs.realpathSync`-resolved comparison but not the unresolved one, so
+  `node --preserve-symlinks-main` (where Node leaves `import.meta.url` as the unresolved symlink
+  path instead of resolving it) would silently exit 0 with no scan — the opposite failure mode from
+  the one just fixed. It now accepts either comparison. The same review also caught that the new
+  symlink test itself was unreliable on macOS, where `os.tmpdir()` is a symlink
+  (`/tmp` → `/private/tmp`): the fixture now canonicalizes its temp directory via
+  `fs.realpathSync` up front, so the test's expected URL already matches what `fs.realpathSync`
+  will produce regardless of whether the OS temp dir itself sits behind a symlink. 37 regression
+  tests total (was 35): the `--preserve-symlinks-main` case and an ancestor-directory-symlink case
+  (proving `fs.realpathSync` resolving a symlink anywhere in the path, not just the leaf file,
+  works the same way the macOS temp-dir case relies on). Two more root-cause defects, both
+  reproduced before fixing: `"config"` is no longer a blanket-excluded directory segment —
+  `config/resolveViteBase.ts` is genuinely imported by `services/deployTarget.ts`
+  (`GITHUB_PAGES_BASE`), so the exclusion was hiding real runtime-consumed source from the audit;
+  the audit's default-in contract (runtime-capable tracked JS/TS stays in the corpus, only
+  demonstrably build-only source is excluded by name) now applies, and the existing
+  `*.config.ts`/`*.config.js` basename rule still excludes genuine build config files wherever
+  they live. Separately, `readTrackedFileContent`'s index fallback no longer swallows a `git show`
+  failure into a silent skip: every caller derives its file list from `git ls-files`, so a path
+  reaching this function was in the index moments ago — an unexpected failure there is a TOCTOU
+  race or a corrupt/unreadable index object, either of which must fail the whole audit closed
+  (a thrown error, non-zero exit) rather than risk silently missing a real violation, the exact
+  failure class the original ENOENT-skip fix (`1bed434`) was found to have. 39 regression tests
+  total (was 37): `config/resolveViteBase.ts` (and a `config/runtime.ts`-shaped path) stay
+  auditable while a `config/something.config.ts` file stays excluded via the basename rule; the
+  index-fallback failure now asserts a thrown error instead of a silent skip. A further review
+  epoch on that exact head found three more real defects, all fixed together: `root` (and every
+  repo-relative authority derived from it — `EXCLUDED_FILES`, baseline/report paths, the git
+  subprocess `cwd`) is now resolved via a new `resolveModuleRoot(moduleUrl)` helper that
+  `fs.realpathSync`s the module path independent of which `import.meta.url` form was passed in —
+  `isDirectExecution` deliberately accepts the unresolved symlink URL for
+  `--preserve-symlinks-main` entry-point detection, but a symlink living outside the repository
+  under that flag would otherwise compute `root` outside the repository entirely. `hasValidCounts`
+  now explicitly rejects an array `summary` (`typeof [] === 'object'` in JS, and
+  `Object.values([])` is vacuously empty, so an empty-array summary previously passed as a valid
+  empty record). The tracked-source corpus and `isSourceFile` classification now share one
+  `SOURCE_EXTENSIONS` authority widened to include `.mts`/`.cts`/`.mjs`/`.cjs` (legitimate runtime
+  module extensions, not just `.ts`/`.tsx`/`.js`/`.jsx`); declaration-file exclusion now covers
+  `.d.mts`/`.d.cts` alongside `.d.ts`, and the `*.config.*` basename rule now covers `.mts`/`.cts`
+  too. Inventoried every currently-tracked `.mts`/`.cts`/`.mjs`/`.cjs` file before widening:
+  almost all are under already-excluded `scripts/`/`tests/` or are `.d.mts` declarations;
+  `.lighthouserc.cjs`/`.lighthouserc.desktop.cjs` (root-level, matching no other exclusion) get
+  their own explicit `EXCLUDED_FILES` entries. Audit output on the real repo is unchanged (252) —
+  none of the three fixes newly exposed a real violation. 48 regression tests total (was 39):
+  `resolveModuleRoot` with a symlink living outside the repo under simulated
+  `--preserve-symlinks-main`; array-`summary` rejection for both audit and baseline; the widened
+  extensions/declarations/config-basename/Lighthouse-exclusion cases; and an end-to-end
+  `resolveAuditableFiles` → `findViolations` scan of a synthetic tracked `.mts` file. PR #817.
 
 ## [1.28.8] — 2026-09-22
 

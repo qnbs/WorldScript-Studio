@@ -2,27 +2,45 @@
 /**
  * Token & design-system audit script.
  *
- * Scans JSX/TSX source for patterns that break the token-first design system:
+ * Scans first-party runtime JS/TS/JSX/TSX source for patterns that break the token-first design
+ * system:
  *   - raw hex / rgb / hsl color literals
  *   - Tailwind `dark:` prefixes
  *   - inline shadow utilities with hard-coded color channels
  *   - inline <svg> elements (duplicated icons should use the shared Icon component)
  *   - raw --glass-* token usage (Visual Maturity #F, DS-6): the ambient glass tokens are reserved
- *     for the rare, transient overlay case DS-6 describes, not a primitive surface default; the
- *     baseline here discloses pre-existing feature-level usage the Visual Maturity program (PRs
- *     A-E) did not reach, and ratchets against it growing further.
+ *     for the rare, transient overlay case DS-6 describes, not a primitive surface default.
  *
- * Exits non-zero when violations are found and writes a JSON report to reports/token-audit.json.
- * Use `--update-baseline` to snapshot the current count for ratcheting.
+ * The candidate corpus is derived from git's own tracked-file list (see `getTrackedSourceFiles`)
+ * rather than a hand-maintained directory allowlist, so a newly added runtime directory is
+ * covered automatically instead of silently invisible until someone remembers to widen a list
+ * (see the post-Visual-Maturity qualification tranche: `services/`, `constants/`, `packages/*\/src`,
+ * `workers/`, `plugins/`, `i18n/`, `api/`, `functions/`, and `public/sw.js` were all outside the
+ * historical scan and are now included).
+ *
+ * The baseline is a true monotonic per-rule ratchet (see `evaluateBaseline`): a rule's count must
+ * equal its baselined count exactly. An increase fails as a regression; a decrease also fails,
+ * because a stale-high baseline would let the count silently regrow back up to the old ceiling
+ * later. `--update-baseline` is the explicit, human-triggered action that accepts the current
+ * counts as the new ceiling in both directions.
+ *
+ * Exits non-zero when violations exceed (or newly undershoot) the baseline and writes a JSON
+ * report to reports/token-audit.json. Use `--update-baseline` to snapshot the current counts.
  */
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const root = path.resolve(__dirname, '..');
+// QNBS-v3 (live review, PR #817): resolves the canonical repo root from a module URL independent of whether that URL itself is symlink-resolved. isDirectExecution deliberately accepts BOTH the resolved and unresolved comparison (so `node --preserve-symlinks-main` is still recognized as direct execution), but repo-relative authority — root, baseline/report paths, the git subprocess cwd — must always anchor to the real file location: under --preserve-symlinks-main, import.meta.url stays the unresolved symlink path, and a symlink living outside the repository would otherwise compute a root outside it entirely. fs.realpathSync resolves the module path itself first, so this is correct regardless of which of the two import.meta.url forms was actually passed in. Exported so this exact scenario is testable without spawning a real --preserve-symlinks-main subprocess.
+export function resolveModuleRoot(moduleUrl) {
+  const modulePath = fs.realpathSync(fileURLToPath(moduleUrl));
+  return path.resolve(path.dirname(modulePath), '..');
+}
+
+// QNBS-v3: exported so tests can build the exact same absolute paths the module's own EXCLUDED_FILES set uses, without duplicating this resolution or touching the filesystem.
+export const root = resolveModuleRoot(import.meta.url);
 
 const REPORT_PATH = path.join(root, 'reports', 'token-audit.json');
 // QNBS-v3: baseline lives at repo root so it is committed (reports/ is gitignored).
@@ -32,29 +50,87 @@ const args = process.argv.slice(2);
 const updateBaseline = args.includes('--update-baseline');
 const showDetails = args.includes('--details');
 
-// QNBS-v3: directories that contain source subject to the token-first rule.
-const SOURCE_DIRS = ['components', 'app', 'hooks', 'features', 'contexts'];
+// QNBS-v3 (Codex, PR #817): the full set of standard JS/TS module extensions — .mts/.cts/.mjs/.cjs are legitimate runtime-capable source, not just .ts/.tsx/.js/.jsx, and their absence here was a corpus gap independent of every other fix in this file. This is the single authority both the git ls-files pathspec (via extensionGlobs) and isSourceFile's classification read from, so the two can never drift apart.
+const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts', '.mjs', '.cjs']);
 
-// QNBS-v3 (Visual Maturity #F, CodeX): root-level runtime UI files sit outside SOURCE_DIRS and were invisible to every rule here, not just ambient-glass-token — App.tsx, index.tsx, register-sw.ts, and types.ts are the first-party root files with actual runtime code (not build/tooling config).
-const ROOT_FILES = ['App.tsx', 'index.tsx', 'register-sw.ts', 'types.ts'].map((f) =>
-  path.join(root, f),
-);
+function extensionGlobs() {
+  return [...SOURCE_EXTENSIONS].map((ext) => `*${ext}`);
+}
 
-// QNBS-v3: files that are allowed to contain raw colors / inline SVGs by design.
+// QNBS-v3: ambient declaration files carry no runtime code — path.extname() alone can't detect these (it returns '.ts' for 'x.d.ts', '.mts' for 'x.d.mts', etc.), so each suffix is checked explicitly.
+const DECLARATION_SUFFIXES = ['.d.ts', '.d.mts', '.d.cts'];
+
+// QNBS-v3 (post-Visual qualification tranche, Section 3.1): directory segments that are dev tooling, generated output, or test/demo surfaces — never shipped product UI/source — excluded wherever they appear in a path, at any depth.
+const EXCLUDED_DIR_SEGMENTS = [
+  'tests',
+  'stories',
+  'scripts',
+  'node_modules',
+  'dist',
+  'coverage',
+  '.storybook',
+  // QNBS-v3: a separate embedded MCP dev-tooling sub-project (own package.json/tsconfig), not shipped product UI.
+  '.mcp',
+  // QNBS-v3 (live review, PR #817): "config" was REMOVED from here — config/resolveViteBase.ts is genuinely imported by services/deployTarget.ts (GITHUB_PAGES_BASE), so a blanket directory exclusion wrongly hid real runtime-consumed source. The audit's default-in contract: runtime-capable tracked JS/TS stays in the corpus, and only demonstrably build/tooling-only source is excluded by name (the *.config.ts/*.config.js basename rule below already covers vite.config.ts etc. wherever they live).
+];
+
+// QNBS-v3: files that are allowed to contain raw colors / inline SVGs by design — each is a source-of-truth or intentionally token-independent file, not an ordinary consuming UI surface.
 const EXCLUDED_FILES = new Set([
   // The global token file is the single source of truth for raw values.
   path.join(root, 'index.css'),
-  // Storybook preview configures canvas backgrounds explicitly.
-  path.join(root, '.storybook', 'preview.tsx'),
   // The icon component is the central registry for SVG paths.
   path.join(root, 'components', 'ui', 'Icon.tsx'),
   // SectionIcon renders icons from the APP_SECTIONS central config, not duplicated inline SVGs.
   path.join(root, 'components', 'ui', 'SectionIcon.tsx'),
   // QNBS-v3: this fatal-fallback inline HTML renders when React itself failed to boot, so it must stay token/CSS-independent by design — the same reason index.css itself is excluded above.
   path.join(root, 'index.tsx'),
+  // QNBS-v3 (post-Visual qualification tranche, Section 3.1): the service worker runs in its own execution context with no `document`/CSSOM — it cannot read a CSS custom property at all — so its offline-fallback SVG placeholder and notification colors are structurally outside the token system's reach, not a token-first regression.
+  path.join(root, 'public', 'sw.js'),
+  // QNBS-v3 (post-Visual qualification tranche, Section 3.1): generates the CSS for an exported EPUB document consumed by external e-reader software — a separate document with its own stylesheet, disconnected from this app's running CSSOM, the same rationale tier as index.css being the source of truth for the app's own raw values.
+  path.join(root, 'services', 'epubApiService.ts'),
+  // QNBS-v3 (post-Visual qualification tranche): the TypeScript mirror of the CSS custom-property scale (docs/Design-System.md's own "TypeScript mirrors live in packages/ui/src/tokens.ts") is a source-of-truth for raw values, the same rationale as index.css.
+  path.join(root, 'packages', 'ui', 'src', 'tokens.ts'),
+  // QNBS-v3: the Tailwind design-token preset defines the raw theme scale itself; same source-of-truth rationale.
+  path.join(root, 'packages', 'ui', 'tailwind-preset.ts'),
+  // QNBS-v3 (Codex, PR #817): Lighthouse CI config at the repo root — the widened .cjs extension coverage would otherwise newly pull these into the corpus; they don't match the *.config.* basename convention (no "config" substring in the name) so need their own explicit exclusion, the same as every other named exemption in this set.
+  path.join(root, '.lighthouserc.cjs'),
+  path.join(root, '.lighthouserc.desktop.cjs'),
 ]);
 
-const SOURCE_EXTENSIONS = new Set(['.tsx', '.jsx', '.ts', '.js']);
+// QNBS-v3: matches vite.config.ts, vitest.config.ts, playwright.config.ts, etc. anywhere in the tree — an unambiguous, ecosystem-wide naming convention for build/tooling config, never a consuming UI surface.
+const BUILD_CONFIG_BASENAME = /\.config\.(ts|js|mts|cts|mjs|cjs)$/;
+
+function isSourceFile(filePath) {
+  if (DECLARATION_SUFFIXES.some((suffix) => filePath.endsWith(suffix))) return false;
+  if (BUILD_CONFIG_BASENAME.test(path.basename(filePath))) return false;
+  return SOURCE_EXTENSIONS.has(path.extname(filePath));
+}
+
+// QNBS-v3 (Codex, PR #817): directory-segment exclusion must be checked against the path RELATIVE TO repoRoot, never the absolute path — a substring check against the absolute path lets an ancestor/checkout directory that happens to share a name with an excluded segment (e.g. a repo checked out under ".../config/WorldScript-Studio") silently exclude real source under the repo's own services/ tree, which has nothing to do with the repo's own config/ directory.
+function isExcluded(filePath, repoRoot) {
+  const normalized = path.normalize(filePath);
+  if (EXCLUDED_FILES.has(normalized)) return true;
+  const relativeSegments = path.relative(repoRoot, normalized).split(path.sep);
+  return EXCLUDED_DIR_SEGMENTS.some((segment) => relativeSegments.includes(segment));
+}
+
+// QNBS-v3 (post-Visual qualification tranche, Section 3.1): derives the candidate corpus from git's own tracked-file list instead of a hand-maintained directory allowlist. Exported (not called from resolveAuditableFiles's default path in tests) so tests can inject a fixed file list rather than shelling out to git.
+// QNBS-v3 (Codex, PR #817): `-z` (NUL-delimited, unquoted) is required — git's default newline-delimited output C-quotes/octal-escapes any "unusual" filename (any non-ASCII byte by default, or an embedded space/newline), so a plain `\n`-split silently turned a real path like `sübdir/ünïcode-file.ts` into the literal, non-existent string `"s\303\274bdir/..."`, dropping it from the corpus entirely.
+export function getTrackedSourceFiles(repoRoot = root) {
+  const raw = execFileSync('git', ['ls-files', '-z', '--', ...extensionGlobs()], {
+    cwd: repoRoot,
+    encoding: 'utf-8',
+  });
+  return raw
+    .split('\0')
+    .filter(Boolean)
+    .map((relPath) => path.join(repoRoot, relPath));
+}
+
+// QNBS-v3: the classifier (isSourceFile/isExcluded) is exercised independently of file discovery, so a test can pass a synthetic candidate list without touching the real git repository or filesystem. repoRoot defaults to this module's own root (real CLI usage) but is overridable so a test can exercise an ancestor-directory-name collision without needing a real checkout at that path.
+export function resolveAuditableFiles(candidateFiles, repoRoot = root) {
+  return candidateFiles.filter((file) => isSourceFile(file) && !isExcluded(file, repoRoot));
+}
 
 // biome-ignore format: regex readability
 const PATTERNS = [
@@ -100,48 +176,122 @@ const PATTERNS = [
   {
     id: 'ambient-glass-token',
     label: 'Raw --glass-* token (Visual Maturity PR F, DS-6: ambient glass is not a primitive default)',
-    // QNBS-v3 (CodeRabbit/Codex): matches the bare "--glass-name" token itself, not any surrounding syntax — this also catches getComputedStyle(el).getPropertyValue('--glass-bg') (the established pattern this codebase already uses for --sc-* tokens in CharacterGraphView.tsx), not just var(...)/Tailwind's bg-(...) forms.
+    // QNBS-v3 (CodeRabbit/Codex): matches the bare "--glass-name" token itself, not any surrounding syntax — this also catches getComputedStyle(el).getPropertyValue('--glass-bg') and Tailwind's bg-(...) shorthand, not just var(...).
     regex: /--glass-[\w-]+/g,
     shouldSkip: (_file) => false,
   },
 ];
-
-function isSourceFile(filePath) {
-  return SOURCE_EXTENSIONS.has(path.extname(filePath));
-}
-
-function isExcluded(filePath) {
-  const normalized = path.normalize(filePath);
-  if (EXCLUDED_FILES.has(normalized)) return true;
-  // QNBS-v3: tests, stories, and build scripts are not held to the runtime token rule.
-  if (normalized.includes(path.sep + 'tests' + path.sep)) return true;
-  if (normalized.includes(path.sep + 'stories' + path.sep)) return true;
-  if (normalized.includes(path.sep + 'scripts' + path.sep)) return true;
-  if (normalized.includes(path.sep + 'node_modules' + path.sep)) return true;
-  if (normalized.includes(path.sep + 'dist' + path.sep)) return true;
-  if (normalized.includes(path.sep + 'coverage' + path.sep)) return true;
-  return false;
-}
-
-function walk(dir, files = []) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walk(fullPath, files);
-    } else if (entry.isFile() && isSourceFile(fullPath) && !isExcluded(fullPath)) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
 
 // QNBS-v3 (Codex): a literal /* or */ inside a quoted string or JSX attribute (e.g. accept="image/*") must never be mistaken for a real comment delimiter — this blanks quoted content (keeping its length, so column positions stay accurate) for comment-boundary detection only; pattern matching itself still runs against the original, un-blanked line.
 function blankStringLiterals(line) {
   return line.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, (match) => ' '.repeat(match.length));
 }
 
-function findViolations(files) {
+/**
+ * QNBS-v3 (CodeAnt + live review, PR #817): the audit's content-resolution contract.
+ *
+ * The corpus (which paths are in scope) comes from `git ls-files` — the index, not the working
+ * tree. Content is read from the working tree when it exists there (the normal case, and the
+ * right one for a local run: a developer auditing their current draft wants THEIR edits checked,
+ * staged or not — same convention as eslint/tsc). Only when the working tree copy is missing
+ * (ENOENT) does this fall back to the index's blob via `git show :<path>`, rather than silently
+ * skipping — a bare skip would audit something other than what the next commit (and CI's
+ * always-clean checkout) actually contains, which is exactly the local/CI parity this corpus
+ * deliberately moved to git ls-files to protect.
+ *
+ * This resolves every real path-vs-content state without special-casing any of them individually:
+ *   - clean / modified-unstaged / modified-staged / newly-staged: working tree read succeeds — no
+ *     fallback involved.
+ *   - unstaged deletion: still in the index (still in `git ls-files`), gone from the working tree
+ *     → index fallback reads its real, about-to-ship-if-staged content.
+ *   - staged deletion (`git rm`/`git add` after `rm`): gone from the index too, so `git ls-files`
+ *     never lists it in the first place — this function is never even called for it.
+ *   - a working-tree-only rename is, at the index level, indistinguishable from an unstaged
+ *     deletion of the old path (handled above) plus an untracked new path (out of scope, same as
+ *     any file that was never `git add`ed).
+ *   - paths containing spaces or other shell-special characters: `execFileSync`'s argv array never
+ *     goes through a shell, so no escaping is needed or applied.
+ *   - Windows: the index pathspec is normalized to forward slashes before the `git show` call,
+ *     since git's `:<path>` syntax requires them on every OS regardless of `path.sep`.
+ *   - an unreadable/corrupt index object, or a TOCTOU race where the index changed mid-scan: the
+ *     index fallback throws rather than returning null — every caller derives `files` from
+ *     getTrackedSourceFiles, so a path reaching this function was in the index moments ago, and
+ *     silently treating an unexpected git-show failure as "nothing to audit" could mask a real
+ *     violation. This fails the whole audit closed (non-zero exit) instead.
+ * Verified empirically against all of the above before this contract was written down.
+ */
+function readTrackedFileContent(file, repoRoot) {
+  try {
+    return fs.readFileSync(file, 'utf-8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    // QNBS-v3 (Codex, PR #817): git's `:<path>` index pathspec always uses forward slashes, on every OS — path.relative returns OS-native separators, which are backslashes on Windows. Without this normalization, `git show` fails to resolve a real index entry on Windows and would silently (and wrongly) treat it as gone from the index too.
+    const relative = path.relative(repoRoot, file).split(path.sep).join('/');
+    // QNBS-v3 (live review, PR #817): no inner catch here — every caller in this file derives `files` from getTrackedSourceFiles (i.e. `file` was in the index moments ago), so a git-show failure at this point is never a legitimate "not tracked" case; it's a TOCTOU race (the index changed mid-scan) or an unreadable/corrupt index object. Either way this must fail the whole audit closed (a thrown error, non-zero exit) rather than silently miss content that may contain real violations — the exact failure mode the ENOENT-skip fix this replaced (1bed434) was itself found to have.
+    return execFileSync('git', ['show', `:${relative}`], {
+      cwd: repoRoot,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  }
+}
+
+// QNBS-v3: isolates the per-line block-comment state machine and pattern matching for a single file's content, so findViolations itself stays a thin per-file orchestration loop (file discovery/skip/aggregation) instead of also carrying this function's own branching.
+function scanFileForViolations(file, content, summary) {
+  const fileViolations = [];
+  const lines = content.split('\n');
+
+  let inBlockComment = false;
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const rawLine = lines[lineIndex];
+    if (rawLine.trim().startsWith('//')) continue; // skip line comments
+
+    // QNBS-v3: tracks /* ... */ block comments (incl. JSX {/* ... */}) via scanLine (string literals blanked, so a literal /* inside a quoted attribute can't falsely open one) — line (unblanked) is what patterns actually match against.
+    let line = rawLine;
+    let scanLine = blankStringLiterals(rawLine);
+    if (inBlockComment) {
+      const endIdx = scanLine.indexOf('*/');
+      if (endIdx === -1) continue;
+      line = line.slice(endIdx + 2);
+      scanLine = scanLine.slice(endIdx + 2);
+      inBlockComment = false;
+    }
+    while (scanLine.includes('/*')) {
+      const startIdx = scanLine.indexOf('/*');
+      const endIdx = scanLine.indexOf('*/', startIdx + 2);
+      if (endIdx === -1) {
+        inBlockComment = true;
+        line = line.slice(0, startIdx);
+        scanLine = scanLine.slice(0, startIdx);
+        break;
+      }
+      line = line.slice(0, startIdx) + line.slice(endIdx + 2);
+      scanLine = scanLine.slice(0, startIdx) + scanLine.slice(endIdx + 2);
+    }
+    if (line.trim().length === 0) continue;
+
+    for (const pattern of PATTERNS) {
+      if (pattern.shouldSkip(file)) continue;
+      const matches = line.match(pattern.regex);
+      if (!matches) continue;
+      for (const match of matches) {
+        fileViolations.push({
+          line: lineIndex + 1,
+          column: line.indexOf(match) + 1,
+          rule: pattern.id,
+          message: pattern.label,
+          match: match.slice(0, 40),
+        });
+        summary[pattern.id] += 1;
+      }
+    }
+  }
+
+  return fileViolations;
+}
+
+// QNBS-v3: repoRoot defaults to this module's own root (real CLI usage) but is overridable so tests can point it at a disposable git fixture instead of the real repository.
+export function findViolations(files, repoRoot = root) {
   const byFile = {};
   const summary = {};
   let total = 0;
@@ -151,61 +301,12 @@ function findViolations(files) {
   }
 
   for (const file of files) {
-    const content = fs.readFileSync(file, 'utf-8');
-    const lines = content.split('\n');
-    const relative = path.relative(root, file);
-    const fileViolations = [];
-
-    let inBlockComment = false;
-    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      const rawLine = lines[lineIndex];
-      if (rawLine.trim().startsWith('//')) continue; // skip line comments
-
-      // QNBS-v3: tracks /* ... */ block comments (incl. JSX {/* ... */}) via scanLine (string literals blanked, so a literal /* inside a quoted attribute can't falsely open one) — line (unblanked) is what patterns actually match against.
-      let line = rawLine;
-      let scanLine = blankStringLiterals(rawLine);
-      if (inBlockComment) {
-        const endIdx = scanLine.indexOf('*/');
-        if (endIdx === -1) continue;
-        line = line.slice(endIdx + 2);
-        scanLine = scanLine.slice(endIdx + 2);
-        inBlockComment = false;
-      }
-      while (scanLine.includes('/*')) {
-        const startIdx = scanLine.indexOf('/*');
-        const endIdx = scanLine.indexOf('*/', startIdx + 2);
-        if (endIdx === -1) {
-          inBlockComment = true;
-          line = line.slice(0, startIdx);
-          scanLine = scanLine.slice(0, startIdx);
-          break;
-        }
-        line = line.slice(0, startIdx) + line.slice(endIdx + 2);
-        scanLine = scanLine.slice(0, startIdx) + scanLine.slice(endIdx + 2);
-      }
-      if (line.trim().length === 0) continue;
-
-      for (const pattern of PATTERNS) {
-        if (pattern.shouldSkip(file)) continue;
-        const matches = line.match(pattern.regex);
-        if (matches) {
-          for (const match of matches) {
-            fileViolations.push({
-              line: lineIndex + 1,
-              column: line.indexOf(match) + 1,
-              rule: pattern.id,
-              message: pattern.label,
-              match: match.slice(0, 40),
-            });
-            summary[pattern.id] += 1;
-            total += 1;
-          }
-        }
-      }
-    }
-
+    // QNBS-v3 (live review, PR #817): readTrackedFileContent no longer returns null — it throws when content is unavailable from both the working tree and the index, so the audit fails closed instead of silently skipping a file that may hold real violations.
+    const content = readTrackedFileContent(file, repoRoot);
+    const fileViolations = scanFileForViolations(file, content, summary);
+    total += fileViolations.length;
     if (fileViolations.length > 0) {
-      byFile[relative] = fileViolations;
+      byFile[path.relative(repoRoot, file)] = fileViolations;
     }
   }
 
@@ -221,14 +322,103 @@ function loadBaseline() {
   }
 }
 
-function main() {
-  const files = SOURCE_DIRS.flatMap((dir) => walk(path.join(root, dir)));
-  // QNBS-v3: same isSourceFile/isExcluded filter walk() applies to directory-discovered files, so an excluded root file (index.tsx) is skipped here too instead of bypassing that check.
-  for (const rootFile of ROOT_FILES) {
-    if (fs.existsSync(rootFile) && isSourceFile(rootFile) && !isExcluded(rootFile)) {
-      files.push(rootFile);
-    }
+// QNBS-v3: sums a rule-keyed count object the same way for both the baseline file and a fresh audit run, so the two internal-consistency checks in evaluateBaseline share one definition of "the total agrees with the per-rule breakdown".
+function sumSummary(summary) {
+  return Object.values(summary).reduce((sum, count) => sum + count, 0);
+}
+
+// QNBS-v3 (Codex, PR #817): a violation count can only ever be a non-negative whole number — this is checked explicitly, before any arithmetic, so a malformed JSON value (a string, NaN/Infinity, a fraction, or a negative number) can never reach `sumSummary`'s `+` or the ratchet loop's `>`/`<`, whose implicit type coercion could otherwise let a corrupted value slip through as if it matched.
+function isValidCount(value) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+// QNBS-v3: validates both `total` and every `summary` value in one call, shared by the audit-side and baseline-side checks in evaluateBaseline so both are held to the identical numeric contract.
+function hasValidCounts(candidate) {
+  // QNBS-v3 (Codex, PR #817): summary must be a Record<string, number>, never an array — typeof [] === 'object' in JS, so without this explicit check an empty array (Object.values([]) is vacuously []) or an array shape entirely would silently pass as "valid" and reach sumSummary's arithmetic.
+  if (
+    !candidate ||
+    typeof candidate.summary !== 'object' ||
+    candidate.summary === null ||
+    Array.isArray(candidate.summary)
+  ) {
+    return false;
   }
+  if (!isValidCount(candidate.total)) return false;
+  return Object.values(candidate.summary).every(isValidCount);
+}
+
+/**
+ * QNBS-v3 (post-Visual qualification tranche, Section 3.2): a true monotonic per-rule ratchet.
+ * Every rule's count must equal its baselined count exactly — an increase is a regression, and a
+ * decrease is also rejected, because leaving the baseline stale-high would let the count silently
+ * regrow back up to the old ceiling in a later, unrelated change. `--update-baseline` is the only
+ * way to accept a new ceiling in either direction. Exported so tests can exercise every outcome
+ * (PASS / regression / stale-high) without shelling out to the real script or touching real files.
+ */
+export function evaluateBaseline(audit, baseline) {
+  // QNBS-v3 (Sourcery, PR #817): a malformed live audit must fail closed before the no-baseline branch gets a chance to short-circuit past it — checked first, unconditionally, so a missing baseline can never mask it. QNBS-v3 (Codex, PR #817): hasValidCounts rejects a non-object summary AND any non-finite/fractional/negative/non-numeric total or per-rule value before sumSummary's '+' or the ratchet loop's '>'/'<' ever see it.
+  if (!hasValidCounts(audit)) {
+    return {
+      ok: false,
+      reason: 'MALFORMED_AUDIT',
+      detail: 'audit.total and every audit.summary value must be finite non-negative integers',
+    };
+  }
+  const auditSum = sumSummary(audit.summary);
+  if (auditSum !== audit.total) {
+    return {
+      ok: false,
+      reason: 'MALFORMED_AUDIT',
+      detail: `audit.total (${audit.total}) !== sum(audit.summary) (${auditSum})`,
+    };
+  }
+
+  if (!baseline) {
+    return audit.total > 0
+      ? { ok: false, reason: 'NO_BASELINE_VIOLATIONS_FOUND' }
+      : { ok: true, reason: 'NO_BASELINE_NO_VIOLATIONS' };
+  }
+
+  // QNBS-v3 (Sourcery, PR #817): a baseline with no valid summary object must fail closed rather than being silently normalized to {} and ratcheted against as if it were a real, empty baseline. QNBS-v3 (Codex, PR #817): same finite/non-negative/integer contract as the audit side — see hasValidCounts.
+  if (!hasValidCounts(baseline)) {
+    return {
+      ok: false,
+      reason: 'MALFORMED_BASELINE',
+      detail:
+        'baseline.total and every baseline.summary value must be finite non-negative integers',
+    };
+  }
+  // QNBS-v3: a malformed baseline (its own stored total disagreeing with its own per-rule breakdown) must fail closed rather than silently ratchet against a number that was never actually true.
+  const baselineSum = sumSummary(baseline.summary);
+  if (baselineSum !== baseline.total) {
+    return {
+      ok: false,
+      reason: 'MALFORMED_BASELINE',
+      detail: `baseline.total (${baseline.total}) !== sum(baseline.summary) (${baselineSum})`,
+    };
+  }
+
+  const allRuleIds = new Set([...Object.keys(audit.summary), ...Object.keys(baseline.summary)]);
+  const regressions = [];
+  const staleHigh = [];
+  for (const ruleId of allRuleIds) {
+    const current = audit.summary[ruleId] ?? 0;
+    const baselined = baseline.summary[ruleId] ?? 0;
+    if (current > baselined) regressions.push(`${ruleId}: ${current} > ${baselined}`);
+    else if (current < baselined) staleHigh.push(`${ruleId}: ${current} < ${baselined}`);
+  }
+
+  if (regressions.length > 0) {
+    return { ok: false, reason: 'REGRESSION', detail: regressions.join(', ') };
+  }
+  if (staleHigh.length > 0) {
+    return { ok: false, reason: 'STALE_HIGH_BASELINE', detail: staleHigh.join(', ') };
+  }
+  return { ok: true, reason: 'EXACT_MATCH' };
+}
+
+function main() {
+  const files = resolveAuditableFiles(getTrackedSourceFiles());
   const audit = findViolations(files);
 
   const report = {
@@ -275,36 +465,36 @@ function main() {
   }
 
   const baseline = loadBaseline();
-  if (baseline) {
-    // QNBS-v3 (Sourcery/CodeAnt/Codex): compare each rule's own count against its own baseline, not just the aggregate total — an aggregate-only check lets a new ambient-glass-token reference hide behind an unrelated fix elsewhere (e.g. one fewer inline-svg) that leaves the total unchanged.
-    const regressions = Object.entries(audit.summary)
-      .filter(([ruleId, count]) => count > (baseline.summary?.[ruleId] ?? 0))
-      .map(([ruleId, count]) => `${ruleId}: ${count} > ${baseline.summary?.[ruleId] ?? 0}`);
-    if (regressions.length > 0) {
-      console.error(
-        `[token-audit] FAIL: per-rule baseline exceeded — ${regressions.join(', ')}. Run with --update-baseline after intentional fixes.`,
-      );
-      process.exit(1);
-    }
-    if (audit.total > baseline.total) {
-      console.error(
-        `[token-audit] FAIL: ${audit.total} violations exceeds baseline of ${baseline.total}. Run with --update-baseline after intentional fixes.`,
-      );
-      process.exit(1);
-    }
-    console.log(`[token-audit] PASS: ${audit.total} ≤ baseline ${baseline.total}.`);
-    process.exit(0);
-  }
-
-  if (audit.total > 0) {
+  const verdict = evaluateBaseline(audit, baseline);
+  if (!verdict.ok) {
+    const detail = verdict.detail ? ` — ${verdict.detail}` : '';
     console.error(
-      '[token-audit] FAIL: violations found. Fix them or run with --update-baseline to establish a baseline.',
+      `[token-audit] FAIL: ${verdict.reason}${detail}. Run with --update-baseline after intentional fixes.`,
     );
     process.exit(1);
   }
-
-  console.log('[token-audit] PASS: no violations found.');
+  console.log(
+    baseline
+      ? `[token-audit] PASS: ${audit.total} matches baseline ${baseline.total} exactly (per-rule).`
+      : '[token-audit] PASS: no violations found.',
+  );
   process.exit(0);
 }
 
-main();
+// QNBS-v3 (Sourcery, PR #817): a raw `file://${argv[1]}` string comparison is not portable — argv[1] is an unencoded filesystem path (no URL-encoding of spaces/unicode, no Windows `file:///C:/...` drive-letter form), while import.meta.url always is; pathToFileURL performs that same platform-correct conversion before comparing. Exported so the comparison itself can be regression-tested without spawning the real CLI.
+// QNBS-v3 (Codex + live review, PR #817): two legitimate Node semantics both need to match. Normally Node resolves import.meta.url through a symlink to its real target while leaving argv[1] as the invoked symlink path (checked via the realpathSync fallback below); under `node --preserve-symlinks-main`, Node does the opposite and leaves import.meta.url as the unresolved symlink path too (checked by the first, cheap comparison, which also covers the ordinary non-symlinked case). Accepting either means neither mode silently exits 0 without scanning.
+export function isDirectExecution(argv1, moduleUrl) {
+  if (typeof argv1 !== 'string' || argv1.length === 0) return false;
+  if (moduleUrl === pathToFileURL(argv1).href) return true;
+  try {
+    return moduleUrl === pathToFileURL(fs.realpathSync(argv1)).href;
+  } catch {
+    // argv1 doesn't exist on disk (e.g. a synthetic test path) — the unresolved comparison above already covers that case.
+    return false;
+  }
+}
+
+// QNBS-v3: only run the CLI when this file is executed directly — importing it (e.g. from a test file, for the exported pure helpers) must not trigger a report write or process.exit.
+if (isDirectExecution(process.argv[1], import.meta.url)) {
+  main();
+}
