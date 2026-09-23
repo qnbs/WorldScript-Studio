@@ -126,6 +126,22 @@ describe('PWAInstallBanner', () => {
     fireEvent.click(screen.getByRole('button', { name: 'pwa.closeBanner' }));
     expect(mockDismissInstall).toHaveBeenCalledOnce();
   });
+
+  it('renders on a solid surface token, without backdrop-blur', () => {
+    mockUsePWA.mockReturnValueOnce({
+      isOffline: false,
+      isInstallable: true,
+      isUpdateAvailable: false,
+      installApp: mockInstallApp,
+      dismissInstall: mockDismissInstall,
+      applyUpdate: mockApplyUpdate,
+      dismissUpdate: mockDismissUpdate,
+    });
+    render(<PWAInstallBanner />);
+    const className = screen.getByRole('banner').className;
+    expect(className).toContain('bg-[var(--sc-surface-raised)]');
+    expect(className).not.toContain('backdrop-blur');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -180,5 +196,21 @@ describe('PWAUpdateToast', () => {
     render(<PWAUpdateToast />);
     fireEvent.click(screen.getByRole('button', { name: 'pwa.later' }));
     expect(mockDismissUpdate).toHaveBeenCalledOnce();
+  });
+
+  it('renders on a solid surface token, without backdrop-blur', () => {
+    mockUsePWA.mockReturnValueOnce({
+      isOffline: false,
+      isInstallable: false,
+      isUpdateAvailable: true,
+      installApp: mockInstallApp,
+      dismissInstall: mockDismissInstall,
+      applyUpdate: mockApplyUpdate,
+      dismissUpdate: mockDismissUpdate,
+    });
+    render(<PWAUpdateToast />);
+    const className = screen.getByRole('alert').className;
+    expect(className).toContain('bg-[var(--sc-surface-raised)]');
+    expect(className).not.toContain('backdrop-blur');
   });
 });

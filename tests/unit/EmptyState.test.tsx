@@ -76,4 +76,11 @@ describe('EmptyState', () => {
     render(<EmptyState title="Empty" icon={<span data-testid="icon">★</span>} />);
     expect(screen.getByTestId('icon')).toBeInTheDocument();
   });
+
+  it('renders on a solid semantic surface token, not a raw glass token', () => {
+    render(<EmptyState title="Empty" />);
+    const className = screen.getByRole('status').className;
+    expect(className).toContain('bg-[var(--sc-surface-overlay)]');
+    expect(className).not.toContain('glass-bg');
+  });
 });

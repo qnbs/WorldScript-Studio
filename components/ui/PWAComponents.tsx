@@ -64,6 +64,7 @@ export const PWAInstallBanner: FC = () => {
 
   return (
     <>
+      {/* QNBS-v3 (Visual Maturity #E, DS-6): a solid surface replaces a translucent one — this floating banner is the same kind of card-like notification Toast (PR C) already de-glassed, and was missed then because it lives in a different file. */}
       {/* biome-ignore lint/a11y/useSemanticElements: <header role="banner"> conflicts with noInteractiveElementToNoninteractiveRole; the div with explicit banner role is the correct pattern for a floating install prompt that must be a landmark without being nested in the page's top-level header. */}
       <div
         role="banner"
@@ -74,8 +75,8 @@ export const PWAInstallBanner: FC = () => {
         flex items-center gap-3
         p-3 pl-4
         rounded-2xl
-        bg-[var(--sc-surface-raised)]/90 border border-[var(--sc-border-subtle)]
-        shadow-2xl backdrop-blur-md
+        bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)]
+        shadow-2xl
         animate-fade-in-up
       "
       >
@@ -141,6 +142,7 @@ export const PWAUpdateToast: FC = () => {
   if (!isUpdateAvailable) return null;
 
   return (
+    // QNBS-v3 (Visual Maturity #E, DS-6): a solid surface replaces a translucent one, matching Toast's (PR C) and PWAInstallBanner's now-solid treatment above — same floating-notification pattern, missed here because this file wasn't in PR C's scope.
     <div
       role="alert"
       aria-live="assertive"
@@ -150,8 +152,8 @@ export const PWAUpdateToast: FC = () => {
         flex items-start gap-3
         p-4
         rounded-2xl
-        bg-[var(--sc-surface-raised)]/95 border border-[var(--sc-accent)]/30
-        shadow-2xl shadow-[var(--sc-accent)]/10 backdrop-blur-md
+        bg-[var(--sc-surface-raised)] border border-[var(--sc-accent)]/30
+        shadow-2xl shadow-[var(--sc-accent)]/10
         animate-fade-in-up
       "
     >

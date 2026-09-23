@@ -113,4 +113,11 @@ describe('Skeleton', () => {
     expect((container.firstChild as HTMLElement).className).toContain('h-4');
     expect((container.firstChild as HTMLElement).className).toContain('w-32');
   });
+
+  it('renders on a solid semantic surface token, not a raw glass token', () => {
+    const { container } = render(<Skeleton />);
+    const className = (container.firstChild as HTMLElement).className;
+    expect(className).toContain('bg-[var(--sc-surface-overlay)]');
+    expect(className).not.toContain('glass-bg');
+  });
 });
