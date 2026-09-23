@@ -84,7 +84,8 @@ git worktree list --porcelain | grep -B2 '^branch refs/heads/main$'   # find the
   git for-each-ref --format='create refs/pre-fetch-snapshot/%(refname:lstrip=3) %(objectname)' \
     refs/remotes/origin | git update-ref --stdin ||
     { echo "pre-fetch snapshot failed — resolve stale refs/pre-fetch-snapshot/* before fetching" >&2; exit 1; }
-  git fetch --no-prune --no-auto-maintenance origin   # a plain `fetch origin` still prunes under
+  git fetch --no-prune --no-auto-maintenance origin ||   # a plain `fetch origin` still prunes under
+    { echo "fetch failed — aborting main update" >&2; exit 1; }
                                  # fetch.prune/remote.origin.prune config — be explicit here too;
                                  # `--no-auto-maintenance` matters too: fetch runs `maintenance
                                  # --auto` by default, and `git gc` (which that can invoke) calls
@@ -94,7 +95,11 @@ git worktree list --porcelain | grep -B2 '^branch refs/heads/main$'   # find the
                                  # alone, before this doc's own rescue steps ever run; this refreshes
                                  # ALL of origin/*, not just main, so a non-main branch can be
                                  # force-pushed by this fetch too — classify any changed ref the
-                                 # same way as "Remote branch cleanup" below
+                                 # same way as "Remote branch cleanup" below. Without an explicit
+                                 # check, and with this block never enabling `errexit`, a failed
+                                 # fetch would let the shell continue straight into a merge against
+                                 # a stale `origin/main` with nothing to catch it (confirmed against
+                                 # CodeRabbit's review of wave 10's own diff)
   [ "$(git branch --show-current)" = "main" ] ||
     { echo "no longer on main — something switched this worktree, abort" >&2; exit 1; }
   git merge --ff-only origin/main
@@ -721,7 +726,8 @@ sha_pre_fetch_snapshot() {   # run before every fetch that touches refs/remotes/
   git for-each-ref --format='create refs/pre-fetch-snapshot/%(refname:lstrip=3) %(objectname)' \
     refs/remotes/origin | git update-ref --stdin
 }
-sha_pre_fetch_snapshot
+sha_pre_fetch_snapshot ||
+  { echo "pre-fetch snapshot failed — resolve stale refs/pre-fetch-snapshot/* before fetching" >&2; exit 1; }
 git fetch --no-prune --no-auto-maintenance origin   # refresh without pruning — a plain `git fetch
                                         # origin` can still prune if fetch.prune/remote.origin.prune
                                         # is set repo-wide, confirmed by `git fetch -h`; be explicit.
@@ -738,18 +744,24 @@ database, a corrupted snapshot) exactly as readily as the expected "no changes" 
 the sweep continue past step's own worth with an inventory that never actually completed:
 
 ```bash
-git for-each-ref --format='%(refname:lstrip=2) %(objectname)' refs/pre-fetch-snapshot > /tmp/refs-before.txt
-git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/remotes/origin > /tmp/refs-after.txt
+refs_before=$(mktemp) refs_after=$(mktemp) refs_diff=$(mktemp)   # unique per invocation — a fixed
+                                                                    # /tmp/refs-*.txt name would let
+                                                                    # two concurrent housekeeping
+                                                                    # sessions clobber each other's
+                                                                    # snapshot/diff and classify
+                                                                    # against the wrong data
+git for-each-ref --format='%(refname:lstrip=2) %(objectname)' refs/pre-fetch-snapshot > "$refs_before"
+git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/remotes/origin > "$refs_after"
 # NOTE the different lstrip counts: `refs/pre-fetch-snapshot/<name>` has one fewer path component
 # than `refs/remotes/origin/<name>` (one directory segment, not two) — using the same lstrip=3 for
 # both turns `refs/pre-fetch-snapshot/main` into an empty name and
 # `refs/pre-fetch-snapshot/feature/foo` into just `foo`, breaking the name-keyed match below
 # between a branch and its own snapshot entry
 diff_status=0
-diff /tmp/refs-before.txt /tmp/refs-after.txt > /tmp/refs-diff.txt || diff_status=$?
+diff "$refs_before" "$refs_after" > "$refs_diff" || diff_status=$?
 case "$diff_status" in 0|1) ;; *) echo "remote-ref comparison failed" >&2; exit "$diff_status" ;; esac
 grep_status=0
-grep '^[<>]' /tmp/refs-diff.txt || grep_status=$?
+grep '^[<>]' "$refs_diff" || grep_status=$?
 [ "$grep_status" -le 1 ] || exit "$grep_status"
 ```
 
@@ -759,15 +771,19 @@ split. Checking the *specific* status this way, instead of `|| true`, is what Co
 Codex both asked for after wave 7's blanket suppression.)
 
 For any ref whose value *changed* (not just the ones the dry-run flagged as absent — the `<` line
-in `/tmp/refs-diff.txt` gives its OLD objectname), treat its **old** value the same as a prune
+in `$refs_diff` gives its OLD objectname), treat its **old** value the same as a prune
 candidate — it may have just been silently orphaned by the fetch itself, not by anything this
-doc's own process decided.
+doc's own process decided. `$refs_diff` (and `$refs_before`/`$refs_after`) stay valid for this as
+long as you're still in the same shell session that created them — that's the same assumption
+this doc already relies on for `reachable_elsewhere()` and the other shell functions defined
+above.
 
 Once every changed ref has been classified and anything unreachable has its own `refs/rescue/`
-entry (see below), the snapshot itself can be cleaned up:
+entry (see below), the snapshot itself can be cleaned up, along with the temp files:
 
 ```bash
 git for-each-ref --format='delete %(refname)' refs/pre-fetch-snapshot | git update-ref --stdin
+rm -f "$refs_before" "$refs_after" "$refs_diff"
 ```
 
 For every candidate — from the dry-run *and* from a force-updated old value — capture its tip and
@@ -786,7 +802,13 @@ each other and both get pruned, leaving the commit unreachable and both reflogs 
 every ref in the batch, not just the one under test:
 
 ```bash
-pending_refs=$(git remote prune origin --dry-run |
+# LC_ALL=C on the parsed command, not the whole shell — git 2.45.1 marks this "would prune"
+# marker for translation (confirmed against git's own source), so under a non-English locale
+# (this repo's shell is German — see "Reading this repo's git output" at the top) the real
+# string is different (e.g. "würde veralteten Branch entfernen"), the sed pattern matches
+# nothing, pending_refs comes back empty, and the whole point of this exclusion — two
+# candidates in the same batch proving each other reachable — silently stops working:
+pending_refs=$(LC_ALL=C git remote prune origin --dry-run |
   sed -n 's/^ \* \[would prune\] origin\//refs\/remotes\/origin\//p')
 
 sha=$(git rev-parse "origin/<candidate-branch>")   # or the old objectname for a force-updated ref
@@ -924,27 +946,34 @@ set -e            # `pipefail` alone doesn't ABORT on a failure, only changes wh
 git worktree list --porcelain
 git branch --format='%(refname:short)' | wc -l
 git for-each-ref --format='create refs/pre-fetch-snapshot/%(refname:lstrip=3) %(objectname)' \
-  refs/remotes/origin | git update-ref --stdin
-git fetch --no-prune --no-auto-maintenance origin   # plain `fetch origin` can still prune under
+  refs/remotes/origin | git update-ref --stdin ||
+  { echo "pre-fetch snapshot failed — resolve stale refs/pre-fetch-snapshot/* before fetching" >&2; exit 1; }
+git fetch --no-prune --no-auto-maintenance origin ||   # plain `fetch origin` can still prune under
+  { echo "fetch failed — aborting sweep" >&2; exit 1; }
                                       # fetch.prune/remote.origin.prune config — be explicit.
                                       # `--no-auto-maintenance` too: this fetch runs BEFORE step 3's
                                       # worktree rescue, and fetch's default post-fetch maintenance
                                       # can invoke `git gc`, which calls its own `git worktree prune
                                       # --expire 3.months.ago` — see the canonical-main-worktree
                                       # flow above for the full citation
-git for-each-ref --format='%(refname:lstrip=2) %(objectname)' refs/pre-fetch-snapshot > /tmp/refs-before.txt
-git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/remotes/origin > /tmp/refs-after.txt
+refs_before=$(mktemp) refs_after=$(mktemp) refs_diff=$(mktemp)   # unique per invocation — a fixed
+                                      # /tmp/refs-*.txt name would let two concurrent housekeeping
+                                      # sessions clobber each other's snapshot/diff and classify
+                                      # against the wrong data
+git for-each-ref --format='%(refname:lstrip=2) %(objectname)' refs/pre-fetch-snapshot > "$refs_before"
+git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/remotes/origin > "$refs_after"
 # NOTE the different lstrip counts: `refs/pre-fetch-snapshot/<name>` has one fewer path component
 # than `refs/remotes/origin/<name>` (one directory segment, not two) — using the same lstrip=3 for
 # both turns `refs/pre-fetch-snapshot/main` into an empty name and
 # `refs/pre-fetch-snapshot/feature/foo` into just `foo`, breaking the name-keyed match below
 # between a branch and its own snapshot entry
 diff_status=0
-diff /tmp/refs-before.txt /tmp/refs-after.txt > /tmp/refs-diff.txt || diff_status=$?
+diff "$refs_before" "$refs_after" > "$refs_diff" || diff_status=$?
 case "$diff_status" in 0|1) ;; *) echo "remote-ref comparison failed" >&2; exit "$diff_status" ;; esac
 grep_status=0
-grep '^[<>]' /tmp/refs-diff.txt || grep_status=$?
-[ "$grep_status" -le 1 ] || exit "$grep_status"   # changed ref → classify per step 5a
+grep '^[<>]' "$refs_diff" || grep_status=$?
+[ "$grep_status" -le 1 ] || exit "$grep_status"   # changed ref → classify per step 5a; $refs_diff
+                                                    # is read again there — see step 5a
 git remote prune origin --dry-run   # non-mutating candidate count; real prune happens in step 5
 git branch -r --format='%(refname:short)' | wc -l
 
@@ -1005,8 +1034,9 @@ git remote prune origin --dry-run
 git reflog show "refs/remotes/origin/<candidate-branch>"   # check for a pre-force-update tip too
 # ...for each reported candidate: capture its SHA, check reachability, rescue-ref if unique...
 git update-ref -d "refs/remotes/origin/<candidate-branch>" "$sha"   # once per reviewed candidate
-# once every changed ref from step 1 is classified, clean up the snapshot:
+# once every changed ref from step 1 is classified, clean up the snapshot and its temp files:
 git for-each-ref --format='delete %(refname)' refs/pre-fetch-snapshot | git update-ref --stdin
+rm -f "$refs_before" "$refs_after" "$refs_diff"
 
 # 5b. Actual remote branch deletion — same current-tip verification as step 4, MERGED only, never
 #     on the historical PR-state record alone. `--force-with-lease` is NOT used here: AGENTS.md
@@ -1342,3 +1372,36 @@ rules this repo's `CLAUDE.md`/`AGENTS.md` already document.
   operating pattern hasn't changed: every fix is validated against real git/AGENTS.md behavior
   before being written down — including, this time, the review loop's own pagination blind spot
   that let two waves' worth of findings go temporarily unseen.
+- **2026-09-23 (successor-branch correction wave)** — the wave-10 push into PR #820 immediately
+  triggered a further, genuinely new review pass (CodeAnt: 3 `Critical`; CodeRabbit: 2), landing
+  right as #820 reached this repo's absolute 15-commit ceiling (`pr:budget`: `SATURATED`/`FREEZE`).
+  Per `docs/PR-CI-MERGE-WORKFLOW.md`'s SATURATED-tier rule ("freeze the PR and create a clean
+  successor carrying the reviewed semantic net state" — never commit 16, never rewrite already-
+  reviewed history to manufacture capacity), #820 was frozen as-is and its reviewed content
+  carried forward onto this clean successor branch as one commit, with these 4 further validated
+  findings applied as a second: (1) the `sha_pre_fetch_snapshot()` helper's caller in "Remote
+  branch cleanup" never checked the helper's own exit status before the fetch that follows it —
+  inconsistent with the identical check wave 10 had already added to the canonical-main-worktree
+  flow's own snapshot creation, and to this same helper's third call site in the quick-reference
+  sweep, which had the same gap — added the same exit-status check everywhere the pattern occurs,
+  for consistency, not just at the one line flagged; (2) both places the snapshot-vs-current-state
+  comparison writes its working files used fixed `/tmp/refs-before.txt` / `refs-after.txt` /
+  `refs-diff.txt` names, so two concurrent housekeeping sessions could clobber each other's
+  snapshot or diff and classify against the wrong data — replaced with `mktemp`-generated unique
+  paths in both occurrences, with cleanup deferred to where the snapshot ref itself is already
+  cleaned up (the temp files must stay readable across the classification step that follows, the
+  same way `reachable_elsewhere()` and other shell functions this doc defines are assumed to stay
+  in scope for the rest of the same shell session); (3) the pending-remote-branch-prune parser
+  (`sed -n 's/^ \* \[would prune\] origin\//.../'`) depends on git's English-locale output, but
+  git 2.45.1 marks that exact marker for translation and this repo's own shell defaults to German
+  (see "Reading this repo's git output" at the top of this doc) — under that locale the pattern
+  matches nothing, silently defeating wave 10's own fix for two candidates proving each other
+  reachable — fixed with `LC_ALL=C` scoped to just the parsed command, found independently by both
+  reviewers; (4) the canonical-main-worktree fetch had no exit-status check and the block never
+  enables `errexit`, so a failed fetch could let the shell continue straight into `merge --ff-only`
+  against a stale `origin/main` with nothing to catch it — added an explicit check that aborts
+  before the merge. A fifth finding (CodeAnt, on the lease-less remote-branch delete added in wave
+  10) was not a new gap: it named exactly the residual this doc already discloses explicitly at
+  that same location, and was dispositioned by reply rather than a further mechanical patch, the
+  same as wave 9's own precedent. #820 remains open, unmerged, and untouched as the audit/review
+  evidence trail for waves 1 through 10; this branch supersedes it going forward.
