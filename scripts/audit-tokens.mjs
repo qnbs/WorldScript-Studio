@@ -173,6 +173,70 @@ function blankStringLiterals(line) {
   return line.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, (match) => ' '.repeat(match.length));
 }
 
+// QNBS-v3 (CodeAnt, PR #817): `git ls-files` lists the index, not the working tree — a file deleted locally but not yet staged (`git rm`/`git add`) still appears there. Returns null for that case instead of throwing, so the caller can skip it; there is no content left to scan for violations. Any other read error still propagates.
+function readFileOrNull(file) {
+  try {
+    return fs.readFileSync(file, 'utf-8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+// QNBS-v3: isolates the per-line block-comment state machine and pattern matching for a single file's content, so findViolations itself stays a thin per-file orchestration loop (file discovery/skip/aggregation) instead of also carrying this function's own branching.
+function scanFileForViolations(file, content, summary) {
+  const fileViolations = [];
+  const lines = content.split('\n');
+
+  let inBlockComment = false;
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const rawLine = lines[lineIndex];
+    if (rawLine.trim().startsWith('//')) continue; // skip line comments
+
+    // QNBS-v3: tracks /* ... */ block comments (incl. JSX {/* ... */}) via scanLine (string literals blanked, so a literal /* inside a quoted attribute can't falsely open one) — line (unblanked) is what patterns actually match against.
+    let line = rawLine;
+    let scanLine = blankStringLiterals(rawLine);
+    if (inBlockComment) {
+      const endIdx = scanLine.indexOf('*/');
+      if (endIdx === -1) continue;
+      line = line.slice(endIdx + 2);
+      scanLine = scanLine.slice(endIdx + 2);
+      inBlockComment = false;
+    }
+    while (scanLine.includes('/*')) {
+      const startIdx = scanLine.indexOf('/*');
+      const endIdx = scanLine.indexOf('*/', startIdx + 2);
+      if (endIdx === -1) {
+        inBlockComment = true;
+        line = line.slice(0, startIdx);
+        scanLine = scanLine.slice(0, startIdx);
+        break;
+      }
+      line = line.slice(0, startIdx) + line.slice(endIdx + 2);
+      scanLine = scanLine.slice(0, startIdx) + scanLine.slice(endIdx + 2);
+    }
+    if (line.trim().length === 0) continue;
+
+    for (const pattern of PATTERNS) {
+      if (pattern.shouldSkip(file)) continue;
+      const matches = line.match(pattern.regex);
+      if (!matches) continue;
+      for (const match of matches) {
+        fileViolations.push({
+          line: lineIndex + 1,
+          column: line.indexOf(match) + 1,
+          rule: pattern.id,
+          message: pattern.label,
+          match: match.slice(0, 40),
+        });
+        summary[pattern.id] += 1;
+      }
+    }
+  }
+
+  return fileViolations;
+}
+
 export function findViolations(files) {
   const byFile = {};
   const summary = {};
@@ -183,73 +247,16 @@ export function findViolations(files) {
   }
 
   for (const file of files) {
-    let content;
-    try {
-      content = fs.readFileSync(file, 'utf-8');
-    } catch (error) {
-      // QNBS-v3 (CodeAnt, PR #817): `git ls-files` lists the index, not the working tree — a file deleted locally but not yet staged (`git rm`/`git add`) still appears there. Skip it rather than crash; there is no content left to scan for violations.
-      if (error.code === 'ENOENT') {
-        console.warn(
-          `[token-audit] skipping tracked-but-missing file: ${path.relative(root, file)}`,
-        );
-        continue;
-      }
-      throw error;
-    }
-    const lines = content.split('\n');
-    const relative = path.relative(root, file);
-    const fileViolations = [];
-
-    let inBlockComment = false;
-    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      const rawLine = lines[lineIndex];
-      if (rawLine.trim().startsWith('//')) continue; // skip line comments
-
-      // QNBS-v3: tracks /* ... */ block comments (incl. JSX {/* ... */}) via scanLine (string literals blanked, so a literal /* inside a quoted attribute can't falsely open one) — line (unblanked) is what patterns actually match against.
-      let line = rawLine;
-      let scanLine = blankStringLiterals(rawLine);
-      if (inBlockComment) {
-        const endIdx = scanLine.indexOf('*/');
-        if (endIdx === -1) continue;
-        line = line.slice(endIdx + 2);
-        scanLine = scanLine.slice(endIdx + 2);
-        inBlockComment = false;
-      }
-      while (scanLine.includes('/*')) {
-        const startIdx = scanLine.indexOf('/*');
-        const endIdx = scanLine.indexOf('*/', startIdx + 2);
-        if (endIdx === -1) {
-          inBlockComment = true;
-          line = line.slice(0, startIdx);
-          scanLine = scanLine.slice(0, startIdx);
-          break;
-        }
-        line = line.slice(0, startIdx) + line.slice(endIdx + 2);
-        scanLine = scanLine.slice(0, startIdx) + scanLine.slice(endIdx + 2);
-      }
-      if (line.trim().length === 0) continue;
-
-      for (const pattern of PATTERNS) {
-        if (pattern.shouldSkip(file)) continue;
-        const matches = line.match(pattern.regex);
-        if (matches) {
-          for (const match of matches) {
-            fileViolations.push({
-              line: lineIndex + 1,
-              column: line.indexOf(match) + 1,
-              rule: pattern.id,
-              message: pattern.label,
-              match: match.slice(0, 40),
-            });
-            summary[pattern.id] += 1;
-            total += 1;
-          }
-        }
-      }
+    const content = readFileOrNull(file);
+    if (content === null) {
+      console.warn(`[token-audit] skipping tracked-but-missing file: ${path.relative(root, file)}`);
+      continue;
     }
 
+    const fileViolations = scanFileForViolations(file, content, summary);
+    total += fileViolations.length;
     if (fileViolations.length > 0) {
-      byFile[relative] = fileViolations;
+      byFile[path.relative(root, file)] = fileViolations;
     }
   }
 
