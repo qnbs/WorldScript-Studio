@@ -31,7 +31,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -267,22 +267,14 @@ function sumSummary(summary) {
  * (PASS / regression / stale-high) without shelling out to the real script or touching real files.
  */
 export function evaluateBaseline(audit, baseline) {
-  if (!baseline) {
-    return audit.total > 0
-      ? { ok: false, reason: 'NO_BASELINE_VIOLATIONS_FOUND' }
-      : { ok: true, reason: 'NO_BASELINE_NO_VIOLATIONS' };
-  }
-
-  // QNBS-v3: a malformed baseline (its own stored total disagreeing with its own per-rule breakdown) must fail closed rather than silently ratchet against a number that was never actually true.
-  const baselineSum = sumSummary(baseline.summary ?? {});
-  if (baseline.summary && baselineSum !== baseline.total) {
+  // QNBS-v3 (Sourcery, PR #817): a malformed live audit must fail closed before the no-baseline branch gets a chance to short-circuit past it — checked first, unconditionally, so a missing baseline can never mask it.
+  if (!audit || typeof audit.summary !== 'object' || audit.summary === null) {
     return {
       ok: false,
-      reason: 'MALFORMED_BASELINE',
-      detail: `baseline.total (${baseline.total}) !== sum(baseline.summary) (${baselineSum})`,
+      reason: 'MALFORMED_AUDIT',
+      detail: 'audit.summary is missing or not an object',
     };
   }
-
   const auditSum = sumSummary(audit.summary);
   if (auditSum !== audit.total) {
     return {
@@ -292,15 +284,36 @@ export function evaluateBaseline(audit, baseline) {
     };
   }
 
-  const allRuleIds = new Set([
-    ...Object.keys(audit.summary),
-    ...Object.keys(baseline.summary ?? {}),
-  ]);
+  if (!baseline) {
+    return audit.total > 0
+      ? { ok: false, reason: 'NO_BASELINE_VIOLATIONS_FOUND' }
+      : { ok: true, reason: 'NO_BASELINE_NO_VIOLATIONS' };
+  }
+
+  // QNBS-v3 (Sourcery, PR #817): a baseline with no valid summary object must fail closed rather than being silently normalized to {} and ratcheted against as if it were a real, empty baseline.
+  if (typeof baseline.summary !== 'object' || baseline.summary === null) {
+    return {
+      ok: false,
+      reason: 'MALFORMED_BASELINE',
+      detail: 'baseline.summary is missing or not an object',
+    };
+  }
+  // QNBS-v3: a malformed baseline (its own stored total disagreeing with its own per-rule breakdown) must fail closed rather than silently ratchet against a number that was never actually true.
+  const baselineSum = sumSummary(baseline.summary);
+  if (baselineSum !== baseline.total) {
+    return {
+      ok: false,
+      reason: 'MALFORMED_BASELINE',
+      detail: `baseline.total (${baseline.total}) !== sum(baseline.summary) (${baselineSum})`,
+    };
+  }
+
+  const allRuleIds = new Set([...Object.keys(audit.summary), ...Object.keys(baseline.summary)]);
   const regressions = [];
   const staleHigh = [];
   for (const ruleId of allRuleIds) {
     const current = audit.summary[ruleId] ?? 0;
-    const baselined = baseline.summary?.[ruleId] ?? 0;
+    const baselined = baseline.summary[ruleId] ?? 0;
     if (current > baselined) regressions.push(`${ruleId}: ${current} > ${baselined}`);
     else if (current < baselined) staleHigh.push(`${ruleId}: ${current} < ${baselined}`);
   }
@@ -378,7 +391,12 @@ function main() {
   process.exit(0);
 }
 
+// QNBS-v3 (Sourcery, PR #817): a raw `file://${argv[1]}` string comparison is not portable — argv[1] is an unencoded filesystem path (no URL-encoding of spaces/unicode, no Windows `file:///C:/...` drive-letter form), while import.meta.url always is; pathToFileURL performs that same platform-correct conversion before comparing. Exported so the comparison itself can be regression-tested without spawning the real CLI.
+export function isDirectExecution(argv1, moduleUrl) {
+  return typeof argv1 === 'string' && argv1.length > 0 && moduleUrl === pathToFileURL(argv1).href;
+}
+
 // QNBS-v3: only run the CLI when this file is executed directly — importing it (e.g. from a test file, for the exported pure helpers) must not trigger a report write or process.exit.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isDirectExecution(process.argv[1], import.meta.url)) {
   main();
 }

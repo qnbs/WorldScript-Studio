@@ -2,10 +2,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   evaluateBaseline,
   findViolations,
+  isDirectExecution,
   resolveAuditableFiles,
   root,
 } from '../../../scripts/audit-tokens.mjs';
@@ -110,6 +112,46 @@ describe('evaluateBaseline (post-Visual qualification tranche, Section 3.2: true
     const verdict = evaluateBaseline(audit, null);
     expect(verdict.ok).toBe(false);
     expect(verdict.reason).toBe('NO_BASELINE_VIOLATIONS_FOUND');
+  });
+
+  it('fails as MALFORMED_AUDIT even when no baseline exists yet (Sourcery, PR #817: the malformed-audit check must not be masked by the no-baseline branch)', () => {
+    const malformedAudit = { total: 999, summary: { 'raw-hex': 6, 'inline-svg': 4 } };
+    const verdict = evaluateBaseline(malformedAudit, null);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toBe('MALFORMED_AUDIT');
+  });
+
+  it('fails as MALFORMED_BASELINE when the baseline has no summary object at all, rather than being normalized to an empty one (Sourcery, PR #817)', () => {
+    // QNBS-v3: this baseline shape is deliberately invalid (no `summary`) to exercise the fail-closed path — not a shape a real caller should ever construct.
+    const baselineWithoutSummary = { total: 5 } as unknown as Parameters<
+      typeof evaluateBaseline
+    >[1];
+    const audit = { total: 5, summary: { 'raw-hex': 5 } };
+    const verdict = evaluateBaseline(audit, baselineWithoutSummary);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toBe('MALFORMED_BASELINE');
+  });
+});
+
+describe('isDirectExecution (Sourcery, PR #817: platform/encoding-safe direct-entry detection)', () => {
+  it('matches when the module URL is the pathToFileURL conversion of argv[1]', () => {
+    const argv1 = '/tmp/some/path/audit-tokens.mjs';
+    expect(isDirectExecution(argv1, pathToFileURL(argv1).href)).toBe(true);
+  });
+
+  it('matches even when argv[1] contains characters that URL-encode differently than the raw path (e.g. spaces)', () => {
+    // QNBS-v3: a raw `file://${argv1}` string comparison fails this exact case — pathToFileURL encodes the space as %20, a plain template-literal concatenation never would.
+    const argv1 = '/tmp/my project dir/audit-tokens.mjs';
+    expect(isDirectExecution(argv1, pathToFileURL(argv1).href)).toBe(true);
+  });
+
+  it('returns false when argv[1] is undefined (module loaded without a script arg)', () => {
+    expect(isDirectExecution(undefined, 'file:///tmp/audit-tokens.mjs')).toBe(false);
+  });
+
+  it('returns false when the module URL does not correspond to argv[1] (imported by another module, not run directly)', () => {
+    const argv1 = '/tmp/some/other-entrypoint.mjs';
+    expect(isDirectExecution(argv1, pathToFileURL('/tmp/audit-tokens.mjs').href)).toBe(false);
   });
 });
 

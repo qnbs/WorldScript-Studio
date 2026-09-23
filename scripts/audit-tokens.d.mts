@@ -33,3 +33,4 @@ export function evaluateBaseline(
   audit: Pick<AuditResult, 'summary' | 'total'>,
   baseline: AuditBaseline | null,
 ): BaselineVerdict;
+export function isDirectExecution(argv1: string | undefined, moduleUrl: string): boolean;
