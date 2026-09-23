@@ -161,13 +161,26 @@ Per standing policy for this session: **do not stack merges**. For each Dependab
    semver level).
 2. Merge (squash).
 3. Wait for the resulting **push-triggered** CI run on `main` (not just the PR's own run — a squash
-   merge produces a new commit SHA that reruns the full pipeline) to reach a concluded, successful
-   state.
+   merge produces a new commit SHA that reruns the full pipeline) to reach **CI green as defined
+   above** — the full suite, not just the required `ci-success` aggregate, which explicitly
+   excludes Storybook and deep-E2E and absorbs a `continue-on-error` desktop Lighthouse failure
+   without failing (see `docs/CI.md`). A red advisory job is a stop condition here too, the same
+   as a red required job.
 4. Only then move to the next PR.
 
 This is slower than merging a batch back-to-back, but avoids diagnosing a `main` failure against a
 pile of unrelated changes, and avoids the specific "PR A's CI was green against a `main` that PR B's
 merge just changed underneath it" class of race.
+
+**A red post-merge `main` is a hard stop, even when the failure looks unrelated to the
+dependency just merged** (confirmed 2026-09-02: a cargo patch merge landed on a `main` whose
+Security Audit was already failing on a separately-tracked, in-flight npm vulnerability fix —
+correctly recognizing the failure as pre-existing and unrelated is not the same as permission to
+merge the next Dependabot PR anyway). Classify the root cause, restore a genuinely green `main`
+(or wait for the PR already fixing it to land **and its own push-triggered `main` CI run to reach
+CI green as defined above, the full suite, not just `ci-success`** — merging the fix is not the
+same as confirming it worked), and only then
+continue the dependency train.
 
 ## Detecting future grouping candidates
 

@@ -113,3 +113,6 @@ voice-spike/
 
 .playwright-mcp/
 .translation-progress-*.json
+.vercel
+.env*
+!.env.example
