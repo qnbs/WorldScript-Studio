@@ -45,8 +45,9 @@ const StatCard: FC<{
       className="animate-in flex items-center p-5 h-auto hover:border-[var(--sc-border-strong)] transition-colors group"
       style={{ '--index': animationIndex } as React.CSSProperties}
     >
+      {/* QNBS-v3 (Visual Maturity #D, DS-6): --sc-border-subtle replaces --glass-border — this chip has no blur/glass surface, just a border color, so it belongs in the same semantic border family as the rest of the app. */}
       <div
-        className={`p-4 rounded-2xl mr-5 flex-shrink-0 border border-[var(--glass-border)] group-hover:scale-110 transition-transform duration-300 shadow-sm ${colorClass}`}
+        className={`p-4 rounded-2xl mr-5 flex-shrink-0 border border-[var(--sc-border-subtle)] group-hover:scale-110 transition-transform duration-300 shadow-sm ${colorClass}`}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -435,10 +436,11 @@ const DashboardModals: FC = () => {
         {!isAiLoading && loglineSuggestions.length > 0 && (
           <div className="space-y-3">
             {loglineSuggestions.map((line) => (
+              // QNBS-v3 (Visual Maturity #D, DS-6): a solid hover:bg-* replaces a translucent one that fought Card's own now-solid resting background (PR B) — hovering would otherwise go from opaque to translucent instead of the reverse.
               <Card
                 as="button"
                 key={line}
-                className="hover:bg-[var(--sc-surface-raised)]/50 transition-colors cursor-pointer w-full text-left border-l-4 border-l-transparent hover:border-l-indigo-500 group"
+                className="hover:bg-[var(--sc-surface-overlay)] transition-colors cursor-pointer w-full text-left border-l-4 border-l-transparent hover:border-l-indigo-500 group"
                 onClick={() => selectLogline(line)}
               >
                 <CardContent className="p-4">
@@ -534,9 +536,10 @@ const OnboardingTipsBanner: FC = () => {
   if (!visible) return null;
 
   return (
+    // QNBS-v3 (Visual Maturity #D, DS-6): a solid surface replaces a translucent one — this is an always-visible dashboard panel, not a transient overlay.
     <section
       aria-label={t('dashboard.onboarding.title')}
-      className="rounded-xl border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/80 p-5 shadow-sm"
+      className="rounded-xl border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] p-5 shadow-sm"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
