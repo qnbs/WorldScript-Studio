@@ -136,6 +136,16 @@ describe('WelcomePortal', () => {
     expect(screen.getByText('portal.open.title')).toBeTruthy();
   });
 
+  it('renders new-project options on a solid surface token, without a translucent background', async () => {
+    const user = userEvent.setup();
+    render(<WelcomePortal onExit={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'portal.welcome.newProject' }));
+    const option = screen.getByRole('button', { name: /portal.new.demo.title/ });
+    const classTokens = option.className.split(/\s+/);
+    expect(classTokens).toContain('bg-[var(--sc-surface-raised)]');
+    expect(option.className).not.toMatch(/bg-\[var\(--sc-surface-raised\)\]\/\d/);
+  });
+
   // QNBS-v3: locks the portal transition that revokes fresh-metadata seed authority after import.
   it('marks a welcome-portal import as ineligible for fresh metadata seeding', async () => {
     mockDispatch.mockResolvedValue({ type: 'project/importProject/fulfilled' });

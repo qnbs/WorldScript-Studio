@@ -30,10 +30,11 @@ const NewProjectOption: React.FC<{
   onClick: () => void;
 }> = ({ icon, title, description, onClick }) => {
   return (
+    // QNBS-v3 (Visual Maturity #D, DS-6): a solid surface replaces the translucent resting state — the Welcome Portal's own DS-6 exception covers its ambient Aurora/noise brand moment, not every card-like option inside it, which stays consistent with Card/Button's now-solid treatment (PR B).
     <button
       type="button"
       onClick={onClick}
-      className="bg-[var(--sc-surface-raised)]/80 p-6 rounded-lg border border-[var(--sc-border-subtle)] hover:border-[var(--sc-accent)] hover:bg-[var(--sc-surface-raised)] transition-all cursor-pointer flex items-start space-x-4 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+      className="bg-[var(--sc-surface-raised)] p-6 rounded-lg border border-[var(--sc-border-subtle)] hover:border-[var(--sc-accent)] hover:bg-[var(--sc-surface-overlay)] transition-all cursor-pointer flex items-start space-x-4 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
     >
       <div className="flex-shrink-0 bg-[var(--sc-surface-overlay)] p-3 rounded-lg">
         {/* QNBS-v3: option text provides the accessible name for this decorative glyph. */}
@@ -55,7 +56,8 @@ const FeatureHighlight: React.FC<{
   title: string;
   description: string;
 }> = ({ icon, title, description }) => (
-  <div className="rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/50 p-4 text-left">
+  // QNBS-v3 (Visual Maturity #D, DS-6): solid surface, same rationale as NewProjectOption above.
+  <div className="rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] p-4 text-left">
     <div className="mb-2 inline-flex rounded-lg bg-[var(--sc-accent-subtle)] p-2 text-[var(--sc-accent)]">
       {/* QNBS-v3: feature text supplies the accessible name for this decorative glyph. */}
       <CustomIcon className="h-5 w-5" aria-hidden="true">
@@ -238,7 +240,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit: exitPortal
           description={t('portal.features.export.description')}
         />
       </div>
-      <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/60 px-4 py-1.5 text-sm text-[var(--sc-text-secondary)]">
+      {/* QNBS-v3 (Visual Maturity #D, DS-6): solid surface, same rationale as NewProjectOption above. */}
+      <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-4 py-1.5 text-sm text-[var(--sc-text-secondary)]">
         {/* QNBS-v3: the adjacent privacy text names this decorative status glyph. */}
         <CustomIcon className="h-4 w-4 text-[var(--sc-success-fg)]" aria-hidden="true">
           <path
@@ -250,8 +253,9 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit: exitPortal
         {t('portal.welcome.privacyBadge')}
       </p>
       {!hasExistingSession && (
+        // QNBS-v3 (Visual Maturity #D, DS-6): solid surface, same rationale as NewProjectOption above.
         <section
-          className="mb-8 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/60 px-4 py-3 text-left text-sm text-[var(--sc-text-secondary)]"
+          className="mb-8 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)] px-4 py-3 text-left text-sm text-[var(--sc-text-secondary)]"
           aria-label={t('portal.welcome.demoHint')}
         >
           <p className="mb-3">{t('portal.welcome.demoHint')}</p>
