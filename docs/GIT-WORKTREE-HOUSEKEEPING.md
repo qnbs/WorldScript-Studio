@@ -57,23 +57,36 @@ git worktree remove <path>              # or --force if git complains about a cl
 ```
 
 After removal, the bare repo's own `refs/heads/main` is very likely stale too (nothing was
-updating it while a worktree held it hostage) — fast-forward it once no worktree references it:
+updating it while a worktree held it hostage) — fast-forward it once no worktree references it.
+**Do this as a compare-and-swap, not a plain read-then-write:** the ancestry check and the ref
+update are two separate git invocations, so anything else that advances `main` in between (a
+concurrent `gh pr merge`, another session, a hook) would otherwise get silently overwritten by a
+now-stale value. Freeze both endpoints first, then let `git update-ref`'s own three-argument form
+refuse the write unless the ref still holds exactly the value you checked:
 
 ```bash
 git fetch origin main
-git merge-base --is-ancestor refs/heads/main refs/remotes/origin/main && \
-  git update-ref refs/heads/main refs/remotes/origin/main
+git worktree list --porcelain | grep -q '^branch refs/heads/main$' && \
+  { echo 'refs/heads/main is still checked out in a worktree — resolve that first, per above' >&2; exit 1; }
+old=$(git rev-parse refs/heads/main)
+new=$(git rev-parse refs/remotes/origin/main)
+git merge-base --is-ancestor "$old" "$new" && \
+  git update-ref refs/heads/main "$new" "$old"
 ```
+
+`git update-ref <ref> <new> <old>` only writes if `<ref>` currently resolves to exactly `<old>` —
+if it doesn't (because something else moved it after you captured `$old`), the command fails
+closed with a lock/mismatch error instead of clobbering whatever that other write introduced.
 
 ## Before removing *any* worktree: prove it's safe
 
-Never remove a worktree — or delete the branch it points at — without checking both of these
+Never remove a worktree — or delete the branch it points at — without checking all of these
 first. A worktree removal only deletes the *checkout*; the branch ref (and its commits) survive
-until you explicitly delete the branch too, so the two checks below matter most before that
-second step:
+until you explicitly delete the branch too, so the checks below matter most before that second
+step.
 
 ```bash
-# 1. Uncommitted changes?
+# 1. Uncommitted TRACKED changes?
 git -C <worktree-path> status --porcelain=v2 -b
 # non-empty output (beyond the branch.* lines) = STOP, something is mid-edit
 
@@ -82,65 +95,166 @@ git -C <worktree-path> rev-list --count origin/main..<branch>
 # > 0 means real, potentially unrecoverable-elsewhere work exists on this branch
 ```
 
-A worktree/branch is safe to remove only when **both** come back clean: no uncommitted diff, and
-either zero unique commits *or* every commit is reachable via a real PR (see below).
+**These two checks are not sufficient by themselves — ignored files are part of the inventory
+too.** `git status --porcelain=v2 -b` never reports gitignored paths, but `git worktree remove`
+deletes the *entire* directory regardless of `.gitignore` — including a freshly-ignored `.env`
+with real local secrets (exactly what this doc's own `.gitignore` change adds), a local database,
+a handoff/evidence file, provider/project metadata, or any other irreplaceable local-only content.
+A clean `status` result proves nothing about that content; inventory it explicitly:
 
-**Third check, easy to skip: has a past session already left a classification?** Before applying
-any of the default heuristics below, look for local `*.md` files inside the worktree — ledger,
-inventory, reconciliation, or handoff notes a previous session wrote specifically to record why
-that dirty state exists and what's safe to do with it. Two real examples found in this repo
-(2026-09-23): `.pr747-orchestration-wip-inventory.md` and `.pr747-split-ledger.md` sat in the
-*main* worktree's root (not the worktree they described) and explicitly classified each
-uncommitted hunk in a different, still-dirty worktree as `SUPERSEDED_BY_759` (safe to discard) or
-`DEFER_TO_ORCHESTRATION_RECONCILIATION` (must be redone fresh against current `main`, never
-resurrected from the stale diff) — that made a `--force` removal of the dirty worktree fully
-auditable instead of a guess. Conversely, `LOCAL-WIP-RECONCILIATION.md` (found inside the
-`takeover-convergence-20260912` worktree) pre-classified three *other* worktrees as
+```bash
+git -C <worktree-path> status --porcelain=v2 --untracked-files=all
+git -C <worktree-path> ls-files --others --ignored --exclude-standard
+```
+
+Classify every ignored path this turns up — "ignored" means "not for git," not "disposable":
+
+| Classification | Meaning | Disposition |
+|---|---|---|
+| `REGENERABLE` | Build output, caches, lockfile-derived state — reproducible from a clean checkout | Safe to discard |
+| `LOCAL_SECRET` | `.env`, keys, tokens, local credentials | Preserve, or discard only with explicit confirmation it's throwaway |
+| `EVIDENCE` | Handoff notes, audit logs, review evidence, anything documenting a decision | Preserve |
+| `UNIQUE_WORK` | Local-only data, exports, or state with no other copy | Preserve |
+| `CACHE` | Tool-local scratch state with no evidentiary or reproducibility value | Safe to discard |
+| `UNKNOWN` | Anything you can't confidently place above | **Stop** — do not remove until resolved |
+
+Only remove the worktree once every ignored path found has a disposition other than `UNKNOWN`.
+
+A worktree/branch is safe to remove only when **all** of the above come back clean: no
+uncommitted tracked diff, no unresolved ignored content, and either zero unique commits *or*
+every commit is reachable via a real PR (see below).
+
+**Next check: has a past session already left a classification — and does it still apply?**
+Search for ledger/handoff/reconciliation evidence before applying any default heuristic below.
+Two real examples found in this repo (2026-09-23) prove this evidence is **not** reliably
+co-located with the worktree it describes: `.pr747-orchestration-wip-inventory.md` and
+`.pr747-split-ledger.md` sat in the *main* worktree's root while classifying dirty state in a
+*different*, still-dirty worktree; `LOCAL-WIP-RECONCILIATION.md` sat inside the
+`takeover-convergence-20260912` worktree while pre-classifying *three other* worktrees as
 `EVIDENCE_ONLY` / `PARTIALLY_VALID`, each with an explicit "Recovery: Worktree, branch, and
-handoff bundle" instruction — meaning those three must stay live regardless of what a fresh
-MERGED/CLOSED PR lookup alone would suggest, because a deliberate architectural decision is still
-pending. **A ledger's explicit disposition always overrides the default heuristics in this doc,
-in both directions** — it can pre-clear a removal the default checks alone wouldn't justify, or
-block one the default checks alone would otherwise allow.
+handoff bundle" instruction. **Search every registered worktree's root, not just the candidate's
+own directory:**
+
+```bash
+for path in $(git worktree list --porcelain | awk '/^worktree /{print $2}'); do
+  find "$path" -maxdepth 1 -iname '*ledger*' -o -iname '*handoff*' -o -iname '*reconciliation*' \
+    -o -iname '*inventory*' -o -iname '*wip*' -o -iname '*recovery*' 2>/dev/null
+done
+```
+
+Don't blindly trust every markdown file this turns up as authoritative — read each candidate and
+correlate it against the specific branch/worktree/PR you're evaluating before it changes any
+decision.
+
+**A ledger's disposition is only as current as the state it actually describes — bind it to that
+state before trusting it, every time:**
+
+1. Note the ledger's own date/anchor (commit SHA, branch, worktree path) as written.
+2. Re-capture the worktree's *current* state (tracked, untracked, **and ignored** — see above).
+3. Check whether anything — a new commit, a new uncommitted hunk, a new ignored file — has
+   appeared since the ledger was written.
+4. Only the specific work the ledger actually enumerated inherits its disposition. Material the
+   ledger never saw gets no free pass from it, however authoritative the ledger otherwise reads.
+5. On any divergence, reclassify the new material from scratch using the checks in this doc —
+   never extend the old disposition to cover it by assumption.
+
+Where practical, bind the ledger's own evidence to something independently checkable (a SHA, a
+diff, a branch tip) rather than trusting its prose alone — that's what let the two real examples
+above support a `--force` removal safely instead of on faith. **A ledger's explicit, still-current
+disposition overrides the default heuristics in this doc, in both directions** — it can pre-clear
+a removal the default checks alone wouldn't justify, or block one the default checks alone would
+otherwise allow. A *stale* ledger overrides nothing beyond what it actually still covers.
 
 ## Cross-referencing branches against real PR history
 
 Linear `git merge-base --is-ancestor <branch> origin/main` **under-counts** in any repo using
 squash-merge (this one does) — a squash-merged PR's original commits are never literal ancestors
 of `main`, since squashing creates one new commit with a different SHA. The correct signal is
-GitHub's own PR state, not git ancestry:
+GitHub's own PR state, not git ancestry — but `headRefName` alone is not a safe join key: a
+fork's PR can use the exact same branch name as a local branch that has nothing to do with it, and
+matching on name only would classify that unrelated local branch as `MERGED`/`CLOSED` and clear it
+for deletion. Include the PR's head repository in the match so only a PR that actually belongs to
+*this* repository can classify a local branch:
 
 ```bash
-gh pr list --state all --limit 1000 --json headRefName,state,number \
-  --jq '.[] | "\(.headRefName)\t\(.state)\t#\(.number)"' | sort > /tmp/pr-heads.tsv
+repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner | ascii_downcase')
+gh pr list --state all --limit 1000 --json headRefName,state,number,headRepository \
+  --jq '.[] | "\(.headRefName)\t\((.headRepository.nameWithOwner // "") | ascii_downcase)\t\(.state)\t#\(.number)"' \
+  | sort > /tmp/pr-heads.tsv
 
 for b in $(git branch --format='%(refname:short)' | grep -v '^main$'); do
-  match=$(awk -F'\t' -v b="$b" '$1==b {print $2, $3}' /tmp/pr-heads.tsv)
+  match=$(awk -F'\t' -v b="$b" -v repo="$repo" '$1==b && $2==repo {print $3, $4}' /tmp/pr-heads.tsv)
   echo "$b -> ${match:-NO PR FOUND}"
 done
 ```
 
-This sorts every local branch into three buckets:
+A branch name present in `pr-heads.tsv` under a *different* `headRepository` is not a match at
+all — treat it exactly like `NO PR FOUND` for that local branch.
 
-- **`MERGED #N`** — content is permanently preserved in `main`'s history via the merge commit,
-  *regardless* of whether the local branch ref still exists. Safe to delete locally and
-  remotely.
-- **`CLOSED #N`** (never merged) — the branch was a deliberately abandoned approach (superseded,
-  rejected, or replaced by a later PR). The work exists **only** on that branch (+ its remote
-  copy, if pushed). Delete the *local* copy freely (git history/reflog covers the 90-day default
-  recovery window even after that); leave the **remote** copy alone unless you're certain nobody
-  needs to reference it — remote branch deletion is visible to every collaborator and harder to
-  casually undo.
-  - **Same-day sibling retry, a common sub-case worth confirming explicitly:** a `CLOSED`
-    (unmerged) PR is often not abandonment but an immediate retry under a renamed branch — check
-    for a sibling branch name (typically `-v2`, `-corrected`, `-2`, or a later date stamp) whose
-    PR **is** `MERGED`, often within hours of the close. Two real examples from this repo
-    (2026-09-20): `feat/553-autosave-canonical-wiring-20260920` (PR closed unmerged) was
-    immediately superseded by `feat/553-autosave-canonical-wiring-20260920-corrected` (merged the
-    same day); `feat/553-universal-ingress-admission` (closed unmerged, twice, under PR numbers
-    from two different weeks) was superseded by `feat/553-universal-ingress-admission-v2`
-    (merged). Finding the merged sibling turns "probably safe to delete" into "confirmed safe to
-    delete" — the content didn't just fail to land, it landed under a different ref.
+This sorts every local branch into three buckets — but the label alone is historical metadata,
+not present-tense proof, in every one of the three:
+
+- **`MERGED #N`** — content is permanently preserved in `main`'s history via the squashed commit
+  (this repo squash-merges — see above; there is no separate two-parent merge commit to look for).
+  **This record is historical, not current — verify the tip you're about to delete is actually
+  what merged before deleting it.** A branch can gain new commits after its PR merged, get reused
+  for unrelated work, diverge locally, or be recreated remotely under the same name; none of that
+  changes what `gh pr list` reports, since it only ever recorded the head at merge time. The
+  ordinary ancestry check gives a **false negative** here too — a squash-merged branch's own
+  commits are never literal ancestors of `main`, so `git merge-base --is-ancestor <branch> main`
+  is not a substitute for this verification. Use whichever of these actually fits the branch in
+  front of you:
+  - fetch the PR's real merge/squash commit (`gh pr view <N> --json mergeCommit --jq
+    '.mergeCommit.oid'`) and confirm `git diff <branch-tip> <that-sha>` is empty, or that every
+    hunk it does show is something you've separately confirmed safe to lose;
+  - `git cherry <base> <branch>` for patch-equivalence when the history is more than one clean
+    squash-shaped diff;
+  - a direct content/patch comparison against `main`'s current tree for the affected paths;
+  - a ledger that dispositions exactly *this* branch's *current* tip (bound per the staleness
+    check above) — not an older or unrelated commit on the same branch.
+
+  Only once the current tip itself is accounted for — not just the branch name and a historical
+  PR record — is it safe to delete locally and remotely.
+- **`CLOSED #N`** (never merged) — this means exactly one thing: **not merged.** It does **not**
+  by itself mean abandoned, superseded, or safe to delete. A PR gets closed for rework-and-reopen,
+  for a scope split, or for reasons that leave its branch's current tip as the only copy of real
+  work anywhere — the state this doc's own safety principles exist to protect. Treat a `CLOSED`
+  branch as **no safer than the "No PR at all" bucket below** unless you can additionally show one
+  of:
+  - explicit, current evidence that it was abandoned or superseded — not inferred from the close
+    event alone;
+  - the current tip carries no unique work beyond what's already reachable elsewhere, verified
+    the same way as the `MERGED` case above (diff/cherry/content comparison — not name or timing);
+  - the content demonstrably exists under another solid authority — a merged sibling PR, but only
+    once *content* evidence confirms it (see the same-day-sibling case just below), never a
+    similar name alone;
+  - a ledger that dispositions exactly this branch's *current* tip (bound per the staleness check
+    above).
+
+  Absent one of those, flag it for human review instead of deleting. **Reflog is not a
+  preservation contract.** It's a local, tool-internal, time-bounded safety net (~90 days by
+  default, and `git gc`/expiry settings can shorten that) — never cite "reflog covers it" as the
+  reason a deletion is fine; it covers accidental *git* mistakes, not a considered decision to
+  discard someone's only copy of real work.
+  - **Same-day sibling retry, a common sub-case of the "another solid authority" proof above — but
+    branch-name similarity is a lead, never proof on its own:** a `CLOSED` (unmerged) PR is often
+    an immediate retry under a renamed branch — check for a sibling branch name (typically `-v2`,
+    `-corrected`, `-2`, or a later date stamp) whose PR **is** `MERGED`, often within hours of the
+    close. That similarity only tells you where to *look*; it does not by itself establish that
+    the merged sibling's diff actually contains the closed PR's changes — a similarly-named PR can
+    be a narrower rewrite, a different-scope redo, or only a partial overlap, and deleting on
+    name/timing alone can destroy the only copy of work the sibling never actually carried. Get
+    the same explicit content evidence required above: diff the closed branch against the merged
+    sibling (`git diff <closed-branch> <merged-sibling-tip>` — or against the sibling's own
+    pre-squash branch tip if it still exists — should show no meaningful unique hunks left in the
+    closed branch), or find a ledger/reconciliation note (see the check above) that already
+    recorded the supersession from an actual review. Two real examples from this repo
+    (2026-09-20) where the name/timing lead turned out to hold up under that stronger check:
+    `feat/553-autosave-canonical-wiring-20260920` (PR closed unmerged) was superseded by
+    `feat/553-autosave-canonical-wiring-20260920-corrected` (merged the same day);
+    `feat/553-universal-ingress-admission` (closed unmerged, twice, under PR numbers from two
+    different weeks) was superseded by `feat/553-universal-ingress-admission-v2` (merged). Treat
+    the lead as a starting point for verification, not as the verification itself.
 - **No PR at all** — this is the dangerous bucket. It means the branch's commits (if any exist
   beyond `origin/main`) were never reviewed or landed anywhere. **Always** run the
   `rev-list --count` check from the previous section before touching these. A branch with zero
@@ -234,7 +348,11 @@ concluding it hung.
 Deleting a *remote* branch is visible to every collaborator and (outside a short GitHub recovery
 window) harder to undo than a local `git branch -D`. Apply a narrower rule than local cleanup:
 only delete remote branches with a **confirmed `MERGED` PR** — their content's permanence doesn't
-depend on the branch ref surviving.
+depend on the branch ref surviving. That confirmation is the *same* current-tip verification as
+the local `MERGED` bucket above, not just the historical PR record — a remote ref can just as
+easily have gained commits, been reused, or been recreated since the PR merged, and remote
+deletion is the higher-stakes side of that mistake. Never delete a remote branch on the historical
+PR-state record alone.
 
 **Before deleting, always run `git fetch origin --prune` first.** Local `origin/*`
 remote-tracking refs are a cache — if you never run a pruning fetch, branches that GitHub already
@@ -265,17 +383,25 @@ machine** under normal load (load average ~2.9, ~385 MB free RAM at time of test
 it interactively as a "quick cleanup" step when hardware is already under load — it will either
 time out or contend with whatever else is running.
 
-**If a `git gc` run gets killed mid-repack**, it leaves a genuinely-safe-to-delete artifact behind:
+**If a `git gc` run gets killed mid-repack**, it leaves a genuinely-safe-to-delete artifact behind
+— but never assume `.git` is the real git directory to clean up. In any *linked* worktree (every
+one this doc targets except the original clone), `.git` is a one-line text file pointing at the
+shared directory, not a directory itself — `find .git/objects/pack ...` there just fails with
+"not a directory" and the actual leftover temp pack goes untouched. Resolve the real, shared
+location first:
 
 ```bash
+common_git_dir=$(git rev-parse --git-common-dir)
 git count-objects -v
 # a "garbage: N" / "size-garbage: N" line means an incomplete temp pack survived the kill
-find .git/objects/pack -name 'tmp_pack_*'
-rm -f .git/objects/pack/tmp_pack_*     # git's own count-objects already told you this is garbage
+find "$common_git_dir/objects/pack" -name 'tmp_pack_*'
+rm -f "$common_git_dir"/objects/pack/tmp_pack_*   # git's own count-objects already told you this is garbage
 ```
 
 This is safe because an interrupted `git gc`'s temp pack was never linked into any real ref — it
-is by definition unreferenced, incomplete data, not a partially-written *real* object.
+is by definition unreferenced, incomplete data, not a partially-written *real* object. It's the
+same shared object store regardless of which worktree you resolve it from, which is exactly why
+guessing a path relative to the wrong `.git` silently misses it.
 
 **Recommendation:** run `git gc` (never `--aggressive` on this hardware) during a genuinely idle
 period — not mid-session, not while other heavy shells (vitest/tsc/vite/build) might run
@@ -296,20 +422,28 @@ git branch --format='%(refname:short)' | wc -l
 git fetch origin --prune
 git branch -r --format='%(refname:short)' | wc -l
 
-# 2. Build the PR-state cross-reference (see above), and for each worktree check for a
-#    pre-existing ledger/reconciliation *.md before trusting the default heuristics
+# 2. Build the fork-safe PR-state cross-reference (see above — headRefName + headRepository,
+#    never headRefName alone), and search EVERY registered worktree's root (not just the
+#    candidate's) for ledger/handoff/reconciliation/inventory/wip/recovery evidence before
+#    trusting any default heuristic below
 
-# 3. Per worktree holding a to-be-deleted branch: status check, detached-HEAD check, then remove
-git -C <path> status --porcelain=v2 -b
+# 3. Per worktree holding a to-be-deleted branch: tracked-status, ignored-files inventory
+#    (classify every hit — UNKNOWN means stop), detached-HEAD check, then remove
+git -C <path> status --porcelain=v2 --untracked-files=all
+git -C <path> ls-files --others --ignored --exclude-standard
 git -C <path> symbolic-ref -q HEAD >/dev/null || echo DETACHED
 git worktree remove <path>              # add --force only if you've confirmed clean + safe
 git worktree prune --dry-run --verbose && git worktree prune --verbose
 
-# 4. Local branch deletion (MERGED, deliberately-CLOSED, or CLOSED-superseded-by-a-merged-sibling
-#    — see above — no active worktree, not in the "never touch" categories above)
+# 4. Local branch deletion — MERGED and CLOSED both require the SAME current-tip verification
+#    (diff against the PR's real merge/squash SHA, git cherry, content comparison, or a ledger
+#    bound to this exact tip) before deleting; a historical PR-state record or a similarly-named
+#    merged sibling is a lead, never proof by itself — see above. No active worktree, not in the
+#    "never touch" categories above.
 git branch -D <branch1> <branch2> ...
 
-# 5. Remote branch deletion (MERGED only)
+# 5. Remote branch deletion — same current-tip verification as step 4, MERGED only, never on the
+#    historical PR-state record alone
 git push origin --delete <branch1> <branch2> ...
 # verify: gh api repos/<owner>/<repo>/branches/<branch> should 404 for each
 
@@ -332,9 +466,41 @@ rules this repo's `CLAUDE.md`/`AGENTS.md` already document.
 - **2026-09-23** — extended during a post-#817 cleanup pass (11→6 worktrees removed; 15 of 30
   non-`main` local branches deleted after in-session approval, remote already fully pruned by
   GitHub) with: locale-dependent git-output translation table; the pre-existing-ledger check as a
-  third worktree-safety gate;
-  the same-day-superseded-sibling PR pattern; nested-worktree containers and the detached-HEAD
-  diagnostic; and the Claude Code auto-mode permission gate (including its background-timeout
-  behavior) encountered while running this exact playbook interactively. All additions are
-  first-hand findings from that pass, not speculative — see the housekeeping session that
-  produced this revision for the full worktree/branch/PR evidence trail.
+  third worktree-safety gate; the same-day-superseded-sibling PR pattern; nested-worktree
+  containers and the detached-HEAD diagnostic; and the Claude Code auto-mode permission gate
+  (including its background-timeout behavior) encountered while running this exact playbook
+  interactively. All additions are first-hand findings from that pass, not speculative — see the
+  housekeeping session that produced this revision for the full worktree/branch/PR evidence trail.
+- **2026-09-23 (PR #820 review correction wave)** — the revision above shipped with ten review
+  findings across four reviewers (CodeAnt: 1 `Critical` race condition; Sourcery: 3; chatgpt-
+  codex-connector: 6), all confirmed real against one shared root cause and fixed together rather
+  than argued down or patched one comment at a time: **historical metadata (a branch name, a PR
+  state, an older ledger) was allowed to stand in for a current-state proof before authorizing a
+  deletion.** Specifically: (1) the `main` fast-forward's ancestry-check-then-`update-ref`
+  sequence was a TOCTOU race — rewritten as an explicit compare-and-swap via `update-ref`'s
+  three-argument form, still gated on no worktree holding `main`; (2) the PR/branch cross-
+  reference matched on `headRefName` alone, so a fork's PR with a colliding branch name could get
+  an unrelated local branch classified `MERGED`/`CLOSED` — added the PR's `headRepository` to the
+  join key; (3) a correctly-matched historical `MERGED`/`CLOSED` record was treated as proof about
+  the branch's *current* tip — added explicit current-tip verification (PR merge/squash SHA diff,
+  `git cherry`, content comparison, or a ledger bound to the current tip) before either bucket
+  authorizes deletion, and the same requirement was added to remote-branch deletion; (4) `CLOSED`
+  was described as automatically safe to delete with reflog as the safety net — rewritten so
+  `CLOSED` means only "not merged," is treated as no safer than the "no PR" bucket without one of
+  four explicit current-state proofs, and reflog is named as what it is (a time-bounded local
+  safety net, not a preservation contract); (5) the same-day-sibling heuristic stated branch-name/
+  timing similarity as sufficient deletion proof — downgraded to an investigative lead that still
+  requires explicit content evidence; (6) the ledger-override rule didn't check whether the ledger
+  predated later changes — added a five-step staleness-binding procedure so only the work a ledger
+  actually enumerated inherits its disposition; (7) the ledger search only looked inside the
+  candidate worktree, even though this doc's own two real examples show the relevant ledger can
+  live in a *different* worktree — search now covers every registered worktree's root; (8) the
+  worktree-safety checks never inventoried gitignored content, so `git worktree remove` could
+  silently destroy a local secret, evidence file, or other irreplaceable ignored data that a clean
+  `git status` never revealed — added an explicit ignored-files inventory with a mandatory
+  classification (`UNKNOWN` blocks removal); (9) the `git gc` recovery commands assumed `.git` was
+  a real directory, which is false in every linked worktree (it's a text file pointing at the
+  shared common dir) — resolved via `git rev-parse --git-common-dir` first; (10) "via the merge
+  commit" corrected to "via the squashed commit" to match this repo's actual squash-merge history.
+  None of these fixes loosen the preserve-first stance elsewhere in this doc — every one of them
+  closes a way the previous wording could have authorized deleting real, unrecoverable work.
