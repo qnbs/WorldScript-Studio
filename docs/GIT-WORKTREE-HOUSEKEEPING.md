@@ -99,8 +99,16 @@ git worktree list --porcelain | grep -B2 '^branch refs/heads/main$'   # find the
   specific worktree to a different branch in the gap between the fetch and the merge, `merge
   --ff-only origin/main` fast-forwards *whatever's currently checked out* to `origin/main`'s tip,
   not `main` itself (confirmed reproducible: an unrelated ancestor branch gets silently advanced
-  while `main` stays stale) — the explicit check above closes that gap immediately before the
-  merge runs.
+  while `main` stays stale). The explicit check above narrows that gap to as small as plain git
+  porcelain allows — but **it does not fully close it**, and no further mechanical check would:
+  `git merge` binds to whatever `HEAD` resolves to *at the moment it runs*, not to a name checked
+  a command earlier, and plain git has no atomic "merge only if still on branch X" primitive to
+  bind the two together as one operation. This is a genuinely narrower, harder-to-hit window than
+  every prior version of this race (it requires another process to run `git switch`/`checkout` in
+  *this exact worktree* in the single-command gap between the check and the merge — not just any
+  ref update anywhere in the repo), and is accepted as a residual for that reason, the same way
+  the local-branch-deletion section above accepts a residual around `git update-ref -d` rather
+  than overclaiming full atomicity it can't actually deliver.
 
 - **If some *other* worktree holds `main` instead** (the actual "recurring symptom" case above —
   a rogue worktree left on `main` after one-off work), repoint that one away first — it's not
@@ -1133,3 +1141,18 @@ rules this repo's `CLAUDE.md`/`AGENTS.md` already document.
   `git branch --show-current` check immediately before it. The pattern holds: this correction
   loop keeps finding real defects in its own immediately-prior fixes, and keeps fixing them with
   verified, git-native mechanisms rather than argument or plausibility.
+- **2026-09-23 (PR #820 review correction wave 9)** — 1 further finding from
+  chatgpt-codex-connector on wave 8's own diff: the `git branch --show-current` check added in
+  wave 8 narrows the window for the wrong-branch fast-forward race but is still a separate command
+  from the `merge` that follows it — another process switching *this exact worktree* in that gap
+  is still possible in principle. Rather than add a further mechanical check (which would face
+  the identical objection, since plain git has no atomic "merge only if still on branch X"
+  primitive to bind a check and a merge into one operation), **documented this as an accepted
+  residual**, explicitly and by name, the same way the local-branch-deletion section already
+  accepts one around `git update-ref -d` rather than claiming an atomicity plain git can't
+  actually provide — while noting precisely why it's narrower than every prior version of this
+  race: it requires another process to run a checkout in this one specific worktree inside a
+  single-command gap, not merely some ref changing anywhere in the repository. Nine waves in,
+  this is the first finding resolved by honest disclosure rather than a further mechanical
+  fix — which is itself consistent with the loop's own operating principle: not every gap has a
+  git-native closure, and pretending otherwise would be less honest than naming the boundary.
