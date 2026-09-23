@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Dashboard } from '../../components/Dashboard';
+import { useDashboard } from '../../hooks/useDashboard';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -199,5 +200,35 @@ describe('Dashboard', () => {
     render(<Dashboard onNavigate={mockOnNavigate} />);
     screen.getByText('dashboard.continueWriting.button').click();
     expect(mockOnNavigate).toHaveBeenCalledWith('manuscript');
+  });
+
+  // QNBS-v3: StatCard shows a Skeleton for one frame, so this anchors on the title text once it's ready rather than querying immediately.
+  it('renders stat-card icon chips with the semantic border token, not --glass-border', async () => {
+    render(<Dashboard onNavigate={mockOnNavigate} />);
+    const title = await screen.findByText('dashboard.stats.totalWordCount');
+    const chip = title.closest('.flex.items-center')?.querySelector('[class*="rounded-2xl"]');
+    expect(chip?.className).toContain('border-[var(--sc-border-subtle)]');
+    expect(chip?.className).not.toContain('glass-border');
+  });
+
+  it('renders the onboarding tips banner on a solid surface token', () => {
+    localStorage.clear();
+    render(<Dashboard onNavigate={mockOnNavigate} />);
+    const banner = screen.getByRole('region', { name: 'dashboard.onboarding.title' });
+    const classTokens = banner.className.split(/\s+/);
+    expect(classTokens).toContain('bg-[var(--sc-surface-raised)]');
+  });
+
+  it('renders logline suggestion cards with a solid hover background', () => {
+    // QNBS-v3: baseContextValue's simplified `t` narrows to (k: string) => string, which the real hook's generic <T>(key, replacements?) => T signature rejects on assignment (though not on the plain vi.fn() factory the module mock above uses) — cast through unknown since only the mock's runtime shape matters here.
+    vi.mocked(useDashboard).mockReturnValueOnce({
+      ...baseContextValue,
+      isLoglineModalOpen: true,
+      loglineSuggestions: ['A hero rises against all odds.'],
+    } as unknown as ReturnType<typeof useDashboard>);
+    render(<Dashboard onNavigate={mockOnNavigate} />);
+    const card = screen.getByRole('button', { name: /A hero rises against all odds\./ });
+    expect(card.className).toContain('hover:bg-[var(--sc-surface-overlay)]');
+    expect(card.className).not.toMatch(/hover:bg-\[var\(--sc-surface-raised\)\]\/\d/);
   });
 });

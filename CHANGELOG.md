@@ -38,6 +38,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--sc-surface-overlay` background (hover now shifts to `--sc-surface-raised` for visible contrast,
   since the header behind it is no longer blurred) and adopts the token-driven radius scale.
   Visual-only: no functional, accessibility, i18n, or component API change. PR #813.
+- **Visual Maturity remediation, PR D (product identity, Welcome Portal + Dashboard slice):** four
+  card-like surfaces in the Welcome Portal (new-project options, feature highlights, the privacy
+  badge, the demo-hint panel) move from a translucent `--sc-surface-raised` tint to the same solid
+  treatment as Card/Button (PR B) — the portal's own DS-6 exception covers its ambient Aurora/noise
+  brand moment, not every piece of card-like UI inside it. In the Dashboard, the stat-card icon chip
+  moves from the raw `--glass-border` token to `--sc-border-subtle` (it has no blur surface, so it
+  belongs in the app's ordinary border family), the always-visible onboarding tips banner moves to a
+  solid background, and the logline-suggestion card's hover background moves from a translucent tint
+  to a solid one (the translucent version was fighting Card's own now-solid resting background from
+  PR B). Visual-only: no functional, accessibility, i18n, or component API change. PR #814.
 
 ## [1.28.8] — 2026-09-22
 
