@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -74,6 +74,38 @@ describe('resolveAuditableFiles (post-Visual qualification tranche, Section 3.1:
     ];
     expect(resolveAuditableFiles(candidates)).toEqual([]);
   });
+
+  it('does not exclude real source merely because an ANCESTOR of the checkout shares a name with an excluded segment (Codex, PR #817)', () => {
+    // QNBS-v3: repoRoot itself sits under a directory literally named "config" — unrelated to this repo's own config/ directory, which is what the "config" exclusion is actually meant to cover.
+    const repoRoot = join('/home', 'user', 'config', 'WorldScript-Studio');
+    const realSource = join(repoRoot, 'services', 'realService.ts');
+    expect(resolveAuditableFiles([realSource], repoRoot)).toEqual([realSource]);
+  });
+
+  it('still excludes a file under the own config/ directory when repoRoot is correctly the repo root', () => {
+    const repoRoot = join('/home', 'user', 'config', 'WorldScript-Studio');
+    const ownConfigFile = join(repoRoot, 'config', 'resolveViteBase.ts');
+    expect(resolveAuditableFiles([ownConfigFile], repoRoot)).toEqual([]);
+  });
+});
+
+describe('getTrackedSourceFiles (Codex, PR #817: NUL-delimited git ls-files output)', () => {
+  let dir: string;
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('correctly recovers a tracked path containing non-ASCII characters, which git C-quotes/octal-escapes in its default newline-delimited output', () => {
+    dir = initGitFixture();
+    const subdir = join(dir, 'sübdir');
+    mkdirSync(subdir);
+    const file = join(subdir, 'ünïcode-file.ts');
+    writeFileSync(file, "export const a = '#123456';\n");
+    git(dir, ['add', '-A']);
+    git(dir, ['commit', '-q', '-m', 'add unicode file']);
+    expect(getTrackedSourceFiles(dir)).toEqual([file]);
+  });
 });
 
 describe('evaluateBaseline (post-Visual qualification tranche, Section 3.2: true monotonic per-rule ratchet)', () => {
@@ -145,6 +177,42 @@ describe('evaluateBaseline (post-Visual qualification tranche, Section 3.2: true
     >[1];
     const audit = { total: 5, summary: { 'raw-hex': 5 } };
     const verdict = evaluateBaseline(audit, baselineWithoutSummary);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toBe('MALFORMED_BASELINE');
+  });
+
+  // QNBS-v3 (Codex, PR #817): each case below is a value type sumSummary's '+' or the ratchet loop's '>'/'<' could otherwise coerce into silently matching — hasValidCounts must reject every one before any arithmetic runs.
+  it.each([
+    ['a string count', { 'raw-hex': '5' }, 5],
+    ['a non-finite count (NaN)', { 'raw-hex': Number.NaN }, 0],
+    ['a fractional count', { 'raw-hex': 5.5 }, 5.5],
+    ['a negative count', { 'raw-hex': -5 }, -5],
+  ])('fails as MALFORMED_BASELINE for %s in baseline.summary', (_label, summary, total) => {
+    const malformedBaseline = { total, summary } as unknown as Parameters<
+      typeof evaluateBaseline
+    >[1];
+    const audit = { total: 5, summary: { 'raw-hex': 5 } };
+    const verdict = evaluateBaseline(audit, malformedBaseline);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toBe('MALFORMED_BASELINE');
+  });
+
+  it('fails as MALFORMED_AUDIT when audit.total itself is a non-integer type (a string), not just a per-rule value', () => {
+    const malformedAudit = { total: '5', summary: { 'raw-hex': 5 } } as unknown as Parameters<
+      typeof evaluateBaseline
+    >[0];
+    const verdict = evaluateBaseline(malformedAudit, baseline);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toBe('MALFORMED_AUDIT');
+  });
+
+  it('fails as MALFORMED_BASELINE when baseline.total is negative, even if it happens to equal the (also-invalid) summed summary', () => {
+    // QNBS-v3: total(-5) === sum(-5) here — proves the fix is real numeric-contract validation, not just a disguised total-vs-sum consistency check that a self-consistent negative baseline could still slip past.
+    const malformedBaseline = { total: -5, summary: { 'raw-hex': -5 } } as unknown as Parameters<
+      typeof evaluateBaseline
+    >[1];
+    const audit = { total: 0, summary: { 'raw-hex': 0 } };
+    const verdict = evaluateBaseline(audit, malformedBaseline);
     expect(verdict.ok).toBe(false);
     expect(verdict.reason).toBe('MALFORMED_BASELINE');
   });

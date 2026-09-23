@@ -93,29 +93,30 @@ function isSourceFile(filePath) {
   return SOURCE_EXTENSIONS.has(path.extname(filePath));
 }
 
-function isExcluded(filePath) {
+// QNBS-v3 (Codex, PR #817): directory-segment exclusion must be checked against the path RELATIVE TO repoRoot, never the absolute path — a substring check against the absolute path lets an ancestor/checkout directory that happens to share a name with an excluded segment (e.g. a repo checked out under ".../config/WorldScript-Studio") silently exclude real source under the repo's own services/ tree, which has nothing to do with the repo's own config/ directory.
+function isExcluded(filePath, repoRoot) {
   const normalized = path.normalize(filePath);
   if (EXCLUDED_FILES.has(normalized)) return true;
-  return EXCLUDED_DIR_SEGMENTS.some((segment) =>
-    normalized.includes(path.sep + segment + path.sep),
-  );
+  const relativeSegments = path.relative(repoRoot, normalized).split(path.sep);
+  return EXCLUDED_DIR_SEGMENTS.some((segment) => relativeSegments.includes(segment));
 }
 
 // QNBS-v3 (post-Visual qualification tranche, Section 3.1): derives the candidate corpus from git's own tracked-file list instead of a hand-maintained directory allowlist. Exported (not called from resolveAuditableFiles's default path in tests) so tests can inject a fixed file list rather than shelling out to git.
+// QNBS-v3 (Codex, PR #817): `-z` (NUL-delimited, unquoted) is required — git's default newline-delimited output C-quotes/octal-escapes any "unusual" filename (any non-ASCII byte by default, or an embedded space/newline), so a plain `\n`-split silently turned a real path like `sübdir/ünïcode-file.ts` into the literal, non-existent string `"s\303\274bdir/..."`, dropping it from the corpus entirely.
 export function getTrackedSourceFiles(repoRoot = root) {
-  const raw = execFileSync('git', ['ls-files', '--', '*.ts', '*.tsx', '*.js', '*.jsx'], {
+  const raw = execFileSync('git', ['ls-files', '-z', '--', '*.ts', '*.tsx', '*.js', '*.jsx'], {
     cwd: repoRoot,
     encoding: 'utf-8',
   });
   return raw
-    .split('\n')
+    .split('\0')
     .filter(Boolean)
     .map((relPath) => path.join(repoRoot, relPath));
 }
 
-// QNBS-v3: the classifier (isSourceFile/isExcluded) is exercised independently of file discovery, so a test can pass a synthetic candidate list without touching the real git repository or filesystem.
-export function resolveAuditableFiles(candidateFiles) {
-  return candidateFiles.filter((file) => isSourceFile(file) && !isExcluded(file));
+// QNBS-v3: the classifier (isSourceFile/isExcluded) is exercised independently of file discovery, so a test can pass a synthetic candidate list without touching the real git repository or filesystem. repoRoot defaults to this module's own root (real CLI usage) but is overridable so a test can exercise an ancestor-directory-name collision without needing a real checkout at that path.
+export function resolveAuditableFiles(candidateFiles, repoRoot = root) {
+  return candidateFiles.filter((file) => isSourceFile(file) && !isExcluded(file, repoRoot));
 }
 
 // biome-ignore format: regex readability
@@ -315,6 +316,20 @@ function sumSummary(summary) {
   return Object.values(summary).reduce((sum, count) => sum + count, 0);
 }
 
+// QNBS-v3 (Codex, PR #817): a violation count can only ever be a non-negative whole number — this is checked explicitly, before any arithmetic, so a malformed JSON value (a string, NaN/Infinity, a fraction, or a negative number) can never reach `sumSummary`'s `+` or the ratchet loop's `>`/`<`, whose implicit type coercion could otherwise let a corrupted value slip through as if it matched.
+function isValidCount(value) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+// QNBS-v3: validates both `total` and every `summary` value in one call, shared by the audit-side and baseline-side checks in evaluateBaseline so both are held to the identical numeric contract.
+function hasValidCounts(candidate) {
+  if (!candidate || typeof candidate.summary !== 'object' || candidate.summary === null) {
+    return false;
+  }
+  if (!isValidCount(candidate.total)) return false;
+  return Object.values(candidate.summary).every(isValidCount);
+}
+
 /**
  * QNBS-v3 (post-Visual qualification tranche, Section 3.2): a true monotonic per-rule ratchet.
  * Every rule's count must equal its baselined count exactly — an increase is a regression, and a
@@ -324,12 +339,12 @@ function sumSummary(summary) {
  * (PASS / regression / stale-high) without shelling out to the real script or touching real files.
  */
 export function evaluateBaseline(audit, baseline) {
-  // QNBS-v3 (Sourcery, PR #817): a malformed live audit must fail closed before the no-baseline branch gets a chance to short-circuit past it — checked first, unconditionally, so a missing baseline can never mask it.
-  if (!audit || typeof audit.summary !== 'object' || audit.summary === null) {
+  // QNBS-v3 (Sourcery, PR #817): a malformed live audit must fail closed before the no-baseline branch gets a chance to short-circuit past it — checked first, unconditionally, so a missing baseline can never mask it. QNBS-v3 (Codex, PR #817): hasValidCounts rejects a non-object summary AND any non-finite/fractional/negative/non-numeric total or per-rule value before sumSummary's '+' or the ratchet loop's '>'/'<' ever see it.
+  if (!hasValidCounts(audit)) {
     return {
       ok: false,
       reason: 'MALFORMED_AUDIT',
-      detail: 'audit.summary is missing or not an object',
+      detail: 'audit.total and every audit.summary value must be finite non-negative integers',
     };
   }
   const auditSum = sumSummary(audit.summary);
@@ -347,12 +362,13 @@ export function evaluateBaseline(audit, baseline) {
       : { ok: true, reason: 'NO_BASELINE_NO_VIOLATIONS' };
   }
 
-  // QNBS-v3 (Sourcery, PR #817): a baseline with no valid summary object must fail closed rather than being silently normalized to {} and ratcheted against as if it were a real, empty baseline.
-  if (typeof baseline.summary !== 'object' || baseline.summary === null) {
+  // QNBS-v3 (Sourcery, PR #817): a baseline with no valid summary object must fail closed rather than being silently normalized to {} and ratcheted against as if it were a real, empty baseline. QNBS-v3 (Codex, PR #817): same finite/non-negative/integer contract as the audit side — see hasValidCounts.
+  if (!hasValidCounts(baseline)) {
     return {
       ok: false,
       reason: 'MALFORMED_BASELINE',
-      detail: 'baseline.summary is missing or not an object',
+      detail:
+        'baseline.total and every baseline.summary value must be finite non-negative integers',
     };
   }
   // QNBS-v3: a malformed baseline (its own stored total disagreeing with its own per-rule breakdown) must fail closed rather than silently ratchet against a number that was never actually true.

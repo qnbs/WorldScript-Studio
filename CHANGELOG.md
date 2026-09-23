@@ -128,7 +128,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unstaged deletion, staged deletion, working-tree-only rename, path containing spaces) before
   writing the contract down as a code comment. `findViolations` was also decomposed into
   `readTrackedFileContent`/`scanFileForViolations` helpers to fix a CodeFactor "Complex Method"
-  flag the first ENOENT fix introduced — no behavior change. PR #817.
+  flag the first ENOENT fix introduced — no behavior change. A further bundled Codex wave fixed
+  three more real defects, each independently reproduced before mutation: `getTrackedSourceFiles`
+  now reads `git ls-files -z` (NUL-delimited, unquoted) instead of newline-splitting the default
+  output, which git C-quotes/octal-escapes for any non-ASCII filename — a plain `\n`-split silently
+  turned a real path like `sübdir/ünïcode-file.ts` into a literal, non-existent escaped string,
+  dropping it from the corpus entirely; `isExcluded`'s directory-segment check now runs against the
+  path relative to `repoRoot` instead of the absolute path, so a checkout whose ANCESTOR directory
+  happens to share a name with an excluded segment (e.g. `.../config/WorldScript-Studio`) can no
+  longer silently exclude real source under the repo's own unrelated directories; and
+  `evaluateBaseline` now validates that `total` and every `summary` value are finite non-negative
+  integers (`hasValidCounts`) before any arithmetic runs, so a malformed JSON value (a string,
+  NaN, a fraction, a negative number) in `token-audit-baseline.json` can never reach `sumSummary`'s
+  `+` or the ratchet loop's `>`/`<`, whose implicit coercion could otherwise let corrupted data
+  through as a false `EXACT_MATCH`. 33 regression tests total, up from 24 (unicode `git ls-files`
+  round-trip, ancestor-directory-collision, and four numeric-malformation cases). No source files
+  were newly discovered by the `-z` fix in the real repository (audit output unchanged at 252).
+  PR #817.
 
 ## [1.28.8] — 2026-09-22
 
