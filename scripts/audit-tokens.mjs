@@ -198,6 +198,8 @@ function blankStringLiterals(line) {
  *     any file that was never `git add`ed).
  *   - paths containing spaces or other shell-special characters: `execFileSync`'s argv array never
  *     goes through a shell, so no escaping is needed or applied.
+ *   - Windows: the index pathspec is normalized to forward slashes before the `git show` call,
+ *     since git's `:<path>` syntax requires them on every OS regardless of `path.sep`.
  * Verified empirically against all of the above before this contract was written down.
  */
 function readTrackedFileContent(file, repoRoot) {
@@ -205,7 +207,8 @@ function readTrackedFileContent(file, repoRoot) {
     return fs.readFileSync(file, 'utf-8');
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
-    const relative = path.relative(repoRoot, file);
+    // QNBS-v3 (Codex, PR #817): git's `:<path>` index pathspec always uses forward slashes, on every OS — path.relative returns OS-native separators, which are backslashes on Windows. Without this normalization, `git show` fails to resolve a real index entry on Windows and the fallback below silently (and wrongly) treats it as gone from the index too.
+    const relative = path.relative(repoRoot, file).split(path.sep).join('/');
     try {
       // QNBS-v3: stderr is expected to be noisy on the (common, harmless) not-in-the-index case, so it's piped rather than inherited to keep normal audit runs and test output clean.
       return execFileSync('git', ['show', `:${relative}`], {
@@ -465,8 +468,16 @@ function main() {
 }
 
 // QNBS-v3 (Sourcery, PR #817): a raw `file://${argv[1]}` string comparison is not portable — argv[1] is an unencoded filesystem path (no URL-encoding of spaces/unicode, no Windows `file:///C:/...` drive-letter form), while import.meta.url always is; pathToFileURL performs that same platform-correct conversion before comparing. Exported so the comparison itself can be regression-tested without spawning the real CLI.
+// QNBS-v3 (Codex, PR #817): Node resolves import.meta.url through a symlink to its real target, but leaves argv[1] as the symlink path the CLI was actually invoked through — realpathSync resolves argv1 the same way before comparing, so running this script via a symlink (e.g. an npm-link'd/packaged bin entry) is still recognized as direct execution. Falls back to the unresolved path if argv1 doesn't exist on disk (not this function's problem to diagnose) rather than throwing.
 export function isDirectExecution(argv1, moduleUrl) {
-  return typeof argv1 === 'string' && argv1.length > 0 && moduleUrl === pathToFileURL(argv1).href;
+  if (typeof argv1 !== 'string' || argv1.length === 0) return false;
+  let resolvedArgv1 = argv1;
+  try {
+    resolvedArgv1 = fs.realpathSync(argv1);
+  } catch {
+    // argv1 may not exist on disk (e.g. a synthetic test path) — comparing the unresolved path is still correct for a non-symlinked invocation.
+  }
+  return moduleUrl === pathToFileURL(resolvedArgv1).href;
 }
 
 // QNBS-v3: only run the CLI when this file is executed directly — importing it (e.g. from a test file, for the exported pure helpers) must not trigger a report write or process.exit.

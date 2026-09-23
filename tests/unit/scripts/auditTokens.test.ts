@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -238,6 +238,20 @@ describe('isDirectExecution (Sourcery, PR #817: platform/encoding-safe direct-en
     const argv1 = '/tmp/some/other-entrypoint.mjs';
     expect(isDirectExecution(argv1, pathToFileURL('/tmp/audit-tokens.mjs').href)).toBe(false);
   });
+
+  it('recognizes direct execution through a symlink, where Node resolves import.meta.url to the real target but leaves argv[1] as the symlink path (Codex, PR #817)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'audit-tokens-symlink-'));
+    try {
+      const real = join(dir, 'real-script.mjs');
+      const link = join(dir, 'script-link.mjs');
+      writeFileSync(real, '// placeholder\n');
+      symlinkSync(real, link);
+      // QNBS-v3: mirrors what Node actually does when a script is invoked through a symlink — argv[1] stays the invoked (symlink) path, import.meta.url resolves to the real file.
+      expect(isDirectExecution(link, pathToFileURL(real).href)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('findViolations (regression guards for the PR #816 comment/string-literal and glass-token fixes)', () => {
@@ -309,5 +323,19 @@ describe('findViolations (regression guards for the PR #816 comment/string-liter
     git(dir, ['commit', '-q', '-m', 'add ToDelete.ts']);
     git(dir, ['rm', '-q', file]);
     expect(getTrackedSourceFiles(dir)).not.toContain(file);
+  });
+
+  it('reads a nested tracked-but-unstaged-deleted file from the index (Codex, PR #817: the index pathspec is normalized to forward slashes before git show — this is a no-op on POSIX, where path.sep is already "/", but the same nested-path resolution path is what Windows relies on after the separator swap)', () => {
+    dir = initGitFixture();
+    const nestedDir = join(dir, 'services', 'sub');
+    mkdirSync(nestedDir, { recursive: true });
+    const file = join(nestedDir, 'Nested.ts');
+    writeFileSync(file, "export const bg = '#123456';\n");
+    git(dir, ['add', '-A']);
+    git(dir, ['commit', '-q', '-m', 'add Nested.ts']);
+    rmSync(file); // delete from the working tree WITHOUT staging the deletion
+    const { summary, total } = findViolations([file], dir);
+    expect(total).toBe(1);
+    expect(summary['raw-hex']).toBe(1);
   });
 });

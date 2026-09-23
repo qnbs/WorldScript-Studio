@@ -144,7 +144,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through as a false `EXACT_MATCH`. 33 regression tests total, up from 24 (unicode `git ls-files`
   round-trip, ancestor-directory-collision, and four numeric-malformation cases). No source files
   were newly discovered by the `-z` fix in the real repository (audit output unchanged at 252).
-  PR #817.
+  A second Codex pass, reviewed after full CI convergence on that wave, found two more real
+  defects in the index-vs-working-tree content-resolution contract itself, both verified
+  empirically before fixing: `isDirectExecution` now resolves `argv[1]` through `fs.realpathSync`
+  before comparing to `import.meta.url` — Node resolves the latter through a symlink to its real
+  target but leaves `argv[1]` as the symlink path actually invoked, so running the CLI through a
+  symlink (e.g. an npm-linked/packaged bin entry) previously exited 0 with no scan at all; and
+  `readTrackedFileContent`'s index fallback now normalizes the pathspec to forward slashes before
+  calling `git show :<path>` — git's index pathspec syntax requires them on every OS, while
+  `path.relative` returns OS-native separators, so on Windows the fallback would fail to resolve a
+  real index entry and silently (and wrongly) treat it as gone from the index too. 35 regression
+  tests total (was 33): a real symlink round-trip and a nested-path index-fallback case. PR #817.
 
 ## [1.28.8] — 2026-09-22
 
