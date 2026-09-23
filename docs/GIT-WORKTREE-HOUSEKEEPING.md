@@ -73,8 +73,20 @@ git worktree list --porcelain | grep -B2 '^branch refs/heads/main$'   # find the
 
   ```bash
   cd <canonical-main-worktree>
+  git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin > /tmp/origin-refs-before.txt
   git fetch --no-prune origin   # a plain `fetch origin` still prunes under
-                                 # fetch.prune/remote.origin.prune config — be explicit here too
+                                 # fetch.prune/remote.origin.prune config — be explicit here too;
+                                 # this refreshes ALL of origin/*, not just main, so the same
+                                 # force-update snapshot from "Remote branch cleanup" below applies
+                                 # here too — a non-main branch can be force-pushed by this fetch
+  git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin |
+    diff /tmp/origin-refs-before.txt - | grep '^[<>]' || true   # `diff`/`grep` both exit nonzero
+                                                                 # on their normal "no changes" or
+                                                                 # "no match" outcomes — `|| true`
+                                                                 # stops that from tripping `-e`;
+                                                                 # any changed ref still needs its
+                                                                 # OLD value checked per "Remote
+                                                                 # branch cleanup" below
   git merge --ff-only origin/main
   git rev-parse HEAD origin/main   # confirm both now match
   ```
@@ -166,8 +178,15 @@ set -o pipefail   # without this, `cmd | while read ...` exits with the LOOP's s
                    # "succeeds" even on zero iterations), so a failed `cmd` looks identical to a
                    # cmd that genuinely found nothing — every pipeline below, and everywhere else
                    # in this doc that pipes a git command into a `while read` loop, needs this set
-                   # in the same shell first, or an explicit exit-status check per command, or a
-                   # broken git invocation can be silently treated as "nothing to preserve"
+                   # in the same shell first
+set -e             # `pipefail` alone only changes what a pipeline's exit status IS — bash still
+                   # only ever ACTS on a nonzero status when `-e` (errexit) is also set; without
+                   # it, this doc's own quick-reference sweep would keep running into a worktree
+                   # remove or a branch/ref delete after a preceding safety check had already
+                   # failed. The one command in this doc that exits nonzero on purpose — `diff`,
+                   # signaling "found differences," not an error — needs its own explicit
+                   # `|| true` (or an `if`/`case` on `$?`) wherever it's used, precisely so a
+                   # blanket `-e` doesn't treat that expected, meaningful nonzero as a crash
 
 # NUL-safe worktree-path extraction, reused by every check in this doc that needs to iterate
 # registered worktree paths: a legal path can contain a space (breaks `for x in $(...)` word
@@ -608,7 +627,9 @@ just been silently orphaned by the fetch itself, not by anything this doc's own 
 
 ```bash
 git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin |
-  diff /tmp/origin-refs-before.txt - | grep '^[<>]'
+  diff /tmp/origin-refs-before.txt - | grep '^[<>]' || true   # both exit nonzero on their normal
+                                                               # "no changes"/"no match" outcome —
+                                                               # `|| true` under `set -e` above
 # any changed refname needs its OLD objectname (the `<` line) checked for reachability too
 ```
 
@@ -732,6 +753,12 @@ find <repo>/.worktrees -mindepth 1 -maxdepth 1 -type d
 find <repo>/.worktrees/*/.worktrees -mindepth 1 -maxdepth 1 -type d 2>/dev/null
 
 set -o pipefail   # a piped command's failure must not look identical to "found nothing" — see above
+set -e            # `pipefail` alone doesn't ABORT on a failure, only changes what the exit status
+                  # IS — without `-e` too, this sweep would keep running into a real removal/delete
+                  # after an earlier safety check had already failed. Every command below that
+                  # exits nonzero on its own *normal*, expected outcome (`diff`/`grep -v`/`git
+                  # ls-remote --exit-code`) is marked `|| true` for exactly that reason — don't
+                  # remove those, and don't run this sweep without `-e` either
 
 # 1. Inventory — fetch WITHOUT --prune here; pruning is a classified decision in step 5, not a
 #    side effect of taking inventory. Snapshot remote-tracking refs first: even --no-prune can't
@@ -742,8 +769,9 @@ git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin > /tmp/
 git fetch --no-prune origin          # plain `fetch origin` can still prune under
                                       # fetch.prune/remote.origin.prune config — be explicit
 git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin |
-  diff /tmp/origin-refs-before.txt - | grep '^[<>]'   # any changed ref needs its OLD value
-                                                       # (the `<` line) checked in step 5a too
+  diff /tmp/origin-refs-before.txt - | grep '^[<>]' || true   # `|| true`: both exit nonzero on
+                                                               # their normal outcome, under `-e`
+                                                               # above; changed ref → step 5a too
 git remote prune origin --dry-run   # non-mutating candidate count; real prune happens in step 5
 git branch -r --format='%(refname:short)' | wc -l
 
@@ -807,7 +835,8 @@ git update-ref -d "refs/remotes/origin/<candidate-branch>" "$sha"   # once per r
 verified_sha=$(git rev-parse "origin/<branch>")
 git push --force-with-lease="<branch>:$verified_sha" origin --delete <branch>
 # verify each is actually gone (path-safe — a raw branch name in a REST URL breaks on `/`):
-git ls-remote --exit-code --refs origin "refs/heads/<branch>"   # exit 2 = confirmed gone
+git ls-remote --exit-code --refs origin "refs/heads/<branch>"; status=$?
+[ "$status" -eq 2 ] || { echo "expected gone (exit 2), got $status — investigate" >&2; exit 1; }
 
 # 6. Loose-object compaction (only when hardware load is genuinely idle)
 git count-objects -v
@@ -1013,3 +1042,18 @@ rules this repo's `CLAUDE.md`/`AGENTS.md` already document.
   at each canonical definition. This wave's ratio (4 architectural/logic fixes, 3 narrower
   syntax/config fixes) reverses wave 5's trend, suggesting the `for-each-ref` consolidation closed
   a class of bug rather than just one instance of it.
+- **2026-09-23 (PR #820 review correction wave 7)** — 2 further findings from
+  chatgpt-codex-connector on wave 6's own diff: (1) `set -o pipefail`, added across wave 6, only
+  changes what a pipeline's exit *status* is — it does not, by itself, make bash *act* on that
+  status; only `set -e` (errexit) does that, and the quick-reference sweep never enabled it. Added
+  `set -e` to the sweep, together with an explicit `|| true` (or an explicit exit-status check for
+  `git ls-remote --exit-code`, whose *confirming* result is a nonzero exit) on every command in
+  that block whose normal, expected outcome is itself nonzero — `diff`, `grep -v`, `git ls-remote
+  --exit-code` — so `-e` aborts on a genuine failure without also aborting on the very outcomes
+  this doc's own checks are designed to detect; (2) the canonical-main-worktree update flow's own
+  `fetch --no-prune origin` (a full, unscoped fetch of `origin/*`) was still missing the
+  force-update snapshot wave 6 added for the other two fetches in this doc — added it here too,
+  noting explicitly that a main-focused fetch still refreshes every other remote-tracking ref in
+  the same call. Both fixes close specific residual gaps in wave 6's own additions rather than
+  finding new categories — a sign this correction loop is converging on the actual boundary of
+  the design rather than continuing to surface new classes of defect.
