@@ -73,7 +73,8 @@ git worktree list --porcelain | grep -B2 '^branch refs/heads/main$'   # find the
 
   ```bash
   cd <canonical-main-worktree>
-  git fetch origin
+  git fetch --no-prune origin   # a plain `fetch origin` still prunes under
+                                 # fetch.prune/remote.origin.prune config — be explicit here too
   git merge --ff-only origin/main
   git rev-parse HEAD origin/main   # confirm both now match
   ```
@@ -315,10 +316,14 @@ surviving *only* in `refs/heads/<branch>`'s own reflog. `git branch -D` deletes 
 with the ref, in the same action, with no separate warning — this is the exact detached-worktree
 reflog risk from above, just for an ordinary named branch instead of a detached checkout, and it
 has never been covered by the worktree-removal reflog check because a to-be-deleted branch often
-has no worktree at all. Inspect it the same way before deleting:
+has no worktree at all. Inspect it the same way before deleting — **without** a `--` before the
+ref, which turns it into a pathspec filter instead of the ref argument and silently produces no
+output at all (confirmed empirically: `git reflog show --all -- refs/heads/other` printed
+nothing for a branch with real reset-away commits in its reflog; `git reflog show refs/heads/other`
+— no `--` — correctly showed them):
 
 ```bash
-git reflog show --all -- refs/heads/<branch>
+git reflog show refs/heads/<branch>
 ```
 
 For anything that turns up beyond the current tip, apply the same reachable-elsewhere check as
@@ -460,7 +465,7 @@ sha=<sha>
 if git -C <path> merge-base --is-ancestor "$sha" origin/main; then
   echo "reachable via origin/main ancestry"
 else
-  branches=$(git -C <path> branch --all --contains "$sha")
+  branches=$(git -C <path> branch --all --no-color --contains "$sha")
   tags=$(git -C <path> tag --contains "$sha")
   if [ -n "$branches" ] || [ -n "$tags" ]; then
     printf 'reachable via:\n%s\n%s\n' "$branches" "$tags"
@@ -482,6 +487,36 @@ corresponding to a version-bump release commit; its originating branch's PR had 
 and the reflog showed the exact `checkout: moving from fix/desktop-startup-safe-open-i18n-20260922
 to origin/main` transition that produced the detached state, with no other commits in the reflog
 to account for.
+
+### `git worktree prune` deletes administrative reflog data even when the checkout is already gone
+
+The reflog check above assumes the worktree's checkout directory still exists (`git -C <path>
+reflog show --all` needs a real path to run against). A `git worktree prune` *candidate* is, by
+definition, the opposite case: its administrative entry survives in the shared `.git` even though
+the actual checkout directory is already missing or inaccessible — that mismatch is exactly what
+makes it prunable. The administrative data for that entry, including its `HEAD` reflog, lives
+independently under the shared git directory and is fully readable *without* the checkout
+directory — until the real prune runs, which deletes that administrative directory outright, with
+no separate warning about what was in it:
+
+```bash
+common_git_dir=$(git rev-parse --git-common-dir)
+git worktree prune --dry-run --verbose
+# each line names the administrative directory being removed, e.g.
+# "Removing worktrees/<name>: gitdir file points to non-existent location" — extract <name>:
+git worktree prune --dry-run --verbose 2>&1 | grep -o 'worktrees/[^:]*' | while IFS= read -r rel; do
+  echo "=== $rel ==="
+  GIT_DIR="$common_git_dir/$rel" git reflog show HEAD
+done
+```
+
+Confirmed empirically (2026-09-23): `GIT_DIR=<admin-dir> git reflog show HEAD` correctly returns
+the full reflog — including a commit created and then abandoned by a later `reset`/checkout —
+*after* the worktree's own checkout directory has already been deleted; running the real
+`git worktree prune --verbose` afterward removes that entire administrative directory, and the
+same command then returns nothing at all. Classify every entry the same way as the live-worktree
+detached-HEAD case above, rescue anything unreachable with `refs/rescue/<sha>`, and only then run
+the real prune.
 
 ## Running this playbook inside Claude Code: the harness's own permission gate
 
@@ -538,14 +573,19 @@ whether it's reachable from anywhere durable — **excluding the candidate ref i
 inspecting actual output rather than chaining on exit codes (same defect as the detached-worktree
 check above: `git branch --contains "$sha"` would trivially "find" the very
 `origin/<candidate-branch>` ref it's about to prune, since a ref always contains its own tip,
-making the check pass even when nothing *else* references that commit):
+making the check pass even when nothing *else* references that commit). **Also pass `--no-color`
+explicitly** — with `color.branch=always` configured, git appends an ANSI reset sequence after
+each branch name, so the anchored `grep -v ".../<candidate-branch>$"` exclusion no longer matches
+the end of the line and silently stops excluding the candidate at all (confirmed empirically:
+reproduced with `color.branch=always` set, the candidate ref survived the filter as non-empty
+output and was misclassified as "reachable elsewhere"):
 
 ```bash
 sha=$(git rev-parse "origin/<candidate-branch>")
 if git merge-base --is-ancestor "$sha" origin/main; then
   echo "reachable via origin/main ancestry"
 else
-  branches=$(git branch --all --contains "$sha" | grep -v "/<candidate-branch>\$")
+  branches=$(git branch --all --no-color --contains "$sha" | grep -v "/<candidate-branch>\$")
   tags=$(git tag --contains "$sha")
   if [ -n "$branches" ] || [ -n "$tags" ]; then
     printf 'reachable via:\n%s\n%s\n' "$branches" "$tags"
@@ -563,10 +603,15 @@ git update-ref "refs/rescue/$sha" "$sha"
 ```
 
 Only once every candidate is either confirmed reachable elsewhere or explicitly preserved does the
-real prune run:
+real removal run — **and it should not be a second, broader `git remote prune origin` call.**
+That command re-scans the *current* remote state at the moment you run it, not the specific
+candidate set the dry-run actually showed you — if another branch was deleted upstream in the
+gap between the dry-run and this step, an unscoped `git remote prune origin` prunes that ref too,
+even though it was never inventoried or classified. Delete only the exact refs you reviewed,
+each bound to the tip you actually checked:
 
 ```bash
-git remote prune origin
+git update-ref -d "refs/remotes/origin/<candidate-branch>" "$sha"   # once per reviewed candidate
 git branch -r --format='%(refname:short)' | grep -v '^origin$\|^origin/main$'
 # cross-reference the survivors against pr-heads.tsv exactly as above, verify each one's CURRENT
 # tip the same way as the MERGED bucket above, then delete bound to exactly that verified SHA —
@@ -666,10 +711,11 @@ git -C <path> reflog show --all
 #    d. only once a–c all pass, remove — main/root worktree can't be removed this way, repoint it
 #       instead (see "The recurring symptom" above)
 git worktree remove <path>              # add --force only if you've confirmed clean + safe
-#    e. dry-run and real prune are two separate steps, not one chained command — inspect every
-#       reported candidate before the second command runs, in a later turn/message, not `&&`-joined
+#    e. dry-run and real prune are two separate steps, not one chained command; each dry-run
+#       candidate's administrative reflog must be rescued before the real prune destroys it,
+#       since its checkout is already gone by definition — see the dedicated section above
 git worktree prune --dry-run --verbose
-# ...review the output above; only once every candidate is confirmed safe...
+# ...for each candidate, GIT_DIR=<admin-dir> git reflog show HEAD, classify, rescue if unique...
 git worktree prune --verbose
 
 # 4. Local branch deletion — MERGED and CLOSED both require the SAME current-tip verification
@@ -678,7 +724,8 @@ git worktree prune --verbose
 #    merged sibling is a lead, never proof by itself. Also inspect the BRANCH'S OWN reflog (not
 #    just its current tip) for anything unreachable, same as a detached worktree — see above.
 #    No active worktree, not in the "never touch" categories above.
-git reflog show --all -- refs/heads/<branch>
+git reflog show refs/heads/<branch>   # NO `--` before the ref — that turns it into a pathspec
+                                       # filter and silently returns nothing (see above)
 # ...classify any entry beyond the current tip, rescue-ref anything unreachable...
 verified_sha=$(git rev-parse <branch>)
 git worktree list --porcelain | grep -q "^branch refs/heads/<branch>\$" && { echo "checked out — resolve first" >&2; exit 1; }
@@ -687,10 +734,12 @@ git update-ref -d refs/heads/<branch> "$verified_sha"
 # plain `git branch -D <branch>` instead if that residual isn't acceptable for this branch)
 
 # 5a. Remote-tracking cache cleanup — classify EVERY dry-run candidate's reachability before
-#     pruning, not after (see "Remote branch cleanup" above); preserve any unreachable tip first
+#     pruning, not after (see "Remote branch cleanup" above); preserve any unreachable tip first.
+#     Delete only the exact reviewed refs — a second `git remote prune origin` call re-scans
+#     current state and can prune something new that was never classified.
 git remote prune origin --dry-run
 # ...for each reported candidate: capture its SHA, check reachability, rescue-ref if unique...
-git remote prune origin
+git update-ref -d "refs/remotes/origin/<candidate-branch>" "$sha"   # once per reviewed candidate
 
 # 5b. Actual remote branch deletion — same current-tip verification as step 4, MERGED only, never
 #     on the historical PR-state record alone, and bound to the verified SHA via a lease (a bare
@@ -851,3 +900,29 @@ rules this repo's `CLAUDE.md`/`AGENTS.md` already document.
   that residual isn't acceptable. Four waves in, the operating pattern hasn't changed: every fix
   is validated against real git behavior before being written down, and no fix is allowed to quietly
   regress a safety property an earlier wave already established.
+- **2026-09-23 (PR #820 review correction wave 5)** — 5 further findings from
+  chatgpt-codex-connector on wave 4's own diff, all confirmed empirically before being fixed:
+  (1) the canonical-main-worktree update flow's own `git fetch origin` was missed when
+  `--no-prune` was added everywhere else in wave 4 — made consistent; (2) the named-branch reflog
+  check used `git reflog show --all -- refs/heads/<branch>` — the `--` turns the ref into a
+  pathspec filter instead of the reflog argument, and the command silently returns nothing;
+  confirmed empirically (a branch with real reset-away commits produced zero output with `--`,
+  and the correct output without it) and fixed by dropping the `--`; (3) the "real prune" step
+  for remote-tracking refs was a second, broader `git remote prune origin` call, which re-scans
+  current remote state rather than acting only on the specific candidates the dry-run reviewed —
+  replaced with per-ref `git update-ref -d refs/remotes/origin/<branch> "$sha"`, bound to exactly
+  what was classified; (4) `git worktree prune`'s real run destroys a prunable candidate's
+  administrative directory — including its `HEAD` reflog — even though that data is independently
+  readable via `GIT_DIR=<admin-dir> git reflog show HEAD` right up until the prune runs; confirmed
+  empirically (a detached commit's reflog entry was readable after its checkout directory was
+  already deleted, then permanently gone once the real prune ran) and added as a dedicated rescue
+  step, parsing the dry-run's own output for each candidate's administrative directory name;
+  (5) the candidate-exclusion filter on `git branch --all --contains` used an anchored `grep -v`
+  that silently stopped matching under `color.branch=always`, since git appends an ANSI reset
+  sequence after the branch name; confirmed empirically (the candidate ref survived the filter as
+  non-empty output with color enabled, correctly excluded with `--no-color`) and fixed by adding
+  `--no-color` to both branch-containment checks in the doc. Five waves in: this round's findings
+  were almost entirely git-syntax and environment-configuration edge cases rather than architectural
+  gaps — a sign the underlying design (current-state proof, native git safety over raw plumbing,
+  preserve-before-mutate ordering) is holding, even as increasingly specific execution details keep
+  getting tightened under it.
