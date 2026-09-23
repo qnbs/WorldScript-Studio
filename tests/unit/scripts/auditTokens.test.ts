@@ -51,13 +51,25 @@ describe('resolveAuditableFiles (post-Visual qualification tranche, Section 3.1:
     expect(resolveAuditableFiles(candidates)).toEqual([]);
   });
 
-  it('excludes files under the newly added directory segments (.storybook, .mcp, config)', () => {
+  it('excludes files under the newly added directory segments (.storybook, .mcp)', () => {
     const candidates = [
       join(root, '.storybook', 'preview.tsx'),
       join(root, '.mcp', 'proforge-mcp-server', 'src', 'index.ts'),
-      join(root, 'config', 'resolveViteBase.ts'),
     ];
     expect(resolveAuditableFiles(candidates)).toEqual([]);
+  });
+
+  it('keeps runtime-capable source under config/ in the corpus rather than excluding the whole directory (live review, PR #817): config/resolveViteBase.ts is genuinely imported by services/deployTarget.ts (GITHUB_PAGES_BASE), so a blanket "config" directory exclusion hid real runtime-consumed source', () => {
+    const candidates = [
+      join(root, 'config', 'resolveViteBase.ts'),
+      join(root, 'config', 'runtime.ts'),
+    ];
+    expect(resolveAuditableFiles(candidates)).toEqual(candidates);
+  });
+
+  it('still excludes a genuine build-config file even when it lives under config/, via the *.config.ts basename rule rather than a directory-wide exclusion', () => {
+    const candidate = join(root, 'config', 'something.config.ts');
+    expect(resolveAuditableFiles([candidate])).toEqual([]);
   });
 
   it('excludes the explicitly listed permanent exemptions (service worker, generated EPUB stylesheet)', () => {
@@ -76,16 +88,16 @@ describe('resolveAuditableFiles (post-Visual qualification tranche, Section 3.1:
   });
 
   it('does not exclude real source merely because an ANCESTOR of the checkout shares a name with an excluded segment (Codex, PR #817)', () => {
-    // QNBS-v3: repoRoot itself sits under a directory literally named "config" — unrelated to this repo's own config/ directory, which is what the "config" exclusion is actually meant to cover.
-    const repoRoot = join('/home', 'user', 'config', 'WorldScript-Studio');
+    // QNBS-v3: repoRoot itself sits under a directory literally named "node_modules" — unrelated to this repo's own node_modules/ exclusion, which is what that segment is actually meant to cover.
+    const repoRoot = join('/home', 'user', 'node_modules', 'WorldScript-Studio');
     const realSource = join(repoRoot, 'services', 'realService.ts');
     expect(resolveAuditableFiles([realSource], repoRoot)).toEqual([realSource]);
   });
 
-  it('still excludes a file under the own config/ directory when repoRoot is correctly the repo root', () => {
-    const repoRoot = join('/home', 'user', 'config', 'WorldScript-Studio');
-    const ownConfigFile = join(repoRoot, 'config', 'resolveViteBase.ts');
-    expect(resolveAuditableFiles([ownConfigFile], repoRoot)).toEqual([]);
+  it('still excludes a file under the repo’s own node_modules/ directory when repoRoot is correctly the repo root', () => {
+    const repoRoot = join('/home', 'user', 'node_modules', 'WorldScript-Studio');
+    const ownNodeModulesFile = join(repoRoot, 'node_modules', 'some-pkg', 'index.ts');
+    expect(resolveAuditableFiles([ownNodeModulesFile], repoRoot)).toEqual([]);
   });
 });
 
@@ -323,14 +335,13 @@ describe('findViolations (regression guards for the PR #816 comment/string-liter
     expect(summary['ambient-glass-token']).toBe(1);
   });
 
-  it('skips a file missing from both the working tree and any git index instead of crashing (no git repo at all here, so the index fallback also fails)', () => {
+  it('fails closed (throws) rather than silently skipping when a path is unreadable from both the working tree and the index (live review, PR #817: a path reaching findViolations was in the index moments ago — an unexpected git-show failure here must not be mistaken for "nothing to audit", since it could mask a real violation)', () => {
     dir = mkdtempSync(join(tmpdir(), 'audit-tokens-test-'));
     const present = join(dir, 'Present.ts');
     const missing = join(dir, 'NeverExisted.ts');
     writeFileSync(present, "export const bg = '#123456';\n");
-    const { summary, total } = findViolations([present, missing]);
-    expect(total).toBe(1);
-    expect(summary['raw-hex']).toBe(1);
+    // QNBS-v3: no git repo exists in dir, so the index fallback for `missing` cannot succeed either — this must throw, not return a partial/silently-skipped result.
+    expect(() => findViolations([present, missing])).toThrow();
   });
 
   it('reads a tracked file from the git index when it is deleted from the working tree but not staged, instead of silently skipping real content (live review, PR #817: git ls-files describes the index, not the working tree — an unstaged deletion still has real, trackable content that the next commit, and CI, would actually contain)', () => {

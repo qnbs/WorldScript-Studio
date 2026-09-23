@@ -166,7 +166,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   will produce regardless of whether the OS temp dir itself sits behind a symlink. 37 regression
   tests total (was 35): the `--preserve-symlinks-main` case and an ancestor-directory-symlink case
   (proving `fs.realpathSync` resolving a symlink anywhere in the path, not just the leaf file,
-  works the same way the macOS temp-dir case relies on). PR #817.
+  works the same way the macOS temp-dir case relies on). Two more root-cause defects, both
+  reproduced before fixing: `"config"` is no longer a blanket-excluded directory segment —
+  `config/resolveViteBase.ts` is genuinely imported by `services/deployTarget.ts`
+  (`GITHUB_PAGES_BASE`), so the exclusion was hiding real runtime-consumed source from the audit;
+  the audit's default-in contract (runtime-capable tracked JS/TS stays in the corpus, only
+  demonstrably build-only source is excluded by name) now applies, and the existing
+  `*.config.ts`/`*.config.js` basename rule still excludes genuine build config files wherever
+  they live. Separately, `readTrackedFileContent`'s index fallback no longer swallows a `git show`
+  failure into a silent skip: every caller derives its file list from `git ls-files`, so a path
+  reaching this function was in the index moments ago — an unexpected failure there is a TOCTOU
+  race or a corrupt/unreadable index object, either of which must fail the whole audit closed
+  (a thrown error, non-zero exit) rather than risk silently missing a real violation, the exact
+  failure class the original ENOENT-skip fix (`1bed434`) was found to have. 39 regression tests
+  total (was 37): `config/resolveViteBase.ts` (and a `config/runtime.ts`-shaped path) stay
+  auditable while a `config/something.config.ts` file stays excluded via the basename rule; the
+  index-fallback failure now asserts a thrown error instead of a silent skip. PR #817.
 
 ## [1.28.8] — 2026-09-22
 

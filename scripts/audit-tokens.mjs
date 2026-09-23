@@ -59,8 +59,7 @@ const EXCLUDED_DIR_SEGMENTS = [
   '.storybook',
   // QNBS-v3: a separate embedded MCP dev-tooling sub-project (own package.json/tsconfig), not shipped product UI.
   '.mcp',
-  // QNBS-v3: build-time config helpers (e.g. resolveViteBase.ts) and non-source JSON, not a consuming UI surface.
-  'config',
+  // QNBS-v3 (live review, PR #817): "config" was REMOVED from here — config/resolveViteBase.ts is genuinely imported by services/deployTarget.ts (GITHUB_PAGES_BASE), so a blanket directory exclusion wrongly hid real runtime-consumed source. The audit's default-in contract: runtime-capable tracked JS/TS stays in the corpus, and only demonstrably build/tooling-only source is excluded by name (the *.config.ts/*.config.js basename rule below already covers vite.config.ts etc. wherever they live).
 ];
 
 // QNBS-v3: files that are allowed to contain raw colors / inline SVGs by design — each is a source-of-truth or intentionally token-independent file, not an ordinary consuming UI surface.
@@ -200,6 +199,11 @@ function blankStringLiterals(line) {
  *     goes through a shell, so no escaping is needed or applied.
  *   - Windows: the index pathspec is normalized to forward slashes before the `git show` call,
  *     since git's `:<path>` syntax requires them on every OS regardless of `path.sep`.
+ *   - an unreadable/corrupt index object, or a TOCTOU race where the index changed mid-scan: the
+ *     index fallback throws rather than returning null — every caller derives `files` from
+ *     getTrackedSourceFiles, so a path reaching this function was in the index moments ago, and
+ *     silently treating an unexpected git-show failure as "nothing to audit" could mask a real
+ *     violation. This fails the whole audit closed (non-zero exit) instead.
  * Verified empirically against all of the above before this contract was written down.
  */
 function readTrackedFileContent(file, repoRoot) {
@@ -207,18 +211,14 @@ function readTrackedFileContent(file, repoRoot) {
     return fs.readFileSync(file, 'utf-8');
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
-    // QNBS-v3 (Codex, PR #817): git's `:<path>` index pathspec always uses forward slashes, on every OS — path.relative returns OS-native separators, which are backslashes on Windows. Without this normalization, `git show` fails to resolve a real index entry on Windows and the fallback below silently (and wrongly) treats it as gone from the index too.
+    // QNBS-v3 (Codex, PR #817): git's `:<path>` index pathspec always uses forward slashes, on every OS — path.relative returns OS-native separators, which are backslashes on Windows. Without this normalization, `git show` fails to resolve a real index entry on Windows and would silently (and wrongly) treat it as gone from the index too.
     const relative = path.relative(repoRoot, file).split(path.sep).join('/');
-    try {
-      // QNBS-v3: stderr is expected to be noisy on the (common, harmless) not-in-the-index case, so it's piped rather than inherited to keep normal audit runs and test output clean.
-      return execFileSync('git', ['show', `:${relative}`], {
-        cwd: repoRoot,
-        encoding: 'utf-8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-    } catch {
-      return null;
-    }
+    // QNBS-v3 (live review, PR #817): no inner catch here — every caller in this file derives `files` from getTrackedSourceFiles (i.e. `file` was in the index moments ago), so a git-show failure at this point is never a legitimate "not tracked" case; it's a TOCTOU race (the index changed mid-scan) or an unreadable/corrupt index object. Either way this must fail the whole audit closed (a thrown error, non-zero exit) rather than silently miss content that may contain real violations — the exact failure mode the ENOENT-skip fix this replaced (1bed434) was itself found to have.
+    return execFileSync('git', ['show', `:${relative}`], {
+      cwd: repoRoot,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
   }
 }
 
@@ -287,14 +287,8 @@ export function findViolations(files, repoRoot = root) {
   }
 
   for (const file of files) {
+    // QNBS-v3 (live review, PR #817): readTrackedFileContent no longer returns null — it throws when content is unavailable from both the working tree and the index, so the audit fails closed instead of silently skipping a file that may hold real violations.
     const content = readTrackedFileContent(file, repoRoot);
-    if (content === null) {
-      console.warn(
-        `[token-audit] skipping file absent from both the working tree and the index: ${path.relative(repoRoot, file)}`,
-      );
-      continue;
-    }
-
     const fileViolations = scanFileForViolations(file, content, summary);
     total += fileViolations.length;
     if (fileViolations.length > 0) {
