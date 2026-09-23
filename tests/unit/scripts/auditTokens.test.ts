@@ -190,4 +190,15 @@ describe('findViolations (regression guards for the PR #816 comment/string-liter
     expect(total).toBe(1);
     expect(summary['ambient-glass-token']).toBe(1);
   });
+
+  it('skips a tracked-but-deleted file instead of crashing (CodeAnt, PR #817: git ls-files lists the index, not the working tree)', () => {
+    dir = mkdtempSync(join(tmpdir(), 'audit-tokens-test-'));
+    const present = join(dir, 'Present.ts');
+    const missing = join(dir, 'DeletedButTracked.ts');
+    writeFileSync(present, "export const bg = '#123456';\n");
+    // QNBS-v3: `missing` is deliberately never written — it stands in for a path git ls-files still returns for a file deleted from disk but not yet staged.
+    const { summary, total } = findViolations([present, missing]);
+    expect(total).toBe(1);
+    expect(summary['raw-hex']).toBe(1);
+  });
 });

@@ -104,16 +104,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   beat-sheet marker palette, +23 `raw-hex` in `constants/sections.tsx`'s per-section accent colors,
   +2 `inline-svg` in `services/commands/commandDefinitions.tsx`) — all three are categorical/
   identity colors or ordinary icon-migration debt already accepted elsewhere in this baseline, none
-  of it newly introduced by this PR. 21 regression tests (`tests/unit/scripts/auditTokens.test.ts`)
+  of it newly introduced by this PR. 22 regression tests (`tests/unit/scripts/auditTokens.test.ts`)
   cover the corpus classification and every ratchet outcome (pass, regression, stale-high,
-  malformed baseline/audit) as exported pure-function unit tests. Sourcery review found three real
-  defects, fixed in one bundled correction wave: the malformed-audit check now runs before the
-  no-baseline branch so a malformed live audit can never be masked by a missing baseline; a
-  baseline with no `summary` object now fails closed as `MALFORMED_BASELINE` instead of being
-  silently normalized to an empty one and ratcheted against; and the CLI's direct-execution guard
-  now compares `import.meta.url` against `pathToFileURL(process.argv[1]).href` (exported as
-  `isDirectExecution`) instead of a raw `file://${argv[1]}` string, which was not portable to
-  Windows drive-letter paths or paths containing URL-encoded characters (e.g. spaces). PR #817.
+  malformed baseline/audit) as exported pure-function unit tests. Review (Sourcery, Codex,
+  CodeRabbit, CodeAnt) found four real defects from the same initial round, all fixed in one
+  bundled correction wave: the malformed-audit check now runs before the no-baseline branch so a
+  malformed live audit can never be masked by a missing baseline; a baseline with no `summary`
+  object now fails closed as `MALFORMED_BASELINE` instead of being silently normalized to an empty
+  one and ratcheted against; the CLI's direct-execution guard now compares `import.meta.url`
+  against `pathToFileURL(process.argv[1]).href` (exported as `isDirectExecution`) instead of a raw
+  `file://${argv[1]}` string, which was not portable to Windows drive-letter paths or paths
+  containing URL-encoded characters (e.g. spaces); and `findViolations` now skips a tracked file
+  that `git ls-files` still lists but that has been deleted from the working tree without being
+  staged, instead of crashing on `ENOENT`. PR #817.
 
 ## [1.28.8] — 2026-09-22
 

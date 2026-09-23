@@ -183,7 +183,19 @@ export function findViolations(files) {
   }
 
   for (const file of files) {
-    const content = fs.readFileSync(file, 'utf-8');
+    let content;
+    try {
+      content = fs.readFileSync(file, 'utf-8');
+    } catch (error) {
+      // QNBS-v3 (CodeAnt, PR #817): `git ls-files` lists the index, not the working tree — a file deleted locally but not yet staged (`git rm`/`git add`) still appears there. Skip it rather than crash; there is no content left to scan for violations.
+      if (error.code === 'ENOENT') {
+        console.warn(
+          `[token-audit] skipping tracked-but-missing file: ${path.relative(root, file)}`,
+        );
+        continue;
+      }
+      throw error;
+    }
     const lines = content.split('\n');
     const relative = path.relative(root, file);
     const fileViolations = [];
