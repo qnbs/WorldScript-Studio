@@ -107,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of it newly introduced by this PR. 15 new regression tests
   (`tests/unit/scripts/auditTokens.test.ts`) cover the corpus classification and every ratchet
   outcome (pass, regression, stale-high, malformed baseline/audit) as exported pure-function unit
-  tests. PR #TBD.
+  tests. PR #817.
 
 ## [1.28.8] — 2026-09-22
 
