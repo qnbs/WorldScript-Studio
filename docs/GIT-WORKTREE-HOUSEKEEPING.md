@@ -73,20 +73,19 @@ git worktree list --porcelain | grep -B2 '^branch refs/heads/main$'   # find the
 
   ```bash
   cd <canonical-main-worktree>
-  git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin > /tmp/origin-refs-before.txt
+  # snapshot refs/remotes/origin/* as REAL refs first, not a text file — a fetch runs git's own
+  # auto-maintenance afterward, which can GC an object the instant nothing reachable points to
+  # it, and a plain text-file record of a SHA string doesn't keep anything reachable (see the
+  # full explanation, and the ref-cleanup step, under "Remote branch cleanup" below):
+  git for-each-ref --format='create refs/pre-fetch-snapshot/%(refname:lstrip=3) %(objectname)' \
+    refs/remotes/origin | git update-ref --stdin
   git fetch --no-prune origin   # a plain `fetch origin` still prunes under
                                  # fetch.prune/remote.origin.prune config — be explicit here too;
-                                 # this refreshes ALL of origin/*, not just main, so the same
-                                 # force-update snapshot from "Remote branch cleanup" below applies
-                                 # here too — a non-main branch can be force-pushed by this fetch
-  git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin |
-    diff /tmp/origin-refs-before.txt - | grep '^[<>]' || true   # `diff`/`grep` both exit nonzero
-                                                                 # on their normal "no changes" or
-                                                                 # "no match" outcomes — `|| true`
-                                                                 # stops that from tripping `-e`;
-                                                                 # any changed ref still needs its
-                                                                 # OLD value checked per "Remote
-                                                                 # branch cleanup" below
+                                 # this refreshes ALL of origin/*, not just main, so a non-main
+                                 # branch can be force-pushed by this fetch too — classify any
+                                 # changed ref the same way as "Remote branch cleanup" below
+  [ "$(git branch --show-current)" = "main" ] ||
+    { echo "no longer on main — something switched this worktree, abort" >&2; exit 1; }
   git merge --ff-only origin/main
   git rev-parse HEAD origin/main   # confirm both now match
   ```
@@ -95,7 +94,13 @@ git worktree list --porcelain | grep -B2 '^branch refs/heads/main$'   # find the
   same non-destructive guarantee the old CAS/fetch approaches were reaching for — but it runs as
   an ordinary checkout-aware git operation *on the worktree that already holds the branch*, so
   there is no separate ref to move out from under anyone: this worktree's own index and files are
-  what's being advanced, by the one process actually doing it.
+  what's being advanced, by the one process actually doing it. **That guarantee depends on `main`
+  still being what's checked out here at the moment of the merge** — if anything switches this
+  specific worktree to a different branch in the gap between the fetch and the merge, `merge
+  --ff-only origin/main` fast-forwards *whatever's currently checked out* to `origin/main`'s tip,
+  not `main` itself (confirmed reproducible: an unrelated ancestor branch gets silently advanced
+  while `main` stays stale) — the explicit check above closes that gap immediately before the
+  merge runs.
 
 - **If some *other* worktree holds `main` instead** (the actual "recurring symptom" case above —
   a rogue worktree left on `main` after one-off work), repoint that one away first — it's not
@@ -610,27 +615,59 @@ when it's absent upstream; if a collaborator **force-pushed** an existing branch
 fetch still moves `origin/<branch>` from its old value straight to the new one, and the old value
 — potentially the last reference to real work — is gone the instant the fetch completes, before
 any inventory or classification runs at all (confirmed empirically: `git fetch --no-prune`
-reports a forced update exactly like a normal fetch would). Snapshot every remote-tracking ref
-*before* fetching, so you have something to compare against afterward:
+reports a forced update exactly like a normal fetch would).
+
+**A snapshot must be a real git ref, not just a text file recording a SHA string.** `git fetch`
+runs `git maintenance --auto` after fetching by default, and any GC (that or a separate one) can
+collect an object the instant nothing reachable points to it — a string in a file doesn't keep
+anything reachable, so the very object you meant to protect can already be gone by the time your
+later classification step tries to inspect it (confirmed empirically: an object still resolvable
+via a real snapshot ref after the exact same fetch that force-updated it away). **Snapshot
+canonical `sha_pre_fetch_snapshot()`:**
 
 ```bash
-git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin > /tmp/origin-refs-before.txt
+sha_pre_fetch_snapshot() {   # run before every fetch that touches refs/remotes/origin
+  git for-each-ref --format='create refs/pre-fetch-snapshot/%(refname:lstrip=3) %(objectname)' \
+    refs/remotes/origin | git update-ref --stdin
+}
+sha_pre_fetch_snapshot
 git fetch --no-prune origin            # refresh without pruning — a plain `git fetch origin` can
                                         # still prune if fetch.prune/remote.origin.prune is set
                                         # repo-wide, confirmed by `git fetch -h`; be explicit
 git remote prune origin --dry-run      # confirmed non-mutating: reports candidates, changes nothing
 ```
 
-Diff the before/after ref values; for any ref whose value *changed* (not just the ones the
-dry-run flagged as absent), treat its **old** value the same as a prune candidate — it may have
-just been silently orphaned by the fetch itself, not by anything this doc's own process decided:
+Compare the snapshot against current state — **checking real exit statuses, not a blanket `||
+true`**, which would swallow a genuine `for-each-ref`/`diff` failure (an unreadable object
+database, a corrupted snapshot) exactly as readily as the expected "no changes" outcome, letting
+the sweep continue past step's own worth with an inventory that never actually completed:
 
 ```bash
-git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin |
-  diff /tmp/origin-refs-before.txt - | grep '^[<>]' || true   # both exit nonzero on their normal
-                                                               # "no changes"/"no match" outcome —
-                                                               # `|| true` under `set -e` above
-# any changed refname needs its OLD objectname (the `<` line) checked for reachability too
+git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/pre-fetch-snapshot > /tmp/refs-before.txt
+git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/remotes/origin > /tmp/refs-after.txt
+diff_status=0
+diff /tmp/refs-before.txt /tmp/refs-after.txt > /tmp/refs-diff.txt || diff_status=$?
+case "$diff_status" in 0|1) ;; *) echo "remote-ref comparison failed" >&2; exit "$diff_status" ;; esac
+grep_status=0
+grep '^[<>]' /tmp/refs-diff.txt || grep_status=$?
+[ "$grep_status" -le 1 ] || exit "$grep_status"
+```
+
+(`diff` exits `0`=identical/`1`=differences found — both expected outcomes, not failures — and
+anything `2` or higher is a real error worth stopping for; `grep` follows the same `0`/`1`/`2+`
+split. Checking the *specific* status this way, instead of `|| true`, is what CodeRabbit and
+Codex both asked for after wave 7's blanket suppression.)
+
+For any ref whose value *changed* (not just the ones the dry-run flagged as absent — the `<` line
+in `/tmp/refs-diff.txt` gives its OLD objectname), treat its **old** value the same as a prune
+candidate — it may have just been silently orphaned by the fetch itself, not by anything this
+doc's own process decided.
+
+Once every changed ref has been classified and anything unreachable has its own `refs/rescue/`
+entry (see below), the snapshot itself can be cleaned up:
+
+```bash
+git for-each-ref --format='delete %(refname)' refs/pre-fetch-snapshot | git update-ref --stdin
 ```
 
 For every candidate — from the dry-run *and* from a force-updated old value — capture its tip and
@@ -761,17 +798,23 @@ set -e            # `pipefail` alone doesn't ABORT on a failure, only changes wh
                   # remove those, and don't run this sweep without `-e` either
 
 # 1. Inventory — fetch WITHOUT --prune here; pruning is a classified decision in step 5, not a
-#    side effect of taking inventory. Snapshot remote-tracking refs first: even --no-prune can't
-#    stop a force-push from silently overwriting a ref's old value in the fetch itself — see above.
+#    side effect of taking inventory. Snapshot remote-tracking refs as REAL refs first (a text
+#    file doesn't survive fetch's own auto-GC — see "Remote branch cleanup" above), since even
+#    --no-prune can't stop a force-push from silently overwriting a ref's old value in the fetch.
 git worktree list --porcelain
 git branch --format='%(refname:short)' | wc -l
-git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin > /tmp/origin-refs-before.txt
+git for-each-ref --format='create refs/pre-fetch-snapshot/%(refname:lstrip=3) %(objectname)' \
+  refs/remotes/origin | git update-ref --stdin
 git fetch --no-prune origin          # plain `fetch origin` can still prune under
                                       # fetch.prune/remote.origin.prune config — be explicit
-git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin |
-  diff /tmp/origin-refs-before.txt - | grep '^[<>]' || true   # `|| true`: both exit nonzero on
-                                                               # their normal outcome, under `-e`
-                                                               # above; changed ref → step 5a too
+git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/pre-fetch-snapshot > /tmp/refs-before.txt
+git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/remotes/origin > /tmp/refs-after.txt
+diff_status=0
+diff /tmp/refs-before.txt /tmp/refs-after.txt > /tmp/refs-diff.txt || diff_status=$?
+case "$diff_status" in 0|1) ;; *) echo "remote-ref comparison failed" >&2; exit "$diff_status" ;; esac
+grep_status=0
+grep '^[<>]' /tmp/refs-diff.txt || grep_status=$?
+[ "$grep_status" -le 1 ] || exit "$grep_status"   # changed ref → classify per step 5a
 git remote prune origin --dry-run   # non-mutating candidate count; real prune happens in step 5
 git branch -r --format='%(refname:short)' | wc -l
 
@@ -828,15 +871,23 @@ git remote prune origin --dry-run
 git reflog show "refs/remotes/origin/<candidate-branch>"   # check for a pre-force-update tip too
 # ...for each reported candidate: capture its SHA, check reachability, rescue-ref if unique...
 git update-ref -d "refs/remotes/origin/<candidate-branch>" "$sha"   # once per reviewed candidate
+# once every changed ref from step 1 is classified, clean up the snapshot:
+git for-each-ref --format='delete %(refname)' refs/pre-fetch-snapshot | git update-ref --stdin
 
 # 5b. Actual remote branch deletion — same current-tip verification as step 4, MERGED only, never
 #     on the historical PR-state record alone, and bound to the verified SHA via a lease (a bare
 #     `--delete` has no lease and can drop a collaborator's new commits) — see above
 verified_sha=$(git rev-parse "origin/<branch>")
 git push --force-with-lease="<branch>:$verified_sha" origin --delete <branch>
-# verify each is actually gone (path-safe — a raw branch name in a REST URL breaks on `/`):
-git ls-remote --exit-code --refs origin "refs/heads/<branch>"; status=$?
-[ "$status" -eq 2 ] || { echo "expected gone (exit 2), got $status — investigate" >&2; exit 1; }
+# verify each is actually gone (path-safe — a raw branch name in a REST URL breaks on `/`).
+# `--exit-code` returning 2 (confirmed gone) IS the success case — never let it hit a bare
+# statement under `set -e` above; the `if` form is exempt from errexit on its own condition:
+if git ls-remote --exit-code --refs origin "refs/heads/<branch>"; then
+  echo "still there — retry" >&2; exit 1
+else
+  status=$?
+  [ "$status" -eq 2 ] || { echo "unexpected ls-remote status $status — investigate" >&2; exit 1; }
+fi
 
 # 6. Loose-object compaction (only when hardware load is genuinely idle)
 git count-objects -v
@@ -1057,3 +1108,28 @@ rules this repo's `CLAUDE.md`/`AGENTS.md` already document.
   the same call. Both fixes close specific residual gaps in wave 6's own additions rather than
   finding new categories — a sign this correction loop is converging on the actual boundary of
   the design rather than continuing to surface new classes of defect.
+- **2026-09-23 (PR #820 review correction wave 8)** — 5 further findings (chatgpt-codex-connector:
+  4; CodeRabbit: 1), the most architecturally significant being a flaw in wave 7's own remedy:
+  **wave 7's `|| true` on the snapshot-comparison pipeline suppressed every failure
+  indiscriminately, not just the expected "no changes"/"no match" outcomes — a genuine
+  `for-each-ref`/`diff` failure (unreadable object database, corrupted snapshot) would silently
+  let the sweep continue with an incomplete inventory** (found independently by Codex, via
+  `PIPESTATUS`, and CodeRabbit, via a discrete-file diff pattern with explicit status checks —
+  adopted the latter for portability, avoiding a bash-specific array). Replaced with explicit
+  status checks per command (`0`/`1` = expected outcomes for `diff`/`grep`, anything higher is a
+  real failure worth aborting for) everywhere the pattern was used. Separately, and more
+  fundamentally: **the snapshot itself was still wrong** — recording `refs/remotes/origin/*`
+  values in a text file doesn't keep the corresponding objects reachable, and `git fetch` runs
+  `git maintenance --auto` afterward by default, which can garbage-collect a force-updated-away
+  object before the later classification step ever gets a chance to create its `refs/rescue/`
+  entry. Replaced the text-file snapshot with real refs under `refs/pre-fetch-snapshot/`,
+  confirmed empirically to keep a force-reset-away commit resolvable through the exact fetch that
+  orphaned it, with an explicit cleanup step once classification completes. Two narrower fixes
+  alongside: `git ls-remote --exit-code`'s confirming result (exit `2`, "gone") is itself a
+  nonzero status that `set -e` (added in wave 7) would abort on before the check could even run —
+  moved it into an `if`/`else` form, which is exempt from errexit on its own condition; and the
+  canonical-main-worktree merge could fast-forward the wrong branch if something switched that
+  worktree away from `main` in the gap between the fetch and the merge — added an explicit
+  `git branch --show-current` check immediately before it. The pattern holds: this correction
+  loop keeps finding real defects in its own immediately-prior fixes, and keeps fixing them with
+  verified, git-native mechanisms rather than argument or plausibility.
