@@ -73,17 +73,23 @@ git worktree list --porcelain | grep -B2 '^branch refs/heads/main$'   # find the
 
   ```bash
   cd <canonical-main-worktree>
-  set -o pipefail   # a failed `create` below (e.g. a leftover refs/pre-fetch-snapshot/* left by
-                     # an interrupted earlier sweep — `create` refuses to overwrite an existing
-                     # ref) must not be silently followed by a fetch that then runs without any
-                     # snapshot actually in place
+  set -o pipefail   # a failed `create` below must not be silently followed by a fetch that then
+                     # runs without any snapshot actually in place
   # snapshot refs/remotes/origin/* as REAL refs first, not a text file — a fetch runs git's own
   # auto-maintenance afterward, which can GC an object the instant nothing reachable points to
   # it, and a plain text-file record of a SHA string doesn't keep anything reachable (see the
-  # full explanation, and the ref-cleanup step, under "Remote branch cleanup" below):
-  git for-each-ref --format='create refs/pre-fetch-snapshot/%(refname:lstrip=3) %(objectname)' \
+  # full explanation, and the ref-cleanup step, under "Remote branch cleanup" below). Namespaced
+  # under a per-invocation run_id, not a fixed path — two housekeeping sessions running this flow
+  # concurrently would otherwise collide on `create` (which refuses to overwrite an existing ref),
+  # and worse, a leftover snapshot from a session that never reached its own cleanup step would
+  # make every later invocation fail indefinitely with no way to tell "another session is actively
+  # using this" from "this is stale debris" — a run_id makes every invocation's own snapshot set
+  # unambiguous and independently cleanable, closing the ownership question rather than papering
+  # over just the `create` failure:
+  run_id="$$-$(date +%s)"
+  git for-each-ref --format="create refs/pre-fetch-snapshot/$run_id/%(refname:lstrip=3) %(objectname)" \
     refs/remotes/origin | git update-ref --stdin ||
-    { echo "pre-fetch snapshot failed — resolve stale refs/pre-fetch-snapshot/* before fetching" >&2; exit 1; }
+    { echo "pre-fetch snapshot failed" >&2; exit 1; }
   git fetch --no-prune --no-auto-maintenance origin ||   # a plain `fetch origin` still prunes under
     { echo "fetch failed — aborting main update" >&2; exit 1; }
                                  # fetch.prune/remote.origin.prune config — be explicit here too;
@@ -102,7 +108,8 @@ git worktree list --porcelain | grep -B2 '^branch refs/heads/main$'   # find the
                                  # CodeRabbit's review of wave 10's own diff)
   [ "$(git branch --show-current)" = "main" ] ||
     { echo "no longer on main — something switched this worktree, abort" >&2; exit 1; }
-  git merge --ff-only origin/main
+  git merge --ff-only origin/main ||
+    { echo "fast-forward merge failed — main diverged from origin/main, resolve before retrying" >&2; exit 1; }
   git rev-parse HEAD origin/main   # confirm both now match
   ```
 
@@ -207,6 +214,29 @@ Only remove the worktree once every ignored path found has a disposition other t
 A worktree/branch is safe to remove only when **all** of the above come back clean: no
 uncommitted tracked diff, no unresolved ignored content, and either zero unique commits *or*
 every commit is reachable via a real PR (see below).
+
+**This inventory and the actual `git worktree remove` are two separate operations — git provides
+no lock to bind them into one atomic step.** Anything else touching this exact worktree between
+the inventory above and the removal (an editor autosave, another terminal, a background process)
+can add or change data that the inventory never saw, and `git worktree remove` would then delete
+it along with everything already reviewed. There is no git-native primitive that inspects and
+removes as a single operation, so this is a genuine, non-eliminable residual absent exclusive
+operator control over that specific worktree for the duration of the sweep — the same kind of
+honest disclosure this doc already gives for `git update-ref -d`'s occupancy-check gap and the
+canonical-main-worktree merge's branch-check gap above. The bounded mitigation is to revalidate
+immediately before the removal and abort on any drift, which narrows the window to as small as
+plain shell allows without overclaiming atomicity it can't deliver:
+
+```bash
+inventory_before=$(git -C <path> status --porcelain=v2 --untracked-files=all;
+  git -C <path> ls-files --others --ignored --exclude-standard)
+# ... reflog inspection, classification, and any rescue-ref work happens here ...
+inventory_now=$(git -C <path> status --porcelain=v2 --untracked-files=all;
+  git -C <path> ls-files --others --ignored --exclude-standard)
+[ "$inventory_now" = "$inventory_before" ] ||
+  { echo "<path> changed since its inventory — reclassify before removing" >&2; exit 1; }
+git worktree remove <path>
+```
 
 **Next check: has a past session already left a classification — and does it still apply?**
 Search for ledger/handoff/reconciliation evidence before applying any default heuristic below.
@@ -721,13 +751,21 @@ later classification step tries to inspect it (confirmed empirically: an object 
 via a real snapshot ref after the exact same fetch that force-updated it away). **Snapshot
 canonical `sha_pre_fetch_snapshot()`:**
 
+**Namespaced under a per-invocation `run_id`, not a fixed path.** Two housekeeping sessions
+running this flow concurrently would otherwise collide on `create` (which refuses to overwrite an
+existing ref), and a leftover snapshot from a session that never reached its own cleanup step
+(below) would make every later invocation fail indefinitely with no way to tell "another session
+is actively using this" from "this is stale debris." A `run_id` makes every invocation's own
+snapshot set unambiguous and independently cleanable — this closes the ownership question rather
+than only handling the `create` failure:
+
 ```bash
+run_id="$$-$(date +%s)"
 sha_pre_fetch_snapshot() {   # run before every fetch that touches refs/remotes/origin
-  git for-each-ref --format='create refs/pre-fetch-snapshot/%(refname:lstrip=3) %(objectname)' \
+  git for-each-ref --format="create refs/pre-fetch-snapshot/$run_id/%(refname:lstrip=3) %(objectname)" \
     refs/remotes/origin | git update-ref --stdin
 }
-sha_pre_fetch_snapshot ||
-  { echo "pre-fetch snapshot failed — resolve stale refs/pre-fetch-snapshot/* before fetching" >&2; exit 1; }
+sha_pre_fetch_snapshot || { echo "pre-fetch snapshot failed" >&2; exit 1; }
 git fetch --no-prune --no-auto-maintenance origin   # refresh without pruning — a plain `git fetch
                                         # origin` can still prune if fetch.prune/remote.origin.prune
                                         # is set repo-wide, confirmed by `git fetch -h`; be explicit.
@@ -750,13 +788,11 @@ refs_before=$(mktemp) refs_after=$(mktemp) refs_diff=$(mktemp)   # unique per in
                                                                     # sessions clobber each other's
                                                                     # snapshot/diff and classify
                                                                     # against the wrong data
-git for-each-ref --format='%(refname:lstrip=2) %(objectname)' refs/pre-fetch-snapshot > "$refs_before"
+git for-each-ref --format="%(refname:lstrip=3) %(objectname)" "refs/pre-fetch-snapshot/$run_id" > "$refs_before"
 git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/remotes/origin > "$refs_after"
-# NOTE the different lstrip counts: `refs/pre-fetch-snapshot/<name>` has one fewer path component
-# than `refs/remotes/origin/<name>` (one directory segment, not two) — using the same lstrip=3 for
-# both turns `refs/pre-fetch-snapshot/main` into an empty name and
-# `refs/pre-fetch-snapshot/feature/foo` into just `foo`, breaking the name-keyed match below
-# between a branch and its own snapshot entry
+# both sides now use the same lstrip count: run_id adds exactly the one path component that
+# `refs/pre-fetch-snapshot/<name>` was previously missing relative to `refs/remotes/origin/<name>`
+# — see the revision history below for the mismatch this replaced
 diff_status=0
 diff "$refs_before" "$refs_after" > "$refs_diff" || diff_status=$?
 case "$diff_status" in 0|1) ;; *) echo "remote-ref comparison failed" >&2; exit "$diff_status" ;; esac
@@ -773,16 +809,18 @@ Codex both asked for after wave 7's blanket suppression.)
 For any ref whose value *changed* (not just the ones the dry-run flagged as absent — the `<` line
 in `$refs_diff` gives its OLD objectname), treat its **old** value the same as a prune
 candidate — it may have just been silently orphaned by the fetch itself, not by anything this
-doc's own process decided. `$refs_diff` (and `$refs_before`/`$refs_after`) stay valid for this as
-long as you're still in the same shell session that created them — that's the same assumption
-this doc already relies on for `reachable_elsewhere()` and the other shell functions defined
-above.
+doc's own process decided. `$refs_diff` (and `$refs_before`/`$refs_after`/`$run_id`) stay valid
+for this as long as you're still in the same shell session that created them — that's the same
+assumption this doc already relies on for `reachable_elsewhere()` and the other shell functions
+defined above.
 
 Once every changed ref has been classified and anything unreachable has its own `refs/rescue/`
-entry (see below), the snapshot itself can be cleaned up, along with the temp files:
+entry (see below), the snapshot itself can be cleaned up, along with the temp files — scoped to
+exactly this invocation's own `run_id`, never the whole `refs/pre-fetch-snapshot` namespace, which
+would delete another concurrently-running session's still-in-progress snapshot too:
 
 ```bash
-git for-each-ref --format='delete %(refname)' refs/pre-fetch-snapshot | git update-ref --stdin
+git for-each-ref --format='delete %(refname)' "refs/pre-fetch-snapshot/$run_id" | git update-ref --stdin
 rm -f "$refs_before" "$refs_after" "$refs_diff"
 ```
 
@@ -945,9 +983,13 @@ set -e            # `pipefail` alone doesn't ABORT on a failure, only changes wh
 #    --no-prune can't stop a force-push from silently overwriting a ref's old value in the fetch.
 git worktree list --porcelain
 git branch --format='%(refname:short)' | wc -l
-git for-each-ref --format='create refs/pre-fetch-snapshot/%(refname:lstrip=3) %(objectname)' \
+run_id="$$-$(date +%s)"   # namespaces this invocation's snapshot refs so a concurrent housekeeping
+                          # session can't collide on `create` or have its still-in-progress
+                          # snapshot deleted by this session's own cleanup in step 5a — see
+                          # "Remote branch cleanup" above for the full rationale
+git for-each-ref --format="create refs/pre-fetch-snapshot/$run_id/%(refname:lstrip=3) %(objectname)" \
   refs/remotes/origin | git update-ref --stdin ||
-  { echo "pre-fetch snapshot failed — resolve stale refs/pre-fetch-snapshot/* before fetching" >&2; exit 1; }
+  { echo "pre-fetch snapshot failed" >&2; exit 1; }
 git fetch --no-prune --no-auto-maintenance origin ||   # plain `fetch origin` can still prune under
   { echo "fetch failed — aborting sweep" >&2; exit 1; }
                                       # fetch.prune/remote.origin.prune config — be explicit.
@@ -960,13 +1002,8 @@ refs_before=$(mktemp) refs_after=$(mktemp) refs_diff=$(mktemp)   # unique per in
                                       # /tmp/refs-*.txt name would let two concurrent housekeeping
                                       # sessions clobber each other's snapshot/diff and classify
                                       # against the wrong data
-git for-each-ref --format='%(refname:lstrip=2) %(objectname)' refs/pre-fetch-snapshot > "$refs_before"
+git for-each-ref --format="%(refname:lstrip=3) %(objectname)" "refs/pre-fetch-snapshot/$run_id" > "$refs_before"
 git for-each-ref --format='%(refname:lstrip=3) %(objectname)' refs/remotes/origin > "$refs_after"
-# NOTE the different lstrip counts: `refs/pre-fetch-snapshot/<name>` has one fewer path component
-# than `refs/remotes/origin/<name>` (one directory segment, not two) — using the same lstrip=3 for
-# both turns `refs/pre-fetch-snapshot/main` into an empty name and
-# `refs/pre-fetch-snapshot/feature/foo` into just `foo`, breaking the name-keyed match below
-# between a branch and its own snapshot entry
 diff_status=0
 diff "$refs_before" "$refs_after" > "$refs_diff" || diff_status=$?
 case "$diff_status" in 0|1) ;; *) echo "remote-ref comparison failed" >&2; exit "$diff_status" ;; esac
@@ -989,15 +1026,24 @@ git branch -r --format='%(refname:short)' | wc -l
 nested=$(list_worktree_paths | while IFS= read -r -d '' other; do [ "$other" = "<path>" ] && continue; case "$other" in "<path>"/*) printf '%s\n' "$other";; esac; done)
 [ -z "$nested" ] || { printf 'nested worktree(s) under <path> — remove leaf(s) first:\n%s\n' "$nested" >&2; exit 1; }
 #    b. tracked-status + ignored-files inventory (classify every hit — UNKNOWN means stop)
-git -C <path> status --porcelain=v2 --untracked-files=all
-git -C <path> ls-files --others --ignored --exclude-standard
+inventory_before=$(git -C <path> status --porcelain=v2 --untracked-files=all;
+  git -C <path> ls-files --others --ignored --exclude-standard)
+printf '%s\n' "$inventory_before"
 #    c. inspect the FULL HEAD reflog UNCONDITIONALLY (not just when currently detached — an
 #       attached worktree can have stranded commits from an earlier detached phase too — see
 #       above), classify each entry with reachable_elsewhere(), rescue-ref anything unreachable
 git -C <path> symbolic-ref -q HEAD >/dev/null || echo DETACHED   # diagnostic only, not the gate
 git -C <path> reflog show --all
-#    d. only once a–c all pass, remove — main/root worktree can't be removed this way, repoint it
-#       instead (see "The recurring symptom" above)
+#    d. only once a–c all pass, revalidate immediately before removing and abort on any drift —
+#       this narrows, but cannot close, the window since step b ran (no git-native lock exists to
+#       bind inventory and removal into one atomic operation; see "Before removing any worktree"
+#       above for the full residual this accepts, which requires the operator not run anything
+#       else against this exact worktree for the duration of the sweep). main/root worktree can't
+#       be removed this way, repoint it instead (see "The recurring symptom" above)
+inventory_now=$(git -C <path> status --porcelain=v2 --untracked-files=all;
+  git -C <path> ls-files --others --ignored --exclude-standard)
+[ "$inventory_now" = "$inventory_before" ] ||
+  { echo "<path> changed since its inventory — reclassify before removing" >&2; exit 1; }
 git worktree remove <path>              # add --force only if you've confirmed clean + safe
 #    e. dry-run and real prune are two separate steps, not one chained command; each dry-run
 #       candidate's administrative reflog must be rescued before the real prune destroys it,
@@ -1034,8 +1080,10 @@ git remote prune origin --dry-run
 git reflog show "refs/remotes/origin/<candidate-branch>"   # check for a pre-force-update tip too
 # ...for each reported candidate: capture its SHA, check reachability, rescue-ref if unique...
 git update-ref -d "refs/remotes/origin/<candidate-branch>" "$sha"   # once per reviewed candidate
-# once every changed ref from step 1 is classified, clean up the snapshot and its temp files:
-git for-each-ref --format='delete %(refname)' refs/pre-fetch-snapshot | git update-ref --stdin
+# once every changed ref from step 1 is classified, clean up the snapshot and its temp files —
+# scoped to this invocation's own $run_id, never the whole refs/pre-fetch-snapshot namespace,
+# which would delete another concurrently-running session's still-in-progress snapshot too:
+git for-each-ref --format='delete %(refname)' "refs/pre-fetch-snapshot/$run_id" | git update-ref --stdin
 rm -f "$refs_before" "$refs_after" "$refs_diff"
 
 # 5b. Actual remote branch deletion — same current-tip verification as step 4, MERGED only, never

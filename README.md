@@ -1275,7 +1275,7 @@ The README is the product/entry-point overview. Detailed operational truth shoul
 | [`ROADMAP.md`](ROADMAP.md) | Forward-looking strategy |
 | [`TODO.md`](TODO.md) | Current execution backlog |
 | [`docs/DEPENDABOT-TRIAGE.md`](docs/DEPENDABOT-TRIAGE.md) | Dependency update discipline |
-| [`docs/GIT-WORKTREE-HOUSEKEEPING.md`](docs/GIT-WORKTREE-HOUSEKEEPING.md) | Git worktree/branch cleanup discipline — the `'main' is already used by worktree` merge-blocker root cause and fix, safe-deletion diagnostics, the Claude Code permission gate, `git gc` hardware caveats |
+| [`docs/GIT-WORKTREE-HOUSEKEEPING.md`](docs/GIT-WORKTREE-HOUSEKEEPING.md) | Git worktree/branch cleanup discipline — the `'main' is already used by worktree` local `gh pr merge` error and its fix, safe-deletion diagnostics, the Claude Code permission gate, `git gc` hardware caveats |
 | [`docs/CODEANT-REVIEW-LOOP.md`](docs/CODEANT-REVIEW-LOOP.md) | Review/convergence runbook |
 | [`docs/DEEPSOURCE-REVIEW-LOOP.md`](docs/DEEPSOURCE-REVIEW-LOOP.md) | Static-analysis convergence |
 
