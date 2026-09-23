@@ -21,9 +21,10 @@ export const EmptyState: FC<EmptyStateProps> = ({
   secondaryAction,
   compact = false,
 }) => (
+  // QNBS-v3 (Visual Maturity #E, DS-6): --sc-surface-overlay replaces the raw --glass-bg token — an empty-state panel is a persistent content-area treatment, not a transient overlay, so it belongs in the same semantic surface family as the rest of the app.
   <div
     role="status"
-    className={`flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--sc-border-subtle)] bg-[var(--glass-bg)] px-6 text-center ${compact ? 'py-6' : 'py-12'}`}
+    className={`flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--sc-border-subtle)] bg-[var(--sc-surface-overlay)] px-6 text-center ${compact ? 'py-6' : 'py-12'}`}
   >
     {icon ? (
       <div className={`text-[var(--sc-text-muted)] ${compact ? 'mb-3' : 'mb-4'}`}>{icon}</div>
