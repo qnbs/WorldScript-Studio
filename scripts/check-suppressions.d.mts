@@ -25,12 +25,12 @@ export interface GateDecision {
 
 export function decideUpdateAction(
   current: SuppressionCounts,
-  existingBaseline: SuppressionBaseline | null,
+  existingBaseline: SuppressionBaseline | undefined,
 ): UpdateDecision;
 
 export function decideGateAction(
   current: SuppressionCounts,
-  existingBaseline: SuppressionBaseline | null,
+  existingBaseline: SuppressionBaseline | undefined,
 ): GateDecision;
 
 export function withUpdateLock<T>(baselinePath: string, fn: () => T): T;

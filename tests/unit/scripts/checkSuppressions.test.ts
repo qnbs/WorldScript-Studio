@@ -40,7 +40,7 @@ describe('decideGateAction (#447: true monotonic per-rule suppression ratchet)',
 
   it('fails as NO_BASELINE_VIOLATIONS_FOUND when no baseline file exists yet and suppressions are present', () => {
     const current = { total: 3, summary: { noExplicitAny: 3 } };
-    const decision = decideGateAction(current, null);
+    const decision = decideGateAction(current, undefined);
     expect(decision.action).toBe('FAIL');
     expect(decision.reason).toBe('NO_BASELINE_VIOLATIONS_FOUND');
     expect(decision.tip).toContain('--update');
@@ -48,7 +48,7 @@ describe('decideGateAction (#447: true monotonic per-rule suppression ratchet)',
 
   it('passes with no baseline file when there are zero current suppressions', () => {
     const current = { total: 0, summary: {} };
-    expect(decideGateAction(current, null)).toEqual({ action: 'PASS' });
+    expect(decideGateAction(current, undefined)).toEqual({ action: 'PASS' });
   });
 
   it('fails closed as a FAIL when the baseline file itself is malformed (total disagrees with its own byRule breakdown)', () => {
@@ -87,9 +87,9 @@ describe('decideUpdateAction (#447: --update can never raise a per-rule ceiling)
     expect(decision.message).toContain('noThenProperty: 1 > 0');
   });
 
-  it('allows first-time baseline creation unconditionally when no baseline exists yet', () => {
+  it('allows first-time baseline creation unconditionally when no baseline exists yet (existingBaseline undefined)', () => {
     const current = { total: 3, summary: { noExplicitAny: 3 } };
-    const decision = decideUpdateAction(current, null);
+    const decision = decideUpdateAction(current, undefined);
     expect(decision).toEqual({
       action: 'WRITE',
       baseline: { total: 3, byRule: { noExplicitAny: 3 } },
@@ -221,25 +221,39 @@ describe('writeBaselineAtomic (CodeRabbit, PR #823: rename-based atomic replace)
   });
 });
 
-describe('falsy-but-present baseline handling (chatgpt-codex-connector, PR #823)', () => {
+describe('falsy-or-null-but-present baseline handling (Codex + CodeRabbit, PR #823, two rounds of the same class of bug)', () => {
   it('decideUpdateAction treats a baseline file that parsed to a falsy JSON scalar as malformed, not as "no baseline" — the original truthiness check would have silently overwritten it', () => {
     const current = { total: 5, summary: { noExplicitAny: 5 } };
     // QNBS-v3: `false` is what loadExistingBaseline would return if suppressions-baseline.json literally contained the 5-byte file `false` — a real, existing, malformed file, not a missing one.
-    const decision = decideUpdateAction(current, false as unknown as null);
+    const decision = decideUpdateAction(current, false as unknown as undefined);
     expect(decision.action).toBe('REFUSE');
     expect(decision.message).toContain('MALFORMED_BASELINE');
   });
 
   it('decideGateAction treats the same falsy-but-present baseline as malformed rather than passing as if no baseline existed', () => {
     const current = { total: 5, summary: { noExplicitAny: 5 } };
-    const decision = decideGateAction(current, 0 as unknown as null);
+    const decision = decideGateAction(current, 0 as unknown as undefined);
     expect(decision.action).toBe('FAIL');
     expect(decision.reason).toBe('MALFORMED_BASELINE');
   });
 
-  it('decideUpdateAction still allows genuine first-time creation when existingBaseline is actually null (not merely falsy)', () => {
+  it('decideUpdateAction treats a baseline file that parsed to literal JSON null as malformed too (fresh evidence, PR #823 round 2): JSON.parse("null") returns the exact same null value a naive check could otherwise collide with the "no baseline" sentinel', () => {
+    const current = { total: 5, summary: { noExplicitAny: 5 } };
+    const decision = decideUpdateAction(current, null as unknown as undefined);
+    expect(decision.action).toBe('REFUSE');
+    expect(decision.message).toContain('MALFORMED_BASELINE');
+  });
+
+  it('decideGateAction treats the same literal-null baseline as malformed rather than passing as if no baseline existed', () => {
+    const current = { total: 5, summary: { noExplicitAny: 5 } };
+    const decision = decideGateAction(current, null as unknown as undefined);
+    expect(decision.action).toBe('FAIL');
+    expect(decision.reason).toBe('MALFORMED_BASELINE');
+  });
+
+  it('decideUpdateAction allows genuine first-time creation only when existingBaseline is actually undefined — the real "no file" sentinel, distinct from every parsed-content case above', () => {
     const current = { total: 3, summary: { noExplicitAny: 3 } };
-    expect(decideUpdateAction(current, null)).toEqual({
+    expect(decideUpdateAction(current, undefined)).toEqual({
       action: 'WRITE',
       baseline: { total: 3, byRule: { noExplicitAny: 3 } },
     });
@@ -249,8 +263,28 @@ describe('falsy-but-present baseline handling (chatgpt-codex-connector, PR #823)
 describe('decideUpdateAction refuses a malformed current scan even on first-time creation (CodeRabbit, PR #823)', () => {
   it('refuses MALFORMED_AUDIT before ever reaching the existingBaseline branch', () => {
     const malformedCurrent = { total: 999, summary: { noExplicitAny: 5 } };
-    const decision = decideUpdateAction(malformedCurrent, null);
+    const decision = decideUpdateAction(malformedCurrent, undefined);
     expect(decision.action).toBe('REFUSE');
     expect(decision.message).toContain('MALFORMED_AUDIT');
+  });
+});
+
+describe('evaluateBaseline prototype-property safety (Codex, PR #823)', () => {
+  it('does not read an inherited Object.prototype property when a ruleId is absent as an OWN key on one side, correctly flagging it as a regression instead of silently treating it as 0 vs 0', () => {
+    const audit = { total: 0, summary: {} };
+    const baseline = { total: 1, summary: { constructor: 1 } };
+    const verdict = evaluateBaseline(audit, baseline);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toBe('STALE_HIGH_BASELINE');
+    expect(verdict.detail).toContain('constructor: 0 < 1');
+  });
+
+  it('flags a regression on a rule name that collides with an inherited property when it appears only in the current audit', () => {
+    const audit = { total: 1, summary: { toString: 1 } };
+    const baseline = { total: 0, summary: {} };
+    const verdict = evaluateBaseline(audit, baseline);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toBe('REGRESSION');
+    expect(verdict.detail).toContain('toString: 1 > 0');
   });
 });

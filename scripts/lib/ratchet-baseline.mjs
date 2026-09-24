@@ -78,9 +78,10 @@ export function evaluateBaseline(audit, baseline) {
   const allRuleIds = new Set([...Object.keys(audit.summary), ...Object.keys(baseline.summary)]);
   const regressions = [];
   const staleHigh = [];
+  // QNBS-v3 (Codex, PR #823): Object.hasOwn, not bracket-index + `?? 0` — a ruleId present as an OWN key on one summary but absent from the other would otherwise read the OTHER summary's inherited Object.prototype property (e.g. ruleId "constructor" resolves to Object.prototype.constructor, not undefined), so `?? 0` never triggers and the numeric comparison silently evaluates false in both directions, hiding a real regression.
   for (const ruleId of allRuleIds) {
-    const current = audit.summary[ruleId] ?? 0;
-    const baselined = baseline.summary[ruleId] ?? 0;
+    const current = Object.hasOwn(audit.summary, ruleId) ? audit.summary[ruleId] : 0;
+    const baselined = Object.hasOwn(baseline.summary, ruleId) ? baseline.summary[ruleId] : 0;
     if (current > baselined) regressions.push(`${ruleId}: ${current} > ${baselined}`);
     else if (current < baselined) staleHigh.push(`${ruleId}: ${current} < ${baselined}`);
   }

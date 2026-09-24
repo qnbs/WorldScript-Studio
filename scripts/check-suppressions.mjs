@@ -37,19 +37,29 @@ function refuseUpdate(verdict) {
   };
 }
 
+// QNBS-v3 (Codex + CodeRabbit, PR #823, independently found): loadExistingBaseline uses `undefined` for "file genuinely absent" (see below) so it can never collide with a JSON `null` literally parsed FROM an existing file — the earlier `!== null` check was still wrong for that exact byte content, since `JSON.parse('null')` returns the same `null` sentinel a truthiness/`!== null` check would treat as bootstrap-allowed. This turns `existingBaseline` (present-but-not-a-valid-shape: null, a scalar, or an array) into a `{ total: NaN, summary: existingBaseline }` marker instead — always a truthy object, so it can never trip evaluateBaseline's own `!baseline` bootstrap shortcut, and its NaN/non-object `summary` always fails hasValidCounts, correctly landing on MALFORMED_BASELINE rather than being silently treated as absent.
+function toBaselineArg(existingBaseline) {
+  if (existingBaseline === undefined) return null;
+  if (
+    existingBaseline === null ||
+    typeof existingBaseline !== 'object' ||
+    Array.isArray(existingBaseline)
+  ) {
+    return { total: Number.NaN, summary: existingBaseline };
+  }
+  return { total: existingBaseline.total, summary: existingBaseline.byRule };
+}
+
 /**
  * QNBS-v3 (#447; hardened after CodeAnt/Codex/CodeRabbit, PR #823): pure decision for `--update`
  * — never writes a file or touches process.exit, so it's exercised directly by tests.
- * `existingBaseline` is `null` on first-time baseline creation (always allowed). Otherwise, only a
+ * `existingBaseline` is `undefined` on first-time baseline creation (always allowed) — see
+ * toBaselineArg for why the "no baseline" sentinel is `undefined`, not `null`. Otherwise, only a
  * STALE_HIGH_BASELINE verdict (a real improvement to bank) or EXACT_MATCH (a no-op) may write —
  * REGRESSION, MALFORMED_BASELINE, and MALFORMED_AUDIT all refuse. The original version refused only
  * REGRESSION, so a malformed baseline (or a malformed live scan) would fall through to a silent
  * overwrite instead of failing closed — exactly the "don't trust corrupted data" gap this whole
  * ratchet exists to close everywhere else.
- * QNBS-v3 (Codex, PR #823): checks `existingBaseline !== null`, not JS truthiness — a baseline file
- * whose content happens to parse as a falsy JSON scalar (`false`/`0`/`""`) is a real, existing,
- * malformed file, not the same as the file being genuinely absent, and must still be validated
- * (and refused as MALFORMED_BASELINE) rather than silently overwritten.
  * QNBS-v3 (CodeRabbit, PR #823): `current` is validated unconditionally, even on first-time
  * creation with no existing baseline — decideUpdateAction is a public, directly-callable export,
  * not gated behind the real scanner that always happens to produce well-formed counts.
@@ -58,11 +68,9 @@ export function decideUpdateAction(current, existingBaseline) {
   const auditVerdict = evaluateBaseline(current, null);
   if (auditVerdict.reason === 'MALFORMED_AUDIT') return refuseUpdate(auditVerdict);
 
-  if (existingBaseline !== null) {
-    const verdict = evaluateBaseline(current, {
-      total: existingBaseline.total,
-      summary: existingBaseline.byRule,
-    });
+  const baselineArg = toBaselineArg(existingBaseline);
+  if (baselineArg !== null) {
+    const verdict = evaluateBaseline(current, baselineArg);
     if (!verdict.ok && verdict.reason !== 'STALE_HIGH_BASELINE') return refuseUpdate(verdict);
   }
   return {
@@ -73,20 +81,14 @@ export function decideUpdateAction(current, existingBaseline) {
 
 /**
  * QNBS-v3 (#447): pure gate decision, given the already-collected current counts and the parsed
- * baseline file (or null if none exists yet). Delegates to the shared `evaluateBaseline` ratchet
- * and only adds the human-readable remediation tip per failure reason.
- * QNBS-v3 (Codex, PR #823, same fix as decideUpdateAction): checks `existingBaseline !== null`,
- * not JS truthiness, for the same reason — a falsy-but-present baseline file must still reach
- * evaluateBaseline's own validation and fail as MALFORMED_BASELINE, not be silently treated as
- * "no baseline yet."
+ * baseline file (or `undefined` if none exists yet). Delegates to the shared `evaluateBaseline`
+ * ratchet and only adds the human-readable remediation tip per failure reason.
+ * QNBS-v3 (Codex, PR #823, same fix as decideUpdateAction): uses toBaselineArg so a baseline file
+ * that exists but parses to a falsy or non-object JSON value (including a literal `null`) reaches
+ * evaluateBaseline's own validation and fails as MALFORMED_BASELINE, not "no baseline yet."
  */
 export function decideGateAction(current, existingBaseline) {
-  const verdict = evaluateBaseline(
-    current,
-    existingBaseline !== null
-      ? { total: existingBaseline.total, summary: existingBaseline.byRule }
-      : null,
-  );
+  const verdict = evaluateBaseline(current, toBaselineArg(existingBaseline));
   if (verdict.ok) return { action: 'PASS' };
 
   let tip = '';
@@ -103,8 +105,10 @@ export function decideGateAction(current, existingBaseline) {
   return { action: 'FAIL', reason: verdict.reason, detail: verdict.detail, tip };
 }
 
+// QNBS-v3 (Codex + CodeRabbit, PR #823): returns `undefined` for "file genuinely absent", never `null` — `null` is a value JSON.parse can legitimately return FROM an existing file's content, and toBaselineArg needs those two states to stay distinguishable.
 function loadExistingBaseline(baselinePath) {
-  return fs.existsSync(baselinePath) ? JSON.parse(fs.readFileSync(baselinePath, 'utf8')) : null;
+  if (!fs.existsSync(baselinePath)) return undefined;
+  return JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
 }
 
 /**
