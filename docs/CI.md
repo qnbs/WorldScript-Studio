@@ -156,6 +156,17 @@ registry gzip-decoding failure mode, while OSV failures remain blocking.
 > an automated PR. Do it manually once `ci-success` has run green on `main` at least once: repo
 > Settings → Branches → `main` → Required status checks → remove the 4 individual entries, add
 > `✅ CI Success`.
+>
+> **In progress (#510):** [`pr-size-enforce.yml`](../.github/workflows/pr-size-enforce.yml) is a new
+> `workflow_call` reusable workflow that will host `pr-size`'s write-scoped (`pull-requests: write`)
+> enforcement/comment step once it is wired up — closing the gap where that step's own job body in
+> `ci.yml` is sourced from the PR's own ref, not a trusted one (`workflow-policy`'s base-ref-checker
+> discipline protects the *checker script*, not the *job body that invokes it and spends the write
+> token*). It is landed here unreferenced, dormant, and structurally validated by `workflow-policy`
+> itself; `scripts/workflow-policy-check.mjs` requires every `uses:` — including a job-level
+> reusable-workflow call — to pin a real 40-hex-char commit SHA, so `ci.yml`'s `pr-size` job cannot
+> be repointed at it until a SHA for this file exists on `main`. A follow-up PR pins `ci.yml`'s
+> `pr-size` job to that merged SHA and removes the now-superseded inline job body.
 
 ### Codecov integration
 
