@@ -229,6 +229,49 @@ describe('flushPersistedState', () => {
     await expect(flushPromise).rejects.toThrow('later autosave refused');
   });
 
+  it('rechecks a settings chain started while the project outcomes were being awaited', async () => {
+    const original = projectPersistenceCoordinator.outcomesSince.bind(
+      projectPersistenceCoordinator,
+    );
+    let injected = false;
+    const spy = vi
+      .spyOn(projectPersistenceCoordinator, 'outcomesSince')
+      .mockImplementation((mark) => {
+        if (!injected) {
+          injected = true;
+          void settingsPersistenceCoordinator
+            .enqueue(() => Promise.reject(new Error('settings saved mid-check refused')))
+            .catch(() => undefined);
+        }
+        return original(mark);
+      });
+    try {
+      await expect(flushPersistedState(buildState())).rejects.toThrow(
+        'settings saved mid-check refused',
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('fails closed when persistence keeps changing across every verification pass', async () => {
+    const original = projectPersistenceCoordinator.outcomesSince.bind(
+      projectPersistenceCoordinator,
+    );
+    const spy = vi
+      .spyOn(projectPersistenceCoordinator, 'outcomesSince')
+      .mockImplementation((mark) => {
+        void settingsPersistenceCoordinator.enqueue(async () => {});
+        return original(mark);
+      });
+    try {
+      await expect(flushPersistedState(buildState())).rejects.toThrow('kept changing');
+    } finally {
+      spy.mockRestore();
+      await settingsPersistenceCoordinator.idle();
+    }
+  });
+
   it('is not affected by a chain that starts only after it resolved', async () => {
     await expect(flushPersistedState(buildState())).resolves.toBeUndefined();
     await expect(

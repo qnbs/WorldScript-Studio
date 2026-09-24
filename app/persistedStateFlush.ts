@@ -52,8 +52,29 @@ export async function flushPersistedState(state: RootState): Promise<void> {
   );
   if (rejected) throw rejected.reason;
   // QNBS-v3 (#553): a resolved (even superseded) result is not proof that everything pending was saved — a waiter is resolved when its own failed attempt had a queued successor, and a save enqueued after this flush's results settled forms a separate chain. Every chain active at the pre-enqueue mark or started since then must have ended in success; each is read from its own outcome promise (never a shared "last outcome"), and a history gap fails closed. The older captured snapshot is never re-enqueued.
-  await assertChainsSucceededSince(settingsPersistenceCoordinator, settingsMark);
-  await assertChainsSucceededSince(projectPersistenceCoordinator, projectMark);
+  await assertStableSuccessSince(settingsMark, projectMark);
+}
+
+const MAX_VERIFICATION_PASSES = 5;
+
+// QNBS-v3 (#553): the boundary is the moment this flush returns, not the moment it first snapshotted — a chain started while an earlier pass was still awaiting (e.g. a settings save enqueued during the project check) is picked up by the next pass. Returns only after a full pass in which neither queue started a new chain; continuous saving past the pass limit fails closed rather than claiming success.
+async function assertStableSuccessSince(
+  settingsMark: ChainMark,
+  projectMark: ChainMark,
+): Promise<void> {
+  for (let pass = 0; pass < MAX_VERIFICATION_PASSES; pass++) {
+    const settingsSeq = settingsPersistenceCoordinator.chainMark().seq;
+    const projectSeq = projectPersistenceCoordinator.chainMark().seq;
+    await assertChainsSucceededSince(settingsPersistenceCoordinator, settingsMark);
+    await assertChainsSucceededSince(projectPersistenceCoordinator, projectMark);
+    if (
+      settingsPersistenceCoordinator.chainMark().seq === settingsSeq &&
+      projectPersistenceCoordinator.chainMark().seq === projectSeq
+    ) {
+      return;
+    }
+  }
+  throw new Error('Persistence kept changing during this flush; cannot prove it saved.');
 }
 
 async function assertChainsSucceededSince(
