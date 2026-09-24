@@ -4,9 +4,9 @@ function sumSummary(summary) {
   return Object.values(summary).reduce((sum, count) => sum + count, 0);
 }
 
-// QNBS-v3 (Codex, PR #817): a violation count can only ever be a non-negative whole number — this is checked explicitly, before any arithmetic, so a malformed JSON value (a string, NaN/Infinity, a fraction, or a negative number) can never reach sumSummary's '+' or the ratchet loop's '>'/'<', whose implicit type coercion could otherwise let a corrupted value slip through as if it matched.
+// QNBS-v3 (Codex, PR #817; hardened by CodeAnt, PR #823): a violation count can only ever be a non-negative whole number — this is checked explicitly, before any arithmetic, so a malformed JSON value (a string, NaN/Infinity, a fraction, or a negative number) can never reach sumSummary's '+' or the ratchet loop's '>'/'<', whose implicit type coercion could otherwise let a corrupted value slip through as if it matched. Number.isSafeInteger, not Number.isInteger — a JSON count above Number.MAX_SAFE_INTEGER can lose precision during parsing and still report Number.isInteger === true, producing an unreliable ratchet comparison against a value that was silently rounded.
 function isValidCount(value) {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 // QNBS-v3: validates both `total` and every `summary` value in one call, shared by the audit-side and baseline-side checks in evaluateBaseline so both are held to the identical numeric contract.

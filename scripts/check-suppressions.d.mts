@@ -10,13 +10,18 @@ export interface SuppressionBaseline {
   byRule: Record<string, number>;
 }
 
-export type UpdateDecision =
-  | { action: 'WRITE'; baseline: SuppressionBaseline }
-  | { action: 'REFUSE'; message: string };
+export interface UpdateDecision {
+  action: 'WRITE' | 'REFUSE';
+  baseline?: SuppressionBaseline;
+  message?: string;
+}
 
-export type GateDecision =
-  | { action: 'PASS' }
-  | { action: 'FAIL'; reason: string; detail?: string; tip: string };
+export interface GateDecision {
+  action: 'PASS' | 'FAIL';
+  reason?: string;
+  detail?: string;
+  tip?: string;
+}
 
 export function decideUpdateAction(
   current: SuppressionCounts,

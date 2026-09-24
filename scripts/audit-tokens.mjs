@@ -31,17 +31,10 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { isDirectExecution } from './lib/cli-entrypoint.mjs';
+import { isDirectExecution, resolveModuleRoot } from './lib/cli-entrypoint.mjs';
 import { evaluateBaseline } from './lib/ratchet-baseline.mjs';
 
-export { evaluateBaseline, isDirectExecution };
-
-// QNBS-v3 (live review, PR #817): resolves the canonical repo root from a module URL independent of whether that URL itself is symlink-resolved. isDirectExecution deliberately accepts BOTH the resolved and unresolved comparison (so `node --preserve-symlinks-main` is still recognized as direct execution), but repo-relative authority — root, baseline/report paths, the git subprocess cwd — must always anchor to the real file location: under --preserve-symlinks-main, import.meta.url stays the unresolved symlink path, and a symlink living outside the repository would otherwise compute a root outside it entirely. fs.realpathSync resolves the module path itself first, so this is correct regardless of which of the two import.meta.url forms was actually passed in. Exported so this exact scenario is testable without spawning a real --preserve-symlinks-main subprocess.
-export function resolveModuleRoot(moduleUrl) {
-  const modulePath = fs.realpathSync(fileURLToPath(moduleUrl));
-  return path.resolve(path.dirname(modulePath), '..');
-}
+export { evaluateBaseline, isDirectExecution, resolveModuleRoot };
 
 // QNBS-v3: exported so tests can build the exact same absolute paths the module's own EXCLUDED_FILES set uses, without duplicating this resolution or touching the filesystem.
 export const root = resolveModuleRoot(import.meta.url);

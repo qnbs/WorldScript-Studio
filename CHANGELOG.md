@@ -204,6 +204,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--preserve-symlinks-main`; array-`summary` rejection for both audit and baseline; the widened
   extensions/declarations/config-basename/Lighthouse-exclusion cases; and an end-to-end
   `resolveAuditableFiles` → `findViolations` scan of a synthetic tracked `.mts` file. PR #817.
+- **Suppression-debt ratchet is now a true per-rule gate (#447):** `check-suppressions.mjs`
+  previously compared only the aggregate suppression total against the committed baseline, so one
+  rule's improvement could finance another rule's regression without CI noticing — confirmed
+  reproducing on `main` (`noExplicitAny` 29→30 masked by `useExhaustiveDependencies` 6→5, aggregate
+  unchanged at 48). Now shares the already-audited per-rule ratchet (`evaluateBaseline`, from the
+  token audit, PR #817) via a new `scripts/lib/ratchet-baseline.mjs`, and `--update` itself refuses
+  to raise any per-rule ceiling. No user-facing change. PR #823.
 
 ## [1.28.8] — 2026-09-22
 

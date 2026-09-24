@@ -22,18 +22,22 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { isDirectExecution } from './lib/cli-entrypoint.mjs';
+import { isDirectExecution, resolveModuleRoot } from './lib/cli-entrypoint.mjs';
 import { evaluateBaseline } from './lib/ratchet-baseline.mjs';
 import { collectTrackedSourceFiles, scanSuppressionFiles } from './suppression-scanner.mjs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const root = path.join(__dirname, '..');
+// QNBS-v3 (Sourcery + CodeAnt, PR #823): a plain path.dirname(fileURLToPath(...)) does not resolve symlinks — under `node --preserve-symlinks-main`, a symlink living outside the repository would make `root` (and therefore the scan corpus, baseline path, and reports directory) resolve beside the symlink instead of the real checkout. `resolveModuleRoot` (shared with audit-tokens.mjs) fixes this via fs.realpathSync.
+export const root = resolveModuleRoot(import.meta.url);
 
 /**
- * QNBS-v3 (#447): pure decision for `--update` — never writes a file or touches process.exit, so
- * it's exercised directly by tests. `existingBaseline` is `null` on first-time baseline creation
- * (always allowed); otherwise a REGRESSION verdict against it refuses the write.
+ * QNBS-v3 (#447; hardened after CodeAnt/Codex/CodeRabbit, PR #823): pure decision for `--update`
+ * — never writes a file or touches process.exit, so it's exercised directly by tests.
+ * `existingBaseline` is `null` on first-time baseline creation (always allowed). Otherwise, only a
+ * STALE_HIGH_BASELINE verdict (a real improvement to bank) or EXACT_MATCH (a no-op) may write —
+ * REGRESSION, MALFORMED_BASELINE, and MALFORMED_AUDIT all refuse. The original version refused only
+ * REGRESSION, so a malformed baseline (or a malformed live scan) would fall through to a silent
+ * overwrite instead of failing closed — exactly the "don't trust corrupted data" gap this whole
+ * ratchet exists to close everywhere else.
  */
 export function decideUpdateAction(current, existingBaseline) {
   if (existingBaseline) {
@@ -41,12 +45,11 @@ export function decideUpdateAction(current, existingBaseline) {
       total: existingBaseline.total,
       summary: existingBaseline.byRule,
     });
-    if (verdict.reason === 'REGRESSION') {
+    if (!verdict.ok && verdict.reason !== 'STALE_HIGH_BASELINE') {
+      const detail = verdict.detail ? `: ${verdict.detail}` : '';
       return {
         action: 'REFUSE',
-        message:
-          `--update refused — this would raise a per-rule ceiling: ${verdict.detail}. ` +
-          'Remove the new suppression(s) or fix the root cause first; --update only ever ratchets down.',
+        message: `--update refused — ${verdict.reason}${detail}. Fix the underlying data first; --update only ever ratchets down from a trustworthy baseline and a trustworthy scan.`,
       };
     }
   }

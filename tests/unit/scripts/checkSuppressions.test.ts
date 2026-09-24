@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { decideGateAction, decideUpdateAction } from '../../../scripts/check-suppressions.mjs';
+import {
+  decideGateAction,
+  decideUpdateAction,
+  root,
+} from '../../../scripts/check-suppressions.mjs';
+import { resolveModuleRoot } from '../../../scripts/lib/cli-entrypoint.mjs';
+import { evaluateBaseline } from '../../../scripts/lib/ratchet-baseline.mjs';
 
 describe('decideGateAction (#447: true monotonic per-rule suppression ratchet)', () => {
   it('passes when every rule count matches the baseline exactly', () => {
@@ -83,5 +89,50 @@ describe('decideUpdateAction (#447: --update can never raise a per-rule ceiling)
       action: 'WRITE',
       baseline: { total: 3, byRule: { noExplicitAny: 3 } },
     });
+  });
+
+  it('refuses to write when the EXISTING baseline is malformed (CodeAnt/Codex/CodeRabbit, PR #823): the original version refused only REGRESSION, so a corrupted baseline file would silently be overwritten by --update instead of failing closed', () => {
+    const current = { total: 5, summary: { noExplicitAny: 5 } };
+    const malformedExisting = { total: 999, byRule: { noExplicitAny: 5 } };
+    const decision = decideUpdateAction(current, malformedExisting);
+    expect(decision.action).toBe('REFUSE');
+    expect(decision.message).toContain('MALFORMED_BASELINE');
+  });
+
+  it('refuses to write when the CURRENT live scan is malformed, not just the existing baseline (same root cause as the previous case, opposite side)', () => {
+    const malformedCurrent = { total: 999, summary: { noExplicitAny: 5 } };
+    const existing = { total: 5, byRule: { noExplicitAny: 5 } };
+    const decision = decideUpdateAction(malformedCurrent, existing);
+    expect(decision.action).toBe('REFUSE');
+    expect(decision.message).toContain('MALFORMED_AUDIT');
+  });
+
+  it('still writes on the legitimate STALE_HIGH_BASELINE case (an improvement to bank) — the malformed-refusal fix must not regress the normal ratchet-down path', () => {
+    const current = { total: 4, summary: { noExplicitAny: 4 } };
+    const existing = { total: 5, byRule: { noExplicitAny: 5 } };
+    const decision = decideUpdateAction(current, existing);
+    expect(decision).toEqual({
+      action: 'WRITE',
+      baseline: { total: 4, byRule: { noExplicitAny: 4 } },
+    });
+  });
+});
+
+describe('root resolution (Sourcery/CodeAnt, PR #823: symlink-safe root, shared with audit-tokens.mjs)', () => {
+  it("check-suppressions.mjs's exported root matches resolveModuleRoot computed directly for the same file, confirming it actually wired up the shared symlink-safe resolver instead of a raw path.dirname(fileURLToPath(...))", () => {
+    const expected = resolveModuleRoot(
+      new URL('../../../scripts/check-suppressions.mjs', import.meta.url).href,
+    );
+    expect(root).toBe(expected);
+  });
+});
+
+describe('isValidCount safe-integer boundary (CodeAnt, PR #823)', () => {
+  it('rejects a count above Number.MAX_SAFE_INTEGER even though Number.isInteger would accept it, since such a JSON value can have lost precision during parsing', () => {
+    const unsafe = Number.MAX_SAFE_INTEGER + 2; // still Number.isInteger === true, not safe
+    const audit = { total: unsafe, summary: { noExplicitAny: unsafe } };
+    const verdict = evaluateBaseline(audit, null);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toBe('MALFORMED_AUDIT');
   });
 });
