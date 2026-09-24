@@ -15,6 +15,15 @@ const mockIsTauriRuntime = vi.fn(() => false);
 const mockLoadTauriApis = vi.fn();
 const mockBeginIdbReset = vi.fn();
 const mockEndIdbReset = vi.fn();
+const mockDuckDbShutdown = vi.fn();
+const mockDuckDbTerminate = vi.fn();
+
+vi.mock('../../services/duckdb/duckdbClient', () => ({
+  duckdbClient: {
+    shutdown: (...args: unknown[]) => mockDuckDbShutdown(...args),
+    terminate: () => mockDuckDbTerminate(),
+  },
+}));
 
 vi.mock('../../services/logger', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -587,6 +596,81 @@ describe('wipeAllAppData', () => {
 
       expect(removeMock).toHaveBeenCalledWith('/app/data/projects', { recursive: true });
       expect(reloadMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // QNBS-v3 (#716): Factory Reset promised to delete all projects but never touched OPFS, leaving the DuckDB analytics file (plaintext project/section titles, loglines, character and codex names) on disk.
+  describe('DuckDB analytics OPFS data', () => {
+    let removeEntry: ReturnType<typeof vi.fn>;
+    const originalStorage = Object.getOwnPropertyDescriptor(navigator, 'storage');
+
+    beforeEach(() => {
+      mockDuckDbShutdown.mockResolvedValue({ messageId: 'm', ok: true });
+      removeEntry = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'storage', {
+        configurable: true,
+        value: { getDirectory: vi.fn().mockResolvedValue({ removeEntry }) },
+      });
+    });
+
+    afterEach(() => {
+      if (originalStorage) Object.defineProperty(navigator, 'storage', originalStorage);
+      else Reflect.deleteProperty(navigator, 'storage');
+    });
+
+    it('shuts DuckDB down, then removes only the worldscript-owned database and its WAL', async () => {
+      await runWipe();
+
+      expect(removeEntry.mock.calls.map(([name]) => name)).toEqual([
+        'worldscript_analytics.duckdb',
+        'worldscript_analytics.duckdb.wal',
+      ]);
+      expect(mockDuckDbShutdown.mock.invocationCallOrder[0]).toBeLessThan(
+        removeEntry.mock.invocationCallOrder[0] ?? 0,
+      );
+      expect(mockDuckDbTerminate).toHaveBeenCalledTimes(1);
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats an already-absent entry as cleared', async () => {
+      removeEntry.mockRejectedValue(Object.assign(new Error('gone'), { name: 'NotFoundError' }));
+
+      await runWipe();
+
+      expect(removeEntry).toHaveBeenCalledTimes(2);
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('still removes the file when shutdown cannot be confirmed, after force-terminating the pool', async () => {
+      mockDuckDbShutdown.mockResolvedValue({ messageId: 'm', ok: false, error: 'Aborted' });
+
+      await runWipe();
+
+      expect(mockDuckDbTerminate).toHaveBeenCalledTimes(1);
+      expect(removeEntry).toHaveBeenCalledWith('worldscript_analytics.duckdb');
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails closed — deleting no database and never reloading — when the file is still locked', async () => {
+      await createDb('worldscript-data-db');
+      const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+      removeEntry.mockRejectedValue(
+        Object.assign(new Error('locked'), { name: 'NoModificationAllowedError' }),
+      );
+
+      vi.useFakeTimers();
+      try {
+        await expect(wipeAllAppData()).rejects.toThrow(
+          'Factory reset could not clear local analytics data',
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(delSpy).not.toHaveBeenCalled();
+      expect(reloadMock).not.toHaveBeenCalled();
+      expect(isFactoryResetInProgress()).toBe(false);
+      delSpy.mockRestore();
     });
   });
 });

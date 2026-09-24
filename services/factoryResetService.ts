@@ -14,6 +14,7 @@ import {
   projectPersistenceCoordinator,
   settingsPersistenceCoordinator,
 } from '../app/persistenceCoordinator';
+import { DUCKDB_OWNED_OPFS_ENTRIES } from './duckdb/duckdbOpfsFiles';
 import type { TauriApis } from './fs/fsCore';
 import { logger } from './logger';
 import { beginIdbReset, endIdbReset } from './storage/idbResetGate';
@@ -206,6 +207,44 @@ async function clearTauriAppData(): Promise<void> {
   }
 }
 
+const DUCKDB_SHUTDOWN_TIMEOUT_MS = 5000;
+
+function isNotFoundError(error: unknown): boolean {
+  return (error as { name?: string } | null)?.name === 'NotFoundError';
+}
+
+// QNBS-v3 (#716): the DuckDB analytics database lives in OPFS, which none of the other reset steps touch — it holds project/section titles, loglines, character and codex entity names and plot labels in plaintext (plus encrypted section/character text), so without this, "permanently delete all your projects" left all of that on disk. Only the worldscript_-owned entries are removed, never the rest of this origin's OPFS. DuckDB holds an OPFS access handle on the file while open, so it is shut down first (bounded, then force-terminated as a backstop); if the file is still locked, removal throws and the reset fails closed instead of reporting a success it did not achieve. A missing entry is fine — analytics may never have run.
+async function clearOwnedDuckDbOpfsData(): Promise<void> {
+  if (typeof navigator === 'undefined' || typeof navigator.storage?.getDirectory !== 'function') {
+    return;
+  }
+  try {
+    const { duckdbClient } = await import('./duckdb/duckdbClient');
+    const timeout =
+      typeof AbortSignal.timeout === 'function'
+        ? AbortSignal.timeout(DUCKDB_SHUTDOWN_TIMEOUT_MS)
+        : undefined;
+    const shutdown = await duckdbClient.shutdown(timeout);
+    if (!shutdown.ok) {
+      logger.warn('[factoryReset] DuckDB shutdown did not confirm; terminating its pool', {
+        error: shutdown.error,
+      });
+    }
+    duckdbClient.terminate();
+    const root = await navigator.storage.getDirectory();
+    for (const name of DUCKDB_OWNED_OPFS_ENTRIES) {
+      try {
+        await root.removeEntry(name);
+      } catch (error) {
+        if (!isNotFoundError(error)) throw error;
+      }
+    }
+  } catch (error) {
+    logger.error('Failed to clear DuckDB analytics data during factory reset:', error);
+    throw new Error('Factory reset could not clear local analytics data');
+  }
+}
+
 /**
  * Wipe all app data and reload.
  * Clears: IDB, localStorage, sessionStorage, SW caches.
@@ -224,6 +263,8 @@ export async function wipeAllAppData(): Promise<void> {
     ]);
     // QNBS-v3: only after those four have genuinely drained -- beginIdbReset() force-closes every other long-lived IDB connection (9 modules), which must not happen while one of the four above is still mid-write. Awaited and can throw: it fails closed on any closer failure, so a rejection here skips straight to the catch below and deletion never starts on an unproven teardown.
     await beginIdbReset();
+    // QNBS-v3 (#716): regenerable derived data goes first — if this or any later step fails, nothing irreplaceable has been deleted yet.
+    await clearOwnedDuckDbOpfsData();
     // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
     await clearTauriAppData();
     await deleteAllIndexedDBDatabases();
