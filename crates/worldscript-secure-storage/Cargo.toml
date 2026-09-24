@@ -1,0 +1,16 @@
+[package]
+name = "worldscript-secure-storage"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77.2"
+description = "Renderer-neutral R-15 protected-record primitives (WSR1 envelope, canonical AAD, AES-256-GCM) — Gate 1, headless"
+publish = false
+
+[lib]
+name = "worldscript_secure_storage"
+
+[dependencies]
+aes-gcm = { version = "0.10.3", default-features = false, features = ["aes", "alloc"] }
+getrandom = "0.2"
+sha2 = "0.10"
+zeroize = { version = "1", features = ["derive"] }
