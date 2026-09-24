@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -8,6 +8,7 @@ import {
   decideUpdateAction,
   root,
   withUpdateLock,
+  writeBaselineAtomic,
 } from '../../../scripts/check-suppressions.mjs';
 import { resolveModuleRoot } from '../../../scripts/lib/cli-entrypoint.mjs';
 import { evaluateBaseline } from '../../../scripts/lib/ratchet-baseline.mjs';
@@ -182,5 +183,74 @@ describe('withUpdateLock (chatgpt-codex-connector, PR #823: real mutual exclusio
         expect(() => withUpdateLock(baselinePath, () => {})).toThrow(/already in progress/);
       }),
     ).not.toThrow();
+  });
+});
+
+describe('writeBaselineAtomic (CodeRabbit, PR #823: rename-based atomic replace)', () => {
+  let dir: string;
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('writes valid, parseable JSON that a reader can load back exactly', () => {
+    dir = mkdtempSync(join(tmpdir(), 'suppressions-atomic-'));
+    const baselinePath = join(dir, 'suppressions-baseline.json');
+    const baseline = { total: 3, byRule: { noExplicitAny: 3 } };
+    writeBaselineAtomic(baselinePath, baseline);
+    expect(JSON.parse(readFileSync(baselinePath, 'utf8'))).toEqual(baseline);
+  });
+
+  it('leaves no temp file behind after a successful write', () => {
+    dir = mkdtempSync(join(tmpdir(), 'suppressions-atomic-'));
+    const baselinePath = join(dir, 'suppressions-baseline.json');
+    writeBaselineAtomic(baselinePath, { total: 0, byRule: {} });
+    const leftovers = readdirSync(dir).filter((f) => f.includes('.tmp-'));
+    expect(leftovers).toEqual([]);
+  });
+
+  it('replaces an existing baseline file rather than merging or appending', () => {
+    dir = mkdtempSync(join(tmpdir(), 'suppressions-atomic-'));
+    const baselinePath = join(dir, 'suppressions-baseline.json');
+    writeBaselineAtomic(baselinePath, { total: 5, byRule: { noExplicitAny: 5 } });
+    writeBaselineAtomic(baselinePath, { total: 2, byRule: { noExplicitAny: 2 } });
+    expect(JSON.parse(readFileSync(baselinePath, 'utf8'))).toEqual({
+      total: 2,
+      byRule: { noExplicitAny: 2 },
+    });
+  });
+});
+
+describe('falsy-but-present baseline handling (chatgpt-codex-connector, PR #823)', () => {
+  it('decideUpdateAction treats a baseline file that parsed to a falsy JSON scalar as malformed, not as "no baseline" — the original truthiness check would have silently overwritten it', () => {
+    const current = { total: 5, summary: { noExplicitAny: 5 } };
+    // QNBS-v3: `false` is what loadExistingBaseline would return if suppressions-baseline.json literally contained the 5-byte file `false` — a real, existing, malformed file, not a missing one.
+    const decision = decideUpdateAction(current, false as unknown as null);
+    expect(decision.action).toBe('REFUSE');
+    expect(decision.message).toContain('MALFORMED_BASELINE');
+  });
+
+  it('decideGateAction treats the same falsy-but-present baseline as malformed rather than passing as if no baseline existed', () => {
+    const current = { total: 5, summary: { noExplicitAny: 5 } };
+    const decision = decideGateAction(current, 0 as unknown as null);
+    expect(decision.action).toBe('FAIL');
+    expect(decision.reason).toBe('MALFORMED_BASELINE');
+  });
+
+  it('decideUpdateAction still allows genuine first-time creation when existingBaseline is actually null (not merely falsy)', () => {
+    const current = { total: 3, summary: { noExplicitAny: 3 } };
+    expect(decideUpdateAction(current, null)).toEqual({
+      action: 'WRITE',
+      baseline: { total: 3, byRule: { noExplicitAny: 3 } },
+    });
+  });
+});
+
+describe('decideUpdateAction refuses a malformed current scan even on first-time creation (CodeRabbit, PR #823)', () => {
+  it('refuses MALFORMED_AUDIT before ever reaching the existingBaseline branch', () => {
+    const malformedCurrent = { total: 999, summary: { noExplicitAny: 5 } };
+    const decision = decideUpdateAction(malformedCurrent, null);
+    expect(decision.action).toBe('REFUSE');
+    expect(decision.message).toContain('MALFORMED_AUDIT');
   });
 });

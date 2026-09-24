@@ -34,3 +34,5 @@ export function decideGateAction(
 ): GateDecision;
 
 export function withUpdateLock<T>(baselinePath: string, fn: () => T): T;
+
+export function writeBaselineAtomic(baselinePath: string, baseline: SuppressionBaseline): void;

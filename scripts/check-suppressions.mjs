@@ -29,6 +29,14 @@ import { collectTrackedSourceFiles, scanSuppressionFiles } from './suppression-s
 // QNBS-v3 (Sourcery + CodeAnt, PR #823): a plain path.dirname(fileURLToPath(...)) does not resolve symlinks — under `node --preserve-symlinks-main`, a symlink living outside the repository would make `root` (and therefore the scan corpus, baseline path, and reports directory) resolve beside the symlink instead of the real checkout. `resolveModuleRoot` (shared with audit-tokens.mjs) fixes this via fs.realpathSync.
 export const root = resolveModuleRoot(import.meta.url);
 
+function refuseUpdate(verdict) {
+  const detail = verdict.detail ? `: ${verdict.detail}` : '';
+  return {
+    action: 'REFUSE',
+    message: `--update refused — ${verdict.reason}${detail}. Fix the underlying data first; --update only ever ratchets down from a trustworthy baseline and a trustworthy scan.`,
+  };
+}
+
 /**
  * QNBS-v3 (#447; hardened after CodeAnt/Codex/CodeRabbit, PR #823): pure decision for `--update`
  * — never writes a file or touches process.exit, so it's exercised directly by tests.
@@ -38,20 +46,24 @@ export const root = resolveModuleRoot(import.meta.url);
  * REGRESSION, so a malformed baseline (or a malformed live scan) would fall through to a silent
  * overwrite instead of failing closed — exactly the "don't trust corrupted data" gap this whole
  * ratchet exists to close everywhere else.
+ * QNBS-v3 (Codex, PR #823): checks `existingBaseline !== null`, not JS truthiness — a baseline file
+ * whose content happens to parse as a falsy JSON scalar (`false`/`0`/`""`) is a real, existing,
+ * malformed file, not the same as the file being genuinely absent, and must still be validated
+ * (and refused as MALFORMED_BASELINE) rather than silently overwritten.
+ * QNBS-v3 (CodeRabbit, PR #823): `current` is validated unconditionally, even on first-time
+ * creation with no existing baseline — decideUpdateAction is a public, directly-callable export,
+ * not gated behind the real scanner that always happens to produce well-formed counts.
  */
 export function decideUpdateAction(current, existingBaseline) {
-  if (existingBaseline) {
+  const auditVerdict = evaluateBaseline(current, null);
+  if (auditVerdict.reason === 'MALFORMED_AUDIT') return refuseUpdate(auditVerdict);
+
+  if (existingBaseline !== null) {
     const verdict = evaluateBaseline(current, {
       total: existingBaseline.total,
       summary: existingBaseline.byRule,
     });
-    if (!verdict.ok && verdict.reason !== 'STALE_HIGH_BASELINE') {
-      const detail = verdict.detail ? `: ${verdict.detail}` : '';
-      return {
-        action: 'REFUSE',
-        message: `--update refused — ${verdict.reason}${detail}. Fix the underlying data first; --update only ever ratchets down from a trustworthy baseline and a trustworthy scan.`,
-      };
-    }
+    if (!verdict.ok && verdict.reason !== 'STALE_HIGH_BASELINE') return refuseUpdate(verdict);
   }
   return {
     action: 'WRITE',
@@ -63,11 +75,17 @@ export function decideUpdateAction(current, existingBaseline) {
  * QNBS-v3 (#447): pure gate decision, given the already-collected current counts and the parsed
  * baseline file (or null if none exists yet). Delegates to the shared `evaluateBaseline` ratchet
  * and only adds the human-readable remediation tip per failure reason.
+ * QNBS-v3 (Codex, PR #823, same fix as decideUpdateAction): checks `existingBaseline !== null`,
+ * not JS truthiness, for the same reason — a falsy-but-present baseline file must still reach
+ * evaluateBaseline's own validation and fail as MALFORMED_BASELINE, not be silently treated as
+ * "no baseline yet."
  */
 export function decideGateAction(current, existingBaseline) {
   const verdict = evaluateBaseline(
     current,
-    existingBaseline && { total: existingBaseline.total, summary: existingBaseline.byRule },
+    existingBaseline !== null
+      ? { total: existingBaseline.total, summary: existingBaseline.byRule }
+      : null,
   );
   if (verdict.ok) return { action: 'PASS' };
 
@@ -120,6 +138,49 @@ export function withUpdateLock(baselinePath, fn) {
   }
 }
 
+/**
+ * QNBS-v3 (CodeRabbit, PR #823): withUpdateLock serializes competing --update processes, but the
+ * gate path (no --update) reads suppressions-baseline.json without that lock. A plain
+ * fs.writeFileSync truncates the file before writing the new content, so a gate run reading
+ * mid-write (or an --update interrupted after truncation) can see/leave incomplete JSON. Writing
+ * to a temp file in the same directory first and renaming it into place is atomic at the
+ * filesystem level — a concurrent reader always sees either the complete old file or the complete
+ * new one, never a partial write.
+ */
+export function writeBaselineAtomic(baselinePath, baseline) {
+  const tmpPath = `${baselinePath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    fs.writeFileSync(tmpPath, `${JSON.stringify(baseline, null, 2)}\n`);
+    fs.renameSync(tmpPath, baselinePath);
+  } catch (err) {
+    fs.rmSync(tmpPath, { force: true });
+    throw err;
+  }
+}
+
+// QNBS-v3 (CodeScene, PR #823): extracted out of main() — the lock/try-catch/decision nesting this needs on its own was pushing main() past this repo's cyclomatic-complexity threshold, and keeping it as its own named function is also just clearer than one more nested block in main().
+function runUpdate(current, total, fileCount, baselinePath) {
+  let result;
+  try {
+    result = withUpdateLock(baselinePath, () => {
+      const existingBaseline = loadExistingBaseline(baselinePath);
+      const decision = decideUpdateAction(current, existingBaseline);
+      if (decision.action === 'REFUSE') return decision;
+      writeBaselineAtomic(baselinePath, decision.baseline);
+      return decision;
+    });
+  } catch (err) {
+    console.error(`[suppressions] ${err.message}`);
+    process.exit(1);
+  }
+  if (result.action === 'REFUSE') {
+    console.error(`[suppressions] ${result.message}`);
+    process.exit(1);
+  }
+  console.log(`[suppressions] baseline updated → ${total} total across ${fileCount} files`);
+  process.exit(0);
+}
+
 function main() {
   const files = collectTrackedSourceFiles({ root });
   const { total, byRule: sorted, byFile } = scanSuppressionFiles(files);
@@ -163,27 +224,8 @@ function main() {
   const baselinePath = path.join(root, 'suppressions-baseline.json');
 
   if (process.argv.includes('--update')) {
-    // QNBS-v3 (chatgpt-codex-connector, PR #823): the whole read-decide-write sequence runs inside the lock, not just a re-check before the write — see withUpdateLock's own comment for why a re-check alone still leaves a real TOCTOU gap between two concurrent --update invocations.
-    // QNBS-v3: process.exit() must not be called from inside the locked callback — it terminates immediately without running withUpdateLock's `finally`, which would leak the lock file on every REFUSE and permanently block all future --update runs. The callback returns a result instead; exiting happens after withUpdateLock has already released the lock.
-    let result;
-    try {
-      result = withUpdateLock(baselinePath, () => {
-        const existingBaseline = loadExistingBaseline(baselinePath);
-        const decision = decideUpdateAction(current, existingBaseline);
-        if (decision.action === 'REFUSE') return decision;
-        fs.writeFileSync(baselinePath, `${JSON.stringify(decision.baseline, null, 2)}\n`);
-        return decision;
-      });
-    } catch (err) {
-      console.error(`[suppressions] ${err.message}`);
-      process.exit(1);
-    }
-    if (result.action === 'REFUSE') {
-      console.error(`[suppressions] ${result.message}`);
-      process.exit(1);
-    }
-    console.log(`[suppressions] baseline updated → ${total} total across ${files.length} files`);
-    process.exit(0);
+    runUpdate(current, total, files.length, baselinePath);
+    return;
   }
 
   const existingBaseline = loadExistingBaseline(baselinePath);
