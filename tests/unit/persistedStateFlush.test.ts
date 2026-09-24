@@ -209,6 +209,33 @@ describe('flushPersistedState', () => {
     expect(h.saveSettings).toHaveBeenCalledTimes(1);
   });
 
+  // QNBS-v3 (#553): CodeAnt's case — a save that starts and fails after this flush's own results settled forms a separate chain, and must still stop a quit/reload.
+  it('rejects when a later chain started while the flush was in flight fails', async () => {
+    let finishSettings: () => void = () => {};
+    h.saveSettings.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSettings = resolve;
+        }),
+    );
+
+    const flushPromise = flushPersistedState(buildState());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await projectPersistenceCoordinator
+      .enqueue(() => Promise.reject(new Error('later autosave refused')))
+      .catch(() => undefined);
+    finishSettings();
+
+    await expect(flushPromise).rejects.toThrow('later autosave refused');
+  });
+
+  it('is not affected by a chain that starts only after it resolved', async () => {
+    await expect(flushPersistedState(buildState())).resolves.toBeUndefined();
+    await expect(
+      projectPersistenceCoordinator.enqueue(() => Promise.reject(new Error('after the flush'))),
+    ).rejects.toThrow('after the flush');
+  });
+
   it('propagates a rejection when saveSettings fails (fail-closed, not swallowed)', async () => {
     h.saveSettings.mockRejectedValueOnce(new Error('disk full'));
     await expect(flushPersistedState(buildState())).rejects.toThrow('disk full');

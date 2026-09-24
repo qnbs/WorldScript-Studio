@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   double-clicked Quit, or an autosave landing mid-quit) could report success and skip #830's
   "discard this window's unsaved changes?" prompt. Every superseded result now carries the
   terminal outcome of the exact save chain that superseded it — scoped to that chain, so a later,
-  independent chain can never change it — and the flush fails closed on it, for both the project
+  independent chain can never change it — and the flush additionally requires every save chain that
+  was running when it began, or started while it was in flight (such as an autosave of an edit made
+  during quit), to have succeeded, failing closed if that cannot be proven — for both the project
   and the settings queue. The older captured snapshot is never re-saved, since a newer successful
   save may already have replaced it. PR #832.
 - **Data integrity (#553):** a second desktop WorldScript window can no longer silently revert

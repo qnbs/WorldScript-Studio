@@ -207,4 +207,39 @@ describe('PersistenceCoordinator', () => {
       await expect(result.chainOutcome).resolves.toEqual({ ok: true });
     });
   });
+
+  // QNBS-v3 (#553): a lifecycle flush observes every chain active at its mark or started since, each via its own promise.
+  describe('chain history since a mark', () => {
+    it('covers the chain active at the mark and every later chain, but not earlier ones', async () => {
+      const coordinator = new PersistenceCoordinator();
+      await coordinator.enqueue(async () => {}).catch(() => undefined);
+      let finishActive!: () => void;
+      const active = coordinator.enqueue(
+        () =>
+          new Promise<void>((resolve) => {
+            finishActive = resolve;
+          }),
+      );
+      const mark = coordinator.chainMark();
+      finishActive();
+      await active;
+      await coordinator
+        .enqueue(() => Promise.reject(new Error('later chain failed')))
+        .catch(() => undefined);
+
+      const outcomes = coordinator.outcomesSince(mark);
+      expect(outcomes).toHaveLength(2);
+      await expect(Promise.all(outcomes ?? [])).resolves.toEqual([
+        { ok: true },
+        { ok: false, error: new Error('later chain failed') },
+      ]);
+    });
+
+    it('returns null (fail closed) once the bounded history no longer covers the mark', async () => {
+      const coordinator = new PersistenceCoordinator();
+      const mark = coordinator.chainMark();
+      for (let i = 0; i < 40; i++) await coordinator.enqueue(async () => {});
+      expect(coordinator.outcomesSince(mark)).toBeNull();
+    });
+  });
 });

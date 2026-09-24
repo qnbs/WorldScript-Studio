@@ -16,6 +16,9 @@ type PendingOperation = {
   operation: SaveOperation;
 };
 type Chain = { outcome: Promise<ChainOutcome>; settle: (outcome: ChainOutcome) => void };
+/** Opaque position in one coordinator's chain history, taken before a caller enqueues. */
+export type ChainMark = { seq: number; activeAtMark: boolean };
+const RETAINED_CHAINS = 32;
 
 function openChain(): Chain {
   let settle!: (outcome: ChainOutcome) => void;
@@ -34,6 +37,24 @@ export class PersistenceCoordinator {
   private idleWaiters: Array<() => void> = [];
   // QNBS-v3 (#553): one chain per uninterrupted drain, from the first operation until the queue is empty. A waiter superseded mid-chain holds this chain's own outcome promise, so a later, independent chain can never overwrite what that waiter observes — unlike a single mutable "last outcome" field.
   private chain: Chain | null = null;
+  private chainSeq = 0;
+  // QNBS-v3 (#553): bounded history of each chain's own outcome promise, keyed by sequence — lets a lifecycle flush observe every chain that ran while it was in flight without any shared mutable "last outcome".
+  private recentChains: Array<{ seq: number; outcome: Promise<ChainOutcome> }> = [];
+
+  chainMark(): ChainMark {
+    return { seq: this.chainSeq, activeAtMark: this.chain !== null };
+  }
+
+  /**
+   * Terminal outcomes of every chain that was active at `mark` or started after it, or null when
+   * the bounded history no longer covers that mark (callers must then fail closed).
+   */
+  outcomesSince(mark: ChainMark): Promise<ChainOutcome>[] | null {
+    const from = mark.activeAtMark ? mark.seq : mark.seq + 1;
+    const expected = Math.max(0, this.chainSeq - from + 1);
+    const covered = this.recentChains.filter((entry) => entry.seq >= from);
+    return covered.length === expected ? covered.map((entry) => entry.outcome) : null;
+  }
 
   // QNBS-v3: settle failed waiters immediately; older waiters become superseded when a queued successor exists, while idle() still waits for that successor before destructive work (e.g. reload).
   idle(): Promise<void> {
@@ -54,6 +75,9 @@ export class PersistenceCoordinator {
     } else {
       this.active = pending;
       this.chain = openChain();
+      this.chainSeq += 1;
+      this.recentChains.push({ seq: this.chainSeq, outcome: this.chain.outcome });
+      if (this.recentChains.length > RETAINED_CHAINS) this.recentChains.shift();
       void this.drain();
     }
 

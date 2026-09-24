@@ -4,7 +4,7 @@ import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersi
 import { isProjectPersistenceAdmitted } from '../services/startupSafeSession';
 import { storageService } from '../services/storageService';
 import {
-  type PersistenceResult,
+  type ChainMark,
   projectPersistenceCoordinator,
   settingsPersistenceCoordinator,
 } from './persistenceCoordinator';
@@ -21,6 +21,9 @@ import type { RootState } from './store';
 export async function flushPersistedState(state: RootState): Promise<void> {
   // QNBS-v3: window.location.reload() fires visibilitychange before the page actually unloads -- without this, a factory reset's own reload races this flush, recreating the just-deleted database with stale pre-reset state.
   if (isFactoryResetInProgress()) return;
+  // QNBS-v3 (#553): marked BEFORE enqueuing, so the flush can later observe exactly the chains that were running or started while it was in flight — including a save enqueued after its own results settled.
+  const settingsMark = settingsPersistenceCoordinator.chainMark();
+  const projectMark = projectPersistenceCoordinator.chainMark();
   const presentData = state.project.present?.data;
   // QNBS-v3 (#332): make visibility and quit flushes wait behind both active and queued saves.
   const saves: Promise<unknown>[] = [
@@ -48,10 +51,20 @@ export async function flushPersistedState(state: RootState): Promise<void> {
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
   if (rejected) throw rejected.reason;
-  // QNBS-v3 (#553): a superseded result is not proof anything was saved — the waiter is resolved even when its own attempt failed behind a queued successor. Each such result carries the terminal outcome of the exact drain chain that superseded it (never a global "last outcome" a later chain could overwrite), and that decides; the older captured snapshot is never re-enqueued, since a newer successful save may already have replaced it.
-  for (const result of results) {
-    if (result.status !== 'fulfilled') continue;
-    const outcome = await (result.value as PersistenceResult | undefined)?.chainOutcome;
-    if (outcome && !outcome.ok) throw outcome.error;
+  // QNBS-v3 (#553): a resolved (even superseded) result is not proof that everything pending was saved — a waiter is resolved when its own failed attempt had a queued successor, and a save enqueued after this flush's results settled forms a separate chain. Every chain active at the pre-enqueue mark or started since then must have ended in success; each is read from its own outcome promise (never a shared "last outcome"), and a history gap fails closed. The older captured snapshot is never re-enqueued.
+  await assertChainsSucceededSince(settingsPersistenceCoordinator, settingsMark);
+  await assertChainsSucceededSince(projectPersistenceCoordinator, projectMark);
+}
+
+async function assertChainsSucceededSince(
+  coordinator: typeof projectPersistenceCoordinator,
+  mark: ChainMark,
+): Promise<void> {
+  const outcomes = coordinator.outcomesSince(mark);
+  if (outcomes === null) {
+    throw new Error('Persistence history no longer covers this flush; cannot prove it saved.');
+  }
+  for (const outcome of await Promise.all(outcomes)) {
+    if (!outcome.ok) throw outcome.error;
   }
 }
