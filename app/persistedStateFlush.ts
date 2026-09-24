@@ -25,7 +25,6 @@ export async function flushPersistedState(state: RootState): Promise<void> {
   const saves: Promise<unknown>[] = [
     settingsPersistenceCoordinator.enqueue(() => storageService.saveSettings(state.settings)),
   ];
-  let confirmProjectSave: (() => Promise<unknown>) | null = null;
   // QNBS-v3: a fenced safe-session project is skipped, never rejected — quitApp aborts on any flush rejection, so a fence must not make the window unquittable.
   if (presentData && isProjectPersistenceAdmitted(presentData.id)) {
     const enriched: ProjectData = {
@@ -36,10 +35,9 @@ export async function flushPersistedState(state: RootState): Promise<void> {
         currentBranchId: state.versionControl.currentBranchId,
       },
     };
-    const saveProject = () =>
-      projectPersistenceCoordinator.enqueue(() => persistProjectAutosaveSnapshot(enriched));
-    confirmProjectSave = saveProject;
-    saves.push(saveProject());
+    saves.push(
+      projectPersistenceCoordinator.enqueue(() => persistProjectAutosaveSnapshot(enriched)),
+    );
   }
   // QNBS-v3: allSettled, not Promise.all — its fail-fast let a caller reload before the other save finished; both must settle first, still failing closed if either rejected.
   const results = await Promise.allSettled(saves);
@@ -49,14 +47,4 @@ export async function flushPersistedState(state: RootState): Promise<void> {
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
   if (rejected) throw rejected.reason;
-  // QNBS-v3 (#553): a superseded project result is not proof the project was saved — the coordinator resolves (not rejects) a waiter whose own failed attempt had a queued successor, and that successor's later rejection never reaches this flush. One confirming save makes its real outcome this flush's answer, so a quit can never mistake an unsaved project for a saved one and skip the stale-writer discard consent.
-  const project = results[1];
-  if (confirmProjectSave && project?.status === 'fulfilled' && isSuperseded(project.value)) {
-    await confirmProjectSave();
-    await projectPersistenceCoordinator.idle();
-  }
-}
-
-function isSuperseded(value: unknown): boolean {
-  return (value as { superseded?: unknown } | undefined)?.superseded === true;
 }

@@ -19,12 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   notice explaining the conflict and how to load the newer version, instead of failing on every
   keystroke; quitting or closing that window asks, in its own language, whether to discard its
   unsaved changes rather than trapping it open forever. Another window's committed data is never
-  touched either way. A quit or close whose save was superseded by another queued save (a
-  double-clicked Quit, or an autosave landing mid-quit) now confirms with one more save and uses
-  its real outcome, so an unsaved project can never be mistaken for a saved one and skip that
-  consent. Not a 3-way merge: the refused window's own later edits are not merged in.
-  Scope: desktop filesystem saves only — the same risk between two browser tabs is owned by #480's
-  multi-tab program. Non-cooperating external writers remain outside any application lock. PR #830.
+  touched either way. Not a 3-way merge: the refused window's own later edits are not merged in.
+  Scope: the desktop `project.json` save only — a stale window's image, binder-asset and Codex
+  writes are not yet fenced by this baseline (still open under #553), and the same risk between two
+  browser tabs is owned by #480's multi-tab program. A quit racing another queued save can still
+  skip the discard prompt, a pre-existing save-queue behavior tracked for an immediate follow-up. Non-cooperating external writers remain outside any application lock. PR #830.
 - **Privacy truth (#526):** Factory Reset's hint and confirmation text no longer imply that
   downloaded local AI and voice models are erased. Reset deletes only storage WorldScript can
   prove it owns; the WebLLM (`webllm/*`) and Transformers (`transformers-cache`) model caches carry
