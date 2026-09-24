@@ -71,6 +71,7 @@ import { DESKTOP_COMMANDS } from './services/desktop/desktopEvents';
 import { installDesktopMenu } from './services/desktop/desktopMenu';
 import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
 import { desktopPlatform } from './services/desktopPlatform';
+import { ProjectFileLockedError } from './services/fs/fsCore';
 import { logger } from './services/logger';
 import { pluginRegistry } from './services/pluginRegistry';
 import { loadScenarioWorkspaceView } from './services/scenarioWorkspaceLoader';
@@ -185,6 +186,51 @@ const ViewLoader: FC = () => {
     </div>
   );
 };
+
+// QNBS-v3 (#553): the minimal shape both module-level functions below need from useStore()'s untyped store -- not AppDispatch/RootState directly, since store.getState() itself returns unknown here (every call site already casts it) and store.dispatch is the plain, non-thunk-aware Dispatch<AnyAction>, not useAppDispatch()'s AppDispatch.
+type MinimalStore = {
+  getState: () => unknown;
+  dispatch: (action: { type: string; payload?: unknown }) => unknown;
+};
+
+// QNBS-v3 (#553): module-level, not component-scoped -- keeps this branch out of App's own per-function complexity score (CodeScene flagged App:FC<AppProps> as a "Complex Method" hotspot). Shared by the two functions below: they hit the exact same cause (another window currently holds this project's save lock) and should tell the user the exact same actionable thing rather than two independently-worded messages that could drift.
+function notifyIfBlockedByProjectLock(error: unknown, dispatch: MinimalStore['dispatch']): void {
+  if (!(error instanceof ProjectFileLockedError)) return;
+  dispatch(
+    statusActions.addNotification({
+      type: 'error',
+      title: 'Cannot Close Yet',
+      description:
+        "Another WorldScript window is currently saving this project. Close that window first, then try again. If this continues after closing any other WorldScript windows, the project's save lock may need to be removed manually.",
+    }),
+  );
+}
+
+// QNBS-v3 (#332/D3): shared by the tray/menu Quit items — PredefinedMenuItem's native Quit bypasses onCloseRequested's flush entirely, so these call this instead. Never resolves if the flush failed, so the app stays running for the user to retry. Module-level, not component-scoped, for the same CodeScene reason as notifyIfBlockedByProjectLock above -- this try/catch counted toward App's own complexity even before #553 touched it, and moving it out only became worth doing once a hotspot-decline gate started failing on it.
+async function performQuitApp(store: MinimalStore): Promise<void> {
+  try {
+    await flushPersistedState(store.getState() as RootState);
+  } catch (error) {
+    logger.warn('Pre-quit flush failed — aborting quit so autosave can retry', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    notifyIfBlockedByProjectLock(error, store.dispatch);
+    return;
+  }
+  // QNBS-v3: routes through desktopPlatform.lifecycle instead of the direct @tauri-apps/plugin-process import it replaced
+  await desktopPlatform.lifecycle.quit();
+}
+
+// QNBS-v3 (#332/D3): flush pending project/settings state before a real quit proceeds -- moved out of the close-to-tray effect below for the same CodeScene reason as performQuitApp above.
+async function flushForCloseToTray(store: MinimalStore): Promise<void> {
+  try {
+    await flushPersistedState(store.getState() as RootState);
+  } catch (error) {
+    // QNBS-v3 (#553): see notifyIfBlockedByProjectLock above -- rethrown unchanged so installCloseToTray's own catch still keeps the window open (fail closed), exactly as for any other flush failure; this only adds the visible notification that was missing.
+    notifyIfBlockedByProjectLock(error, store.dispatch);
+    throw error;
+  }
+}
 
 interface AppProps {
   isNewUser: boolean;
@@ -464,19 +510,7 @@ const App: FC<AppProps> = ({ isNewUser, allowInitialMetadataSeed: initialSeedAut
   //
   // executeCommand is held in a ref so the menu only rebuilds when the language (t) changes — not on
   // every executeCommand identity change (it depends on characters/worlds/settings/… and recreates often).
-  // QNBS-v3 (#332/D3): shared by the tray/menu Quit items — PredefinedMenuItem's native Quit bypasses onCloseRequested's flush entirely, so these call this instead. Never resolves if the flush failed, so the app stays running for the user to retry.
-  const quitApp = useCallback(async () => {
-    try {
-      await flushPersistedState(store.getState() as RootState);
-    } catch (error) {
-      logger.warn('Pre-quit flush failed — aborting quit so autosave can retry', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return;
-    }
-    // QNBS-v3: routes through desktopPlatform.lifecycle instead of the direct @tauri-apps/plugin-process import it replaced
-    await desktopPlatform.lifecycle.quit();
-  }, [store]);
+  const quitApp = useCallback(() => performQuitApp(store), [store]);
 
   // QNBS-v3: executeCommandRef synced in its own effect (never assigned during render) so the menu
   // effect below can depend on [t, quitApp] only and skip rebuilding on every executeCommand identity change.
@@ -529,8 +563,7 @@ const App: FC<AppProps> = ({ isNewUser, allowInitialMetadataSeed: initialSeedAut
       // Defensive read — imported/malformed persisted settings can leave `desktop` null/undefined,
       // which would crash the close handler; default to false (don't trap the window).
       () => (store.getState() as RootState).settings.desktop?.minimizeToTray ?? false,
-      // QNBS-v3 (#332/D3): flush pending project/settings state before a real quit proceeds.
-      () => flushPersistedState(store.getState() as RootState),
+      () => flushForCloseToTray(store),
     ).then((fn) => {
       if (cancelled) {
         fn?.();

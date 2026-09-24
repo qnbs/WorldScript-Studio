@@ -10,7 +10,7 @@ import { logger } from '../logger';
 // QNBS-v3: delegates through desktopPlatform now, not @tauri-apps/* directly — shape unchanged, so the 5 fs-store consumers need zero call-site changes.
 export type TauriApis = {
   readTextFile: (path: string) => Promise<string>;
-  writeTextFile: (path: string, content: string) => Promise<void>;
+  writeTextFile: (path: string, content: string, opts?: { createNew?: boolean }) => Promise<void>;
   readFile: (path: string) => Promise<Uint8Array<ArrayBuffer>>;
   writeFile: (path: string, data: Uint8Array) => Promise<void>;
   mkdir: (path: string, opts?: { recursive?: boolean }) => Promise<void>;
@@ -39,7 +39,8 @@ export async function loadTauriApis(): Promise<TauriApis> {
   }
   tauriApis = {
     readTextFile: (path) => desktopPlatform.filesystem.readTextFile(path),
-    writeTextFile: (path, content) => desktopPlatform.filesystem.writeTextFile(path, content),
+    writeTextFile: (path, content, opts) =>
+      desktopPlatform.filesystem.writeTextFile(path, content, opts),
     readFile: (path) =>
       desktopPlatform.filesystem.readFile(path) as Promise<Uint8Array<ArrayBuffer>>,
     writeFile: (path, data) => desktopPlatform.filesystem.writeFile(path, data),
@@ -65,7 +66,8 @@ export async function retryFs<T>(fn: () => Promise<T>, retries = 2, delayMs = 50
       return await fn();
     } catch (err) {
       lastError = err;
-      const msg = err instanceof Error ? err.message.toLowerCase() : '';
+      // QNBS-v3 (#553): String(err), not err instanceof Error ? err.message : '' — the real Tauri invoke boundary rejects with a plain string, never a JS Error, so an instanceof-Error-only check saw an empty message for every real transient filesystem error and silently never retried it.
+      const msg = String(err instanceof Error ? err.message : err).toLowerCase();
       const isTransient =
         msg.includes('busy') ||
         msg.includes('temporarily') ||
@@ -150,6 +152,104 @@ export function writeTextFileAtomic(
 // QNBS-v3: binary assets use the same same-directory replace so readers never observe a partial file.
 export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array): Promise<void> {
   return writeAndReplace(apis, path, (temporary) => apis.writeFile(temporary, data));
+}
+
+// --- Cross-process project-file lock (#553) ---
+// QNBS-v3: writeTextFileAtomic's beforeReplace re-check narrows but does not eliminate the TOCTOU gap between two OS processes (two app instances) each racing their own read-check-rename cycle against the same project file — this lock closes that gap by serializing the whole cycle behind an OS-level exclusive-create sibling file. Deliberately has NO time-based or ownership-token stale-lock reclaim: every such scheme was proven unsound during review (an owner token still can't make removal conditional on content — the path can change between the re-read and the remove call — and a lock file exists, per plugin-fs semantics, before its content is written, so a reader can observe an empty/malformed live lock and misclassify it as abandoned) — see #553 for tracked follow-up requiring real OS-level locking (flock or equivalent, which needs new Rust-side code) to recover a crashed writer's orphaned lock; until then, a genuinely stuck lock is out-of-band-recoverable only (restart clears in-process state; the file itself is never corrupted by this, only unsavable). This also means the guarantee below is scoped to writers that participate in this exact convention — a non-cooperating external tool (e.g. a sync client) that writes project.json directly without ever creating <path>.lock is not, and cannot be, fenced by an application-level file alone.
+
+export class ProjectFileLockedError extends Error {
+  constructor(path: string) {
+    super(`project file is locked by another writer: ${path}`);
+    this.name = 'ProjectFileLockedError';
+  }
+}
+
+const LOCK_SUFFIX = '.lock';
+const LOCK_ACQUIRE_ATTEMPTS = 3;
+const LOCK_ACQUIRE_BACKOFF_MS = [200, 500];
+
+// QNBS-v3 (#553): the one name for the stable sibling directory that holds every project's lock file, shared by projectFsStore.ts (which creates locks under it) and factoryResetService.ts (which must check it before wiping app data) — a second, independently-typed copy of this string in the latter would be exactly the kind of drift-prone duplication already flagged once in this PR.
+export const PROJECT_LOCKS_DIR_NAME = 'project-locks';
+
+function lockPathFor(path: string): string {
+  return `${path}${LOCK_SUFFIX}`;
+}
+
+// QNBS-v3: distinguishes genuine lock contention from an unrelated filesystem failure (permission denied, missing parent directory, disk full) by checking actual filesystem state after a failed create, never by pattern-matching the error's message text — the real Tauri error embeds the full lock path (e.g. a project titled "Existential Novel" makes the message contain "exist" regardless of cause), so any substring/keyword match on it is spoofable by ordinary user-chosen project names and would misclassify a real, unrelated, recoverable failure as contention.
+async function classifyFailedLockCreate(
+  apis: TauriApis,
+  lockPath: string,
+  error: unknown,
+): Promise<'contention' | 'unrelated'> {
+  // QNBS-v3: a failed create classifies as contention only if something now demonstrably occupies the path — whether it was already there or is our own attempt's partial artifact, treating either as "do not touch" is the safe default; a check that failed to even determine this propagates the original error rather than guessing.
+  let occupied: boolean;
+  try {
+    occupied = await apis.exists(lockPath);
+  } catch {
+    throw error;
+  }
+  return occupied ? 'contention' : 'unrelated';
+}
+
+// QNBS-v3 (#553): a bounded one-shot inline retry, not a loop — exists() coming back false right after a failed create does not prove the failure was unrelated to contention; the lock we just collided with may have been released by its owner's `finally` block in the instant between our failed create and this check, a real interleaving under ordinary two-window concurrent editing, not a contrived edge case. Immediately rethrowing that stale first error would surface a spurious permanent-looking failure for a path that is actually free again. One extra attempt closes that race: if the path really is free now, it succeeds; if the first failure truly was unrelated (permission denied, disk full, ...), this attempt fails the same way and *that* fresh error is what propagates, never the stale one. If the retry instead collides with a genuinely new lock, it is classified exactly like the first attempt — contention, handled by the caller's own bounded backoff loop — rather than being swallowed here.
+async function tryCreateLock(apis: TauriApis, lockPath: string): Promise<boolean> {
+  try {
+    // QNBS-v3: empty content, not just unread by anything — verified against the pinned tauri-plugin-fs@2.5.2 Rust source: write_file's create_new open() and its data write_all() are two separate steps, and a write_all failure after a successful open leaves the just-created file orphaned with no cleanup. write_all on an empty buffer never issues an OS write syscall at all (its loop condition is false immediately), so it cannot itself fail once open() has already succeeded — an empty payload therefore closes this gap rather than merely narrowing it, leaving only open()'s own already-proven-atomic create_new as a failure point.
+    await apis.writeTextFile(lockPath, '', { createNew: true });
+    return true;
+  } catch (firstError) {
+    if ((await classifyFailedLockCreate(apis, lockPath, firstError)) === 'contention') {
+      return false;
+    }
+    try {
+      await apis.writeTextFile(lockPath, '', { createNew: true });
+      return true;
+    } catch (secondError) {
+      if ((await classifyFailedLockCreate(apis, lockPath, secondError)) === 'contention') {
+        return false;
+      }
+      throw secondError;
+    }
+  }
+}
+
+/**
+ * Serializes an operation against a project file across OS processes via an exclusive-create
+ * sibling lock file. Bounded retry only, never an unbounded wait, and never removes a lock it did
+ * not itself create — see the module-level comment above for why every reclaim strategy considered
+ * was unsound. A genuinely held lock (including one abandoned by a crashed writer) surfaces as
+ * ProjectFileLockedError, which flows into the caller's existing retry-next-cycle error handling.
+ */
+export async function withProjectFileLock<T>(
+  apis: TauriApis,
+  path: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const lockPath = lockPathFor(path);
+  let acquired = false;
+  for (let attempt = 0; attempt < LOCK_ACQUIRE_ATTEMPTS; attempt++) {
+    acquired = await tryCreateLock(apis, lockPath);
+    if (acquired) break;
+    if (attempt < LOCK_ACQUIRE_ATTEMPTS - 1) {
+      await new Promise((resolve) => setTimeout(resolve, LOCK_ACQUIRE_BACKOFF_MS[attempt]));
+    }
+  }
+  if (!acquired) {
+    throw new ProjectFileLockedError(path);
+  }
+  try {
+    return await fn();
+  } finally {
+    try {
+      // QNBS-v3: retryFs, not a bare remove — a single transient release failure (e.g. Windows briefly reporting the file busy) must not turn into the same permanent, unrecoverable lock this module has no reclaim path for.
+      await retryFs(() => apis.remove(lockPath));
+    } catch (error) {
+      logger.warn('Failed to release project file lock; it will block saves until removed', {
+        path: lockPath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 // --- LZ-String compression (mirrors dbService threshold and prefix) ---

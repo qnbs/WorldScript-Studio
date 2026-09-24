@@ -24,6 +24,7 @@ import {
   loadRagVectorMigration,
 } from '../services/duckdb/duckdbListenerLoader';
 import { isFactoryResetInProgress } from '../services/factoryResetService';
+import { ProjectFileLockedError } from '../services/fs/fsCore';
 import { logger } from '../services/logger';
 import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersistence';
 import { storageService } from '../services/storageService';
@@ -259,13 +260,25 @@ addDebouncedListener(
         return;
       }
       logger.error('Auto-save (project) failed:', error);
-      api.dispatch(
-        statusActions.addNotification({
-          type: 'error',
-          title: 'Auto-Save Failed',
-          description: 'Your changes could not be saved to the local database.',
-        }),
-      );
+      // QNBS-v3 (#553): distinct, truthful notification for lock contention — never auto-deletes anything; the recovery instruction requires closing other instances first. Does not promise an automatic retry: nothing currently schedules one, so the copy instead names the two things that do retry today (another edit, or Ctrl/Cmd+S). Deliberately hardcoded, matching this listener's own pre-existing (non-i18n) notification convention rather than AGENTS.md's i18n-system requirement — proper localization was attempted and reverted: it requires the same new key in all 19 locale sources, which alone saturates this PR's absolute file-count ceiling (see PR discussion). Tracked as an explicit, disclosed follow-up, not a hidden gap.
+      if (error instanceof ProjectFileLockedError) {
+        api.dispatch(
+          statusActions.addNotification({
+            type: 'error',
+            title: 'Save Delayed',
+            description:
+              "Another WorldScript window seems to be saving this project right now. Keep editing, or press Ctrl/Cmd+S in a moment to retry. If this continues after closing any other WorldScript windows, the project's save lock may need to be removed manually.",
+          }),
+        );
+      } else {
+        api.dispatch(
+          statusActions.addNotification({
+            type: 'error',
+            title: 'Auto-Save Failed',
+            description: 'Your changes could not be saved to the local database.',
+          }),
+        );
+      }
       api.dispatch(statusActions.setSavingStatus('idle'));
     }
   },
