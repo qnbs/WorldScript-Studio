@@ -30,7 +30,7 @@ describe('PersistenceCoordinator', () => {
     const [firstResult, secondResult] = await Promise.all([first, second]);
 
     expect(events).toEqual(['first:start', 'first:end', 'second:start']);
-    expect(firstResult).toEqual({ superseded: true });
+    expect(firstResult).toMatchObject({ superseded: true });
     expect(secondResult).toEqual({ superseded: false });
   });
 
@@ -54,8 +54,8 @@ describe('PersistenceCoordinator', () => {
     const [firstResult, secondResult, thirdResult] = await Promise.all([first, second, third]);
 
     expect(saved).toEqual([1, 3]);
-    expect(firstResult).toEqual({ superseded: true });
-    expect(secondResult).toEqual({ superseded: true });
+    expect(firstResult).toMatchObject({ superseded: true });
+    expect(secondResult).toMatchObject({ superseded: true });
     expect(thirdResult).toEqual({ superseded: false });
   });
 
@@ -74,7 +74,7 @@ describe('PersistenceCoordinator', () => {
     });
 
     gate.resolve();
-    await expect(first).resolves.toEqual({ superseded: true });
+    await expect(first).resolves.toMatchObject({ superseded: true });
     await expect(second).resolves.toEqual({ superseded: false });
     expect(saved).toEqual(['second']);
   });
@@ -109,7 +109,7 @@ describe('PersistenceCoordinator', () => {
     });
 
     gate.resolve();
-    await expect(first).resolves.toEqual({ superseded: true });
+    await expect(first).resolves.toMatchObject({ superseded: true });
     // The failed superseded waiter has already settled, but the second generation is now
     // running in the background — idle() must not resolve until it finishes too.
     expect(saved).toEqual(['second:start']);
@@ -134,5 +134,112 @@ describe('PersistenceCoordinator', () => {
       resolved = true;
     });
     expect(resolved).toBe(true);
+  });
+
+  // QNBS-v3 (#553): a waiter superseded after its own failed attempt is resolved, so the terminal outcome of the exact chain that superseded it must be observable — scoped to that chain, never a global mutable field a later chain could overwrite.
+  describe('chain-scoped terminal outcome', () => {
+    function failingOp(): { run: () => Promise<void>; fail: (error: Error) => void } {
+      let fail!: (error: Error) => void;
+      const promise = new Promise<void>((_resolve, reject) => {
+        fail = reject;
+      });
+      return { run: () => promise, fail };
+    }
+
+    it('A fails -> B succeeds: superseded A observes terminal success', async () => {
+      const coordinator = new PersistenceCoordinator();
+      const a = failingOp();
+      const first = coordinator.enqueue(a.run);
+      const second = coordinator.enqueue(async () => {});
+      a.fail(new Error('A failed'));
+
+      const result = await first;
+      expect(result.superseded).toBe(true);
+      await expect(result.chainOutcome).resolves.toEqual({ ok: true });
+      await expect(second).resolves.toEqual({ superseded: false });
+    });
+
+    it('A fails -> B fails: superseded A observes B’s failure', async () => {
+      const coordinator = new PersistenceCoordinator();
+      const a = failingOp();
+      const first = coordinator.enqueue(a.run);
+      const second = coordinator.enqueue(() => Promise.reject(new Error('B failed')));
+      a.fail(new Error('A failed'));
+
+      const result = await first;
+      await expect(second).rejects.toThrow('B failed');
+      await expect(result.chainOutcome).resolves.toEqual({
+        ok: false,
+        error: new Error('B failed'),
+      });
+    });
+
+    it('A fails -> queued B replaced by C -> C fails: C’s failure is authoritative', async () => {
+      const coordinator = new PersistenceCoordinator();
+      const a = failingOp();
+      const first = coordinator.enqueue(a.run);
+      const replaced = coordinator.enqueue(() => Promise.reject(new Error('B must never run')));
+      const third = coordinator.enqueue(() => Promise.reject(new Error('C failed')));
+      a.fail(new Error('A failed'));
+
+      const result = await first;
+      await expect(replaced).rejects.toThrow('C failed');
+      await expect(third).rejects.toThrow('C failed');
+      await expect(result.chainOutcome).resolves.toEqual({
+        ok: false,
+        error: new Error('C failed'),
+      });
+    });
+
+    it('a later independent chain cannot change an earlier superseded waiter’s outcome', async () => {
+      const coordinator = new PersistenceCoordinator();
+      const a = failingOp();
+      const first = coordinator.enqueue(a.run);
+      const second = coordinator.enqueue(async () => {});
+      a.fail(new Error('A failed'));
+      const result = await first;
+      await second;
+      await coordinator.idle();
+
+      await expect(
+        coordinator.enqueue(() => Promise.reject(new Error('independent chain failed'))),
+      ).rejects.toThrow('independent chain failed');
+      await expect(result.chainOutcome).resolves.toEqual({ ok: true });
+    });
+  });
+
+  // QNBS-v3 (#553): a lifecycle flush observes every chain active at its mark or started since, each via its own promise.
+  describe('chain history since a mark', () => {
+    it('covers the chain active at the mark and every later chain, but not earlier ones', async () => {
+      const coordinator = new PersistenceCoordinator();
+      await coordinator.enqueue(async () => {}).catch(() => undefined);
+      let finishActive!: () => void;
+      const active = coordinator.enqueue(
+        () =>
+          new Promise<void>((resolve) => {
+            finishActive = resolve;
+          }),
+      );
+      const mark = coordinator.chainMark();
+      finishActive();
+      await active;
+      await coordinator
+        .enqueue(() => Promise.reject(new Error('later chain failed')))
+        .catch(() => undefined);
+
+      const outcomes = coordinator.outcomesSince(mark);
+      expect(outcomes).toHaveLength(2);
+      await expect(Promise.all(outcomes ?? [])).resolves.toEqual([
+        { ok: true },
+        { ok: false, error: new Error('later chain failed') },
+      ]);
+    });
+
+    it('returns null (fail closed) once the bounded history no longer covers the mark', async () => {
+      const coordinator = new PersistenceCoordinator();
+      const mark = coordinator.chainMark();
+      for (let i = 0; i < 40; i++) await coordinator.enqueue(async () => {});
+      expect(coordinator.outcomesSince(mark)).toBeNull();
+    });
   });
 });
