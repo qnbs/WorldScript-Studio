@@ -10,7 +10,7 @@ import { logger } from '../logger';
 // QNBS-v3: delegates through desktopPlatform now, not @tauri-apps/* directly — shape unchanged, so the 5 fs-store consumers need zero call-site changes.
 export type TauriApis = {
   readTextFile: (path: string) => Promise<string>;
-  writeTextFile: (path: string, content: string) => Promise<void>;
+  writeTextFile: (path: string, content: string, opts?: { createNew?: boolean }) => Promise<void>;
   readFile: (path: string) => Promise<Uint8Array<ArrayBuffer>>;
   writeFile: (path: string, data: Uint8Array) => Promise<void>;
   mkdir: (path: string, opts?: { recursive?: boolean }) => Promise<void>;
@@ -39,7 +39,8 @@ export async function loadTauriApis(): Promise<TauriApis> {
   }
   tauriApis = {
     readTextFile: (path) => desktopPlatform.filesystem.readTextFile(path),
-    writeTextFile: (path, content) => desktopPlatform.filesystem.writeTextFile(path, content),
+    writeTextFile: (path, content, opts) =>
+      desktopPlatform.filesystem.writeTextFile(path, content, opts),
     readFile: (path) =>
       desktopPlatform.filesystem.readFile(path) as Promise<Uint8Array<ArrayBuffer>>,
     writeFile: (path, data) => desktopPlatform.filesystem.writeFile(path, data),
@@ -150,6 +151,85 @@ export function writeTextFileAtomic(
 // QNBS-v3: binary assets use the same same-directory replace so readers never observe a partial file.
 export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array): Promise<void> {
   return writeAndReplace(apis, path, (temporary) => apis.writeFile(temporary, data));
+}
+
+// --- Cross-process project-file lock (#553) ---
+// QNBS-v3: writeTextFileAtomic's beforeReplace re-check narrows but does not eliminate the TOCTOU gap between two OS processes (two app instances, or an external sync tool) each racing their own read-check-rename cycle against the same project file — this lock closes that gap by serializing the whole cycle behind an OS-level exclusive-create sibling file.
+
+export class ProjectFileLockedError extends Error {
+  constructor(path: string) {
+    super(`project file is locked by another writer: ${path}`);
+    this.name = 'ProjectFileLockedError';
+  }
+}
+
+const LOCK_SUFFIX = '.lock';
+const STALE_LOCK_MS = 30_000;
+const LOCK_ACQUIRE_ATTEMPTS = 3;
+const LOCK_ACQUIRE_BACKOFF_MS = [200, 500];
+
+function lockPathFor(path: string): string {
+  return `${path}${LOCK_SUFFIX}`;
+}
+
+async function tryCreateLock(apis: TauriApis, lockPath: string): Promise<boolean> {
+  try {
+    await apis.writeTextFile(lockPath, String(Date.now()), { createNew: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// QNBS-v3: a lock older than STALE_LOCK_MS is treated as abandoned by a crashed writer, never an in-progress one — a normal save completes in well under a second. A malformed timestamp can never have been written by tryCreateLock itself, so it is treated as reclaimable too, rather than an unrecoverable deadlock — the only alternative once a fresh, valid lock is ruled out.
+async function reclaimStaleLock(apis: TauriApis, lockPath: string): Promise<void> {
+  let existing: string;
+  try {
+    existing = await apis.readTextFile(lockPath);
+  } catch {
+    return;
+  }
+  const acquiredAt = Number.parseInt(existing, 10);
+  if (Number.isFinite(acquiredAt) && Date.now() - acquiredAt < STALE_LOCK_MS) return;
+  try {
+    await apis.remove(lockPath);
+  } catch {
+    // another writer may already be reclaiming it — its own create attempt is authoritative, not this one
+  }
+}
+
+/**
+ * Serializes an operation against a project file across OS processes via an exclusive-create
+ * sibling lock file. Bounded retry only, never an unbounded wait — a genuinely held lock surfaces
+ * as ProjectFileLockedError for the caller's own existing retry-next-cycle semantics.
+ */
+export async function withProjectFileLock<T>(
+  apis: TauriApis,
+  path: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const lockPath = lockPathFor(path);
+  let acquired = false;
+  for (let attempt = 0; attempt < LOCK_ACQUIRE_ATTEMPTS; attempt++) {
+    acquired = await tryCreateLock(apis, lockPath);
+    if (acquired) break;
+    if (attempt < LOCK_ACQUIRE_ATTEMPTS - 1) {
+      await reclaimStaleLock(apis, lockPath);
+      await new Promise((resolve) => setTimeout(resolve, LOCK_ACQUIRE_BACKOFF_MS[attempt]));
+    }
+  }
+  if (!acquired) {
+    throw new ProjectFileLockedError(path);
+  }
+  try {
+    return await fn();
+  } finally {
+    try {
+      await apis.remove(lockPath);
+    } catch {
+      // best-effort release; a leftover lock self-heals via the staleness check on the next attempt
+    }
+  }
 }
 
 // --- LZ-String compression (mirrors dbService threshold and prefix) ---

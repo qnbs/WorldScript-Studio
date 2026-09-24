@@ -24,7 +24,8 @@ vi.mock('../../../../services/desktopPlatform', () => ({
       runtime: { isDesktop: true, os: null },
       filesystem: {
         readTextFile: (p: string) => fsHolder.current.readTextFile(p),
-        writeTextFile: (p: string, c: string) => fsHolder.current.writeTextFile(p, c),
+        writeTextFile: (p: string, c: string, opts?: { createNew?: boolean }) =>
+          fsHolder.current.writeTextFile(p, c, opts),
         readFile: (p: string) => fsHolder.current.readFile(p),
         writeFile: (p: string, d: Uint8Array) => fsHolder.current.writeFile(p, d),
         mkdir: (p: string, opts?: { recursive?: boolean }) => fsHolder.current.mkdir(p, opts),
@@ -106,7 +107,10 @@ function makeFakeFs(): FakeFs {
       dirs.add(p);
       return Promise.resolve();
     },
-    writeTextFile: (p: string, c: string) => {
+    writeTextFile: (p: string, c: string, opts?: { createNew?: boolean }) => {
+      if (opts?.createNew && text.has(p)) {
+        return Promise.reject(new Error(`EEXIST ${p}`));
+      }
       text.set(p, c);
       return Promise.resolve();
     },
@@ -257,11 +261,11 @@ describe('FsProjectStore — projects', () => {
     await fake.apis.mkdir('/app/projects/p1', { recursive: true });
     await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
     const originalWriteTextFile = fake.apis.writeTextFile;
-    fake.apis.writeTextFile = (path: string, content: string) => {
+    fake.apis.writeTextFile = (path: string, content: string, opts?: { createNew?: boolean }) => {
       if (path.startsWith(`${sourcePath}.tmp-`)) {
         fake.text.set(sourcePath, compressJsonText(concurrentRaw));
       }
-      return originalWriteTextFile(path, content);
+      return originalWriteTextFile(path, content, opts);
     };
 
     await expect(
@@ -273,6 +277,46 @@ describe('FsProjectStore — projects', () => {
     });
     expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(concurrentRaw);
     expect([...fake.text.keys()].some((path) => path.startsWith(`${sourcePath}.tmp-`))).toBe(false);
+  });
+
+  // QNBS-v3 (#553): the generation re-check above narrows the TOCTOU gap but does not close it — these prove the cross-process lock actually gates persistExistingCanonicalProject.
+  it('acquires and releases a cross-process lock around an existing-project save', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+
+    await store.saveProject({ ...project, title: 'Locked and saved' } as never);
+
+    expect(fake.text.has(`${sourcePath}.lock`)).toBe(false);
+    expect(JSON.parse(decompressJsonText(fake.text.get(sourcePath) as string))).toMatchObject({
+      title: 'Locked and saved',
+    });
+  });
+
+  it('refuses an existing-project save while another writer holds a fresh lock', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+    await fake.apis.writeTextFile(`${sourcePath}.lock`, String(Date.now()));
+
+    await expect(
+      store.saveProject({ ...project, title: 'Blocked writer' } as never),
+    ).rejects.toMatchObject({ name: 'ProjectCanonicalWritebackError', projectId: 'p1' });
+    expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(JSON.stringify(project));
+  });
+
+  it('reclaims a stale lock left by a crashed writer and completes the save', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+    await fake.apis.writeTextFile(`${sourcePath}.lock`, String(Date.now() - 60_000));
+
+    await store.saveProject({ ...project, title: 'Recovered writer' } as never);
+
+    expect(fake.text.has(`${sourcePath}.lock`)).toBe(false);
+    expect(JSON.parse(decompressJsonText(fake.text.get(sourcePath) as string))).toMatchObject({
+      title: 'Recovered writer',
+    });
   });
 
   it('refuses non-current filesystem writeback without changing the stored source', async () => {

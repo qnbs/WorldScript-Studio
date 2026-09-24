@@ -36,9 +36,11 @@ import {
   compressJsonText,
   decompressData,
   decompressJsonText,
+  ProjectFileLockedError,
   retryFs,
   sanitizePathSegment,
   type TauriApis,
+  withProjectFileLock,
   writeTextFileAtomic,
 } from './fsCore';
 import {
@@ -716,6 +718,28 @@ export class FsProjectStore extends FsAssetStore {
     projectId: string,
     projectToPersist: StoryProject,
   ): Promise<void> {
+    // QNBS-v3 (#553): the whole read-admit-writeback-replace cycle runs under one cross-process lock — the prior re-read-before-rename check alone narrowed but did not close the gap between two OS processes (two app instances, or an external sync tool) each racing this same sequence.
+    try {
+      await withProjectFileLock(apis, projectFile, () =>
+        this.persistExistingCanonicalProjectLocked(apis, projectFile, projectId, projectToPersist),
+      );
+    } catch (error) {
+      if (error instanceof ProjectFileLockedError) {
+        throw new ProjectCanonicalWritebackError(
+          projectId,
+          `filesystem canonical replacement failed: ${error.message}`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async persistExistingCanonicalProjectLocked(
+    apis: TauriApis,
+    projectFile: string,
+    projectId: string,
+    projectToPersist: StoryProject,
+  ): Promise<void> {
     // QNBS-v3 (#553): keep existing-project writeback as one preserve-first raw-carrier transaction boundary.
     let currentRaw: string;
     try {
@@ -757,7 +781,7 @@ export class FsProjectStore extends FsAssetStore {
     try {
       const expectedGeneration = computeProjectSourceGeneration(admission.canonical.raw);
       await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw), async () => {
-        // QNBS-v3 (#553): re-read immediately before rename so an external writer cannot be silently overwritten between admission and replacement.
+        // QNBS-v3 (#553): re-read immediately before rename as defense-in-depth even under the lock — a corrupted/foreign lock file would otherwise be the only thing standing between two writers.
         const latestRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
         if (computeProjectSourceGeneration(latestRaw) !== expectedGeneration) {
           throw new Error('source generation changed before atomic replacement');

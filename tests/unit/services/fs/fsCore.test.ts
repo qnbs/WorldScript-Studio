@@ -15,8 +15,10 @@ import {
   decompressJsonText,
   decryptText,
   encryptText,
+  ProjectFileLockedError,
   retryFs,
   sanitizePathSegment,
+  withProjectFileLock,
   writeTextFileAtomic,
 } from '../../../../services/fs/fsCore';
 
@@ -137,6 +139,99 @@ describe('writeTextFileAtomic', () => {
     expect(mockLoggerWarn).toHaveBeenCalledWith(
       'Failed to remove temp file after a failed atomic write',
       expect.objectContaining({ error: 'access denied' }),
+    );
+  });
+});
+
+describe('withProjectFileLock', () => {
+  // QNBS-v3 (#553): an in-memory exclusive-create-aware fake — real enough to exercise the lock's create/read/remove sequence without needing the full FsProjectStore fixture.
+  function makeLockableApis(initialLocks: Record<string, string> = {}): TauriApis {
+    const locks = new Map(Object.entries(initialLocks));
+    return {
+      readTextFile: vi.fn((path: string) => {
+        if (!locks.has(path)) return Promise.reject(new Error(`ENOENT ${path}`));
+        return Promise.resolve(locks.get(path) as string);
+      }),
+      writeTextFile: vi.fn((path: string, content: string, opts?: { createNew?: boolean }) => {
+        if (opts?.createNew && locks.has(path)) return Promise.reject(new Error(`EEXIST ${path}`));
+        locks.set(path, content);
+        return Promise.resolve();
+      }),
+      readFile: vi.fn(),
+      writeFile: vi.fn(),
+      mkdir: vi.fn(),
+      exists: vi.fn(),
+      readDir: vi.fn(),
+      remove: vi.fn((path: string) => {
+        locks.delete(path);
+        return Promise.resolve();
+      }),
+      rename: vi.fn(),
+      open: vi.fn(),
+      save: vi.fn(),
+      appDataDir: vi.fn(),
+      join: vi.fn(),
+    };
+  }
+
+  it('acquires the lock, runs the operation, and releases it on success', async () => {
+    const apis = makeLockableApis();
+    const result = await withProjectFileLock(apis, '/data/project.json', async () => 'done');
+
+    expect(result).toBe('done');
+    expect(apis.writeTextFile).toHaveBeenCalledWith('/data/project.json.lock', expect.any(String), {
+      createNew: true,
+    });
+    expect(apis.remove).toHaveBeenCalledWith('/data/project.json.lock');
+  });
+
+  it('releases the lock even when the wrapped operation throws', async () => {
+    const apis = makeLockableApis();
+
+    await expect(
+      withProjectFileLock(apis, '/data/project.json', async () => {
+        throw new Error('writeback refused');
+      }),
+    ).rejects.toThrow('writeback refused');
+    expect(apis.remove).toHaveBeenCalledWith('/data/project.json.lock');
+  });
+
+  it('throws ProjectFileLockedError after bounded retries when a fresh lock is held', async () => {
+    const apis = makeLockableApis({ '/data/project.json.lock': String(Date.now()) });
+    const fn = vi.fn().mockResolvedValue('unreachable');
+
+    await expect(withProjectFileLock(apis, '/data/project.json', fn)).rejects.toBeInstanceOf(
+      ProjectFileLockedError,
+    );
+    expect(fn).not.toHaveBeenCalled();
+    // QNBS-v3: bounded — exactly 3 create attempts, never an unbounded wait.
+    expect(apis.writeTextFile).toHaveBeenCalledTimes(3);
+  });
+
+  it('reclaims a stale lock left by a crashed writer and completes the operation', async () => {
+    const apis = makeLockableApis({
+      '/data/project.json.lock': String(Date.now() - 60_000),
+    });
+
+    await expect(
+      withProjectFileLock(apis, '/data/project.json', async () => 'recovered'),
+    ).resolves.toBe('recovered');
+  });
+
+  it('reclaims a malformed lock rather than deadlocking forever', async () => {
+    const apis = makeLockableApis({ '/data/project.json.lock': 'not-a-timestamp' });
+
+    await expect(
+      withProjectFileLock(apis, '/data/project.json', async () => 'recovered'),
+    ).resolves.toBe('recovered');
+  });
+
+  it('does not fail the operation when best-effort lock release itself fails', async () => {
+    const apis = makeLockableApis();
+    apis.remove = vi.fn().mockRejectedValue(new Error('EPERM'));
+
+    await expect(withProjectFileLock(apis, '/data/project.json', async () => 'done')).resolves.toBe(
+      'done',
     );
   });
 });

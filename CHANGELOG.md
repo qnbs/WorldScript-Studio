@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** the desktop filesystem save path now serializes existing-project
+  writeback across OS processes via an exclusive-create sibling lock file (`<project.json>.lock`),
+  closing the TOCTOU gap between the prior generation-hash re-check and the atomic rename — two
+  app instances, or an external sync tool, racing the same save could previously (in a narrow
+  window) have one writer's rename silently clobber the other's more recent write. Bounded retry
+  only (3 attempts), and a lock older than 30s left by a crashed writer is automatically
+  reclaimed — never an unbounded wait or a permanent deadlock. No change to web/PWA (IndexedDB)
+  persistence, which isn't exposed to this same cross-process race.
 - **Dependency governance:** removed the temporary, version-scoped `minimumReleaseAgeExclude:
   qs@6.16.0` entry (added in #587) now that it has aged past the 7-day `minimumReleaseAge`
   quarantine floor; `AUDIT.md`'s `qs` override row updated to match. `nanoid@3.3.18`'s exclusion
