@@ -21,5 +21,8 @@
   "desktop.tray.quit": "Quit",
   "desktop.tray.settings": "Settings",
   "desktop.tray.show": "Show WorldScript Studio",
-  "desktop.tray.tooltip": "WorldScript Studio"
+  "desktop.tray.tooltip": "WorldScript Studio",
+  "desktop.staleWriter.title": "Νεότερη έκδοση αποθηκεύτηκε σε άλλο παράθυρο",
+  "desktop.staleWriter.description": "Ένα άλλο παράθυρο του WorldScript αποθήκευσε αυτό το έργο αφού ανοίχτηκε σε αυτό το παράθυρο, οπότε αυτό το παράθυρο σταμάτησε την αποθήκευση για να μην αντικαταστήσει αυτές τις αλλαγές. Αντιγράψτε ό,τι χρειάζεστε ακόμη από αυτό το παράθυρο και έπειτα κλείστε και ανοίξτε ξανά το WorldScript για να φορτώσετε τη νεότερη έκδοση.",
+  "desktop.staleWriter.quitConfirm": "Ένα άλλο παράθυρο του WorldScript αποθήκευσε νεότερη έκδοση αυτού του έργου, οπότε οι πιο πρόσφατες αλλαγές αυτού του παραθύρου δεν μπορούν να αποθηκευτούν χωρίς να την αντικαταστήσουν. Έξοδος ούτως ή άλλως και απόρριψη των μη αποθηκευμένων αλλαγών αυτού του παραθύρου;"
 }
