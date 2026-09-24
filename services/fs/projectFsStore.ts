@@ -21,6 +21,7 @@ import {
 import {
   commitOwnedProjectEdit,
   computeProjectSourceGeneration,
+  type ProjectSourceGeneration,
   type ProjectWritebackResult,
 } from '../projectDocumentWriteback';
 import { importedProjectJsonSchema, parseImportedProjectJson } from '../projectImportSchema';
@@ -38,6 +39,7 @@ import {
   decompressJsonText,
   PROJECT_LOCKS_DIR_NAME,
   retryFs,
+  StaleProjectWriterError,
   sanitizePathSegment,
   type TauriApis,
   withProjectFileLock,
@@ -260,6 +262,8 @@ const LEGACY_FALLBACK_WRITER_IDENTITIES = ['browser-project', 'default', 'projec
 export class FsProjectStore extends FsAssetStore {
   private readonly verifiedLegacyProjectDirectories = new Set<string>();
   private readonly legacyAdmissionRecords = new Map<string, LegacyAdmissionRecord>();
+  // QNBS-v3 (#553): the canonical generation this process's editable in-memory project descends from, per project — set only by the editing load and by this process's own commits, never by background reads (backup/LoRA use loadProject), so a background re-read can never mask a stale writer.
+  private readonly editingBaselines = new Map<string, ProjectSourceGeneration>();
 
   private writerIdentityAliases(projectId: string): Set<string> {
     const identities = new Set([projectId]);
@@ -752,6 +756,8 @@ export class FsProjectStore extends FsAssetStore {
     // QNBS-v3 (#553): create absent project files directly; preserve the admitted raw carrier when replacing an existing source.
     if (!sourceExists) {
       await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
+      // QNBS-v3 (#553): no other writer can have loaded a project that did not exist; the next save re-admits this file and establishes the baseline from its canonical form.
+      this.editingBaselines.delete(projectId);
     } else {
       await this.persistExistingCanonicalProjectLocked(
         apis,
@@ -785,6 +791,12 @@ export class FsProjectStore extends FsAssetStore {
         `filesystem source is not admitted: ${admission.source.classification}`,
       );
     }
+    // QNBS-v3 (#553): refuse before building the overlay — the edit below is fenced only against the carrier read now, so an independently-loaded window whose snapshot predates the current generation would otherwise pass that fence and silently revert fields another window committed.
+    const currentGeneration = computeProjectSourceGeneration(admission.canonical.raw);
+    const baseline = this.editingBaselines.get(projectId);
+    if (baseline !== undefined && baseline !== currentGeneration) {
+      throw new StaleProjectWriterError(projectId);
+    }
     const autosaveEdit = buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw);
     const projectRecord = projectToPersist as unknown as Record<string, unknown>;
     const backendMetadata = Object.fromEntries(
@@ -807,7 +819,7 @@ export class FsProjectStore extends FsAssetStore {
       );
     }
     try {
-      const expectedGeneration = computeProjectSourceGeneration(admission.canonical.raw);
+      const expectedGeneration = currentGeneration;
       await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw), async () => {
         // QNBS-v3 (#553): re-read immediately before rename as defense-in-depth even under the lock — a corrupted/foreign lock file would otherwise be the only thing standing between two writers.
         const latestRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
@@ -815,6 +827,7 @@ export class FsProjectStore extends FsAssetStore {
           throw new Error('source generation changed before atomic replacement');
         }
       });
+      this.editingBaselines.set(projectId, writeback.generation);
     } catch (error) {
       throw new ProjectCanonicalWritebackError(
         projectId,
@@ -954,7 +967,10 @@ export class FsProjectStore extends FsAssetStore {
   // QNBS-v3: desktop bootstrap uses a distinct admission boundary so a readable legacy projection cannot enter the ordinary editable Redux store.
   async loadProjectForEditing(projectId: string): Promise<StoryProject | null> {
     return this.withLegacyRoutingOperation(async () => {
-      const project = await this.loadProjectUnlocked(projectId);
+      const loaded: { generation: ProjectSourceGeneration | null } = { generation: null };
+      const project = await this.loadProjectUnlocked(projectId, (generation) => {
+        loaded.generation = generation;
+      });
       const safeProjectId = projectPathSegment(projectId);
       if (project && safeProjectId && this.legacyAdmissionRecords.has(safeProjectId)) {
         throw new ProjectLoadError(
@@ -964,11 +980,21 @@ export class FsProjectStore extends FsAssetStore {
           'LEGACY_UNVERSIONED',
         );
       }
+      if (safeProjectId) {
+        if (project && loaded.generation !== null) {
+          this.editingBaselines.set(safeProjectId, loaded.generation);
+        } else {
+          this.editingBaselines.delete(safeProjectId);
+        }
+      }
       return project;
     });
   }
 
-  private async loadProjectUnlocked(projectId: string): Promise<StoryProject | null> {
+  private async loadProjectUnlocked(
+    projectId: string,
+    onCanonicalGeneration?: (generation: ProjectSourceGeneration) => void,
+  ): Promise<StoryProject | null> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const safeProjectId = projectPathSegment(projectId);
@@ -1013,6 +1039,10 @@ export class FsProjectStore extends FsAssetStore {
         admission.status === 'LEGACY_TO_V1'
           ? withoutSyntheticLegacySchemaVersion(admission.canonical.projection)
           : admission.canonical.projection;
+      // QNBS-v3 (#553): computed from the exact admitted raw the save path fences against, so an unchanged file always matches this baseline.
+      if (admission.status === 'CURRENT') {
+        onCanonicalGeneration?.(computeProjectSourceGeneration(admission.canonical.raw));
+      }
     } catch (error) {
       logger.error('Failed to parse project file (corrupt data):', error);
       throw new ProjectLoadError(

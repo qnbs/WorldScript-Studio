@@ -21,5 +21,8 @@
   "desktop.tray.quit": "Quit",
   "desktop.tray.settings": "Settings",
   "desktop.tray.show": "Show WorldScript Studio",
-  "desktop.tray.tooltip": "WorldScript Studio"
+  "desktop.tray.tooltip": "WorldScript Studio",
+  "desktop.staleWriter.title": "Újabb verzió mentve egy másik ablakban",
+  "desktop.staleWriter.description": "Egy másik WorldScript-ablak elmentette ezt a projektet, miután ebben az ablakban megnyitottad, ezért ez az ablak leállította a mentést, hogy ne írja felül azokat a módosításokat. Másold ki ebből az ablakból, amire még szükséged van, majd zárd be és nyisd meg újra a WorldScriptet az újabb verzió betöltéséhez.",
+  "desktop.staleWriter.quitConfirm": "Egy másik WorldScript-ablak elmentette a projekt újabb verzióját, ezért ennek az ablaknak a legutóbbi módosításai nem menthetők el annak felülírása nélkül. Mégis kilépsz, és elveted ennek az ablaknak a nem mentett módosításait?"
 }

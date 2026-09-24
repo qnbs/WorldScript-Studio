@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** a second desktop WorldScript window can no longer silently revert
+  changes another window saved. #826's lock only serialized write *order*: two windows that both
+  opened a project at the same version, then edited independently, would each save in turn — and
+  the second overlaid its whole older in-memory snapshot onto the first's newer file, reverting
+  every field only the first had changed, while its read-then-write fence still passed. The desktop
+  filesystem store now remembers which on-disk generation each window's open project came from
+  (set by the editing load and by the window's own saves; background reads such as backups and
+  LoRA datasets never move it) and refuses a save whose file has since advanced, before building
+  any overwrite and leaving no temp or lock file behind. The refused window shows one localized
+  notice explaining the conflict and how to load the newer version, instead of failing on every
+  keystroke; quitting or closing that window asks, in its own language, whether to discard its
+  unsaved changes rather than trapping it open forever. Another window's committed data is never
+  touched either way. Not a 3-way merge: the refused window's own later edits are not merged in.
+  Scope: desktop filesystem saves only — the same risk between two browser tabs is owned by #480's
+  multi-tab program. Non-cooperating external writers remain outside any application lock. PR #830.
 - **Privacy truth (#526):** Factory Reset's hint and confirmation text no longer imply that
   downloaded local AI and voice models are erased. Reset deletes only storage WorldScript can
   prove it owns; the WebLLM (`webllm/*`) and Transformers (`transformers-cache`) model caches carry

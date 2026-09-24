@@ -65,6 +65,7 @@ import {
   decompressData,
   decompressJsonText,
   ProjectFileLockedError,
+  StaleProjectWriterError,
 } from '../../../../services/fs/fsCore';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
@@ -2030,6 +2031,101 @@ describe('FsProjectStore — projects', () => {
     });
     expect((await store.loadProject('p1'))?.title).toBe('My Novel');
     expect([...fake.text.keys()].some((path) => path.includes('.tmp-'))).toBe(false);
+  });
+});
+
+// QNBS-v3 (#553): two FsProjectStore instances over one filesystem are two WorldScript processes. The #826 lock serializes their writes; these prove the load-generation baseline additionally refuses a writer whose snapshot predates another window's commit, instead of silently reverting that window's fields.
+describe('FsProjectStore — stale independently-loaded writer', () => {
+  const PROJECT_FILE = '/app/projects/p1/project.json';
+  const base = {
+    id: 'p1',
+    schemaVersion: 1,
+    title: 'Original',
+    logline: 'Original logline',
+    manuscript: [{ id: 's1', title: 'Ch1', content: 'hello' }],
+    characters: [],
+    worlds: [],
+  };
+  const persisted = () =>
+    JSON.parse(decompressJsonText(fake.text.get(PROJECT_FILE) as string)) as Record<
+      string,
+      unknown
+    >;
+
+  async function twoWindowsLoadedAtG0(): Promise<[FsProjectStore, FsProjectStore]> {
+    await store.saveProject(base as never);
+    const windowA = new FsProjectStore();
+    const windowB = new FsProjectStore();
+    await windowA.loadProjectForEditing('p1');
+    await windowB.loadProjectForEditing('p1');
+    return [windowA, windowB];
+  }
+
+  it('refuses the second window instead of reverting the first window’s committed field', async () => {
+    const [windowA, windowB] = await twoWindowsLoadedAtG0();
+
+    await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+    await expect(
+      windowB.saveProject({ ...base, logline: 'Changed by B' } as never),
+    ).rejects.toBeInstanceOf(StaleProjectWriterError);
+
+    expect(persisted()).toMatchObject({ title: 'Changed by A', logline: 'Original logline' });
+  });
+
+  it('lets the same window keep saving after its own commits', async () => {
+    const [windowA] = await twoWindowsLoadedAtG0();
+
+    await windowA.saveProject({ ...base, title: 'First' } as never);
+    await windowA.saveProject({ ...base, title: 'Second' } as never);
+    await windowA.saveProject({ ...base, title: 'Third' } as never);
+
+    expect(persisted()).toMatchObject({ title: 'Third' });
+  });
+
+  it('lets the refused window save again once it reloads the current generation', async () => {
+    const [windowA, windowB] = await twoWindowsLoadedAtG0();
+    await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+    await expect(windowB.saveProject({ ...base } as never)).rejects.toBeInstanceOf(
+      StaleProjectWriterError,
+    );
+
+    const reloaded = await windowB.loadProjectForEditing('p1');
+    await windowB.saveProject({ ...(reloaded as object), logline: 'B after reload' } as never);
+
+    expect(persisted()).toMatchObject({ title: 'Changed by A', logline: 'B after reload' });
+  });
+
+  it('does not let a background read move the editing baseline and mask the conflict', async () => {
+    const [windowA, windowB] = await twoWindowsLoadedAtG0();
+    await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+
+    // Backup/LoRA-style read of the newer generation by the stale window itself.
+    expect((await windowB.loadProject('p1'))?.title).toBe('Changed by A');
+    await expect(
+      windowB.saveProject({ ...base, logline: 'Changed by B' } as never),
+    ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    expect(persisted()).toMatchObject({ title: 'Changed by A' });
+  });
+
+  it('refuses a stale writer before anything is written, leaving no temp file behind', async () => {
+    const [windowA, windowB] = await twoWindowsLoadedAtG0();
+    await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+    const before = fake.text.get(PROJECT_FILE);
+
+    await expect(windowB.saveProject({ ...base } as never)).rejects.toBeInstanceOf(
+      StaleProjectWriterError,
+    );
+
+    expect(fake.text.get(PROJECT_FILE)).toBe(before);
+    expect([...fake.text.keys()].some((path) => path.includes('.tmp-'))).toBe(false);
+    expect([...fake.text.keys()].some((path) => path.endsWith('.lock'))).toBe(false);
+  });
+
+  it('keeps today’s behavior for a window that never loaded the project for editing', async () => {
+    await store.saveProject(base as never);
+    const other = new FsProjectStore();
+    await other.saveProject({ ...base, title: 'Saved without an editing load' } as never);
+    expect(persisted()).toMatchObject({ title: 'Saved without an editing load' });
   });
 });
 

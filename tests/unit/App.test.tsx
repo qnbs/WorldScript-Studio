@@ -155,11 +155,16 @@ vi.mock('../../services/desktopPlatform', () => ({
   },
 }));
 
+vi.mock('../../services/i18n/staticTranslate', () => ({
+  getCurrentLanguage: () => 'en',
+  getStaticTranslation: (key: string) => Promise.resolve(key),
+}));
+
 import App from '../../App';
 import { statusActions } from '../../features/status/statusSlice';
 import { installCloseToTray, installDesktopTray } from '../../services/desktop/desktopTray';
 import { desktopPlatform } from '../../services/desktopPlatform';
-import { ProjectFileLockedError } from '../../services/fs/fsCore';
+import { ProjectFileLockedError, StaleProjectWriterError } from '../../services/fs/fsCore';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -270,5 +275,62 @@ describe('quit/close blocked by a held project-file lock (#553)', () => {
         payload: expect.objectContaining({ title: 'Cannot Close Yet' }),
       }),
     );
+  });
+});
+
+// QNBS-v3 (#553): a stale-writer refusal never clears by waiting, so quit/close must not trap the window forever — they proceed only on the user's explicit, localized choice to discard this window's unsaved changes, and otherwise stay fail-closed exactly as before.
+describe('quit/close refused by a stale independently-loaded writer (#553)', () => {
+  const stale = () => new StaleProjectWriterError('p1');
+
+  it('quits only after the user explicitly confirms discarding this window’s changes', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mockFlushPersistedState.mockRejectedValueOnce(stale());
+    render(<App isNewUser={false} allowInitialMetadataSeed={false} />);
+    const quitApp = vi.mocked(installDesktopTray).mock.calls[0]?.[2] as () => Promise<void>;
+
+    await quitApp();
+
+    expect(confirmSpy).toHaveBeenCalledWith('desktop.staleWriter.quitConfirm');
+    expect(desktopPlatform.lifecycle.quit).toHaveBeenCalledTimes(1);
+    confirmSpy.mockRestore();
+  });
+
+  it('stays open when the user declines, on both the quit and the close-to-tray path', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    mockFlushPersistedState.mockRejectedValueOnce(stale()).mockRejectedValueOnce(stale());
+    render(<App isNewUser={false} allowInitialMetadataSeed={false} />);
+    const quitApp = vi.mocked(installDesktopTray).mock.calls[0]?.[2] as () => Promise<void>;
+    const flushPendingState = vi.mocked(installCloseToTray).mock
+      .calls[0]?.[1] as () => Promise<void>;
+
+    await quitApp();
+    await expect(flushPendingState()).rejects.toBeInstanceOf(StaleProjectWriterError);
+
+    expect(desktopPlatform.lifecycle.quit).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it('lets the window close via close-to-tray once the user confirms', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mockFlushPersistedState.mockRejectedValueOnce(stale());
+    render(<App isNewUser={false} allowInitialMetadataSeed={false} />);
+    const flushPendingState = vi.mocked(installCloseToTray).mock
+      .calls[0]?.[1] as () => Promise<void>;
+
+    await expect(flushPendingState()).resolves.toBeUndefined();
+    confirmSpy.mockRestore();
+  });
+
+  it('never offers the discard prompt for an ordinary flush failure', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mockFlushPersistedState.mockRejectedValueOnce(new Error('disk full'));
+    render(<App isNewUser={false} allowInitialMetadataSeed={false} />);
+    const quitApp = vi.mocked(installDesktopTray).mock.calls[0]?.[2] as () => Promise<void>;
+
+    await quitApp();
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(desktopPlatform.lifecycle.quit).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 });
