@@ -181,6 +181,35 @@ function runUpdate(current, total, fileCount, baselinePath) {
   process.exit(0);
 }
 
+// QNBS-v3 (CodeScene, PR #823): extracted out of main() for the same reason as runUpdate() — this was one of the two remaining nested-conditional blocks pushing main() to the "Bumpy Road" threshold (2 blocks). Pure side-effecting report writer, no decision logic worth unit-testing beyond what the existing scanner/report tests already cover.
+function printDetails(byFile, total, reportsDir) {
+  const details = Object.entries(byFile)
+    .filter(([, rules]) => Object.keys(rules).length > 0)
+    .sort((a, b) => {
+      const countA = Object.values(a[1]).reduce((sum, n) => sum + n, 0);
+      const countB = Object.values(b[1]).reduce((sum, n) => sum + n, 0);
+      return countB - countA;
+    })
+    .map(([file, rules]) => ({ file, rules }));
+  fs.writeFileSync(
+    path.join(reportsDir, 'suppressions-details.json'),
+    `${JSON.stringify({ total, files: details.length, details, generatedAt: new Date().toISOString() }, null, 2)}\n`,
+  );
+  console.log('\n[suppressions] per-file breakdown:');
+  for (const { file, rules } of details.slice(0, 20)) {
+    const fileTotal = Object.values(rules).reduce((sum, n) => sum + n, 0);
+    console.log(`  ${fileTotal}  ${path.relative(root, file)}`);
+    for (const [rule, n] of Object.entries(rules).sort((a, b) => b[1] - a[1])) {
+      console.log(`       ${n}  ${rule}`);
+    }
+  }
+  if (details.length > 20) {
+    console.log(
+      `  ... and ${details.length - 20} more files (see reports/suppressions-details.json)`,
+    );
+  }
+}
+
 function main() {
   const files = collectTrackedSourceFiles({ root });
   const { total, byRule: sorted, byFile } = scanSuppressionFiles(files);
@@ -193,33 +222,7 @@ function main() {
     `${JSON.stringify({ total, byRule: sorted, files: files.length, generatedAt: new Date().toISOString() }, null, 2)}\n`,
   );
 
-  if (process.argv.includes('--details')) {
-    const details = Object.entries(byFile)
-      .filter(([, rules]) => Object.keys(rules).length > 0)
-      .sort((a, b) => {
-        const countA = Object.values(a[1]).reduce((sum, n) => sum + n, 0);
-        const countB = Object.values(b[1]).reduce((sum, n) => sum + n, 0);
-        return countB - countA;
-      })
-      .map(([file, rules]) => ({ file, rules }));
-    fs.writeFileSync(
-      path.join(reportsDir, 'suppressions-details.json'),
-      `${JSON.stringify({ total, files: details.length, details, generatedAt: new Date().toISOString() }, null, 2)}\n`,
-    );
-    console.log('\n[suppressions] per-file breakdown:');
-    for (const { file, rules } of details.slice(0, 20)) {
-      const fileTotal = Object.values(rules).reduce((sum, n) => sum + n, 0);
-      console.log(`  ${fileTotal}  ${path.relative(root, file)}`);
-      for (const [rule, n] of Object.entries(rules).sort((a, b) => b[1] - a[1])) {
-        console.log(`       ${n}  ${rule}`);
-      }
-    }
-    if (details.length > 20) {
-      console.log(
-        `  ... and ${details.length - 20} more files (see reports/suppressions-details.json)`,
-      );
-    }
-  }
+  if (process.argv.includes('--details')) printDetails(byFile, total, reportsDir);
 
   const baselinePath = path.join(root, 'suppressions-baseline.json');
 
