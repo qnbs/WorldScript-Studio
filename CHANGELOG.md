@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **CI security (phase 1/2, #510):** adds `.github/workflows/pr-size-enforce.yml`, a `workflow_call`
+  reusable workflow that will host the `pr-size` job's write-scoped (`pull-requests: write`)
+  enforcement/comment step once a follow-up PR pins `ci.yml`'s `pr-size` job to this PR's merged
+  SHA — closing the gap where that job's own body (not just the checker script it invokes) is
+  currently sourced from a same-repo PR's own ref. Landed dormant and unreferenced this phase; does
+  not yet change `pr-size`'s runtime behavior. PR #825.
 - **Dependency governance:** removed the temporary, version-scoped `minimumReleaseAgeExclude:
   qs@6.16.0` entry (added in #587) now that it has aged past the 7-day `minimumReleaseAge`
   quarantine floor; `AUDIT.md`'s `qs` override row updated to match. `nanoid@3.3.18`'s exclusion
