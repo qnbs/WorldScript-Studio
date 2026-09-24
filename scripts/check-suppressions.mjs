@@ -2,43 +2,191 @@
 /**
  * Suppression-debt ratchet gate (audit finding F-4).
  *
- * Counts `biome-ignore` directives across Git-tracked TS/TSX source files, grouped by rule, and fails CI
- * when the total exceeds the committed baseline in `suppressions-baseline.json`. The baseline may
- * only ever DECREASE — this stops the suppression count (162x noExplicitAny at baseline time) from
- * silently growing the way it did Mar→Jun 2026 (137 → 186). No gate previously prevented that.
+ * Counts `biome-ignore` directives across Git-tracked TS/TSX source files, grouped by rule, and
+ * fails CI when any rule's count differs from its committed per-rule baseline in
+ * `suppressions-baseline.json` (#447: a true monotonic per-rule ratchet — see
+ * `scripts/lib/ratchet-baseline.mjs`). An aggregate-only comparison previously let one rule's
+ * improvement finance another rule's regression as long as the total stayed unchanged.
  *
- * Run:    node scripts/check-suppressions.mjs            # gate (exit 1 if total > baseline)
- *         node scripts/check-suppressions.mjs --update   # rewrite baseline to current (after abatement)
+ * Run:    node scripts/check-suppressions.mjs            # gate (exit 1 on any per-rule mismatch)
+ *         node scripts/check-suppressions.mjs --update   # ratchet the baseline to current counts
  *         node scripts/check-suppressions.mjs --details  # gate + per-file breakdown
+ *
+ * `--update` refuses to write a baseline that would raise any existing per-rule ceiling — a
+ * regression must be fixed at the source (or accepted through a separately governed, explicit
+ * exception edited directly into the baseline file), never through the routine ratchet-down
+ * command.
  *
  * Writes a full per-rule breakdown to `reports/suppressions.json`.
  * With --details, also writes a per-file breakdown to `reports/suppressions-details.json`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isDirectExecution, resolveModuleRoot } from './lib/cli-entrypoint.mjs';
+import { evaluateBaseline } from './lib/ratchet-baseline.mjs';
 import { collectTrackedSourceFiles, scanSuppressionFiles } from './suppression-scanner.mjs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.join(__dirname, '..');
+// QNBS-v3 (Sourcery + CodeAnt, PR #823): a plain path.dirname(fileURLToPath(...)) does not resolve symlinks — under `node --preserve-symlinks-main`, a symlink living outside the repository would make `root` (and therefore the scan corpus, baseline path, and reports directory) resolve beside the symlink instead of the real checkout. `resolveModuleRoot` (shared with audit-tokens.mjs) fixes this via fs.realpathSync.
+export const root = resolveModuleRoot(import.meta.url);
 
-const files = collectTrackedSourceFiles({ root });
-const { total, byRule: sorted, byFile } = scanSuppressionFiles(files);
-const report = {
-  total,
-  byRule: sorted,
-  files: files.length,
-  generatedAt: new Date().toISOString(),
-};
-const reportsDir = path.join(root, 'reports');
-fs.mkdirSync(reportsDir, { recursive: true });
-fs.writeFileSync(
-  path.join(reportsDir, 'suppressions.json'),
-  `${JSON.stringify(report, null, 2)}\n`,
-);
+function refuseUpdate(verdict) {
+  const detail = verdict.detail ? `: ${verdict.detail}` : '';
+  return {
+    action: 'REFUSE',
+    message: `--update refused — ${verdict.reason}${detail}. Fix the underlying data first; --update only ever ratchets down from a trustworthy baseline and a trustworthy scan.`,
+  };
+}
 
-const showDetails = process.argv.includes('--details');
-if (showDetails) {
+// QNBS-v3 (Codex + CodeRabbit, PR #823, independently found): loadExistingBaseline uses `undefined` for "file genuinely absent" (see below) so it can never collide with a JSON `null` literally parsed FROM an existing file — the earlier `!== null` check was still wrong for that exact byte content, since `JSON.parse('null')` returns the same `null` sentinel a truthiness/`!== null` check would treat as bootstrap-allowed. This turns `existingBaseline` (present-but-not-a-valid-shape: null, a scalar, or an array) into a `{ total: NaN, summary: existingBaseline }` marker instead — always a truthy object, so it can never trip evaluateBaseline's own `!baseline` bootstrap shortcut, and its NaN/non-object `summary` always fails hasValidCounts, correctly landing on MALFORMED_BASELINE rather than being silently treated as absent.
+function toBaselineArg(existingBaseline) {
+  if (existingBaseline === undefined) return null;
+  if (
+    existingBaseline === null ||
+    typeof existingBaseline !== 'object' ||
+    Array.isArray(existingBaseline)
+  ) {
+    return { total: Number.NaN, summary: existingBaseline };
+  }
+  return { total: existingBaseline.total, summary: existingBaseline.byRule };
+}
+
+/**
+ * QNBS-v3 (#447; hardened after CodeAnt/Codex/CodeRabbit, PR #823): pure decision for `--update`
+ * — never writes a file or touches process.exit, so it's exercised directly by tests.
+ * `existingBaseline` is `undefined` on first-time baseline creation (always allowed) — see
+ * toBaselineArg for why the "no baseline" sentinel is `undefined`, not `null`. Otherwise, only a
+ * STALE_HIGH_BASELINE verdict (a real improvement to bank) or EXACT_MATCH (a no-op) may write —
+ * REGRESSION, MALFORMED_BASELINE, and MALFORMED_AUDIT all refuse. The original version refused only
+ * REGRESSION, so a malformed baseline (or a malformed live scan) would fall through to a silent
+ * overwrite instead of failing closed — exactly the "don't trust corrupted data" gap this whole
+ * ratchet exists to close everywhere else.
+ * QNBS-v3 (CodeRabbit, PR #823): `current` is validated unconditionally, even on first-time
+ * creation with no existing baseline — decideUpdateAction is a public, directly-callable export,
+ * not gated behind the real scanner that always happens to produce well-formed counts.
+ */
+export function decideUpdateAction(current, existingBaseline) {
+  const auditVerdict = evaluateBaseline(current, null);
+  if (auditVerdict.reason === 'MALFORMED_AUDIT') return refuseUpdate(auditVerdict);
+
+  const baselineArg = toBaselineArg(existingBaseline);
+  if (baselineArg !== null) {
+    const verdict = evaluateBaseline(current, baselineArg);
+    if (!verdict.ok && verdict.reason !== 'STALE_HIGH_BASELINE') return refuseUpdate(verdict);
+  }
+  return {
+    action: 'WRITE',
+    baseline: { total: current.total, byRule: current.summary },
+  };
+}
+
+/**
+ * QNBS-v3 (#447): pure gate decision, given the already-collected current counts and the parsed
+ * baseline file (or `undefined` if none exists yet). Delegates to the shared `evaluateBaseline`
+ * ratchet and only adds the human-readable remediation tip per failure reason.
+ * QNBS-v3 (Codex, PR #823, same fix as decideUpdateAction): uses toBaselineArg so a baseline file
+ * that exists but parses to a falsy or non-object JSON value (including a literal `null`) reaches
+ * evaluateBaseline's own validation and fails as MALFORMED_BASELINE, not "no baseline yet."
+ */
+export function decideGateAction(current, existingBaseline) {
+  const verdict = evaluateBaseline(current, toBaselineArg(existingBaseline));
+  if (verdict.ok) return { action: 'PASS' };
+
+  let tip = '';
+  if (verdict.reason === 'REGRESSION') {
+    tip =
+      'Remove the new suppression or fix the root cause; do not raise the baseline (ratchet-only).';
+  } else if (verdict.reason === 'STALE_HIGH_BASELINE') {
+    tip =
+      'A per-rule count dropped below its baseline — run `node scripts/check-suppressions.mjs --update` ' +
+      'to bank the improvement (this cannot also raise a different rule; see above).';
+  } else if (verdict.reason === 'NO_BASELINE_VIOLATIONS_FOUND') {
+    tip = 'No suppressions-baseline.json exists yet — run with --update to create it.';
+  }
+  return { action: 'FAIL', reason: verdict.reason, detail: verdict.detail, tip };
+}
+
+// QNBS-v3 (Codex + CodeRabbit, PR #823): returns `undefined` for "file genuinely absent", never `null` — `null` is a value JSON.parse can legitimately return FROM an existing file's content, and toBaselineArg needs those two states to stay distinguishable.
+function loadExistingBaseline(baselinePath) {
+  if (!fs.existsSync(baselinePath)) return undefined;
+  return JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+}
+
+/**
+ * QNBS-v3 (chatgpt-codex-connector, PR #823): the earlier re-read-before-write guard only
+ * narrowed the concurrent-`--update` race, it didn't close it — two processes can each pass the
+ * re-read check before either writes. This makes the whole read-decide-write sequence exclusive
+ * via a lock file created with the `wx` flag, which Node/the OS guarantee is atomic (fails with
+ * EEXIST if another process already holds it) — a real mutual-exclusion primitive, not a narrowed
+ * window. A stale lock left by a crashed prior run must be removed manually; this is a rarely
+ * invoked, human/CI-triggered CLI command, not a long-running service, so that residual is
+ * accepted rather than adding lock-staleness heuristics that would reintroduce their own race.
+ */
+export function withUpdateLock(baselinePath, fn) {
+  const lockPath = `${baselinePath}.lock`;
+  let fd;
+  try {
+    fd = fs.openSync(lockPath, 'wx');
+  } catch (err) {
+    if (err.code === 'EEXIST') {
+      throw new Error(
+        `another --update is already in progress (${lockPath} exists) — re-run once it finishes, or remove the lock file manually if a previous run crashed`,
+      );
+    }
+    throw err;
+  }
+  try {
+    return fn();
+  } finally {
+    fs.closeSync(fd);
+    fs.unlinkSync(lockPath);
+  }
+}
+
+/**
+ * QNBS-v3 (CodeRabbit, PR #823): withUpdateLock serializes competing --update processes, but the
+ * gate path (no --update) reads suppressions-baseline.json without that lock. A plain
+ * fs.writeFileSync truncates the file before writing the new content, so a gate run reading
+ * mid-write (or an --update interrupted after truncation) can see/leave incomplete JSON. Writing
+ * to a temp file in the same directory first and renaming it into place is atomic at the
+ * filesystem level — a concurrent reader always sees either the complete old file or the complete
+ * new one, never a partial write.
+ */
+export function writeBaselineAtomic(baselinePath, baseline) {
+  const tmpPath = `${baselinePath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    fs.writeFileSync(tmpPath, `${JSON.stringify(baseline, null, 2)}\n`);
+    fs.renameSync(tmpPath, baselinePath);
+  } catch (err) {
+    fs.rmSync(tmpPath, { force: true });
+    throw err;
+  }
+}
+
+// QNBS-v3 (CodeScene, PR #823): extracted out of main() — the lock/try-catch/decision nesting this needs on its own was pushing main() past this repo's cyclomatic-complexity threshold, and keeping it as its own named function is also just clearer than one more nested block in main().
+function runUpdate(current, total, fileCount, baselinePath) {
+  let result;
+  try {
+    result = withUpdateLock(baselinePath, () => {
+      const existingBaseline = loadExistingBaseline(baselinePath);
+      const decision = decideUpdateAction(current, existingBaseline);
+      if (decision.action === 'REFUSE') return decision;
+      writeBaselineAtomic(baselinePath, decision.baseline);
+      return decision;
+    });
+  } catch (err) {
+    console.error(`[suppressions] ${err.message}`);
+    process.exit(1);
+  }
+  if (result.action === 'REFUSE') {
+    console.error(`[suppressions] ${result.message}`);
+    process.exit(1);
+  }
+  console.log(`[suppressions] baseline updated → ${total} total across ${fileCount} files`);
+  process.exit(0);
+}
+
+// QNBS-v3 (CodeScene, PR #823): extracted out of main() for the same reason as runUpdate() — this was one of the two remaining nested-conditional blocks pushing main() to the "Bumpy Road" threshold (2 blocks). Pure side-effecting report writer, no decision logic worth unit-testing beyond what the existing scanner/report tests already cover.
+function printDetails(byFile, total, reportsDir) {
   const details = Object.entries(byFile)
     .filter(([, rules]) => Object.keys(rules).length > 0)
     .sort((a, b) => {
@@ -66,41 +214,47 @@ if (showDetails) {
   }
 }
 
-const baselinePath = path.join(root, 'suppressions-baseline.json');
+function main() {
+  const files = collectTrackedSourceFiles({ root });
+  const { total, byRule: sorted, byFile } = scanSuppressionFiles(files);
+  const current = { total, summary: sorted };
 
-if (process.argv.includes('--update')) {
-  fs.writeFileSync(baselinePath, `${JSON.stringify({ total, byRule: sorted }, null, 2)}\n`);
-  console.log(`[suppressions] baseline updated → ${total} total across ${files.length} files`);
-  process.exit(0);
+  const reportsDir = path.join(root, 'reports');
+  fs.mkdirSync(reportsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(reportsDir, 'suppressions.json'),
+    `${JSON.stringify({ total, byRule: sorted, files: files.length, generatedAt: new Date().toISOString() }, null, 2)}\n`,
+  );
+
+  if (process.argv.includes('--details')) printDetails(byFile, total, reportsDir);
+
+  const baselinePath = path.join(root, 'suppressions-baseline.json');
+
+  if (process.argv.includes('--update')) {
+    runUpdate(current, total, files.length, baselinePath);
+    return;
+  }
+
+  const existingBaseline = loadExistingBaseline(baselinePath);
+  console.log(`[suppressions] total ${total} across ${files.length} files`);
+  for (const [rule, n] of Object.entries(sorted))
+    console.log(`  ${n.toString().padStart(4)}  ${rule}`);
+
+  const decision = decideGateAction(current, existingBaseline);
+  if (decision.action === 'FAIL') {
+    console.error(
+      `\n[suppressions] FAIL — ${decision.reason}${decision.detail ? `: ${decision.detail}` : ''}`,
+    );
+    if (decision.tip) console.error(decision.tip);
+    console.error(
+      'Tip: run `node scripts/check-suppressions.mjs --details` for a per-file breakdown.',
+    );
+    process.exit(1);
+  }
+  console.log('[suppressions] OK');
 }
 
-if (!fs.existsSync(baselinePath)) {
-  console.error(
-    '[suppressions] missing suppressions-baseline.json — run with --update to create it.',
-  );
-  process.exit(1);
+// QNBS-v3: only run the CLI when this file is executed directly — importing it (e.g. from a test file, for the exported pure helpers) must not trigger a report write or process.exit.
+if (isDirectExecution(process.argv[1], import.meta.url)) {
+  main();
 }
-
-const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
-console.log(
-  `[suppressions] total ${total} (baseline ${baseline.total}) across ${files.length} files`,
-);
-for (const [rule, n] of Object.entries(sorted))
-  console.log(`  ${n.toString().padStart(4)}  ${rule}`);
-
-if (total > baseline.total) {
-  console.error(
-    `\n[suppressions] FAIL — ${total} > baseline ${baseline.total} (+${total - baseline.total}). ` +
-      'Remove a suppression or fix the root cause; do not raise the baseline (ratchet-only).',
-  );
-  console.error(
-    'Tip: run `node scripts/check-suppressions.mjs --details` for a per-file breakdown.',
-  );
-  process.exit(1);
-}
-if (total < baseline.total) {
-  console.log(
-    `[suppressions] ${baseline.total - total} below baseline — run \`node scripts/check-suppressions.mjs --update\` to ratchet it down.`,
-  );
-}
-console.log('[suppressions] OK');
