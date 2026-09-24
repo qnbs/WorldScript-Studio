@@ -283,12 +283,15 @@ describe('FsProjectStore — projects', () => {
   // QNBS-v3 (#553): the generation re-check above narrows the TOCTOU gap but does not close it — these prove the cross-process lock actually gates persistExistingCanonicalProject.
   it('acquires and releases a cross-process lock around an existing-project save', async () => {
     const sourcePath = '/app/projects/p1/project.json';
+    const lockPath = '/app/project-locks/p1.lock';
     await fake.apis.mkdir('/app/projects/p1', { recursive: true });
     await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
 
     await store.saveProject({ ...project, title: 'Locked and saved' } as never);
 
+    // QNBS-v3 (#553): the lock lives outside projects/<id>/ — see the dedicated quarantine/delete test below for why.
     expect(fake.text.has(`${sourcePath}.lock`)).toBe(false);
+    expect(fake.text.has(lockPath)).toBe(false);
     expect(JSON.parse(decompressJsonText(fake.text.get(sourcePath) as string))).toMatchObject({
       title: 'Locked and saved',
     });
@@ -296,9 +299,11 @@ describe('FsProjectStore — projects', () => {
 
   it('refuses an existing-project save while another writer holds the lock', async () => {
     const sourcePath = '/app/projects/p1/project.json';
+    const lockPath = '/app/project-locks/p1.lock';
     await fake.apis.mkdir('/app/projects/p1', { recursive: true });
     await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
-    await fake.apis.writeTextFile(`${sourcePath}.lock`, 'locked');
+    await fake.apis.mkdir('/app/project-locks', { recursive: true });
+    await fake.apis.writeTextFile(lockPath, 'locked');
 
     // QNBS-v3 (#553): ProjectFileLockedError now propagates as itself (unwrapped) so a caller — e.g. the autosave listener — can give a truthful, distinct "another writer holds the lock" message instead of the same generic writeback-refusal message as every other cause.
     await expect(
@@ -306,18 +311,49 @@ describe('FsProjectStore — projects', () => {
     ).rejects.toBeInstanceOf(ProjectFileLockedError);
     expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(JSON.stringify(project));
     // QNBS-v3 (#553): a held lock must never be removed by a caller that didn't create it — no reclaim exists.
-    expect(fake.text.has(`${sourcePath}.lock`)).toBe(true);
+    expect(fake.text.has(lockPath)).toBe(true);
   });
 
   // QNBS-v3 (#553, Thread 0): locking only the existing-project branch left this exact race — two processes could both observe an absent project.json and independently create it, the later one silently overwriting the earlier.
   it('refuses a first-time save while another writer holds the lock for the same not-yet-created project', async () => {
     await fake.apis.mkdir('/app/projects/p1', { recursive: true });
-    await fake.apis.writeTextFile('/app/projects/p1/project.json.lock', 'locked');
+    await fake.apis.mkdir('/app/project-locks', { recursive: true });
+    await fake.apis.writeTextFile('/app/project-locks/p1.lock', 'locked');
 
     await expect(store.saveProject(project as never)).rejects.toBeInstanceOf(
       ProjectFileLockedError,
     );
     expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
+  });
+
+  // QNBS-v3 (#553): the specific regression a fresh review caught — a lock colocated inside projects/<id>/ would be relocated by quarantine's rename and deleted by deleteProject's recursive remove, letting a concurrent writer wrongly conclude the path is free once a new projects/<id>/ is recreated. Proves the lock's new stable location survives both operations untouched.
+  it('keeps an active lock intact across a concurrent quarantine of the same project directory', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const lockPath = '/app/project-locks/p1.lock';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+    await fake.apis.mkdir('/app/project-locks', { recursive: true });
+    await fake.apis.writeTextFile(lockPath, 'locked');
+
+    await store.quarantineProject('p1');
+
+    // QNBS-v3: quarantine renamed projects/p1 away entirely — the lock, living outside that directory, must be unaffected.
+    expect(fake.text.has(sourcePath)).toBe(false);
+    expect(fake.text.has(lockPath)).toBe(true);
+  });
+
+  it('keeps an active lock intact across a concurrent delete of the same project directory', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const lockPath = '/app/project-locks/p1.lock';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+    await fake.apis.mkdir('/app/project-locks', { recursive: true });
+    await fake.apis.writeTextFile(lockPath, 'locked');
+
+    await store.deleteProject('p1');
+
+    expect(fake.text.has(sourcePath)).toBe(false);
+    expect(fake.text.has(lockPath)).toBe(true);
   });
 
   it('refuses non-current filesystem writeback without changing the stored source', async () => {

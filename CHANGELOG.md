@@ -25,10 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The lock payload is empty, verified against the pinned `tauri-plugin-fs@2.5.2` Rust source to
   close (not just narrow) the window where a successful exclusive-create's later write step could
   otherwise fail and orphan a partial lock. Lock release retries a transient failure and
-  diagnostically warns rather than silently swallowing a persistent one. Autosave now shows a
-  distinct, truthful notification when blocked by another instance's lock, rather than the same
-  generic "could not be saved" message as every other failure cause. No change to web/PWA
-  (IndexedDB) persistence, which isn't exposed to this cross-process race. PR #826.
+  diagnostically warns rather than silently swallowing a persistent one. The lock lives in a new
+  stable sibling directory (`project-locks/`), not inside `projects/<id>/` itself — that directory
+  can be renamed whole by project quarantine or removed whole by project deletion, either of which
+  would otherwise carry a currently-held lock away with it and let a second writer wrongly conclude
+  the path was free. Autosave now shows a distinct, truthful notification when blocked by another
+  instance's lock (hardcoded, not yet localized — proper i18n needs the same new key in all 19
+  locale sources, which alone saturates this PR's absolute file-count ceiling; tracked as an
+  explicit, disclosed follow-up), rather than the same generic "could not be saved" message as
+  every other failure cause, and no longer promises an automatic retry that nothing currently
+  schedules. No change to web/PWA (IndexedDB) persistence, which isn't exposed to this cross-process
+  race. PR #826.
 - **Dependency governance:** removed the temporary, version-scoped `minimumReleaseAgeExclude:
   qs@6.16.0` entry (added in #587) now that it has aged past the 7-day `minimumReleaseAge`
   quarantine floor; `AUDIT.md`'s `qs` override row updated to match. `nanoid@3.3.18`'s exclusion

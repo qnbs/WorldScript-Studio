@@ -719,9 +719,18 @@ export class FsProjectStore extends FsAssetStore {
     projectId: string,
     projectToPersist: StoryProject,
   ): Promise<void> {
-    await withProjectFileLock(apis, projectFile, () =>
+    const lockKeyPath = await this.projectLockKeyPath(apis, projectId);
+    await withProjectFileLock(apis, lockKeyPath, () =>
       this.persistProjectFileLocked(apis, projectFile, projectId, projectToPersist),
     );
+  }
+
+  // QNBS-v3 (#553): the lock lives outside projects/<id>/ deliberately — quarantineProjectUnlocked's rename and deleteProjectUnlocked's recursive remove both operate on exactly that directory, so a sibling lock file there could be relocated or deleted out from under its owner, letting a concurrent writer wrongly conclude the path is free. A stable sibling of projects/ and quarantined-projects/ is untouched by either operation.
+  private async projectLockKeyPath(apis: TauriApis, projectId: string): Promise<string> {
+    const appDataPath = await this.ensureAppDataPath();
+    const locksRoot = await apis.join(appDataPath, 'project-locks');
+    await apis.mkdir(locksRoot, { recursive: true });
+    return apis.join(locksRoot, projectId);
   }
 
   private async persistProjectFileLocked(
