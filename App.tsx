@@ -187,6 +187,22 @@ const ViewLoader: FC = () => {
   );
 };
 
+// QNBS-v3 (#553): module-level, not a component-scoped useCallback -- keeps this branch out of App's own per-function complexity score (CodeScene flagged App:FC<AppProps> as a "Complex Method" hotspot), and out of quitApp's and the close-to-tray wrapper's own bodies too. Shared by both call sites below: they hit the exact same cause (another window currently holds this project's save lock) and should tell the user the exact same actionable thing rather than two independently-worded messages that could drift. `dispatch` is typed to only what this needs (a plain action object), not AppDispatch, since it is called with useStore()'s untyped store.dispatch here, not useAppDispatch()'s thunk-aware one.
+function notifyIfBlockedByProjectLock(
+  error: unknown,
+  dispatch: (action: { type: string; payload?: unknown }) => unknown,
+): void {
+  if (!(error instanceof ProjectFileLockedError)) return;
+  dispatch(
+    statusActions.addNotification({
+      type: 'error',
+      title: 'Cannot Close Yet',
+      description:
+        'Another WorldScript window is currently saving this project. Close that window first, then try again.',
+    }),
+  );
+}
+
 interface AppProps {
   isNewUser: boolean;
   allowInitialMetadataSeed: boolean;
@@ -465,18 +481,6 @@ const App: FC<AppProps> = ({ isNewUser, allowInitialMetadataSeed: initialSeedAut
   //
   // executeCommand is held in a ref so the menu only rebuilds when the language (t) changes — not on
   // every executeCommand identity change (it depends on characters/worlds/settings/… and recreates often).
-  // QNBS-v3 (#553): shared by quitApp below and the close-to-tray flush wrapper further down -- both hit the exact same cause (another window currently holds this project's save lock) and should tell the user the exact same actionable thing rather than two independently-worded messages that could drift.
-  const notifyQuitBlockedByProjectLock = useCallback(() => {
-    store.dispatch(
-      statusActions.addNotification({
-        type: 'error',
-        title: 'Cannot Close Yet',
-        description:
-          'Another WorldScript window is currently saving this project. Close that window first, then try again.',
-      }),
-    );
-  }, [store]);
-
   // QNBS-v3 (#332/D3): shared by the tray/menu Quit items — PredefinedMenuItem's native Quit bypasses onCloseRequested's flush entirely, so these call this instead. Never resolves if the flush failed, so the app stays running for the user to retry.
   const quitApp = useCallback(async () => {
     try {
@@ -485,15 +489,13 @@ const App: FC<AppProps> = ({ isNewUser, allowInitialMetadataSeed: initialSeedAut
       logger.warn('Pre-quit flush failed — aborting quit so autosave can retry', {
         error: error instanceof Error ? error.message : String(error),
       });
-      // QNBS-v3 (#553): a held project-file lock is a distinct, expected, actionable cause -- make it visible instead of leaving the window silently refusing to quit with no explanation. Still aborts the quit (fail closed, matching every other flush failure here); the lock's owner must close first before this window's flush -- and therefore its quit -- can succeed.
-      if (error instanceof ProjectFileLockedError) {
-        notifyQuitBlockedByProjectLock();
-      }
+      // QNBS-v3 (#553): see notifyIfBlockedByProjectLock above -- still aborts the quit (fail closed, matching every other flush failure here) either way; the lock's owner must close first before this window's flush, and therefore its quit, can succeed.
+      notifyIfBlockedByProjectLock(error, store.dispatch);
       return;
     }
     // QNBS-v3: routes through desktopPlatform.lifecycle instead of the direct @tauri-apps/plugin-process import it replaced
     await desktopPlatform.lifecycle.quit();
-  }, [store, notifyQuitBlockedByProjectLock]);
+  }, [store]);
 
   // QNBS-v3: executeCommandRef synced in its own effect (never assigned during render) so the menu
   // effect below can depend on [t, quitApp] only and skip rebuilding on every executeCommand identity change.
@@ -549,10 +551,8 @@ const App: FC<AppProps> = ({ isNewUser, allowInitialMetadataSeed: initialSeedAut
       // QNBS-v3 (#332/D3): flush pending project/settings state before a real quit proceeds.
       () =>
         flushPersistedState(store.getState() as RootState).catch((error: unknown) => {
-          // QNBS-v3 (#553): see notifyQuitBlockedByProjectLock above -- rethrown unchanged so installCloseToTray's own catch still keeps the window open (fail closed), exactly as for any other flush failure; this only adds the visible notification that was missing.
-          if (error instanceof ProjectFileLockedError) {
-            notifyQuitBlockedByProjectLock();
-          }
+          // QNBS-v3 (#553): see notifyIfBlockedByProjectLock above -- rethrown unchanged so installCloseToTray's own catch still keeps the window open (fail closed), exactly as for any other flush failure; this only adds the visible notification that was missing.
+          notifyIfBlockedByProjectLock(error, store.dispatch);
           throw error;
         }),
     ).then((fn) => {
@@ -566,7 +566,7 @@ const App: FC<AppProps> = ({ isNewUser, allowInitialMetadataSeed: initialSeedAut
       cancelled = true;
       unlisten?.();
     };
-  }, [store, notifyQuitBlockedByProjectLock]);
+  }, [store]);
 
   // QNBS-v3: Tauri deep link handler for native file associations (.worldscript, .wsst)
   useEffect(() => {
