@@ -767,6 +767,10 @@ export class FsProjectStore extends FsAssetStore {
       );
     }
     // QNBS-v3 (#553): create absent project files directly; preserve the admitted raw carrier when replacing an existing source.
+    // QNBS-v3 (#553): a missing file while this window still holds a baseline means another window deleted or quarantined the project after this one loaded it — recreating it from this window's snapshot would resurrect deliberately removed data. This window's own delete/quarantine forgets its baseline first, so only a genuinely new project reaches the create branch.
+    if (!sourceExists && this.editingBaselines.has(projectId)) {
+      throw new StaleProjectWriterError(projectId);
+    }
     if (!sourceExists) {
       // QNBS-v3 (#553): the creating window owns the file it just wrote — clearing its baseline instead would leave it unfenced if another window opened and saved the new file before this window's next save. Computed before writing, through the same admission a later read applies, so no failure can follow a completed write.
       const createdJson = JSON.stringify(projectToPersist);
@@ -1206,6 +1210,7 @@ export class FsProjectStore extends FsAssetStore {
             await writeTextFileAtomic(apis, manifestPath, JSON.stringify(manifest));
           }
           await retryFs(() => apis.rename(projectPath, preservedPath));
+          this.editingBaselines.delete(safeProjectId);
           this.clearLegacyAuxiliaryPolicy(safeProjectId);
           this.clearLegacyAdmissionForSource(safeProjectId);
           return { projectId: safeProjectId, path: preservedPath };
@@ -1290,6 +1295,7 @@ export class FsProjectStore extends FsAssetStore {
         await this.deleteStoryCodexStrict(safeProjectId);
       }
       if (projectExists) await retryFs(() => apis.remove(projectPath, { recursive: true }));
+      this.editingBaselines.delete(safeProjectId);
     } catch (error) {
       logger.error('Failed to clean up legacy project data during deletion', {
         projectId: safeProjectId,

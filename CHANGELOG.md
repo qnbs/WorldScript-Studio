@@ -14,8 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every field only the first had changed, while its read-then-write fence still passed. The desktop
   filesystem store now remembers which on-disk generation each window's open project came from
   (set by the editing load, by the window's own saves, and when the window creates the file;
-  background reads such as backups and LoRA datasets never move it) and refuses a save whose file has since advanced, before building
-  any overwrite and leaving no temp or lock file behind. The refused window shows one localized
+  background reads such as backups and LoRA datasets never move it) and refuses a save whose file
+  has since advanced — or has since been deleted or quarantined by another window, which it would
+  otherwise resurrect — before building any overwrite and leaving no temp or lock file behind. The refused window shows one localized
   notice explaining the conflict and how to load the newer version, instead of failing on every
   keystroke; quitting or closing that window asks, in its own language, whether to discard its
   unsaved changes rather than trapping it open forever. Another window's committed data is never

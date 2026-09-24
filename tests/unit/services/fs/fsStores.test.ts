@@ -2141,6 +2141,26 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
     expect(persisted()).toMatchObject({ title: 'Creator second save' });
   });
 
+  it.each([
+    ['deleted', (w: FsProjectStore) => w.deleteProject('p1')],
+    ['quarantined', (w: FsProjectStore) => w.quarantineProject('p1')],
+  ])('refuses to resurrect a project another window %s', async (_label, remove) => {
+    const [windowA, windowB] = await twoWindowsLoadedAtG0();
+    await remove(windowA);
+
+    await expect(
+      windowB.saveProject({ ...base, title: 'Stale resurrection' } as never),
+    ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    expect(fake.text.has(PROJECT_FILE)).toBe(false);
+  });
+
+  it('lets a window recreate a project it deleted itself', async () => {
+    const [windowA] = await twoWindowsLoadedAtG0();
+    await windowA.deleteProject('p1');
+    await windowA.saveProject({ ...base, title: 'Recreated by its own deleter' } as never);
+    expect(persisted()).toMatchObject({ title: 'Recreated by its own deleter' });
+  });
+
   it('keeps today’s behavior for a window that never loaded the project for editing', async () => {
     await store.saveProject(base as never);
     const other = new FsProjectStore();
