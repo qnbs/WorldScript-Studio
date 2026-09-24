@@ -4,6 +4,7 @@ import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersi
 import { isProjectPersistenceAdmitted } from '../services/startupSafeSession';
 import { storageService } from '../services/storageService';
 import {
+  type PersistenceResult,
   projectPersistenceCoordinator,
   settingsPersistenceCoordinator,
 } from './persistenceCoordinator';
@@ -47,4 +48,10 @@ export async function flushPersistedState(state: RootState): Promise<void> {
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
   if (rejected) throw rejected.reason;
+  // QNBS-v3 (#553): a superseded result is not proof anything was saved — the waiter is resolved even when its own attempt failed behind a queued successor. Each such result carries the terminal outcome of the exact drain chain that superseded it (never a global "last outcome" a later chain could overwrite), and that decides; the older captured snapshot is never re-enqueued, since a newer successful save may already have replaced it.
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    const outcome = await (result.value as PersistenceResult | undefined)?.chainOutcome;
+    if (outcome && !outcome.ok) throw outcome.error;
+  }
 }

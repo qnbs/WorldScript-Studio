@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** quitting or closing a desktop window can no longer mistake unsaved
+  data for saved data. The save queue deliberately resolves — rather than rejects — an older save
+  whose own attempt failed while a newer save was already queued, and the newer save's later
+  failure never reached it; so a pre-quit/pre-close flush racing another queued save (a
+  double-clicked Quit, or an autosave landing mid-quit) could report success and skip #830's
+  "discard this window's unsaved changes?" prompt. Every superseded result now carries the
+  terminal outcome of the exact save chain that superseded it — scoped to that chain, so a later,
+  independent chain can never change it — and the flush fails closed on it, for both the project
+  and the settings queue. The older captured snapshot is never re-saved, since a newer successful
+  save may already have replaced it. PR #832.
 - **Data integrity (#553):** a second desktop WorldScript window can no longer silently revert
   changes another window saved. #826's lock only serialized write *order*: two windows that both
   opened a project at the same version, then edited independently, would each save in turn — and

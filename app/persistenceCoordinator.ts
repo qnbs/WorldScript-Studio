@@ -1,5 +1,11 @@
 type SaveOperation = () => Promise<void>;
-export type PersistenceResult = { superseded: boolean };
+export type ChainOutcome = { ok: true } | { ok: false; error: unknown };
+/**
+ * `chainOutcome` is the terminal outcome of the exact drain chain this waiter belonged to — the
+ * newest operation that chain ran before the queue emptied. It is present whenever a waiter is
+ * `superseded`, because a superseded waiter can be resolved even though its own attempt failed.
+ */
+export type PersistenceResult = { superseded: boolean; chainOutcome?: Promise<ChainOutcome> };
 type Waiter = {
   generation: number;
   resolve: (result: PersistenceResult) => void;
@@ -9,6 +15,15 @@ type PendingOperation = {
   generation: number;
   operation: SaveOperation;
 };
+type Chain = { outcome: Promise<ChainOutcome>; settle: (outcome: ChainOutcome) => void };
+
+function openChain(): Chain {
+  let settle!: (outcome: ChainOutcome) => void;
+  const outcome = new Promise<ChainOutcome>((resolve) => {
+    settle = resolve;
+  });
+  return { outcome, settle };
+}
 
 // QNBS-v3 (#332): serialize each persistence resource and wait for the newest queued snapshot before resolving.
 export class PersistenceCoordinator {
@@ -17,6 +32,8 @@ export class PersistenceCoordinator {
   private queued: PendingOperation | null = null;
   private waiters: Waiter[] = [];
   private idleWaiters: Array<() => void> = [];
+  // QNBS-v3 (#553): one chain per uninterrupted drain, from the first operation until the queue is empty. A waiter superseded mid-chain holds this chain's own outcome promise, so a later, independent chain can never overwrite what that waiter observes — unlike a single mutable "last outcome" field.
+  private chain: Chain | null = null;
 
   // QNBS-v3: settle failed waiters immediately; older waiters become superseded when a queued successor exists, while idle() still waits for that successor before destructive work (e.g. reload).
   idle(): Promise<void> {
@@ -36,6 +53,7 @@ export class PersistenceCoordinator {
       this.queued = pending;
     } else {
       this.active = pending;
+      this.chain = openChain();
       void this.drain();
     }
 
@@ -43,6 +61,8 @@ export class PersistenceCoordinator {
   }
 
   private async drain(): Promise<void> {
+    const chain = this.chain as Chain;
+    let terminal: ChainOutcome = { ok: true };
     while (this.active) {
       const current = this.active;
       try {
@@ -51,8 +71,9 @@ export class PersistenceCoordinator {
         const next = this.queued;
         if (next) {
           // QNBS-v3: a failed snapshot is not user-visible when a newer queued snapshot will take over; rejecting it would clear the shared saving state and show a false failure while the successor is still running.
-          this.resolveThrough(current.generation, true);
+          this.resolveThrough(current.generation, chain, true);
         } else {
+          terminal = { ok: false, error };
           this.rejectThrough(current.generation, error);
         }
         this.active = next;
@@ -67,19 +88,25 @@ export class PersistenceCoordinator {
         continue;
       }
 
-      this.resolveThrough(current.generation);
+      terminal = { ok: true };
+      this.resolveThrough(current.generation, chain);
       this.active = null;
     }
+    this.chain = null;
+    chain.settle(terminal);
     const idleWaiters = this.idleWaiters;
     this.idleWaiters = [];
     for (const resolve of idleWaiters) resolve();
   }
 
-  private resolveThrough(generation: number, superseded = false): void {
+  private resolveThrough(generation: number, chain: Chain, superseded = false): void {
     const remaining: Waiter[] = [];
     for (const waiter of this.waiters) {
       if (waiter.generation <= generation) {
-        waiter.resolve({ superseded: superseded || waiter.generation < generation });
+        const isSuperseded = superseded || waiter.generation < generation;
+        waiter.resolve(
+          isSuperseded ? { superseded: true, chainOutcome: chain.outcome } : { superseded: false },
+        );
       } else {
         remaining.push(waiter);
       }
