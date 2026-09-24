@@ -71,7 +71,7 @@ import { DESKTOP_COMMANDS } from './services/desktop/desktopEvents';
 import { installDesktopMenu } from './services/desktop/desktopMenu';
 import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
 import { desktopPlatform } from './services/desktopPlatform';
-import { ProjectFileLockedError } from './services/fs/fsCore';
+import { ProjectFileLockedError, StaleProjectWriterError } from './services/fs/fsCore';
 import { logger } from './services/logger';
 import { pluginRegistry } from './services/pluginRegistry';
 import { loadScenarioWorkspaceView } from './services/scenarioWorkspaceLoader';
@@ -207,6 +207,17 @@ function notifyIfBlockedByProjectLock(error: unknown, dispatch: MinimalStore['di
 }
 
 // QNBS-v3 (#332/D3): shared by the tray/menu Quit items — PredefinedMenuItem's native Quit bypasses onCloseRequested's flush entirely, so these call this instead. Never resolves if the flush failed, so the app stays running for the user to retry. Module-level, not component-scoped, for the same CodeScene reason as notifyIfBlockedByProjectLock above -- this try/catch counted toward App's own complexity even before #553 touched it, and moving it out only became worth doing once a hotspot-decline gate started failing on it.
+// QNBS-v3 (#553): a stale-writer refusal never clears by waiting — without this, a window whose edits conflict with another window's newer save could never be closed through normal UI. Quitting is allowed only on the user's explicit choice to discard this window's unsaved changes; the other window's committed data on disk is never touched either way.
+async function confirmDiscardStaleChanges(error: unknown): Promise<boolean> {
+  if (!(error instanceof StaleProjectWriterError)) return false;
+  const { getStaticTranslation, getCurrentLanguage } = await import(
+    './services/i18n/staticTranslate'
+  );
+  return window.confirm(
+    await getStaticTranslation('desktop.staleWriter.quitConfirm', getCurrentLanguage()),
+  );
+}
+
 async function performQuitApp(store: MinimalStore): Promise<void> {
   try {
     await flushPersistedState(store.getState() as RootState);
@@ -215,7 +226,7 @@ async function performQuitApp(store: MinimalStore): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
     });
     notifyIfBlockedByProjectLock(error, store.dispatch);
-    return;
+    if (!(await confirmDiscardStaleChanges(error))) return;
   }
   // QNBS-v3: routes through desktopPlatform.lifecycle instead of the direct @tauri-apps/plugin-process import it replaced
   await desktopPlatform.lifecycle.quit();
@@ -228,6 +239,7 @@ async function flushForCloseToTray(store: MinimalStore): Promise<void> {
   } catch (error) {
     // QNBS-v3 (#553): see notifyIfBlockedByProjectLock above -- rethrown unchanged so installCloseToTray's own catch still keeps the window open (fail closed), exactly as for any other flush failure; this only adds the visible notification that was missing.
     notifyIfBlockedByProjectLock(error, store.dispatch);
+    if (await confirmDiscardStaleChanges(error)) return;
     throw error;
   }
 }

@@ -20,7 +20,7 @@ import settingsReducer, { settingsActions } from '../../features/settings/settin
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
 import writerReducer, { writerActions } from '../../features/writer/writerSlice';
-import { ProjectFileLockedError } from '../../services/fs/fsCore';
+import { ProjectFileLockedError, StaleProjectWriterError } from '../../services/fs/fsCore';
 import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionService';
 
 // ---------------------------------------------------------------------------
@@ -416,6 +416,23 @@ describe('auto-save project listener', () => {
     expect(errorNote?.title).toBe('Save Delayed');
     expect(errorNote?.description).toMatch(/another worldscript window/i);
     expect(errorNote?.description).not.toMatch(/local database/i);
+  });
+
+  // QNBS-v3 (#553): a stale-writer refusal needs its own localized explanation, and — since it persists until reload — must not re-notify on every later debounce.
+  it('notifies a stale-writer refusal once per project with its own localized copy', async () => {
+    mockPersistProjectAutosaveSnapshot
+      .mockRejectedValueOnce(new StaleProjectWriterError('p-stale-once'))
+      .mockRejectedValueOnce(new StaleProjectWriterError('p-stale-once'));
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Stale edit 1'));
+    await vi.advanceTimersByTimeAsync(1500);
+    store.dispatch(projectActions.updateTitle('Stale edit 2'));
+    await vi.advanceTimersByTimeAsync(1500);
+
+    const errors = store.getState().status.notifications.filter((n) => n.type === 'error');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.title).toBe('desktop.staleWriter.title');
+    expect(errors[0]?.description).toBe('desktop.staleWriter.description');
   });
 
   // QNBS-v3: a debounce armed just before a factory reset began must not fire after it and repopulate the database the reset just deleted.

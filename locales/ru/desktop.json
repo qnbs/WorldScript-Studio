@@ -21,5 +21,8 @@
   "desktop.tray.quit": "Покидать",
   "desktop.tray.settings": "Настройки",
   "desktop.tray.show": "Показать студию WorldScript",
-  "desktop.tray.tooltip": "WorldScript Studio"
+  "desktop.tray.tooltip": "WorldScript Studio",
+  "desktop.staleWriter.title": "Более новая версия сохранена в другом окне",
+  "desktop.staleWriter.description": "Другое окно WorldScript сохранило этот проект после того, как он был открыт в этом окне, поэтому это окно прекратило сохранение, чтобы не перезаписать эти изменения. Скопируйте из этого окна всё, что вам ещё нужно, затем закройте и снова откройте WorldScript, чтобы загрузить более новую версию.",
+  "desktop.staleWriter.quitConfirm": "Другое окно WorldScript сохранило более новую версию этого проекта, поэтому последние изменения в этом окне нельзя сохранить, не перезаписав её. Всё равно выйти и отменить несохранённые изменения этого окна?"
 }

@@ -164,6 +164,16 @@ export class ProjectFileLockedError extends Error {
   }
 }
 
+// QNBS-v3 (#553): the lock above serializes write ORDER only; this refuses a writer whose in-memory project descends from an older on-disk generation than the one now committed — overlaying its full snapshot onto the newer carrier would silently revert fields another WorldScript window changed. Distinct from lock contention: waiting never clears it, only reloading does.
+export class StaleProjectWriterError extends Error {
+  constructor(readonly projectId: string) {
+    super(
+      `project ${projectId} was changed by another WorldScript window after this window loaded it`,
+    );
+    this.name = 'StaleProjectWriterError';
+  }
+}
+
 const LOCK_SUFFIX = '.lock';
 const LOCK_ACQUIRE_ATTEMPTS = 3;
 const LOCK_ACQUIRE_BACKOFF_MS = [200, 500];

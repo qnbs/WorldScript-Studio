@@ -21,5 +21,8 @@
   "desktop.tray.quit": "Quit",
   "desktop.tray.settings": "Settings",
   "desktop.tray.show": "Show WorldScript Studio",
-  "desktop.tray.tooltip": "WorldScript Studio"
+  "desktop.tray.tooltip": "WorldScript Studio",
+  "desktop.staleWriter.title": "تم حفظ إصدار أحدث في نافذة أخرى",
+  "desktop.staleWriter.description": "حفظت نافذة أخرى من WorldScript هذا المشروع بعد فتحه في هذه النافذة، لذا توقفت هذه النافذة عن الحفظ لتجنب الكتابة فوق تلك التغييرات. انسخ ما لا تزال تحتاجه من هذه النافذة، ثم أغلق WorldScript وأعد فتحه لتحميل الإصدار الأحدث.",
+  "desktop.staleWriter.quitConfirm": "حفظت نافذة أخرى من WorldScript إصدارًا أحدث من هذا المشروع، لذا لا يمكن حفظ أحدث تغييرات هذه النافذة دون الكتابة فوقه. هل تريد الخروج على أي حال وتجاهل التغييرات غير المحفوظة في هذه النافذة؟"
 }

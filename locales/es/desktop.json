@@ -21,5 +21,8 @@
   "desktop.tray.quit": "Salir",
   "desktop.tray.settings": "Ajustes",
   "desktop.tray.show": "Mostrar WorldScript Studio",
-  "desktop.tray.tooltip": "WorldScript Studio"
+  "desktop.tray.tooltip": "WorldScript Studio",
+  "desktop.staleWriter.title": "Versión más reciente guardada en otra ventana",
+  "desktop.staleWriter.description": "Otra ventana de WorldScript guardó este proyecto después de que se abriera en esta ventana, así que esta ventana ha dejado de guardar para no sobrescribir esos cambios. Copia lo que aún necesites de esta ventana y luego cierra y vuelve a abrir WorldScript para cargar la versión más reciente.",
+  "desktop.staleWriter.quitConfirm": "Otra ventana de WorldScript guardó una versión más reciente de este proyecto, por lo que los últimos cambios de esta ventana no se pueden guardar sin sobrescribirla. ¿Salir de todos modos y descartar los cambios no guardados de esta ventana?"
 }

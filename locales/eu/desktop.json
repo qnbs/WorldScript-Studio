@@ -21,5 +21,8 @@
   "desktop.tray.quit": "Quit",
   "desktop.tray.settings": "Settings",
   "desktop.tray.show": "Show WorldScript Studio",
-  "desktop.tray.tooltip": "WorldScript Studio"
+  "desktop.tray.tooltip": "WorldScript Studio",
+  "desktop.staleWriter.title": "Bertsio berriagoa gorde da beste leiho batean",
+  "desktop.staleWriter.description": "WorldScript-en beste leiho batek proiektu hau gorde du leiho honetan ireki ondoren; beraz, leiho honek gordetzeari utzi dio aldaketa horiek ez gainidazteko. Kopiatu leiho honetatik oraindik behar duzuna, eta itxi eta ireki berriro WorldScript bertsio berriagoa kargatzeko.",
+  "desktop.staleWriter.quitConfirm": "WorldScript-en beste leiho batek proiektu honen bertsio berriago bat gorde du; beraz, leiho honetako azken aldaketak ezin dira gorde hura gainidatzi gabe. Irten hala ere eta baztertu leiho honetako gorde gabeko aldaketak?"
 }
