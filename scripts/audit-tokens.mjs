@@ -31,13 +31,10 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isDirectExecution, resolveModuleRoot } from './lib/cli-entrypoint.mjs';
+import { evaluateBaseline } from './lib/ratchet-baseline.mjs';
 
-// QNBS-v3 (live review, PR #817): resolves the canonical repo root from a module URL independent of whether that URL itself is symlink-resolved. isDirectExecution deliberately accepts BOTH the resolved and unresolved comparison (so `node --preserve-symlinks-main` is still recognized as direct execution), but repo-relative authority — root, baseline/report paths, the git subprocess cwd — must always anchor to the real file location: under --preserve-symlinks-main, import.meta.url stays the unresolved symlink path, and a symlink living outside the repository would otherwise compute a root outside it entirely. fs.realpathSync resolves the module path itself first, so this is correct regardless of which of the two import.meta.url forms was actually passed in. Exported so this exact scenario is testable without spawning a real --preserve-symlinks-main subprocess.
-export function resolveModuleRoot(moduleUrl) {
-  const modulePath = fs.realpathSync(fileURLToPath(moduleUrl));
-  return path.resolve(path.dirname(modulePath), '..');
-}
+export { evaluateBaseline, isDirectExecution, resolveModuleRoot };
 
 // QNBS-v3: exported so tests can build the exact same absolute paths the module's own EXCLUDED_FILES set uses, without duplicating this resolution or touching the filesystem.
 export const root = resolveModuleRoot(import.meta.url);
@@ -322,101 +319,6 @@ function loadBaseline() {
   }
 }
 
-// QNBS-v3: sums a rule-keyed count object the same way for both the baseline file and a fresh audit run, so the two internal-consistency checks in evaluateBaseline share one definition of "the total agrees with the per-rule breakdown".
-function sumSummary(summary) {
-  return Object.values(summary).reduce((sum, count) => sum + count, 0);
-}
-
-// QNBS-v3 (Codex, PR #817): a violation count can only ever be a non-negative whole number — this is checked explicitly, before any arithmetic, so a malformed JSON value (a string, NaN/Infinity, a fraction, or a negative number) can never reach `sumSummary`'s `+` or the ratchet loop's `>`/`<`, whose implicit type coercion could otherwise let a corrupted value slip through as if it matched.
-function isValidCount(value) {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
-}
-
-// QNBS-v3: validates both `total` and every `summary` value in one call, shared by the audit-side and baseline-side checks in evaluateBaseline so both are held to the identical numeric contract.
-function hasValidCounts(candidate) {
-  // QNBS-v3 (Codex, PR #817): summary must be a Record<string, number>, never an array — typeof [] === 'object' in JS, so without this explicit check an empty array (Object.values([]) is vacuously []) or an array shape entirely would silently pass as "valid" and reach sumSummary's arithmetic.
-  if (
-    !candidate ||
-    typeof candidate.summary !== 'object' ||
-    candidate.summary === null ||
-    Array.isArray(candidate.summary)
-  ) {
-    return false;
-  }
-  if (!isValidCount(candidate.total)) return false;
-  return Object.values(candidate.summary).every(isValidCount);
-}
-
-/**
- * QNBS-v3 (post-Visual qualification tranche, Section 3.2): a true monotonic per-rule ratchet.
- * Every rule's count must equal its baselined count exactly — an increase is a regression, and a
- * decrease is also rejected, because leaving the baseline stale-high would let the count silently
- * regrow back up to the old ceiling in a later, unrelated change. `--update-baseline` is the only
- * way to accept a new ceiling in either direction. Exported so tests can exercise every outcome
- * (PASS / regression / stale-high) without shelling out to the real script or touching real files.
- */
-export function evaluateBaseline(audit, baseline) {
-  // QNBS-v3 (Sourcery, PR #817): a malformed live audit must fail closed before the no-baseline branch gets a chance to short-circuit past it — checked first, unconditionally, so a missing baseline can never mask it. QNBS-v3 (Codex, PR #817): hasValidCounts rejects a non-object summary AND any non-finite/fractional/negative/non-numeric total or per-rule value before sumSummary's '+' or the ratchet loop's '>'/'<' ever see it.
-  if (!hasValidCounts(audit)) {
-    return {
-      ok: false,
-      reason: 'MALFORMED_AUDIT',
-      detail: 'audit.total and every audit.summary value must be finite non-negative integers',
-    };
-  }
-  const auditSum = sumSummary(audit.summary);
-  if (auditSum !== audit.total) {
-    return {
-      ok: false,
-      reason: 'MALFORMED_AUDIT',
-      detail: `audit.total (${audit.total}) !== sum(audit.summary) (${auditSum})`,
-    };
-  }
-
-  if (!baseline) {
-    return audit.total > 0
-      ? { ok: false, reason: 'NO_BASELINE_VIOLATIONS_FOUND' }
-      : { ok: true, reason: 'NO_BASELINE_NO_VIOLATIONS' };
-  }
-
-  // QNBS-v3 (Sourcery, PR #817): a baseline with no valid summary object must fail closed rather than being silently normalized to {} and ratcheted against as if it were a real, empty baseline. QNBS-v3 (Codex, PR #817): same finite/non-negative/integer contract as the audit side — see hasValidCounts.
-  if (!hasValidCounts(baseline)) {
-    return {
-      ok: false,
-      reason: 'MALFORMED_BASELINE',
-      detail:
-        'baseline.total and every baseline.summary value must be finite non-negative integers',
-    };
-  }
-  // QNBS-v3: a malformed baseline (its own stored total disagreeing with its own per-rule breakdown) must fail closed rather than silently ratchet against a number that was never actually true.
-  const baselineSum = sumSummary(baseline.summary);
-  if (baselineSum !== baseline.total) {
-    return {
-      ok: false,
-      reason: 'MALFORMED_BASELINE',
-      detail: `baseline.total (${baseline.total}) !== sum(baseline.summary) (${baselineSum})`,
-    };
-  }
-
-  const allRuleIds = new Set([...Object.keys(audit.summary), ...Object.keys(baseline.summary)]);
-  const regressions = [];
-  const staleHigh = [];
-  for (const ruleId of allRuleIds) {
-    const current = audit.summary[ruleId] ?? 0;
-    const baselined = baseline.summary[ruleId] ?? 0;
-    if (current > baselined) regressions.push(`${ruleId}: ${current} > ${baselined}`);
-    else if (current < baselined) staleHigh.push(`${ruleId}: ${current} < ${baselined}`);
-  }
-
-  if (regressions.length > 0) {
-    return { ok: false, reason: 'REGRESSION', detail: regressions.join(', ') };
-  }
-  if (staleHigh.length > 0) {
-    return { ok: false, reason: 'STALE_HIGH_BASELINE', detail: staleHigh.join(', ') };
-  }
-  return { ok: true, reason: 'EXACT_MATCH' };
-}
-
 function main() {
   const files = resolveAuditableFiles(getTrackedSourceFiles());
   const audit = findViolations(files);
@@ -479,19 +381,6 @@ function main() {
       : '[token-audit] PASS: no violations found.',
   );
   process.exit(0);
-}
-
-// QNBS-v3 (Sourcery, PR #817): a raw `file://${argv[1]}` string comparison is not portable — argv[1] is an unencoded filesystem path (no URL-encoding of spaces/unicode, no Windows `file:///C:/...` drive-letter form), while import.meta.url always is; pathToFileURL performs that same platform-correct conversion before comparing. Exported so the comparison itself can be regression-tested without spawning the real CLI.
-// QNBS-v3 (Codex + live review, PR #817): two legitimate Node semantics both need to match. Normally Node resolves import.meta.url through a symlink to its real target while leaving argv[1] as the invoked symlink path (checked via the realpathSync fallback below); under `node --preserve-symlinks-main`, Node does the opposite and leaves import.meta.url as the unresolved symlink path too (checked by the first, cheap comparison, which also covers the ordinary non-symlinked case). Accepting either means neither mode silently exits 0 without scanning.
-export function isDirectExecution(argv1, moduleUrl) {
-  if (typeof argv1 !== 'string' || argv1.length === 0) return false;
-  if (moduleUrl === pathToFileURL(argv1).href) return true;
-  try {
-    return moduleUrl === pathToFileURL(fs.realpathSync(argv1)).href;
-  } catch {
-    // argv1 doesn't exist on disk (e.g. a synthetic test path) — the unresolved comparison above already covers that case.
-    return false;
-  }
 }
 
 // QNBS-v3: only run the CLI when this file is executed directly — importing it (e.g. from a test file, for the exported pure helpers) must not trigger a report write or process.exit.
