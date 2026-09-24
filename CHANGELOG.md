@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Privacy truth (#526):** Factory Reset's hint and confirmation text no longer imply that
+  downloaded local AI and voice models are erased. Reset deletes only storage WorldScript can
+  prove it owns; the WebLLM (`webllm/*`) and Transformers (`transformers-cache`) model caches carry
+  vendor-fixed names another same-origin app could share, so reset deliberately leaves them. The
+  copy now says those models may not be removed and names the control that does clear them
+  ("Clear Local Models" in Settings), in all 19 locales — hedged as "may", since on Linux desktop
+  the WebView's storage can sit inside the app-data directory that reset does wipe. A new test
+  requires every locale's reset copy to contain that locale's actual button label. No deletion
+  behavior changes; positive ownership of these caches remains open in #526. PR #828.
 - **Data integrity (#553):** the desktop filesystem save path now mutually excludes concurrent
   saves of the same project across OS processes (two app instances) via an atomic exclusive-create
   lock file (`project-locks/<projectId>.lock`) held across the whole read-admit-writeback-replace
