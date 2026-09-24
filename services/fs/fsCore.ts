@@ -66,7 +66,8 @@ export async function retryFs<T>(fn: () => Promise<T>, retries = 2, delayMs = 50
       return await fn();
     } catch (err) {
       lastError = err;
-      const msg = err instanceof Error ? err.message.toLowerCase() : '';
+      // QNBS-v3 (#553): String(err), not err instanceof Error ? err.message : '' — the real Tauri invoke boundary rejects with a plain string, never a JS Error, so an instanceof-Error-only check saw an empty message for every real transient filesystem error and silently never retried it.
+      const msg = String(err instanceof Error ? err.message : err).toLowerCase();
       const isTransient =
         msg.includes('busy') ||
         msg.includes('temporarily') ||
@@ -171,20 +172,21 @@ function lockPathFor(path: string): string {
   return `${path}${LOCK_SUFFIX}`;
 }
 
-// QNBS-v3: distinguishes genuine lock contention (the exclusive-create target already exists) from an unrelated filesystem failure (permission denied, missing parent directory, disk full) — the latter must propagate as itself, never get silently retried and misreported as ProjectFileLockedError, matching retryFs's own established isTransient-message-matching convention in this same file.
-// QNBS-v3: String(error), not error instanceof Error ? error.message : '' — the real Tauri invoke boundary serializes a Rust CommandError as a plain string (e.g. "File exists (os error 17)"), never wrapping it in a JS Error, so an instanceof-Error check alone would see an empty message for every real exclusive-create collision and misclassify it as a non-contention failure.
-function isLockContentionError(error: unknown): boolean {
-  const message = String(error instanceof Error ? error.message : error).toLowerCase();
-  return message.includes('exist');
-}
-
+// QNBS-v3: distinguishes genuine lock contention from an unrelated filesystem failure (permission denied, missing parent directory, disk full) by checking actual filesystem state after a failed create, never by pattern-matching the error's message text — the real Tauri error embeds the full lock path (e.g. a project titled "Existential Novel" makes the message contain "exist" regardless of cause), so any substring/keyword match on it is spoofable by ordinary user-chosen project names and would misclassify a real, unrelated, recoverable failure as contention.
 async function tryCreateLock(apis: TauriApis, lockPath: string): Promise<boolean> {
   try {
-    // QNBS-v3: content is never read back by anything (no reclaim logic exists) — a fixed marker is enough; createNew's atomicity is what matters, not what's written.
-    await apis.writeTextFile(lockPath, 'locked', { createNew: true });
+    // QNBS-v3: empty content, not just unread by anything — verified against the pinned tauri-plugin-fs@2.5.2 Rust source: write_file's create_new open() and its data write_all() are two separate steps, and a write_all failure after a successful open leaves the just-created file orphaned with no cleanup. write_all on an empty buffer never issues an OS write syscall at all (its loop condition is false immediately), so it cannot itself fail once open() has already succeeded — an empty payload therefore closes this gap rather than merely narrowing it, leaving only open()'s own already-proven-atomic create_new as a failure point.
+    await apis.writeTextFile(lockPath, '', { createNew: true });
     return true;
   } catch (error) {
-    if (isLockContentionError(error)) return false;
+    // QNBS-v3: a failed create classifies as contention only if something now demonstrably occupies the path — whether it was already there or is our own attempt's partial artifact, treating either as "do not touch" is the safe default; a check that failed to even determine this propagates the original error rather than guessing.
+    let occupied: boolean;
+    try {
+      occupied = await apis.exists(lockPath);
+    } catch {
+      throw error;
+    }
+    if (occupied) return false;
     throw error;
   }
 }

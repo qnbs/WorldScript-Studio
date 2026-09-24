@@ -56,6 +56,13 @@ describe('retryFs', () => {
     await expect(retryFs(fn, 2, 0)).rejects.toThrow(/locked/);
     expect(fn).toHaveBeenCalledTimes(3); // initial + 2 retries
   });
+
+  // QNBS-v3 (#553): the real Tauri invoke boundary rejects with a plain string, never a JS Error — an Error-instance-only message check would see an empty message here and never retry a genuinely transient real-world failure.
+  it('retries a plain-string transient rejection, not only an Error instance', async () => {
+    const fn = vi.fn().mockRejectedValueOnce('resource busy or locked').mockResolvedValueOnce('ok');
+    await expect(retryFs(fn, 2, 0)).resolves.toBe('ok');
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('writeTextFileAtomic', () => {
@@ -160,7 +167,8 @@ describe('withProjectFileLock', () => {
       readFile: vi.fn(),
       writeFile: vi.fn(),
       mkdir: vi.fn(),
-      exists: vi.fn(),
+      // QNBS-v3 (#553): wired to the same locks Map — tryCreateLock's contention check now inspects actual filesystem state, not error-message text, so the fake must reflect real state for that check to mean anything in tests.
+      exists: vi.fn((path: string) => Promise.resolve(locks.has(path))),
       readDir: vi.fn(),
       remove: vi.fn((path: string) => {
         locks.delete(path);
@@ -238,7 +246,7 @@ describe('withProjectFileLock', () => {
     expect(mockLoggerWarn).not.toHaveBeenCalled();
   });
 
-  // QNBS-v3 (#553): a permission/disk-full/missing-directory failure must propagate as itself — never be silently retried and misreported as lock contention.
+  // QNBS-v3 (#553): a permission/disk-full/missing-directory failure must propagate as itself — never be silently retried and misreported as lock contention. Contention is now decided by checking actual filesystem state (apis.exists), not error-message text, so this fake's exists() correctly reports nothing at this path.
   it('propagates a non-contention filesystem error immediately, without retrying or misreporting it', async () => {
     const apis = makeLockableApis();
     apis.writeTextFile = vi.fn().mockRejectedValue(new Error('EACCES: permission denied'));
@@ -251,19 +259,48 @@ describe('withProjectFileLock', () => {
     expect(apis.writeTextFile).toHaveBeenCalledTimes(1);
   });
 
-  // QNBS-v3 (#553): the real Tauri invoke boundary rejects with a plain string (e.g. "File exists (os error 17)"), never a JS Error — a check that only reads error.message on an Error instance would see an empty message for every real collision and misclassify genuine contention as an unrelated failure.
-  it('classifies a plain-string Tauri-shaped rejection as lock contention, not an unrelated error', async () => {
+  // QNBS-v3 (#553): the adversarial case that defeated message-substring matching — a project titled so its own path contains "exist" makes the real Tauri error message contain "exist" regardless of cause. Proves a genuine permission failure on such a path still propagates as itself rather than being misclassified as contention, now that classification checks filesystem state instead of the message.
+  it('does not misclassify a non-contention error as contention merely because the path contains "exist"', async () => {
     const apis = makeLockableApis();
-    // QNBS-v3: rejects with a bare string on the first call (real shape), then succeeds — proves the string is actually classified as contention and retried, not just tolerated.
     apis.writeTextFile = vi
       .fn()
-      .mockRejectedValueOnce('File exists (os error 17)')
-      .mockResolvedValueOnce(undefined);
+      .mockRejectedValue(
+        new Error(
+          'failed to open file at path: /app/projects/Existential Novel/project.json.lock with error: permission denied',
+        ),
+      );
+    const fn = vi.fn();
 
-    await expect(withProjectFileLock(apis, '/data/project.json', async () => 'done')).resolves.toBe(
-      'done',
+    await expect(
+      withProjectFileLock(apis, '/app/projects/Existential Novel/project.json', fn),
+    ).rejects.toThrow('permission denied');
+    expect(fn).not.toHaveBeenCalled();
+    expect(apis.exists).toHaveBeenCalledWith('/app/projects/Existential Novel/project.json.lock');
+  });
+
+  // QNBS-v3 (#553): the real Tauri invoke boundary rejects with a plain string, never a JS Error — proves classification never depended on the error's shape or message at all, only on the actual filesystem state, so this is handled uniformly regardless.
+  it('classifies contention correctly for a plain-string Tauri-shaped rejection, by filesystem state alone', async () => {
+    const apis = makeLockableApis({ '/data/project.json.lock': '' });
+    apis.writeTextFile = vi.fn().mockRejectedValue('File exists (os error 17)');
+    const fn = vi.fn();
+
+    await expect(withProjectFileLock(apis, '/data/project.json', fn)).rejects.toBeInstanceOf(
+      ProjectFileLockedError,
     );
-    expect(apis.writeTextFile).toHaveBeenCalledTimes(2);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3 (#553): if apis.exists itself cannot be evaluated, the original failure must propagate rather than guessing — never silently converting an unclassifiable error into either contention or a swallowed failure.
+  it('propagates the original error when contention cannot be determined', async () => {
+    const apis = makeLockableApis();
+    apis.writeTextFile = vi.fn().mockRejectedValue(new Error('EIO: input/output error'));
+    apis.exists = vi.fn().mockRejectedValue(new Error('device not ready'));
+    const fn = vi.fn();
+
+    await expect(withProjectFileLock(apis, '/data/project.json', fn)).rejects.toThrow(
+      'input/output error',
+    );
+    expect(fn).not.toHaveBeenCalled();
   });
 
   // QNBS-v3 (#553): the mutual-exclusion proof every reviewed reclaim strategy would have defeated — a second caller must be refused, never admitted, while the first still holds the lock.

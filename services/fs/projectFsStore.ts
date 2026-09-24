@@ -36,7 +36,6 @@ import {
   compressJsonText,
   decompressData,
   decompressJsonText,
-  ProjectFileLockedError,
   retryFs,
   sanitizePathSegment,
   type TauriApis,
@@ -713,25 +712,16 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   // QNBS-v3 (#553): the existence check AND both the create-new and existing-project branches run under one cross-process lock — locking only the existing-project branch left a same-shape race where two processes could both observe an absent project.json and independently perform atomic creation, the later one silently overwriting the earlier.
+  // QNBS-v3 (#553): ProjectFileLockedError propagates as itself, not wrapped into ProjectCanonicalWritebackError — nothing in app/features/hooks/components checks either type today, so this changes no existing behavior, and it lets a caller distinguish "another writer currently holds the lock" from every other writeback-refusal cause for a truthful, actionable notification instead of the same generic message for both.
   private async persistProjectFile(
     apis: TauriApis,
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
   ): Promise<void> {
-    try {
-      await withProjectFileLock(apis, projectFile, () =>
-        this.persistProjectFileLocked(apis, projectFile, projectId, projectToPersist),
-      );
-    } catch (error) {
-      if (error instanceof ProjectFileLockedError) {
-        throw new ProjectCanonicalWritebackError(
-          projectId,
-          `filesystem canonical replacement failed: ${error.message}`,
-        );
-      }
-      throw error;
-    }
+    await withProjectFileLock(apis, projectFile, () =>
+      this.persistProjectFileLocked(apis, projectFile, projectId, projectToPersist),
+    );
   }
 
   private async persistProjectFileLocked(

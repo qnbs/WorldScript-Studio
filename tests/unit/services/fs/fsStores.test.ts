@@ -64,6 +64,7 @@ import {
   compressJsonText,
   decompressData,
   decompressJsonText,
+  ProjectFileLockedError,
 } from '../../../../services/fs/fsCore';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
@@ -299,9 +300,10 @@ describe('FsProjectStore — projects', () => {
     await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
     await fake.apis.writeTextFile(`${sourcePath}.lock`, 'locked');
 
+    // QNBS-v3 (#553): ProjectFileLockedError now propagates as itself (unwrapped) so a caller — e.g. the autosave listener — can give a truthful, distinct "another writer holds the lock" message instead of the same generic writeback-refusal message as every other cause.
     await expect(
       store.saveProject({ ...project, title: 'Blocked writer' } as never),
-    ).rejects.toMatchObject({ name: 'ProjectCanonicalWritebackError', projectId: 'p1' });
+    ).rejects.toBeInstanceOf(ProjectFileLockedError);
     expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(JSON.stringify(project));
     // QNBS-v3 (#553): a held lock must never be removed by a caller that didn't create it — no reclaim exists.
     expect(fake.text.has(`${sourcePath}.lock`)).toBe(true);
@@ -312,10 +314,9 @@ describe('FsProjectStore — projects', () => {
     await fake.apis.mkdir('/app/projects/p1', { recursive: true });
     await fake.apis.writeTextFile('/app/projects/p1/project.json.lock', 'locked');
 
-    await expect(store.saveProject(project as never)).rejects.toMatchObject({
-      name: 'ProjectCanonicalWritebackError',
-      projectId: 'p1',
-    });
+    await expect(store.saveProject(project as never)).rejects.toBeInstanceOf(
+      ProjectFileLockedError,
+    );
     expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
   });
 

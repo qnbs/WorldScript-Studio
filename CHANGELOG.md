@@ -18,10 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recovery rather than risking two writers both entering the critical section — tracked as a
   follow-up requiring real OS-level locking. Does not, and cannot, fence a non-cooperating external
   writer (e.g. a sync tool) that doesn't participate in this same-application lock convention. Lock
-  contention is classified from the real Tauri invoke error shape (a plain string, not a JS Error);
-  lock release retries a transient failure and diagnostically warns rather than silently swallowing
-  a persistent one. No change to web/PWA (IndexedDB) persistence, which isn't exposed to this
-  cross-process race. PR #826.
+  contention is classified by checking actual filesystem state after a failed create, never by
+  matching the error message text — the real Tauri error always embeds the full lock path, so a
+  substring match is spoofable by an ordinary project name containing "exist"; both `retryFs` and
+  this classification now normalize the real Tauri invoke shape (a plain string, not a JS Error).
+  The lock payload is empty, verified against the pinned `tauri-plugin-fs@2.5.2` Rust source to
+  close (not just narrow) the window where a successful exclusive-create's later write step could
+  otherwise fail and orphan a partial lock. Lock release retries a transient failure and
+  diagnostically warns rather than silently swallowing a persistent one. Autosave now shows a
+  distinct, truthful notification when blocked by another instance's lock, rather than the same
+  generic "could not be saved" message as every other failure cause. No change to web/PWA
+  (IndexedDB) persistence, which isn't exposed to this cross-process race. PR #826.
 - **Dependency governance:** removed the temporary, version-scoped `minimumReleaseAgeExclude:
   qs@6.16.0` entry (added in #587) now that it has aged past the 7-day `minimumReleaseAge`
   quarantine floor; `AUDIT.md`'s `qs` override row updated to match. `nanoid@3.3.18`'s exclusion
