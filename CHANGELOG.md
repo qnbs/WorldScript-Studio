@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Privacy (#716):** Factory Reset now deletes the DuckDB analytics database it previously left
+  behind in the Origin Private File System. That file (`worldscript_analytics.duckdb`, plus its
+  write-ahead log) holds project and section titles, loglines, character and codex entity names
+  and plot labels in plaintext, alongside encrypted section/character text — so "permanently
+  delete all your projects" was leaving all of that on disk. DuckDB is shut down first to release
+  its file handle, only the two `worldscript_`-owned OPFS entries are removed (never the rest of
+  the origin's OPFS), and this regenerable data is removed before any other destructive step. If
+  the file cannot be removed (still locked), reset fails closed with the existing "reset failed"
+  message instead of reporting success. Local AI model caches are still not removed by Factory
+  Reset (tracked separately in #526). PR #827.
 - **Data integrity (#553):** the desktop filesystem save path now mutually excludes concurrent
   saves of the same project across OS processes (two app instances) via an atomic exclusive-create
   lock file (`project-locks/<projectId>.lock`) held across the whole read-admit-writeback-replace

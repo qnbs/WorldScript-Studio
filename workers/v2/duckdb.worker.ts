@@ -6,6 +6,7 @@ import {
   registerTaskHandler,
   type WorkerHandlerContext,
 } from '../../packages/worker-bus/src/workerBootstrap';
+import { DUCKDB_OPFS_FILE_NAME } from '../../services/duckdb/duckdbOpfsFiles';
 import { createLogger } from '../../services/logger';
 
 // QNBS-v3: [services/logger.ts is worker-safe — its window.localStorage/Tauri touches are all
@@ -68,19 +69,17 @@ export async function initDuckDb(
     try {
       const { DuckDBDataProtocol } = await getDuckDb();
       const opfsRoot = await navigator.storage.getDirectory();
-      const fileHandle = await opfsRoot.getFileHandle('worldscript_analytics.duckdb', {
+      const fileHandle = await opfsRoot.getFileHandle(DUCKDB_OPFS_FILE_NAME, {
         create: true,
       });
       await newDb.registerFileHandle(
-        'worldscript_analytics.duckdb',
+        DUCKDB_OPFS_FILE_NAME,
         fileHandle,
         DuckDBDataProtocol.BROWSER_FSACCESS,
         true,
       );
       opfsConnection = await newDb.connect();
-      await opfsConnection.query(
-        "ATTACH 'worldscript_analytics.duckdb' AS analytics (TYPE duckdb)",
-      );
+      await opfsConnection.query(`ATTACH '${DUCKDB_OPFS_FILE_NAME}' AS analytics (TYPE duckdb)`);
       connection = opfsConnection;
     } catch (opfsErr) {
       // QNBS-v3: [Cleanup is best-effort — a rejecting close() must not block the fallback below or replace the original OPFS error.]
