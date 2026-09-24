@@ -31,10 +31,11 @@ export interface DesktopDirEntry {
   readonly isDirectory: boolean;
 }
 
-/** Matches Tauri plugin-fs's real WriteFileOptions subset — services/logger.ts needs `{ append: true, create: true }` for JSONL log writes. */
+/** Matches Tauri plugin-fs's real WriteFileOptions subset — services/logger.ts needs `{ append: true, create: true }` for JSONL log writes; `createNew` (#553) is plugin-fs's real O_CREAT|O_EXCL equivalent, used for the cross-process project-file lock. */
 export interface DesktopWriteOptions {
   append?: boolean;
   create?: boolean;
+  createNew?: boolean;
 }
 
 /** Low-level filesystem primitives — mirrors services/fs/fsCore.ts's `TauriApis` fs subset exactly. */

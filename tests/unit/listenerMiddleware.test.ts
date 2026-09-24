@@ -20,6 +20,7 @@ import settingsReducer, { settingsActions } from '../../features/settings/settin
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
 import writerReducer, { writerActions } from '../../features/writer/writerSlice';
+import { ProjectFileLockedError } from '../../services/fs/fsCore';
 import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionService';
 
 // ---------------------------------------------------------------------------
@@ -398,6 +399,23 @@ describe('auto-save project listener', () => {
     // An error notification should be present
     const errorNote = notifications.find((n) => n.type === 'error');
     expect(errorNote).toBeTruthy();
+    // QNBS-v3 (#553): the generic path's own title must stay unchanged by the new lock-specific branch.
+    expect(errorNote?.title).toBe('Auto-Save Failed');
+  });
+
+  // QNBS-v3 (#553): a distinct, truthful notification for lock contention — not the generic "could not be saved to the local database" message, which would falsely suggest a permanent failure rather than another WorldScript instance currently holding the save lock.
+  it('dispatches a distinct, truthful notification when saveProject is refused by a held project file lock', async () => {
+    mockPersistProjectAutosaveSnapshot.mockRejectedValueOnce(
+      new ProjectFileLockedError('/app/projects/p1/project.json'),
+    );
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Lock Contended Save'));
+    await vi.advanceTimersByTimeAsync(1500);
+    const notifications = store.getState().status.notifications;
+    const errorNote = notifications.find((n) => n.type === 'error');
+    expect(errorNote?.title).toBe('Save Delayed');
+    expect(errorNote?.description).toMatch(/another worldscript window/i);
+    expect(errorNote?.description).not.toMatch(/local database/i);
   });
 
   // QNBS-v3: a debounce armed just before a factory reset began must not fire after it and repopulate the database the reset just deleted.

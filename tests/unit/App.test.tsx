@@ -2,44 +2,53 @@ import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockUseApp, mockProjectBootstrapEffect, mockDispatch, mockStore, selectorState, project } =
-  vi.hoisted(() => ({
-    mockUseApp: vi.fn(),
-    mockProjectBootstrapEffect: vi.fn(),
-    mockDispatch: vi.fn(),
-    mockStore: {
-      getState: vi.fn(() => ({})),
-    },
-    selectorState: {
-      settings: {
-        theme: 'light',
-        appearancePreset: 'default',
-        writingSurfaceStyle: 'default',
-        keyboardShortcuts: [],
-        privacy: { analyticsEnabled: false },
-        aiMode: 'hybrid',
-        openRouter: { enabled: false },
-        advancedEditor: {
-          distractionFree: false,
-          typewriterMode: false,
-          zenMode: false,
-          focusMode: false,
-        },
-        accessibility: {
-          highContrast: false,
-          reducedMotion: false,
-          reducedTransparency: false,
-          largeText: false,
-          screenReader: false,
-          focusIndicators: false,
-          comfortableTargets: false,
-          colorBlindMode: 'none',
-        },
-        desktop: { minimizeToTray: false },
+const {
+  mockUseApp,
+  mockProjectBootstrapEffect,
+  mockDispatch,
+  mockStore,
+  mockFlushPersistedState,
+  selectorState,
+  project,
+} = vi.hoisted(() => ({
+  mockUseApp: vi.fn(),
+  mockProjectBootstrapEffect: vi.fn(),
+  mockDispatch: vi.fn(),
+  mockFlushPersistedState: vi.fn().mockResolvedValue(undefined),
+  mockStore: {
+    getState: vi.fn(() => ({})),
+    dispatch: (...args: unknown[]) => mockDispatch(...args),
+  },
+  selectorState: {
+    settings: {
+      theme: 'light',
+      appearancePreset: 'default',
+      writingSurfaceStyle: 'default',
+      keyboardShortcuts: [],
+      privacy: { analyticsEnabled: false },
+      aiMode: 'hybrid',
+      openRouter: { enabled: false },
+      advancedEditor: {
+        distractionFree: false,
+        typewriterMode: false,
+        zenMode: false,
+        focusMode: false,
       },
+      accessibility: {
+        highContrast: false,
+        reducedMotion: false,
+        reducedTransparency: false,
+        largeText: false,
+        screenReader: false,
+        focusIndicators: false,
+        comfortableTargets: false,
+        colorBlindMode: 'none',
+      },
+      desktop: { minimizeToTray: false },
     },
-    project: { id: 'test-project', title: 'Test project' },
-  }));
+  },
+  project: { id: 'test-project', title: 'Test project' },
+}));
 
 vi.mock('react-redux', () => ({
   Provider: ({ children }: { children: ReactNode }) => children,
@@ -49,6 +58,10 @@ vi.mock('react-redux', () => ({
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
   useAppSelector: vi.fn((selector: (state: unknown) => unknown) => selector(selectorState)),
+}));
+
+vi.mock('../../app/persistedStateFlush', () => ({
+  flushPersistedState: (...args: unknown[]) => mockFlushPersistedState(...args),
 }));
 
 vi.mock('../../features/project/projectSelectors', () => ({
@@ -143,6 +156,10 @@ vi.mock('../../services/desktopPlatform', () => ({
 }));
 
 import App from '../../App';
+import { statusActions } from '../../features/status/statusSlice';
+import { installCloseToTray, installDesktopTray } from '../../services/desktop/desktopTray';
+import { desktopPlatform } from '../../services/desktopPlatform';
+import { ProjectFileLockedError } from '../../services/fs/fsCore';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -199,5 +216,59 @@ describe('portal-active body class (Aurora/noise scope)', () => {
   it('never sets portal-active for an ordinary (non-portal) boot', () => {
     render(<App isNewUser={false} allowInitialMetadataSeed={false} />);
     expect(document.body.classList.contains('portal-active')).toBe(false);
+  });
+});
+
+// QNBS-v3 (#553): a fresh review's finding — quitting or closing a window whose flush is refused by another window's held project-file lock aborted with only a console warn, no visible explanation, and no way for the user to know the lock's own owner must close first. Proves both paths (native/tray Quit and the close-to-tray window-close handler) now surface a distinct notification for exactly this cause while still aborting (fail closed) exactly as before for any other flush failure — never silently discarding an unsaved change to let the window close anyway.
+describe('quit/close blocked by a held project-file lock (#553)', () => {
+  it('shows a distinct notification and still aborts quitting when the flush is refused by a held lock', async () => {
+    mockFlushPersistedState.mockRejectedValueOnce(
+      new ProjectFileLockedError('/app/projects/p1/project.json'),
+    );
+    render(<App isNewUser={false} allowInitialMetadataSeed={false} />);
+    const quitApp = vi.mocked(installDesktopTray).mock.calls[0]?.[2] as () => Promise<void>;
+
+    await quitApp();
+
+    expect(desktopPlatform.lifecycle.quit).not.toHaveBeenCalled();
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: statusActions.addNotification.type,
+        payload: expect.objectContaining({ type: 'error', title: 'Cannot Close Yet' }),
+      }),
+    );
+  });
+
+  it('shows the same notification and keeps the window open when the close-to-tray flush is refused by a held lock', async () => {
+    mockFlushPersistedState.mockRejectedValueOnce(
+      new ProjectFileLockedError('/app/projects/p1/project.json'),
+    );
+    render(<App isNewUser={false} allowInitialMetadataSeed={false} />);
+    const flushPendingState = vi.mocked(installCloseToTray).mock
+      .calls[0]?.[1] as () => Promise<void>;
+
+    // QNBS-v3: rethrown unchanged so installCloseToTray's own catch still keeps the window open.
+    await expect(flushPendingState()).rejects.toBeInstanceOf(ProjectFileLockedError);
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: statusActions.addNotification.type,
+        payload: expect.objectContaining({ type: 'error', title: 'Cannot Close Yet' }),
+      }),
+    );
+  });
+
+  it('does not show the lock notification for an unrelated flush failure, and still aborts quitting', async () => {
+    mockFlushPersistedState.mockRejectedValueOnce(new Error('disk full'));
+    render(<App isNewUser={false} allowInitialMetadataSeed={false} />);
+    const quitApp = vi.mocked(installDesktopTray).mock.calls[0]?.[2] as () => Promise<void>;
+
+    await quitApp();
+
+    expect(desktopPlatform.lifecycle.quit).not.toHaveBeenCalled();
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ title: 'Cannot Close Yet' }),
+      }),
+    );
   });
 });

@@ -36,9 +36,11 @@ import {
   compressJsonText,
   decompressData,
   decompressJsonText,
+  PROJECT_LOCKS_DIR_NAME,
   retryFs,
   sanitizePathSegment,
   type TauriApis,
+  withProjectFileLock,
   writeTextFileAtomic,
 } from './fsCore';
 import {
@@ -710,7 +712,57 @@ export class FsProjectStore extends FsAssetStore {
     return this.withLegacyRoutingOperation(() => this.saveProjectUnlocked(project));
   }
 
-  private async persistExistingCanonicalProject(
+  // QNBS-v3 (#553): the existence check AND both the create-new and existing-project branches run under one cross-process lock — locking only the existing-project branch left a same-shape race where two processes could both observe an absent project.json and independently perform atomic creation, the later one silently overwriting the earlier.
+  // QNBS-v3 (#553): ProjectFileLockedError propagates as itself, not wrapped into ProjectCanonicalWritebackError — nothing in app/features/hooks/components checks either type today, so this changes no existing behavior, and it lets a caller distinguish "another writer currently holds the lock" from every other writeback-refusal cause for a truthful, actionable notification instead of the same generic message for both.
+  private async persistProjectFile(
+    apis: TauriApis,
+    projectFile: string,
+    projectId: string,
+    projectToPersist: StoryProject,
+  ): Promise<void> {
+    const lockKeyPath = await this.projectLockKeyPath(apis, projectId);
+    await withProjectFileLock(apis, lockKeyPath, () =>
+      this.persistProjectFileLocked(apis, projectFile, projectId, projectToPersist),
+    );
+  }
+
+  // QNBS-v3 (#553): the lock lives outside projects/<id>/ deliberately — quarantineProjectUnlocked's rename and deleteProjectUnlocked's recursive remove both operate on exactly that directory, so a sibling lock file there could be relocated or deleted out from under its owner, letting a concurrent writer wrongly conclude the path is free. A stable sibling of projects/ and quarantined-projects/ is untouched by either operation.
+  private async projectLockKeyPath(apis: TauriApis, projectId: string): Promise<string> {
+    const appDataPath = await this.ensureAppDataPath();
+    const locksRoot = await apis.join(appDataPath, PROJECT_LOCKS_DIR_NAME);
+    await apis.mkdir(locksRoot, { recursive: true });
+    return apis.join(locksRoot, projectId);
+  }
+
+  private async persistProjectFileLocked(
+    apis: TauriApis,
+    projectFile: string,
+    projectId: string,
+    projectToPersist: StoryProject,
+  ): Promise<void> {
+    let sourceExists: boolean;
+    try {
+      sourceExists = await apis.exists(projectFile);
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem source inspection failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    // QNBS-v3 (#553): create absent project files directly; preserve the admitted raw carrier when replacing an existing source.
+    if (!sourceExists) {
+      await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
+    } else {
+      await this.persistExistingCanonicalProjectLocked(
+        apis,
+        projectFile,
+        projectId,
+        projectToPersist,
+      );
+    }
+  }
+
+  private async persistExistingCanonicalProjectLocked(
     apis: TauriApis,
     projectFile: string,
     projectId: string,
@@ -757,7 +809,7 @@ export class FsProjectStore extends FsAssetStore {
     try {
       const expectedGeneration = computeProjectSourceGeneration(admission.canonical.raw);
       await writeTextFileAtomic(apis, projectFile, compressJsonText(writeback.raw), async () => {
-        // QNBS-v3 (#553): re-read immediately before rename so an external writer cannot be silently overwritten between admission and replacement.
+        // QNBS-v3 (#553): re-read immediately before rename as defense-in-depth even under the lock — a corrupted/foreign lock file would otherwise be the only thing standing between two writers.
         const latestRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
         if (computeProjectSourceGeneration(latestRaw) !== expectedGeneration) {
           throw new Error('source generation changed before atomic replacement');
@@ -836,22 +888,7 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    let sourceExists: boolean;
-    try {
-      sourceExists = await apis.exists(projectFile);
-    } catch (error) {
-      throw new ProjectCanonicalWritebackError(
-        projectId,
-        `filesystem source inspection failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-
-    // QNBS-v3 (#553): create absent project files directly; preserve the admitted raw carrier when replacing an existing source.
-    if (!sourceExists) {
-      await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
-    } else {
-      await this.persistExistingCanonicalProject(apis, projectFile, projectId, projectToPersist);
-    }
+    await this.persistProjectFile(apis, projectFile, projectId, projectToPersist);
     // QNBS-v3 (#553): capture recovery state only after authoritative replacement succeeds, so a refused save cannot mutate snapshot history.
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       this.lastAutoSnapshotTime = Date.now();
