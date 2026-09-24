@@ -23,7 +23,6 @@ const WRITE_SCOPE_ALLOWLIST = {
     'pr-size': new Set(['pull-requests']),
   },
   'docker.yml': { 'build-push': new Set(['packages']) },
-  'pr-size-enforce.yml': { enforce: new Set(['pull-requests']) },
   'prune-deployments.yml': { prune: new Set(['deployments']) },
   'tauri-build.yml': { release: new Set(['contents']) },
   'codeql.yml': { analyze: new Set(['security-events']) },

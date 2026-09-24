@@ -163,10 +163,14 @@ registry gzip-decoding failure mode, while OSV failures remain blocking.
 > `ci.yml` is sourced from the PR's own ref, not a trusted one (`workflow-policy`'s base-ref-checker
 > discipline protects the *checker script*, not the *job body that invokes it and spends the write
 > token*). It is landed here unreferenced, dormant, and structurally validated by `workflow-policy`
-> itself; `scripts/workflow-policy-check.mjs` requires every `uses:` — including a job-level
-> reusable-workflow call — to pin a real 40-hex-char commit SHA, so `ci.yml`'s `pr-size` job cannot
-> be repointed at it until a SHA for this file exists on `main`. A follow-up PR pins `ci.yml`'s
-> `pr-size` job to that merged SHA and removes the now-superseded inline job body.
+> itself; its own job declares no `permissions:` override (the eventual `pull-requests: write` scope
+> comes only from `ci.yml`'s calling `pr-size` job, already on `WRITE_SCOPE_ALLOWLIST`) specifically
+> so this PR never has to touch `scripts/workflow-policy-check.mjs` itself — a file
+> `reviewer-governance-trust.yml` refuses on any diff at all, by design. `checkUsesRef` also requires
+> every `uses:` — including a job-level reusable-workflow call — to pin a real 40-hex-char commit
+> SHA, so `ci.yml`'s `pr-size` job cannot be repointed at this file until a SHA for it exists on
+> `main`. A follow-up PR pins `ci.yml`'s `pr-size` job to that merged SHA and removes the
+> now-superseded inline job body.
 
 ### Codecov integration
 

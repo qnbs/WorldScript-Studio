@@ -14,9 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      pull-requests: write
+    # QNBS-v3: no permissions: override here — the pull-requests: write scope this job needs is granted by ci.yml's calling `pr-size` job (already allowlisted there); declaring it here too would require WRITE_SCOPE_ALLOWLIST to name this file, which means editing scripts/workflow-policy-check.mjs — a file reviewer-governance-trust.yml refuses on ANY diff, by design.
     steps:
       # QNBS-v3: ref pins the checkout to the PR's recorded base commit, never the PR's own merge/head ref, so the checked-out scripts/check-pr-size.mjs is guaranteed the trusted base copy — no git-show/temp-file indirection needed to escape a PR-controlled checkout.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
