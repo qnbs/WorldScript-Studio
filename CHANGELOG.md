@@ -17,8 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the primitives available), so a lock left behind by a crashed writer requires out-of-band
   recovery rather than risking two writers both entering the critical section — tracked as a
   follow-up requiring real OS-level locking. Does not, and cannot, fence a non-cooperating external
-  writer (e.g. a sync tool) that doesn't participate in this same-application lock convention. No
-  change to web/PWA (IndexedDB) persistence, which isn't exposed to this cross-process race. PR #826.
+  writer (e.g. a sync tool) that doesn't participate in this same-application lock convention. Lock
+  contention is classified from the real Tauri invoke error shape (a plain string, not a JS Error);
+  lock release retries a transient failure and diagnostically warns rather than silently swallowing
+  a persistent one. No change to web/PWA (IndexedDB) persistence, which isn't exposed to this
+  cross-process race. PR #826.
 - **Dependency governance:** removed the temporary, version-scoped `minimumReleaseAgeExclude:
   qs@6.16.0` entry (added in #587) now that it has aged past the 7-day `minimumReleaseAge`
   quarantine floor; `AUDIT.md`'s `qs` override row updated to match. `nanoid@3.3.18`'s exclusion

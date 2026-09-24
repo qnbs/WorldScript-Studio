@@ -172,8 +172,9 @@ function lockPathFor(path: string): string {
 }
 
 // QNBS-v3: distinguishes genuine lock contention (the exclusive-create target already exists) from an unrelated filesystem failure (permission denied, missing parent directory, disk full) — the latter must propagate as itself, never get silently retried and misreported as ProjectFileLockedError, matching retryFs's own established isTransient-message-matching convention in this same file.
+// QNBS-v3: String(error), not error instanceof Error ? error.message : '' — the real Tauri invoke boundary serializes a Rust CommandError as a plain string (e.g. "File exists (os error 17)"), never wrapping it in a JS Error, so an instanceof-Error check alone would see an empty message for every real exclusive-create collision and misclassify it as a non-contention failure.
 function isLockContentionError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  const message = String(error instanceof Error ? error.message : error).toLowerCase();
   return message.includes('exist');
 }
 
@@ -216,9 +217,13 @@ export async function withProjectFileLock<T>(
     return await fn();
   } finally {
     try {
-      await apis.remove(lockPath);
-    } catch {
-      // best-effort release; a leftover lock from a crash requires out-of-band recovery, per the module comment above
+      // QNBS-v3: retryFs, not a bare remove — a single transient release failure (e.g. Windows briefly reporting the file busy) must not turn into the same permanent, unrecoverable lock this module has no reclaim path for.
+      await retryFs(() => apis.remove(lockPath));
+    } catch (error) {
+      logger.warn('Failed to release project file lock; it will block saves until removed', {
+        path: lockPath,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 }

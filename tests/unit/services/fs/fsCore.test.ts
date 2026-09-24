@@ -209,13 +209,33 @@ describe('withProjectFileLock', () => {
     expect(apis.remove).not.toHaveBeenCalled();
   });
 
-  it('does not fail the operation when best-effort lock release itself fails', async () => {
+  // QNBS-v3 (#553): a persistent (non-transient) release failure must not fail the operation itself — the operation already succeeded — but must be surfaced, not silently swallowed, since this module has no reclaim path to self-heal from it.
+  it('does not fail the operation when lock release persistently fails, but warns diagnostically', async () => {
     const apis = makeLockableApis();
     apis.remove = vi.fn().mockRejectedValue(new Error('EPERM'));
 
     await expect(withProjectFileLock(apis, '/data/project.json', async () => 'done')).resolves.toBe(
       'done',
     );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      'Failed to release project file lock; it will block saves until removed',
+      expect.objectContaining({ path: '/data/project.json.lock', error: 'EPERM' }),
+    );
+  });
+
+  // QNBS-v3 (#553): a single transient release failure (the scenario Thread 13 raised — Windows briefly reporting the lock file busy) must self-heal via retryFs, not become the permanent stuck lock this module otherwise has no way to clear.
+  it('retries a transient lock release failure and does not warn once it succeeds', async () => {
+    const apis = makeLockableApis();
+    apis.remove = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('resource busy or locked'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(withProjectFileLock(apis, '/data/project.json', async () => 'done')).resolves.toBe(
+      'done',
+    );
+    expect(apis.remove).toHaveBeenCalledTimes(2);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
   });
 
   // QNBS-v3 (#553): a permission/disk-full/missing-directory failure must propagate as itself — never be silently retried and misreported as lock contention.
@@ -229,6 +249,21 @@ describe('withProjectFileLock', () => {
     );
     expect(fn).not.toHaveBeenCalled();
     expect(apis.writeTextFile).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3 (#553): the real Tauri invoke boundary rejects with a plain string (e.g. "File exists (os error 17)"), never a JS Error — a check that only reads error.message on an Error instance would see an empty message for every real collision and misclassify genuine contention as an unrelated failure.
+  it('classifies a plain-string Tauri-shaped rejection as lock contention, not an unrelated error', async () => {
+    const apis = makeLockableApis();
+    // QNBS-v3: rejects with a bare string on the first call (real shape), then succeeds — proves the string is actually classified as contention and retried, not just tolerated.
+    apis.writeTextFile = vi
+      .fn()
+      .mockRejectedValueOnce('File exists (os error 17)')
+      .mockResolvedValueOnce(undefined);
+
+    await expect(withProjectFileLock(apis, '/data/project.json', async () => 'done')).resolves.toBe(
+      'done',
+    );
+    expect(apis.writeTextFile).toHaveBeenCalledTimes(2);
   });
 
   // QNBS-v3 (#553): the mutual-exclusion proof every reviewed reclaim strategy would have defeated — a second caller must be refused, never admitted, while the first still holds the lock.
