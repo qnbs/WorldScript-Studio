@@ -138,6 +138,14 @@ function main() {
       console.error(`[suppressions] ${decision.message}`);
       process.exit(1);
     }
+    // QNBS-v3 (CodeAnt, PR #823): re-read the baseline file immediately before writing and refuse if it changed since existingBaseline was loaded above — otherwise two concurrent `--update` invocations can both validate against the same stale baseline and the later write silently clobbers whatever the other one just ratcheted down, with no error from either.
+    const stillCurrentBaseline = loadExistingBaseline(baselinePath);
+    if (JSON.stringify(stillCurrentBaseline) !== JSON.stringify(existingBaseline)) {
+      console.error(
+        '[suppressions] --update refused — suppressions-baseline.json changed on disk since this run started (likely a concurrent --update); re-run to validate against the current file.',
+      );
+      process.exit(1);
+    }
     fs.writeFileSync(baselinePath, `${JSON.stringify(decision.baseline, null, 2)}\n`);
     console.log(`[suppressions] baseline updated → ${total} total across ${files.length} files`);
     process.exit(0);
