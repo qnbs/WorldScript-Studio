@@ -32,3 +32,5 @@ export function decideGateAction(
   current: SuppressionCounts,
   existingBaseline: SuppressionBaseline | null,
 ): GateDecision;
+
+export function withUpdateLock<T>(baselinePath: string, fn: () => T): T;

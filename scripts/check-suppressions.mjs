@@ -89,6 +89,37 @@ function loadExistingBaseline(baselinePath) {
   return fs.existsSync(baselinePath) ? JSON.parse(fs.readFileSync(baselinePath, 'utf8')) : null;
 }
 
+/**
+ * QNBS-v3 (chatgpt-codex-connector, PR #823): the earlier re-read-before-write guard only
+ * narrowed the concurrent-`--update` race, it didn't close it — two processes can each pass the
+ * re-read check before either writes. This makes the whole read-decide-write sequence exclusive
+ * via a lock file created with the `wx` flag, which Node/the OS guarantee is atomic (fails with
+ * EEXIST if another process already holds it) — a real mutual-exclusion primitive, not a narrowed
+ * window. A stale lock left by a crashed prior run must be removed manually; this is a rarely
+ * invoked, human/CI-triggered CLI command, not a long-running service, so that residual is
+ * accepted rather than adding lock-staleness heuristics that would reintroduce their own race.
+ */
+export function withUpdateLock(baselinePath, fn) {
+  const lockPath = `${baselinePath}.lock`;
+  let fd;
+  try {
+    fd = fs.openSync(lockPath, 'wx');
+  } catch (err) {
+    if (err.code === 'EEXIST') {
+      throw new Error(
+        `another --update is already in progress (${lockPath} exists) — re-run once it finishes, or remove the lock file manually if a previous run crashed`,
+      );
+    }
+    throw err;
+  }
+  try {
+    return fn();
+  } finally {
+    fs.closeSync(fd);
+    fs.unlinkSync(lockPath);
+  }
+}
+
 function main() {
   const files = collectTrackedSourceFiles({ root });
   const { total, byRule: sorted, byFile } = scanSuppressionFiles(files);
@@ -130,27 +161,32 @@ function main() {
   }
 
   const baselinePath = path.join(root, 'suppressions-baseline.json');
-  const existingBaseline = loadExistingBaseline(baselinePath);
 
   if (process.argv.includes('--update')) {
-    const decision = decideUpdateAction(current, existingBaseline);
-    if (decision.action === 'REFUSE') {
-      console.error(`[suppressions] ${decision.message}`);
+    // QNBS-v3 (chatgpt-codex-connector, PR #823): the whole read-decide-write sequence runs inside the lock, not just a re-check before the write — see withUpdateLock's own comment for why a re-check alone still leaves a real TOCTOU gap between two concurrent --update invocations.
+    // QNBS-v3: process.exit() must not be called from inside the locked callback — it terminates immediately without running withUpdateLock's `finally`, which would leak the lock file on every REFUSE and permanently block all future --update runs. The callback returns a result instead; exiting happens after withUpdateLock has already released the lock.
+    let result;
+    try {
+      result = withUpdateLock(baselinePath, () => {
+        const existingBaseline = loadExistingBaseline(baselinePath);
+        const decision = decideUpdateAction(current, existingBaseline);
+        if (decision.action === 'REFUSE') return decision;
+        fs.writeFileSync(baselinePath, `${JSON.stringify(decision.baseline, null, 2)}\n`);
+        return decision;
+      });
+    } catch (err) {
+      console.error(`[suppressions] ${err.message}`);
       process.exit(1);
     }
-    // QNBS-v3 (CodeAnt, PR #823): re-read the baseline file immediately before writing and refuse if it changed since existingBaseline was loaded above — otherwise two concurrent `--update` invocations can both validate against the same stale baseline and the later write silently clobbers whatever the other one just ratcheted down, with no error from either.
-    const stillCurrentBaseline = loadExistingBaseline(baselinePath);
-    if (JSON.stringify(stillCurrentBaseline) !== JSON.stringify(existingBaseline)) {
-      console.error(
-        '[suppressions] --update refused — suppressions-baseline.json changed on disk since this run started (likely a concurrent --update); re-run to validate against the current file.',
-      );
+    if (result.action === 'REFUSE') {
+      console.error(`[suppressions] ${result.message}`);
       process.exit(1);
     }
-    fs.writeFileSync(baselinePath, `${JSON.stringify(decision.baseline, null, 2)}\n`);
     console.log(`[suppressions] baseline updated → ${total} total across ${files.length} files`);
     process.exit(0);
   }
 
+  const existingBaseline = loadExistingBaseline(baselinePath);
   console.log(`[suppressions] total ${total} across ${files.length} files`);
   for (const [rule, n] of Object.entries(sorted))
     console.log(`  ${n.toString().padStart(4)}  ${rule}`);

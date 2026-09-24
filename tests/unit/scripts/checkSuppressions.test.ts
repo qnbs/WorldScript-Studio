@@ -1,9 +1,13 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   decideGateAction,
   decideUpdateAction,
   root,
+  withUpdateLock,
 } from '../../../scripts/check-suppressions.mjs';
 import { resolveModuleRoot } from '../../../scripts/lib/cli-entrypoint.mjs';
 import { evaluateBaseline } from '../../../scripts/lib/ratchet-baseline.mjs';
@@ -134,5 +138,49 @@ describe('isValidCount safe-integer boundary (CodeAnt, PR #823)', () => {
     const verdict = evaluateBaseline(audit, null);
     expect(verdict.ok).toBe(false);
     expect(verdict.reason).toBe('MALFORMED_AUDIT');
+  });
+});
+
+describe('withUpdateLock (chatgpt-codex-connector, PR #823: real mutual exclusion, not a narrowed re-check window)', () => {
+  let dir: string;
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('runs the callback and returns its value when no other lock is held', () => {
+    dir = mkdtempSync(join(tmpdir(), 'suppressions-lock-'));
+    const baselinePath = join(dir, 'suppressions-baseline.json');
+    const result = withUpdateLock(baselinePath, () => 'done');
+    expect(result).toBe('done');
+  });
+
+  it('removes the lock file after the callback completes normally', () => {
+    dir = mkdtempSync(join(tmpdir(), 'suppressions-lock-'));
+    const baselinePath = join(dir, 'suppressions-baseline.json');
+    withUpdateLock(baselinePath, () => {});
+    expect(existsSync(`${baselinePath}.lock`)).toBe(false);
+  });
+
+  it('removes the lock file even when the callback throws (the exact bug this fix closes: process.exit() inside the callback would have skipped this cleanup)', () => {
+    dir = mkdtempSync(join(tmpdir(), 'suppressions-lock-'));
+    const baselinePath = join(dir, 'suppressions-baseline.json');
+    expect(() =>
+      withUpdateLock(baselinePath, () => {
+        throw new Error('callback failed');
+      }),
+    ).toThrow('callback failed');
+    expect(existsSync(`${baselinePath}.lock`)).toBe(false);
+  });
+
+  it('refuses a second concurrent acquisition while the first lock is still held, proving real mutual exclusion rather than a re-check that both callers could still pass', () => {
+    dir = mkdtempSync(join(tmpdir(), 'suppressions-lock-'));
+    const baselinePath = join(dir, 'suppressions-baseline.json');
+    expect(() =>
+      withUpdateLock(baselinePath, () => {
+        // QNBS-v3: still holding the outer lock here — a second acquisition attempt for the same baselinePath must fail, simulating a second `--update` process starting mid-run.
+        expect(() => withUpdateLock(baselinePath, () => {})).toThrow(/already in progress/);
+      }),
+    ).not.toThrow();
   });
 });
