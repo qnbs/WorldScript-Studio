@@ -327,34 +327,26 @@ describe('FsProjectStore — projects', () => {
   });
 
   // QNBS-v3 (#553): the specific regression a fresh review caught — a lock colocated inside projects/<id>/ would be relocated by quarantine's rename and deleted by deleteProject's recursive remove, letting a concurrent writer wrongly conclude the path is free once a new projects/<id>/ is recreated. Proves the lock's new stable location survives both operations untouched.
-  it('keeps an active lock intact across a concurrent quarantine of the same project directory', async () => {
-    const sourcePath = '/app/projects/p1/project.json';
-    const lockPath = '/app/project-locks/p1.lock';
-    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
-    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
-    await fake.apis.mkdir('/app/project-locks', { recursive: true });
-    await fake.apis.writeTextFile(lockPath, 'locked');
+  it.each([
+    ['quarantine', () => store.quarantineProject('p1')],
+    ['delete', () => store.deleteProject('p1')],
+  ])(
+    'keeps an active lock intact across a concurrent %s of the same project directory',
+    async (_label, act) => {
+      const sourcePath = '/app/projects/p1/project.json';
+      const lockPath = '/app/project-locks/p1.lock';
+      await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+      await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+      await fake.apis.mkdir('/app/project-locks', { recursive: true });
+      await fake.apis.writeTextFile(lockPath, 'locked');
 
-    await store.quarantineProject('p1');
+      await act();
 
-    // QNBS-v3: quarantine renamed projects/p1 away entirely — the lock, living outside that directory, must be unaffected.
-    expect(fake.text.has(sourcePath)).toBe(false);
-    expect(fake.text.has(lockPath)).toBe(true);
-  });
-
-  it('keeps an active lock intact across a concurrent delete of the same project directory', async () => {
-    const sourcePath = '/app/projects/p1/project.json';
-    const lockPath = '/app/project-locks/p1.lock';
-    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
-    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
-    await fake.apis.mkdir('/app/project-locks', { recursive: true });
-    await fake.apis.writeTextFile(lockPath, 'locked');
-
-    await store.deleteProject('p1');
-
-    expect(fake.text.has(sourcePath)).toBe(false);
-    expect(fake.text.has(lockPath)).toBe(true);
-  });
+      // QNBS-v3: both operations remove/rename projects/p1 entirely — the lock, living outside that directory, must be unaffected.
+      expect(fake.text.has(sourcePath)).toBe(false);
+      expect(fake.text.has(lockPath)).toBe(true);
+    },
+  );
 
   it('refuses non-current filesystem writeback without changing the stored source', async () => {
     const { schemaVersion: _schemaVersion, ...legacyProject } = project;
