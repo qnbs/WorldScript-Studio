@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependency governance:** removed the temporary, version-scoped `minimumReleaseAgeExclude:
+  qs@6.16.0` entry (added in #587) now that it has aged past the 7-day `minimumReleaseAge`
+  quarantine floor; `AUDIT.md`'s `qs` override row updated to match. `nanoid@3.3.18`'s exclusion
+  is unchanged. PR #824.
 - Post-release v1.28.8 truth sync: release-candidate markers and evidence reconciliation
   (see `## [1.28.8]` below).
 - **Visual Maturity remediation, PR A (editorial foundation):** Aurora/noise ambient decoration no
