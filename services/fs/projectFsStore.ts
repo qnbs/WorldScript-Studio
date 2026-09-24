@@ -33,7 +33,6 @@ import {
 } from '../storageBackend';
 import { FsAssetStore } from './assetFsStore';
 import {
-  compressData,
   compressJsonText,
   decompressData,
   decompressJsonText,
@@ -258,12 +257,26 @@ type LegacyAdmissionRecord = {
 
 const LEGACY_FALLBACK_WRITER_IDENTITIES = ['browser-project', 'default', 'project'] as const;
 
+type ProjectAdmission = ReturnType<typeof admitCanonicalProjectDocument>;
+
+// QNBS-v3 (#553): computed from the exact admitted raw the save path fences against, so an unchanged file always matches the baseline it seeds; null for anything not admitted as CURRENT (no baseline, i.e. unfenced as before).
+function currentGenerationOf(admission: ProjectAdmission): ProjectSourceGeneration | null {
+  return admission.status === 'CURRENT' && admission.canonical
+    ? computeProjectSourceGeneration(admission.canonical.raw)
+    : null;
+}
+
 // QNBS-v3: one source-owned record keeps the canonical directory, embedded identity, aliases, and write verdict together.
 export class FsProjectStore extends FsAssetStore {
   private readonly verifiedLegacyProjectDirectories = new Set<string>();
   private readonly legacyAdmissionRecords = new Map<string, LegacyAdmissionRecord>();
   // QNBS-v3 (#553): the canonical generation this process's editable in-memory project descends from, per project — set only by the editing load and by this process's own commits, never by background reads (backup/LoRA use loadProject), so a background re-read can never mask a stale writer.
   private readonly editingBaselines = new Map<string, ProjectSourceGeneration>();
+
+  private setEditingBaseline(projectId: string, generation: ProjectSourceGeneration | null): void {
+    if (generation === null) this.editingBaselines.delete(projectId);
+    else this.editingBaselines.set(projectId, generation);
+  }
 
   private writerIdentityAliases(projectId: string): Set<string> {
     const identities = new Set([projectId]);
@@ -755,9 +768,13 @@ export class FsProjectStore extends FsAssetStore {
     }
     // QNBS-v3 (#553): create absent project files directly; preserve the admitted raw carrier when replacing an existing source.
     if (!sourceExists) {
-      await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
-      // QNBS-v3 (#553): no other writer can have loaded a project that did not exist; the next save re-admits this file and establishes the baseline from its canonical form.
-      this.editingBaselines.delete(projectId);
+      // QNBS-v3 (#553): the creating window owns the file it just wrote — clearing its baseline instead would leave it unfenced if another window opened and saved the new file before this window's next save. Computed before writing, through the same admission a later read applies, so no failure can follow a completed write.
+      const createdJson = JSON.stringify(projectToPersist);
+      const createdGeneration = currentGenerationOf(
+        admitCanonicalProjectDocument(createdJson, storedProjectSchema),
+      );
+      await writeTextFileAtomic(apis, projectFile, compressJsonText(createdJson));
+      this.setEditingBaseline(projectId, createdGeneration);
     } else {
       await this.persistExistingCanonicalProjectLocked(
         apis,
@@ -980,20 +997,14 @@ export class FsProjectStore extends FsAssetStore {
           'LEGACY_UNVERSIONED',
         );
       }
-      if (safeProjectId) {
-        if (project && loaded.generation !== null) {
-          this.editingBaselines.set(safeProjectId, loaded.generation);
-        } else {
-          this.editingBaselines.delete(safeProjectId);
-        }
-      }
+      if (safeProjectId) this.setEditingBaseline(safeProjectId, project ? loaded.generation : null);
       return project;
     });
   }
 
   private async loadProjectUnlocked(
     projectId: string,
-    onCanonicalGeneration?: (generation: ProjectSourceGeneration) => void,
+    onCanonicalGeneration?: (generation: ProjectSourceGeneration | null) => void,
   ): Promise<StoryProject | null> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
@@ -1039,10 +1050,7 @@ export class FsProjectStore extends FsAssetStore {
         admission.status === 'LEGACY_TO_V1'
           ? withoutSyntheticLegacySchemaVersion(admission.canonical.projection)
           : admission.canonical.projection;
-      // QNBS-v3 (#553): computed from the exact admitted raw the save path fences against, so an unchanged file always matches this baseline.
-      if (admission.status === 'CURRENT') {
-        onCanonicalGeneration?.(computeProjectSourceGeneration(admission.canonical.raw));
-      }
+      onCanonicalGeneration?.(currentGenerationOf(admission));
     } catch (error) {
       logger.error('Failed to parse project file (corrupt data):', error);
       throw new ProjectLoadError(

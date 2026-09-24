@@ -13,13 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the second overlaid its whole older in-memory snapshot onto the first's newer file, reverting
   every field only the first had changed, while its read-then-write fence still passed. The desktop
   filesystem store now remembers which on-disk generation each window's open project came from
-  (set by the editing load and by the window's own saves; background reads such as backups and
-  LoRA datasets never move it) and refuses a save whose file has since advanced, before building
+  (set by the editing load, by the window's own saves, and when the window creates the file;
+  background reads such as backups and LoRA datasets never move it) and refuses a save whose file has since advanced, before building
   any overwrite and leaving no temp or lock file behind. The refused window shows one localized
   notice explaining the conflict and how to load the newer version, instead of failing on every
   keystroke; quitting or closing that window asks, in its own language, whether to discard its
   unsaved changes rather than trapping it open forever. Another window's committed data is never
-  touched either way. Not a 3-way merge: the refused window's own later edits are not merged in.
+  touched either way. A quit or close whose save was superseded by another queued save (a
+  double-clicked Quit, or an autosave landing mid-quit) now confirms with one more save and uses
+  its real outcome, so an unsaved project can never be mistaken for a saved one and skip that
+  consent. Not a 3-way merge: the refused window's own later edits are not merged in.
   Scope: desktop filesystem saves only — the same risk between two browser tabs is owned by #480's
   multi-tab program. Non-cooperating external writers remain outside any application lock. PR #830.
 - **Privacy truth (#526):** Factory Reset's hint and confirmation text no longer imply that

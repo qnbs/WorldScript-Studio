@@ -30,6 +30,7 @@ vi.mock('../../services/factoryResetService', () => ({
 }));
 
 import { flushPersistedState } from '../../app/persistedStateFlush';
+import { projectPersistenceCoordinator } from '../../app/persistenceCoordinator';
 import {
   _resetSafeSessionForTest,
   enterSafeSession,
@@ -140,6 +141,48 @@ describe('flushPersistedState', () => {
   it('propagates a rejection when canonical autosave fails (fail-closed, not swallowed)', async () => {
     h.persistProjectAutosaveSnapshot.mockRejectedValueOnce(new Error('disk full'));
     await expect(flushPersistedState(buildState())).rejects.toThrow('disk full');
+  });
+
+  // QNBS-v3 (#553): the coordinator resolves (not rejects) a waiter whose own failed attempt had a queued successor; a flush must not read that as "saved" — a quit would otherwise skip the stale-writer discard consent while the project is still unsaved.
+  it('rejects when its own attempt failed behind a queued successor that also failed', async () => {
+    let failOwnAttempt: (error: Error) => void = () => {};
+    h.persistProjectAutosaveSnapshot
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            failOwnAttempt = reject;
+          }),
+      )
+      .mockRejectedValueOnce(new Error('confirming save refused'));
+
+    const flushPromise = flushPersistedState(buildState());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const successor = projectPersistenceCoordinator
+      .enqueue(() => Promise.reject(new Error('successor refused')))
+      .catch(() => undefined);
+    failOwnAttempt(new Error('own attempt refused'));
+
+    await expect(flushPromise).rejects.toThrow('confirming save refused');
+    await successor;
+  });
+
+  it('resolves once a confirming save succeeds after a superseded attempt', async () => {
+    let failOwnAttempt: (error: Error) => void = () => {};
+    h.persistProjectAutosaveSnapshot.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          failOwnAttempt = reject;
+        }),
+    );
+
+    const flushPromise = flushPersistedState(buildState());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const successor = projectPersistenceCoordinator.enqueue(async () => {});
+    failOwnAttempt(new Error('own attempt refused'));
+
+    await expect(flushPromise).resolves.toBeUndefined();
+    await successor;
+    expect(h.persistProjectAutosaveSnapshot).toHaveBeenCalledTimes(2);
   });
 
   it('propagates a rejection when saveSettings fails (fail-closed, not swallowed)', async () => {

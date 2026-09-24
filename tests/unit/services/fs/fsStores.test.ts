@@ -2121,6 +2121,26 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
     expect([...fake.text.keys()].some((path) => path.endsWith('.lock'))).toBe(false);
   });
 
+  it('keeps the creating window fenced if another window saves its new file first', async () => {
+    const creator = new FsProjectStore();
+    await creator.saveProject(base as never);
+    const other = new FsProjectStore();
+    await other.loadProjectForEditing('p1');
+    await other.saveProject({ ...base, title: 'Changed by other' } as never);
+
+    await expect(
+      creator.saveProject({ ...base, logline: 'Stale creator edit' } as never),
+    ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    expect(persisted()).toMatchObject({ title: 'Changed by other', logline: 'Original logline' });
+  });
+
+  it('lets the creating window keep saving its own new file', async () => {
+    const creator = new FsProjectStore();
+    await creator.saveProject(base as never);
+    await creator.saveProject({ ...base, title: 'Creator second save' } as never);
+    expect(persisted()).toMatchObject({ title: 'Creator second save' });
+  });
+
   it('keeps today’s behavior for a window that never loaded the project for editing', async () => {
     await store.saveProject(base as never);
     const other = new FsProjectStore();
