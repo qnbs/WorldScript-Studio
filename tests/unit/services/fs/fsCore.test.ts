@@ -196,34 +196,17 @@ describe('withProjectFileLock', () => {
     expect(apis.remove).toHaveBeenCalledWith('/data/project.json.lock');
   });
 
-  it('throws ProjectFileLockedError after bounded retries when a fresh lock is held', async () => {
-    const apis = makeLockableApis({ '/data/project.json.lock': String(Date.now()) });
+  it('throws ProjectFileLockedError after bounded retries when a lock is already held', async () => {
+    const apis = makeLockableApis({ '/data/project.json.lock': 'locked' });
     const fn = vi.fn().mockResolvedValue('unreachable');
 
     await expect(withProjectFileLock(apis, '/data/project.json', fn)).rejects.toBeInstanceOf(
       ProjectFileLockedError,
     );
     expect(fn).not.toHaveBeenCalled();
-    // QNBS-v3: bounded — exactly 3 create attempts, never an unbounded wait.
+    // QNBS-v3: bounded — exactly 3 create attempts, never an unbounded wait, and never a remove of the held lock (no reclaim exists).
     expect(apis.writeTextFile).toHaveBeenCalledTimes(3);
-  });
-
-  it('reclaims a stale lock left by a crashed writer and completes the operation', async () => {
-    const apis = makeLockableApis({
-      '/data/project.json.lock': String(Date.now() - 60_000),
-    });
-
-    await expect(
-      withProjectFileLock(apis, '/data/project.json', async () => 'recovered'),
-    ).resolves.toBe('recovered');
-  });
-
-  it('reclaims a malformed lock rather than deadlocking forever', async () => {
-    const apis = makeLockableApis({ '/data/project.json.lock': 'not-a-timestamp' });
-
-    await expect(
-      withProjectFileLock(apis, '/data/project.json', async () => 'recovered'),
-    ).resolves.toBe('recovered');
+    expect(apis.remove).not.toHaveBeenCalled();
   });
 
   it('does not fail the operation when best-effort lock release itself fails', async () => {
@@ -233,6 +216,42 @@ describe('withProjectFileLock', () => {
     await expect(withProjectFileLock(apis, '/data/project.json', async () => 'done')).resolves.toBe(
       'done',
     );
+  });
+
+  // QNBS-v3 (#553): a permission/disk-full/missing-directory failure must propagate as itself — never be silently retried and misreported as lock contention.
+  it('propagates a non-contention filesystem error immediately, without retrying or misreporting it', async () => {
+    const apis = makeLockableApis();
+    apis.writeTextFile = vi.fn().mockRejectedValue(new Error('EACCES: permission denied'));
+    const fn = vi.fn();
+
+    await expect(withProjectFileLock(apis, '/data/project.json', fn)).rejects.toThrow(
+      'permission denied',
+    );
+    expect(fn).not.toHaveBeenCalled();
+    expect(apis.writeTextFile).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3 (#553): the mutual-exclusion proof every reviewed reclaim strategy would have defeated — a second caller must be refused, never admitted, while the first still holds the lock.
+  it('never admits a second caller while the first still holds the lock (mutual exclusion proof)', async () => {
+    const apis = makeLockableApis();
+    let releaseFirst!: () => void;
+    const firstOperation = new Promise<string>((resolve) => {
+      releaseFirst = () => resolve('first');
+    });
+
+    const firstCall = withProjectFileLock(apis, '/data/project.json', () => firstOperation);
+    // QNBS-v3: yields once so the first call's exclusive-create has actually landed before the second attempts it.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const secondFn = vi.fn().mockResolvedValue('second');
+    const secondCall = withProjectFileLock(apis, '/data/project.json', secondFn);
+
+    await expect(secondCall).rejects.toBeInstanceOf(ProjectFileLockedError);
+    expect(secondFn).not.toHaveBeenCalled();
+
+    releaseFirst();
+    await expect(firstCall).resolves.toBe('first');
   });
 });
 

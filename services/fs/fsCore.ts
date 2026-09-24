@@ -154,7 +154,7 @@ export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array)
 }
 
 // --- Cross-process project-file lock (#553) ---
-// QNBS-v3: writeTextFileAtomic's beforeReplace re-check narrows but does not eliminate the TOCTOU gap between two OS processes (two app instances, or an external sync tool) each racing their own read-check-rename cycle against the same project file — this lock closes that gap by serializing the whole cycle behind an OS-level exclusive-create sibling file.
+// QNBS-v3: writeTextFileAtomic's beforeReplace re-check narrows but does not eliminate the TOCTOU gap between two OS processes (two app instances) each racing their own read-check-rename cycle against the same project file — this lock closes that gap by serializing the whole cycle behind an OS-level exclusive-create sibling file. Deliberately has NO time-based or ownership-token stale-lock reclaim: every such scheme was proven unsound during review (an owner token still can't make removal conditional on content — the path can change between the re-read and the remove call — and a lock file exists, per plugin-fs semantics, before its content is written, so a reader can observe an empty/malformed live lock and misclassify it as abandoned) — see #553 for tracked follow-up requiring real OS-level locking (flock or equivalent, which needs new Rust-side code) to recover a crashed writer's orphaned lock; until then, a genuinely stuck lock is out-of-band-recoverable only (restart clears in-process state; the file itself is never corrupted by this, only unsavable). This also means the guarantee below is scoped to writers that participate in this exact convention — a non-cooperating external tool (e.g. a sync client) that writes project.json directly without ever creating <path>.lock is not, and cannot be, fenced by an application-level file alone.
 
 export class ProjectFileLockedError extends Error {
   constructor(path: string) {
@@ -164,7 +164,6 @@ export class ProjectFileLockedError extends Error {
 }
 
 const LOCK_SUFFIX = '.lock';
-const STALE_LOCK_MS = 30_000;
 const LOCK_ACQUIRE_ATTEMPTS = 3;
 const LOCK_ACQUIRE_BACKOFF_MS = [200, 500];
 
@@ -172,36 +171,29 @@ function lockPathFor(path: string): string {
   return `${path}${LOCK_SUFFIX}`;
 }
 
-async function tryCreateLock(apis: TauriApis, lockPath: string): Promise<boolean> {
-  try {
-    await apis.writeTextFile(lockPath, String(Date.now()), { createNew: true });
-    return true;
-  } catch {
-    return false;
-  }
+// QNBS-v3: distinguishes genuine lock contention (the exclusive-create target already exists) from an unrelated filesystem failure (permission denied, missing parent directory, disk full) — the latter must propagate as itself, never get silently retried and misreported as ProjectFileLockedError, matching retryFs's own established isTransient-message-matching convention in this same file.
+function isLockContentionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  return message.includes('exist');
 }
 
-// QNBS-v3: a lock older than STALE_LOCK_MS is treated as abandoned by a crashed writer, never an in-progress one — a normal save completes in well under a second. A malformed timestamp can never have been written by tryCreateLock itself, so it is treated as reclaimable too, rather than an unrecoverable deadlock — the only alternative once a fresh, valid lock is ruled out.
-async function reclaimStaleLock(apis: TauriApis, lockPath: string): Promise<void> {
-  let existing: string;
+async function tryCreateLock(apis: TauriApis, lockPath: string): Promise<boolean> {
   try {
-    existing = await apis.readTextFile(lockPath);
-  } catch {
-    return;
-  }
-  const acquiredAt = Number.parseInt(existing, 10);
-  if (Number.isFinite(acquiredAt) && Date.now() - acquiredAt < STALE_LOCK_MS) return;
-  try {
-    await apis.remove(lockPath);
-  } catch {
-    // another writer may already be reclaiming it — its own create attempt is authoritative, not this one
+    // QNBS-v3: content is never read back by anything (no reclaim logic exists) — a fixed marker is enough; createNew's atomicity is what matters, not what's written.
+    await apis.writeTextFile(lockPath, 'locked', { createNew: true });
+    return true;
+  } catch (error) {
+    if (isLockContentionError(error)) return false;
+    throw error;
   }
 }
 
 /**
  * Serializes an operation against a project file across OS processes via an exclusive-create
- * sibling lock file. Bounded retry only, never an unbounded wait — a genuinely held lock surfaces
- * as ProjectFileLockedError for the caller's own existing retry-next-cycle semantics.
+ * sibling lock file. Bounded retry only, never an unbounded wait, and never removes a lock it did
+ * not itself create — see the module-level comment above for why every reclaim strategy considered
+ * was unsound. A genuinely held lock (including one abandoned by a crashed writer) surfaces as
+ * ProjectFileLockedError, which flows into the caller's existing retry-next-cycle error handling.
  */
 export async function withProjectFileLock<T>(
   apis: TauriApis,
@@ -214,7 +206,6 @@ export async function withProjectFileLock<T>(
     acquired = await tryCreateLock(apis, lockPath);
     if (acquired) break;
     if (attempt < LOCK_ACQUIRE_ATTEMPTS - 1) {
-      await reclaimStaleLock(apis, lockPath);
       await new Promise((resolve) => setTimeout(resolve, LOCK_ACQUIRE_BACKOFF_MS[attempt]));
     }
   }
@@ -227,7 +218,7 @@ export async function withProjectFileLock<T>(
     try {
       await apis.remove(lockPath);
     } catch {
-      // best-effort release; a leftover lock self-heals via the staleness check on the next attempt
+      // best-effort release; a leftover lock from a crash requires out-of-band recovery, per the module comment above
     }
   }
 }

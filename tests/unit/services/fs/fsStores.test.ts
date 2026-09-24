@@ -293,30 +293,30 @@ describe('FsProjectStore — projects', () => {
     });
   });
 
-  it('refuses an existing-project save while another writer holds a fresh lock', async () => {
+  it('refuses an existing-project save while another writer holds the lock', async () => {
     const sourcePath = '/app/projects/p1/project.json';
     await fake.apis.mkdir('/app/projects/p1', { recursive: true });
     await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
-    await fake.apis.writeTextFile(`${sourcePath}.lock`, String(Date.now()));
+    await fake.apis.writeTextFile(`${sourcePath}.lock`, 'locked');
 
     await expect(
       store.saveProject({ ...project, title: 'Blocked writer' } as never),
     ).rejects.toMatchObject({ name: 'ProjectCanonicalWritebackError', projectId: 'p1' });
     expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(JSON.stringify(project));
+    // QNBS-v3 (#553): a held lock must never be removed by a caller that didn't create it — no reclaim exists.
+    expect(fake.text.has(`${sourcePath}.lock`)).toBe(true);
   });
 
-  it('reclaims a stale lock left by a crashed writer and completes the save', async () => {
-    const sourcePath = '/app/projects/p1/project.json';
+  // QNBS-v3 (#553, Thread 0): locking only the existing-project branch left this exact race — two processes could both observe an absent project.json and independently create it, the later one silently overwriting the earlier.
+  it('refuses a first-time save while another writer holds the lock for the same not-yet-created project', async () => {
     await fake.apis.mkdir('/app/projects/p1', { recursive: true });
-    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
-    await fake.apis.writeTextFile(`${sourcePath}.lock`, String(Date.now() - 60_000));
+    await fake.apis.writeTextFile('/app/projects/p1/project.json.lock', 'locked');
 
-    await store.saveProject({ ...project, title: 'Recovered writer' } as never);
-
-    expect(fake.text.has(`${sourcePath}.lock`)).toBe(false);
-    expect(JSON.parse(decompressJsonText(fake.text.get(sourcePath) as string))).toMatchObject({
-      title: 'Recovered writer',
+    await expect(store.saveProject(project as never)).rejects.toMatchObject({
+      name: 'ProjectCanonicalWritebackError',
+      projectId: 'p1',
     });
+    expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
   });
 
   it('refuses non-current filesystem writeback without changing the stored source', async () => {

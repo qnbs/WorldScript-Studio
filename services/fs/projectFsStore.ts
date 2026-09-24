@@ -712,16 +712,16 @@ export class FsProjectStore extends FsAssetStore {
     return this.withLegacyRoutingOperation(() => this.saveProjectUnlocked(project));
   }
 
-  private async persistExistingCanonicalProject(
+  // QNBS-v3 (#553): the existence check AND both the create-new and existing-project branches run under one cross-process lock — locking only the existing-project branch left a same-shape race where two processes could both observe an absent project.json and independently perform atomic creation, the later one silently overwriting the earlier.
+  private async persistProjectFile(
     apis: TauriApis,
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
   ): Promise<void> {
-    // QNBS-v3 (#553): the whole read-admit-writeback-replace cycle runs under one cross-process lock — the prior re-read-before-rename check alone narrowed but did not close the gap between two OS processes (two app instances, or an external sync tool) each racing this same sequence.
     try {
       await withProjectFileLock(apis, projectFile, () =>
-        this.persistExistingCanonicalProjectLocked(apis, projectFile, projectId, projectToPersist),
+        this.persistProjectFileLocked(apis, projectFile, projectId, projectToPersist),
       );
     } catch (error) {
       if (error instanceof ProjectFileLockedError) {
@@ -731,6 +731,34 @@ export class FsProjectStore extends FsAssetStore {
         );
       }
       throw error;
+    }
+  }
+
+  private async persistProjectFileLocked(
+    apis: TauriApis,
+    projectFile: string,
+    projectId: string,
+    projectToPersist: StoryProject,
+  ): Promise<void> {
+    let sourceExists: boolean;
+    try {
+      sourceExists = await apis.exists(projectFile);
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `filesystem source inspection failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    // QNBS-v3 (#553): create absent project files directly; preserve the admitted raw carrier when replacing an existing source.
+    if (!sourceExists) {
+      await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
+    } else {
+      await this.persistExistingCanonicalProjectLocked(
+        apis,
+        projectFile,
+        projectId,
+        projectToPersist,
+      );
     }
   }
 
@@ -860,22 +888,7 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    let sourceExists: boolean;
-    try {
-      sourceExists = await apis.exists(projectFile);
-    } catch (error) {
-      throw new ProjectCanonicalWritebackError(
-        projectId,
-        `filesystem source inspection failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-
-    // QNBS-v3 (#553): create absent project files directly; preserve the admitted raw carrier when replacing an existing source.
-    if (!sourceExists) {
-      await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
-    } else {
-      await this.persistExistingCanonicalProject(apis, projectFile, projectId, projectToPersist);
-    }
+    await this.persistProjectFile(apis, projectFile, projectId, projectToPersist);
     // QNBS-v3 (#553): capture recovery state only after authoritative replacement succeeds, so a refused save cannot mutate snapshot history.
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       this.lastAutoSnapshotTime = Date.now();

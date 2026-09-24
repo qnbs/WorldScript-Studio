@@ -7,14 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Data integrity (#553):** the desktop filesystem save path now serializes existing-project
-  writeback across OS processes via an exclusive-create sibling lock file (`<project.json>.lock`),
-  closing the TOCTOU gap between the prior generation-hash re-check and the atomic rename — two
-  app instances, or an external sync tool, racing the same save could previously (in a narrow
-  window) have one writer's rename silently clobber the other's more recent write. Bounded retry
-  only (3 attempts), and a lock older than 30s left by a crashed writer is automatically
-  reclaimed — never an unbounded wait or a permanent deadlock. No change to web/PWA (IndexedDB)
-  persistence, which isn't exposed to this same cross-process race. PR #826.
+- **Data integrity (#553):** the desktop filesystem save path now mutually excludes concurrent
+  saves of the same project across OS processes (two app instances) via an atomic exclusive-create
+  sibling lock file (`<project.json>.lock`) held across the whole read-admit-writeback-replace
+  cycle, closing the TOCTOU gap between the prior generation-hash re-check and the atomic rename.
+  Bounded retry only (3 attempts, short backoff), never an unbounded wait. Deliberately has no
+  automatic stale-lock reclaim: every time-based or ownership-token reclaim strategy considered
+  was proven unsound during review (removal can never be made conditional on a lock's content with
+  the primitives available), so a lock left behind by a crashed writer requires out-of-band
+  recovery rather than risking two writers both entering the critical section — tracked as a
+  follow-up requiring real OS-level locking. Does not, and cannot, fence a non-cooperating external
+  writer (e.g. a sync tool) that doesn't participate in this same-application lock convention. No
+  change to web/PWA (IndexedDB) persistence, which isn't exposed to this cross-process race. PR #826.
 - **Dependency governance:** removed the temporary, version-scoped `minimumReleaseAgeExclude:
   qs@6.16.0` entry (added in #587) now that it has aged past the 7-day `minimumReleaseAge`
   quarantine floor; `AUDIT.md`'s `qs` override row updated to match. `nanoid@3.3.18`'s exclusion
