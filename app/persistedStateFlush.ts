@@ -4,6 +4,7 @@ import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersi
 import { isProjectPersistenceAdmitted } from '../services/startupSafeSession';
 import { storageService } from '../services/storageService';
 import {
+  type ChainMark,
   projectPersistenceCoordinator,
   settingsPersistenceCoordinator,
 } from './persistenceCoordinator';
@@ -20,6 +21,9 @@ import type { RootState } from './store';
 export async function flushPersistedState(state: RootState): Promise<void> {
   // QNBS-v3: window.location.reload() fires visibilitychange before the page actually unloads -- without this, a factory reset's own reload races this flush, recreating the just-deleted database with stale pre-reset state.
   if (isFactoryResetInProgress()) return;
+  // QNBS-v3 (#553): marked BEFORE enqueuing, so the flush can later observe exactly the chains that were running or started while it was in flight — including a save enqueued after its own results settled.
+  const settingsMark = settingsPersistenceCoordinator.chainMark();
+  const projectMark = projectPersistenceCoordinator.chainMark();
   const presentData = state.project.present?.data;
   // QNBS-v3 (#332): make visibility and quit flushes wait behind both active and queued saves.
   const saves: Promise<unknown>[] = [
@@ -47,4 +51,41 @@ export async function flushPersistedState(state: RootState): Promise<void> {
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
   if (rejected) throw rejected.reason;
+  // QNBS-v3 (#553): a resolved (even superseded) result is not proof that everything pending was saved — a waiter is resolved when its own failed attempt had a queued successor, and a save enqueued after this flush's results settled forms a separate chain. Every chain active at the pre-enqueue mark or started since then must have ended in success; each is read from its own outcome promise (never a shared "last outcome"), and a history gap fails closed. The older captured snapshot is never re-enqueued.
+  await assertStableSuccessSince(settingsMark, projectMark);
+}
+
+const MAX_VERIFICATION_PASSES = 5;
+
+// QNBS-v3 (#553): the boundary is the moment this flush returns, not the moment it first snapshotted — a chain started while an earlier pass was still awaiting (e.g. a settings save enqueued during the project check) is picked up by the next pass. Returns only after a full pass in which neither queue started a new chain; continuous saving past the pass limit fails closed rather than claiming success.
+async function assertStableSuccessSince(
+  settingsMark: ChainMark,
+  projectMark: ChainMark,
+): Promise<void> {
+  for (let pass = 0; pass < MAX_VERIFICATION_PASSES; pass++) {
+    const settingsSeq = settingsPersistenceCoordinator.chainMark().seq;
+    const projectSeq = projectPersistenceCoordinator.chainMark().seq;
+    await assertChainsSucceededSince(settingsPersistenceCoordinator, settingsMark);
+    await assertChainsSucceededSince(projectPersistenceCoordinator, projectMark);
+    if (
+      settingsPersistenceCoordinator.chainMark().seq === settingsSeq &&
+      projectPersistenceCoordinator.chainMark().seq === projectSeq
+    ) {
+      return;
+    }
+  }
+  throw new Error('Persistence kept changing during this flush; cannot prove it saved.');
+}
+
+async function assertChainsSucceededSince(
+  coordinator: typeof projectPersistenceCoordinator,
+  mark: ChainMark,
+): Promise<void> {
+  const outcomes = coordinator.outcomesSince(mark);
+  if (outcomes === null) {
+    throw new Error('Persistence history no longer covers this flush; cannot prove it saved.');
+  }
+  for (const outcome of await Promise.all(outcomes)) {
+    if (!outcome.ok) throw outcome.error;
+  }
 }
