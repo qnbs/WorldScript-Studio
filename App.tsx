@@ -201,7 +201,7 @@ function notifyIfBlockedByProjectLock(error: unknown, dispatch: MinimalStore['di
       type: 'error',
       title: 'Cannot Close Yet',
       description:
-        'Another WorldScript window is currently saving this project. Close that window first, then try again.',
+        "Another WorldScript window is currently saving this project. Close that window first, then try again. If this continues after closing any other WorldScript windows, the project's save lock may need to be removed manually.",
     }),
   );
 }
