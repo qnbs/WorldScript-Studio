@@ -163,9 +163,19 @@ function sanitizeViewCarryingUrlState(): void {
 async function clearTauriAppData(): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
-    const { loadTauriApis, retryFs } = await import('./fs/fsCore');
+    const { loadTauriApis, retryFs, PROJECT_LOCKS_DIR_NAME } = await import('./fs/fsCore');
     const apis = await loadTauriApis();
     const appDataPath = await apis.appDataDir();
+    // QNBS-v3 (#553): a best-effort guard, not a full solution -- there is still a gap between this check and the deletion loop below in which a save could begin (the same class of residual gap withProjectFileLock's own module-level comment already discloses for reclaim), and a stale lock left by a crashed writer blocks reset exactly like a genuinely active one, requiring the same out-of-band manual removal already documented for saves. It does close the concrete, reported case: this function used to recursively delete every child of appDataPath, including project-locks/, while a save in another process could still be inside withProjectFileLock's fn() -- deleting its lock out from under it and letting a third write recreate the directory and re-enter the save critical section before the original owner finished. Checked before touching anything, so a detected conflict aborts with zero data loss, never partial cleanup.
+    const locksRoot = await apis.join(appDataPath, PROJECT_LOCKS_DIR_NAME);
+    if (await apis.exists(locksRoot)) {
+      const activeLocks = await retryFs(() => apis.readDir(locksRoot));
+      if (activeLocks.length > 0) {
+        throw new Error(
+          'Factory reset cannot proceed while a project is being saved in another window or process.',
+        );
+      }
+    }
     if (await apis.exists(appDataPath)) {
       // QNBS-v3: keep the capability-scoped AppData root and remove only its contents.
       const entries = await retryFs(() => apis.readDir(appDataPath));

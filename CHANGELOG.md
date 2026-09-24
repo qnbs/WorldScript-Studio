@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Data integrity (#553):** the desktop filesystem save path now mutually excludes concurrent
   saves of the same project across OS processes (two app instances) via an atomic exclusive-create
-  sibling lock file (`<project.json>.lock`) held across the whole read-admit-writeback-replace
+  lock file (`project-locks/<projectId>.lock`) held across the whole read-admit-writeback-replace
   cycle, closing the TOCTOU gap between the prior generation-hash re-check and the atomic rename.
   Bounded retry only (3 attempts, short backoff), never an unbounded wait. Deliberately has no
   automatic stale-lock reclaim: every time-based or ownership-token reclaim strategy considered
@@ -22,20 +22,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matching the error message text — the real Tauri error always embeds the full lock path, so a
   substring match is spoofable by an ordinary project name containing "exist"; both `retryFs` and
   this classification now normalize the real Tauri invoke shape (a plain string, not a JS Error).
-  The lock payload is empty, verified against the pinned `tauri-plugin-fs@2.5.2` Rust source to
-  close (not just narrow) the window where a successful exclusive-create's later write step could
-  otherwise fail and orphan a partial lock. Lock release retries a transient failure and
-  diagnostically warns rather than silently swallowing a persistent one. The lock lives in a new
-  stable sibling directory (`project-locks/`), not inside `projects/<id>/` itself — that directory
-  can be renamed whole by project quarantine or removed whole by project deletion, either of which
-  would otherwise carry a currently-held lock away with it and let a second writer wrongly conclude
-  the path was free. Autosave now shows a distinct, truthful notification when blocked by another
-  instance's lock (hardcoded, not yet localized — proper i18n needs the same new key in all 19
-  locale sources, which alone saturates this PR's absolute file-count ceiling; tracked as an
-  explicit, disclosed follow-up), rather than the same generic "could not be saved" message as
-  every other failure cause, and no longer promises an automatic retry that nothing currently
-  schedules. No change to web/PWA (IndexedDB) persistence, which isn't exposed to this cross-process
-  race. PR #826.
+  A failed create whose path then checks as *not* occupied gets one bounded inline retry before its
+  error is treated as genuine and unrelated to contention — the lock we collided with may simply
+  have been released between our failed create and that check, a real interleaving under ordinary
+  two-window editing, not a contrived edge case; without the retry that resolved race surfaced as a
+  spurious permanent-looking failure instead of the immediate success it should have been. The lock
+  payload is empty, verified against the pinned `tauri-plugin-fs@2.5.2` Rust source to close (not
+  just narrow) the window where a successful exclusive-create's later write step could otherwise
+  fail and orphan a partial lock. Lock release retries a transient failure and diagnostically warns
+  rather than silently swallowing a persistent one. The lock lives in a new stable sibling directory
+  (`project-locks/`), not inside `projects/<id>/` itself — that directory can be renamed whole by
+  project quarantine or removed whole by project deletion, either of which would otherwise carry a
+  currently-held lock away with it and let a second writer wrongly conclude the path was free.
+  Factory reset is the same hazard by a third route — it used to recursively delete every child of
+  the app-data root, `project-locks/` included, while another process could still be mid-save;
+  factory reset now refuses (before deleting anything, so a refusal never leaves partial cleanup)
+  when any lock file is present, the same best-effort, not-fully-closable guard as the rest of this
+  lock (a save can still start in the gap between that check and the deletion that follows, and a
+  stale lock from a crashed writer blocks reset exactly like a genuinely active one until it is
+  removed out-of-band). Autosave, and now quitting or closing a window, all show a distinct,
+  truthful notification when blocked by another instance's lock (hardcoded, not yet localized —
+  proper i18n needs the same new key in all 19 locale sources, which alone saturates this PR's
+  absolute file-count ceiling; tracked as an explicit, disclosed follow-up), rather than the same
+  generic failure message as every other cause; quitting/closing still aborts exactly as before
+  (fail closed) rather than silently discarding an unsaved change, it just no longer does so with no
+  visible explanation. Autosave's notification no longer promises an automatic retry that nothing
+  currently schedules. No change to web/PWA (IndexedDB) persistence, which isn't exposed to this
+  cross-process race. PR #826.
 - **Dependency governance:** removed the temporary, version-scoped `minimumReleaseAgeExclude:
   qs@6.16.0` entry (added in #587) now that it has aged past the 7-day `minimumReleaseAge`
   quarantine floor; `AUDIT.md`'s `qs` override row updated to match. `nanoid@3.3.18`'s exclusion

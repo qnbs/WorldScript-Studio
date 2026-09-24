@@ -168,26 +168,48 @@ const LOCK_SUFFIX = '.lock';
 const LOCK_ACQUIRE_ATTEMPTS = 3;
 const LOCK_ACQUIRE_BACKOFF_MS = [200, 500];
 
+// QNBS-v3 (#553): the one name for the stable sibling directory that holds every project's lock file, shared by projectFsStore.ts (which creates locks under it) and factoryResetService.ts (which must check it before wiping app data) — a second, independently-typed copy of this string in the latter would be exactly the kind of drift-prone duplication already flagged once in this PR.
+export const PROJECT_LOCKS_DIR_NAME = 'project-locks';
+
 function lockPathFor(path: string): string {
   return `${path}${LOCK_SUFFIX}`;
 }
 
 // QNBS-v3: distinguishes genuine lock contention from an unrelated filesystem failure (permission denied, missing parent directory, disk full) by checking actual filesystem state after a failed create, never by pattern-matching the error's message text — the real Tauri error embeds the full lock path (e.g. a project titled "Existential Novel" makes the message contain "exist" regardless of cause), so any substring/keyword match on it is spoofable by ordinary user-chosen project names and would misclassify a real, unrelated, recoverable failure as contention.
+async function classifyFailedLockCreate(
+  apis: TauriApis,
+  lockPath: string,
+  error: unknown,
+): Promise<'contention' | 'unrelated'> {
+  // QNBS-v3: a failed create classifies as contention only if something now demonstrably occupies the path — whether it was already there or is our own attempt's partial artifact, treating either as "do not touch" is the safe default; a check that failed to even determine this propagates the original error rather than guessing.
+  let occupied: boolean;
+  try {
+    occupied = await apis.exists(lockPath);
+  } catch {
+    throw error;
+  }
+  return occupied ? 'contention' : 'unrelated';
+}
+
+// QNBS-v3 (#553): a bounded one-shot inline retry, not a loop — exists() coming back false right after a failed create does not prove the failure was unrelated to contention; the lock we just collided with may have been released by its owner's `finally` block in the instant between our failed create and this check, a real interleaving under ordinary two-window concurrent editing, not a contrived edge case. Immediately rethrowing that stale first error would surface a spurious permanent-looking failure for a path that is actually free again. One extra attempt closes that race: if the path really is free now, it succeeds; if the first failure truly was unrelated (permission denied, disk full, ...), this attempt fails the same way and *that* fresh error is what propagates, never the stale one. If the retry instead collides with a genuinely new lock, it is classified exactly like the first attempt — contention, handled by the caller's own bounded backoff loop — rather than being swallowed here.
 async function tryCreateLock(apis: TauriApis, lockPath: string): Promise<boolean> {
   try {
     // QNBS-v3: empty content, not just unread by anything — verified against the pinned tauri-plugin-fs@2.5.2 Rust source: write_file's create_new open() and its data write_all() are two separate steps, and a write_all failure after a successful open leaves the just-created file orphaned with no cleanup. write_all on an empty buffer never issues an OS write syscall at all (its loop condition is false immediately), so it cannot itself fail once open() has already succeeded — an empty payload therefore closes this gap rather than merely narrowing it, leaving only open()'s own already-proven-atomic create_new as a failure point.
     await apis.writeTextFile(lockPath, '', { createNew: true });
     return true;
-  } catch (error) {
-    // QNBS-v3: a failed create classifies as contention only if something now demonstrably occupies the path — whether it was already there or is our own attempt's partial artifact, treating either as "do not touch" is the safe default; a check that failed to even determine this propagates the original error rather than guessing.
-    let occupied: boolean;
-    try {
-      occupied = await apis.exists(lockPath);
-    } catch {
-      throw error;
+  } catch (firstError) {
+    if ((await classifyFailedLockCreate(apis, lockPath, firstError)) === 'contention') {
+      return false;
     }
-    if (occupied) return false;
-    throw error;
+    try {
+      await apis.writeTextFile(lockPath, '', { createNew: true });
+      return true;
+    } catch (secondError) {
+      if ((await classifyFailedLockCreate(apis, lockPath, secondError)) === 'contention') {
+        return false;
+      }
+      throw secondError;
+    }
   }
 }
 

@@ -246,8 +246,8 @@ describe('withProjectFileLock', () => {
     expect(mockLoggerWarn).not.toHaveBeenCalled();
   });
 
-  // QNBS-v3 (#553): a permission/disk-full/missing-directory failure must propagate as itself — never be silently retried and misreported as lock contention. Contention is now decided by checking actual filesystem state (apis.exists), not error-message text, so this fake's exists() correctly reports nothing at this path.
-  it('propagates a non-contention filesystem error immediately, without retrying or misreporting it', async () => {
+  // QNBS-v3 (#553): a permission/disk-full/missing-directory failure must propagate as itself — never be silently retried forever and misreported as lock contention. Contention is now decided by checking actual filesystem state (apis.exists), not error-message text, so this fake's exists() correctly reports nothing at this path. Exactly 2 attempts (the bounded inline retry below), not 1 — see "retries once inline..." below for why a lone attempt isn't enough to safely conclude an error is genuinely unrelated to contention.
+  it('propagates a non-contention filesystem error after one bounded inline retry, without misreporting it as contention', async () => {
     const apis = makeLockableApis();
     apis.writeTextFile = vi.fn().mockRejectedValue(new Error('EACCES: permission denied'));
     const fn = vi.fn();
@@ -256,7 +256,57 @@ describe('withProjectFileLock', () => {
       'permission denied',
     );
     expect(fn).not.toHaveBeenCalled();
-    expect(apis.writeTextFile).toHaveBeenCalledTimes(1);
+    expect(apis.writeTextFile).toHaveBeenCalledTimes(2);
+  });
+
+  // QNBS-v3 (#553): the transient-race finding from a fresh review of the prior wave — exists() coming back false right after a failed create does not prove the failure was unrelated to contention; the owner we collided with may have released between our failed create and this check. Proves that race is closed: the stale first failure is never thrown, and an immediate retry against the now-genuinely-free path succeeds instead.
+  it('retries once inline when the lock vanishes between a failed create and the contention check, then succeeds', async () => {
+    const apis = makeLockableApis();
+    apis.writeTextFile = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('AlreadyExists (os error 17)'))
+      .mockResolvedValueOnce(undefined);
+    apis.exists = vi.fn().mockResolvedValueOnce(false); // the collided-with lock is already gone
+
+    await expect(withProjectFileLock(apis, '/data/project.json', async () => 'done')).resolves.toBe(
+      'done',
+    );
+    expect(apis.writeTextFile).toHaveBeenCalledTimes(2);
+    expect(apis.exists).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3 (#553): the inline retry's own collision must not be swallowed as if it were the same unrelated failure — a fresh collision on the retry is genuine contention and must fall through to the caller's own bounded backoff loop, exactly like a first-attempt collision would.
+  it('classifies a fresh collision on the inline retry as contention, not as an unrelated error', async () => {
+    const apis = makeLockableApis();
+    apis.writeTextFile = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('AlreadyExists (os error 17)'))
+      .mockRejectedValueOnce(new Error('AlreadyExists (os error 17)'))
+      .mockResolvedValueOnce(undefined);
+    apis.exists = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    await expect(withProjectFileLock(apis, '/data/project.json', async () => 'done')).resolves.toBe(
+      'done',
+    );
+    // QNBS-v3: 3 create attempts total (1 + inline retry, both within the first outer attempt; the third is the outer loop's own second attempt after backoff) — never a raw, unclassified rejection escaping the second collision.
+    expect(apis.writeTextFile).toHaveBeenCalledTimes(3);
+    expect(apis.exists).toHaveBeenCalledTimes(2);
+  });
+
+  // QNBS-v3 (#553): if both the original and the retried attempt fail for a genuine, still-current reason, the fresh (second) error must propagate — never the stale first one, which could describe a condition that no longer holds.
+  it('propagates the fresh retry error, never the stale first error, when both attempts fail for an unrelated reason', async () => {
+    const apis = makeLockableApis();
+    apis.writeTextFile = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('EIO: device error (first attempt)'))
+      .mockRejectedValueOnce(new Error('EIO: device error (second attempt)'));
+    apis.exists = vi.fn().mockResolvedValue(false);
+    const fn = vi.fn();
+
+    await expect(withProjectFileLock(apis, '/data/project.json', fn)).rejects.toThrow(
+      'second attempt',
+    );
+    expect(fn).not.toHaveBeenCalled();
   });
 
   // QNBS-v3 (#553): the adversarial case that defeated message-substring matching — a project titled so its own path contains "exist" makes the real Tauri error message contain "exist" regardless of cause. Proves a genuine permission failure on such a path still propagates as itself rather than being misclassified as contention, now that classification checks filesystem state instead of the message.

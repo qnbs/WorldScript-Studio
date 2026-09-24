@@ -26,6 +26,8 @@ vi.mock('../../services/fs/fsCore', () => ({
   loadTauriApis: (...args: unknown[]) => mockLoadTauriApis(...args),
   // QNBS-v3: pass-through — retry/backoff behavior is covered by fsCore.test.ts directly.
   retryFs: (fn: () => Promise<unknown>) => fn(),
+  // QNBS-v3 (#553): the real, exported name — not a test-local restatement — so this suite exercises the same constant clearTauriAppData actually imports, never silently drifting from it.
+  PROJECT_LOCKS_DIR_NAME: 'project-locks',
 }));
 // QNBS-v3: the gate's own registry/generation behavior is covered directly by idbResetGate.test.ts — this suite only verifies factoryResetService calls begin/end at the right points.
 vi.mock('../../services/storage/idbResetGate', () => ({
@@ -472,7 +474,8 @@ describe('wipeAllAppData', () => {
       const joinMock = vi.fn((base: string, name: string) => Promise.resolve(`${base}/${name}`));
       mockLoadTauriApis.mockResolvedValue({
         appDataDir: vi.fn().mockResolvedValue('/app/data'),
-        exists: vi.fn().mockResolvedValue(true),
+        // QNBS-v3 (#553): path-aware, not a single fixed value — this exercises the same appDataPath existence the removal loop below always assumed, while the new project-locks/ guard's own check on a *different* path (/app/data/project-locks) correctly finds nothing there.
+        exists: vi.fn((path: string) => Promise.resolve(path === '/app/data')),
         readDir: vi
           .fn()
           .mockResolvedValue([{ name: 'projects' }, { name: undefined }, { name: 'keys.bin' }]),
@@ -491,7 +494,7 @@ describe('wipeAllAppData', () => {
     it('rejects and never reloads when every AppData entry fails to remove', async () => {
       mockLoadTauriApis.mockResolvedValue({
         appDataDir: vi.fn().mockResolvedValue('/app/data'),
-        exists: vi.fn().mockResolvedValue(true),
+        exists: vi.fn((path: string) => Promise.resolve(path === '/app/data')),
         readDir: vi.fn().mockResolvedValue([{ name: 'locked-file' }]),
         join: vi.fn((base: string, name: string) => Promise.resolve(`${base}/${name}`)),
         remove: vi.fn().mockRejectedValue(new Error('EBUSY')),
@@ -534,6 +537,56 @@ describe('wipeAllAppData', () => {
       }
 
       expect(reloadMock).not.toHaveBeenCalled();
+    });
+
+    // QNBS-v3 (#553): a fresh review's finding — this function used to recursively delete every child of appDataPath, including project-locks/, while a save in another process could still be inside withProjectFileLock's fn(). Proves the guard refuses before touching anything, so a detected conflict never leaves partial cleanup, and that a merely-empty project-locks/ (no active lock, just the directory itself) does not block a normal reset.
+    it('refuses to clear AppData, deleting nothing, when an active project lock is present', async () => {
+      const removeMock = vi.fn().mockResolvedValue(undefined);
+      mockLoadTauriApis.mockResolvedValue({
+        appDataDir: vi.fn().mockResolvedValue('/app/data'),
+        exists: vi.fn((path: string) =>
+          Promise.resolve(path === '/app/data' || path === '/app/data/project-locks'),
+        ),
+        readDir: vi.fn((path: string) =>
+          Promise.resolve(
+            path === '/app/data/project-locks' ? [{ name: 'p1.lock' }] : [{ name: 'projects' }],
+          ),
+        ),
+        join: vi.fn((base: string, name: string) => Promise.resolve(`${base}/${name}`)),
+        remove: removeMock,
+      });
+
+      vi.useFakeTimers();
+      try {
+        await expect(wipeAllAppData()).rejects.toThrow(
+          'Factory reset could not clear desktop data',
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(removeMock).not.toHaveBeenCalled();
+      expect(reloadMock).not.toHaveBeenCalled();
+    });
+
+    it('proceeds with a normal reset when the project-locks directory exists but holds no active lock', async () => {
+      const removeMock = vi.fn().mockResolvedValue(undefined);
+      mockLoadTauriApis.mockResolvedValue({
+        appDataDir: vi.fn().mockResolvedValue('/app/data'),
+        exists: vi.fn((path: string) =>
+          Promise.resolve(path === '/app/data' || path === '/app/data/project-locks'),
+        ),
+        readDir: vi.fn((path: string) =>
+          Promise.resolve(path === '/app/data/project-locks' ? [] : [{ name: 'projects' }]),
+        ),
+        join: vi.fn((base: string, name: string) => Promise.resolve(`${base}/${name}`)),
+        remove: removeMock,
+      });
+
+      await runWipe();
+
+      expect(removeMock).toHaveBeenCalledWith('/app/data/projects', { recursive: true });
+      expect(reloadMock).toHaveBeenCalledTimes(1);
     });
   });
 });
