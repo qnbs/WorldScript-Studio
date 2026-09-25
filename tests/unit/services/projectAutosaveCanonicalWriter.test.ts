@@ -520,6 +520,51 @@ describe('saveAutosaveSnapshotCanonical replacement (#553 a10)', () => {
     expect(Object.keys((await readProjectRecord(authority)) as object)).toEqual(['data']);
   });
 
+  it('a restored replacement keeps the snapshot carrier’s own data and applies the editor edit', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: predecessorA });
+    const carrier = JSON.stringify({
+      schemaVersion: 1,
+      id: 'default',
+      title: 'Snapshot B',
+      snapshotOnly: { kept: true },
+      characters: { ids: [], entities: {} },
+      worlds: { ids: [], entities: {} },
+    });
+
+    const result = await saveAutosaveSnapshotCanonical(
+      snapshot({
+        title: 'Snapshot B, edited',
+        characters: { ids: [], entities: {} },
+        worlds: { ids: [], entities: {} },
+      }),
+      authority,
+      { replacement: true, replacementRaw: carrier },
+    );
+
+    expect(result.status).toBe('SAVED');
+    const { raw } = await storedProject(authority);
+    expect(JSON.parse(raw)).toMatchObject({
+      title: 'Snapshot B, edited',
+      snapshotOnly: { kept: true },
+    });
+    expect(raw).not.toContain('A-only');
+  });
+
+  it('fails closed when the restore carrier cannot take the editor edit', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: predecessorA });
+    const before = await readProjectRecord(authority);
+
+    const result = await saveAutosaveSnapshotCanonical(snapshot({ title: 'B' }), authority, {
+      replacement: true,
+      replacementRaw: '{"title":',
+    });
+
+    expect(result.status).toBe('VERIFICATION_FAILED');
+    expect(await readProjectRecord(authority)).toEqual(before);
+  });
+
   it('a replacement over a legacy record migrates, then replaces without the legacy opaque field', async () => {
     const authority = new IdbProjectCanonicalAuthority();
     await seedProjectRecord(authority, { data: legacyRecordPayload() });

@@ -29,6 +29,14 @@ const BOOT_EPOCH = toEditorReplacementEpoch(0);
 let editorEpoch: EditorReplacementEpoch = BOOT_EPOCH;
 let baseline: PersistedBaseline | null = null;
 
+interface RestoreCarrier {
+  readonly targetStorageId: string;
+  readonly epoch: EditorReplacementEpoch;
+  readonly raw: string;
+}
+
+let restoreCarrier: RestoreCarrier | null = null;
+
 /** Called by the project-change listener whenever `present.generation` changes. */
 export function noteEditorEpoch(epoch: EditorReplacementEpoch): void {
   editorEpoch = epoch;
@@ -47,11 +55,43 @@ export function notePersistedEditorEpoch(
 ): void {
   const targetStorageId = targetStorageIdOf(project);
   baseline = targetStorageId === null ? null : { targetStorageId, authority, epoch };
+  // QNBS-v3 (#553 a5): only the save of the carrier's own target and epoch consumes it — an older save that finishes after a restore must not drop the restore's carrier.
+  if (
+    restoreCarrier !== null &&
+    restoreCarrier.targetStorageId === targetStorageId &&
+    restoreCarrier.epoch === epoch
+  ) {
+    restoreCarrier = null;
+  }
+}
+
+/** Binds a restore's admitted text to the project and editor epoch the restore produced; called at the fulfilled boundary only. */
+export function bindRestoreCarrier(
+  project: unknown,
+  epoch: EditorReplacementEpoch,
+  raw: string,
+): void {
+  const targetStorageId = targetStorageIdOf(project);
+  restoreCarrier = targetStorageId === null ? null : { targetStorageId, epoch, raw };
+}
+
+/**
+ * The restored text the editor's `project` at `epoch` starts from, or null — a carrier bound to
+ * another target or epoch (a later edit-replacing action, a switch, an undo across the restore) is
+ * never reused.
+ */
+export function restoreCarrierFor(
+  project: unknown,
+  epoch: EditorReplacementEpoch = editorEpoch,
+): string | null {
+  if (!restoreCarrier || restoreCarrier.epoch !== epoch) return null;
+  return restoreCarrier.targetStorageId === targetStorageIdOf(project) ? restoreCarrier.raw : null;
 }
 
 /** Drops the baseline when the storage authority changes under the editor (reset, rekey, re-init). */
 export function invalidatePersistedEditorEpoch(): void {
   baseline = null;
+  restoreCarrier = null;
 }
 
 /**
@@ -80,4 +120,5 @@ export function _editorEpochForTest(): EditorReplacementEpoch {
 export function _resetEditorProjectGenerationForTest(): void {
   editorEpoch = BOOT_EPOCH;
   baseline = null;
+  restoreCarrier = null;
 }

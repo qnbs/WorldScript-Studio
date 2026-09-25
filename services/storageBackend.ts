@@ -102,6 +102,14 @@ export type CanonicalProjectRawResult =
 // QNBS-v3 (#553 a10): replacement = the editable project was replaced wholesale since storage last received it; write it as a fresh canonical document, never an edit of the predecessor's text.
 export interface SaveProjectOptions {
   replacement?: boolean;
+  /** The admitted text a restored project starts from; a replacement overlays the editor's edits onto it instead of writing a fresh document (#553 a5). */
+  replacementRaw?: string;
+}
+
+/** A restore's admitted project and the exact canonical text it was admitted from (#553 a5). */
+export interface RestoredSnapshot<Project = unknown> {
+  project: Project;
+  raw: string;
 }
 
 export interface StorageBackend {
@@ -149,7 +157,10 @@ export interface StorageBackend {
   saveSnapshotText(snapshotLabel: string, projectJson: string): Promise<number>;
   getSnapshotData(snapshotId: number): Promise<unknown>;
   // QNBS-v3: filesystem restore validates this pre-read target; other backends retain their existing snapshot semantics.
-  restoreSnapshot?(snapshotId: number, currentProject: SnapshotRestoreTarget): Promise<unknown>;
+  restoreSnapshot?(
+    snapshotId: number,
+    currentProject: SnapshotRestoreTarget,
+  ): Promise<RestoredSnapshot>;
   listSnapshots(): Promise<ProjectSnapshot[]>;
   deleteSnapshot(snapshotId: number): Promise<void>;
 

@@ -176,25 +176,35 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
   return result as ProjectData;
 });
 
-export const restoreSnapshotThunk = createAsyncThunk(
-  'project/restoreSnapshot',
-  async (snapshotId: number, thunkApi) => {
-    // QNBS-v3: capture ownership before snapshot I/O so payload contents cannot change the restore target.
-    const currentSlice = (thunkApi.getState() as RootState).project?.present;
-    if (!currentSlice?.data) {
-      throw new Error('Cannot restore a snapshot without an active project.');
-    }
-    const capturedTargetIdentity = getProjectTargetIdentity(currentSlice);
-    const restored = await storageService.restoreSnapshot(snapshotId, currentSlice.data);
-    const liveSlice = (thunkApi.getState() as RootState).project?.present;
-    if (!identityUnchanged(capturedTargetIdentity, getProjectTargetIdentity(liveSlice))) {
-      throw new Error('Cannot restore a snapshot after the active project changed.');
-    }
-    // QNBS-v3 (#553 §2.8): a snapshot's stored text may use the portable array form for characters/worlds; normalize through the same boundary bootstrap uses before it reaches the entity adapters.
-    const normalized = getPersistedProjectPayload({ data: restored as ProjectData });
-    if (!normalized) {
-      throw new Error('Cannot restore a snapshot whose characters or worlds are malformed.');
-    }
-    return normalized;
-  },
-);
+/** Carried on the fulfilled action only, so a restore discarded before it can never leave a carrier behind (#553 a5). */
+export interface RestoreSnapshotFulfilledMeta {
+  restoreCarrier: string;
+}
+
+export const restoreSnapshotThunk = createAsyncThunk<
+  ProjectData,
+  number,
+  { fulfilledMeta: RestoreSnapshotFulfilledMeta }
+>('project/restoreSnapshot', async (snapshotId, thunkApi) => {
+  // QNBS-v3: capture ownership before snapshot I/O so payload contents cannot change the restore target.
+  const currentSlice = (thunkApi.getState() as RootState).project?.present;
+  if (!currentSlice?.data) {
+    throw new Error('Cannot restore a snapshot without an active project.');
+  }
+  const capturedTargetIdentity = getProjectTargetIdentity(currentSlice);
+  const { project: restored, raw } = await storageService.restoreSnapshot(
+    snapshotId,
+    currentSlice.data,
+  );
+  const liveSlice = (thunkApi.getState() as RootState).project?.present;
+  if (!identityUnchanged(capturedTargetIdentity, getProjectTargetIdentity(liveSlice))) {
+    throw new Error('Cannot restore a snapshot after the active project changed.');
+  }
+  // QNBS-v3 (#553 §2.8): a snapshot's stored text may use the portable array form for characters/worlds; normalize through the same boundary bootstrap uses before it reaches the entity adapters.
+  const normalized = getPersistedProjectPayload({ data: restored as ProjectData });
+  if (!normalized) {
+    throw new Error('Cannot restore a snapshot whose characters or worlds are malformed.');
+  }
+  // QNBS-v3 (#553 a5): the exact admitted text leaves the thunk only with the fulfilled action, after the live identity check; the listener binds it once the reducer assigned the new editor epoch.
+  return thunkApi.fulfillWithValue(normalized, { restoreCarrier: raw });
+});

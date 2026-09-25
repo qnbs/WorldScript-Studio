@@ -26,6 +26,8 @@ import writerReducer, { writerActions } from '../../features/writer/writerSlice'
 import {
   _editorEpochForTest,
   _resetEditorProjectGenerationForTest,
+  restoreCarrierFor,
+  toEditorReplacementEpoch,
 } from '../../services/editorProjectGeneration';
 import { ProjectFileLockedError, StaleProjectWriterError } from '../../services/fs/fsCore';
 import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionService';
@@ -503,15 +505,33 @@ describe('auto-save project listener', () => {
     store.dispatch({
       type: restoreSnapshotThunk.fulfilled.type,
       payload: { ...before.data, title: 'Restored B' },
+      meta: { restoreCarrier: '{"exact":9007199254740993}' },
     });
     await vi.advanceTimersByTimeAsync(1500);
 
     const present = store.getState().project.present;
     expect(present.generation).not.toBe(before.generation);
+    // QNBS-v3 (#553 a5): bound to the restored project at the epoch the reducer assigned, not before.
+    const epoch = toEditorReplacementEpoch(present.generation);
+    expect(restoreCarrierFor(present.data, epoch)).toBe('{"exact":9007199254740993}');
+    expect(restoreCarrierFor(present.data, toEditorReplacementEpoch(before.generation))).toBeNull();
     expect(mockPersistProjectAutosaveSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({ id: before.data.id, title: 'Restored B' }),
       present.generation,
     );
+  });
+
+  it('leaves no restore carrier behind for a rejected restore', async () => {
+    const store = makeFullStore();
+    store.dispatch({
+      type: restoreSnapshotThunk.rejected.type,
+      error: { message: 'identity changed' },
+      meta: { restoreCarrier: '{"leak":true}' },
+    });
+    const present = store.getState().project.present;
+    expect(
+      restoreCarrierFor(present.data, toEditorReplacementEpoch(present.generation)),
+    ).toBeNull();
   });
 
   // QNBS-v3: enqueue() resolving already clears the coordinator's own active slot, so a reset starting right after is invisible to wipeAllAppData()'s drain -- the post-save writes need their own re-check.
