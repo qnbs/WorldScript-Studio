@@ -17,9 +17,17 @@ vi.mock('../../../services/storageService', () => ({
   },
 }));
 
-vi.mock('../../../services/projectImportSchema', () => ({
-  parseImportedProjectJson: vi.fn(),
-}));
+vi.mock('../../../services/projectImportSchema', () => {
+  const parseImportedProjectJson = vi.fn();
+  return {
+    parseImportedProjectJson,
+    // QNBS-v3 (#553 a4): the thunk reads projection and admitted text together; tests keep scripting the projection.
+    parseImportedProjectDocument: (text: string) => ({
+      project: parseImportedProjectJson(text),
+      raw: text,
+    }),
+  };
+});
 
 import featureFlagsReducer from '../../../features/featureFlags/featureFlagsSlice';
 import { charactersAdapter, worldsAdapter } from '../../../features/project/adapters';
@@ -304,6 +312,29 @@ describe('importProjectThunk', () => {
     const action = await store.dispatch(importProjectThunk(file));
 
     expect(action.type).toBe('project/importProject/fulfilled');
+  });
+
+  // QNBS-v3 (#553 a4): the admitted text travels only on the fulfilled action, without inline image copies.
+  it('carries the admitted import text on the fulfilled action, inline images removed', async () => {
+    const withImage = {
+      ...minimalProject,
+      characters: [{ id: 'c1', name: 'Ada', avatarBase64: 'QUJD' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(withImage as never);
+    // Admitted import text is always CURRENT (older documents are migrated on admission).
+    const text = JSON.stringify({ ...withImage, schemaVersion: 1 }).replace(
+      /}$/,
+      ',"opaque":9007199254740993}',
+    );
+
+    const action = await makeStore().dispatch(
+      importProjectThunk(new File([text], 'novel.json', { type: 'application/json' })),
+    );
+
+    const carrier = (action as unknown as { meta: { replacementCarrier: string | null } }).meta
+      .replacementCarrier;
+    expect(carrier).toContain('"opaque":9007199254740993');
+    expect(carrier).not.toContain('avatarBase64');
   });
 
   it('handles array-format characters without avatarBase64', async () => {

@@ -459,9 +459,21 @@ export function admitImportedProjectJson(
 
 // QNBS-v3: route file imports through the canonical admission boundary before exposing editable data.
 export function parseImportedProjectJson(text: string): ImportedProjectJson {
+  return parseImportedProjectDocument(text).project;
+}
+
+/** An admitted import: the editable projection plus the admitted portable text it came from (#553 a4). */
+export interface ImportedProjectDocument {
+  project: ImportedProjectJson;
+  raw: string;
+}
+
+// QNBS-v3 (#553 a4): the admitted canonical text is kept next to the projection, so the first save of an import can start from it instead of a re-serialization of the parsed projection.
+export function parseImportedProjectDocument(text: string): ImportedProjectDocument {
   const admission = admitImportedProjectJson(text);
-  if (admission.canonical?.projection !== null && admission.canonical?.projection !== undefined) {
-    return admission.canonical.projection;
+  const canonical = admission.canonical;
+  if (canonical?.projection !== null && canonical?.projection !== undefined) {
+    return { project: canonical.projection, raw: canonical.raw };
   }
   // QNBS-v3: distinguish a valid source refused by portable admission from malformed input.
   const fallbackError =
