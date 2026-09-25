@@ -249,18 +249,74 @@ describe('libraryBackupService snapshot egress (#553 a11)', () => {
 
   it('records one unexportable snapshot as not exported without aborting the backup', async () => {
     const { storageService } = await import('../../services/storageService');
-    vi.mocked(storageService.listSnapshots).mockResolvedValue([snap(3), snap(4), snap(5)]);
+    vi.mocked(storageService.listSnapshots).mockResolvedValue([
+      snap(3),
+      snap(4),
+      snap(6),
+      snap(7),
+      snap(5),
+    ]);
     vi.mocked(storageService.getSnapshotText).mockImplementation(async (id: number) => {
       if (id === 3) return '{"schemaVersion":99,"title":"Future"}';
       if (id === 4) throw new Error('snapshot read failed');
+      if (id === 6) return null;
+      if (id === 7) return '[1,2]';
       return exactSnapshotText;
     });
     const { collectLibraryBackupPayload } = await import('../../services/libraryBackupService');
 
     const payload = await collectLibraryBackupPayload();
 
-    expect(payload.snapshots.map((s) => s.dataRaw === null)).toEqual([true, true, false]);
-    expect(payload.snapshots.map((s) => s.name)).toEqual(['s3', 's4', 's5']);
+    expect(payload.snapshots.map((s) => s.dataRaw === null)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+    ]);
+    expect(payload.snapshots.map((s) => s.data === null)).toEqual([true, true, true, true, false]);
+    expect(payload.snapshots.map((s) => s.name)).toEqual(['s3', 's4', 's6', 's7', 's5']);
     expect(payload.projects).toHaveLength(1);
+  });
+
+  it('decodes an archive written before snapshot carriers existed without inventing one', async () => {
+    const { storageService } = await import('../../services/storageService');
+    vi.mocked(storageService.getStorageBackendKind).mockResolvedValue('indexeddb');
+    vi.mocked(storageService.listSnapshots).mockResolvedValue([]);
+    const JSZip = (await import('jszip')).default;
+    const legacyPayload = {
+      format: LIBRARY_BACKUP_FORMAT,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      storageBackend: 'indexeddb',
+      settings: null,
+      projects: [],
+      snapshots: [{ id: 1, date: 'd', name: 'old', wordCount: 0, data: { title: 'Old' } }],
+    };
+    const inner = new JSZip();
+    inner.file('payload.json', JSON.stringify(legacyPayload));
+    const innerBytes = await inner.generateAsync({ type: 'uint8array' });
+    const { salt, iv, ciphertext } = await encryptLibraryInnerBytes(innerBytes, 'pw-old');
+    const outer = new JSZip();
+    const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u));
+    outer.file(
+      'META.json',
+      JSON.stringify({
+        format: LIBRARY_BACKUP_FORMAT,
+        kdf: 'PBKDF2-SHA256',
+        iterations: 600000,
+        saltBase64: b64(salt),
+        ivBase64: b64(iv),
+        cipher: 'AES-GCM-256',
+      }),
+    );
+    outer.file('vault.bin', ciphertext);
+
+    const parsed = await decryptLibraryZipBlob(
+      await outer.generateAsync({ type: 'blob' }),
+      'pw-old',
+    );
+
+    expect(parsed.snapshots[0]?.data).toEqual({ title: 'Old' });
+    expect(parsed.snapshots[0]).not.toHaveProperty('dataRaw');
   });
 });

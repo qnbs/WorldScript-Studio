@@ -46,8 +46,12 @@ export interface LibrarySnapshotEntry {
   wordCount: number;
   /** Readable parsed view of `dataRaw` (portable); null when the snapshot could not be exported. */
   data: unknown;
-  /** QNBS-v3 (#553 a11): the snapshot's portable stored carrier — exact text on the filesystem, the stored structured value in IndexedDB; authoritative over `data`. */
-  dataRaw: string | null;
+  /**
+   * QNBS-v3 (#553 a11): the snapshot's portable stored carrier — exact text on the filesystem, the
+   * stored structured value in IndexedDB; authoritative over `data`. Absent in archives written
+   * before it existed: those carry only `data`, which is never promoted to a raw carrier.
+   */
+  dataRaw?: string | null;
 }
 
 // QNBS-v3 (#553 a11): one unreadable or unadmittable historical snapshot is recorded as not exported instead of aborting the whole library backup.
@@ -61,7 +65,7 @@ async function collectSnapshotEntry(
   } catch (error) {
     logger.warn('collectLibraryBackupPayload: skipping unexportable snapshot', {
       snapshotId: snapshot.id,
-      error: error instanceof Error ? error.message : String(error),
+      error: String(error),
     });
     return { ...snapshot, data: null, dataRaw: null };
   }
