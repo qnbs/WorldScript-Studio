@@ -2341,6 +2341,43 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
       expect(fake.text.has(PROJECT_FILE)).toBe(true);
     });
 
+    it('makes a delete take its project and routed locks in the same sorted order as asset writes', async () => {
+      await store.saveProject({ ...base, id: 'zeta', title: 'Zeta' } as never);
+      withPolicy(store, 'zeta', 'legacy', true);
+      const originalWrite = fake.apis.writeTextFile;
+      const lockOrder: string[] = [];
+      fake.apis.writeTextFile = (path, content, opts) => {
+        if (path.startsWith('/app/project-locks/')) lockOrder.push(path);
+        return originalWrite(path, content, opts);
+      };
+
+      await store.deleteProject('zeta');
+
+      expect(lockOrder).toEqual(['/app/project-locks/legacy.lock', '/app/project-locks/zeta.lock']);
+    });
+
+    it('locks the fallback directory an unusable project ID actually writes to', async () => {
+      await fake.apis.mkdir('/app/project-locks', { recursive: true });
+      await fake.apis.writeTextFile('/app/project-locks/project.lock', 'held by a delete');
+
+      await expect(
+        new FsProjectStore().saveStoryCodex({ projectId: '***', entries: [] } as never),
+      ).rejects.toBeInstanceOf(ProjectFileLockedError);
+      expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+    });
+
+    it('reports a partial delete-all instead of resolving while binder files remain', async () => {
+      await store.saveProject(base as never);
+      await store.saveBinderAsset('p1', 'a1', new ArrayBuffer(3), meta);
+      await store.saveBinderAsset('p1', 'a2', new ArrayBuffer(3), meta);
+      const originalRemove = fake.apis.remove;
+      fake.apis.remove = (path, opts) =>
+        path.endsWith('a1.bin') ? Promise.reject(new Error('EACCES')) : originalRemove(path, opts);
+
+      await expect(store.deleteAllBinderAssetsForProject('p1')).rejects.toThrow('EACCES');
+      expect(await store.listBinderAssetIds('p1')).toEqual(['a1']);
+    });
+
     it('lets the refused window write assets again after reloading', async () => {
       const [windowA, windowB] = await twoWindowsLoadedAtG0();
       await windowA.saveProject({ ...base, title: 'Changed by A' } as never);

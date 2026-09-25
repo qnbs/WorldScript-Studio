@@ -403,9 +403,12 @@ export class FsProjectStore extends FsAssetStore {
     projectIds: readonly string[],
     fn: () => Promise<T>,
   ): Promise<T> {
+    // QNBS-v3 (#553): same fallback the binder/codex path builders apply, so an unusable ID locks the projects/project directory it actually writes.
     const safeIds = [
-      ...new Set(projectIds.map((id) => projectPathSegment(id)).filter((id): id is string => !!id)),
-    ].sort();
+      ...new Set(projectIds.map((id) => projectPathSegment(sanitizePathSegment(id, 'project')))),
+    ]
+      .filter((id): id is string => !!id)
+      .sort();
     if (safeIds.length === 0) return fn();
     const apis = await this.getApis();
     const lockAndRun = async (index: number): Promise<T> => {
@@ -1347,9 +1350,7 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   async deleteProject(projectId: string): Promise<void> {
-    return this.withLegacyRoutingOperation(() =>
-      this.withProjectLockFor(projectId, () => this.deleteProjectUnlocked(projectId)),
-    );
+    return this.withLegacyRoutingOperation(() => this.deleteProjectUnlocked(projectId));
   }
 
   private async deleteProjectUnlocked(projectId: string): Promise<void> {
@@ -1360,27 +1361,28 @@ export class FsProjectStore extends FsAssetStore {
     const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
 
     // QNBS-v3: uncertain existence is a typed retryable deletion failure, never permission to clean up.
-    let projectExists: boolean;
-    try {
-      projectExists = await apis.exists(projectPath);
-    } catch (error) {
-      logger.error('Failed to inspect project existence before deletion', {
-        projectId: safeProjectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw new ProjectDeleteError('identity-inspection-failed');
-    }
-    if (projectExists) {
+    const probeProjectExists = async (): Promise<boolean> => {
+      try {
+        return await apis.exists(projectPath);
+      } catch (error) {
+        logger.error('Failed to inspect project existence before deletion', {
+          projectId: safeProjectId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw new ProjectDeleteError('identity-inspection-failed');
+      }
+    };
+    // QNBS-v3 (#553): read-only hydration runs before locking so the project and every routed legacy directory it empties are locked in one sorted acquisition — the order fenced asset writes use — instead of logical-first, which could invert against them.
+    if (await probeProjectExists()) {
       await this.hydrateLegacyPolicyForDeletion(safeProjectId, projectPath, apis, appDataPath);
     }
-
-    // QNBS-v3 (#553): the project lock is already held; routed legacy directories this delete also empties are locked too, once hydration has made the routes known.
-    const routedLegacyIds = [
+    const lockIds = [
+      safeProjectId,
       this.legacyBinderProjectId(safeProjectId),
       this.legacyCodexProjectId(safeProjectId),
-    ].filter((id): id is string => id !== null && projectPathSegment(id) !== safeProjectId);
-    await this.withProjectLocks(routedLegacyIds, () =>
-      this.removeProjectDataLocked(safeProjectId, projectPath, projectExists, apis),
+    ].filter((id): id is string => id !== null);
+    await this.withProjectLocks(lockIds, async () =>
+      this.removeProjectDataLocked(safeProjectId, projectPath, await probeProjectExists(), apis),
     );
     this.verifiedLegacyProjectDirectories.delete(safeProjectId);
     this.clearLegacyAdmissionForSource(safeProjectId);

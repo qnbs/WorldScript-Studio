@@ -366,15 +366,13 @@ export class FsAssetStore extends FsSnapshotStore {
     await this.withAuxiliaryWriteOperation(
       async () => {
         const ids = await this.listBinderAssetIdsUnlocked(projectId);
-        await Promise.all(
-          ids.map(async (id) => {
-            try {
-              await this.deleteBinderAssetStrict(projectId, id);
-            } catch (error) {
-              logger.warn('deleteBinderAsset failed:', error);
-            }
-          }),
+        const results = await Promise.allSettled(
+          ids.map((id) => this.deleteBinderAssetStrict(projectId, id)),
         );
+        const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+        for (const failure of failures) logger.warn('deleteBinderAsset failed:', failure.reason);
+        // QNBS-v3 (#553): every asset is still attempted, but a partial cleanup must not report success while files remain.
+        if (failures.length > 0) throw failures[0]?.reason;
       },
       projectId,
       () =>
