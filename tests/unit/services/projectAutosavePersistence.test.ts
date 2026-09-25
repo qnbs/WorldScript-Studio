@@ -43,7 +43,9 @@ vi.mock('../../../services/projectAutosaveCanonicalWriter', () => ({
 
 import {
   _resetEditorProjectGenerationForTest,
+  bindRestoreCarrier,
   isReplacementPending,
+  restoreCarrierFor,
   toEditorReplacementEpoch,
 } from '../../../services/editorProjectGeneration';
 import { StaleProjectWriterError } from '../../../services/fs/fsCore';
@@ -168,5 +170,43 @@ describe('persistProjectAutosaveSnapshot replacement baseline (#553 a10)', () =>
     );
     expect(h.saveProject).toHaveBeenCalledWith({ data: snapshot }, { replacement: true });
     expect(isReplacementPending(snapshot, 'fs', epoch(1))).toBe(true);
+  });
+
+  it('passes a restore carrier bound to this target and epoch with the replacement, then drops it', async () => {
+    bindRestoreCarrier(snapshot, epoch(1), '{"carrier":true}');
+    await persistProjectAutosaveSnapshot(snapshot, epoch(1));
+    expect(h.saveAutosaveSnapshotCanonical).toHaveBeenLastCalledWith(snapshot, {
+      replacement: true,
+      replacementRaw: '{"carrier":true}',
+    });
+    expect(restoreCarrierFor(snapshot, epoch(1))).toBeNull();
+  });
+
+  it('keeps the carrier after a failed save so the retry still writes the restored text', async () => {
+    bindRestoreCarrier(snapshot, epoch(1), '{"carrier":true}');
+    h.saveAutosaveSnapshotCanonical.mockResolvedValueOnce({ status: 'CONFLICT' });
+    await expect(persistProjectAutosaveSnapshot(snapshot, epoch(1))).rejects.toThrow();
+    expect(restoreCarrierFor(snapshot, epoch(1))).toBe('{"carrier":true}');
+  });
+
+  it.each([
+    ['a later epoch (reset/import after the restore, or an undo across it)', snapshot, 2],
+    ['another target (switch or Safe-Session rekey)', { ...snapshot, id: 'other' }, 1],
+  ])('never uses a carrier bound to %s', async (_label, project, at) => {
+    bindRestoreCarrier(snapshot, epoch(1), '{"carrier":true}');
+    await persistProjectAutosaveSnapshot(project as ProjectData, epoch(at));
+    expect(h.saveAutosaveSnapshotCanonical).toHaveBeenLastCalledWith(project, {
+      replacement: true,
+    });
+  });
+
+  it('passes the carrier to the desktop backend as well', async () => {
+    h.isTauriRuntime.mockReturnValue(true);
+    bindRestoreCarrier(snapshot, epoch(1), '{"carrier":true}');
+    await persistProjectAutosaveSnapshot(snapshot, epoch(1));
+    expect(h.saveProject).toHaveBeenCalledWith(
+      { data: snapshot },
+      { replacement: true, replacementRaw: '{"carrier":true}' },
+    );
   });
 });

@@ -6,6 +6,7 @@ import type {
   ImageDeleteAdmission,
   ImageWriteAdmission,
   ProjectQuarantineResult,
+  RestoredSnapshot,
   SaveProjectInput,
   SaveProjectOptions,
   SnapshotRestoreTarget,
@@ -256,12 +257,20 @@ class StorageManager {
   }
 
   // QNBS-v3: filesystem backends receive the pre-read target; a backend without its own restore authority (IndexedDB) gets the same canonical admission and owner check here, never an unchecked stored object (#553 §2.8).
-  async restoreSnapshot(id: number, currentProject: SnapshotRestoreTarget): Promise<unknown> {
+  async restoreSnapshot(
+    id: number,
+    currentProject: SnapshotRestoreTarget,
+  ): Promise<RestoredSnapshot> {
     const backend = await this.getBackend();
     if (backend.restoreSnapshot) {
       return backend.restoreSnapshot(id, currentProject);
     }
-    return admitStructuredSnapshotRestore(await backend.getSnapshotData(id), currentProject);
+    // QNBS-v3 (#553 a5): IndexedDB holds a structured snapshot, so its admitted CURRENT object serialized is the whole carrier.
+    const project = admitStructuredSnapshotRestore(
+      await backend.getSnapshotData(id),
+      currentProject,
+    );
+    return { project, raw: JSON.stringify(project) };
   }
 
   async listSnapshots(): Promise<ProjectSnapshot[]> {

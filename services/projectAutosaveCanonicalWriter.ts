@@ -2,7 +2,12 @@ import { CURRENT_PROJECT_SCHEMA_VERSION } from '../features/project/projectSchem
 import type { ProjectData } from '../features/project/projectState';
 import type { StoryProject } from '../types';
 import { buildAutosaveOwnedProjectEdit } from './projectAutosaveEditBridge';
-import type { CanonicalProjectRawText, ProjectSourceGeneration } from './projectDocumentWriteback';
+import {
+  type CanonicalProjectRawText,
+  commitOwnedProjectEdit,
+  computeProjectSourceGeneration,
+  type ProjectSourceGeneration,
+} from './projectDocumentWriteback';
 import {
   type IdbProjectCanonicalAuthority,
   idbProjectCanonicalAuthority,
@@ -132,6 +137,35 @@ async function commitSnapshotEdit(
 export interface CanonicalAutosaveOptions {
   /** The editor project replaced the stored one; write it whole instead of overlaying it (#553 a10). */
   replacement?: boolean;
+  /** A restored project's admitted text: the replacement overlays the editor's edits onto it (#553 a5). */
+  replacementRaw?: string;
+}
+
+// QNBS-v3 (#553 a5): a restored project keeps the snapshot's own text — its opaque fields and exact tokens — with only the editor's owned changes applied; a carrier that cannot take the edit fails closed instead of silently falling back to a fresh document.
+function replacementDocument(
+  snapshot: ProjectData,
+  options: CanonicalAutosaveOptions,
+):
+  | { status: 'OK'; raw: CanonicalProjectRawText }
+  | { status: 'VERIFICATION_FAILED'; reason: string } {
+  const carrier = options.replacementRaw;
+  if (carrier === undefined) return { status: 'OK', raw: buildInitialCanonicalRaw(snapshot) };
+  let status: string;
+  try {
+    const applied = commitOwnedProjectEdit({
+      expectedGeneration: computeProjectSourceGeneration(carrier),
+      currentRaw: carrier,
+      edit: buildAutosaveOwnedProjectEdit(snapshot, carrier),
+    });
+    if (applied.status === 'COMMITTED') return { status: 'OK', raw: applied.raw };
+    status = applied.status;
+  } catch {
+    status = 'MALFORMED_CARRIER';
+  }
+  return {
+    status: 'VERIFICATION_FAILED',
+    reason: `restore carrier did not accept the editor edit (${status})`,
+  };
 }
 
 // QNBS-v3 (#553 a10): one dispatch point for both CURRENT write paths, so the post-migration commit cannot silently fall back to an overlay of the predecessor's text.
@@ -145,9 +179,11 @@ async function commitSnapshot(
   if (!options.replacement) {
     return commitSnapshotEdit(snapshot, authority, currentRaw, expectedGeneration);
   }
+  const document = replacementDocument(snapshot, options);
+  if (document.status !== 'OK') return document;
   const result = await authority.commitCanonicalProjectReplacement({
     expectedGeneration,
-    currentRaw: buildInitialCanonicalRaw(snapshot),
+    currentRaw: document.raw,
   });
   if (result.status === 'COMMITTED') return { status: 'SAVED', generation: result.generation };
   if (result.status === 'NOT_ADMITTED_FOR_WRITE') {

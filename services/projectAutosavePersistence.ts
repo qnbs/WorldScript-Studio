@@ -3,6 +3,7 @@ import {
   type EditorReplacementEpoch,
   isReplacementPending,
   notePersistedEditorEpoch,
+  restoreCarrierFor,
   toEditorReplacementEpoch,
 } from './editorProjectGeneration';
 import {
@@ -32,10 +33,12 @@ export async function persistProjectAutosaveSnapshot(
   assertProjectPersistenceAdmitted(snapshot.id);
   const authority = await storageService.getProjectAuthority();
   const replacement = isReplacementPending(snapshot, authority, editorEpoch);
+  const replacementRaw = (replacement && restoreCarrierFor(snapshot, editorEpoch)) || undefined;
+  const options = replacementRaw === undefined ? { replacement } : { replacement, replacementRaw };
   if (isTauriRuntime()) {
-    await storageService.saveProject(saveEnvelopeFromProjectData(snapshot), { replacement });
+    await storageService.saveProject(saveEnvelopeFromProjectData(snapshot), options);
   } else {
-    const result = await saveAutosaveSnapshotCanonical(snapshot, undefined, { replacement });
+    const result = await saveAutosaveSnapshotCanonical(snapshot, undefined, options);
     assertCanonicalAutosaveSucceeded(result);
   }
   notePersistedEditorEpoch(snapshot, authority, editorEpoch);
