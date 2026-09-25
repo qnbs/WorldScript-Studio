@@ -2040,6 +2040,76 @@ describe('FsProjectStore — projects', () => {
 });
 
 // QNBS-v3 (#553): two FsProjectStore instances over one filesystem are two WorldScript processes. The #826 lock serializes their writes; these prove the load-generation baseline additionally refuses a writer whose snapshot predates another window's commit, instead of silently reverting that window's fields.
+describe('FsProjectStore — snapshot canonical carrier (#553 §2.8, a3/a5)', () => {
+  const PROJECT_FILE = '/app/projects/p1/project.json';
+  const doc = {
+    id: 'p1',
+    schemaVersion: 1,
+    title: 'Doc',
+    logline: 'L',
+    manuscript: [],
+    characters: [],
+    worlds: [],
+  };
+  const snapshotTexts = () =>
+    [...fake.text.entries()]
+      .filter(([path]) => path.startsWith('/app/snapshots/'))
+      .map(([, envelope]) => decompressJsonText(JSON.parse(envelope).data as string));
+
+  async function storedWithExactInteger(): Promise<string> {
+    await store.saveProject(doc as never);
+    const raw = decompressJsonText(fake.text.get(PROJECT_FILE) as string).replace(
+      /}$/,
+      ',"futureWidget":{"k":1},"bigCount":9007199254740993}',
+    );
+    fake.text.set(PROJECT_FILE, raw);
+    return raw;
+  }
+
+  it('auto-snapshots the exact text a save just committed, integer literals included', async () => {
+    await storedWithExactInteger();
+    const editor = new FsProjectStore();
+    await editor.loadProjectForEditing('p1');
+    // The interval starts at construction; make the next save due for its auto-snapshot.
+    (editor as unknown as { lastAutoSnapshotTime: number }).lastAutoSnapshotTime = 0;
+    await editor.saveProject({ ...doc, title: 'Edited' } as never);
+    await vi.waitFor(() => expect(snapshotTexts().length).toBeGreaterThan(0));
+
+    const snapshot = snapshotTexts().at(-1) as string;
+    expect(snapshot).toContain('"bigCount":9007199254740993');
+    expect(snapshot).toBe(decompressJsonText(fake.text.get(PROJECT_FILE) as string));
+  });
+
+  it('admits the snapshot’s own content for the target without writing the project', async () => {
+    const storedRaw = await storedWithExactInteger();
+    const editor = new FsProjectStore();
+    await editor.loadProjectForEditing('p1');
+    const snapshotId = await editor.saveSnapshotText('manual', storedRaw);
+    await editor.saveProject({ ...doc, title: 'Changed after snapshot' } as never);
+    const before = fake.text.get(PROJECT_FILE);
+
+    const restored = await editor.restoreSnapshot(snapshotId, { ...doc } as never);
+
+    // Persisting a restore is the coordinated same-ID replacement write (#553 a10), never done here.
+    expect(fake.text.get(PROJECT_FILE)).toBe(before);
+    expect(restored).toMatchObject({ id: 'p1', title: 'Doc', futureWidget: { k: 1 } });
+  });
+
+  it('takes machine-local metadata from the restore target, never from the snapshot', async () => {
+    const storedRaw = await storedWithExactInteger();
+    const editor = new FsProjectStore();
+    await editor.loadProjectForEditing('p1');
+    const snapshotId = await editor.saveSnapshotText(
+      'manual',
+      storedRaw.replace(/}$/, ',"__worldscriptLegacyProjectDirectory":"elsewhere"}'),
+    );
+
+    const restored = await editor.restoreSnapshot(snapshotId, { ...doc } as never);
+
+    expect(restored).not.toHaveProperty('__worldscriptLegacyProjectDirectory');
+  });
+});
+
 describe('FsProjectStore — canonical raw egress (#553 §2.8)', () => {
   it('returns the stored raw byte-for-byte, including integers the parsed projection rounds', async () => {
     await store.saveProject({

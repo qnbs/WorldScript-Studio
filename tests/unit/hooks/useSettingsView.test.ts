@@ -239,6 +239,7 @@ vi.mock('../../../services/storageService', () => ({
     loadEditorExportCarrier: vi.fn().mockResolvedValue(null),
     listSnapshots: () => mockListSnapshots(),
     saveSnapshot: (name: string, project: unknown) => mockSaveSnapshot(name, project),
+    saveSnapshotText: (name: string, projectJson: string) => mockSaveSnapshot(name, projectJson),
     deleteSnapshot: (id: number) => mockDeleteSnapshot(id),
   },
 }));
@@ -592,7 +593,12 @@ describe('handleCreateSnapshot', () => {
     await act(async () => {
       await result.current.handleCreateSnapshot();
     });
-    expect(mockSaveSnapshot).toHaveBeenCalledWith('First Draft', mockProject);
+    // QNBS-v3 (#553 §2.8): the snapshot is the canonical text of the editor project, not the parsed object.
+    expect(mockSaveSnapshot).toHaveBeenCalledWith('First Draft', expect.any(String));
+    expect(JSON.parse(mockSaveSnapshot.mock.calls.at(-1)?.[1] as string)).toMatchObject({
+      title: mockProject.title,
+      schemaVersion: 1,
+    });
     expect(result.current.snapshotName).toBe('');
     expect(result.current.modal.state).toBe('closed');
     await waitFor(() => {

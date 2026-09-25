@@ -65,6 +65,11 @@ export class IdbSnapshotStore extends IdbCodexStore {
     return this.createSnapshot(data, name);
   }
 
+  // QNBS-v3 (#553 §2.8): IndexedDB snapshots are structured values (the same representation the project record uses), so the canonical text is stored as the value it encodes.
+  async saveSnapshotText(name: string, projectJson: string): Promise<number> {
+    return this.createSnapshot(JSON.parse(projectJson) as ProjectData, name);
+  }
+
   async listSnapshots(): Promise<ProjectSnapshot[]> {
     return retryDb(async () => {
       // QNBS-v3: Snapshot metadata (name/date/word count) is about protected content — the superset check blocks a locked session, or an active journal migration, from enumerating it.

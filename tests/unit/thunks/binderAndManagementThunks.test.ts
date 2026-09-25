@@ -755,19 +755,42 @@ describe('importProjectThunk', () => {
 // restoreSnapshotThunk
 // ---------------------------------------------------------------------------
 describe('restoreSnapshotThunk', () => {
-  it('dispatches fulfilled with snapshot data from storageService', async () => {
-    const snapshotData = { title: 'Snapshot Title', manuscript: [] };
+  it('dispatches fulfilled with snapshot data normalized for the entity adapters (#553 §2.8)', async () => {
+    // Stored project text may use the portable array form for characters/worlds.
+    const snapshotData = {
+      title: 'Snapshot Title',
+      manuscript: [],
+      characters: [{ id: 'c1', name: 'Ada' }],
+      worlds: [],
+    };
     vi.mocked(storageService.restoreSnapshot).mockResolvedValue(snapshotData as never);
 
     const store = makeStore();
     const action = await store.dispatch(restoreSnapshotThunk(42));
 
     expect(action.type).toBe('project/restoreSnapshot/fulfilled');
-    expect((action as { payload: typeof snapshotData }).payload).toEqual(snapshotData);
+    expect((action as { payload: Record<string, unknown> }).payload).toMatchObject({
+      title: 'Snapshot Title',
+      characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Ada' } } },
+      worlds: { ids: [], entities: {} },
+    });
     expect(storageService.restoreSnapshot).toHaveBeenCalledWith(
       42,
       expect.objectContaining({ id: 'default' }),
     );
+  });
+
+  it('rejects a restored snapshot whose collections cannot be normalized', async () => {
+    vi.mocked(storageService.restoreSnapshot).mockResolvedValue({
+      title: 'Bad',
+      manuscript: [],
+      characters: [{ id: 'dup' }, { id: 'dup' }],
+      worlds: [],
+    } as never);
+
+    const action = await makeStore().dispatch(restoreSnapshotThunk(7));
+
+    expect(action.type).toBe('project/restoreSnapshot/rejected');
   });
 
   it('captures the current project before requesting snapshot data', async () => {

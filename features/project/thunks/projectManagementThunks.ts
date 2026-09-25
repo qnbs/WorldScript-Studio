@@ -1,5 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '../../../app/store';
+import { getPersistedProjectPayload } from '../../../services/appBootstrap';
 import { logger } from '../../../services/logger';
 import { parseImportedProjectJson } from '../../../services/projectImportSchema';
 import { getSafeSessionProjectId } from '../../../services/startupSafeSession';
@@ -189,6 +190,11 @@ export const restoreSnapshotThunk = createAsyncThunk(
     if (!identityUnchanged(capturedTargetIdentity, getProjectTargetIdentity(liveSlice))) {
       throw new Error('Cannot restore a snapshot after the active project changed.');
     }
-    return restored;
+    // QNBS-v3 (#553 §2.8): a snapshot's stored text may use the portable array form for characters/worlds; normalize through the same boundary bootstrap uses before it reaches the entity adapters.
+    const normalized = getPersistedProjectPayload({ data: restored as ProjectData });
+    if (!normalized) {
+      throw new Error('Cannot restore a snapshot whose characters or worlds are malformed.');
+    }
+    return normalized;
   },
 );

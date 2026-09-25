@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../services/storageService', () => ({
-  storageService: { loadEditorExportCarrier: vi.fn() },
+  storageService: { loadEditorExportCarrier: vi.fn(), saveSnapshotText: vi.fn() },
 }));
 
 import { StaleProjectWriterError } from '../../../services/fs/fsCore';
 import {
   _resetEditableProjectReplacementForTest,
+  createCanonicalProjectSnapshot,
   downloadCanonicalProjectExport,
   loadCanonicalEgressRaw,
   noteEditableProjectGenerationChanged,
@@ -133,4 +134,31 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
       ).rejects.toBe(refusal);
     },
   );
+
+  it('snapshots the same canonical text as export but keeps machine-local metadata', async () => {
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+
+    await createCanonicalProjectSnapshot('manual', 'p1', edited as never);
+
+    expect(storageService.loadEditorExportCarrier).toHaveBeenCalledWith('p1');
+    const text = vi.mocked(storageService.saveSnapshotText).mock.calls.at(-1)?.[1] as string;
+    expect(text).toContain('"title":"Unsaved edit"');
+    expect(text).toContain('"bigCount":9007199254740993');
+    expect(text).toContain('__worldscriptLegacyProjectDirectory');
+  });
+
+  it('builds a manual snapshot of a replaced editor project from its own state, fence still asked', async () => {
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+    noteEditableProjectGenerationChanged();
+
+    await createCanonicalProjectSnapshot('manual', 'p1', {
+      ...edited,
+      title: 'Replacement B',
+    } as never);
+
+    expect(storageService.loadEditorExportCarrier).toHaveBeenCalledWith('p1');
+    const text = vi.mocked(storageService.saveSnapshotText).mock.calls.at(-1)?.[1] as string;
+    expect(text).toContain('"title":"Replacement B"');
+    expect(text).not.toContain('futureWidget');
+  });
 });
