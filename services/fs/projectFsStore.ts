@@ -261,6 +261,19 @@ const LEGACY_FALLBACK_WRITER_IDENTITIES = ['browser-project', 'default', 'projec
 type ProjectAdmission = ReturnType<typeof admitCanonicalProjectDocument>;
 
 // QNBS-v3 (#553): computed from the exact admitted raw the save path fences against, so an unchanged file always matches the baseline it seeds; null for anything not admitted as CURRENT (no baseline, i.e. unfenced as before).
+type EditingBaseline = { generation: ProjectSourceGeneration; incarnation: string | null };
+
+const PROJECT_INCARNATION_FILE_NAME = '.incarnation';
+const INCARNATION_LOAD_ATTEMPTS = 3;
+
+function newProjectIncarnation(): string {
+  return typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+        byte.toString(16).padStart(2, '0'),
+      ).join('');
+}
+
 function currentGenerationOf(admission: ProjectAdmission): ProjectSourceGeneration | null {
   return admission.status === 'CURRENT' && admission.canonical
     ? computeProjectSourceGeneration(admission.canonical.raw)
@@ -276,12 +289,29 @@ function auxiliaryTargetDirectory(projectId: string): string | null {
 export class FsProjectStore extends FsAssetStore {
   private readonly verifiedLegacyProjectDirectories = new Set<string>();
   private readonly legacyAdmissionRecords = new Map<string, LegacyAdmissionRecord>();
-  // QNBS-v3 (#553): the canonical generation this process's editable in-memory project descends from, per project — set only by the editing load and by this process's own commits, never by background reads (backup/LoRA use loadProject), so a background re-read can never mask a stale writer.
-  private readonly editingBaselines = new Map<string, ProjectSourceGeneration>();
+  // QNBS-v3 (#553): the canonical generation and project incarnation this process's editable in-memory project descends from, per project — set only by the editing load and by this process's own commits, never by background reads (backup/LoRA use loadProject), so a background re-read can never mask a stale writer.
+  private readonly editingBaselines = new Map<string, EditingBaseline>();
 
-  private setEditingBaseline(projectId: string, generation: ProjectSourceGeneration | null): void {
-    if (generation === null) this.editingBaselines.delete(projectId);
-    else this.editingBaselines.set(projectId, generation);
+  private setEditingBaseline(projectId: string, baseline: EditingBaseline | null): void {
+    if (baseline === null) this.editingBaselines.delete(projectId);
+    else this.editingBaselines.set(projectId, baseline);
+  }
+
+  // QNBS-v3 (#553): a random per-creation token beside project.json. Delete and quarantine take it with the directory and every create writes a fresh one, so a deleted-then-recreated project never matches an old window even when its project.json is byte-identical. Projects created before this token existed have none (null) until recreated; that still differs from any fresh token.
+  private async readProjectIncarnation(
+    apis: TauriApis,
+    safeProjectId: string,
+  ): Promise<string | null> {
+    const appDataPath = await this.ensureAppDataPath();
+    const incarnationFile = await apis.join(
+      appDataPath,
+      'projects',
+      safeProjectId,
+      PROJECT_INCARNATION_FILE_NAME,
+    );
+    if (!(await apis.exists(incarnationFile))) return null;
+    const token = (await retryFs(() => apis.readTextFile(incarnationFile))).trim();
+    return token === '' ? null : token;
   }
 
   private writerIdentityAliases(projectId: string): Set<string> {
@@ -443,15 +473,19 @@ export class FsProjectStore extends FsAssetStore {
   private async assertProjectSourceMatches(
     apis: TauriApis,
     safeProjectId: string,
-    baseline: ProjectSourceGeneration,
+    baseline: EditingBaseline,
   ): Promise<void> {
     const appDataPath = await this.ensureAppDataPath();
     const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
     let exists: boolean;
     let raw = '';
+    let incarnation: string | null = null;
     try {
       exists = await apis.exists(projectFile);
-      if (exists) raw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+      if (exists) {
+        raw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+        incarnation = await this.readProjectIncarnation(apis, safeProjectId);
+      }
     } catch (error) {
       // QNBS-v3 (#553): an unreadable fence is an authority error, not a generic failure the delete wrappers would log and report as done.
       throw new ProjectCanonicalWritebackError(
@@ -460,7 +494,11 @@ export class FsProjectStore extends FsAssetStore {
       );
     }
     if (!exists) throw new StaleProjectWriterError(safeProjectId);
-    if (currentGenerationOf(admitCanonicalProjectDocument(raw, storedProjectSchema)) !== baseline) {
+    if (
+      currentGenerationOf(admitCanonicalProjectDocument(raw, storedProjectSchema)) !==
+        baseline.generation ||
+      incarnation !== baseline.incarnation
+    ) {
       throw new StaleProjectWriterError(safeProjectId);
     }
   }
@@ -850,8 +888,19 @@ export class FsProjectStore extends FsAssetStore {
       const createdGeneration = currentGenerationOf(
         admitCanonicalProjectDocument(createdJson, storedProjectSchema),
       );
+      // QNBS-v3 (#553): the fresh incarnation lands before project.json, so the project never exists on disk without the token a later window will load.
+      const incarnation = newProjectIncarnation();
+      const appDataPath = await this.ensureAppDataPath();
+      await writeTextFileAtomic(
+        apis,
+        await apis.join(appDataPath, 'projects', projectId, PROJECT_INCARNATION_FILE_NAME),
+        incarnation,
+      );
       await writeTextFileAtomic(apis, projectFile, compressJsonText(createdJson));
-      this.setEditingBaseline(projectId, createdGeneration);
+      this.setEditingBaseline(
+        projectId,
+        createdGeneration === null ? null : { generation: createdGeneration, incarnation },
+      );
     } else {
       await this.persistExistingCanonicalProjectLocked(
         apis,
@@ -887,8 +936,20 @@ export class FsProjectStore extends FsAssetStore {
     }
     // QNBS-v3 (#553): refuse before building the overlay — the edit below is fenced only against the carrier read now, so an independently-loaded window whose snapshot predates the current generation would otherwise pass that fence and silently revert fields another window committed.
     const currentGeneration = computeProjectSourceGeneration(admission.canonical.raw);
+    let currentIncarnation: string | null;
+    try {
+      currentIncarnation = await this.readProjectIncarnation(apis, projectId);
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `project incarnation read failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     const baseline = this.editingBaselines.get(projectId);
-    if (baseline !== undefined && baseline !== currentGeneration) {
+    if (
+      baseline !== undefined &&
+      (baseline.generation !== currentGeneration || baseline.incarnation !== currentIncarnation)
+    ) {
       throw new StaleProjectWriterError(projectId);
     }
     const autosaveEdit = buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw);
@@ -921,7 +982,10 @@ export class FsProjectStore extends FsAssetStore {
           throw new Error('source generation changed before atomic replacement');
         }
       });
-      this.editingBaselines.set(projectId, writeback.generation);
+      this.editingBaselines.set(projectId, {
+        generation: writeback.generation,
+        incarnation: currentIncarnation,
+      });
     } catch (error) {
       throw new ProjectCanonicalWritebackError(
         projectId,
@@ -1061,11 +1125,11 @@ export class FsProjectStore extends FsAssetStore {
   // QNBS-v3: desktop bootstrap uses a distinct admission boundary so a readable legacy projection cannot enter the ordinary editable Redux store.
   async loadProjectForEditing(projectId: string): Promise<StoryProject | null> {
     return this.withLegacyRoutingOperation(async () => {
-      const loaded: { generation: ProjectSourceGeneration | null } = { generation: null };
-      const project = await this.loadProjectUnlocked(projectId, (generation) => {
-        loaded.generation = generation;
-      });
       const safeProjectId = projectPathSegment(projectId);
+      const { project, generation, incarnation } = await this.loadProjectWithIncarnation(
+        projectId,
+        safeProjectId,
+      );
       if (project && safeProjectId && this.legacyAdmissionRecords.has(safeProjectId)) {
         throw new ProjectLoadError(
           'unsupported-version',
@@ -1074,9 +1138,51 @@ export class FsProjectStore extends FsAssetStore {
           'LEGACY_UNVERSIONED',
         );
       }
-      if (safeProjectId) this.setEditingBaseline(safeProjectId, project ? loaded.generation : null);
+      if (safeProjectId) {
+        this.setEditingBaseline(
+          safeProjectId,
+          project && generation !== null ? { generation, incarnation } : null,
+        );
+      }
       return project;
     });
+  }
+
+  // QNBS-v3 (#553): the token is read on both sides of the project read; a delete-and-recreate landing in between changes it, and that load is retried instead of pairing the old document with the new incarnation.
+  private async loadProjectWithIncarnation(
+    projectId: string,
+    safeProjectId: string | null,
+  ): Promise<{
+    project: StoryProject | null;
+    generation: ProjectSourceGeneration | null;
+    incarnation: string | null;
+  }> {
+    const apis = await this.getApis();
+    const readIncarnation = async (): Promise<string | null> => {
+      if (!safeProjectId) return null;
+      try {
+        return await this.readProjectIncarnation(apis, safeProjectId);
+      } catch {
+        throw new ProjectLoadError(
+          'io-error',
+          `The project identity for "${projectId}" could not be read. The file has not been changed.`,
+          projectId,
+        );
+      }
+    };
+    for (let attempt = 0; attempt < INCARNATION_LOAD_ATTEMPTS; attempt++) {
+      const before = await readIncarnation();
+      let generation: ProjectSourceGeneration | null = null;
+      const project = await this.loadProjectUnlocked(projectId, (loadedGeneration) => {
+        generation = loadedGeneration;
+      });
+      if ((await readIncarnation()) === before) return { project, generation, incarnation: before };
+    }
+    throw new ProjectLoadError(
+      'io-error',
+      `The project "${projectId}" kept being replaced while it was loading. The file has not been changed.`,
+      projectId,
+    );
   }
 
   private async loadProjectUnlocked(
