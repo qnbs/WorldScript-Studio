@@ -7,7 +7,6 @@ import {
   encryptLibraryInnerBytes,
   LIBRARY_BACKUP_FORMAT,
 } from '../../services/libraryBackupService';
-import type { StoryProject } from '../../types';
 
 vi.mock('../../services/storageService', () => ({
   storageService: {
@@ -35,6 +34,8 @@ const minimalProject = (): ProjectData => ({
   manuscript: [],
 });
 
+const minimalRaw = (): string => JSON.stringify({ ...minimalProject(), schemaVersion: 1 });
+
 describe('libraryBackupService crypto', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -60,9 +61,7 @@ describe('libraryBackupService zip roundtrip', () => {
     const { storageService } = await import('../../services/storageService');
     vi.mocked(storageService.getStorageBackendKind).mockResolvedValue('indexeddb');
     vi.mocked(storageService.listProjects).mockResolvedValue(['p1']);
-    vi.mocked(storageService.loadProject).mockResolvedValue(
-      minimalProject() as unknown as StoryProject,
-    );
+    vi.mocked(storageService.loadCanonicalProjectRaw).mockResolvedValue(minimalRaw());
     vi.mocked(storageService.getStoryCodex).mockResolvedValue(null);
     vi.mocked(storageService.getRagVectors).mockResolvedValue([]);
     vi.mocked(storageService.listBinderAssetIds).mockResolvedValue([]);
@@ -81,8 +80,14 @@ describe('libraryBackupService zip roundtrip', () => {
 
   it('carries the stored canonical raw so opaque fields and exact numbers survive the backup', async () => {
     const { storageService } = await import('../../services/storageService');
-    const storedRaw =
-      '{"id":"p1","title":"Test","futureWidget":{"k":1},"bigCount":9007199254740993}';
+    const portableRaw = minimalRaw().replace(
+      /}$/,
+      ',"futureWidget":{"k":1},"bigCount":9007199254740993}',
+    );
+    const storedRaw = portableRaw.replace(
+      /}$/,
+      ',"__worldscriptLegacyProjectDirectory":"old-dir","__worldscriptLegacyAuxiliary":{"a":1}}',
+    );
     vi.mocked(storageService.loadCanonicalProjectRaw).mockResolvedValue(storedRaw);
     const { buildEncryptedLibraryZipBlob } = await import('../../services/libraryBackupService');
 
@@ -91,7 +96,12 @@ describe('libraryBackupService zip roundtrip', () => {
       'zip-secret-pass',
     );
 
-    expect(parsed.projects[0]?.projectRaw).toBe(storedRaw);
+    // Exact stored text minus the two machine-local trust keys — in both representations.
+    expect(parsed.projects[0]?.projectRaw).toBe(portableRaw);
+    expect(parsed.projects[0]?.project).toMatchObject({ futureWidget: { k: 1 } });
+    expect(parsed.projects[0]?.project).not.toHaveProperty('__worldscriptLegacyProjectDirectory');
+    expect(parsed.projects[0]?.project).not.toHaveProperty('__worldscriptLegacyAuxiliary');
+    expect(storageService.loadProject).not.toHaveBeenCalled();
   });
 });
 
@@ -111,16 +121,18 @@ describe('libraryBackupService — partial corruption (DA-01)', () => {
     const { storageService } = await import('../../services/storageService');
     const { ProjectLoadError } = await import('../../services/fs/projectFsStore');
     vi.mocked(storageService.listProjects).mockResolvedValue(['good', 'corrupt']);
-    vi.mocked(storageService.loadProject).mockImplementation(async (projectId: string) => {
-      if (projectId === 'corrupt') {
-        throw new ProjectLoadError(
-          'corrupt',
-          'The saved project file for "corrupt" is corrupted.',
-          'corrupt',
-        );
-      }
-      return minimalProject() as unknown as StoryProject;
-    });
+    vi.mocked(storageService.loadCanonicalProjectRaw).mockImplementation(
+      async (projectId: string) => {
+        if (projectId === 'corrupt') {
+          throw new ProjectLoadError(
+            'corrupt',
+            'The saved project file for "corrupt" is corrupted.',
+            'corrupt',
+          );
+        }
+        return minimalRaw();
+      },
+    );
     const { collectLibraryBackupPayload } = await import('../../services/libraryBackupService');
     const payload = await collectLibraryBackupPayload();
     expect(payload.projects).toHaveLength(2);
@@ -136,7 +148,7 @@ describe('libraryBackupService — partial corruption (DA-01)', () => {
     const { storageService } = await import('../../services/storageService');
     const { ProjectLoadError } = await import('../../services/fs/projectFsStore');
     vi.mocked(storageService.listProjects).mockResolvedValue(['future']);
-    vi.mocked(storageService.loadProject).mockRejectedValue(
+    vi.mocked(storageService.loadCanonicalProjectRaw).mockRejectedValue(
       new ProjectLoadError(
         'unsupported-version',
         'The saved project uses a schema version this build cannot edit.',
@@ -155,12 +167,14 @@ describe('libraryBackupService — partial corruption (DA-01)', () => {
   it('rethrows an unexpected (non-ProjectLoadError) failure instead of silently swallowing it', async () => {
     const { storageService } = await import('../../services/storageService');
     vi.mocked(storageService.listProjects).mockResolvedValue(['ok', 'buggy']);
-    vi.mocked(storageService.loadProject).mockImplementation(async (projectId: string) => {
-      if (projectId === 'buggy') {
-        throw new TypeError('Cannot read properties of undefined (a genuine programming bug)');
-      }
-      return minimalProject() as unknown as StoryProject;
-    });
+    vi.mocked(storageService.loadCanonicalProjectRaw).mockImplementation(
+      async (projectId: string) => {
+        if (projectId === 'buggy') {
+          throw new TypeError('Cannot read properties of undefined (a genuine programming bug)');
+        }
+        return minimalRaw();
+      },
+    );
     const { collectLibraryBackupPayload } = await import('../../services/libraryBackupService');
     await expect(collectLibraryBackupPayload()).rejects.toThrow(TypeError);
   });

@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import type { Settings, StoryProject } from '../types';
 import { ProjectLoadError } from './fs/projectFsStore';
 import { logger } from './logger';
+import { toPortableProjectRaw } from './projectCanonicalEgress';
 import type { BinderAssetPayload } from './storageBackend';
 import { storageService } from './storageService';
 
@@ -15,9 +16,9 @@ const PBKDF2_ITERATIONS = 600_000;
 
 export interface LibraryProjectBundle {
   projectId: string;
-  /** Readable typed view; lossy (drops opaque fields). `projectRaw` is the authoritative copy. */
+  /** Readable parsed view (portable: local metadata removed). A parse cannot hold integers beyond Number.MAX_SAFE_INTEGER exactly; `projectRaw` is the exact copy. */
   project: StoryProject | null;
-  /** QNBS-v3 (#553 §2.8): the stored canonical raw text — authoritative for any restore; null when the project could not be read. */
+  /** QNBS-v3 (#553 §2.8): the stored canonical text of the last saved generation, portable — authoritative for any restore; null when the project could not be read. Unsaved editor changes are not included. */
   projectRaw: string | null;
   storyCodex: unknown;
   ragVectors: unknown[];
@@ -131,11 +132,11 @@ export async function collectLibraryBackupPayload(
 
   for (const projectId of projectIds) {
     // QNBS-v3 (DA-01): loadProject now throws on corrupt/unreadable data rather than returning null — one bad project must not abort the whole backup.
-    let project: StoryProject | null;
-    let projectRaw: string | null = null;
+    // QNBS-v3 (#553 §2.8): ONE read per project — the readable entry is parsed from the same portable text, so the two can never describe different generations.
+    let projectRaw: string | null;
     try {
-      project = await storageService.loadProject(projectId);
-      projectRaw = project ? await storageService.loadCanonicalProjectRaw(projectId) : null;
+      const storedRaw = await storageService.loadCanonicalProjectRaw(projectId);
+      projectRaw = storedRaw === null ? null : toPortableProjectRaw(storedRaw);
     } catch (error) {
       // QNBS-v3 (codex P1): only the expected corruption/I-O case is swallowed — an unexpected bug must still surface, not be silently absorbed as "skip this project".
       if (!(error instanceof ProjectLoadError)) throw error;
@@ -146,8 +147,9 @@ export async function collectLibraryBackupPayload(
         reason: error.reason,
         error: error.message,
       });
-      project = null;
+      projectRaw = null;
     }
+    const project = projectRaw === null ? null : (JSON.parse(projectRaw) as StoryProject);
     const codex = await storageService.getStoryCodex(projectId);
     const ragVectors = await storageService.getRagVectors(projectId);
     const binderIds = await storageService.listBinderAssetIds(projectId);

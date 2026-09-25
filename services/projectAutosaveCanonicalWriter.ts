@@ -1,5 +1,6 @@
 import { CURRENT_PROJECT_SCHEMA_VERSION } from '../features/project/projectSchemaVersion';
 import type { ProjectData } from '../features/project/projectState';
+import type { StoryProject } from '../types';
 import { buildAutosaveOwnedProjectEdit } from './projectAutosaveEditBridge';
 import type { CanonicalProjectRawText, ProjectSourceGeneration } from './projectDocumentWriteback';
 import {
@@ -98,7 +99,9 @@ function resultForNonAdmittedClassification(classification: string): CanonicalAu
 }
 
 // QNBS-v3: the runtime-extra schemaVersion is discarded and the authority-owned CURRENT version injected last, so spread ordering or snapshot extras can never override it.
-function buildInitialCanonicalRaw(snapshot: ProjectData): CanonicalProjectRawText {
+export function buildInitialCanonicalRaw(
+  snapshot: ProjectData | StoryProject,
+): CanonicalProjectRawText {
   const snapshotRecord = snapshot as unknown as Record<string, unknown>;
   const { characters, worlds, schemaVersion: _runtimeExtra, ...rest } = snapshotRecord;
   return JSON.stringify({

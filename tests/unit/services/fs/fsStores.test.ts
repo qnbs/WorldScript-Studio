@@ -2071,6 +2071,74 @@ describe('FsProjectStore — canonical raw egress (#553 §2.8)', () => {
       status: 'ABSENT',
     });
   });
+
+  describe('editor export carrier', () => {
+    const doc = {
+      id: 'p1',
+      schemaVersion: 1,
+      title: 'Doc',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    };
+
+    async function editorsLoadedAtG0(): Promise<[FsProjectStore, FsProjectStore]> {
+      await store.saveProject(doc as never);
+      const windowA = new FsProjectStore();
+      const windowB = new FsProjectStore();
+      await windowA.loadProjectForEditing('p1');
+      await windowB.loadProjectForEditing('p1');
+      return [windowA, windowB];
+    }
+
+    it('returns the carrier for a current editor, including after its own saves', async () => {
+      const [windowA] = await editorsLoadedAtG0();
+      await expect(windowA.loadEditorExportCarrier('p1')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+      await windowA.saveProject({ ...doc, title: 'Own save' } as never);
+      await expect(windowA.loadEditorExportCarrier('p1')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+    });
+
+    it('refuses an editor another window moved past', async () => {
+      const [windowA, windowB] = await editorsLoadedAtG0();
+      await windowA.saveProject({ ...doc, title: 'Changed by A' } as never);
+      await expect(windowB.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+    });
+
+    it('refuses an editor whose project was deleted and recreated byte-identically', async () => {
+      const [windowA, windowB] = await editorsLoadedAtG0();
+      await windowA.deleteProject('p1');
+      await windowA.saveProject(doc as never);
+      await expect(windowB.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+    });
+
+    it('resolves an id-less project to the directory it was loaded from', async () => {
+      await store.saveProject(doc as never);
+      const file = '/app/projects/p1/project.json';
+      const { id: _id, ...idless } = JSON.parse(decompressJsonText(fake.text.get(file) as string));
+      fake.text.set(file, JSON.stringify(idless));
+      const editor = new FsProjectStore();
+      await editor.loadProjectForEditing('p1');
+
+      await expect(editor.loadEditorExportCarrier(undefined)).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+      await expect(editor.loadEditorExportCarrier('')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+    });
+
+    it('refuses rather than guessing when an id-less project has no known source', async () => {
+      await expect(new FsProjectStore().loadEditorExportCarrier(undefined)).resolves.toEqual({
+        status: 'REFUSED',
+        classification: 'UNKNOWN_SOURCE',
+      });
+    });
+  });
 });
 
 describe('FsProjectStore — stale independently-loaded writer', () => {

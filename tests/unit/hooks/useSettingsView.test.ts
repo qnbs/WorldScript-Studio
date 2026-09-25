@@ -236,7 +236,7 @@ vi.mock('../../../services/storage/storageEncryptionService', () => ({
 
 vi.mock('../../../services/storageService', () => ({
   storageService: {
-    loadCanonicalProjectRaw: vi.fn().mockResolvedValue(null),
+    loadEditorExportCarrier: vi.fn().mockResolvedValue(null),
     listSnapshots: () => mockListSnapshots(),
     saveSnapshot: (name: string, project: unknown) => mockSaveSnapshot(name, project),
     deleteSnapshot: (id: number) => mockDeleteSnapshot(id),

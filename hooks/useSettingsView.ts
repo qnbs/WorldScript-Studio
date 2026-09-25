@@ -20,7 +20,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { desktopPlatform } from '../services/desktopPlatform';
 import { wipeAllAppData } from '../services/factoryResetService';
 import { logger } from '../services/logger';
-import { loadCanonicalEgressRaw } from '../services/projectCanonicalEgress';
+import { downloadCanonicalProjectExport } from '../services/projectCanonicalEgress';
 import type { ProtectedStoreMigrationProgress } from '../services/storage/protectedStoreMigration';
 import {
   clearIdbEncryptionKey,
@@ -311,27 +311,11 @@ export const useSettingsView = () => {
 
   const handleExport = useCallback(async () => {
     if (!project) return;
-    const projectToExport: StoryProject = {
-      ...project,
-      characters,
-      worlds,
-    };
-    let dataStr: string;
-    try {
-      // QNBS-v3 (#553 §2.8): the stored canonical raw with unsaved edits overlaid, so opaque fields and exact numbers survive the export.
-      dataStr = await loadCanonicalEgressRaw(project.id, projectToExport);
-    } catch (error) {
+    const projectToExport: StoryProject = { ...project, characters, worlds };
+    await downloadCanonicalProjectExport(project.id, projectToExport, (error) => {
       logger.error('Project export refused', error);
       toast.error(t('export.exportFailed'));
-      return;
-    }
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.download = `${project.title.replace(/\s+/g, '_')}_backup.json`;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
+    });
   }, [project, characters, worlds, toast, t]);
 
   const handleImport = useCallback(

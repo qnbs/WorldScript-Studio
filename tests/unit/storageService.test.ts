@@ -7,6 +7,7 @@ const mockDb = {
   saveProject: vi.fn().mockResolvedValue(undefined),
   loadProject: vi.fn().mockResolvedValue(null),
   loadCanonicalProjectRaw: vi.fn().mockResolvedValue({ status: 'ABSENT' }),
+  loadEditorExportCarrier: vi.fn().mockResolvedValue({ status: 'ABSENT' }),
   listProjects: vi.fn().mockResolvedValue([]),
   deleteProject: vi.fn().mockResolvedValue(undefined),
   saveImage: vi.fn().mockResolvedValue(undefined),
@@ -86,6 +87,27 @@ describe('storageService (IndexedDB backend in browser)', () => {
     await expect(storageService.loadCanonicalProjectRaw('p1')).rejects.toMatchObject({
       name: 'ProjectLoadError',
       reason: 'unsupported-version',
+    });
+  });
+
+  it('refuses a stale editor and a backend without canonical text instead of reading either as absent', async () => {
+    mockDb.loadEditorExportCarrier.mockResolvedValueOnce({ status: 'STALE' });
+    await expect(storageService.loadEditorExportCarrier('p1')).rejects.toMatchObject({
+      name: 'StaleProjectWriterError',
+    });
+
+    mockDb.loadEditorExportCarrier.mockResolvedValueOnce({ status: 'UNSUPPORTED' });
+    await expect(storageService.loadEditorExportCarrier('p1')).rejects.toThrow(
+      'cannot provide the stored project text',
+    );
+
+    mockDb.loadEditorExportCarrier.mockResolvedValueOnce({
+      status: 'REFUSED',
+      classification: 'MALFORMED',
+    });
+    await expect(storageService.loadEditorExportCarrier(undefined)).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'corrupt',
     });
   });
 

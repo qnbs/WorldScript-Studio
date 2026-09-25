@@ -28,6 +28,8 @@ import {
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
 import { logger } from '../logger';
+import { admitCanonicalProjectDocument } from '../projectDocument';
+import { importedProjectJsonSchema } from '../projectImportSchema';
 import type { CanonicalProjectRawResult, SaveProjectInput } from '../storageBackend';
 import { IdbAssetStore } from './idbAssetStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
@@ -243,7 +245,8 @@ function storedProjectIdOf(raw: string): string | null {
     const parsed: unknown = JSON.parse(raw);
     const id =
       parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)['id'] : undefined;
-    return typeof id === 'string' ? id : null;
+    // An empty id is id-less, like the importer's `projectDataJson.id || …` treats it.
+    return typeof id === 'string' && id !== '' ? id : null;
   } catch {
     return null;
   }
@@ -439,16 +442,32 @@ export class IdbProjectStore extends IdbAssetStore {
     return raw as unknown as StoryProject;
   }
 
-  // QNBS-v3 (#553 §2.8): the canonical authority's own raw text, so egress keeps opaque fields and exact numeric tokens; a record for another project id reads as absent, like loadProject.
+  // QNBS-v3 (#553 §2.8): IndexedDB stores a structured value, not text — the authority refuses unsafe integer literals at commit and only yields text that round-trips exactly, so this is the full stored content with no lexical precision left to lose. Admitted the same way import admits a file: full schema validation, and an in-memory LEGACY_TO_V1 stamp (never written back) so a pre-version record still exports.
   async loadCanonicalProjectRaw(projectId: string): Promise<CanonicalProjectRawResult> {
-    const admission = await idbProjectCanonicalAuthority.loadCanonicalProjectAdmission();
+    const { admission, decodedRaw } =
+      await idbProjectCanonicalAuthority.loadCanonicalProjectEgress();
     if (admission.status === 'ABSENT') return { status: 'ABSENT' };
-    if (admission.status !== 'CURRENT') {
+    if (admission.status === 'GENERATION_CONTRADICTION') {
       return { status: 'REFUSED', classification: admission.classification };
     }
-    const storedId = storedProjectIdOf(admission.currentRaw);
+    const verdict =
+      decodedRaw === null
+        ? null
+        : admitCanonicalProjectDocument(decodedRaw, importedProjectJsonSchema);
+    if (!verdict?.canonical) {
+      return {
+        status: 'REFUSED',
+        classification: verdict?.source.classification ?? 'MALFORMED',
+      };
+    }
+    const storedId = storedProjectIdOf(verdict.canonical.raw);
     if (storedId !== null && storedId !== projectId) return { status: 'ABSENT' };
-    return { status: 'CURRENT', raw: admission.currentRaw };
+    return { status: 'CURRENT', raw: verdict.canonical.raw };
+  }
+
+  // QNBS-v3 (#553 §2.8): IndexedDB holds exactly one project and no per-window editing baseline (multi-tab authority is #480), so the editor's carrier is that record when its id matches.
+  async loadEditorExportCarrier(projectId: string | undefined): Promise<CanonicalProjectRawResult> {
+    return this.loadCanonicalProjectRaw(projectId ?? '');
   }
 
   async listProjects(): Promise<string[]> {

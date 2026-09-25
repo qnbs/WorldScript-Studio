@@ -7,13 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Data integrity (#553):** project export (Settings and Dashboard "Export JSON") and the
-  encrypted library backup now write the project exactly as it is stored — with any unsaved edits
-  applied — instead of re-serializing a parsed copy. Before, very large whole numbers in a project
-  were silently rounded on the way out. The library backup keeps its readable `project` entry and
-  adds `projectRaw`, the exact stored text, for a future restore. If the stored project cannot be
-  combined with the current edits, the export now fails with a message instead of writing a lossy
-  file. Snapshots are handled in a follow-up. PR #837.
+- **Data integrity (#553):** project export and the encrypted library backup now write the
+  project's stored text instead of re-serializing a parsed copy of it.
+  - **JSON export** (Settings and Dashboard "Export JSON") writes the stored project with the
+    editor's unsaved changes applied. On desktop, very large whole numbers are kept exactly; a parse
+    used to round them. A never-saved project exports as a current-version file. An export from a
+    window another window has moved past (or whose project was deleted and recreated) is refused,
+    like a save from that window.
+  - **Encrypted library backup** stores each project's last saved text (unsaved changes still in
+    the editor are not included) and its readable `project` entry is now derived from that same
+    text, so the two always describe the same saved version. The exact text is added as
+    `projectRaw` for a future restore.
+  - Both drop two machine-local routing fields (`__worldscriptLegacyProjectDirectory`,
+    `__worldscriptLegacyAuxiliary`) that must never leave the machine, exactly as import already
+    does, and refuse — with an "Export failed" message and no file — rather than write a copy
+    that loses stored data or that this app would not import.
+  - Browser storage keeps projects as structured data, not text, so its export reproduces what is
+    stored; very large whole numbers could never be saved there. Older browser projects without a
+    version export as current files without being changed. Snapshots follow separately. PR #837.
 
 - **Data integrity (#553):** a desktop window can no longer write into a project that another
   window deleted and then recreated under the same ID — even when the recreated project file is

@@ -1,19 +1,24 @@
 /**
- * Canonical project egress (#553, PROJECT-CORE-COMPATIBILITY-CONTRACT §2.8).
+ * Canonical project egress (#553, PROJECT-CORE-COMPATIBILITY-CONTRACT §2.8, §3.1, §4).
  *
- * Export and backup must serialize the canonical raw payload, not the typed projection: the
- * projection silently drops opaque/out-of-scope fields and rounds unsafe integers, so a file
- * written from it loses data that the stored project still holds.
+ * Export and backup serialize the stored canonical raw payload rather than re-serializing a parsed
+ * project object. Re-serializing a parse cannot reproduce the persisted text exactly — the
+ * filesystem carrier can hold integers beyond Number.MAX_SAFE_INTEGER that a parse rounds — and
+ * the portable result must also drop machine-local trust metadata (§2.8), which the stored text
+ * legitimately carries.
  */
 
 import type { ProjectData } from '../features/project/projectSlice';
 import type { StoryProject } from '../types';
+import { buildInitialCanonicalRaw } from './projectAutosaveCanonicalWriter';
 import { buildAutosaveOwnedProjectEdit } from './projectAutosaveEditBridge';
+import { admitCanonicalProjectDocument, stripTopLevelObjectKeys } from './projectDocument';
 import {
   type CanonicalProjectRawText,
   commitOwnedProjectEdit,
   computeProjectSourceGeneration,
 } from './projectDocumentWriteback';
+import { importedProjectJsonSchema, PORTABLE_LOCAL_METADATA_KEYS } from './projectImportSchema';
 import { storageService } from './storageService';
 
 export class ProjectEgressError extends Error {
@@ -23,12 +28,23 @@ export class ProjectEgressError extends Error {
   }
 }
 
-// QNBS-v3 (#553 §2.8): the same owned-edit overlay a save would commit, computed without committing, so unsaved edits are included and every field the editor does not own survives byte-for-byte.
+// QNBS-v3 (#553 §2.8): filesystem-local routing/trust metadata is never portable (the key set import strips), and the result is re-admitted as an import would be, so egress never emits a file this app would refuse.
+export function toPortableProjectRaw(raw: CanonicalProjectRawText): CanonicalProjectRawText {
+  const portable = stripTopLevelObjectKeys(raw, PORTABLE_LOCAL_METADATA_KEYS);
+  if (portable === null) throw new ProjectEgressError('local metadata could not be removed');
+  const verdict = admitCanonicalProjectDocument(portable, importedProjectJsonSchema);
+  if (verdict.status !== 'CURRENT' || verdict.canonical === null) {
+    throw new ProjectEgressError(`portable document is ${verdict.source.classification}`);
+  }
+  return portable;
+}
+
+// QNBS-v3 (#553 §2.8): the same owned-edit overlay a save would commit, computed without committing — unsaved edits are included and every field the editor does not own keeps its stored text. Nothing stored yet gets the same versioned first document a first save would write.
 export function overlayProjectOntoCanonicalRaw(
   project: ProjectData | StoryProject,
   storedRaw: CanonicalProjectRawText | null,
 ): CanonicalProjectRawText {
-  if (storedRaw === null) return JSON.stringify(project);
+  if (storedRaw === null) return toPortableProjectRaw(buildInitialCanonicalRaw(project));
   let result: ReturnType<typeof commitOwnedProjectEdit>;
   try {
     result = commitOwnedProjectEdit({
@@ -44,18 +60,37 @@ export function overlayProjectOntoCanonicalRaw(
       result.status === 'CONFLICT' ? 'source generation changed' : result.status,
     );
   }
-  return result.raw;
+  return toPortableProjectRaw(result.raw);
 }
 
-// QNBS-v3 (#553 §2.8): nothing stored yet means there is nothing opaque to lose, so the in-memory project is the whole truth.
+// QNBS-v3 (#553 §2.8): the backend resolves which stored project the editor is working on (a filesystem project's identity can be its directory, not its id) and refuses a stale editor; this layer never guesses a storage key.
 export async function loadCanonicalEgressRaw(
   projectId: string | undefined,
   project: ProjectData | StoryProject,
 ): Promise<CanonicalProjectRawText> {
-  // QNBS-v3 (#553 §2.8): the same key IndexedDB's listProjects reports for an id-less project.
-  const storageKey = projectId || 'browser-project';
   return overlayProjectOntoCanonicalRaw(
     project,
-    await storageService.loadCanonicalProjectRaw(storageKey),
+    await storageService.loadEditorExportCarrier(projectId),
   );
+}
+
+// QNBS-v3 (#553 §2.8): shared by both "Export JSON" buttons; a refusal writes no file and is reported through onRefused.
+export async function downloadCanonicalProjectExport(
+  projectId: string | undefined,
+  project: StoryProject,
+  onRefused: (error: unknown) => void,
+): Promise<void> {
+  let raw: CanonicalProjectRawText;
+  try {
+    raw = await loadCanonicalEgressRaw(projectId, project);
+  } catch (error) {
+    onRefused(error);
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.download = `${project.title.replace(/\s+/g, '_')}_backup.json`;
+  link.href = url;
+  link.click();
+  URL.revokeObjectURL(url);
 }

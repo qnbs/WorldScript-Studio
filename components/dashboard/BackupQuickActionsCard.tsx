@@ -5,7 +5,7 @@ import { selectAllCharacters, selectAllWorlds } from '../../features/project/pro
 import { importProjectThunk } from '../../features/project/thunks/projectManagementThunks';
 import { statusActions } from '../../features/status/statusSlice';
 import { useTranslation } from '../../hooks/useTranslation';
-import { loadCanonicalEgressRaw } from '../../services/projectCanonicalEgress';
+import { downloadCanonicalProjectExport } from '../../services/projectCanonicalEgress';
 import { storageService } from '../../services/storageService';
 import type { ProjectSnapshot, StoryProject, View } from '../../types';
 import { Button } from '../ui/Button';
@@ -40,22 +40,12 @@ export const BackupQuickActionsCard: FC<BackupQuickActionsCardProps> = ({ onNavi
 
   const handleExport = useCallback(async () => {
     if (!project) return;
-    const payload: StoryProject = { ...project, characters, worlds };
-    let raw: string;
-    try {
-      // QNBS-v3 (#553 §2.8): the stored canonical raw with unsaved edits overlaid, so opaque fields and exact numbers survive the export.
-      raw = await loadCanonicalEgressRaw(project.id, payload);
-    } catch {
-      dispatch(statusActions.addNotification({ type: 'error', title: t('export.exportFailed') }));
-      return;
-    }
-    const blob = new Blob([raw], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = `${project.title.replace(/\s+/g, '_')}_backup.json`;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
+    await downloadCanonicalProjectExport(
+      project.id,
+      { ...project, characters, worlds } as StoryProject,
+      () =>
+        dispatch(statusActions.addNotification({ type: 'error', title: t('export.exportFailed') })),
+    );
   }, [project, characters, worlds, dispatch, t]);
 
   const handleImport = useCallback(

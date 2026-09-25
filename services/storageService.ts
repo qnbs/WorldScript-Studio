@@ -2,6 +2,7 @@ import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../typ
 import type {
   BinderAssetMeta,
   BinderAssetPayload,
+  CanonicalProjectRawResult,
   ImageDeleteAdmission,
   ImageWriteAdmission,
   ProjectQuarantineResult,
@@ -31,6 +32,7 @@ export {
 // Import existing services
 import { dbService } from './dbService';
 import { fileSystemService } from './fileSystemService';
+import { StaleProjectWriterError } from './fs/fsCore';
 import { ProjectLoadError } from './fs/projectFsStore';
 import { logger } from './logger';
 import {
@@ -50,6 +52,27 @@ declare global {
 
 // Storage manager that chooses the appropriate backend.
 // The manager adapts snapshot/project signature differences at the call-site.
+
+function canonicalRawOrThrow(result: CanonicalProjectRawResult, projectId: string): string | null {
+  switch (result.status) {
+    case 'CURRENT':
+      return result.raw;
+    case 'ABSENT':
+      return null;
+    case 'STALE':
+      throw new StaleProjectWriterError(projectId);
+    case 'UNSUPPORTED':
+      throw new Error(
+        'The active storage backend cannot provide the stored project text needed for a lossless export.',
+      );
+    case 'REFUSED':
+      throw new ProjectLoadError(
+        result.classification === 'MALFORMED' ? 'corrupt' : 'unsupported-version',
+        `The saved project "${projectId}" was refused as ${result.classification} and cannot be exported. It has not been changed.`,
+        projectId,
+      );
+  }
+}
 class StorageManager {
   private backend: StorageBackend;
   private ready: Promise<void>;
@@ -104,18 +127,15 @@ class StorageManager {
     return backend.loadProject(projectId);
   }
 
-  // QNBS-v3 (#553 §2.8): null means nothing is stored yet; a refused record throws like loadProject so egress never falls back to a lossy copy of it.
+  // QNBS-v3 (#553 §2.8): null means nothing is stored yet; every other non-CURRENT outcome throws so egress never falls back to a lossy copy.
   async loadCanonicalProjectRaw(projectId: string): Promise<string | null> {
     const backend = await this.getBackend();
-    if (!backend.loadCanonicalProjectRaw) return null;
-    const result = await backend.loadCanonicalProjectRaw(projectId);
-    if (result.status === 'CURRENT') return result.raw;
-    if (result.status === 'ABSENT') return null;
-    throw new ProjectLoadError(
-      result.classification === 'MALFORMED' ? 'corrupt' : 'unsupported-version',
-      `The saved project "${projectId}" was refused as ${result.classification} and cannot be exported. It has not been changed.`,
-      projectId,
-    );
+    return canonicalRawOrThrow(await backend.loadCanonicalProjectRaw(projectId), projectId);
+  }
+
+  async loadEditorExportCarrier(projectId: string | undefined): Promise<string | null> {
+    const backend = await this.getBackend();
+    return canonicalRawOrThrow(await backend.loadEditorExportCarrier(projectId), projectId ?? '');
   }
 
   async listProjects(): Promise<string[]> {

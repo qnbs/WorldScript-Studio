@@ -24,6 +24,7 @@ vi.mock('../../app/hooks', () => ({
           data: {
             id: 'proj-1',
             title: 'My Story',
+            logline: 'A logline',
             sections: [],
             characters: [],
             worlds: [],
@@ -51,7 +52,7 @@ vi.mock('../../features/status/statusSlice', () => ({
 vi.mock('../../services/storageService', () => ({
   storageService: {
     listSnapshots: (...args: unknown[]) => mockListSnapshots(...args),
-    loadCanonicalProjectRaw: vi.fn().mockResolvedValue(null),
+    loadEditorExportCarrier: vi.fn().mockResolvedValue(null),
   },
 }));
 
@@ -127,7 +128,7 @@ describe('BackupQuickActionsCard', () => {
     render(<BackupQuickActionsCard onNavigate={onNavigate} />);
     await waitFor(() => expect(mockListSnapshots).toHaveBeenCalled());
     await user.click(screen.getByText('dashboard.backup.exportJson'));
-    expect(clickSpy).toHaveBeenCalled();
+    await waitFor(() => expect(clickSpy).toHaveBeenCalled());
     createEl.mockRestore();
   });
 
