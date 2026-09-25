@@ -482,17 +482,22 @@ export class FsCore {
   }
 
   // QNBS-v3 (#553): subclasses refuse an auxiliary write from a window whose editable project no longer matches disk.
-  protected async assertAuxiliaryWriterCurrent(_projectId: string): Promise<void> {}
+  protected runFencedAuxiliaryWrite<T>(
+    _projectId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return operation();
+  }
 
-  // QNBS-v3 (#553): user-facing image/binder/codex mutations take the same stale-writer fence as saveProject; rollback and project-delete internals deliberately bypass it.
+  // QNBS-v3 (#553): user-facing image/binder/codex mutations take the same stale-writer fence as saveProject; rollback, import and project-delete internals deliberately bypass it.
   protected withAuxiliaryWriteOperation<T>(
     operation: () => Promise<T>,
     projectId: string,
   ): Promise<T> {
-    return this.withLegacyRoutingOperation(async () => {
-      await this.assertAuxiliaryWriterCurrent(projectId);
-      return operation();
-    }, projectId);
+    return this.withLegacyRoutingOperation(
+      () => this.runFencedAuxiliaryWrite(projectId, operation),
+      projectId,
+    );
   }
 
   // QNBS-v3: serialize complete filesystem operations so legacy route ownership cannot change between awaited mutations.

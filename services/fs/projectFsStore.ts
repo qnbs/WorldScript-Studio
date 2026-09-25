@@ -37,6 +37,7 @@ import {
   decompressData,
   decompressJsonText,
   PROJECT_LOCKS_DIR_NAME,
+  ProjectFileLockedError,
   retryFs,
   StaleProjectWriterError,
   sanitizePathSegment,
@@ -389,15 +390,55 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   protected override isProjectWriteAuthorityError(error: unknown): boolean {
-    return error instanceof ProjectWritebackError || error instanceof StaleProjectWriterError;
+    return (
+      error instanceof ProjectWritebackError ||
+      error instanceof StaleProjectWriterError ||
+      error instanceof ProjectFileLockedError
+    );
   }
 
-  // QNBS-v3 (#553): same verdict saveProject reaches — a missing, unadmitted, or newer project.json means another window moved on, so this window's asset write could undo that window's work. No baseline (never edit-loaded, or deleted by this window) stays unfenced as before. The check is not held across the write; saveProject's cross-process lock only covers project.json.
-  protected override async assertAuxiliaryWriterCurrent(projectId: string): Promise<void> {
-    const safeProjectId = projectPathSegment(projectId);
-    const baseline = safeProjectId ? this.editingBaselines.get(safeProjectId) : undefined;
-    if (!safeProjectId || baseline === undefined) return;
+  // QNBS-v3 (#553): fence every project directory the write can land in — the named one plus any verified legacy directory its codex/binder data is routed to — so an alias caller cannot bypass the baseline recorded under the storage directory.
+  private auxiliaryFenceTargets(projectId: string): [string, ProjectSourceGeneration][] {
+    const targets = new Map<string, ProjectSourceGeneration>();
+    for (const id of [
+      projectId,
+      this.legacyCodexProjectId(projectId),
+      this.legacyBinderProjectId(projectId),
+    ]) {
+      const safeId = id ? projectPathSegment(id) : null;
+      const baseline = safeId ? this.editingBaselines.get(safeId) : undefined;
+      if (safeId && baseline !== undefined) targets.set(safeId, baseline);
+    }
+    return [...targets].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  }
+
+  // QNBS-v3 (#553): same verdict saveProject reaches, under the same cross-process lock held across the write, so another window cannot commit between check and write. No baseline (never edit-loaded, or deleted by this window) stays unfenced as before.
+  protected override async runFencedAuxiliaryWrite<T>(
+    projectId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const targets = this.auxiliaryFenceTargets(projectId);
+    if (targets.length === 0) return operation();
     const apis = await this.getApis();
+    const lockAndRun = async (index: number): Promise<T> => {
+      const target = targets[index];
+      if (target === undefined) {
+        for (const [safeId, baseline] of targets) {
+          await this.assertProjectSourceMatches(apis, safeId, baseline);
+        }
+        return operation();
+      }
+      const lockKeyPath = await this.projectLockKeyPath(apis, target[0]);
+      return withProjectFileLock(apis, lockKeyPath, () => lockAndRun(index + 1));
+    };
+    return lockAndRun(0);
+  }
+
+  private async assertProjectSourceMatches(
+    apis: TauriApis,
+    safeProjectId: string,
+    baseline: ProjectSourceGeneration,
+  ): Promise<void> {
     const appDataPath = await this.ensureAppDataPath();
     const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
     let exists: boolean;
@@ -410,8 +451,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectWritebackError(safeProjectId);
     }
     if (!exists) throw new StaleProjectWriterError(safeProjectId);
-    const admission = admitCanonicalProjectDocument(raw, storedProjectSchema);
-    if (currentGenerationOf(admission) !== baseline) {
+    if (currentGenerationOf(admitCanonicalProjectDocument(raw, storedProjectSchema)) !== baseline) {
       throw new StaleProjectWriterError(safeProjectId);
     }
   }
@@ -1463,7 +1503,7 @@ export class FsProjectStore extends FsAssetStore {
       for (const char of characterArray) {
         const row = { ...char };
         if (row.avatarBase64) {
-          await this.saveImage(row.id, row.avatarBase64);
+          await this.saveImageUnfenced(row.id, row.avatarBase64);
           row.hasAvatar = true;
           delete row.avatarBase64;
         }
@@ -1483,7 +1523,7 @@ export class FsProjectStore extends FsAssetStore {
       for (const world of worldArray) {
         const row = { ...world };
         if (row.ambianceImageBase64) {
-          await this.saveImage(row.id, row.ambianceImageBase64);
+          await this.saveImageUnfenced(row.id, row.ambianceImageBase64);
           row.hasAmbianceImage = true;
           delete row.ambianceImageBase64;
         }

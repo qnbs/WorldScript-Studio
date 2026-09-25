@@ -2228,6 +2228,38 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
       },
     );
 
+    it.each(auxiliaryWrites)(
+      'holds the project lock across %s so no commit can land between check and write',
+      async (_label, write) => {
+        const [windowA] = await twoWindowsLoadedAtG0();
+        await fake.apis.mkdir('/app/project-locks', { recursive: true });
+        await fake.apis.writeTextFile('/app/project-locks/p1.lock', 'held by another window');
+        const before = diskSnapshot();
+
+        await expect(write(windowA)).rejects.toBeInstanceOf(ProjectFileLockedError);
+        expect(diskSnapshot()).toEqual(before);
+      },
+    );
+
+    it('fences a codex write routed into a legacy directory under that directory’s baseline', async () => {
+      const [windowA, windowB] = await twoWindowsLoadedAtG0();
+      (
+        windowB as unknown as {
+          registerLegacyAuxiliaryPolicy(
+            projectId: string,
+            legacyProjectId: string,
+            policy: { codex: boolean; binderAssetIds: ReadonlySet<string> },
+          ): void;
+        }
+      ).registerLegacyAuxiliaryPolicy('alias', 'p1', { codex: true, binderAssetIds: new Set() });
+      await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+
+      await expect(
+        windowB.saveStoryCodex({ projectId: 'alias', entries: [] } as never),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+      expect(fake.text.has('/app/projects/p1/codex/codex.snap')).toBe(false);
+    });
+
     it('lets the refused window write assets again after reloading', async () => {
       const [windowA, windowB] = await twoWindowsLoadedAtG0();
       await windowA.saveProject({ ...base, title: 'Changed by A' } as never);

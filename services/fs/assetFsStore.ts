@@ -111,17 +111,35 @@ export class FsAssetStore extends FsSnapshotStore {
     writeAdmission?: ImageWriteAdmission,
   ): Promise<void> {
     // QNBS-v3: serialize replacement writes with deletes so a pending remove cannot erase the newly committed image.
-    await this.withAuxiliaryWriteOperation(async () => {
-      // QNBS-v3: [Admission before temp-file creation / Reject already-stale writes without disk residue / Preserve filesystem authority]
-      writeAdmission?.();
-      const apis = await this.getApis();
-      const { dir, file } = await this.qualifiedImagePaths(projectId, id);
-      if (!(await apis.exists(dir))) {
-        await apis.mkdir(dir, { recursive: true });
-      }
-      // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
-      await writeTextFileAtomic(apis, file, base64Data, writeAdmission);
-    }, projectId);
+    await this.withAuxiliaryWriteOperation(
+      () => this.writeQualifiedImage(id, base64Data, projectId, writeAdmission),
+      projectId,
+    );
+  }
+
+  // QNBS-v3 (#553): file import writes into the shared default namespace, not an edited project's, so it keeps its pre-fence behavior.
+  protected async saveImageUnfenced(id: string, base64Data: string): Promise<void> {
+    await this.withLegacyRoutingOperation(
+      () => this.writeQualifiedImage(id, base64Data, 'default'),
+      'default',
+    );
+  }
+
+  private async writeQualifiedImage(
+    id: string,
+    base64Data: string,
+    projectId: string,
+    writeAdmission?: ImageWriteAdmission,
+  ): Promise<void> {
+    // QNBS-v3: [Admission before temp-file creation / Reject already-stale writes without disk residue / Preserve filesystem authority]
+    writeAdmission?.();
+    const apis = await this.getApis();
+    const { dir, file } = await this.qualifiedImagePaths(projectId, id);
+    if (!(await apis.exists(dir))) {
+      await apis.mkdir(dir, { recursive: true });
+    }
+    // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
+    await writeTextFileAtomic(apis, file, base64Data, writeAdmission);
   }
 
   async getImage(id: string, projectId = 'default'): Promise<string | null> {
