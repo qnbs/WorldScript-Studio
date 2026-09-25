@@ -604,33 +604,9 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
   async createCanonicalProjectIfAbsent(params: {
     currentRaw: CanonicalProjectRawText;
   }): Promise<CreateCanonicalProjectResult> {
-    const admission = admitCanonicalProjectDocument(params.currentRaw, importedProjectJsonSchema);
-    if (admission.status !== 'CURRENT') {
-      return {
-        status: 'MALFORMED_SOURCE',
-        reason: `initial canonical payload is not a valid CURRENT document (classification: ${admission.source.classification})`,
-      };
-    }
-    if (containsUnsafeIntegerLiteral(params.currentRaw)) {
-      return {
-        status: 'VERIFICATION_FAILED',
-        reason: UNSAFE_INTEGER_VERIFICATION_REASON,
-      };
-    }
-    const parsedPayload = parseCanonicalRawPreservingUnsafeIntegers(params.currentRaw);
-    if (!isRecord(parsedPayload)) {
-      return {
-        status: 'MALFORMED_SOURCE',
-        reason: 'Initial canonical payload is not an object after preserve-first parsing.',
-      };
-    }
-    const currentPayload = parsedPayload;
-    const newPayload = rewrapProjectEnvelope(currentPayload, {
-      kind: 'data',
-      originalEnvelope: {},
-    });
-    // QNBS-v3: IDB stores the parsed payload, so hash its persisted JSON form rather than caller-only whitespace; the marker must equal the ordinary reload admission generation.
-    const newGeneration = computeProjectSourceGeneration(JSON.stringify(currentPayload));
+    const prepared = prepareFreshCanonicalPayload(params.currentRaw, 'initial');
+    if (prepared.status !== 'OK') return prepared;
+    const { newPayload, newGeneration } = prepared;
 
     return withProtectedWriteAdmission(async () => {
       const encoded = await this.encodeVerifiedPayload(newPayload);
@@ -647,6 +623,37 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
       }
       if (committed.status === 'NOT_ADMITTED_FOR_WRITE') return { status: 'CONFLICT' };
       return committed;
+    });
+  }
+
+  /**
+   * Replaces the CURRENT canonical record wholesale with a fresh CURRENT document (#553 a10) -- for an
+   * editor project that replaced the stored one (reset, import, restore), so nothing of the stored
+   * predecessor's text or envelope survives. The record must still be at `expectedGeneration` and
+   * is written through the same raw-bytes fence as every other canonical write.
+   */
+  async commitCanonicalProjectReplacement(params: {
+    expectedGeneration: ProjectSourceGeneration;
+    currentRaw: CanonicalProjectRawText;
+  }): Promise<CommitCanonicalProjectEditResult> {
+    const { admission, rawRecordSnapshot } = await this.readCanonicalProjectSnapshot();
+    if (admission.status !== 'CURRENT') {
+      return {
+        status: 'NOT_ADMITTED_FOR_WRITE',
+        classification: admission.status === 'ABSENT' ? 'ABSENT' : admission.classification,
+      };
+    }
+    if (admission.generation !== params.expectedGeneration) return { status: 'CONFLICT' };
+    const prepared = prepareFreshCanonicalPayload(params.currentRaw, 'replacement');
+    if (prepared.status !== 'OK') return prepared;
+    return withProtectedWriteAdmission(async () => {
+      const encoded = await this.encodeVerifiedPayload(prepared.newPayload);
+      if (encoded.status === 'VERIFICATION_FAILED') return encoded;
+      return this.commitGenerationFencedWrite(
+        rawRecordSnapshot,
+        prepared.newGeneration,
+        encoded.encodedPayload,
+      );
     });
   }
 
@@ -738,3 +745,39 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
 }
 
 export const idbProjectCanonicalAuthority = new IdbProjectCanonicalAuthority();
+
+// QNBS-v3 (#553 a10): a created or replacing record carries only the new document in a fresh browser envelope, so no predecessor sibling or opaque field is inherited; the marker hashes the persisted JSON form so it equals the next reload's admission generation.
+function prepareFreshCanonicalPayload(
+  currentRaw: CanonicalProjectRawText,
+  label: 'initial' | 'replacement',
+):
+  | {
+      status: 'OK';
+      newPayload: StoredProjectEnvelope | Record<string, unknown>;
+      newGeneration: ProjectSourceGeneration;
+    }
+  | { status: 'VERIFICATION_FAILED'; reason: string }
+  | { status: 'MALFORMED_SOURCE'; reason: string } {
+  const admission = admitCanonicalProjectDocument(currentRaw, importedProjectJsonSchema);
+  if (admission.status !== 'CURRENT') {
+    return {
+      status: 'MALFORMED_SOURCE',
+      reason: `${label} canonical payload is not a valid CURRENT document (classification: ${admission.source.classification})`,
+    };
+  }
+  if (containsUnsafeIntegerLiteral(currentRaw)) {
+    return { status: 'VERIFICATION_FAILED', reason: UNSAFE_INTEGER_VERIFICATION_REASON };
+  }
+  const parsedPayload = parseCanonicalRawPreservingUnsafeIntegers(currentRaw);
+  if (!isRecord(parsedPayload)) {
+    return {
+      status: 'MALFORMED_SOURCE',
+      reason: `The ${label} canonical payload is not an object after preserve-first parsing.`,
+    };
+  }
+  return {
+    status: 'OK',
+    newPayload: rewrapProjectEnvelope(parsedPayload, { kind: 'data', originalEnvelope: {} }),
+    newGeneration: computeProjectSourceGeneration(JSON.stringify(parsedPayload)),
+  };
+}

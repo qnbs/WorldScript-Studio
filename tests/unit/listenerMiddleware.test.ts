@@ -23,11 +23,11 @@ import settingsReducer, { settingsActions } from '../../features/settings/settin
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
 import writerReducer, { writerActions } from '../../features/writer/writerSlice';
-import { ProjectFileLockedError, StaleProjectWriterError } from '../../services/fs/fsCore';
 import {
-  _editableProjectReplacedForTest,
-  _resetEditableProjectReplacementForTest,
-} from '../../services/projectCanonicalEgress';
+  _editorEpochForTest,
+  _resetEditorProjectGenerationForTest,
+} from '../../services/editorProjectGeneration';
+import { ProjectFileLockedError, StaleProjectWriterError } from '../../services/fs/fsCore';
 import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionService';
 
 // ---------------------------------------------------------------------------
@@ -470,6 +470,24 @@ describe('auto-save project listener', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(mockPersistProjectAutosaveSnapshot).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3 (#553 a10): a restore reaches storage through the ordinary autosave, carrying the epoch read from the same state as its data, so persistence writes it as a replacement.
+  it('autosaves a same-id restore with the restored data and its new editor epoch together', async () => {
+    const store = makeFullStore();
+    const before = store.getState().project.present;
+    store.dispatch({
+      type: restoreSnapshotThunk.fulfilled.type,
+      payload: { ...before.data, title: 'Restored B' },
+    });
+    await vi.advanceTimersByTimeAsync(1500);
+
+    const present = store.getState().project.present;
+    expect(present.generation).not.toBe(before.generation);
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: before.data.id, title: 'Restored B' }),
+      present.generation,
+    );
   });
 
   // QNBS-v3: enqueue() resolving already clears the coordinator's own active slot, so a reset starting right after is invisible to wipeAllAppData()'s drain -- the post-save writes need their own re-check.
@@ -926,12 +944,12 @@ describe('export replacement signal (#553 §2.8)', () => {
     });
   }
 
-  beforeEach(() => _resetEditableProjectReplacementForTest());
+  beforeEach(() => _resetEditorProjectGenerationForTest());
 
   it('does not mark an ordinary edit of the same project as a replacement', () => {
     const store = makeProjectStore();
     store.dispatch(projectActions.updateTitle('Edited'));
-    expect(_editableProjectReplacedForTest()).toBe(false);
+    expect(_editorEpochForTest()).toBe(0);
   });
 
   it.each([
@@ -946,7 +964,8 @@ describe('export replacement signal (#553 §2.8)', () => {
     const sameId = store.getState().project.present.data;
     store.dispatch(replace({ ...sameId, title: 'Replacement B' }) as never);
     expect(store.getState().project.present.data.id).toBe(sameId.id);
-    expect(_editableProjectReplacedForTest()).toBe(true);
+    expect(_editorEpochForTest()).toBe(store.getState().project.present.generation);
+    expect(_editorEpochForTest()).not.toBe(0);
   });
 });
 

@@ -243,6 +243,56 @@ describe('FsProjectStore — projects', () => {
     expect(savedRaw).toContain('"opaqueTop":{"numeric":9007199254740993}');
   });
 
+  // QNBS-v3 (#553 a10): a replaced editor project (reset/import/restore B over same-ID A) is written whole — nothing of A's text, opaque data or routing metadata survives.
+  it('writes a replacement as a fresh document without the predecessor’s opaque data', async () => {
+    const source =
+      '{"schemaVersion":1,"id":"p1","title":"Project A","logline":"A","manuscript":[],"characters":[{"id":"c1","name":"Ada","opaqueNumber":9007199254740993}],"worlds":[],"opaqueTop":{"a":true},"__worldscriptLegacyAuxiliary":{"from":"A"}}';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/p1/project.json', source);
+    const projectB = { ...project, title: 'Restored B' };
+
+    await store.saveProject(projectB as never, { replacement: true });
+
+    const savedRaw = decompressJsonText(fake.text.get('/app/projects/p1/project.json') as string);
+    expect(savedRaw).not.toContain('opaque');
+    expect(savedRaw).not.toContain('Project A');
+    expect(savedRaw).not.toContain('__worldscriptLegacyAuxiliary');
+    expect(JSON.parse(savedRaw)).toEqual({ ...projectB, schemaVersion: 1 });
+  });
+
+  it('keeps the external-generation fence for a replacement', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    const concurrentRaw = JSON.stringify({ ...project, title: 'Concurrent writer' });
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (path: string, content: string, opts?: { createNew?: boolean }) => {
+      if (path.startsWith(`${sourcePath}.tmp-`)) {
+        fake.text.set(sourcePath, compressJsonText(concurrentRaw));
+      }
+      return originalWriteTextFile(path, content, opts);
+    };
+
+    await expect(
+      store.saveProject({ ...project, title: 'Replacement' } as never, { replacement: true }),
+    ).rejects.toMatchObject({ name: 'ProjectCanonicalWritebackError', projectId: 'p1' });
+    expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(concurrentRaw);
+  });
+
+  it('keeps the editing-baseline fence for a replacement from a stale window', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+    await store.loadProjectForEditing('p1');
+    const otherWindowRaw = JSON.stringify({ ...project, title: 'Other window' });
+    await fake.apis.writeTextFile(sourcePath, otherWindowRaw);
+
+    await expect(
+      store.saveProject({ ...project, title: 'Replacement' } as never, { replacement: true }),
+    ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(otherWindowRaw);
+  });
+
   it('removes an owned optional field from the current filesystem raw carrier when the snapshot omits it', async () => {
     const sourcePath = '/app/projects/p1/project.json';
     const source = JSON.stringify({

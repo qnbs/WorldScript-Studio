@@ -7,6 +7,7 @@ import type {
   ImageWriteAdmission,
   ProjectQuarantineResult,
   SaveProjectInput,
+  SaveProjectOptions,
   SnapshotRestoreTarget,
   StorageBackend,
 } from './storageBackend';
@@ -108,12 +109,12 @@ class StorageManager {
   }
 
   // Delegate all methods to the current backend
-  async saveProject(project: SaveProjectInput): Promise<void> {
+  async saveProject(project: SaveProjectInput, options?: SaveProjectOptions): Promise<void> {
     // QNBS-v3: StoryProject has no typed id, but persisted envelopes carry one -- a non-string id counts as unset, which a safe session refuses.
     const projectId = (flatProjectOf(project) as unknown as Record<string, unknown>)['id'];
     assertProjectPersistenceAdmitted(typeof projectId === 'string' ? projectId : undefined);
     const backend = await this.getBackend();
-    return backend.saveProject(project);
+    return backend.saveProject(project, options);
   }
 
   async loadProject(projectId: string): Promise<StoryProject | null> {

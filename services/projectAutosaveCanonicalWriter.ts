@@ -24,7 +24,8 @@ import {
  *   ordinary owned-edit commit in the SAME call -- the migration persisted the previously stored
  *   legacy state, while the current Redux snapshot may carry new user edits that a future debounce
  *   might never come to save.
- * - CURRENT -> the #777 bridge edit through commitCanonicalProjectEdit.
+ * - CURRENT -> the #777 bridge edit through commitCanonicalProjectEdit, or, for a replaced editor
+ *   project, a whole-document commitCanonicalProjectReplacement.
  * - FUTURE / SUPPORTED_OLDER / UNSUPPORTED_OLDER / MALFORMED / GENERATION_CONTRADICTION -> fail
  *   closed with a typed refusal; there is deliberately NO fallback to storageService.saveProject.
  *
@@ -128,6 +129,33 @@ async function commitSnapshotEdit(
   return result;
 }
 
+export interface CanonicalAutosaveOptions {
+  /** The editor project replaced the stored one; write it whole instead of overlaying it (#553 a10). */
+  replacement?: boolean;
+}
+
+// QNBS-v3 (#553 a10): one dispatch point for both CURRENT write paths, so the post-migration commit cannot silently fall back to an overlay of the predecessor's text.
+async function commitSnapshot(
+  snapshot: ProjectData,
+  authority: IdbProjectCanonicalAuthority,
+  currentRaw: CanonicalProjectRawText,
+  expectedGeneration: ProjectSourceGeneration,
+  options: CanonicalAutosaveOptions,
+): Promise<CanonicalAutosaveResult> {
+  if (!options.replacement) {
+    return commitSnapshotEdit(snapshot, authority, currentRaw, expectedGeneration);
+  }
+  const result = await authority.commitCanonicalProjectReplacement({
+    expectedGeneration,
+    currentRaw: buildInitialCanonicalRaw(snapshot),
+  });
+  if (result.status === 'COMMITTED') return { status: 'SAVED', generation: result.generation };
+  if (result.status === 'NOT_ADMITTED_FOR_WRITE') {
+    return resultForNonAdmittedClassification(result.classification);
+  }
+  return result;
+}
+
 async function handleLegacyUnversioned(
   authority: IdbProjectCanonicalAuthority,
 ): Promise<Evaluation> {
@@ -146,6 +174,7 @@ async function handleLegacyUnversioned(
 async function finishAfterMigration(
   snapshot: ProjectData,
   authority: IdbProjectCanonicalAuthority,
+  options: CanonicalAutosaveOptions,
 ): Promise<CanonicalAutosaveResult> {
   const admission = await authority.loadCanonicalProjectAdmission();
   if (admission.status !== 'CURRENT') {
@@ -156,11 +185,12 @@ async function finishAfterMigration(
     return resultForNonAdmittedClassification(admission.classification);
   }
 
-  const saved = await commitSnapshotEdit(
+  const saved = await commitSnapshot(
     snapshot,
     authority,
     admission.currentRaw,
     admission.generation,
+    options,
   );
   return saved.status === 'SAVED'
     ? { status: 'MIGRATED_AND_SAVED', generation: saved.generation }
@@ -170,6 +200,7 @@ async function finishAfterMigration(
 async function evaluateOnce(
   snapshot: ProjectData,
   authority: IdbProjectCanonicalAuthority,
+  options: CanonicalAutosaveOptions,
 ): Promise<Evaluation> {
   const admission = await authority.loadCanonicalProjectAdmission();
   switch (admission.status) {
@@ -185,7 +216,13 @@ async function evaluateOnce(
     }
     case 'CURRENT':
       return final(
-        await commitSnapshotEdit(snapshot, authority, admission.currentRaw, admission.generation),
+        await commitSnapshot(
+          snapshot,
+          authority,
+          admission.currentRaw,
+          admission.generation,
+          options,
+        ),
       );
     case 'NOT_ADMITTED':
       if (admission.classification === 'LEGACY_UNVERSIONED') {
@@ -200,12 +237,13 @@ async function evaluateOnce(
 export async function saveAutosaveSnapshotCanonical(
   snapshot: ProjectData,
   authority: IdbProjectCanonicalAuthority = idbProjectCanonicalAuthority,
+  options: CanonicalAutosaveOptions = {},
 ): Promise<CanonicalAutosaveResult> {
-  const first = await evaluateOnce(snapshot, authority);
+  const first = await evaluateOnce(snapshot, authority, options);
   if (first.outcome === 'FINAL') return first.result;
-  if (first.afterMigration === true) return finishAfterMigration(snapshot, authority);
+  if (first.afterMigration === true) return finishAfterMigration(snapshot, authority, options);
   // QNBS-v3: exactly one re-evaluation per invocation -- a second-pass state that would need yet another reload stops as CONFLICT; the next ordinary debounce cycle retries naturally.
-  const second = await evaluateOnce(snapshot, authority);
+  const second = await evaluateOnce(snapshot, authority, options);
   if (second.outcome !== 'FINAL') return { status: 'CONFLICT' };
   return second.result;
 }

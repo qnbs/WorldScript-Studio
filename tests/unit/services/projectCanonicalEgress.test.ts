@@ -4,13 +4,17 @@ vi.mock('../../../services/storageService', () => ({
   storageService: { loadEditorExportCarrier: vi.fn(), saveSnapshotText: vi.fn() },
 }));
 
+import {
+  _resetEditorProjectGenerationForTest,
+  noteEditorEpoch,
+  notePersistedEditorEpoch,
+  toEditorReplacementEpoch,
+} from '../../../services/editorProjectGeneration';
 import { StaleProjectWriterError } from '../../../services/fs/fsCore';
 import {
-  _resetEditableProjectReplacementForTest,
   createCanonicalProjectSnapshot,
   downloadCanonicalProjectExport,
   loadCanonicalEgressRaw,
-  noteEditableProjectGenerationChanged,
   overlayProjectOntoCanonicalRaw,
   ProjectEgressError,
   toPortableProjectRaw,
@@ -39,7 +43,7 @@ const edited = { ...stored, title: 'Unsaved edit' };
 
 beforeEach(() => {
   vi.mocked(storageService.loadEditorExportCarrier).mockReset();
-  _resetEditableProjectReplacementForTest();
+  _resetEditorProjectGenerationForTest();
 });
 
 describe('projectCanonicalEgress (#553 §2.8)', () => {
@@ -103,7 +107,7 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
 
   it('never overlays a replaced editor project onto the replaced project’s stored text', async () => {
     vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
-    noteEditableProjectGenerationChanged();
+    noteEditorEpoch(toEditorReplacementEpoch(1));
 
     const raw = await loadCanonicalEgressRaw('p1', { ...edited, title: 'Replacement B' } as never);
 
@@ -112,6 +116,23 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
     expect(raw).not.toContain('futureWidget');
     expect(raw).not.toContain('bigCount');
     expect(JSON.parse(raw)).toMatchObject({ title: 'Replacement B', schemaVersion: 1 });
+  });
+
+  it('reuses the stored text again once the replacement epoch of this target is committed', async () => {
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+    noteEditorEpoch(toEditorReplacementEpoch(1));
+    notePersistedEditorEpoch(edited, 'idb', toEditorReplacementEpoch(1));
+
+    expect(await loadCanonicalEgressRaw('p1', edited as never)).toContain('"futureWidget"');
+  });
+
+  it('never reuses a committed baseline for another storage target (Safe-Session rekey)', async () => {
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+    notePersistedEditorEpoch(edited, 'idb', toEditorReplacementEpoch(0));
+
+    const raw = await loadCanonicalEgressRaw('rekeyed', { ...edited, id: 'rekeyed' } as never);
+
+    expect(raw).not.toContain('futureWidget');
   });
 
   it.each([
@@ -127,7 +148,7 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
       vi.mocked(storageService.loadEditorExportCarrier).mockImplementation(() => {
         throw refusal;
       });
-      noteEditableProjectGenerationChanged();
+      noteEditorEpoch(toEditorReplacementEpoch(1));
 
       await expect(
         loadCanonicalEgressRaw('p1', { ...edited, title: 'Replacement B' } as never),
@@ -149,7 +170,7 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
 
   it('builds a manual snapshot of a replaced editor project from its own state, fence still asked', async () => {
     vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
-    noteEditableProjectGenerationChanged();
+    noteEditorEpoch(toEditorReplacementEpoch(1));
 
     await createCanonicalProjectSnapshot('manual', 'p1', {
       ...edited,

@@ -23,11 +23,11 @@ import {
   loadLocalRagService,
   loadRagVectorMigration,
 } from '../services/duckdb/duckdbListenerLoader';
+import { noteEditorEpoch, toEditorReplacementEpoch } from '../services/editorProjectGeneration';
 import { isFactoryResetInProgress } from '../services/factoryResetService';
 import { ProjectFileLockedError, StaleProjectWriterError } from '../services/fs/fsCore';
 import { logger } from '../services/logger';
 import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersistence';
-import { noteEditableProjectGenerationChanged } from '../services/projectCanonicalEgress';
 import { storageService } from '../services/storageService';
 import type { Character, StorySection, World } from '../types';
 import { isAnalyticsPersistenceAllowed } from './analyticsGate';
@@ -293,8 +293,9 @@ addDebouncedListener(
         return;
       }
       // QNBS-v3 (#332): skip stale indexing after a newer project snapshot supersedes this save.
+      const editorEpoch = toEditorReplacementEpoch(state.project?.present?.generation);
       const projectSaveResult = await projectPersistenceCoordinator.enqueue(() =>
-        persistProjectAutosaveSnapshot(enriched),
+        persistProjectAutosaveSnapshot(enriched, editorEpoch),
       );
       if (projectSaveResult.superseded) return;
 
@@ -546,7 +547,11 @@ listenerMiddleware.startListening({
       (listenerApi.getState() as RootState).project?.present?.generation !==
       (listenerApi.getOriginalState() as RootState).project?.present?.generation
     ) {
-      noteEditableProjectGenerationChanged();
+      noteEditorEpoch(
+        toEditorReplacementEpoch(
+          (listenerApi.getState() as RootState).project?.present?.generation,
+        ),
+      );
     }
     listenerApi.dispatch(writerActions.invalidateForProjectChange());
     listenerApi.dispatch(copilotActions.invalidateForProjectChange());

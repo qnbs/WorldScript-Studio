@@ -10,6 +10,7 @@
 
 import type { ProjectData } from '../features/project/projectSlice';
 import type { StoryProject } from '../types';
+import { currentProjectAuthority, isReplacementPending } from './editorProjectGeneration';
 import { buildInitialCanonicalRaw } from './projectAutosaveCanonicalWriter';
 import { buildAutosaveOwnedProjectEdit } from './projectAutosaveEditBridge';
 import { admitCanonicalProjectDocument, stripTopLevelObjectKeys } from './projectDocument';
@@ -70,21 +71,6 @@ function overlayOwnedEditOntoCanonicalRaw(
   return result.raw;
 }
 
-let editableProjectReplaced = false;
-
-// QNBS-v3 (#553 §2.8): ProjectSliceState.generation changes only when the editable project is replaced wholesale (reset, import, restore, or an undo across one), often keeping its id — from then on the stored text may still be the replaced project's, so export must not overlay onto it.
-export function noteEditableProjectGenerationChanged(): void {
-  editableProjectReplaced = true;
-}
-
-export function _resetEditableProjectReplacementForTest(): void {
-  editableProjectReplaced = false;
-}
-
-export function _editableProjectReplacedForTest(): boolean {
-  return editableProjectReplaced;
-}
-
 // QNBS-v3 (#553 §2.8): the backend resolves which stored project the editor is working on (a filesystem project's identity can be its directory, not its id) and is always asked, so a stale, refused or unsupported source fails closed; a replaced editor project then discards the stored text as content and is exported from its own state alone.
 export async function loadCanonicalEgressRaw(
   projectId: string | undefined,
@@ -98,7 +84,10 @@ async function loadEditorCanonicalRaw(
   project: ProjectData | StoryProject,
 ): Promise<CanonicalProjectRawText> {
   const storedRaw = await storageService.loadEditorExportCarrier(projectId);
-  return overlayOwnedEditOntoCanonicalRaw(project, editableProjectReplaced ? null : storedRaw);
+  return overlayOwnedEditOntoCanonicalRaw(
+    project,
+    isReplacementPending(project, currentProjectAuthority()) ? null : storedRaw,
+  );
 }
 
 // QNBS-v3 (#553 §2.8): a manual snapshot is the same canonical text export uses (same fence, same replacement rule) but stays local, so machine-local metadata is kept for the restore path that re-derives it.

@@ -99,8 +99,13 @@ export type CanonicalProjectRawResult =
   | { status: 'STALE' }
   | { status: 'UNSUPPORTED' };
 
+// QNBS-v3 (#553 a10): replacement = the editable project was replaced wholesale since storage last received it; write it as a fresh canonical document, never an edit of the predecessor's text.
+export interface SaveProjectOptions {
+  replacement?: boolean;
+}
+
 export interface StorageBackend {
-  saveProject(project: SaveProjectInput): Promise<void>;
+  saveProject(project: SaveProjectInput, options?: SaveProjectOptions): Promise<void>;
   loadProject(projectId: string): Promise<StoryProject | null>;
   /** QNBS-v3: editable desktop admission must reject readable legacy projections before Redux hydration. */
   loadProjectForEditing?(projectId: string): Promise<StoryProject | null>;

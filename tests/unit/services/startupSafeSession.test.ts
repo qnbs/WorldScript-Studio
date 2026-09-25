@@ -198,9 +198,10 @@ describe('persistProjectAutosaveSnapshot under the safe-session fence', () => {
 
     await persistProjectAutosaveSnapshot(snapshot(sessionIdentity()));
     expect(h.saveProject).toHaveBeenCalledTimes(1);
-    expect(h.saveProject).toHaveBeenCalledWith({
-      data: expect.objectContaining({ id: sessionIdentity() }),
-    });
+    expect(h.saveProject).toHaveBeenCalledWith(
+      { data: expect.objectContaining({ id: sessionIdentity() }) },
+      { replacement: false },
+    );
   });
 
   it('is untouched outside a safe session', async () => {
