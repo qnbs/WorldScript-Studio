@@ -2040,6 +2040,39 @@ describe('FsProjectStore — projects', () => {
 });
 
 // QNBS-v3 (#553): two FsProjectStore instances over one filesystem are two WorldScript processes. The #826 lock serializes their writes; these prove the load-generation baseline additionally refuses a writer whose snapshot predates another window's commit, instead of silently reverting that window's fields.
+describe('FsProjectStore — canonical raw egress (#553 §2.8)', () => {
+  it('returns the stored raw byte-for-byte, including integers the parsed projection rounds', async () => {
+    await store.saveProject({
+      id: 'p1',
+      schemaVersion: 1,
+      title: 'Raw egress',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    } as never);
+    const file = '/app/projects/p1/project.json';
+    const withOpaque = decompressJsonText(fake.text.get(file) as string).replace(
+      /}$/,
+      ',"futureWidget":{"k":1},"bigCount":9007199254740993}',
+    );
+    fake.text.set(file, withOpaque);
+
+    const result = await new FsProjectStore().loadCanonicalProjectRaw('p1');
+    const projection = await new FsProjectStore().loadProject('p1');
+
+    expect(result).toEqual({ status: 'CURRENT', raw: withOpaque });
+    // The parsed projection keeps the opaque object but cannot hold the exact integer.
+    expect(JSON.stringify(projection)).not.toContain('9007199254740993');
+  });
+
+  it('reports an absent project as ABSENT', async () => {
+    await expect(new FsProjectStore().loadCanonicalProjectRaw('missing')).resolves.toEqual({
+      status: 'ABSENT',
+    });
+  });
+});
+
 describe('FsProjectStore — stale independently-loaded writer', () => {
   const PROJECT_FILE = '/app/projects/p1/project.json';
   const base = {

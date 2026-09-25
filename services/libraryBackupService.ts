@@ -15,7 +15,10 @@ const PBKDF2_ITERATIONS = 600_000;
 
 export interface LibraryProjectBundle {
   projectId: string;
+  /** Readable typed view; lossy (drops opaque fields). `projectRaw` is the authoritative copy. */
   project: StoryProject | null;
+  /** QNBS-v3 (#553 §2.8): the stored canonical raw text — authoritative for any restore; null when the project could not be read. */
+  projectRaw: string | null;
   storyCodex: unknown;
   ragVectors: unknown[];
   binderAssets: Array<{
@@ -129,8 +132,10 @@ export async function collectLibraryBackupPayload(
   for (const projectId of projectIds) {
     // QNBS-v3 (DA-01): loadProject now throws on corrupt/unreadable data rather than returning null — one bad project must not abort the whole backup.
     let project: StoryProject | null;
+    let projectRaw: string | null = null;
     try {
       project = await storageService.loadProject(projectId);
+      projectRaw = project ? await storageService.loadCanonicalProjectRaw(projectId) : null;
     } catch (error) {
       // QNBS-v3 (codex P1): only the expected corruption/I-O case is swallowed — an unexpected bug must still surface, not be silently absorbed as "skip this project".
       if (!(error instanceof ProjectLoadError)) throw error;
@@ -163,6 +168,7 @@ export async function collectLibraryBackupPayload(
     projects.push({
       projectId,
       project,
+      projectRaw,
       storyCodex: codex,
       ragVectors,
       binderAssets,

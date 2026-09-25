@@ -20,6 +20,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { desktopPlatform } from '../services/desktopPlatform';
 import { wipeAllAppData } from '../services/factoryResetService';
 import { logger } from '../services/logger';
+import { loadCanonicalEgressRaw } from '../services/projectCanonicalEgress';
 import type { ProtectedStoreMigrationProgress } from '../services/storage/protectedStoreMigration';
 import {
   clearIdbEncryptionKey,
@@ -308,14 +309,22 @@ export const useSettingsView = () => {
     );
   }, [project.manuscript]);
 
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     if (!project) return;
     const projectToExport: StoryProject = {
       ...project,
       characters,
       worlds,
     };
-    const dataStr = JSON.stringify(projectToExport, null, 2);
+    let dataStr: string;
+    try {
+      // QNBS-v3 (#553 §2.8): the stored canonical raw with unsaved edits overlaid, so opaque fields and exact numbers survive the export.
+      dataStr = await loadCanonicalEgressRaw(project.id, projectToExport);
+    } catch (error) {
+      logger.error('Project export refused', error);
+      toast.error(t('export.exportFailed'));
+      return;
+    }
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
@@ -323,7 +332,7 @@ export const useSettingsView = () => {
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
-  }, [project, characters, worlds]);
+  }, [project, characters, worlds, toast, t]);
 
   const handleImport = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {

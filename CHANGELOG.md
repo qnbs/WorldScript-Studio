@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** project export (Settings and Dashboard "Export JSON") and the
+  encrypted library backup now write the project exactly as it is stored — with any unsaved edits
+  applied — instead of re-serializing a parsed copy. Before, very large whole numbers in a project
+  were silently rounded on the way out. The library backup keeps its readable `project` entry and
+  adds `projectRaw`, the exact stored text, for a future restore. If the stored project cannot be
+  combined with the current edits, the export now fails with a message instead of writing a lossy
+  file. Snapshots are handled in a follow-up. PR #837.
+
 - **Data integrity (#553):** a desktop window can no longer write into a project that another
   window deleted and then recreated under the same ID — even when the recreated project file is
   byte-identical to what the old window loaded. Every newly created project now gets a random

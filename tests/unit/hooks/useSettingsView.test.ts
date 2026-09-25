@@ -236,6 +236,7 @@ vi.mock('../../../services/storage/storageEncryptionService', () => ({
 
 vi.mock('../../../services/storageService', () => ({
   storageService: {
+    loadCanonicalProjectRaw: vi.fn().mockResolvedValue(null),
     listSnapshots: () => mockListSnapshots(),
     saveSnapshot: (name: string, project: unknown) => mockSaveSnapshot(name, project),
     deleteSnapshot: (id: number) => mockDeleteSnapshot(id),
@@ -481,13 +482,13 @@ describe('currentWordCount', () => {
 // handleExport
 // ---------------------------------------------------------------------------
 describe('handleExport', () => {
-  it('creates a JSON blob URL for download', () => {
+  it('creates a JSON blob URL for download', async () => {
     const mockCreateObjectURL = vi.mocked(URL.createObjectURL);
     mockCreateObjectURL.mockClear();
 
     const { result } = renderHook(() => useSettingsView());
-    act(() => {
-      result.current.handleExport();
+    await act(async () => {
+      await result.current.handleExport();
     });
     // QNBS-v3: verify blob URL created for JSON download link
     expect(mockCreateObjectURL).toHaveBeenCalled();

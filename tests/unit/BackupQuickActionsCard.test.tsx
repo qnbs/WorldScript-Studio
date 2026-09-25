@@ -51,6 +51,7 @@ vi.mock('../../features/status/statusSlice', () => ({
 vi.mock('../../services/storageService', () => ({
   storageService: {
     listSnapshots: (...args: unknown[]) => mockListSnapshots(...args),
+    loadCanonicalProjectRaw: vi.fn().mockResolvedValue(null),
   },
 }));
 

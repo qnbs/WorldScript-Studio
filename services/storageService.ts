@@ -31,6 +31,7 @@ export {
 // Import existing services
 import { dbService } from './dbService';
 import { fileSystemService } from './fileSystemService';
+import { ProjectLoadError } from './fs/projectFsStore';
 import { logger } from './logger';
 import {
   assertProjectNamespaceWriteAdmitted,
@@ -101,6 +102,20 @@ class StorageManager {
     const backend = await this.getBackend();
     if (backend.loadProjectForEditing) return backend.loadProjectForEditing(projectId);
     return backend.loadProject(projectId);
+  }
+
+  // QNBS-v3 (#553 §2.8): null means nothing is stored yet; a refused record throws like loadProject so egress never falls back to a lossy copy of it.
+  async loadCanonicalProjectRaw(projectId: string): Promise<string | null> {
+    const backend = await this.getBackend();
+    if (!backend.loadCanonicalProjectRaw) return null;
+    const result = await backend.loadCanonicalProjectRaw(projectId);
+    if (result.status === 'CURRENT') return result.raw;
+    if (result.status === 'ABSENT') return null;
+    throw new ProjectLoadError(
+      result.classification === 'MALFORMED' ? 'corrupt' : 'unsupported-version',
+      `The saved project "${projectId}" was refused as ${result.classification} and cannot be exported. It has not been changed.`,
+      projectId,
+    );
   }
 
   async listProjects(): Promise<string[]> {

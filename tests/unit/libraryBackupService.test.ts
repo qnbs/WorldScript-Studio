@@ -14,6 +14,7 @@ vi.mock('../../services/storageService', () => ({
     getStorageBackendKind: vi.fn(),
     listProjects: vi.fn(),
     loadProject: vi.fn(),
+    loadCanonicalProjectRaw: vi.fn(),
     getStoryCodex: vi.fn(),
     getRagVectors: vi.fn(),
     listBinderAssetIds: vi.fn(),
@@ -76,6 +77,21 @@ describe('libraryBackupService zip roundtrip', () => {
     expect(parsed.format).toBe(LIBRARY_BACKUP_FORMAT);
     expect(parsed.projects).toHaveLength(1);
     expect(parsed.projects[0]?.projectId).toBe('p1');
+  });
+
+  it('carries the stored canonical raw so opaque fields and exact numbers survive the backup', async () => {
+    const { storageService } = await import('../../services/storageService');
+    const storedRaw =
+      '{"id":"p1","title":"Test","futureWidget":{"k":1},"bigCount":9007199254740993}';
+    vi.mocked(storageService.loadCanonicalProjectRaw).mockResolvedValue(storedRaw);
+    const { buildEncryptedLibraryZipBlob } = await import('../../services/libraryBackupService');
+
+    const parsed = await decryptLibraryZipBlob(
+      await buildEncryptedLibraryZipBlob('zip-secret-pass'),
+      'zip-secret-pass',
+    );
+
+    expect(parsed.projects[0]?.projectRaw).toBe(storedRaw);
   });
 });
 

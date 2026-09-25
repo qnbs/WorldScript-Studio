@@ -28,9 +28,10 @@ import {
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
 import { logger } from '../logger';
-import type { SaveProjectInput } from '../storageBackend';
+import type { CanonicalProjectRawResult, SaveProjectInput } from '../storageBackend';
 import { IdbAssetStore } from './idbAssetStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
+import { idbProjectCanonicalAuthority } from './idbProjectCanonicalAuthority';
 import { withProtectedWriteAdmission } from './protectedWriteAdmission';
 import {
   assertIdbProtectedWriteAllowed,
@@ -237,6 +238,16 @@ function selectIdbProjectObservationTarget(project: unknown): unknown {
   return rawData === undefined ? project : rawData;
 }
 
+function storedProjectIdOf(raw: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const id =
+      parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)['id'] : undefined;
+    return typeof id === 'string' ? id : null;
+  } catch {
+    return null;
+  }
+}
 export class IdbProjectStore extends IdbAssetStore {
   // Helper to validate state structure and fix common issues
   private validateAndFixState(project: unknown, settings: unknown): PersistedState | undefined {
@@ -426,6 +437,18 @@ export class IdbProjectStore extends IdbAssetStore {
     // (or if no ID is set yet, return it for any query — single-project behaviour).
     if (raw.id && raw.id !== projectId) return null;
     return raw as unknown as StoryProject;
+  }
+
+  // QNBS-v3 (#553 §2.8): the canonical authority's own raw text, so egress keeps opaque fields and exact numeric tokens; a record for another project id reads as absent, like loadProject.
+  async loadCanonicalProjectRaw(projectId: string): Promise<CanonicalProjectRawResult> {
+    const admission = await idbProjectCanonicalAuthority.loadCanonicalProjectAdmission();
+    if (admission.status === 'ABSENT') return { status: 'ABSENT' };
+    if (admission.status !== 'CURRENT') {
+      return { status: 'REFUSED', classification: admission.classification };
+    }
+    const storedId = storedProjectIdOf(admission.currentRaw);
+    if (storedId !== null && storedId !== projectId) return { status: 'ABSENT' };
+    return { status: 'CURRENT', raw: admission.currentRaw };
   }
 
   async listProjects(): Promise<string[]> {

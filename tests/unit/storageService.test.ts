@@ -6,6 +6,7 @@ import { saveEnvelopeFromProjectData } from '../../services/storageBackend';
 const mockDb = {
   saveProject: vi.fn().mockResolvedValue(undefined),
   loadProject: vi.fn().mockResolvedValue(null),
+  loadCanonicalProjectRaw: vi.fn().mockResolvedValue({ status: 'ABSENT' }),
   listProjects: vi.fn().mockResolvedValue([]),
   deleteProject: vi.fn().mockResolvedValue(undefined),
   saveImage: vi.fn().mockResolvedValue(undefined),
@@ -69,6 +70,23 @@ describe('storageService (IndexedDB backend in browser)', () => {
     });
     await storageService.saveProject(payload);
     expect(mockDb.saveProject).toHaveBeenCalledWith(payload);
+  });
+
+  it('returns the stored canonical raw, null when absent, and refuses a non-admitted record (#553 §2.8)', async () => {
+    mockDb.loadCanonicalProjectRaw.mockResolvedValueOnce({ status: 'CURRENT', raw: '{"id":"p1"}' });
+    await expect(storageService.loadCanonicalProjectRaw('p1')).resolves.toBe('{"id":"p1"}');
+
+    mockDb.loadCanonicalProjectRaw.mockResolvedValueOnce({ status: 'ABSENT' });
+    await expect(storageService.loadCanonicalProjectRaw('p1')).resolves.toBeNull();
+
+    mockDb.loadCanonicalProjectRaw.mockResolvedValueOnce({
+      status: 'REFUSED',
+      classification: 'FUTURE',
+    });
+    await expect(storageService.loadCanonicalProjectRaw('p1')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'unsupported-version',
+    });
   });
 
   it('delegates loadProject to dbService', async () => {

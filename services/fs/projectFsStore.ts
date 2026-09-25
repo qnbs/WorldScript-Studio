@@ -26,6 +26,7 @@ import {
 } from '../projectDocumentWriteback';
 import { importedProjectJsonSchema, parseImportedProjectJson } from '../projectImportSchema';
 import {
+  type CanonicalProjectRawResult,
   normalizeSaveProjectInputToStoryProject,
   type ProjectQuarantineResult,
   type SaveProjectInput,
@@ -1122,6 +1123,17 @@ export class FsProjectStore extends FsAssetStore {
     return this.withLegacyRoutingOperation(() => this.loadProjectUnlocked(projectId));
   }
 
+  // QNBS-v3 (#553 §2.8): the admitted raw carrier, so export/backup keep opaque fields and exact numeric tokens instead of the typed projection.
+  async loadCanonicalProjectRaw(projectId: string): Promise<CanonicalProjectRawResult> {
+    return this.withLegacyRoutingOperation(async () => {
+      let raw: string | null = null;
+      const project = await this.loadProjectUnlocked(projectId, (_generation, admittedRaw) => {
+        raw = admittedRaw;
+      });
+      return project && raw !== null ? { status: 'CURRENT', raw } : { status: 'ABSENT' };
+    });
+  }
+
   // QNBS-v3: desktop bootstrap uses a distinct admission boundary so a readable legacy projection cannot enter the ordinary editable Redux store.
   async loadProjectForEditing(projectId: string): Promise<StoryProject | null> {
     return this.withLegacyRoutingOperation(async () => {
@@ -1187,7 +1199,7 @@ export class FsProjectStore extends FsAssetStore {
 
   private async loadProjectUnlocked(
     projectId: string,
-    onCanonicalGeneration?: (generation: ProjectSourceGeneration | null) => void,
+    onCanonicalGeneration?: (generation: ProjectSourceGeneration | null, raw: string) => void,
   ): Promise<StoryProject | null> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
@@ -1233,7 +1245,7 @@ export class FsProjectStore extends FsAssetStore {
         admission.status === 'LEGACY_TO_V1'
           ? withoutSyntheticLegacySchemaVersion(admission.canonical.projection)
           : admission.canonical.projection;
-      onCanonicalGeneration?.(currentGenerationOf(admission));
+      onCanonicalGeneration?.(currentGenerationOf(admission), admission.canonical.raw);
     } catch (error) {
       logger.error('Failed to parse project file (corrupt data):', error);
       throw new ProjectLoadError(

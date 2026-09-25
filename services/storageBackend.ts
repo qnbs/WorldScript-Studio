@@ -91,11 +91,18 @@ export function normalizeSaveProjectInputToStoryProject(project: SaveProjectInpu
  * Contract implemented by IndexedDB (`dbService`) and Tauri filesystem (`fileSystemService`).
  * Single source of truth — import from here, not from `storageService`, to avoid circular deps.
  */
+export type CanonicalProjectRawResult =
+  | { status: 'ABSENT' }
+  | { status: 'CURRENT'; raw: string }
+  | { status: 'REFUSED'; classification: string };
+
 export interface StorageBackend {
   saveProject(project: SaveProjectInput): Promise<void>;
   loadProject(projectId: string): Promise<StoryProject | null>;
   /** QNBS-v3: editable desktop admission must reject readable legacy projections before Redux hydration. */
   loadProjectForEditing?(projectId: string): Promise<StoryProject | null>;
+  /** QNBS-v3 (#553 §2.8): the stored canonical raw text for egress, never the typed projection that drops opaque fields. */
+  loadCanonicalProjectRaw?(projectId: string): Promise<CanonicalProjectRawResult>;
   listProjects(): Promise<string[]>;
   deleteProject(projectId: string): Promise<void>;
   /** QNBS-v3 (#332): optional — only the multi-project Tauri filesystem backend implements this; IndexedDB's single-project contract has no "which one" ambiguity to resolve. */
