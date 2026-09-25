@@ -78,16 +78,13 @@ export function _editableProjectReplacedForTest(): boolean {
   return editableProjectReplaced;
 }
 
-// QNBS-v3 (#553 §2.8): the backend resolves which stored project the editor is working on (a filesystem project's identity can be its directory, not its id) and refuses a stale editor; this layer never guesses a storage key. A replaced editor project is exported from its own state alone — everything it legitimately holds is in that state.
+// QNBS-v3 (#553 §2.8): the backend resolves which stored project the editor is working on (a filesystem project's identity can be its directory, not its id) and is always asked, so a stale, refused or unsupported source fails closed; a replaced editor project then discards the stored text as content and is exported from its own state alone.
 export async function loadCanonicalEgressRaw(
   projectId: string | undefined,
   project: ProjectData | StoryProject,
 ): Promise<CanonicalProjectRawText> {
-  if (editableProjectReplaced) return overlayProjectOntoCanonicalRaw(project, null);
-  return overlayProjectOntoCanonicalRaw(
-    project,
-    await storageService.loadEditorExportCarrier(projectId),
-  );
+  const storedRaw = await storageService.loadEditorExportCarrier(projectId);
+  return overlayProjectOntoCanonicalRaw(project, editableProjectReplaced ? null : storedRaw);
 }
 
 // QNBS-v3 (#553 §2.8): shared by both "Export JSON" buttons; a refusal writes no file and is reported through onRefused.

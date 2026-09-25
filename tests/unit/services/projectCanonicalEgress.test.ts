@@ -4,6 +4,7 @@ vi.mock('../../../services/storageService', () => ({
   storageService: { loadEditorExportCarrier: vi.fn() },
 }));
 
+import { StaleProjectWriterError } from '../../../services/fs/fsCore';
 import {
   _resetEditableProjectReplacementForTest,
   downloadCanonicalProjectExport,
@@ -105,9 +106,31 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
 
     const raw = await loadCanonicalEgressRaw('p1', { ...edited, title: 'Replacement B' } as never);
 
-    expect(storageService.loadEditorExportCarrier).not.toHaveBeenCalled();
+    // The backend fence is still consulted; only its payload is discarded.
+    expect(storageService.loadEditorExportCarrier).toHaveBeenCalledWith('p1');
     expect(raw).not.toContain('futureWidget');
     expect(raw).not.toContain('bigCount');
     expect(JSON.parse(raw)).toMatchObject({ title: 'Replacement B', schemaVersion: 1 });
   });
+
+  it.each([
+    [
+      'STALE (another window advanced, deleted, or recreated the project)',
+      new StaleProjectWriterError('p1'),
+    ],
+    ['REFUSED', new Error('refused')],
+    ['UNSUPPORTED', new Error('unsupported')],
+  ])(
+    'still refuses a replaced project’s export when the backend fence answers %s',
+    async (_label, refusal) => {
+      vi.mocked(storageService.loadEditorExportCarrier).mockImplementation(() => {
+        throw refusal;
+      });
+      noteEditableProjectGenerationChanged();
+
+      await expect(
+        loadCanonicalEgressRaw('p1', { ...edited, title: 'Replacement B' } as never),
+      ).rejects.toBe(refusal);
+    },
+  );
 });
