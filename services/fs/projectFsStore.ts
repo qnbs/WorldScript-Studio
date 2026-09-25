@@ -29,6 +29,7 @@ import {
   type CanonicalProjectRawResult,
   normalizeSaveProjectInputToStoryProject,
   type ProjectQuarantineResult,
+  type RestoredSnapshot,
   type SaveProjectInput,
   type SaveProjectOptions,
   type SnapshotRestoreTarget,
@@ -307,6 +308,23 @@ function overlayAutosaveWriteback(
 }
 
 // QNBS-v3 (#553 a10): a replaced editor project is written whole, like a created one — nothing of the stored predecessor's text survives, and its routing metadata is only what saveProjectUnlocked derived for this target, never inherited from the file being replaced.
+/** How an existing project file is replaced: null for an ordinary owned edit (#553 a10/a5). */
+type ReplacementWrite = { readonly carrier: string | undefined } | null;
+
+function replacementWriteOf(options: SaveProjectOptions | undefined): ReplacementWrite {
+  return options?.replacement === true ? { carrier: options.replacementRaw } : null;
+}
+
+// QNBS-v3 (#553 a5): a restored project keeps the snapshot's own admitted text with the editor's edits applied — the same overlay an ordinary save uses, only onto the carrier instead of the file being replaced; without a carrier it is written whole.
+function replacementWriteback(
+  projectToPersist: StoryProject,
+  replacement: NonNullable<ReplacementWrite>,
+): ProjectWritebackResult {
+  return replacement.carrier === undefined
+    ? freshReplacementWriteback(projectToPersist)
+    : overlayAutosaveWriteback(projectToPersist, replacement.carrier);
+}
+
 function freshReplacementWriteback(projectToPersist: StoryProject): ProjectWritebackResult {
   const raw = JSON.stringify(projectToPersist);
   const admission = admitCanonicalProjectDocument(raw, storedProjectSchema);
@@ -785,7 +803,7 @@ export class FsProjectStore extends FsAssetStore {
   async restoreSnapshot(
     snapshotId: number,
     currentProject: SnapshotRestoreTarget,
-  ): Promise<StoryProject> {
+  ): Promise<RestoredSnapshot<StoryProject>> {
     // QNBS-v3: serialize target validation and snapshot ownership checks so routing cannot change mid-restore.
     return this.withLegacyRoutingOperation(() =>
       this.restoreSnapshotUnlocked(snapshotId, currentProject),
@@ -795,7 +813,7 @@ export class FsProjectStore extends FsAssetStore {
   private async restoreSnapshotUnlocked(
     snapshotId: number,
     currentProject: SnapshotRestoreTarget,
-  ): Promise<StoryProject> {
+  ): Promise<RestoredSnapshot<StoryProject>> {
     const targetDirectory = snapshotRestoreTargetDirectory(currentProject);
     if (!targetDirectory) {
       throw new ProjectSnapshotRestoreError('target-unavailable');
@@ -886,13 +904,13 @@ export class FsProjectStore extends FsAssetStore {
     if (restoredText.status !== 'COMMITTED') {
       throw new ProjectSnapshotRestoreError('snapshot-invalid');
     }
-    // QNBS-v3 (#553 §2.8): admission only — persisting a restore is a same-ID replacement that must run after the thunk's live identity check and through the persistence coordinator (#553 a10), so nothing is written here.
-    return JSON.parse(restoredText.raw) as StoryProject;
+    // QNBS-v3 (#553 a5): admission only — the exact admitted text is returned, never kept here; the thunk binds it after its live identity check and the replacement save persists it through the persistence coordinator.
+    return { project: JSON.parse(restoredText.raw) as StoryProject, raw: restoredText.raw };
   }
 
   async saveProject(project: SaveProjectInput, options?: SaveProjectOptions): Promise<void> {
     return this.withLegacyRoutingOperation(() =>
-      this.saveProjectUnlocked(project, options?.replacement === true),
+      this.saveProjectUnlocked(project, replacementWriteOf(options)),
     );
   }
 
@@ -903,7 +921,7 @@ export class FsProjectStore extends FsAssetStore {
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
-    replacement: boolean,
+    replacement: ReplacementWrite,
   ): Promise<string> {
     const lockKeyPath = await this.projectLockKeyPath(apis, projectId);
     return withProjectFileLock(apis, lockKeyPath, () =>
@@ -924,7 +942,7 @@ export class FsProjectStore extends FsAssetStore {
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
-    replacement: boolean,
+    replacement: ReplacementWrite,
   ): Promise<string> {
     let sourceExists: boolean;
     try {
@@ -976,7 +994,7 @@ export class FsProjectStore extends FsAssetStore {
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
-    replacement: boolean,
+    replacement: ReplacementWrite,
   ): Promise<string> {
     // QNBS-v3 (#553): keep existing-project writeback as one preserve-first raw-carrier transaction boundary.
     let currentRaw: string;
@@ -1014,7 +1032,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new StaleProjectWriterError(projectId);
     }
     const writeback = replacement
-      ? freshReplacementWriteback(projectToPersist)
+      ? replacementWriteback(projectToPersist, replacement)
       : overlayAutosaveWriteback(projectToPersist, admission.canonical.raw);
     if (writeback.status !== 'COMMITTED') {
       throw new ProjectCanonicalWritebackError(
@@ -1047,7 +1065,7 @@ export class FsProjectStore extends FsAssetStore {
 
   private async saveProjectUnlocked(
     project: SaveProjectInput,
-    replacement: boolean,
+    replacement: ReplacementWrite,
   ): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
     const rawProjectId = (flat as unknown as Record<string, unknown>)['id'];

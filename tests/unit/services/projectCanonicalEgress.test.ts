@@ -10,6 +10,7 @@ vi.mock('../../../services/storageService', () => ({
 
 import {
   _resetEditorProjectGenerationForTest,
+  bindRestoreCarrier,
   noteEditorEpoch,
   notePersistedEditorEpoch,
   toEditorReplacementEpoch,
@@ -107,6 +108,25 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
     vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
     const raw = await loadCanonicalEgressRaw('p1', edited as never);
     expect(raw).toContain('"futureWidget"');
+  });
+
+  it('exports a restored editor project from its restore carrier, exact tokens kept', async () => {
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+    const carrier = JSON.stringify({ ...stored, title: 'Snapshot' }).replace(
+      /}$/,
+      ',"snapshotExact":9007199254740993}',
+    );
+    noteEditorEpoch(toEditorReplacementEpoch(1));
+    bindRestoreCarrier(edited, toEditorReplacementEpoch(1), carrier);
+
+    const raw = await loadCanonicalEgressRaw('p1', {
+      ...edited,
+      title: 'Snapshot, edited',
+    } as never);
+
+    expect(raw).toContain('"snapshotExact":9007199254740993');
+    expect(raw).not.toContain('futureWidget');
+    expect(JSON.parse(raw)).toMatchObject({ title: 'Snapshot, edited' });
   });
 
   it('never overlays a replaced editor project onto the replaced project’s stored text', async () => {

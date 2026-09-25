@@ -208,9 +208,12 @@ describe('storageService (IndexedDB backend in browser)', () => {
     await expect(
       storageService.restoreSnapshot(42, currentProject as never),
     ).resolves.toMatchObject({
-      id: 'p1',
-      title: 'Snapshot',
-      futureWidget: { k: 1 },
+      raw: expect.stringContaining('"futureWidget":{"k":1}'),
+      project: {
+        id: 'p1',
+        title: 'Snapshot',
+        futureWidget: { k: 1 },
+      },
     });
     expect(mockDb.getSnapshotData).toHaveBeenCalledWith(42);
 

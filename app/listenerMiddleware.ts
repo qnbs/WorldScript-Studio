@@ -10,6 +10,7 @@ import {
 } from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
+import { restoreSnapshotThunk } from '../features/project/thunks/projectManagementThunks';
 import { statusActions } from '../features/status/statusSlice';
 import { writerActions } from '../features/writer/writerSlice';
 import { DEFAULT_OPENROUTER_MODEL_ID } from '../services/ai/cloudModelCatalog';
@@ -24,6 +25,7 @@ import {
   loadRagVectorMigration,
 } from '../services/duckdb/duckdbListenerLoader';
 import {
+  bindRestoreCarrier,
   type EditorReplacementEpoch,
   noteEditorEpoch,
   toEditorReplacementEpoch,
@@ -1022,3 +1024,16 @@ export const startAppListening = listenerMiddleware.startListening as TypedStart
   RootState,
   AppDispatch
 >;
+
+// QNBS-v3 (#553 a5): runs after the reducer assigned the restore's editor epoch, so the admitted snapshot text is bound to exactly the project and epoch it produced — never earlier, and never for a restore that was discarded.
+listenerMiddleware.startListening({
+  actionCreator: restoreSnapshotThunk.fulfilled,
+  effect: (action, listenerApi) => {
+    const state = listenerApi.getState() as RootState;
+    bindRestoreCarrier(
+      state.project?.present?.data,
+      editorEpochOf(state),
+      action.meta.restoreCarrier,
+    );
+  },
+});

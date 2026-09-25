@@ -269,6 +269,29 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.has('/app/projects/p1/.incarnation')).toBe(true);
   });
 
+  // QNBS-v3 (#553 a5): a restored project is persisted from the snapshot's own admitted text — exact tokens and opaque fields survive, the editor's edit is applied, nothing of the replaced file remains.
+  it('persists a restore carrier byte-exactly with the editor edit applied', async () => {
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/p1/project.json',
+      '{"schemaVersion":1,"id":"p1","title":"Project A","logline":"A","manuscript":[],"characters":[],"worlds":[],"aOnly":true}',
+    );
+    const carrier =
+      '{"schemaVersion":1,"id":"p1","title":"Snapshot B","logline":"B","manuscript":[],"characters":[],"worlds":[],"exact":9007199254740993,"opaque":{"keep":true}}';
+
+    await store.saveProject({ ...project, title: 'Snapshot B, edited', logline: 'B' } as never, {
+      replacement: true,
+      replacementRaw: carrier,
+    });
+
+    const savedRaw = decompressJsonText(fake.text.get('/app/projects/p1/project.json') as string);
+    expect(savedRaw).toContain('"exact":9007199254740993');
+    expect(savedRaw).toContain('"opaque":{"keep":true}');
+    expect(savedRaw).toContain('"title":"Snapshot B, edited"');
+    expect(savedRaw).not.toContain('aOnly');
+    expect(savedRaw).not.toContain('Project A');
+  });
+
   it('keeps the editing-baseline fence for a replacement from a stale window', async () => {
     const sourcePath = '/app/projects/p1/project.json';
     await fake.apis.mkdir('/app/projects/p1', { recursive: true });
@@ -1647,7 +1670,7 @@ describe('FsProjectStore — projects', () => {
     });
     fake.text.set('/app/config/active-project-id.txt', 'p1');
 
-    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const { project: restored } = await store.restoreSnapshot(snapshotId, current as never);
 
     expect((restored as unknown as Record<string, unknown>)['id']).toBe('p2');
     expect(restored.title).toBe('Older second project content');
@@ -1663,7 +1686,7 @@ describe('FsProjectStore — projects', () => {
       manuscript: [{ id: 's-old', title: 'Older', content: 'previous draft' }],
     });
 
-    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const { project: restored } = await store.restoreSnapshot(snapshotId, current as never);
     const restoredRecord = restored as unknown as Record<string, unknown>;
 
     expect(restoredRecord['id']).toBe('p1');
@@ -1744,7 +1767,7 @@ describe('FsProjectStore — projects', () => {
       title: 'Legacy snapshot content',
     });
 
-    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const { project: restored } = await store.restoreSnapshot(snapshotId, current as never);
 
     expect(restored.title).toBe('Legacy snapshot content');
     expect((restored as unknown as Record<string, unknown>)['schemaVersion']).toBe(1);
@@ -1776,7 +1799,7 @@ describe('FsProjectStore — projects', () => {
       },
     });
 
-    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const { project: restored } = await store.restoreSnapshot(snapshotId, current as never);
     const restoredRecord = restored as unknown as Record<string, unknown>;
     const metadata = restoredRecord['__worldscriptLegacyAuxiliary'] as Record<string, unknown>;
 
@@ -2136,7 +2159,7 @@ describe('FsProjectStore — snapshot canonical carrier (#553 §2.8, a3/a5)', ()
     await editor.saveProject({ ...doc, title: 'Changed after snapshot' } as never);
     const before = fake.text.get(PROJECT_FILE);
 
-    const restored = await editor.restoreSnapshot(snapshotId, { ...doc } as never);
+    const { project: restored } = await editor.restoreSnapshot(snapshotId, { ...doc } as never);
 
     // Persisting a restore is the coordinated same-ID replacement write (#553 a10), never done here.
     expect(fake.text.get(PROJECT_FILE)).toBe(before);
@@ -2152,7 +2175,7 @@ describe('FsProjectStore — snapshot canonical carrier (#553 §2.8, a3/a5)', ()
       storedRaw.replace(/}$/, ',"__worldscriptLegacyProjectDirectory":"elsewhere"}'),
     );
 
-    const restored = await editor.restoreSnapshot(snapshotId, { ...doc } as never);
+    const { project: restored } = await editor.restoreSnapshot(snapshotId, { ...doc } as never);
 
     expect(restored).not.toHaveProperty('__worldscriptLegacyProjectDirectory');
   });
