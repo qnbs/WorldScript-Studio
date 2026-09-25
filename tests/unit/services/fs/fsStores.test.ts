@@ -2151,6 +2151,15 @@ describe('FsProjectStore — snapshot canonical carrier (#553 §2.8, a3/a5)', ()
     expect(snapshot).toBe(decompressJsonText(fake.text.get(PROJECT_FILE) as string));
   });
 
+  // QNBS-v3 (#553 a11): backup egress reads the stored snapshot text itself, never a parse of it.
+  it('returns a snapshot’s stored text byte-exact for backup egress, null when absent', async () => {
+    const storedRaw = await storedWithExactInteger();
+    const snapshotId = await store.saveSnapshotText('manual', storedRaw);
+
+    expect(await store.getSnapshotText(snapshotId)).toBe(storedRaw);
+    expect(await store.getSnapshotText(123456)).toBeNull();
+  });
+
   it('admits the snapshot’s own content for the target without writing the project', async () => {
     const storedRaw = await storedWithExactInteger();
     const editor = new FsProjectStore();
