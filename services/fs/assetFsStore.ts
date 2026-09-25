@@ -244,14 +244,18 @@ export class FsAssetStore extends FsSnapshotStore {
     data: ArrayBuffer,
     meta: BinderAssetMeta,
   ): Promise<void> {
-    await this.withAuxiliaryWriteOperation(async () => {
-      const apis = await this.getApis();
-      const { dir, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
-      if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
-      const metaOut: BinderAssetMeta = { ...meta, byteSize: data.byteLength };
-      await writeFileAtomic(apis, binFile, new Uint8Array(data));
-      await writeTextFileAtomic(apis, metaFile, JSON.stringify(metaOut));
-    }, projectId);
+    await this.withAuxiliaryWriteOperation(
+      async () => {
+        const apis = await this.getApis();
+        const { dir, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
+        if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
+        const metaOut: BinderAssetMeta = { ...meta, byteSize: data.byteLength };
+        await writeFileAtomic(apis, binFile, new Uint8Array(data));
+        await writeTextFileAtomic(apis, metaFile, JSON.stringify(metaOut));
+      },
+      projectId,
+      [this.binderFenceProjectId(projectId, assetId)],
+    );
   }
 
   async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
@@ -289,6 +293,7 @@ export class FsAssetStore extends FsSnapshotStore {
       await this.withAuxiliaryWriteOperation(
         () => this.deleteBinderAssetStrict(projectId, assetId),
         projectId,
+        [this.binderFenceProjectId(projectId, assetId)],
       );
     } catch (error) {
       if (this.isProjectWriteAuthorityError(error)) throw error;
@@ -358,17 +363,29 @@ export class FsAssetStore extends FsSnapshotStore {
   }
 
   async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
-    await this.withAuxiliaryWriteOperation(async () => {
-      const ids = await this.listBinderAssetIdsUnlocked(projectId);
-      await Promise.all(
-        ids.map(async (id) => {
-          try {
-            await this.deleteBinderAssetStrict(projectId, id);
-          } catch (error) {
-            logger.warn('deleteBinderAsset failed:', error);
-          }
-        }),
-      );
-    }, projectId);
+    await this.withAuxiliaryWriteOperation(
+      async () => {
+        const ids = await this.listBinderAssetIdsUnlocked(projectId);
+        await Promise.all(
+          ids.map(async (id) => {
+            try {
+              await this.deleteBinderAssetStrict(projectId, id);
+            } catch (error) {
+              logger.warn('deleteBinderAsset failed:', error);
+            }
+          }),
+        );
+      },
+      projectId,
+      [projectId, this.legacyBinderProjectId(projectId)].filter((id): id is string => id !== null),
+    );
+  }
+
+  private binderFenceProjectId(projectId: string, assetId: string): string {
+    return this.resolveAuxiliaryProjectId(
+      projectId,
+      'binder',
+      sanitizePathSegment(assetId, 'asset'),
+    );
   }
 }

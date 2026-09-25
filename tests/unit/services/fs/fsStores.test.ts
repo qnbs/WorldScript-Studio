@@ -67,7 +67,10 @@ import {
   ProjectFileLockedError,
   StaleProjectWriterError,
 } from '../../../../services/fs/fsCore';
-import { FsProjectStore, ProjectWritebackError } from '../../../../services/fs/projectFsStore';
+import {
+  FsProjectStore,
+  ProjectCanonicalWritebackError,
+} from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 
 // QNBS-v3: shared Binder fixture keeps schema-complete asset nodes consistent across filesystem cleanup and routing tests.
@@ -327,13 +330,13 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
   });
 
-  // QNBS-v3 (#553): the specific regression a fresh review caught — a lock colocated inside projects/<id>/ would be relocated by quarantine's rename and deleted by deleteProject's recursive remove, letting a concurrent writer wrongly conclude the path is free once a new projects/<id>/ is recreated. Proves the lock's new stable location survives both operations untouched.
+  // QNBS-v3 (#553): quarantine and delete now take the project lock themselves, so neither can run under a concurrent writer; the lock, living outside projects/<id>/, is never moved or removed by the refused operation.
   it.each([
-    ['quarantine', () => store.quarantineProject('p1')],
-    ['delete', () => store.deleteProject('p1')],
+    ['quarantine', () => store.quarantineProject('p1'), 'ProjectQuarantineError'],
+    ['delete', () => store.deleteProject('p1'), 'ProjectFileLockedError'],
   ])(
-    'keeps an active lock intact across a concurrent %s of the same project directory',
-    async (_label, act) => {
+    'refuses a %s while another writer holds the project lock, leaving both intact',
+    async (_label, act, errorName) => {
       const sourcePath = '/app/projects/p1/project.json';
       const lockPath = '/app/project-locks/p1.lock';
       await fake.apis.mkdir('/app/projects/p1', { recursive: true });
@@ -341,10 +344,9 @@ describe('FsProjectStore — projects', () => {
       await fake.apis.mkdir('/app/project-locks', { recursive: true });
       await fake.apis.writeTextFile(lockPath, 'locked');
 
-      await act();
+      await expect(act()).rejects.toMatchObject({ name: errorName });
 
-      // QNBS-v3: both operations remove/rename projects/p1 entirely — the lock, living outside that directory, must be unaffected.
-      expect(fake.text.has(sourcePath)).toBe(false);
+      expect(fake.text.has(sourcePath)).toBe(true);
       expect(fake.text.has(lockPath)).toBe(true);
     },
   );
@@ -1530,7 +1532,10 @@ describe('FsProjectStore — projects', () => {
       name: 'ProjectDeleteError',
       reason: 'identity-inspection-failed',
     });
-    expect(removeSpy).not.toHaveBeenCalled();
+    // Only the delete's own project-lock release may remove anything.
+    expect(
+      removeSpy.mock.calls.every(([path]) => String(path).startsWith('/app/project-locks/')),
+    ).toBe(true);
     expect(fake.text.has('/app/projects/p1/project.json')).toBe(true);
   });
 
@@ -2224,7 +2229,7 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
       async (_label, write) => {
         const [windowA] = await twoWindowsLoadedAtG0();
         vi.spyOn(fake.apis, 'exists').mockRejectedValue(new Error('EIO'));
-        await expect(write(windowA)).rejects.toBeInstanceOf(ProjectWritebackError);
+        await expect(write(windowA)).rejects.toBeInstanceOf(ProjectCanonicalWritebackError);
       },
     );
 
@@ -2258,6 +2263,36 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
         windowB.saveStoryCodex({ projectId: 'alias', entries: [] } as never),
       ).rejects.toBeInstanceOf(StaleProjectWriterError);
       expect(fake.text.has('/app/projects/p1/codex/codex.snap')).toBe(false);
+    });
+
+    it('fences a binder write only against the directory that asset is routed to', async () => {
+      await store.saveProject(base as never);
+      await store.saveProject({ ...base, id: 'legacy', title: 'Legacy' } as never);
+      const windowA = new FsProjectStore();
+      const windowB = new FsProjectStore();
+      await windowB.loadProjectForEditing('p1');
+      await windowB.loadProjectForEditing('legacy');
+      await windowA.loadProjectForEditing('legacy');
+      await windowA.saveProject({ ...base, id: 'legacy', title: 'Legacy changed by A' } as never);
+      (
+        windowB as unknown as {
+          registerLegacyAuxiliaryPolicy(
+            projectId: string,
+            legacyProjectId: string,
+            policy: { codex: boolean; binderAssetIds: ReadonlySet<string> },
+          ): void;
+        }
+      ).registerLegacyAuxiliaryPolicy('p1', 'legacy', {
+        codex: false,
+        binderAssetIds: new Set(['old']),
+      });
+
+      await expect(
+        windowB.saveBinderAsset('p1', 'fresh', new ArrayBuffer(3), meta),
+      ).resolves.toBeUndefined();
+      await expect(
+        windowB.saveBinderAsset('p1', 'old', new ArrayBuffer(3), meta),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
     });
 
     it('lets the refused window write assets again after reloading', async () => {

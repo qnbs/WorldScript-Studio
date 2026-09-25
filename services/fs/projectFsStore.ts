@@ -392,20 +392,18 @@ export class FsProjectStore extends FsAssetStore {
   protected override isProjectWriteAuthorityError(error: unknown): boolean {
     return (
       error instanceof ProjectWritebackError ||
+      error instanceof ProjectCanonicalWritebackError ||
       error instanceof StaleProjectWriterError ||
       error instanceof ProjectFileLockedError
     );
   }
 
-  // QNBS-v3 (#553): fence every project directory the write can land in — the named one plus any verified legacy directory its codex/binder data is routed to — so an alias caller cannot bypass the baseline recorded under the storage directory.
-  private auxiliaryFenceTargets(projectId: string): [string, ProjectSourceGeneration][] {
+  private auxiliaryFenceTargets(
+    fenceProjectIds: readonly string[],
+  ): [string, ProjectSourceGeneration][] {
     const targets = new Map<string, ProjectSourceGeneration>();
-    for (const id of [
-      projectId,
-      this.legacyCodexProjectId(projectId),
-      this.legacyBinderProjectId(projectId),
-    ]) {
-      const safeId = id ? projectPathSegment(id) : null;
+    for (const id of fenceProjectIds) {
+      const safeId = projectPathSegment(id);
       const baseline = safeId ? this.editingBaselines.get(safeId) : undefined;
       if (safeId && baseline !== undefined) targets.set(safeId, baseline);
     }
@@ -414,10 +412,10 @@ export class FsProjectStore extends FsAssetStore {
 
   // QNBS-v3 (#553): same verdict saveProject reaches, under the same cross-process lock held across the write, so another window cannot commit between check and write. No baseline (never edit-loaded, or deleted by this window) stays unfenced as before.
   protected override async runFencedAuxiliaryWrite<T>(
-    projectId: string,
+    fenceProjectIds: readonly string[],
     operation: () => Promise<T>,
   ): Promise<T> {
-    const targets = this.auxiliaryFenceTargets(projectId);
+    const targets = this.auxiliaryFenceTargets(fenceProjectIds);
     if (targets.length === 0) return operation();
     const apis = await this.getApis();
     const lockAndRun = async (index: number): Promise<T> => {
@@ -446,9 +444,12 @@ export class FsProjectStore extends FsAssetStore {
     try {
       exists = await apis.exists(projectFile);
       if (exists) raw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
-    } catch {
+    } catch (error) {
       // QNBS-v3 (#553): an unreadable fence is an authority error, not a generic failure the delete wrappers would log and report as done.
-      throw new ProjectWritebackError(safeProjectId);
+      throw new ProjectCanonicalWritebackError(
+        safeProjectId,
+        `stale-writer fence could not read the project file: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
     if (!exists) throw new StaleProjectWriterError(safeProjectId);
     if (currentGenerationOf(admitCanonicalProjectDocument(raw, storedProjectSchema)) !== baseline) {
@@ -1200,7 +1201,27 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   async quarantineProject(projectId: string): Promise<ProjectQuarantineResult> {
-    return this.withLegacyRoutingOperation(() => this.quarantineProjectUnlocked(projectId));
+    return this.withLegacyRoutingOperation(async () => {
+      try {
+        return await this.withProjectLockFor(projectId, () =>
+          this.quarantineProjectUnlocked(projectId),
+        );
+      } catch (error) {
+        if (!(error instanceof ProjectFileLockedError)) throw error;
+        logger.error('Project quarantine blocked by another writer holding the project lock', {
+          projectId,
+        });
+        throw new ProjectQuarantineError('io-error');
+      }
+    });
+  }
+
+  // QNBS-v3 (#553): destructive project operations take the lock fenced auxiliary writes hold, so a check that passed cannot be invalidated by a delete or quarantine before that write finishes.
+  private async withProjectLockFor<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
+    const safeProjectId = projectPathSegment(projectId);
+    if (!safeProjectId) return fn();
+    const apis = await this.getApis();
+    return withProjectFileLock(apis, await this.projectLockKeyPath(apis, safeProjectId), fn);
   }
 
   private async quarantineProjectUnlocked(projectId: string): Promise<ProjectQuarantineResult> {
@@ -1323,7 +1344,9 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   async deleteProject(projectId: string): Promise<void> {
-    return this.withLegacyRoutingOperation(() => this.deleteProjectUnlocked(projectId));
+    return this.withLegacyRoutingOperation(() =>
+      this.withProjectLockFor(projectId, () => this.deleteProjectUnlocked(projectId)),
+    );
   }
 
   private async deleteProjectUnlocked(projectId: string): Promise<void> {

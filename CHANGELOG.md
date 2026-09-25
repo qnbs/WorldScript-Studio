@@ -12,8 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only the project file itself, so a second window that had fallen behind (or whose project another
   window had deleted) could still overwrite or remove assets the other window was using. These
   writes now run the same check as project saves, under the same cross-process lock held through
-  the write (so another window cannot save in between), including data routed into a legacy
-  project directory, and are refused until the window reloads the project. Windows that never opened the project for editing, and the project's own deletion and
+  the write (so another window cannot save, delete or quarantine the project in between —
+  deleting or quarantining now waits for that lock too), checked against exactly the directory
+  each write lands in (including data routed into a legacy project directory), and are refused
+  until the window reloads the project. Windows that never opened the project for editing, and the project's own deletion and
   rollback paths, behave as before. PR #833.
 - **Data integrity (#553):** quitting or closing a desktop window can no longer mistake unsaved
   data for saved data. The save queue deliberately resolves — rather than rejects — an older save
