@@ -158,6 +158,22 @@ describe('IdbProjectStore.loadCanonicalProjectRaw — real authority (#553 §2.8
     });
   });
 
+  it('snapshots exactly the numbers IndexedDB holds — the text round trip adds no loss', async () => {
+    // IndexedDB stores JS numbers: 2 ** 53 + 1 is already 9007199254740992 before any egress runs.
+    const bigStored = 2 ** 53 + 1;
+    const fractional = 0.1 + 0.2;
+    await seed(current({ bigCount: bigStored, ratio: fractional }));
+    const store = new IdbProjectStore();
+
+    const carrier = await store.loadEditorExportCarrier('p1');
+    const id = await store.saveSnapshotText('manual', (carrier as { raw: string }).raw);
+    const snapshot = (await store.getSnapshotData(id)) as unknown as Record<string, unknown>;
+
+    expect(snapshot['bigCount']).toBe(bigStored);
+    expect(snapshot['ratio']).toBe(fractional);
+    expect(snapshot).toEqual(JSON.parse((carrier as { raw: string }).raw));
+  });
+
   it('reports nothing stored as absent', async () => {
     await expect(new IdbProjectStore().loadCanonicalProjectRaw('p1')).resolves.toEqual({
       status: 'ABSENT',

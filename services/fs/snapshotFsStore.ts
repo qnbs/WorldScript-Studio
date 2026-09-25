@@ -7,7 +7,7 @@ import type { ProjectSnapshot } from '../../types';
 import { logger } from '../logger';
 import { FsCodexStore } from './codexFsStore';
 import {
-  compressData,
+  compressJsonText,
   countProjectWords,
   decompressJsonText,
   retryFs,
@@ -25,6 +25,11 @@ interface SnapshotEnvelope {
 
 export class FsSnapshotStore extends FsCodexStore {
   async saveSnapshot(snapshotLabel: string, data: unknown): Promise<number> {
+    return this.saveSnapshotText(snapshotLabel, JSON.stringify(data));
+  }
+
+  // QNBS-v3 (#553 §2.8): stores the canonical project text exactly — same envelope format (compressData is compressJsonText of the JSON), so existing readers are unaffected.
+  async saveSnapshotText(snapshotLabel: string, projectJson: string): Promise<number> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const snapshotsPath = await apis.join(appDataPath, 'snapshots');
@@ -38,8 +43,8 @@ export class FsSnapshotStore extends FsCodexStore {
       id,
       name: snapshotLabel,
       date: new Date().toISOString(),
-      wordCount: countProjectWords(data),
-      data: compressData(data),
+      wordCount: countProjectWords(JSON.parse(projectJson)),
+      data: compressJsonText(projectJson),
     };
     const snapshotFile = await apis.join(snapshotsPath, `${id}.json`);
     await writeTextFileAtomic(apis, snapshotFile, JSON.stringify(envelope));

@@ -194,8 +194,29 @@ describe('storageService (IndexedDB backend in browser)', () => {
     expect(mockDb.getSnapshotData).toHaveBeenCalledWith(42);
 
     const currentProject = { id: 'p1', title: 'Current target' };
-    await storageService.restoreSnapshot(42, currentProject as never);
+    mockDb.getSnapshotData.mockResolvedValueOnce({
+      id: 'p1',
+      schemaVersion: 1,
+      title: 'Snapshot',
+      logline: 'L',
+      futureWidget: { k: 1 },
+    });
+    await expect(
+      storageService.restoreSnapshot(42, currentProject as never),
+    ).resolves.toMatchObject({
+      id: 'p1',
+      title: 'Snapshot',
+      futureWidget: { k: 1 },
+    });
     expect(mockDb.getSnapshotData).toHaveBeenCalledWith(42);
+
+    // QNBS-v3 (#553 §2.8, a6): a future-version snapshot never reaches the editor unchecked.
+    mockDb.getSnapshotData.mockResolvedValueOnce({ id: 'p1', schemaVersion: 99, title: 't' });
+    await expect(storageService.restoreSnapshot(42, currentProject as never)).rejects.toMatchObject(
+      {
+        reason: 'snapshot-invalid',
+      },
+    );
 
     await storageService.listSnapshots();
     expect(mockDb.listSnapshots).toHaveBeenCalled();

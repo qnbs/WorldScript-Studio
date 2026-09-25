@@ -232,6 +232,10 @@ export class CloudSyncBackend implements StorageBackend {
     throw new Error('CloudSyncBackend: snapshots are local-only');
   }
 
+  async saveSnapshotText(_label: string, _projectJson: string): Promise<number> {
+    throw new Error('CloudSyncBackend: snapshots are local-only');
+  }
+
   async getSnapshotData(_id: number): Promise<unknown> {
     throw new Error('CloudSyncBackend: snapshots are local-only');
   }

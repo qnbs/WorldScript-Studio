@@ -44,7 +44,14 @@ export function overlayProjectOntoCanonicalRaw(
   project: ProjectData | StoryProject,
   storedRaw: CanonicalProjectRawText | null,
 ): CanonicalProjectRawText {
-  if (storedRaw === null) return toPortableProjectRaw(buildInitialCanonicalRaw(project));
+  return toPortableProjectRaw(overlayOwnedEditOntoCanonicalRaw(project, storedRaw));
+}
+
+function overlayOwnedEditOntoCanonicalRaw(
+  project: ProjectData | StoryProject,
+  storedRaw: CanonicalProjectRawText | null,
+): CanonicalProjectRawText {
+  if (storedRaw === null) return buildInitialCanonicalRaw(project);
   let result: ReturnType<typeof commitOwnedProjectEdit>;
   try {
     result = commitOwnedProjectEdit({
@@ -60,7 +67,7 @@ export function overlayProjectOntoCanonicalRaw(
       result.status === 'CONFLICT' ? 'source generation changed' : result.status,
     );
   }
-  return toPortableProjectRaw(result.raw);
+  return result.raw;
 }
 
 let editableProjectReplaced = false;
@@ -83,8 +90,24 @@ export async function loadCanonicalEgressRaw(
   projectId: string | undefined,
   project: ProjectData | StoryProject,
 ): Promise<CanonicalProjectRawText> {
+  return toPortableProjectRaw(await loadEditorCanonicalRaw(projectId, project));
+}
+
+async function loadEditorCanonicalRaw(
+  projectId: string | undefined,
+  project: ProjectData | StoryProject,
+): Promise<CanonicalProjectRawText> {
   const storedRaw = await storageService.loadEditorExportCarrier(projectId);
-  return overlayProjectOntoCanonicalRaw(project, editableProjectReplaced ? null : storedRaw);
+  return overlayOwnedEditOntoCanonicalRaw(project, editableProjectReplaced ? null : storedRaw);
+}
+
+// QNBS-v3 (#553 §2.8): a manual snapshot is the same canonical text export uses (same fence, same replacement rule) but stays local, so machine-local metadata is kept for the restore path that re-derives it.
+export async function createCanonicalProjectSnapshot(
+  name: string,
+  projectId: string | undefined,
+  project: ProjectData | StoryProject,
+): Promise<number> {
+  return storageService.saveSnapshotText(name, await loadEditorCanonicalRaw(projectId, project));
 }
 
 // QNBS-v3 (#553 §2.8): shared by both "Export JSON" buttons; a refusal writes no file and is reported through onRefused.
