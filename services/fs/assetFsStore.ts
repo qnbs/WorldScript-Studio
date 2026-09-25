@@ -111,17 +111,35 @@ export class FsAssetStore extends FsSnapshotStore {
     writeAdmission?: ImageWriteAdmission,
   ): Promise<void> {
     // QNBS-v3: serialize replacement writes with deletes so a pending remove cannot erase the newly committed image.
-    await this.withLegacyRoutingOperation(async () => {
-      // QNBS-v3: [Admission before temp-file creation / Reject already-stale writes without disk residue / Preserve filesystem authority]
-      writeAdmission?.();
-      const apis = await this.getApis();
-      const { dir, file } = await this.qualifiedImagePaths(projectId, id);
-      if (!(await apis.exists(dir))) {
-        await apis.mkdir(dir, { recursive: true });
-      }
-      // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
-      await writeTextFileAtomic(apis, file, base64Data, writeAdmission);
-    }, projectId);
+    await this.withAuxiliaryWriteOperation(
+      () => this.writeQualifiedImage(id, base64Data, projectId, writeAdmission),
+      projectId,
+    );
+  }
+
+  // QNBS-v3 (#553): file import writes into the shared default namespace, not an edited project's, so it keeps its pre-fence behavior.
+  protected async saveImageUnfenced(id: string, base64Data: string): Promise<void> {
+    await this.withLegacyRoutingOperation(
+      () => this.writeQualifiedImage(id, base64Data, 'default'),
+      'default',
+    );
+  }
+
+  private async writeQualifiedImage(
+    id: string,
+    base64Data: string,
+    projectId: string,
+    writeAdmission?: ImageWriteAdmission,
+  ): Promise<void> {
+    // QNBS-v3: [Admission before temp-file creation / Reject already-stale writes without disk residue / Preserve filesystem authority]
+    writeAdmission?.();
+    const apis = await this.getApis();
+    const { dir, file } = await this.qualifiedImagePaths(projectId, id);
+    if (!(await apis.exists(dir))) {
+      await apis.mkdir(dir, { recursive: true });
+    }
+    // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
+    await writeTextFileAtomic(apis, file, base64Data, writeAdmission);
   }
 
   async getImage(id: string, projectId = 'default'): Promise<string | null> {
@@ -158,7 +176,7 @@ export class FsAssetStore extends FsSnapshotStore {
   ): Promise<void> {
     try {
       // QNBS-v3: serialized + write-authority-checked like deleteBinderAsset -- an unserialized ownership check could go stale against a concurrent project creation and delete another project's unattributed legacy image.
-      await this.withLegacyRoutingOperation(async () => {
+      await this.withAuxiliaryWriteOperation(async () => {
         const apis = await this.getApis();
         const qualifiedFile = (await this.qualifiedImagePaths(projectId, id)).file;
         // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when ownership is already provable; otherwise it may belong to a different (possibly already-deleted) project, so leave it untouched rather than risk destroying another project's image.
@@ -226,14 +244,18 @@ export class FsAssetStore extends FsSnapshotStore {
     data: ArrayBuffer,
     meta: BinderAssetMeta,
   ): Promise<void> {
-    await this.withLegacyRoutingOperation(async () => {
-      const apis = await this.getApis();
-      const { dir, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
-      if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
-      const metaOut: BinderAssetMeta = { ...meta, byteSize: data.byteLength };
-      await writeFileAtomic(apis, binFile, new Uint8Array(data));
-      await writeTextFileAtomic(apis, metaFile, JSON.stringify(metaOut));
-    }, projectId);
+    await this.withAuxiliaryWriteOperation(
+      async () => {
+        const apis = await this.getApis();
+        const { dir, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
+        if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
+        const metaOut: BinderAssetMeta = { ...meta, byteSize: data.byteLength };
+        await writeFileAtomic(apis, binFile, new Uint8Array(data));
+        await writeTextFileAtomic(apis, metaFile, JSON.stringify(metaOut));
+      },
+      projectId,
+      () => this.binderFenceProjectIds(projectId, assetId),
+    );
   }
 
   async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
@@ -268,9 +290,10 @@ export class FsAssetStore extends FsSnapshotStore {
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
     try {
-      await this.withLegacyRoutingOperation(
+      await this.withAuxiliaryWriteOperation(
         () => this.deleteBinderAssetStrict(projectId, assetId),
         projectId,
+        () => this.binderFenceProjectIds(projectId, assetId),
       );
     } catch (error) {
       if (this.isProjectWriteAuthorityError(error)) throw error;
@@ -295,7 +318,8 @@ export class FsAssetStore extends FsSnapshotStore {
     }
   }
 
-  private async listBinderAssetIdsUnlocked(projectId: string): Promise<string[]> {
+  // QNBS-v3 (#553): strict mode is for bulk deletion — an unreadable directory must fail it rather than read as "nothing left to delete".
+  private async listBinderAssetIdsUnlocked(projectId: string, strict = false): Promise<string[]> {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
@@ -324,6 +348,7 @@ export class FsAssetStore extends FsSnapshotStore {
             }
           }
         } catch (error) {
+          if (strict) throw error;
           // QNBS-v3: one unreadable legacy directory must not erase IDs already collected from a healthy project directory.
           logger.warn('listBinderAssetIds: skipped unreadable project directory', {
             projectId,
@@ -334,23 +359,37 @@ export class FsAssetStore extends FsSnapshotStore {
       }
       return [...ids];
     } catch (error) {
+      if (strict) throw error;
       logger.warn('listBinderAssetIds failed:', error);
       return [];
     }
   }
 
   async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
-    await this.withLegacyRoutingOperation(async () => {
-      const ids = await this.listBinderAssetIdsUnlocked(projectId);
-      await Promise.all(
-        ids.map(async (id) => {
-          try {
-            await this.deleteBinderAssetStrict(projectId, id);
-          } catch (error) {
-            logger.warn('deleteBinderAsset failed:', error);
-          }
-        }),
-      );
-    }, projectId);
+    await this.withAuxiliaryWriteOperation(
+      async () => {
+        const ids = await this.listBinderAssetIdsUnlocked(projectId, true);
+        const results = await Promise.allSettled(
+          ids.map((id) => this.deleteBinderAssetStrict(projectId, id)),
+        );
+        const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+        for (const failure of failures) logger.warn('deleteBinderAsset failed:', failure.reason);
+        // QNBS-v3 (#553): every asset is still attempted, but a partial cleanup must not report success while files remain.
+        if (failures.length > 0) throw failures[0]?.reason;
+      },
+      projectId,
+      () =>
+        [projectId, this.legacyBinderProjectId(projectId)].filter(
+          (id): id is string => id !== null,
+        ),
+    );
+  }
+
+  // QNBS-v3 (#553): the logical project (whose baseline the editing window holds) and the directory the asset is routed to.
+  private binderFenceProjectIds(projectId: string, assetId: string): string[] {
+    return [
+      projectId,
+      this.resolveAuxiliaryProjectId(projectId, 'binder', sanitizePathSegment(assetId, 'asset')),
+    ];
   }
 }
