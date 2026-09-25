@@ -1,6 +1,5 @@
 import type { ProjectData } from '../features/project/projectSlice';
 import {
-  currentProjectAuthority,
   type EditorReplacementEpoch,
   isReplacementPending,
   notePersistedEditorEpoch,
@@ -13,6 +12,7 @@ import {
 import { assertProjectPersistenceAdmitted } from './startupSafeSession';
 import { saveEnvelopeFromProjectData } from './storageBackend';
 import { storageService } from './storageService';
+import { isTauriRuntime } from './tauriRuntime';
 
 /**
  * Persists one autosave snapshot through the authority appropriate to the running product.
@@ -30,9 +30,9 @@ export async function persistProjectAutosaveSnapshot(
   editorEpoch: EditorReplacementEpoch = toEditorReplacementEpoch(0),
 ): Promise<void> {
   assertProjectPersistenceAdmitted(snapshot.id);
-  const authority = currentProjectAuthority();
+  const authority = await storageService.getProjectAuthority();
   const replacement = isReplacementPending(snapshot, authority, editorEpoch);
-  if (authority === 'fs') {
+  if (isTauriRuntime()) {
     await storageService.saveProject(saveEnvelopeFromProjectData(snapshot), { replacement });
   } else {
     const result = await saveAutosaveSnapshotCanonical(snapshot, undefined, { replacement });

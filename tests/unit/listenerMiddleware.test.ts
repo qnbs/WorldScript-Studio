@@ -472,6 +472,30 @@ describe('auto-save project listener', () => {
     expect(mockPersistProjectAutosaveSnapshot).not.toHaveBeenCalled();
   });
 
+  // QNBS-v3 (#553 a10): a save suspended in the health check must not enqueue the state it was armed with — a newer save could already have enqueued, and this older capture would overwrite it.
+  it('saves the newest state, not the one captured before the health-check await', async () => {
+    let resolveHealth: (value: { ok: boolean; warning: string | null }) => void = () => {};
+    mockCheckStorageHealth.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHealth = resolve;
+      }),
+    );
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Armed'));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mockCheckStorageHealth).toHaveBeenCalled();
+
+    store.dispatch(projectActions.updateTitle('Newer'));
+    resolveHealth({ ok: true, warning: null });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenCalledTimes(1);
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: 'Newer' }),
+      store.getState().project.present.generation,
+    );
+  });
+
   // QNBS-v3 (#553 a10): a restore reaches storage through the ordinary autosave, carrying the epoch read from the same state as its data, so persistence writes it as a replacement.
   it('autosaves a same-id restore with the restored data and its new editor epoch together', async () => {
     const store = makeFullStore();

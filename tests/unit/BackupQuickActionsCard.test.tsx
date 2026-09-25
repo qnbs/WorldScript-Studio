@@ -53,6 +53,7 @@ vi.mock('../../services/storageService', () => ({
   storageService: {
     listSnapshots: (...args: unknown[]) => mockListSnapshots(...args),
     loadEditorExportCarrier: vi.fn().mockResolvedValue(null),
+    getProjectAuthority: vi.fn().mockResolvedValue('idb'),
   },
 }));
 

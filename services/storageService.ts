@@ -75,6 +75,8 @@ function canonicalRawOrThrow(result: CanonicalProjectRawResult, projectId: strin
       );
   }
 }
+export type ProjectAuthority = 'fs' | 'idb';
+
 class StorageManager {
   private backend: StorageBackend;
   private ready: Promise<void>;
@@ -106,6 +108,12 @@ class StorageManager {
   private async getBackend(): Promise<StorageBackend> {
     await this.ready;
     return this.backend;
+  }
+
+  // QNBS-v3 (#553 a10): the replacement baseline is bound to the storage that really holds the project — a desktop build whose filesystem init failed runs on IndexedDB and must not share the 'fs' baseline.
+  async getProjectAuthority(): Promise<ProjectAuthority> {
+    const backend = await this.getBackend();
+    return backend === fileSystemService ? 'fs' : 'idb';
   }
 
   // Delegate all methods to the current backend

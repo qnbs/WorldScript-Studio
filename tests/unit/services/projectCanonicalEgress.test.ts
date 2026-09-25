@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../services/storageService', () => ({
-  storageService: { loadEditorExportCarrier: vi.fn(), saveSnapshotText: vi.fn() },
+  storageService: {
+    loadEditorExportCarrier: vi.fn(),
+    saveSnapshotText: vi.fn(),
+    getProjectAuthority: vi.fn(async () => 'idb'),
+  },
 }));
 
 import {

@@ -10,7 +10,7 @@
 
 import type { ProjectData } from '../features/project/projectSlice';
 import type { StoryProject } from '../types';
-import { currentProjectAuthority, isReplacementPending } from './editorProjectGeneration';
+import { isReplacementPending } from './editorProjectGeneration';
 import { buildInitialCanonicalRaw } from './projectAutosaveCanonicalWriter';
 import { buildAutosaveOwnedProjectEdit } from './projectAutosaveEditBridge';
 import { admitCanonicalProjectDocument, stripTopLevelObjectKeys } from './projectDocument';
@@ -84,10 +84,8 @@ async function loadEditorCanonicalRaw(
   project: ProjectData | StoryProject,
 ): Promise<CanonicalProjectRawText> {
   const storedRaw = await storageService.loadEditorExportCarrier(projectId);
-  return overlayOwnedEditOntoCanonicalRaw(
-    project,
-    isReplacementPending(project, currentProjectAuthority()) ? null : storedRaw,
-  );
+  const replaced = isReplacementPending(project, await storageService.getProjectAuthority());
+  return overlayOwnedEditOntoCanonicalRaw(project, replaced ? null : storedRaw);
 }
 
 // QNBS-v3 (#553 §2.8): a manual snapshot is the same canonical text export uses (same fence, same replacement rule) but stays local, so machine-local metadata is kept for the restore path that re-derives it.

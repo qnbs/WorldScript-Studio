@@ -19,7 +19,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock('../../../services/tauriRuntime', () => ({ isTauriRuntime: () => h.isTauri.value }));
 vi.mock('../../../services/storageService', () => ({
-  storageService: { saveProject: h.saveProject },
+  storageService: { saveProject: h.saveProject, getProjectAuthority: async () => 'fs' },
 }));
 vi.mock('../../../services/projectAutosaveCanonicalWriter', () => ({
   saveAutosaveSnapshotCanonical: h.saveAutosaveSnapshotCanonical,

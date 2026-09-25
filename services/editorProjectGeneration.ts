@@ -11,7 +11,6 @@
  */
 
 import { getProjectTargetStorageId } from '../features/project/projectIdentity';
-import { isTauriRuntime } from './tauriRuntime';
 
 declare const editorEpochBrand: unique symbol;
 export type EditorReplacementEpoch = number & { readonly [editorEpochBrand]: true };
@@ -29,11 +28,6 @@ interface PersistedBaseline {
 const BOOT_EPOCH = toEditorReplacementEpoch(0);
 let editorEpoch: EditorReplacementEpoch = BOOT_EPOCH;
 let baseline: PersistedBaseline | null = null;
-
-/** The storage authority project saves and canonical reads resolve to in this runtime. */
-export function currentProjectAuthority(): string {
-  return isTauriRuntime() ? 'fs' : 'idb';
-}
 
 /** Called by the project-change listener whenever `present.generation` changes. */
 export function noteEditorEpoch(epoch: EditorReplacementEpoch): void {

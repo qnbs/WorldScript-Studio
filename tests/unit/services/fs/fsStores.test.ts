@@ -260,23 +260,13 @@ describe('FsProjectStore — projects', () => {
     expect(JSON.parse(savedRaw)).toEqual({ ...projectB, schemaVersion: 1 });
   });
 
-  it('keeps the external-generation fence for a replacement', async () => {
-    const sourcePath = '/app/projects/p1/project.json';
-    const concurrentRaw = JSON.stringify({ ...project, title: 'Concurrent writer' });
-    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
-    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
-    const originalWriteTextFile = fake.apis.writeTextFile;
-    fake.apis.writeTextFile = (path: string, content: string, opts?: { createNew?: boolean }) => {
-      if (path.startsWith(`${sourcePath}.tmp-`)) {
-        fake.text.set(sourcePath, compressJsonText(concurrentRaw));
-      }
-      return originalWriteTextFile(path, content, opts);
-    };
+  // QNBS-v3 (#553 a10): a first-ever save flagged as a replacement (a reset or Safe-Session identity) still takes the create branch — there is no predecessor to replace.
+  it('creates an absent project normally when the save is flagged as a replacement', async () => {
+    await store.saveProject(project as never, { replacement: true });
 
-    await expect(
-      store.saveProject({ ...project, title: 'Replacement' } as never, { replacement: true }),
-    ).rejects.toMatchObject({ name: 'ProjectCanonicalWritebackError', projectId: 'p1' });
-    expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(concurrentRaw);
+    const savedRaw = decompressJsonText(fake.text.get('/app/projects/p1/project.json') as string);
+    expect(JSON.parse(savedRaw)).toEqual(project);
+    expect(fake.text.has('/app/projects/p1/.incarnation')).toBe(true);
   });
 
   it('keeps the editing-baseline fence for a replacement from a stale window', async () => {
@@ -307,32 +297,40 @@ describe('FsProjectStore — projects', () => {
     expect(decompressJsonText(fake.text.get(sourcePath) as string)).not.toContain('"aiPreset"');
   });
 
-  it('refuses an external source generation change before atomic filesystem replacement', async () => {
-    const sourcePath = '/app/projects/p1/project.json';
-    const concurrentRaw = JSON.stringify({
-      ...project,
-      title: 'Concurrent writer',
-    });
-    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
-    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
-    const originalWriteTextFile = fake.apis.writeTextFile;
-    fake.apis.writeTextFile = (path: string, content: string, opts?: { createNew?: boolean }) => {
-      if (path.startsWith(`${sourcePath}.tmp-`)) {
-        fake.text.set(sourcePath, compressJsonText(concurrentRaw));
-      }
-      return originalWriteTextFile(path, content, opts);
-    };
+  it.each([
+    ['an owned edit', undefined],
+    ['a replacement', { replacement: true }],
+  ])(
+    'refuses an external source generation change before atomic filesystem replacement (%s)',
+    async (_label, options) => {
+      const sourcePath = '/app/projects/p1/project.json';
+      const concurrentRaw = JSON.stringify({
+        ...project,
+        title: 'Concurrent writer',
+      });
+      await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+      await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+      const originalWriteTextFile = fake.apis.writeTextFile;
+      fake.apis.writeTextFile = (path: string, content: string, opts?: { createNew?: boolean }) => {
+        if (path.startsWith(`${sourcePath}.tmp-`)) {
+          fake.text.set(sourcePath, compressJsonText(concurrentRaw));
+        }
+        return originalWriteTextFile(path, content, opts);
+      };
 
-    await expect(
-      store.saveProject({ ...project, title: 'Local writer' } as never),
-    ).rejects.toMatchObject({
-      name: 'ProjectCanonicalWritebackError',
-      projectId: 'p1',
-      detail: expect.stringContaining('source generation changed before atomic replacement'),
-    });
-    expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(concurrentRaw);
-    expect([...fake.text.keys()].some((path) => path.startsWith(`${sourcePath}.tmp-`))).toBe(false);
-  });
+      await expect(
+        store.saveProject({ ...project, title: 'Local writer' } as never, options),
+      ).rejects.toMatchObject({
+        name: 'ProjectCanonicalWritebackError',
+        projectId: 'p1',
+        detail: expect.stringContaining('source generation changed before atomic replacement'),
+      });
+      expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(concurrentRaw);
+      expect([...fake.text.keys()].some((path) => path.startsWith(`${sourcePath}.tmp-`))).toBe(
+        false,
+      );
+    },
+  );
 
   // QNBS-v3 (#553): the generation re-check above narrows the TOCTOU gap but does not close it — these prove the cross-process lock actually gates persistExistingCanonicalProject.
   it('acquires and releases a cross-process lock around an existing-project save', async () => {

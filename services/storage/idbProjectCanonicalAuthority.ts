@@ -460,13 +460,10 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
   }): Promise<CommitCanonicalProjectEditResult> {
     const { admission, rawRecordSnapshot } = await this.readCanonicalProjectSnapshot();
     if (admission.status !== 'CURRENT') {
-      const classification =
-        admission.status === 'ABSENT'
-          ? 'ABSENT'
-          : admission.status === 'GENERATION_CONTRADICTION'
-            ? `GENERATION_CONTRADICTION:${admission.classification}`
-            : admission.classification;
-      return { status: 'NOT_ADMITTED_FOR_WRITE', classification };
+      return {
+        status: 'NOT_ADMITTED_FOR_WRITE',
+        classification: nonCurrentClassification(admission),
+      };
     }
 
     const applied = commitOwnedProjectEdit({
@@ -640,7 +637,7 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
     if (admission.status !== 'CURRENT') {
       return {
         status: 'NOT_ADMITTED_FOR_WRITE',
-        classification: admission.status === 'ABSENT' ? 'ABSENT' : admission.classification,
+        classification: nonCurrentClassification(admission),
       };
     }
     if (admission.generation !== params.expectedGeneration) return { status: 'CONFLICT' };
@@ -780,4 +777,15 @@ function prepareFreshCanonicalPayload(
     newPayload: rewrapProjectEnvelope(parsedPayload, { kind: 'data', originalEnvelope: {} }),
     newGeneration: computeProjectSourceGeneration(JSON.stringify(parsedPayload)),
   };
+}
+
+// QNBS-v3 (#553 §2.7): edit and replacement report a non-CURRENT record identically, keeping the GENERATION_CONTRADICTION prefix the autosave writer maps to its own refusal.
+function nonCurrentClassification(
+  admission: Exclude<CanonicalProjectAdmission, { status: 'CURRENT' }>,
+): string {
+  if (admission.status === 'ABSENT') return 'ABSENT';
+  if (admission.status === 'GENERATION_CONTRADICTION') {
+    return `GENERATION_CONTRADICTION:${admission.classification}`;
+  }
+  return admission.classification;
 }

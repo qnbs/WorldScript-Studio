@@ -3,6 +3,7 @@ import type { ProjectData } from '../../../features/project/projectSlice';
 
 const h = vi.hoisted(() => ({
   isTauriRuntime: vi.fn(() => false),
+  projectAuthority: vi.fn((): 'fs' | 'idb' | undefined => undefined),
   saveProject: vi.fn(async (_project: unknown, _options?: unknown) => {}),
   saveAutosaveSnapshotCanonical: vi.fn(
     async (
@@ -26,6 +27,7 @@ vi.mock('../../../services/storageBackend', () => ({
 vi.mock('../../../services/storageService', () => ({
   storageService: {
     saveProject: (project: unknown, options?: unknown) => h.saveProject(project, options),
+    getProjectAuthority: async () => h.projectAuthority() ?? (h.isTauriRuntime() ? 'fs' : 'idb'),
   },
 }));
 
@@ -147,6 +149,15 @@ describe('persistProjectAutosaveSnapshot replacement baseline (#553 a10)', () =>
   it('never reuses a baseline across storage authorities', async () => {
     await persistProjectAutosaveSnapshot(snapshot, epoch(2));
     expect(isReplacementPending(snapshot, 'fs', epoch(2))).toBe(true);
+  });
+
+  it('binds a desktop build running on its IndexedDB fallback to the idb baseline, not fs', async () => {
+    h.isTauriRuntime.mockReturnValue(true);
+    h.projectAuthority.mockReturnValue('idb');
+    await persistProjectAutosaveSnapshot(snapshot, epoch(1));
+    expect(isReplacementPending(snapshot, 'idb', epoch(1))).toBe(false);
+    expect(isReplacementPending(snapshot, 'fs', epoch(1))).toBe(true);
+    h.projectAuthority.mockReturnValue(undefined);
   });
 
   it('keeps the desktop generation/incarnation fence fail-closed and the baseline untouched', async () => {

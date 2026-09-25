@@ -69,8 +69,12 @@ describe('storageService (IndexedDB backend in browser)', () => {
       outline: [],
       manuscript: [],
     });
-    await storageService.saveProject(payload);
-    expect(mockDb.saveProject).toHaveBeenCalledWith(payload);
+    await storageService.saveProject(payload, { replacement: true });
+    expect(mockDb.saveProject).toHaveBeenCalledWith(payload, { replacement: true });
+  });
+
+  it('names the storage that really holds the project as its replacement authority (#553 a10)', async () => {
+    await expect(storageService.getProjectAuthority()).resolves.toBe('idb');
   });
 
   it('returns the stored canonical raw, null when absent, and refuses a non-admitted record (#553 §2.8)', async () => {
