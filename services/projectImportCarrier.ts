@@ -28,18 +28,20 @@ function collectionEntities(collection: unknown): readonly unknown[] {
   return [];
 }
 
+// QNBS-v3 (#553 a4): the same truthiness test importProjectThunk uses before moving an image to image storage — an empty inline value is not transferred, so it is not removed either.
+function hasTransferredImage(entity: unknown, field: string): entity is { id: string } {
+  return isRecord(entity) && typeof entity['id'] === 'string' && Boolean(entity[field]);
+}
+
 function inlineImageRemovals(collection: unknown, field: string): EntityCollectionEdit | null {
-  const removeFields: Record<string, readonly string[]> = {};
-  for (const entity of collectionEntities(collection)) {
-    if (isRecord(entity) && typeof entity['id'] === 'string' && Object.hasOwn(entity, field)) {
-      removeFields[entity['id']] = [field];
-    }
-  }
-  const ids = Object.keys(removeFields);
+  const ids = collectionEntities(collection)
+    .filter((entity) => hasTransferredImage(entity, field))
+    .map((entity) => (entity as { id: string }).id);
+  if (ids.length === 0) return null;
+  // QNBS-v3: Object.fromEntries defines own properties, so an entity id such as "__proto__" is kept as a real key instead of hitting the prototype setter.
+  const removeFields = Object.fromEntries(ids.map((id) => [id, [field]]));
   // QNBS-v3: removals apply to upserted entities only — an id-only upsert merged over the existing entity keeps every stored field and its position.
-  return ids.length > 0
-    ? { upsert: ids.map((id) => ({ id })), preserveExistingFields: true, removeFields }
-    : null;
+  return { upsert: ids.map((id) => ({ id })), preserveExistingFields: true, removeFields };
 }
 
 /** The admitted import text without its inline image copies, or null when it cannot be prepared. */

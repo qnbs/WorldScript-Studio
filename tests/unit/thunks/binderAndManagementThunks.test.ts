@@ -22,10 +22,10 @@ vi.mock('../../../services/projectImportSchema', () => {
   return {
     parseImportedProjectJson,
     // QNBS-v3 (#553 a4): the thunk reads projection and admitted text together; tests keep scripting the projection.
-    parseImportedProjectDocument: (text: string) => ({
+    parseImportedProjectDocument: vi.fn((text: string) => ({
       project: parseImportedProjectJson(text),
       raw: text,
-    }),
+    })),
   };
 });
 
@@ -44,7 +44,10 @@ import settingsReducer from '../../../features/settings/settingsSlice';
 import statusReducer from '../../../features/status/statusSlice';
 import versionControlReducer from '../../../features/versionControl/versionControlSlice';
 import writerReducer from '../../../features/writer/writerSlice';
-import { parseImportedProjectJson } from '../../../services/projectImportSchema';
+import {
+  parseImportedProjectDocument,
+  parseImportedProjectJson,
+} from '../../../services/projectImportSchema';
 import {
   _resetSafeSessionForTest,
   enterSafeSession,
@@ -335,6 +338,29 @@ describe('importProjectThunk', () => {
       .replacementCarrier;
     expect(carrier).toContain('"opaque":9007199254740993');
     expect(carrier).not.toContain('avatarBase64');
+  });
+
+  // QNBS-v3 (#553 a4): the real admission runs here, so the bound carrier is proven free of local metadata rather than echoed from the input.
+  it('binds a carrier from real import admission without local routing metadata', async () => {
+    const actual = await vi.importActual<typeof import('../../../services/projectImportSchema')>(
+      '../../../services/projectImportSchema',
+    );
+    vi.mocked(parseImportedProjectDocument).mockImplementationOnce(
+      actual.parseImportedProjectDocument,
+    );
+    const text =
+      '{"schemaVersion":1,"id":"proj-1","title":"T","logline":"L","manuscript":[],"characters":[],"worlds":[],' +
+      '"opaque":9007199254740993,"__worldscriptLegacyProjectDirectory":"dir","__worldscriptLegacyAuxiliary":{"k":1}}';
+
+    const action = await makeStore().dispatch(
+      importProjectThunk(new File([text], 'novel.json', { type: 'application/json' })),
+    );
+
+    expect(action.type).toBe('project/importProject/fulfilled');
+    const carrier = (action as unknown as { meta: { replacementCarrier: string | null } }).meta
+      .replacementCarrier;
+    expect(carrier).toContain('"opaque":9007199254740993');
+    expect(carrier).not.toContain('__worldscriptLegacy');
   });
 
   it('handles array-format characters without avatarBase64', async () => {

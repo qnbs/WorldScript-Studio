@@ -182,6 +182,15 @@ describe('persistProjectAutosaveSnapshot replacement baseline (#553 a10)', () =>
     h.projectAuthority.mockReturnValue(undefined);
   });
 
+  // QNBS-v3 (#553 a5): a committed save of another target at the carrier's epoch does not consume it — only the carrier's own target and epoch do.
+  it('keeps a carrier bound to another target when a different project’s save commits', async () => {
+    bindReplacementCarrier({ ...snapshot, id: 'other' }, epoch(1), EXACT_CARRIER);
+
+    await persistProjectAutosaveSnapshot(snapshot, epoch(1));
+
+    expect(replacementCarrierFor({ ...snapshot, id: 'other' }, epoch(1))).toBe(EXACT_CARRIER);
+  });
+
   it('keeps the carrier when the canonical save of an IndexedDB-fallback restore fails', async () => {
     h.isTauriRuntime.mockReturnValue(true);
     h.projectAuthority.mockReturnValue('idb');

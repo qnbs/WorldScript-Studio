@@ -38,6 +38,7 @@ vi.mock('../../../features/project/thunks/projectManagementThunks', () => ({
     vi.fn(() => ({ type: 'project/importProject/pending' })),
     {
       fulfilled: { match: (action: { type: string }) => action.type.endsWith('/fulfilled') },
+      rejected: { match: (action: { type: string }) => action.type.endsWith('/rejected') },
     },
   ),
 }));
@@ -208,6 +209,30 @@ describe('tauriDeepLink', () => {
         expect.objectContaining({
           type: 'status/addNotification',
           payload: expect.objectContaining({ type: 'error' }),
+        }),
+      );
+    });
+
+    it.each([
+      [
+        'the thunk’s message',
+        { message: 'Invalid project file: FUTURE' },
+        'Invalid project file: FUTURE',
+      ],
+      ['the unknown-error fallback', {}, 'error.deepLink.unknown'],
+    ])('notifies a rejected import with %s', async (_label, error, description) => {
+      await initTauriDeepLink(dispatch, t);
+      const handler = h.onDeepLink.mock.calls[0]?.[0] as (urls: string[]) => Promise<void>;
+      dispatchMock.mockReturnValueOnce({ type: 'project/importProject/rejected', error });
+      await handler(['worldscript:///home/user/novel.worldscript']);
+      expect(dispatchMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'status/addNotification',
+          payload: expect.objectContaining({
+            type: 'error',
+            title: 'error.deepLink.title',
+            description,
+          }),
         }),
       );
     });
