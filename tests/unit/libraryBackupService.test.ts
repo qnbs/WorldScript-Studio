@@ -21,6 +21,7 @@ vi.mock('../../services/storageService', () => ({
     loadSettings: vi.fn(),
     listSnapshots: vi.fn(),
     getSnapshotData: vi.fn(),
+    getSnapshotText: vi.fn(),
   },
 }));
 
@@ -190,5 +191,76 @@ describe('libraryBackupService — partial corruption (DA-01)', () => {
     );
     const { collectLibraryBackupPayload } = await import('../../services/libraryBackupService');
     await expect(collectLibraryBackupPayload()).rejects.toThrow(TypeError);
+  });
+});
+
+describe('libraryBackupService snapshot egress (#553 a11)', () => {
+  const snap = (id: number) => ({ id, date: '2026-09-25', name: `s${id}`, wordCount: 1 });
+  const exactSnapshotText =
+    '{"schemaVersion":1,"id":"p1","title":"Snap","logline":"L","characters":[],"worlds":[],"manuscript":[],' +
+    '"exact":9007199254740993,"opaque":{"nested":[1,2]},' +
+    '"__worldscriptLegacyProjectDirectory":"local-dir","__worldscriptLegacyAuxiliary":{"k":1}}';
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { storageService } = await import('../../services/storageService');
+    vi.mocked(storageService.getStorageBackendKind).mockResolvedValue('filesystem');
+    vi.mocked(storageService.listProjects).mockResolvedValue(['p1']);
+    vi.mocked(storageService.loadCanonicalProjectRaw).mockResolvedValue(minimalRaw());
+    vi.mocked(storageService.getStoryCodex).mockResolvedValue(null);
+    vi.mocked(storageService.getRagVectors).mockResolvedValue([]);
+    vi.mocked(storageService.listBinderAssetIds).mockResolvedValue([]);
+    vi.mocked(storageService.loadSettings).mockResolvedValue(null);
+  });
+
+  it('exports the stored snapshot text exactly, opaque fields kept, local metadata removed', async () => {
+    const { storageService } = await import('../../services/storageService');
+    vi.mocked(storageService.listSnapshots).mockResolvedValue([snap(1)]);
+    vi.mocked(storageService.getSnapshotText).mockResolvedValue(exactSnapshotText);
+    const { buildEncryptedLibraryZipBlob } = await import('../../services/libraryBackupService');
+
+    const parsed = await decryptLibraryZipBlob(
+      await buildEncryptedLibraryZipBlob('pw-a11'),
+      'pw-a11',
+    );
+
+    const entry = parsed.snapshots[0];
+    expect(entry?.dataRaw).toContain('"exact":9007199254740993');
+    expect(entry?.dataRaw).toContain('"opaque":{"nested":[1,2]}');
+    expect(entry?.dataRaw).not.toContain('__worldscriptLegacy');
+    expect(entry?.data).not.toHaveProperty('__worldscriptLegacyProjectDirectory');
+    expect(entry?.data).not.toHaveProperty('__worldscriptLegacyAuxiliary');
+    expect(storageService.getSnapshotData).not.toHaveBeenCalled();
+    // Project entries (a2) are unchanged.
+    expect(parsed.projects[0]?.projectRaw).toBe(minimalRaw());
+  });
+
+  it('keeps a supported older (unversioned) snapshot exportable as stored', async () => {
+    const { storageService } = await import('../../services/storageService');
+    const legacy = '{"title":"Old","logline":"L","characters":[],"worlds":[],"manuscript":[]}';
+    vi.mocked(storageService.listSnapshots).mockResolvedValue([snap(2)]);
+    vi.mocked(storageService.getSnapshotText).mockResolvedValue(legacy);
+    const { collectLibraryBackupPayload } = await import('../../services/libraryBackupService');
+
+    const payload = await collectLibraryBackupPayload();
+
+    expect(payload.snapshots[0]?.dataRaw).toBe(legacy);
+  });
+
+  it('records one unexportable snapshot as not exported without aborting the backup', async () => {
+    const { storageService } = await import('../../services/storageService');
+    vi.mocked(storageService.listSnapshots).mockResolvedValue([snap(3), snap(4), snap(5)]);
+    vi.mocked(storageService.getSnapshotText).mockImplementation(async (id: number) => {
+      if (id === 3) return '{"schemaVersion":99,"title":"Future"}';
+      if (id === 4) throw new Error('snapshot read failed');
+      return exactSnapshotText;
+    });
+    const { collectLibraryBackupPayload } = await import('../../services/libraryBackupService');
+
+    const payload = await collectLibraryBackupPayload();
+
+    expect(payload.snapshots.map((s) => s.dataRaw === null)).toEqual([true, true, false]);
+    expect(payload.snapshots.map((s) => s.name)).toEqual(['s3', 's4', 's5']);
+    expect(payload.projects).toHaveLength(1);
   });
 });

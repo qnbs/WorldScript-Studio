@@ -78,6 +78,11 @@ export class FsSnapshotStore extends FsCodexStore {
     return content;
   }
 
+  // QNBS-v3 (#553 a11): the stored text itself, unparsed, so backup egress keeps exact tokens; read failures propagate so the caller can tell them from an absent snapshot.
+  async getSnapshotText(snapshotId: number): Promise<string | null> {
+    return this.getSnapshotJsonText(snapshotId);
+  }
+
   async getSnapshotData(snapshotId: number): Promise<unknown> {
     try {
       const raw = await this.getSnapshotJsonText(snapshotId);

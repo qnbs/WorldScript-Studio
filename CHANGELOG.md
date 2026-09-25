@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** the encrypted library backup now includes each snapshot as it is
+  stored, alongside the readable copy.
+  - **Desktop:** the snapshot's stored text is kept exactly — fields this version does not know
+    and very large whole numbers included.
+  - **Browser:** the stored snapshot data is included as stored.
+  - Machine-local folder and routing details are removed, as they already are for projects. Older
+    snapshots are included as stored. A snapshot that cannot be exported is listed without its
+    content instead of failing the whole backup. PR #841.
 - **Data integrity (#553):** a restored snapshot is now saved from the snapshot itself, with your
   edits since the restore applied, instead of a re-serialized copy of the editor state.
   - **Desktop:** the snapshot's stored text is kept exactly — fields this version does not know

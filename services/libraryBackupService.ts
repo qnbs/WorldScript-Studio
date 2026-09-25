@@ -6,7 +6,7 @@ import JSZip from 'jszip';
 import type { Settings, StoryProject } from '../types';
 import { ProjectLoadError } from './fs/projectFsStore';
 import { logger } from './logger';
-import { toPortableProjectRaw } from './projectCanonicalEgress';
+import { toPortableProjectRaw, toPortableSnapshotRaw } from './projectCanonicalEgress';
 import type { BinderAssetPayload } from './storageBackend';
 import { storageService } from './storageService';
 
@@ -36,7 +36,35 @@ export interface LibraryBackupPayload {
   storageBackend: 'indexeddb' | 'filesystem';
   settings: Settings | null;
   projects: LibraryProjectBundle[];
-  snapshots: Array<{ id: number; date: string; name: string; wordCount: number; data: unknown }>;
+  snapshots: LibrarySnapshotEntry[];
+}
+
+export interface LibrarySnapshotEntry {
+  id: number;
+  date: string;
+  name: string;
+  wordCount: number;
+  /** Readable parsed view of `dataRaw` (portable); null when the snapshot could not be exported. */
+  data: unknown;
+  /** QNBS-v3 (#553 a11): the snapshot's portable stored carrier — exact text on the filesystem, the stored structured value in IndexedDB; authoritative over `data`. */
+  dataRaw: string | null;
+}
+
+// QNBS-v3 (#553 a11): one unreadable or unadmittable historical snapshot is recorded as not exported instead of aborting the whole library backup.
+async function collectSnapshotEntry(
+  snapshot: Omit<LibrarySnapshotEntry, 'data' | 'dataRaw'>,
+): Promise<LibrarySnapshotEntry> {
+  try {
+    const storedRaw = await storageService.getSnapshotText(snapshot.id);
+    const dataRaw = storedRaw === null ? null : toPortableSnapshotRaw(storedRaw);
+    return { ...snapshot, data: dataRaw === null ? null : JSON.parse(dataRaw), dataRaw };
+  } catch (error) {
+    logger.warn('collectLibraryBackupPayload: skipping unexportable snapshot', {
+      snapshotId: snapshot.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { ...snapshot, data: null, dataRaw: null };
+  }
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -184,10 +212,11 @@ export async function collectLibraryBackupPayload(
   onProgress?.('settings', done, total);
 
   const snaps = await storageService.listSnapshots();
-  const snapshots = [];
+  const snapshots: LibrarySnapshotEntry[] = [];
   for (const s of snaps) {
-    const data = await storageService.getSnapshotData(s.id);
-    snapshots.push({ id: s.id, date: s.date, name: s.name, wordCount: s.wordCount, data });
+    snapshots.push(
+      await collectSnapshotEntry({ id: s.id, date: s.date, name: s.name, wordCount: s.wordCount }),
+    );
   }
   done++;
   onProgress?.('snapshots', done, total);

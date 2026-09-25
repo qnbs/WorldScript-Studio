@@ -156,6 +156,8 @@ export interface StorageBackend {
   /** QNBS-v3 (#553 §2.8): stores the canonical project text; a text-storing backend keeps it byte-for-byte. */
   saveSnapshotText(snapshotLabel: string, projectJson: string): Promise<number>;
   getSnapshotData(snapshotId: number): Promise<unknown>;
+  /** QNBS-v3 (#553 a11): a text-storing backend returns the snapshot's stored text byte-for-byte (null when absent); others omit this and their structured value is the carrier. */
+  getSnapshotText?(snapshotId: number): Promise<string | null>;
   // QNBS-v3: filesystem restore validates this pre-read target; other backends retain their existing snapshot semantics.
   restoreSnapshot?(
     snapshotId: number,

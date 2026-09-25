@@ -189,6 +189,15 @@ describe('storageService (IndexedDB backend in browser)', () => {
     delete (window as { __TAURI__?: unknown }).__TAURI__;
   });
 
+  it('serves a structured-value backend’s snapshot carrier as its stored value serialized (#553 a11)', async () => {
+    mockDb.getSnapshotData.mockResolvedValueOnce({ id: 'p1', title: 'Snap', opaque: { k: 1 } });
+    await expect(storageService.getSnapshotText(7)).resolves.toBe(
+      '{"id":"p1","title":"Snap","opaque":{"k":1}}',
+    );
+    mockDb.getSnapshotData.mockResolvedValueOnce(null);
+    await expect(storageService.getSnapshotText(8)).resolves.toBeNull();
+  });
+
   it('delegates snapshot operations to dbService', async () => {
     mockDb.saveSnapshot.mockResolvedValueOnce(42);
     const id = await storageService.saveSnapshot('label', { data: 1 });
