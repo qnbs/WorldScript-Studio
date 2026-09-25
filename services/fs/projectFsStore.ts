@@ -37,6 +37,7 @@ import {
   decompressData,
   decompressJsonText,
   PROJECT_LOCKS_DIR_NAME,
+  ProjectFileLockedError,
   retryFs,
   StaleProjectWriterError,
   sanitizePathSegment,
@@ -266,6 +267,11 @@ function currentGenerationOf(admission: ProjectAdmission): ProjectSourceGenerati
     : null;
 }
 
+// QNBS-v3 (#553): the directory an auxiliary write actually lands in — the same 'project' fallback the binder/codex path builders apply — used for both its lock and its baseline check so the two can never name different directories.
+function auxiliaryTargetDirectory(projectId: string): string | null {
+  return projectPathSegment(sanitizePathSegment(projectId, 'project'));
+}
+
 // QNBS-v3: one source-owned record keeps the canonical directory, embedded identity, aliases, and write verdict together.
 export class FsProjectStore extends FsAssetStore {
   private readonly verifiedLegacyProjectDirectories = new Set<string>();
@@ -389,7 +395,74 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   protected override isProjectWriteAuthorityError(error: unknown): boolean {
-    return error instanceof ProjectWritebackError;
+    return (
+      error instanceof ProjectWritebackError ||
+      error instanceof ProjectCanonicalWritebackError ||
+      error instanceof StaleProjectWriterError ||
+      error instanceof ProjectFileLockedError
+    );
+  }
+
+  // QNBS-v3 (#553): takes every lock in one sorted order so two multi-directory operations cannot hold each other's first lock.
+  private async withProjectLocks<T>(
+    projectIds: readonly string[],
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const safeIds = [...new Set(projectIds.map(auxiliaryTargetDirectory))]
+      .filter((id): id is string => !!id)
+      .sort();
+    if (safeIds.length === 0) return fn();
+    const apis = await this.getApis();
+    const lockAndRun = async (index: number): Promise<T> => {
+      const safeId = safeIds[index];
+      if (safeId === undefined) return fn();
+      const lockKeyPath = await this.projectLockKeyPath(apis, safeId);
+      return withProjectFileLock(apis, lockKeyPath, () => lockAndRun(index + 1));
+    };
+    return lockAndRun(0);
+  }
+
+  // QNBS-v3 (#553): every write locks its logical and routed directories, even without a baseline, so a delete or quarantine can never interleave with it; directories this window holds a baseline for must also still match disk (the saveProject verdict). No baseline (never edit-loaded, or deleted by this window) skips only the generation check.
+  protected override async runFencedAuxiliaryWrite<T>(
+    fenceProjectIds: readonly string[],
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return this.withProjectLocks(fenceProjectIds, async () => {
+      const apis = await this.getApis();
+      for (const id of fenceProjectIds) {
+        const safeId = auxiliaryTargetDirectory(id);
+        const baseline = safeId ? this.editingBaselines.get(safeId) : undefined;
+        if (safeId && baseline !== undefined) {
+          await this.assertProjectSourceMatches(apis, safeId, baseline);
+        }
+      }
+      return operation();
+    });
+  }
+
+  private async assertProjectSourceMatches(
+    apis: TauriApis,
+    safeProjectId: string,
+    baseline: ProjectSourceGeneration,
+  ): Promise<void> {
+    const appDataPath = await this.ensureAppDataPath();
+    const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
+    let exists: boolean;
+    let raw = '';
+    try {
+      exists = await apis.exists(projectFile);
+      if (exists) raw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+    } catch (error) {
+      // QNBS-v3 (#553): an unreadable fence is an authority error, not a generic failure the delete wrappers would log and report as done.
+      throw new ProjectCanonicalWritebackError(
+        safeProjectId,
+        `stale-writer fence could not read the project file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    if (!exists) throw new StaleProjectWriterError(safeProjectId);
+    if (currentGenerationOf(admitCanonicalProjectDocument(raw, storedProjectSchema)) !== baseline) {
+      throw new StaleProjectWriterError(safeProjectId);
+    }
   }
 
   private canonicalLegacyProjection(
@@ -1136,7 +1209,27 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   async quarantineProject(projectId: string): Promise<ProjectQuarantineResult> {
-    return this.withLegacyRoutingOperation(() => this.quarantineProjectUnlocked(projectId));
+    return this.withLegacyRoutingOperation(async () => {
+      try {
+        return await this.withProjectLockFor(projectId, () =>
+          this.quarantineProjectUnlocked(projectId),
+        );
+      } catch (error) {
+        if (!(error instanceof ProjectFileLockedError)) throw error;
+        logger.error('Project quarantine blocked by another writer holding the project lock', {
+          projectId,
+        });
+        throw new ProjectQuarantineError('io-error');
+      }
+    });
+  }
+
+  // QNBS-v3 (#553): destructive project operations take the lock fenced auxiliary writes hold, so a check that passed cannot be invalidated by a delete or quarantine before that write finishes.
+  private async withProjectLockFor<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
+    const safeProjectId = projectPathSegment(projectId);
+    if (!safeProjectId) return fn();
+    const apis = await this.getApis();
+    return withProjectFileLock(apis, await this.projectLockKeyPath(apis, safeProjectId), fn);
   }
 
   private async quarantineProjectUnlocked(projectId: string): Promise<ProjectQuarantineResult> {
@@ -1270,20 +1363,40 @@ export class FsProjectStore extends FsAssetStore {
     const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
 
     // QNBS-v3: uncertain existence is a typed retryable deletion failure, never permission to clean up.
-    let projectExists: boolean;
-    try {
-      projectExists = await apis.exists(projectPath);
-    } catch (error) {
-      logger.error('Failed to inspect project existence before deletion', {
-        projectId: safeProjectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw new ProjectDeleteError('identity-inspection-failed');
-    }
-    if (projectExists) {
+    const probeProjectExists = async (): Promise<boolean> => {
+      try {
+        return await apis.exists(projectPath);
+      } catch (error) {
+        logger.error('Failed to inspect project existence before deletion', {
+          projectId: safeProjectId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw new ProjectDeleteError('identity-inspection-failed');
+      }
+    };
+    // QNBS-v3 (#553): read-only hydration runs before locking so the project and every routed legacy directory it empties are locked in one sorted acquisition — the order fenced asset writes use — instead of logical-first, which could invert against them.
+    if (await probeProjectExists()) {
       await this.hydrateLegacyPolicyForDeletion(safeProjectId, projectPath, apis, appDataPath);
     }
+    const lockIds = [
+      safeProjectId,
+      this.legacyBinderProjectId(safeProjectId),
+      this.legacyCodexProjectId(safeProjectId),
+    ].filter((id): id is string => id !== null);
+    await this.withProjectLocks(lockIds, async () =>
+      this.removeProjectDataLocked(safeProjectId, projectPath, await probeProjectExists(), apis),
+    );
+    this.verifiedLegacyProjectDirectories.delete(safeProjectId);
+    this.clearLegacyAdmissionForSource(safeProjectId);
+    this.clearLegacyAuxiliaryPolicy(safeProjectId);
+  }
 
+  private async removeProjectDataLocked(
+    safeProjectId: string,
+    projectPath: string,
+    projectExists: boolean,
+    apis: TauriApis,
+  ): Promise<void> {
     try {
       const legacyBinderIds = this.legacyBinderAssetIdsForProject(safeProjectId);
       if (legacyBinderIds.length > 0) {
@@ -1303,9 +1416,6 @@ export class FsProjectStore extends FsAssetStore {
       });
       throw new ProjectDeleteError();
     }
-    this.verifiedLegacyProjectDirectories.delete(safeProjectId);
-    this.clearLegacyAdmissionForSource(safeProjectId);
-    this.clearLegacyAuxiliaryPolicy(safeProjectId);
   }
 
   private async hydrateLegacyPolicyForDeletion(
@@ -1439,7 +1549,7 @@ export class FsProjectStore extends FsAssetStore {
       for (const char of characterArray) {
         const row = { ...char };
         if (row.avatarBase64) {
-          await this.saveImage(row.id, row.avatarBase64);
+          await this.saveImageUnfenced(row.id, row.avatarBase64);
           row.hasAvatar = true;
           delete row.avatarBase64;
         }
@@ -1459,7 +1569,7 @@ export class FsProjectStore extends FsAssetStore {
       for (const world of worldArray) {
         const row = { ...world };
         if (row.ambianceImageBase64) {
-          await this.saveImage(row.id, row.ambianceImageBase64);
+          await this.saveImageUnfenced(row.id, row.ambianceImageBase64);
           row.hasAmbianceImage = true;
           delete row.ambianceImageBase64;
         }

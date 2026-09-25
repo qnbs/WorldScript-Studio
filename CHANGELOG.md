@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** a desktop window whose copy of a project is out of date can no longer
+  save or delete that project's images, binder attachments, or story codex. Before, #830 blocked
+  only the project file itself, so a second window that had fallen behind (or whose project another
+  window had deleted) could still overwrite or remove assets the other window was using. These
+  writes now run the same check as project saves, under the same cross-process lock held through
+  the write (so another window cannot save, delete or quarantine the project in between —
+  deleting or quarantining now waits for that lock too, including for legacy directories a
+  delete also empties), checked against both the project and the directory each write actually
+  lands in (including data routed into a legacy project directory), and are refused until the
+  window reloads the project. Asset writes take that lock even from a window that never opened
+  the project for editing, so they can never interleave with a delete; such windows skip only the
+  out-of-date check. Project import and rollback writes are unchanged. A delete or quarantine,
+  and any asset write, can now be refused while another window holds the project's lock; a lock
+  left behind by a crashed window is tracked separately in #831. Deleting all of a project's
+  binder files now reports a partial failure instead of succeeding while files remain. PR #833.
 - **Data integrity (#553):** quitting or closing a desktop window can no longer mistake unsaved
   data for saved data. The save queue deliberately resolves — rather than rejects — an older save
   whose own attempt failed while a newer save was already queued, and the newer save's later
