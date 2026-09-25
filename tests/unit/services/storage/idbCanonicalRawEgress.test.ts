@@ -36,13 +36,14 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  // The singleton authority keeps its connection across tests, so clear the record explicitly.
+  // The singleton authority keeps its connection across tests, so clear both the record and the canonical generation marker it may have written.
   const store = await projectStore('readwrite');
   await new Promise<void>((resolve, reject) => {
     store.delete('project');
     store.transaction.oncomplete = () => resolve();
     store.transaction.onerror = () => reject(store.transaction.error);
   });
+  await idbProjectCanonicalAuthority.clearCanonicalGenerationMarker();
   clearIdbEncryptionKey();
 });
 

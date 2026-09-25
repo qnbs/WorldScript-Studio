@@ -11,9 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   project's stored text instead of re-serializing a parsed copy of it.
   - **JSON export** (Settings and Dashboard "Export JSON") writes the stored project with the
     editor's unsaved changes applied. On desktop, very large whole numbers are kept exactly; a parse
-    used to round them. A never-saved project exports as a current-version file. An export from a
-    window another window has moved past (or whose project was deleted and recreated) is refused,
-    like a save from that window. After the editor's project is replaced as a whole (a new project,
+    used to round them. A never-saved project exports as a current-version file. If another window has saved
+    newer changes to the project since this window loaded it (or deleted and recreated it), the
+    export is refused, just as a save from this window would be. After the editor's project is replaced as a whole (a new project,
     an import or a snapshot restore — even under the same id), the export is built from that
     project alone, never from the previous project's stored text.
   - **Encrypted library backup** stores each project's last saved text (unsaved changes still in
