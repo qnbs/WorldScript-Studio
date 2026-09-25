@@ -822,32 +822,42 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectSnapshotRestoreError('snapshot-owner-mismatch');
     }
 
-    const restored = { ...(admittedSnapshot as unknown as Record<string, unknown>) };
-    delete restored['id'];
-    delete restored[LEGACY_PROJECT_DIRECTORY_METADATA_KEY];
-    delete restored[LEGACY_AUXILIARY_METADATA_KEY];
-
+    // QNBS-v3 (#553 §2.8, a5): identity and machine-local metadata come from the restore target, set on the snapshot's own admitted text so every other field keeps its stored tokens.
+    const fields: Record<string, unknown> = {};
+    const removeFields: string[] = [
+      'id',
+      LEGACY_PROJECT_DIRECTORY_METADATA_KEY,
+      LEGACY_AUXILIARY_METADATA_KEY,
+    ];
     const validatedTargetId = persistedProjectId(validatedTarget);
     if (typeof validatedTargetId === 'string') {
       const safeTargetId = projectPathSegment(validatedTargetId);
       if (!safeTargetId || safeTargetId !== targetDirectory) {
         throw new ProjectSnapshotRestoreError('target-unavailable');
       }
-      restored['id'] = safeTargetId;
+      fields['id'] = safeTargetId;
     }
-
-    restored['schemaVersion'] = CURRENT_PROJECT_SCHEMA_VERSION;
-
     const validatedTargetDirectory = legacyProjectDirectory(validatedTarget);
     if (validatedTargetDirectory) {
-      restored[LEGACY_PROJECT_DIRECTORY_METADATA_KEY] = validatedTargetDirectory;
+      fields[LEGACY_PROJECT_DIRECTORY_METADATA_KEY] = validatedTargetDirectory;
     }
     const validatedTargetMetadata = persistedLegacyAuxiliaryMetadata(validatedTarget);
     if (validatedTargetMetadata) {
-      restored[LEGACY_AUXILIARY_METADATA_KEY] = validatedTargetMetadata;
+      fields[LEGACY_AUXILIARY_METADATA_KEY] = validatedTargetMetadata;
     }
-
-    return restored as unknown as StoryProject;
+    const snapshotRaw = snapshotAdmission.canonical?.raw;
+    if (snapshotRaw === undefined) throw new ProjectSnapshotRestoreError('snapshot-invalid');
+    const restoredText = commitOwnedProjectEdit({
+      expectedGeneration: computeProjectSourceGeneration(snapshotRaw),
+      currentRaw: snapshotRaw,
+      edit: { fields, removeFields: removeFields.filter((key) => !Object.hasOwn(fields, key)) },
+    });
+    if (restoredText.status !== 'COMMITTED') {
+      throw new ProjectSnapshotRestoreError('snapshot-invalid');
+    }
+    const apis = await this.getApis();
+    await this.replaceProjectWithRestoredText(apis, targetDirectory, restoredText.raw);
+    return JSON.parse(restoredText.raw) as StoryProject;
   }
 
   async saveProject(project: SaveProjectInput): Promise<void> {
@@ -861,9 +871,9 @@ export class FsProjectStore extends FsAssetStore {
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
-  ): Promise<void> {
+  ): Promise<string> {
     const lockKeyPath = await this.projectLockKeyPath(apis, projectId);
-    await withProjectFileLock(apis, lockKeyPath, () =>
+    return withProjectFileLock(apis, lockKeyPath, () =>
       this.persistProjectFileLocked(apis, projectFile, projectId, projectToPersist),
     );
   }
@@ -881,7 +891,7 @@ export class FsProjectStore extends FsAssetStore {
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
-  ): Promise<void> {
+  ): Promise<string> {
     let sourceExists: boolean;
     try {
       sourceExists = await apis.exists(projectFile);
@@ -916,14 +926,69 @@ export class FsProjectStore extends FsAssetStore {
         createdGeneration === null ? null : { generation: createdGeneration, incarnation },
       );
       this.editingSourceId = projectId;
-    } else {
-      await this.persistExistingCanonicalProjectLocked(
-        apis,
-        projectFile,
+      return createdJson;
+    }
+    return this.persistExistingCanonicalProjectLocked(
+      apis,
+      projectFile,
+      projectId,
+      projectToPersist,
+    );
+  }
+
+  // QNBS-v3 (#553): the stale-writer verdict — this window may only replace the project it last loaded or committed (generation and incarnation); returns the current incarnation for the new baseline.
+  private async assertEditingBaselineCurrent(
+    apis: TauriApis,
+    projectId: string,
+    currentGeneration: ProjectSourceGeneration,
+  ): Promise<string | null> {
+    let currentIncarnation: string | null;
+    try {
+      currentIncarnation = await this.readProjectIncarnation(apis, projectId);
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
         projectId,
-        projectToPersist,
+        `project incarnation read failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+    const baseline = this.editingBaselines.get(projectId);
+    if (
+      baseline !== undefined &&
+      (baseline.generation !== currentGeneration || baseline.incarnation !== currentIncarnation)
+    ) {
+      throw new StaleProjectWriterError(projectId);
+    }
+    return currentIncarnation;
+  }
+
+  // QNBS-v3 (#553 §2.8, a5): a snapshot restore replaces the project with the snapshot's own canonical text, under the same lock and stale-writer verdict as a save — never an overlay of the parsed snapshot onto the current text, which would round its integers and keep fields the snapshot never had.
+  private async replaceProjectWithRestoredText(
+    apis: TauriApis,
+    projectId: string,
+    restoredRaw: string,
+  ): Promise<void> {
+    const appDataPath = await this.ensureAppDataPath();
+    const projectFile = await apis.join(appDataPath, 'projects', projectId, 'project.json');
+    await withProjectFileLock(apis, await this.projectLockKeyPath(apis, projectId), async () => {
+      const currentRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+      const currentGeneration = computeProjectSourceGeneration(currentRaw);
+      const incarnation = await this.assertEditingBaselineCurrent(
+        apis,
+        projectId,
+        currentGeneration,
+      );
+      await writeTextFileAtomic(apis, projectFile, compressJsonText(restoredRaw), async () => {
+        const latestRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+        if (computeProjectSourceGeneration(latestRaw) !== currentGeneration) {
+          throw new Error('source generation changed before atomic replacement');
+        }
+      });
+      this.editingBaselines.set(projectId, {
+        generation: computeProjectSourceGeneration(restoredRaw),
+        incarnation,
+      });
+      this.editingSourceId = projectId;
+    });
   }
 
   private async persistExistingCanonicalProjectLocked(
@@ -931,7 +996,7 @@ export class FsProjectStore extends FsAssetStore {
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
-  ): Promise<void> {
+  ): Promise<string> {
     // QNBS-v3 (#553): keep existing-project writeback as one preserve-first raw-carrier transaction boundary.
     let currentRaw: string;
     try {
@@ -951,22 +1016,11 @@ export class FsProjectStore extends FsAssetStore {
     }
     // QNBS-v3 (#553): refuse before building the overlay — the edit below is fenced only against the carrier read now, so an independently-loaded window whose snapshot predates the current generation would otherwise pass that fence and silently revert fields another window committed.
     const currentGeneration = computeProjectSourceGeneration(admission.canonical.raw);
-    let currentIncarnation: string | null;
-    try {
-      currentIncarnation = await this.readProjectIncarnation(apis, projectId);
-    } catch (error) {
-      throw new ProjectCanonicalWritebackError(
-        projectId,
-        `project incarnation read failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-    const baseline = this.editingBaselines.get(projectId);
-    if (
-      baseline !== undefined &&
-      (baseline.generation !== currentGeneration || baseline.incarnation !== currentIncarnation)
-    ) {
-      throw new StaleProjectWriterError(projectId);
-    }
+    const currentIncarnation = await this.assertEditingBaselineCurrent(
+      apis,
+      projectId,
+      currentGeneration,
+    );
     const autosaveEdit = buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw);
     const projectRecord = projectToPersist as unknown as Record<string, unknown>;
     const backendMetadata = Object.fromEntries(
@@ -1008,6 +1062,7 @@ export class FsProjectStore extends FsAssetStore {
         `filesystem canonical replacement failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+    return writeback.raw;
   }
 
   private async saveProjectUnlocked(project: SaveProjectInput): Promise<void> {
@@ -1075,11 +1130,16 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    await this.persistProjectFile(apis, projectFile, projectId, projectToPersist);
-    // QNBS-v3 (#553): capture recovery state only after authoritative replacement succeeds, so a refused save cannot mutate snapshot history.
+    const committedRaw = await this.persistProjectFile(
+      apis,
+      projectFile,
+      projectId,
+      projectToPersist,
+    );
+    // QNBS-v3 (#553): capture recovery state only after authoritative replacement succeeds, so a refused save cannot mutate snapshot history — and capture the exact text just committed (§2.8), not a re-serialized parse of the input.
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       this.lastAutoSnapshotTime = Date.now();
-      this.saveSnapshot('auto', projectToPersist)
+      this.saveSnapshotText('auto', committedRaw)
         .then(() => this.pruneAutoSnapshots())
         .catch((error) => {
           // QNBS-v3: auto-snapshot failure stays non-fatal while remaining visible for recovery diagnostics.

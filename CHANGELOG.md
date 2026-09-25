@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** project snapshots now keep the project exactly as it is stored.
+  - **Creating a snapshot:** automatic desktop snapshots store the exact text a save just wrote,
+    and "Create snapshot" stores the project as it is stored with the editor's unsaved changes
+    applied — no longer a re-serialized copy that rounded very large whole numbers. The same
+    stale-window refusal as export applies. Snapshot files keep their existing format.
+  - **Restoring on desktop:** the snapshot's own stored text becomes the project again, under
+    the same lock and stale-window check as a save; before, only a parsed copy was handed to the
+    editor and saved over the current project later.
+  - **Restoring in the browser:** a snapshot is now checked like an imported file before it can
+    reach the editor — a snapshot from a newer app version, a damaged one, or one belonging to
+    another project is refused instead of loaded. Browser storage keeps snapshots as structured
+    data, as it does projects. PR #838.
+
 - **Data integrity (#553):** project export and the encrypted library backup now write the
   project's stored text instead of re-serializing a parsed copy of it.
   - **JSON export** (Settings and Dashboard "Export JSON") writes the stored project with the

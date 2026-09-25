@@ -35,6 +35,7 @@ import { fileSystemService } from './fileSystemService';
 import { StaleProjectWriterError } from './fs/fsCore';
 import { ProjectLoadError } from './fs/projectFsStore';
 import { logger } from './logger';
+import { admitStructuredSnapshotRestore } from './snapshotRestoreAdmission';
 import {
   assertProjectNamespaceWriteAdmitted,
   assertProjectPersistenceAdmitted,
@@ -234,18 +235,24 @@ class StorageManager {
     return backend.saveSnapshot(name, data);
   }
 
+  // QNBS-v3 (#553 §2.8): a snapshot of the canonical project text, not a re-serialized parse.
+  async saveSnapshotText(name: string, projectJson: string): Promise<number> {
+    const backend = await this.getBackend();
+    return backend.saveSnapshotText(name, projectJson);
+  }
+
   async getSnapshotData(id: number): Promise<unknown> {
     const backend = await this.getBackend();
     return backend.getSnapshotData(id);
   }
 
-  // QNBS-v3: filesystem backends receive the pre-read target while IndexedDB keeps its existing snapshot fallback.
+  // QNBS-v3: filesystem backends receive the pre-read target; a backend without its own restore authority (IndexedDB) gets the same canonical admission and owner check here, never an unchecked stored object (#553 §2.8).
   async restoreSnapshot(id: number, currentProject: SnapshotRestoreTarget): Promise<unknown> {
     const backend = await this.getBackend();
     if (backend.restoreSnapshot) {
       return backend.restoreSnapshot(id, currentProject);
     }
-    return backend.getSnapshotData(id);
+    return admitStructuredSnapshotRestore(await backend.getSnapshotData(id), currentProject);
   }
 
   async listSnapshots(): Promise<ProjectSnapshot[]> {

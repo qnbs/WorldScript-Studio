@@ -20,7 +20,10 @@ import { useTranslation } from '../hooks/useTranslation';
 import { desktopPlatform } from '../services/desktopPlatform';
 import { wipeAllAppData } from '../services/factoryResetService';
 import { logger } from '../services/logger';
-import { downloadCanonicalProjectExport } from '../services/projectCanonicalEgress';
+import {
+  createCanonicalProjectSnapshot,
+  downloadCanonicalProjectExport,
+} from '../services/projectCanonicalEgress';
 import type { ProtectedStoreMigrationProgress } from '../services/storage/protectedStoreMigration';
 import {
   clearIdbEncryptionKey,
@@ -366,7 +369,7 @@ export const useSettingsView = () => {
   }, []);
 
   const handleCreateSnapshot = useCallback(async () => {
-    await storageService.saveSnapshot(snapshotName, project);
+    await createCanonicalProjectSnapshot(snapshotName, project.id, project);
     setSnapshotName('');
     setModal({ state: 'closed', payload: {} });
     refreshSnapshots();
