@@ -55,8 +55,14 @@ export function notePersistedEditorEpoch(
 ): void {
   const targetStorageId = targetStorageIdOf(project);
   baseline = targetStorageId === null ? null : { targetStorageId, authority, epoch };
-  // QNBS-v3 (#553 a5): once the restored project is stored, the stored text is its carrier.
-  restoreCarrier = null;
+  // QNBS-v3 (#553 a5): only the save of the carrier's own target and epoch consumes it — an older save that finishes after a restore must not drop the restore's carrier.
+  if (
+    restoreCarrier !== null &&
+    restoreCarrier.targetStorageId === targetStorageId &&
+    restoreCarrier.epoch === epoch
+  ) {
+    restoreCarrier = null;
+  }
 }
 
 /** Binds a restore's admitted text to the project and editor epoch the restore produced; called at the fulfilled boundary only. */
