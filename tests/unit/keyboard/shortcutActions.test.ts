@@ -229,6 +229,7 @@ describe('performShortcutAction — save', () => {
     await performShortcutAction('save', api);
     expect(mockPersistProjectAutosaveSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'p1', title: 'My Novel' }),
+      expect.any(Number),
     );
   });
 

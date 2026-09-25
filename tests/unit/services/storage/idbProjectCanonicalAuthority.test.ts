@@ -622,11 +622,18 @@ describe('IdbProjectCanonicalAuthority#commitCanonicalProjectEdit', () => {
       expectedGeneration: 'irrelevant',
       edit: { fields: { title: 'Should never land' } },
     });
+    // QNBS-v3 (#553 a10): a replacement reports the same contradiction as an edit, not its inner classification.
+    const replaced = await authority.commitCanonicalProjectReplacement({
+      expectedGeneration: 'irrelevant',
+      currentRaw: JSON.stringify({ ...baseProjectPayload(), title: 'Should never land' }),
+    });
 
-    expect(result).toEqual({
+    const refusal = {
       status: 'NOT_ADMITTED_FOR_WRITE',
       classification: 'GENERATION_CONTRADICTION:LEGACY_UNVERSIONED',
-    });
+    };
+    expect(result).toEqual(refusal);
+    expect(replaced).toEqual(refusal);
   });
 
   it('refuses to commit when no project record exists yet', async () => {

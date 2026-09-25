@@ -23,11 +23,15 @@ import {
   loadLocalRagService,
   loadRagVectorMigration,
 } from '../services/duckdb/duckdbListenerLoader';
+import {
+  type EditorReplacementEpoch,
+  noteEditorEpoch,
+  toEditorReplacementEpoch,
+} from '../services/editorProjectGeneration';
 import { isFactoryResetInProgress } from '../services/factoryResetService';
 import { ProjectFileLockedError, StaleProjectWriterError } from '../services/fs/fsCore';
 import { logger } from '../services/logger';
 import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersistence';
-import { noteEditableProjectGenerationChanged } from '../services/projectCanonicalEgress';
 import { storageService } from '../services/storageService';
 import type { Character, StorySection, World } from '../types';
 import { isAnalyticsPersistenceAllowed } from './analyticsGate';
@@ -74,6 +78,10 @@ type DebouncedEffectApi = {
   dispatch: AppDispatch;
   delay: (ms: number) => Promise<void>;
 };
+
+function editorEpochOf(state: RootState): EditorReplacementEpoch {
+  return toEditorReplacementEpoch(state.project?.present?.generation);
+}
 
 function addDebouncedListener(
   predicate: (curr: RootState, prev: RootState) => boolean,
@@ -235,13 +243,13 @@ addDebouncedListener(
   },
   1000,
   async (api) => {
-    const state = api.getState();
+    const armedState = api.getState();
     const orig = api.getOriginalState();
-    const unchangedProject = state.project.present === orig.project.present;
+    const unchangedProject = armedState.project.present === orig.project.present;
     const unchangedVc =
-      state.versionControl.snapshots === orig.versionControl.snapshots &&
-      state.versionControl.branches === orig.versionControl.branches &&
-      state.versionControl.currentBranchId === orig.versionControl.currentBranchId;
+      armedState.versionControl.snapshots === orig.versionControl.snapshots &&
+      armedState.versionControl.branches === orig.versionControl.branches &&
+      armedState.versionControl.currentBranchId === orig.versionControl.currentBranchId;
     if (unchangedProject && unchangedVc) return;
 
     api.dispatch(statusActions.setSavingStatus('saving'));
@@ -262,6 +270,8 @@ addDebouncedListener(
       /* non-critical — don't block save if health check itself fails */
     }
 
+    // QNBS-v3 (#553 a10): read after the health-check await, so data and editor epoch are the newest state and a newer save that enqueued meanwhile cannot be overwritten by this older capture.
+    const state = api.getState();
     try {
       // QNBS-v3: RootState already infers state.project.present.data as ProjectData — no cast, no null-guard needed
       const presentData = selectProjectData(state);
@@ -293,8 +303,9 @@ addDebouncedListener(
         return;
       }
       // QNBS-v3 (#332): skip stale indexing after a newer project snapshot supersedes this save.
+      const editorEpoch = editorEpochOf(state);
       const projectSaveResult = await projectPersistenceCoordinator.enqueue(() =>
-        persistProjectAutosaveSnapshot(enriched),
+        persistProjectAutosaveSnapshot(enriched, editorEpoch),
       );
       if (projectSaveResult.superseded) return;
 
@@ -546,7 +557,7 @@ listenerMiddleware.startListening({
       (listenerApi.getState() as RootState).project?.present?.generation !==
       (listenerApi.getOriginalState() as RootState).project?.present?.generation
     ) {
-      noteEditableProjectGenerationChanged();
+      noteEditorEpoch(editorEpochOf(listenerApi.getState() as RootState));
     }
     listenerApi.dispatch(writerActions.invalidateForProjectChange());
     listenerApi.dispatch(copilotActions.invalidateForProjectChange());

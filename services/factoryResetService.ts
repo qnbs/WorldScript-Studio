@@ -14,6 +14,7 @@ import {
   projectPersistenceCoordinator,
   settingsPersistenceCoordinator,
 } from '../app/persistenceCoordinator';
+import { invalidatePersistedEditorEpoch } from './editorProjectGeneration';
 import type { TauriApis } from './fs/fsCore';
 import { logger } from './logger';
 import { beginIdbReset, endIdbReset } from './storage/idbResetGate';
@@ -222,6 +223,8 @@ export async function wipeAllAppData(): Promise<void> {
       crossProjectIndexCoordinator.idle(),
       duckDbWriteCoordinator.idle(),
     ]);
+    // QNBS-v3 (#553 a10): the wiped stores no longer hold the text the last save committed, so a save attempted after a failed reset must write the editor project whole.
+    invalidatePersistedEditorEpoch();
     // QNBS-v3: only after those four have genuinely drained -- beginIdbReset() force-closes every other long-lived IDB connection (9 modules), which must not happen while one of the four above is still mid-write. Awaited and can throw: it fails closed on any closer failure, so a rejection here skips straight to the catch below and deletion never starts on an unproven teardown.
     await beginIdbReset();
     // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.

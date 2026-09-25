@@ -30,6 +30,7 @@ import {
   normalizeSaveProjectInputToStoryProject,
   type ProjectQuarantineResult,
   type SaveProjectInput,
+  type SaveProjectOptions,
   type SnapshotRestoreTarget,
 } from '../storageBackend';
 import { FsAssetStore } from './assetFsStore';
@@ -284,6 +285,36 @@ function persistedIdOfRaw(raw: string): string | null {
   } catch {
     return null;
   }
+}
+
+// QNBS-v3 (#553): the editor's owned fields overlay the admitted carrier; the target-local routing metadata this save derived is written explicitly because the overlay only covers editor-owned paths.
+function overlayAutosaveWriteback(
+  projectToPersist: StoryProject,
+  currentRaw: string,
+): ProjectWritebackResult {
+  const autosaveEdit = buildAutosaveOwnedProjectEdit(projectToPersist, currentRaw);
+  const projectRecord = projectToPersist as unknown as Record<string, unknown>;
+  const backendMetadata = Object.fromEntries(
+    [LEGACY_PROJECT_DIRECTORY_METADATA_KEY, LEGACY_AUXILIARY_METADATA_KEY]
+      .filter((key) => Object.hasOwn(projectRecord, key) && projectRecord[key] !== undefined)
+      .map((key) => [key, projectRecord[key]]),
+  );
+  return commitOwnedProjectEdit({
+    expectedGeneration: computeProjectSourceGeneration(currentRaw),
+    currentRaw,
+    edit: { ...autosaveEdit, fields: { ...autosaveEdit.fields, ...backendMetadata } },
+  });
+}
+
+// QNBS-v3 (#553 a10): a replaced editor project is written whole, like a created one — nothing of the stored predecessor's text survives, and its routing metadata is only what saveProjectUnlocked derived for this target, never inherited from the file being replaced.
+function freshReplacementWriteback(projectToPersist: StoryProject): ProjectWritebackResult {
+  const raw = JSON.stringify(projectToPersist);
+  const admission = admitCanonicalProjectDocument(raw, storedProjectSchema);
+  const generation = currentGenerationOf(admission);
+  if (generation === null) {
+    return { status: 'NOT_ADMITTED_FOR_WRITE', classification: admission.source.classification };
+  }
+  return { status: 'COMMITTED', raw, generation };
 }
 
 function currentGenerationOf(admission: ProjectAdmission): ProjectSourceGeneration | null {
@@ -859,8 +890,10 @@ export class FsProjectStore extends FsAssetStore {
     return JSON.parse(restoredText.raw) as StoryProject;
   }
 
-  async saveProject(project: SaveProjectInput): Promise<void> {
-    return this.withLegacyRoutingOperation(() => this.saveProjectUnlocked(project));
+  async saveProject(project: SaveProjectInput, options?: SaveProjectOptions): Promise<void> {
+    return this.withLegacyRoutingOperation(() =>
+      this.saveProjectUnlocked(project, options?.replacement === true),
+    );
   }
 
   // QNBS-v3 (#553): the existence check AND both the create-new and existing-project branches run under one cross-process lock — locking only the existing-project branch left a same-shape race where two processes could both observe an absent project.json and independently perform atomic creation, the later one silently overwriting the earlier.
@@ -870,10 +903,11 @@ export class FsProjectStore extends FsAssetStore {
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
+    replacement: boolean,
   ): Promise<string> {
     const lockKeyPath = await this.projectLockKeyPath(apis, projectId);
     return withProjectFileLock(apis, lockKeyPath, () =>
-      this.persistProjectFileLocked(apis, projectFile, projectId, projectToPersist),
+      this.persistProjectFileLocked(apis, projectFile, projectId, projectToPersist, replacement),
     );
   }
 
@@ -890,6 +924,7 @@ export class FsProjectStore extends FsAssetStore {
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
+    replacement: boolean,
   ): Promise<string> {
     let sourceExists: boolean;
     try {
@@ -932,6 +967,7 @@ export class FsProjectStore extends FsAssetStore {
       projectFile,
       projectId,
       projectToPersist,
+      replacement,
     );
   }
 
@@ -940,6 +976,7 @@ export class FsProjectStore extends FsAssetStore {
     projectFile: string,
     projectId: string,
     projectToPersist: StoryProject,
+    replacement: boolean,
   ): Promise<string> {
     // QNBS-v3 (#553): keep existing-project writeback as one preserve-first raw-carrier transaction boundary.
     let currentRaw: string;
@@ -976,21 +1013,9 @@ export class FsProjectStore extends FsAssetStore {
     ) {
       throw new StaleProjectWriterError(projectId);
     }
-    const autosaveEdit = buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw);
-    const projectRecord = projectToPersist as unknown as Record<string, unknown>;
-    const backendMetadata = Object.fromEntries(
-      [LEGACY_PROJECT_DIRECTORY_METADATA_KEY, LEGACY_AUXILIARY_METADATA_KEY]
-        .filter((key) => Object.hasOwn(projectRecord, key) && projectRecord[key] !== undefined)
-        .map((key) => [key, projectRecord[key]]),
-    );
-    const writeback = commitOwnedProjectEdit({
-      expectedGeneration: computeProjectSourceGeneration(admission.canonical.raw),
-      currentRaw: admission.canonical.raw,
-      edit: {
-        ...autosaveEdit,
-        fields: { ...autosaveEdit.fields, ...backendMetadata },
-      },
-    });
+    const writeback = replacement
+      ? freshReplacementWriteback(projectToPersist)
+      : overlayAutosaveWriteback(projectToPersist, admission.canonical.raw);
     if (writeback.status !== 'COMMITTED') {
       throw new ProjectCanonicalWritebackError(
         projectId,
@@ -1020,7 +1045,10 @@ export class FsProjectStore extends FsAssetStore {
     return writeback.raw;
   }
 
-  private async saveProjectUnlocked(project: SaveProjectInput): Promise<void> {
+  private async saveProjectUnlocked(
+    project: SaveProjectInput,
+    replacement: boolean,
+  ): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
     const rawProjectId = (flat as unknown as Record<string, unknown>)['id'];
     const suppliedProjectId = typeof rawProjectId === 'string';
@@ -1090,6 +1118,7 @@ export class FsProjectStore extends FsAssetStore {
       projectFile,
       projectId,
       projectToPersist,
+      replacement,
     );
     // QNBS-v3 (#553): capture recovery state only after authoritative replacement succeeds, so a refused save cannot mutate snapshot history — and capture the exact text just committed (§2.8), not a re-serialized parse of the input.
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {

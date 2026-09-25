@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** after "New project", an import, or a snapshot restore replaces the open
+  project (usually keeping its ID), the next save now writes that project whole instead of merging
+  it into the stored predecessor, so no hidden data of the replaced project carries over. Ordinary
+  edits still keep the stored project's unknown fields and exact values. The same rule decides
+  whether export and "Create snapshot" may reuse the stored text. Saving a restored snapshot's
+  exact original text is part of a separate follow-up. PR #839.
 - **Data integrity (#553):** project snapshots now keep the project exactly as it is stored.
   - **Creating a snapshot:** automatic desktop snapshots store the exact text a save just wrote,
     and "Create snapshot" stores the project as it is stored with the editor's unsaved changes
