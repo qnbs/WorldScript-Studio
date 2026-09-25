@@ -2173,6 +2173,89 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
     expect(persisted()).toMatchObject({ title: 'Saved without an editing load' });
   });
 
+  describe('project incarnation (delete then byte-identical recreate)', () => {
+    const INCARNATION_FILE = '/app/projects/p1/.incarnation';
+
+    async function recreatedIdentically(): Promise<[FsProjectStore, FsProjectStore]> {
+      const [windowA, windowB] = await twoWindowsLoadedAtG0();
+      const originalBytes = decompressJsonText(fake.text.get(PROJECT_FILE) as string);
+      await windowA.deleteProject('p1');
+      await windowA.saveProject(base as never);
+      // The ABA precondition: the recreated document is byte-identical to what B loaded.
+      expect(decompressJsonText(fake.text.get(PROJECT_FILE) as string)).toBe(originalBytes);
+      return [windowA, windowB];
+    }
+
+    it('refuses the old window’s project save against the recreated project', async () => {
+      const [, windowB] = await recreatedIdentically();
+      await expect(
+        windowB.saveProject({ ...base, title: 'Old incarnation edit' } as never),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+      expect(persisted()).toMatchObject({ title: 'Original' });
+    });
+
+    it('refuses the old window’s asset write against the recreated project', async () => {
+      const [, windowB] = await recreatedIdentically();
+      await expect(
+        windowB.saveImage('c1', 'data:image/png;base64,AAAA', 'p1'),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    });
+
+    it('lets the old window work again after reloading the recreated project', async () => {
+      const [, windowB] = await recreatedIdentically();
+      await windowB.loadProjectForEditing('p1');
+      await windowB.saveProject({ ...base, title: 'After reload' } as never);
+      expect(persisted()).toMatchObject({ title: 'After reload' });
+    });
+
+    it('detects the recreate for a project created before incarnation tokens existed', async () => {
+      await store.saveProject(base as never);
+      fake.text.delete(INCARNATION_FILE);
+      const windowA = new FsProjectStore();
+      const windowB = new FsProjectStore();
+      await windowA.loadProjectForEditing('p1');
+      await windowB.loadProjectForEditing('p1');
+      const originalBytes = decompressJsonText(fake.text.get(PROJECT_FILE) as string);
+      // A current window's save never lazily assigns a token (that would falsely strand other current windows).
+      await windowA.saveProject(base as never);
+      expect(fake.text.has(INCARNATION_FILE)).toBe(false);
+
+      await windowA.deleteProject('p1');
+      await windowA.saveProject(base as never);
+      expect(decompressJsonText(fake.text.get(PROJECT_FILE) as string)).toBe(originalBytes);
+      await expect(
+        windowB.saveProject({ ...base, title: 'Old incarnation edit' } as never),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    });
+
+    it('fails a save closed when the incarnation cannot be read', async () => {
+      const [windowA] = await twoWindowsLoadedAtG0();
+      const originalRead = fake.apis.readTextFile;
+      fake.apis.readTextFile = (path) =>
+        path === INCARNATION_FILE ? Promise.reject(new Error('EIO')) : originalRead(path);
+
+      await expect(
+        windowA.saveProject({ ...base, title: 'Blocked' } as never),
+      ).rejects.toBeInstanceOf(ProjectCanonicalWritebackError);
+      fake.apis.readTextFile = originalRead;
+      expect(persisted()).toMatchObject({ title: 'Original' });
+    });
+
+    it('refuses to pair a document with an incarnation that changed during the load', async () => {
+      await store.saveProject(base as never);
+      const originalRead = fake.apis.readTextFile;
+      let reads = 0;
+      fake.apis.readTextFile = (path) =>
+        path === INCARNATION_FILE ? Promise.resolve(`token-${reads++}`) : originalRead(path);
+
+      await expect(new FsProjectStore().loadProjectForEditing('p1')).rejects.toMatchObject({
+        name: 'ProjectLoadError',
+        reason: 'io-error',
+      });
+      fake.apis.readTextFile = originalRead;
+    });
+  });
+
   describe('auxiliary image/binder/codex writes', () => {
     const meta = { name: 'a.pdf', mimeType: 'application/pdf', byteSize: 0 } as never;
     const auxiliaryWrites: [string, (w: FsProjectStore) => Promise<void>][] = [
