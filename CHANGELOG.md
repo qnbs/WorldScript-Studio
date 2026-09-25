@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** a desktop window can no longer write into a project that another
+  window deleted and then recreated under the same ID — even when the recreated project file is
+  byte-identical to what the old window loaded. Every newly created project now gets a random
+  identity token in a small file beside its project file; project saves and image, binder and
+  codex writes are refused when the window's token no longer matches, until the window reloads.
+  Loading re-checks the token so a delete-and-recreate during the load cannot be missed. Projects
+  created before this change have no token until they are next recreated, which is still
+  detected. PR #835.
+
 - **Data integrity (#553):** a desktop window whose copy of a project is out of date can no longer
   save or delete that project's images, binder attachments, or story codex. Before, #830 blocked
   only the project file itself, so a second window that had fallen behind (or whose project another
