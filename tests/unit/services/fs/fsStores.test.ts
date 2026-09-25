@@ -2167,6 +2167,70 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
     await other.saveProject({ ...base, title: 'Saved without an editing load' } as never);
     expect(persisted()).toMatchObject({ title: 'Saved without an editing load' });
   });
+
+  describe('auxiliary image/binder/codex writes', () => {
+    const meta = { name: 'a.pdf', mimeType: 'application/pdf', byteSize: 0 } as never;
+    const auxiliaryWrites: [string, (w: FsProjectStore) => Promise<void>][] = [
+      ['saveImage', (w) => w.saveImage('c1', 'data:image/png;base64,AAAA', 'p1')],
+      ['deleteImage', (w) => w.deleteImage('c1', 'p1')],
+      ['saveBinderAsset', (w) => w.saveBinderAsset('p1', 'a1', new ArrayBuffer(3), meta)],
+      ['deleteBinderAsset', (w) => w.deleteBinderAsset('p1', 'a1')],
+      ['deleteAllBinderAssetsForProject', (w) => w.deleteAllBinderAssetsForProject('p1')],
+      ['saveStoryCodex', (w) => w.saveStoryCodex({ projectId: 'p1', entries: [] } as never)],
+      ['deleteStoryCodex', (w) => w.deleteStoryCodex('p1')],
+    ];
+    const diskSnapshot = () =>
+      [...fake.text.entries(), ...fake.bin.entries()].map(([k, v]) => `${k}=${String(v)}`);
+
+    it.each(auxiliaryWrites)(
+      'refuses %s from a window another window moved past',
+      async (_label, write) => {
+        const [windowA, windowB] = await twoWindowsLoadedAtG0();
+        await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+        const before = diskSnapshot();
+
+        await expect(write(windowB)).rejects.toBeInstanceOf(StaleProjectWriterError);
+        expect(diskSnapshot()).toEqual(before);
+      },
+    );
+
+    it.each(auxiliaryWrites)(
+      'refuses %s after another window deleted the project',
+      async (_label, write) => {
+        const [windowA, windowB] = await twoWindowsLoadedAtG0();
+        await windowA.deleteProject('p1');
+
+        await expect(write(windowB)).rejects.toBeInstanceOf(StaleProjectWriterError);
+      },
+    );
+
+    it.each(auxiliaryWrites)('lets a current window run %s', async (_label, write) => {
+      const [windowA] = await twoWindowsLoadedAtG0();
+      await windowA.saveProject({ ...base, title: 'Own commit' } as never);
+      await expect(write(windowA)).resolves.toBeUndefined();
+    });
+
+    it.each(auxiliaryWrites)(
+      'keeps %s unfenced for a window that never edit-loaded',
+      async (_label, write) => {
+        await store.saveProject(base as never);
+        await new FsProjectStore().saveProject({ ...base, title: 'Other' } as never);
+        await expect(write(new FsProjectStore())).resolves.toBeUndefined();
+      },
+    );
+
+    it('lets the refused window write assets again after reloading', async () => {
+      const [windowA, windowB] = await twoWindowsLoadedAtG0();
+      await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+      await expect(
+        windowB.saveImage('c1', 'data:image/png;base64,AAAA', 'p1'),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+
+      await windowB.loadProjectForEditing('p1');
+      await windowB.saveImage('c1', 'data:image/png;base64,AAAA', 'p1');
+      expect(await windowB.getImage('c1', 'p1')).toBe('data:image/png;base64,AAAA');
+    });
+  });
 });
 
 describe('FsSettingsStore — settings + encrypted API keys', () => {

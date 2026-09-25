@@ -19,7 +19,7 @@ export class FsCodexStore extends FsSettingsStore {
   // Story Codex — projects/{projectId}/codex/codex.snap
 
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
-    await this.withLegacyRoutingOperation(async () => {
+    await this.withAuxiliaryWriteOperation(async () => {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
       const safeId = sanitizePathSegment(
@@ -55,7 +55,7 @@ export class FsCodexStore extends FsSettingsStore {
 
   async deleteStoryCodex(projectId: string): Promise<void> {
     try {
-      await this.withLegacyRoutingOperation(
+      await this.withAuxiliaryWriteOperation(
         () => this.deleteStoryCodexStrict(projectId),
         projectId,
       );

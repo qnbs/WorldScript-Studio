@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** a desktop window whose copy of a project is out of date can no longer
+  save or delete that project's images, binder attachments, or story codex. Before, #830 blocked
+  only the project file itself, so a second window that had fallen behind (or whose project another
+  window had deleted) could still overwrite or remove assets the other window was using. These
+  writes now run the same check as project saves and are refused until the window reloads the
+  project. Windows that never opened the project for editing, and the project's own deletion and
+  rollback paths, behave as before. PR #833.
 - **Data integrity (#553):** quitting or closing a desktop window can no longer mistake unsaved
   data for saved data. The save queue deliberately resolves — rather than rejects — an older save
   whose own attempt failed while a newer save was already queued, and the newer save's later

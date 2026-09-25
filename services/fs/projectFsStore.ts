@@ -389,7 +389,25 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   protected override isProjectWriteAuthorityError(error: unknown): boolean {
-    return error instanceof ProjectWritebackError;
+    return error instanceof ProjectWritebackError || error instanceof StaleProjectWriterError;
+  }
+
+  // QNBS-v3 (#553): same verdict saveProject reaches — a missing, unadmitted, or newer project.json means another window moved on, so this window's asset write could undo that window's work. No baseline (never edit-loaded, or deleted by this window) stays unfenced as before. The check is not held across the write; saveProject's cross-process lock only covers project.json.
+  protected override async assertAuxiliaryWriterCurrent(projectId: string): Promise<void> {
+    const safeProjectId = projectPathSegment(projectId);
+    const baseline = safeProjectId ? this.editingBaselines.get(safeProjectId) : undefined;
+    if (!safeProjectId || baseline === undefined) return;
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
+    if (!(await apis.exists(projectFile))) throw new StaleProjectWriterError(safeProjectId);
+    const admission = admitCanonicalProjectDocument(
+      decompressJsonText(await retryFs(() => apis.readTextFile(projectFile))),
+      storedProjectSchema,
+    );
+    if (currentGenerationOf(admission) !== baseline) {
+      throw new StaleProjectWriterError(safeProjectId);
+    }
   }
 
   private canonicalLegacyProjection(

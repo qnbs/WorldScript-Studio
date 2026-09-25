@@ -111,7 +111,7 @@ export class FsAssetStore extends FsSnapshotStore {
     writeAdmission?: ImageWriteAdmission,
   ): Promise<void> {
     // QNBS-v3: serialize replacement writes with deletes so a pending remove cannot erase the newly committed image.
-    await this.withLegacyRoutingOperation(async () => {
+    await this.withAuxiliaryWriteOperation(async () => {
       // QNBS-v3: [Admission before temp-file creation / Reject already-stale writes without disk residue / Preserve filesystem authority]
       writeAdmission?.();
       const apis = await this.getApis();
@@ -158,7 +158,7 @@ export class FsAssetStore extends FsSnapshotStore {
   ): Promise<void> {
     try {
       // QNBS-v3: serialized + write-authority-checked like deleteBinderAsset -- an unserialized ownership check could go stale against a concurrent project creation and delete another project's unattributed legacy image.
-      await this.withLegacyRoutingOperation(async () => {
+      await this.withAuxiliaryWriteOperation(async () => {
         const apis = await this.getApis();
         const qualifiedFile = (await this.qualifiedImagePaths(projectId, id)).file;
         // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when ownership is already provable; otherwise it may belong to a different (possibly already-deleted) project, so leave it untouched rather than risk destroying another project's image.
@@ -226,7 +226,7 @@ export class FsAssetStore extends FsSnapshotStore {
     data: ArrayBuffer,
     meta: BinderAssetMeta,
   ): Promise<void> {
-    await this.withLegacyRoutingOperation(async () => {
+    await this.withAuxiliaryWriteOperation(async () => {
       const apis = await this.getApis();
       const { dir, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
       if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
@@ -268,7 +268,7 @@ export class FsAssetStore extends FsSnapshotStore {
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
     try {
-      await this.withLegacyRoutingOperation(
+      await this.withAuxiliaryWriteOperation(
         () => this.deleteBinderAssetStrict(projectId, assetId),
         projectId,
       );
@@ -340,7 +340,7 @@ export class FsAssetStore extends FsSnapshotStore {
   }
 
   async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
-    await this.withLegacyRoutingOperation(async () => {
+    await this.withAuxiliaryWriteOperation(async () => {
       const ids = await this.listBinderAssetIdsUnlocked(projectId);
       await Promise.all(
         ids.map(async (id) => {
