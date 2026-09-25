@@ -40,6 +40,17 @@ export function toPortableProjectRaw(raw: CanonicalProjectRawText): CanonicalPro
   return portable;
 }
 
+// QNBS-v3 (#553 a11): snapshots are historical, so a supported older one stays exportable as it was stored (restore migrates it on admission); only local metadata is removed, and a snapshot this build could never admit is refused.
+export function toPortableSnapshotRaw(raw: string): string {
+  const portable = stripTopLevelObjectKeys(raw, PORTABLE_LOCAL_METADATA_KEYS);
+  if (portable === null) throw new ProjectEgressError('local metadata could not be removed');
+  const verdict = admitCanonicalProjectDocument(portable, importedProjectJsonSchema);
+  if (verdict.status === 'REFUSED') {
+    throw new ProjectEgressError(`portable snapshot is ${verdict.source.classification}`);
+  }
+  return portable;
+}
+
 // QNBS-v3 (#553 §2.8): the same owned-edit overlay a save would commit, computed without committing — unsaved edits are included and every field the editor does not own keeps its stored text. Nothing stored yet gets the same versioned first document a first save would write.
 export function overlayProjectOntoCanonicalRaw(
   project: ProjectData | StoryProject,
