@@ -321,6 +321,8 @@ function admitNonCurrentClassification(
 
 interface CanonicalProjectSnapshot {
   admission: CanonicalProjectAdmission;
+  /** The decoded record as text whatever its version class; null when absent or undecodable. */
+  decodedRaw: CanonicalProjectRawText | null;
   /** The exact raw (undecoded) value read from PROJECT_RECORD_KEY, for the raw-bytes CAS fence. */
   rawRecordSnapshot: unknown;
 }
@@ -343,6 +345,15 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
   /** Reads, decrypts/decompresses, and classifies the current canonical project record. Never writes anything. */
   async loadCanonicalProjectAdmission(): Promise<CanonicalProjectAdmission> {
     return (await this.readCanonicalProjectSnapshot()).admission;
+  }
+
+  /** QNBS-v3 (#553 §2.8): admission and decoded text from ONE read, so read-only egress can admit a legacy record in memory without a second, possibly different, read. Never writes. */
+  async loadCanonicalProjectEgress(): Promise<{
+    admission: CanonicalProjectAdmission;
+    decodedRaw: CanonicalProjectRawText | null;
+  }> {
+    const { admission, decodedRaw } = await this.readCanonicalProjectSnapshot();
+    return { admission, decodedRaw };
   }
 
   private async readDecodedProjectSnapshot(): Promise<DecodedProjectSnapshot> {
@@ -403,11 +414,12 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
     const { rawRecordSnapshot, projectRecordPresent, parsedGeneration, decoded } =
       await this.readDecodedProjectSnapshot();
     if (!projectRecordPresent) {
-      return { admission: { status: 'ABSENT' }, rawRecordSnapshot };
+      return { admission: { status: 'ABSENT' }, decodedRaw: null, rawRecordSnapshot };
     }
     if (!decoded) {
       return {
         admission: admitNonCurrentClassification('MALFORMED', parsedGeneration),
+        decodedRaw: null,
         rawRecordSnapshot,
       };
     }
@@ -416,6 +428,7 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
     if (classification !== 'CURRENT') {
       return {
         admission: admitNonCurrentClassification(classification, parsedGeneration),
+        decodedRaw: decoded.currentRaw,
         rawRecordSnapshot,
       };
     }
@@ -428,6 +441,7 @@ export class IdbProjectCanonicalAuthority extends IdbConnectionManager {
         generation,
         envelope: decoded.envelope,
       },
+      decodedRaw: decoded.currentRaw,
       rawRecordSnapshot,
     };
   }

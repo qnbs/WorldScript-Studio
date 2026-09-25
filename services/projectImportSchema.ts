@@ -10,7 +10,8 @@ import {
   stripTopLevelObjectKeys,
 } from './projectDocument';
 
-const PORTABLE_IMPORT_LOCAL_METADATA_KEYS = new Set([
+// QNBS-v3 (#553 §2.8): machine-local trust/routing metadata — stripped at every portable boundary, import and export alike.
+export const PORTABLE_LOCAL_METADATA_KEYS: ReadonlySet<string> = new Set([
   '__worldscriptLegacyProjectDirectory',
   '__worldscriptLegacyAuxiliary',
 ]);
@@ -444,7 +445,7 @@ export function admitImportedProjectJson(
 
   const portableRaw = stripTopLevelObjectKeys(
     admission.canonical.raw,
-    PORTABLE_IMPORT_LOCAL_METADATA_KEYS,
+    PORTABLE_LOCAL_METADATA_KEYS,
   );
   if (portableRaw === null) {
     return { source: admission.source, canonical: null, status: 'REFUSED' };

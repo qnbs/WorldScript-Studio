@@ -2040,6 +2040,140 @@ describe('FsProjectStore — projects', () => {
 });
 
 // QNBS-v3 (#553): two FsProjectStore instances over one filesystem are two WorldScript processes. The #826 lock serializes their writes; these prove the load-generation baseline additionally refuses a writer whose snapshot predates another window's commit, instead of silently reverting that window's fields.
+describe('FsProjectStore — canonical raw egress (#553 §2.8)', () => {
+  it('returns the stored raw byte-for-byte, including integers the parsed projection rounds', async () => {
+    await store.saveProject({
+      id: 'p1',
+      schemaVersion: 1,
+      title: 'Raw egress',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    } as never);
+    const file = '/app/projects/p1/project.json';
+    const withOpaque = decompressJsonText(fake.text.get(file) as string).replace(
+      /}$/,
+      ',"futureWidget":{"k":1},"bigCount":9007199254740993}',
+    );
+    fake.text.set(file, withOpaque);
+
+    const result = await new FsProjectStore().loadCanonicalProjectRaw('p1');
+    const projection = await new FsProjectStore().loadProject('p1');
+
+    expect(result).toEqual({ status: 'CURRENT', raw: withOpaque });
+    // The parsed projection keeps the opaque object but cannot hold the exact integer.
+    expect(JSON.stringify(projection)).not.toContain('9007199254740993');
+  });
+
+  it('reports an absent project as ABSENT', async () => {
+    await expect(new FsProjectStore().loadCanonicalProjectRaw('missing')).resolves.toEqual({
+      status: 'ABSENT',
+    });
+  });
+
+  describe('editor export carrier', () => {
+    const doc = {
+      id: 'p1',
+      schemaVersion: 1,
+      title: 'Doc',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    };
+
+    async function editorsLoadedAtG0(): Promise<[FsProjectStore, FsProjectStore]> {
+      await store.saveProject(doc as never);
+      const windowA = new FsProjectStore();
+      const windowB = new FsProjectStore();
+      await windowA.loadProjectForEditing('p1');
+      await windowB.loadProjectForEditing('p1');
+      return [windowA, windowB];
+    }
+
+    it('returns the carrier for a current editor, including after its own saves', async () => {
+      const [windowA] = await editorsLoadedAtG0();
+      await expect(windowA.loadEditorExportCarrier('p1')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+      await windowA.saveProject({ ...doc, title: 'Own save' } as never);
+      await expect(windowA.loadEditorExportCarrier('p1')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+    });
+
+    it('refuses an editor another window moved past', async () => {
+      const [windowA, windowB] = await editorsLoadedAtG0();
+      await windowA.saveProject({ ...doc, title: 'Changed by A' } as never);
+      await expect(windowB.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+    });
+
+    it('refuses an editor whose project was deleted and recreated byte-identically', async () => {
+      const [windowA, windowB] = await editorsLoadedAtG0();
+      await windowA.deleteProject('p1');
+      await windowA.saveProject(doc as never);
+      await expect(windowB.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+    });
+
+    it('resolves an id-less project to the directory it was loaded from', async () => {
+      await store.saveProject(doc as never);
+      const file = '/app/projects/p1/project.json';
+      const { id: _id, ...idless } = JSON.parse(decompressJsonText(fake.text.get(file) as string));
+      fake.text.set(file, JSON.stringify(idless));
+      const editor = new FsProjectStore();
+      await editor.loadProjectForEditing('p1');
+
+      await expect(editor.loadEditorExportCarrier(undefined)).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+      await expect(editor.loadEditorExportCarrier('')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+    });
+
+    it('refuses an editor whose project another window deleted', async () => {
+      const [windowA, windowB] = await editorsLoadedAtG0();
+      await windowA.deleteProject('p1');
+      await expect(windowB.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+    });
+
+    it('refuses when the project is recreated while its text is being read', async () => {
+      const [windowA] = await editorsLoadedAtG0();
+      const incarnationFile = '/app/projects/p1/.incarnation';
+      const originalRead = fake.apis.readTextFile;
+      let incarnationReads = 0;
+      fake.apis.readTextFile = (path) =>
+        path === incarnationFile
+          ? Promise.resolve(incarnationReads++ === 0 ? 'before' : 'after')
+          : originalRead(path);
+
+      await expect(windowA.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+      fake.apis.readTextFile = originalRead;
+    });
+
+    it('uses the loaded directory when the editor loaded a project whose stored id names another directory', async () => {
+      await store.saveProject({ ...doc, id: 'legacy-dir' } as never);
+      const file = '/app/projects/legacy-dir/project.json';
+      const aliased = JSON.parse(decompressJsonText(fake.text.get(file) as string));
+      fake.text.set(file, JSON.stringify({ ...aliased, id: 'stored-id' }));
+      const editor = new FsProjectStore();
+      await editor.loadProjectForEditing('legacy-dir');
+
+      await expect(editor.loadEditorExportCarrier('stored-id')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+    });
+
+    it('refuses rather than guessing when an id-less project has no known source', async () => {
+      await expect(new FsProjectStore().loadEditorExportCarrier(undefined)).resolves.toEqual({
+        status: 'REFUSED',
+        classification: 'UNKNOWN_SOURCE',
+      });
+    });
+  });
+});
+
 describe('FsProjectStore — stale independently-loaded writer', () => {
   const PROJECT_FILE = '/app/projects/p1/project.json';
   const base = {

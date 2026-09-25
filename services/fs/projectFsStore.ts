@@ -26,6 +26,7 @@ import {
 } from '../projectDocumentWriteback';
 import { importedProjectJsonSchema, parseImportedProjectJson } from '../projectImportSchema';
 import {
+  type CanonicalProjectRawResult,
   normalizeSaveProjectInputToStoryProject,
   type ProjectQuarantineResult,
   type SaveProjectInput,
@@ -274,6 +275,17 @@ function newProjectIncarnation(): string {
       ).join('');
 }
 
+function persistedIdOfRaw(raw: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const id =
+      parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)['id'] : undefined;
+    return typeof id === 'string' ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 function currentGenerationOf(admission: ProjectAdmission): ProjectSourceGeneration | null {
   return admission.status === 'CURRENT' && admission.canonical
     ? computeProjectSourceGeneration(admission.canonical.raw)
@@ -291,6 +303,8 @@ export class FsProjectStore extends FsAssetStore {
   private readonly legacyAdmissionRecords = new Map<string, LegacyAdmissionRecord>();
   // QNBS-v3 (#553): the canonical generation and project incarnation this process's editable in-memory project descends from, per project — set only by the editing load and by this process's own commits, never by background reads (backup/LoRA use loadProject), so a background re-read can never mask a stale writer.
   private readonly editingBaselines = new Map<string, EditingBaseline>();
+  // QNBS-v3 (#553 §2.8): the project directory this window's editor is working on — the identity a project without a persisted id cannot carry itself. Set by the editing load and by this window's own saves.
+  private editingSourceId: string | null = null;
 
   private setEditingBaseline(projectId: string, baseline: EditingBaseline | null): void {
     if (baseline === null) this.editingBaselines.delete(projectId);
@@ -901,6 +915,7 @@ export class FsProjectStore extends FsAssetStore {
         projectId,
         createdGeneration === null ? null : { generation: createdGeneration, incarnation },
       );
+      this.editingSourceId = projectId;
     } else {
       await this.persistExistingCanonicalProjectLocked(
         apis,
@@ -986,6 +1001,7 @@ export class FsProjectStore extends FsAssetStore {
         generation: writeback.generation,
         incarnation: currentIncarnation,
       });
+      this.editingSourceId = projectId;
     } catch (error) {
       throw new ProjectCanonicalWritebackError(
         projectId,
@@ -1122,6 +1138,64 @@ export class FsProjectStore extends FsAssetStore {
     return this.withLegacyRoutingOperation(() => this.loadProjectUnlocked(projectId));
   }
 
+  // QNBS-v3 (#553 §2.8): the admitted raw carrier from ONE read of project.json — the persisted text, including integer literals a parse would round; its readable form must be derived from this same text, never from a second read.
+  async loadCanonicalProjectRaw(projectId: string): Promise<CanonicalProjectRawResult> {
+    return this.withLegacyRoutingOperation(async () => {
+      const { raw } = await this.readAdmittedCarrier(projectId);
+      return raw === null ? { status: 'ABSENT' } : { status: 'CURRENT', raw };
+    });
+  }
+
+  // QNBS-v3 (#553 §2.8): the editor's own project, resolved to the directory it was loaded from, and refused as STALE under the same generation + incarnation verdict saveProject applies — an export from a window another window moved past would otherwise mix that window's older edits into newer stored data.
+  async loadEditorExportCarrier(projectId: string | undefined): Promise<CanonicalProjectRawResult> {
+    return this.withLegacyRoutingOperation(async () => {
+      const sourceId = await this.resolveEditorSourceId(projectId);
+      if (sourceId === null) return { status: 'REFUSED', classification: 'UNKNOWN_SOURCE' };
+      const apis = await this.getApis();
+      const baseline = this.editingBaselines.get(sourceId);
+      const incarnationBefore = await this.readProjectIncarnation(apis, sourceId);
+      const { raw, generation } = await this.readAdmittedCarrier(sourceId);
+      const incarnationAfter = await this.readProjectIncarnation(apis, sourceId);
+      if (incarnationBefore !== incarnationAfter) return { status: 'STALE' };
+      if (raw === null) return baseline ? { status: 'STALE' } : { status: 'ABSENT' };
+      if (
+        baseline &&
+        (baseline.generation !== generation || baseline.incarnation !== incarnationAfter)
+      ) {
+        return { status: 'STALE' };
+      }
+      return { status: 'CURRENT', raw };
+    });
+  }
+
+  private async readAdmittedCarrier(
+    projectId: string,
+  ): Promise<{ raw: string | null; generation: ProjectSourceGeneration | null }> {
+    let raw: string | null = null;
+    let generation: ProjectSourceGeneration | null = null;
+    const project = await this.loadProjectUnlocked(projectId, (admittedGeneration, admittedRaw) => {
+      raw = admittedRaw;
+      generation = admittedGeneration;
+    });
+    return project ? { raw, generation } : { raw: null, generation: null };
+  }
+
+  private forgetEditingProject(safeProjectId: string): void {
+    this.editingBaselines.delete(safeProjectId);
+    if (this.editingSourceId === safeProjectId) this.editingSourceId = null;
+  }
+
+  // QNBS-v3 (#553 §2.8): a persisted id names its directory unless the editor loaded a legacy directory whose stored id differs from its name; an id-less (or empty-id) project is identified only by the editing load.
+  private async resolveEditorSourceId(projectId: string | undefined): Promise<string | null> {
+    const idSegment = projectId ? projectPathSegment(projectId) : null;
+    const editing = this.editingSourceId;
+    if (editing === null || idSegment === editing) return idSegment ?? editing;
+    if (idSegment === null) return editing;
+    const { raw } = await this.readAdmittedCarrier(editing);
+    const editingId = raw === null ? null : persistedIdOfRaw(raw);
+    return editingId === projectId ? editing : idSegment;
+  }
+
   // QNBS-v3: desktop bootstrap uses a distinct admission boundary so a readable legacy projection cannot enter the ordinary editable Redux store.
   async loadProjectForEditing(projectId: string): Promise<StoryProject | null> {
     return this.withLegacyRoutingOperation(async () => {
@@ -1143,6 +1217,7 @@ export class FsProjectStore extends FsAssetStore {
           safeProjectId,
           project && generation !== null ? { generation, incarnation } : null,
         );
+        if (project) this.editingSourceId = safeProjectId;
       }
       return project;
     });
@@ -1187,7 +1262,7 @@ export class FsProjectStore extends FsAssetStore {
 
   private async loadProjectUnlocked(
     projectId: string,
-    onCanonicalGeneration?: (generation: ProjectSourceGeneration | null) => void,
+    onCanonicalGeneration?: (generation: ProjectSourceGeneration | null, raw: string) => void,
   ): Promise<StoryProject | null> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
@@ -1233,7 +1308,7 @@ export class FsProjectStore extends FsAssetStore {
         admission.status === 'LEGACY_TO_V1'
           ? withoutSyntheticLegacySchemaVersion(admission.canonical.projection)
           : admission.canonical.projection;
-      onCanonicalGeneration?.(currentGenerationOf(admission));
+      onCanonicalGeneration?.(currentGenerationOf(admission), admission.canonical.raw);
     } catch (error) {
       logger.error('Failed to parse project file (corrupt data):', error);
       throw new ProjectLoadError(
@@ -1409,7 +1484,7 @@ export class FsProjectStore extends FsAssetStore {
             await writeTextFileAtomic(apis, manifestPath, JSON.stringify(manifest));
           }
           await retryFs(() => apis.rename(projectPath, preservedPath));
-          this.editingBaselines.delete(safeProjectId);
+          this.forgetEditingProject(safeProjectId);
           this.clearLegacyAuxiliaryPolicy(safeProjectId);
           this.clearLegacyAdmissionForSource(safeProjectId);
           return { projectId: safeProjectId, path: preservedPath };
@@ -1514,7 +1589,7 @@ export class FsProjectStore extends FsAssetStore {
         await this.deleteStoryCodexStrict(safeProjectId);
       }
       if (projectExists) await retryFs(() => apis.remove(projectPath, { recursive: true }));
-      this.editingBaselines.delete(safeProjectId);
+      this.forgetEditingProject(safeProjectId);
     } catch (error) {
       logger.error('Failed to clean up legacy project data during deletion', {
         projectId: safeProjectId,
