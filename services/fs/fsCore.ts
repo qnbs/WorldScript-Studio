@@ -493,10 +493,11 @@ export class FsCore {
   protected withAuxiliaryWriteOperation<T>(
     operation: () => Promise<T>,
     projectId: string,
-    fenceProjectIds: readonly string[] = [projectId],
+    fenceProjectIds: () => readonly string[] = () => [projectId],
   ): Promise<T> {
+    // QNBS-v3 (#553): routes are resolved only once serialized, the same moment the write resolves its paths, so no queued policy change can split the fenced directory from the written one.
     return this.withLegacyRoutingOperation(
-      () => this.runFencedAuxiliaryWrite(fenceProjectIds, operation),
+      () => this.runFencedAuxiliaryWrite(fenceProjectIds(), operation),
       projectId,
     );
   }

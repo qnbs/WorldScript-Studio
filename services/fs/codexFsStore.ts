@@ -33,7 +33,7 @@ export class FsCodexStore extends FsSettingsStore {
         await writeTextFileAtomic(apis, codexFile, compressData(codex));
       },
       codex.projectId,
-      [this.resolveAuxiliaryProjectId(codex.projectId, 'codex')],
+      () => [codex.projectId, this.resolveAuxiliaryProjectId(codex.projectId, 'codex')],
     );
   }
 
@@ -62,7 +62,7 @@ export class FsCodexStore extends FsSettingsStore {
       await this.withAuxiliaryWriteOperation(
         () => this.deleteStoryCodexStrict(projectId),
         projectId,
-        [this.resolveAuxiliaryProjectId(projectId, 'codex')],
+        () => [projectId, this.resolveAuxiliaryProjectId(projectId, 'codex')],
       );
     } catch (error) {
       if (this.isProjectWriteAuthorityError(error)) throw error;

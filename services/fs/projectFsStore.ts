@@ -398,38 +398,41 @@ export class FsProjectStore extends FsAssetStore {
     );
   }
 
-  private auxiliaryFenceTargets(
-    fenceProjectIds: readonly string[],
-  ): [string, ProjectSourceGeneration][] {
-    const targets = new Map<string, ProjectSourceGeneration>();
-    for (const id of fenceProjectIds) {
-      const safeId = projectPathSegment(id);
-      const baseline = safeId ? this.editingBaselines.get(safeId) : undefined;
-      if (safeId && baseline !== undefined) targets.set(safeId, baseline);
-    }
-    return [...targets].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  // QNBS-v3 (#553): takes every lock in one sorted order so two multi-directory operations cannot hold each other's first lock.
+  private async withProjectLocks<T>(
+    projectIds: readonly string[],
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const safeIds = [
+      ...new Set(projectIds.map((id) => projectPathSegment(id)).filter((id): id is string => !!id)),
+    ].sort();
+    if (safeIds.length === 0) return fn();
+    const apis = await this.getApis();
+    const lockAndRun = async (index: number): Promise<T> => {
+      const safeId = safeIds[index];
+      if (safeId === undefined) return fn();
+      const lockKeyPath = await this.projectLockKeyPath(apis, safeId);
+      return withProjectFileLock(apis, lockKeyPath, () => lockAndRun(index + 1));
+    };
+    return lockAndRun(0);
   }
 
-  // QNBS-v3 (#553): same verdict saveProject reaches, under the same cross-process lock held across the write, so another window cannot commit between check and write. No baseline (never edit-loaded, or deleted by this window) stays unfenced as before.
+  // QNBS-v3 (#553): every write locks its logical and routed directories, even without a baseline, so a delete or quarantine can never interleave with it; directories this window holds a baseline for must also still match disk (the saveProject verdict). No baseline (never edit-loaded, or deleted by this window) skips only the generation check.
   protected override async runFencedAuxiliaryWrite<T>(
     fenceProjectIds: readonly string[],
     operation: () => Promise<T>,
   ): Promise<T> {
-    const targets = this.auxiliaryFenceTargets(fenceProjectIds);
-    if (targets.length === 0) return operation();
-    const apis = await this.getApis();
-    const lockAndRun = async (index: number): Promise<T> => {
-      const target = targets[index];
-      if (target === undefined) {
-        for (const [safeId, baseline] of targets) {
+    return this.withProjectLocks(fenceProjectIds, async () => {
+      const apis = await this.getApis();
+      for (const id of fenceProjectIds) {
+        const safeId = projectPathSegment(id);
+        const baseline = safeId ? this.editingBaselines.get(safeId) : undefined;
+        if (safeId && baseline !== undefined) {
           await this.assertProjectSourceMatches(apis, safeId, baseline);
         }
-        return operation();
       }
-      const lockKeyPath = await this.projectLockKeyPath(apis, target[0]);
-      return withProjectFileLock(apis, lockKeyPath, () => lockAndRun(index + 1));
-    };
-    return lockAndRun(0);
+      return operation();
+    });
   }
 
   private async assertProjectSourceMatches(
@@ -1371,6 +1374,25 @@ export class FsProjectStore extends FsAssetStore {
       await this.hydrateLegacyPolicyForDeletion(safeProjectId, projectPath, apis, appDataPath);
     }
 
+    // QNBS-v3 (#553): the project lock is already held; routed legacy directories this delete also empties are locked too, once hydration has made the routes known.
+    const routedLegacyIds = [
+      this.legacyBinderProjectId(safeProjectId),
+      this.legacyCodexProjectId(safeProjectId),
+    ].filter((id): id is string => id !== null && projectPathSegment(id) !== safeProjectId);
+    await this.withProjectLocks(routedLegacyIds, () =>
+      this.removeProjectDataLocked(safeProjectId, projectPath, projectExists, apis),
+    );
+    this.verifiedLegacyProjectDirectories.delete(safeProjectId);
+    this.clearLegacyAdmissionForSource(safeProjectId);
+    this.clearLegacyAuxiliaryPolicy(safeProjectId);
+  }
+
+  private async removeProjectDataLocked(
+    safeProjectId: string,
+    projectPath: string,
+    projectExists: boolean,
+    apis: TauriApis,
+  ): Promise<void> {
     try {
       const legacyBinderIds = this.legacyBinderAssetIdsForProject(safeProjectId);
       if (legacyBinderIds.length > 0) {
@@ -1390,9 +1412,6 @@ export class FsProjectStore extends FsAssetStore {
       });
       throw new ProjectDeleteError();
     }
-    this.verifiedLegacyProjectDirectories.delete(safeProjectId);
-    this.clearLegacyAdmissionForSource(safeProjectId);
-    this.clearLegacyAuxiliaryPolicy(safeProjectId);
   }
 
   private async hydrateLegacyPolicyForDeletion(

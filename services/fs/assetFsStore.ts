@@ -254,7 +254,7 @@ export class FsAssetStore extends FsSnapshotStore {
         await writeTextFileAtomic(apis, metaFile, JSON.stringify(metaOut));
       },
       projectId,
-      [this.binderFenceProjectId(projectId, assetId)],
+      () => this.binderFenceProjectIds(projectId, assetId),
     );
   }
 
@@ -293,7 +293,7 @@ export class FsAssetStore extends FsSnapshotStore {
       await this.withAuxiliaryWriteOperation(
         () => this.deleteBinderAssetStrict(projectId, assetId),
         projectId,
-        [this.binderFenceProjectId(projectId, assetId)],
+        () => this.binderFenceProjectIds(projectId, assetId),
       );
     } catch (error) {
       if (this.isProjectWriteAuthorityError(error)) throw error;
@@ -377,15 +377,18 @@ export class FsAssetStore extends FsSnapshotStore {
         );
       },
       projectId,
-      [projectId, this.legacyBinderProjectId(projectId)].filter((id): id is string => id !== null),
+      () =>
+        [projectId, this.legacyBinderProjectId(projectId)].filter(
+          (id): id is string => id !== null,
+        ),
     );
   }
 
-  private binderFenceProjectId(projectId: string, assetId: string): string {
-    return this.resolveAuxiliaryProjectId(
+  // QNBS-v3 (#553): the logical project (whose baseline the editing window holds) and the directory the asset is routed to.
+  private binderFenceProjectIds(projectId: string, assetId: string): string[] {
+    return [
       projectId,
-      'binder',
-      sanitizePathSegment(assetId, 'asset'),
-    );
+      this.resolveAuxiliaryProjectId(projectId, 'binder', sanitizePathSegment(assetId, 'asset')),
+    ];
   }
 }

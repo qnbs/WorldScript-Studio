@@ -2295,6 +2295,52 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
       ).rejects.toBeInstanceOf(StaleProjectWriterError);
     });
 
+    const withPolicy = (w: FsProjectStore, projectId: string, legacyId: string, codex: boolean) =>
+      (
+        w as unknown as {
+          registerLegacyAuxiliaryPolicy(
+            projectId: string,
+            legacyProjectId: string,
+            policy: { codex: boolean; binderAssetIds: ReadonlySet<string> },
+          ): void;
+        }
+      ).registerLegacyAuxiliaryPolicy(projectId, legacyId, {
+        codex,
+        binderAssetIds: new Set(codex ? [] : ['old']),
+      });
+
+    it('fences a routed codex write by the logical project’s baseline too', async () => {
+      const [windowA, windowB] = await twoWindowsLoadedAtG0();
+      withPolicy(windowB, 'p1', 'legacy', true);
+      await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+
+      await expect(
+        windowB.saveStoryCodex({ projectId: 'p1', entries: [] } as never),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+      expect(fake.text.has('/app/projects/legacy/codex/codex.snap')).toBe(false);
+    });
+
+    it('locks a write even for a window with no baseline, so it cannot interleave with a delete', async () => {
+      await store.saveProject(base as never);
+      await fake.apis.mkdir('/app/project-locks', { recursive: true });
+      await fake.apis.writeTextFile('/app/project-locks/p1.lock', 'held by a delete');
+
+      await expect(
+        new FsProjectStore().saveStoryCodex({ projectId: 'p1', entries: [] } as never),
+      ).rejects.toBeInstanceOf(ProjectFileLockedError);
+      expect(fake.text.has('/app/projects/p1/codex/codex.snap')).toBe(false);
+    });
+
+    it('locks the routed legacy directory a delete also empties', async () => {
+      await store.saveProject(base as never);
+      withPolicy(store, 'p1', 'legacy', true);
+      await fake.apis.mkdir('/app/project-locks', { recursive: true });
+      await fake.apis.writeTextFile('/app/project-locks/legacy.lock', 'held by a codex write');
+
+      await expect(store.deleteProject('p1')).rejects.toBeInstanceOf(ProjectFileLockedError);
+      expect(fake.text.has(PROJECT_FILE)).toBe(true);
+    });
+
     it('lets the refused window write assets again after reloading', async () => {
       const [windowA, windowB] = await twoWindowsLoadedAtG0();
       await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
