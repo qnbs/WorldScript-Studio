@@ -822,7 +822,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectSnapshotRestoreError('snapshot-owner-mismatch');
     }
 
-    // QNBS-v3 (#553 §2.8, a5): identity and machine-local metadata come from the restore target, set on the snapshot's own admitted text so every other field keeps its stored tokens.
+    // QNBS-v3 (#553 §2.8): identity and machine-local metadata come from the restore target, set on the snapshot's own admitted text so every other field keeps its stored content.
     const fields: Record<string, unknown> = {};
     const removeFields: string[] = [
       'id',
@@ -855,8 +855,7 @@ export class FsProjectStore extends FsAssetStore {
     if (restoredText.status !== 'COMMITTED') {
       throw new ProjectSnapshotRestoreError('snapshot-invalid');
     }
-    const apis = await this.getApis();
-    await this.replaceProjectWithRestoredText(apis, targetDirectory, restoredText.raw);
+    // QNBS-v3 (#553 §2.8): admission only — persisting a restore is a same-ID replacement that must run after the thunk's live identity check and through the persistence coordinator (#553 a10), so nothing is written here.
     return JSON.parse(restoredText.raw) as StoryProject;
   }
 
@@ -936,61 +935,6 @@ export class FsProjectStore extends FsAssetStore {
     );
   }
 
-  // QNBS-v3 (#553): the stale-writer verdict — this window may only replace the project it last loaded or committed (generation and incarnation); returns the current incarnation for the new baseline.
-  private async assertEditingBaselineCurrent(
-    apis: TauriApis,
-    projectId: string,
-    currentGeneration: ProjectSourceGeneration,
-  ): Promise<string | null> {
-    let currentIncarnation: string | null;
-    try {
-      currentIncarnation = await this.readProjectIncarnation(apis, projectId);
-    } catch (error) {
-      throw new ProjectCanonicalWritebackError(
-        projectId,
-        `project incarnation read failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-    const baseline = this.editingBaselines.get(projectId);
-    if (
-      baseline !== undefined &&
-      (baseline.generation !== currentGeneration || baseline.incarnation !== currentIncarnation)
-    ) {
-      throw new StaleProjectWriterError(projectId);
-    }
-    return currentIncarnation;
-  }
-
-  // QNBS-v3 (#553 §2.8, a5): a snapshot restore replaces the project with the snapshot's own canonical text, under the same lock and stale-writer verdict as a save — never an overlay of the parsed snapshot onto the current text, which would round its integers and keep fields the snapshot never had.
-  private async replaceProjectWithRestoredText(
-    apis: TauriApis,
-    projectId: string,
-    restoredRaw: string,
-  ): Promise<void> {
-    const appDataPath = await this.ensureAppDataPath();
-    const projectFile = await apis.join(appDataPath, 'projects', projectId, 'project.json');
-    await withProjectFileLock(apis, await this.projectLockKeyPath(apis, projectId), async () => {
-      const currentRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
-      const currentGeneration = computeProjectSourceGeneration(currentRaw);
-      const incarnation = await this.assertEditingBaselineCurrent(
-        apis,
-        projectId,
-        currentGeneration,
-      );
-      await writeTextFileAtomic(apis, projectFile, compressJsonText(restoredRaw), async () => {
-        const latestRaw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
-        if (computeProjectSourceGeneration(latestRaw) !== currentGeneration) {
-          throw new Error('source generation changed before atomic replacement');
-        }
-      });
-      this.editingBaselines.set(projectId, {
-        generation: computeProjectSourceGeneration(restoredRaw),
-        incarnation,
-      });
-      this.editingSourceId = projectId;
-    });
-  }
-
   private async persistExistingCanonicalProjectLocked(
     apis: TauriApis,
     projectFile: string,
@@ -1016,11 +960,22 @@ export class FsProjectStore extends FsAssetStore {
     }
     // QNBS-v3 (#553): refuse before building the overlay — the edit below is fenced only against the carrier read now, so an independently-loaded window whose snapshot predates the current generation would otherwise pass that fence and silently revert fields another window committed.
     const currentGeneration = computeProjectSourceGeneration(admission.canonical.raw);
-    const currentIncarnation = await this.assertEditingBaselineCurrent(
-      apis,
-      projectId,
-      currentGeneration,
-    );
+    let currentIncarnation: string | null;
+    try {
+      currentIncarnation = await this.readProjectIncarnation(apis, projectId);
+    } catch (error) {
+      throw new ProjectCanonicalWritebackError(
+        projectId,
+        `project incarnation read failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    const baseline = this.editingBaselines.get(projectId);
+    if (
+      baseline !== undefined &&
+      (baseline.generation !== currentGeneration || baseline.incarnation !== currentIncarnation)
+    ) {
+      throw new StaleProjectWriterError(projectId);
+    }
     const autosaveEdit = buildAutosaveOwnedProjectEdit(projectToPersist, admission.canonical.raw);
     const projectRecord = projectToPersist as unknown as Record<string, unknown>;
     const backendMetadata = Object.fromEntries(

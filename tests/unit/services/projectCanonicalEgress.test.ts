@@ -146,4 +146,19 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
     expect(text).toContain('"bigCount":9007199254740993');
     expect(text).toContain('__worldscriptLegacyProjectDirectory');
   });
+
+  it('builds a manual snapshot of a replaced editor project from its own state, fence still asked', async () => {
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+    noteEditableProjectGenerationChanged();
+
+    await createCanonicalProjectSnapshot('manual', 'p1', {
+      ...edited,
+      title: 'Replacement B',
+    } as never);
+
+    expect(storageService.loadEditorExportCarrier).toHaveBeenCalledWith('p1');
+    const text = vi.mocked(storageService.saveSnapshotText).mock.calls.at(-1)?.[1] as string;
+    expect(text).toContain('"title":"Replacement B"');
+    expect(text).not.toContain('futureWidget');
+  });
 });

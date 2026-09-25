@@ -2080,37 +2080,33 @@ describe('FsProjectStore — snapshot canonical carrier (#553 §2.8, a3/a5)', ()
     expect(snapshot).toBe(decompressJsonText(fake.text.get(PROJECT_FILE) as string));
   });
 
-  it('restores the snapshot’s own text as the project, integer literals included', async () => {
+  it('admits the snapshot’s own content for the target without writing the project', async () => {
     const storedRaw = await storedWithExactInteger();
     const editor = new FsProjectStore();
     await editor.loadProjectForEditing('p1');
     const snapshotId = await editor.saveSnapshotText('manual', storedRaw);
     await editor.saveProject({ ...doc, title: 'Changed after snapshot' } as never);
+    const before = fake.text.get(PROJECT_FILE);
 
     const restored = await editor.restoreSnapshot(snapshotId, { ...doc } as never);
 
-    const onDisk = decompressJsonText(fake.text.get(PROJECT_FILE) as string);
-    expect(onDisk).toContain('"bigCount":9007199254740993');
-    expect(JSON.parse(onDisk)).toMatchObject({ id: 'p1', title: 'Doc', futureWidget: { k: 1 } });
-    expect(restored).toMatchObject({ id: 'p1', title: 'Doc' });
-    // The restoring window's own write keeps it current.
-    await editor.saveProject({ ...doc, title: 'After restore' } as never);
+    // Persisting a restore is the coordinated same-ID replacement write (#553 a10), never done here.
+    expect(fake.text.get(PROJECT_FILE)).toBe(before);
+    expect(restored).toMatchObject({ id: 'p1', title: 'Doc', futureWidget: { k: 1 } });
   });
 
-  it('refuses a restore from a window another window moved past, leaving the project unchanged', async () => {
+  it('takes machine-local metadata from the restore target, never from the snapshot', async () => {
     const storedRaw = await storedWithExactInteger();
-    const windowA = new FsProjectStore();
-    const windowB = new FsProjectStore();
-    await windowA.loadProjectForEditing('p1');
-    await windowB.loadProjectForEditing('p1');
-    const snapshotId = await windowB.saveSnapshotText('manual', storedRaw);
-    await windowA.saveProject({ ...doc, title: 'Changed by A' } as never);
-    const before = fake.text.get(PROJECT_FILE);
-
-    await expect(windowB.restoreSnapshot(snapshotId, { ...doc } as never)).rejects.toBeInstanceOf(
-      StaleProjectWriterError,
+    const editor = new FsProjectStore();
+    await editor.loadProjectForEditing('p1');
+    const snapshotId = await editor.saveSnapshotText(
+      'manual',
+      storedRaw.replace(/}$/, ',"__worldscriptLegacyProjectDirectory":"elsewhere"}'),
     );
-    expect(fake.text.get(PROJECT_FILE)).toBe(before);
+
+    const restored = await editor.restoreSnapshot(snapshotId, { ...doc } as never);
+
+    expect(restored).not.toHaveProperty('__worldscriptLegacyProjectDirectory');
   });
 });
 

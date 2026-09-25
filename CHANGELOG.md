@@ -12,9 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     and "Create snapshot" stores the project as it is stored with the editor's unsaved changes
     applied — no longer a re-serialized copy that rounded very large whole numbers. The same
     stale-window refusal as export applies. Snapshot files keep their existing format.
-  - **Restoring on desktop:** the snapshot's own stored text becomes the project again, under
-    the same lock and stale-window check as a save; before, only a parsed copy was handed to the
-    editor and saved over the current project later.
+  - **Restoring on desktop:** the snapshot's stored content is admitted for the current project
+    with identity and machine-local routing taken from that project, never from the snapshot;
+    characters and worlds stored in the portable list form are converted before they reach the
+    editor. Saving a restored project exactly (as a replacement, not merged into the current
+    project) is part of a separate follow-up.
   - **Restoring in the browser:** a snapshot is now checked like an imported file before it can
     reach the editor — a snapshot from a newer app version, a damaged one, or one belonging to
     another project is refused instead of loaded. Browser storage keeps snapshots as structured

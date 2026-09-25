@@ -50,10 +50,31 @@ describe('admitStructuredSnapshotRestore (#553 §2.8, a6)', () => {
     );
   });
 
-  it('admits an id-less snapshot into an id-less project', () => {
-    const { id: _id, ...idless } = snapshot();
-    expect(admitStructuredSnapshotRestore(idless, { title: 'Current' } as never)).toMatchObject({
-      title: 'Snapshot',
-    });
-  });
+  it.each([
+    [
+      'the snapshot has no id',
+      (() => {
+        const { id: _id, ...rest } = snapshot();
+        return rest;
+      })(),
+      target,
+    ],
+    ['the target has no id', snapshot(), { title: 'Current' }],
+    [
+      'neither has an id',
+      (() => {
+        const { id: _id, ...rest } = snapshot();
+        return rest;
+      })(),
+      { title: 'Current' },
+    ],
+    ['an id is empty', snapshot({ id: '' }), target],
+  ])(
+    'refuses as unverifiable when %s — two missing ids prove nothing',
+    (_label, value, current) => {
+      expect(() => admitStructuredSnapshotRestore(value, current as never)).toThrow(
+        expect.objectContaining({ reason: 'snapshot-owner-unverifiable' }),
+      );
+    },
+  );
 });
