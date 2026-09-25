@@ -27,6 +27,7 @@ import { isFactoryResetInProgress } from '../services/factoryResetService';
 import { ProjectFileLockedError, StaleProjectWriterError } from '../services/fs/fsCore';
 import { logger } from '../services/logger';
 import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersistence';
+import { noteEditableProjectGenerationChanged } from '../services/projectCanonicalEgress';
 import { storageService } from '../services/storageService';
 import type { Character, StorySection, World } from '../types';
 import { isAnalyticsPersistenceAllowed } from './analyticsGate';
@@ -541,6 +542,12 @@ listenerMiddleware.startListening({
     );
   },
   effect: (_action, listenerApi) => {
+    if (
+      (listenerApi.getState() as RootState).project?.present?.generation !==
+      (listenerApi.getOriginalState() as RootState).project?.present?.generation
+    ) {
+      noteEditableProjectGenerationChanged();
+    }
     listenerApi.dispatch(writerActions.invalidateForProjectChange());
     listenerApi.dispatch(copilotActions.invalidateForProjectChange());
     // QNBS-v3 (#713): a mid-pipeline HITL review run is scoped to the manuscript it was generated against -- clearing it here (belt) is the primary defense; submitReview's own origin-identity check (suspenders) covers the race window before this listener fires.

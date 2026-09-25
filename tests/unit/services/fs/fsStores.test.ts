@@ -2132,6 +2132,39 @@ describe('FsProjectStore — canonical raw egress (#553 §2.8)', () => {
       });
     });
 
+    it('refuses an editor whose project another window deleted', async () => {
+      const [windowA, windowB] = await editorsLoadedAtG0();
+      await windowA.deleteProject('p1');
+      await expect(windowB.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+    });
+
+    it('refuses when the project is recreated while its text is being read', async () => {
+      const [windowA] = await editorsLoadedAtG0();
+      const incarnationFile = '/app/projects/p1/.incarnation';
+      const originalRead = fake.apis.readTextFile;
+      let incarnationReads = 0;
+      fake.apis.readTextFile = (path) =>
+        path === incarnationFile
+          ? Promise.resolve(incarnationReads++ === 0 ? 'before' : 'after')
+          : originalRead(path);
+
+      await expect(windowA.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+      fake.apis.readTextFile = originalRead;
+    });
+
+    it('uses the loaded directory when the editor loaded a project whose stored id names another directory', async () => {
+      await store.saveProject({ ...doc, id: 'legacy-dir' } as never);
+      const file = '/app/projects/legacy-dir/project.json';
+      const aliased = JSON.parse(decompressJsonText(fake.text.get(file) as string));
+      fake.text.set(file, JSON.stringify({ ...aliased, id: 'stored-id' }));
+      const editor = new FsProjectStore();
+      await editor.loadProjectForEditing('legacy-dir');
+
+      await expect(editor.loadEditorExportCarrier('stored-id')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+    });
+
     it('refuses rather than guessing when an id-less project has no known source', async () => {
       await expect(new FsProjectStore().loadEditorExportCarrier(undefined)).resolves.toEqual({
         status: 'REFUSED',

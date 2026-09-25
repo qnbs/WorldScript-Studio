@@ -63,11 +63,27 @@ export function overlayProjectOntoCanonicalRaw(
   return toPortableProjectRaw(result.raw);
 }
 
-// QNBS-v3 (#553 §2.8): the backend resolves which stored project the editor is working on (a filesystem project's identity can be its directory, not its id) and refuses a stale editor; this layer never guesses a storage key.
+let editableProjectReplaced = false;
+
+// QNBS-v3 (#553 §2.8): ProjectSliceState.generation changes only when the editable project is replaced wholesale (reset, import, restore, or an undo across one), often keeping its id — from then on the stored text may still be the replaced project's, so export must not overlay onto it.
+export function noteEditableProjectGenerationChanged(): void {
+  editableProjectReplaced = true;
+}
+
+export function _resetEditableProjectReplacementForTest(): void {
+  editableProjectReplaced = false;
+}
+
+export function _editableProjectReplacedForTest(): boolean {
+  return editableProjectReplaced;
+}
+
+// QNBS-v3 (#553 §2.8): the backend resolves which stored project the editor is working on (a filesystem project's identity can be its directory, not its id) and refuses a stale editor; this layer never guesses a storage key. A replaced editor project is exported from its own state alone — everything it legitimately holds is in that state.
 export async function loadCanonicalEgressRaw(
   projectId: string | undefined,
   project: ProjectData | StoryProject,
 ): Promise<CanonicalProjectRawText> {
+  if (editableProjectReplaced) return overlayProjectOntoCanonicalRaw(project, null);
   return overlayProjectOntoCanonicalRaw(
     project,
     await storageService.loadEditorExportCarrier(projectId),

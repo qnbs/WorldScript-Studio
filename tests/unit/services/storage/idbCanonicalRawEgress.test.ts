@@ -132,6 +132,31 @@ describe('IdbProjectStore.loadCanonicalProjectRaw — real authority (#553 §2.8
     });
   });
 
+  it('refuses a record that cannot be decoded as a project', async () => {
+    await seed(new Map([['not', 'json']]));
+    await expect(new IdbProjectStore().loadCanonicalProjectRaw('p1')).resolves.toMatchObject({
+      status: 'REFUSED',
+    });
+  });
+
+  it('refuses a pre-version record once a canonical generation was recorded (§2.7 contradiction)', async () => {
+    await seed(current());
+    await idbProjectCanonicalAuthority.commitCanonicalProjectEdit({
+      expectedGeneration: (
+        (await idbProjectCanonicalAuthority.loadCanonicalProjectAdmission()) as {
+          generation: string;
+        }
+      ).generation,
+      edit: { fields: { title: 'Committed' } },
+    });
+    const { schemaVersion: _omit, ...legacy } = current();
+    await seed(legacy);
+
+    await expect(new IdbProjectStore().loadCanonicalProjectRaw('p1')).resolves.toMatchObject({
+      status: 'REFUSED',
+    });
+  });
+
   it('reports nothing stored as absent', async () => {
     await expect(new IdbProjectStore().loadCanonicalProjectRaw('p1')).resolves.toEqual({
       status: 'ABSENT',

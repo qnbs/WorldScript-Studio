@@ -5,8 +5,10 @@ vi.mock('../../../services/storageService', () => ({
 }));
 
 import {
+  _resetEditableProjectReplacementForTest,
   downloadCanonicalProjectExport,
   loadCanonicalEgressRaw,
+  noteEditableProjectGenerationChanged,
   overlayProjectOntoCanonicalRaw,
   ProjectEgressError,
   toPortableProjectRaw,
@@ -33,7 +35,10 @@ const storedRaw = JSON.stringify(stored).replace(
 );
 const edited = { ...stored, title: 'Unsaved edit' };
 
-beforeEach(() => vi.mocked(storageService.loadEditorExportCarrier).mockReset());
+beforeEach(() => {
+  vi.mocked(storageService.loadEditorExportCarrier).mockReset();
+  _resetEditableProjectReplacementForTest();
+});
 
 describe('projectCanonicalEgress (#553 §2.8)', () => {
   it('applies the unsaved edit, keeps opaque data and exact tokens, and strips local trust metadata', () => {
@@ -86,5 +91,23 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
 
     expect(onRefused).toHaveBeenCalledWith(expect.any(ProjectEgressError));
     expect(createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('overlays an ordinary edit onto the stored carrier of the same project', async () => {
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+    const raw = await loadCanonicalEgressRaw('p1', edited as never);
+    expect(raw).toContain('"futureWidget"');
+  });
+
+  it('never overlays a replaced editor project onto the replaced project’s stored text', async () => {
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+    noteEditableProjectGenerationChanged();
+
+    const raw = await loadCanonicalEgressRaw('p1', { ...edited, title: 'Replacement B' } as never);
+
+    expect(storageService.loadEditorExportCarrier).not.toHaveBeenCalled();
+    expect(raw).not.toContain('futureWidget');
+    expect(raw).not.toContain('bigCount');
+    expect(JSON.parse(raw)).toMatchObject({ title: 'Replacement B', schemaVersion: 1 });
   });
 });

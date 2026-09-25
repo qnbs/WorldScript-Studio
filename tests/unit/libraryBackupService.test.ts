@@ -143,6 +143,19 @@ describe('libraryBackupService — partial corruption (DA-01)', () => {
     expect(corrupt?.project).toBeNull();
   });
 
+  it('keeps a listed project whose stored text is absent as an empty entry', async () => {
+    const { storageService } = await import('../../services/storageService');
+    vi.mocked(storageService.listProjects).mockResolvedValue(['gone']);
+    vi.mocked(storageService.loadCanonicalProjectRaw).mockResolvedValue(null);
+    const { collectLibraryBackupPayload } = await import('../../services/libraryBackupService');
+    const payload = await collectLibraryBackupPayload();
+    expect(payload.projects[0]).toMatchObject({
+      projectId: 'gone',
+      project: null,
+      projectRaw: null,
+    });
+  });
+
   // QNBS-v3: unsupported projects must never be represented as a successful backup with an omitted payload.
   it('fails visibly when a project uses an unsupported schema version', async () => {
     const { storageService } = await import('../../services/storageService');

@@ -482,6 +482,22 @@ describe('currentWordCount', () => {
 // handleExport
 // ---------------------------------------------------------------------------
 describe('handleExport', () => {
+  it('reports a refused export and starts no download (#553 §2.8)', async () => {
+    const { storageService } = await import('../../../services/storageService');
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValueOnce('{"title":');
+    const mockCreateObjectURL = vi.mocked(URL.createObjectURL);
+    mockCreateObjectURL.mockClear();
+    stableToast.error.mockClear();
+
+    const { result } = renderHook(() => useSettingsView());
+    await act(async () => {
+      await result.current.handleExport();
+    });
+
+    expect(stableToast.error).toHaveBeenCalledWith('export.exportFailed');
+    expect(mockCreateObjectURL).not.toHaveBeenCalled();
+  });
+
   it('creates a JSON blob URL for download', async () => {
     const mockCreateObjectURL = vi.mocked(URL.createObjectURL);
     mockCreateObjectURL.mockClear();

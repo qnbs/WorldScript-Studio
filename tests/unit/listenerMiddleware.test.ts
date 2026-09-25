@@ -15,12 +15,19 @@ import { DEFAULT_PIPELINE_CONFIG } from '../../features/proForge/types';
 import { getProjectTargetIdentity } from '../../features/project/projectIdentity';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import projectReducer, { projectActions } from '../../features/project/projectSlice';
-import { importProjectThunk } from '../../features/project/thunks/projectManagementThunks';
+import {
+  importProjectThunk,
+  restoreSnapshotThunk,
+} from '../../features/project/thunks/projectManagementThunks';
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
 import writerReducer, { writerActions } from '../../features/writer/writerSlice';
 import { ProjectFileLockedError, StaleProjectWriterError } from '../../services/fs/fsCore';
+import {
+  _editableProjectReplacedForTest,
+  _resetEditableProjectReplacementForTest,
+} from '../../services/projectCanonicalEgress';
 import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionService';
 
 // ---------------------------------------------------------------------------
@@ -906,6 +913,43 @@ describe('desktop notification listener (ProForge stageCompleted)', () => {
 });
 
 // QNBS-v3 (#713): writer/copilot keep generation state in global Redux, so a project-incarnation change needs an explicit invalidation listener independent of component lifecycle.
+describe('export replacement signal (#553 §2.8)', () => {
+  function makeProjectStore() {
+    return configureStore({
+      reducer: {
+        project: undoable(projectReducer, { limit: 10 }) as unknown as Reducer,
+        writer: writerReducer,
+        copilot: copilotReducer,
+        proForge: proForgeReducer,
+      },
+      middleware: (getDefault) => getDefault().prepend(listenerMiddleware.middleware),
+    });
+  }
+
+  beforeEach(() => _resetEditableProjectReplacementForTest());
+
+  it('does not mark an ordinary edit of the same project as a replacement', () => {
+    const store = makeProjectStore();
+    store.dispatch(projectActions.updateTitle('Edited'));
+    expect(_editableProjectReplacedForTest()).toBe(false);
+  });
+
+  it.each([
+    [
+      'resetProject',
+      () => projectActions.resetProject({ title: 'B', logline: 'L', chapter1Title: 'C1' }),
+    ],
+    ['import', (data: unknown) => ({ type: importProjectThunk.fulfilled.type, payload: data })],
+    ['restore', (data: unknown) => ({ type: restoreSnapshotThunk.fulfilled.type, payload: data })],
+  ])('marks a same-id %s as a replacement', (_label, replace) => {
+    const store = makeProjectStore();
+    const sameId = store.getState().project.present.data;
+    store.dispatch(replace({ ...sameId, title: 'Replacement B' }) as never);
+    expect(store.getState().project.present.data.id).toBe(sameId.id);
+    expect(_editableProjectReplacedForTest()).toBe(true);
+  });
+});
+
 describe('AI state invalidation listener (#713)', () => {
   function makeWriterCopilotStore() {
     return configureStore({
