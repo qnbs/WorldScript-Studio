@@ -2378,6 +2378,32 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
       expect(await store.listBinderAssetIds('p1')).toEqual(['a1']);
     });
 
+    it('checks the fallback directory’s baseline, not just its lock, for an unusable project ID', async () => {
+      await store.saveProject({ ...base, id: 'project', title: 'Fallback' } as never);
+      const windowA = new FsProjectStore();
+      const windowB = new FsProjectStore();
+      await windowA.loadProjectForEditing('project');
+      await windowB.loadProjectForEditing('project');
+      await windowA.saveProject({ ...base, id: 'project', title: 'Changed by A' } as never);
+
+      await expect(
+        windowB.saveStoryCodex({ projectId: '***', entries: [] } as never),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+      expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+    });
+
+    it('fails delete-all when the asset list cannot be read', async () => {
+      await store.saveProject(base as never);
+      await store.saveBinderAsset('p1', 'a1', new ArrayBuffer(3), meta);
+      const originalReadDir = fake.apis.readDir;
+      fake.apis.readDir = (path) =>
+        path.endsWith('/binder') ? Promise.reject(new Error('EIO')) : originalReadDir(path);
+
+      await expect(store.deleteAllBinderAssetsForProject('p1')).rejects.toThrow('EIO');
+      fake.apis.readDir = originalReadDir;
+      expect(await store.listBinderAssetIds('p1')).toEqual(['a1']);
+    });
+
     it('lets the refused window write assets again after reloading', async () => {
       const [windowA, windowB] = await twoWindowsLoadedAtG0();
       await windowA.saveProject({ ...base, title: 'Changed by A' } as never);

@@ -267,6 +267,11 @@ function currentGenerationOf(admission: ProjectAdmission): ProjectSourceGenerati
     : null;
 }
 
+// QNBS-v3 (#553): the directory an auxiliary write actually lands in — the same 'project' fallback the binder/codex path builders apply — used for both its lock and its baseline check so the two can never name different directories.
+function auxiliaryTargetDirectory(projectId: string): string | null {
+  return projectPathSegment(sanitizePathSegment(projectId, 'project'));
+}
+
 // QNBS-v3: one source-owned record keeps the canonical directory, embedded identity, aliases, and write verdict together.
 export class FsProjectStore extends FsAssetStore {
   private readonly verifiedLegacyProjectDirectories = new Set<string>();
@@ -403,10 +408,7 @@ export class FsProjectStore extends FsAssetStore {
     projectIds: readonly string[],
     fn: () => Promise<T>,
   ): Promise<T> {
-    // QNBS-v3 (#553): same fallback the binder/codex path builders apply, so an unusable ID locks the projects/project directory it actually writes.
-    const safeIds = [
-      ...new Set(projectIds.map((id) => projectPathSegment(sanitizePathSegment(id, 'project')))),
-    ]
+    const safeIds = [...new Set(projectIds.map(auxiliaryTargetDirectory))]
       .filter((id): id is string => !!id)
       .sort();
     if (safeIds.length === 0) return fn();
@@ -428,7 +430,7 @@ export class FsProjectStore extends FsAssetStore {
     return this.withProjectLocks(fenceProjectIds, async () => {
       const apis = await this.getApis();
       for (const id of fenceProjectIds) {
-        const safeId = projectPathSegment(id);
+        const safeId = auxiliaryTargetDirectory(id);
         const baseline = safeId ? this.editingBaselines.get(safeId) : undefined;
         if (safeId && baseline !== undefined) {
           await this.assertProjectSourceMatches(apis, safeId, baseline);

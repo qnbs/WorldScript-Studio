@@ -318,7 +318,8 @@ export class FsAssetStore extends FsSnapshotStore {
     }
   }
 
-  private async listBinderAssetIdsUnlocked(projectId: string): Promise<string[]> {
+  // QNBS-v3 (#553): strict mode is for bulk deletion — an unreadable directory must fail it rather than read as "nothing left to delete".
+  private async listBinderAssetIdsUnlocked(projectId: string, strict = false): Promise<string[]> {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
@@ -347,6 +348,7 @@ export class FsAssetStore extends FsSnapshotStore {
             }
           }
         } catch (error) {
+          if (strict) throw error;
           // QNBS-v3: one unreadable legacy directory must not erase IDs already collected from a healthy project directory.
           logger.warn('listBinderAssetIds: skipped unreadable project directory', {
             projectId,
@@ -357,6 +359,7 @@ export class FsAssetStore extends FsSnapshotStore {
       }
       return [...ids];
     } catch (error) {
+      if (strict) throw error;
       logger.warn('listBinderAssetIds failed:', error);
       return [];
     }
@@ -365,7 +368,7 @@ export class FsAssetStore extends FsSnapshotStore {
   async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
     await this.withAuxiliaryWriteOperation(
       async () => {
-        const ids = await this.listBinderAssetIdsUnlocked(projectId);
+        const ids = await this.listBinderAssetIdsUnlocked(projectId, true);
         const results = await Promise.allSettled(
           ids.map((id) => this.deleteBinderAssetStrict(projectId, id)),
         );
