@@ -7,6 +7,7 @@ import type {
   ImageWriteAdmission,
   ProjectQuarantineResult,
   SaveProjectInput,
+  SaveProjectOptions,
   SnapshotRestoreTarget,
   StorageBackend,
 } from './storageBackend';
@@ -74,6 +75,8 @@ function canonicalRawOrThrow(result: CanonicalProjectRawResult, projectId: strin
       );
   }
 }
+export type ProjectAuthority = 'fs' | 'idb';
+
 class StorageManager {
   private backend: StorageBackend;
   private ready: Promise<void>;
@@ -107,13 +110,19 @@ class StorageManager {
     return this.backend;
   }
 
+  // QNBS-v3 (#553 a10): the replacement baseline is bound to the storage that really holds the project — a desktop build whose filesystem init failed runs on IndexedDB and must not share the 'fs' baseline.
+  async getProjectAuthority(): Promise<ProjectAuthority> {
+    const backend = await this.getBackend();
+    return backend === fileSystemService ? 'fs' : 'idb';
+  }
+
   // Delegate all methods to the current backend
-  async saveProject(project: SaveProjectInput): Promise<void> {
+  async saveProject(project: SaveProjectInput, options?: SaveProjectOptions): Promise<void> {
     // QNBS-v3: StoryProject has no typed id, but persisted envelopes carry one -- a non-string id counts as unset, which a safe session refuses.
     const projectId = (flatProjectOf(project) as unknown as Record<string, unknown>)['id'];
     assertProjectPersistenceAdmitted(typeof projectId === 'string' ? projectId : undefined);
     const backend = await this.getBackend();
-    return backend.saveProject(project);
+    return backend.saveProject(project, options);
   }
 
   async loadProject(projectId: string): Promise<StoryProject | null> {

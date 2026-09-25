@@ -1,4 +1,5 @@
 import type { ProjectData } from '../features/project/projectSlice';
+import { toEditorReplacementEpoch } from '../services/editorProjectGeneration';
 import { isFactoryResetInProgress } from '../services/factoryResetService';
 import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersistence';
 import { isProjectPersistenceAdmitted } from '../services/startupSafeSession';
@@ -31,6 +32,7 @@ export async function flushPersistedState(state: RootState): Promise<void> {
   ];
   // QNBS-v3: a fenced safe-session project is skipped, never rejected — quitApp aborts on any flush rejection, so a fence must not make the window unquittable.
   if (presentData && isProjectPersistenceAdmitted(presentData.id)) {
+    const editorEpoch = toEditorReplacementEpoch(state.project.present?.generation);
     const enriched: ProjectData = {
       ...presentData,
       persistedVersionControl: {
@@ -40,7 +42,9 @@ export async function flushPersistedState(state: RootState): Promise<void> {
       },
     };
     saves.push(
-      projectPersistenceCoordinator.enqueue(() => persistProjectAutosaveSnapshot(enriched)),
+      projectPersistenceCoordinator.enqueue(() =>
+        persistProjectAutosaveSnapshot(enriched, editorEpoch),
+      ),
     );
   }
   // QNBS-v3: allSettled, not Promise.all — its fail-fast let a caller reload before the other save finished; both must settle first, still failing closed if either rejected.

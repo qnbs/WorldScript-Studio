@@ -237,6 +237,7 @@ vi.mock('../../../services/storage/storageEncryptionService', () => ({
 vi.mock('../../../services/storageService', () => ({
   storageService: {
     loadEditorExportCarrier: vi.fn().mockResolvedValue(null),
+    getProjectAuthority: vi.fn().mockResolvedValue('idb'),
     listSnapshots: () => mockListSnapshots(),
     saveSnapshot: (name: string, project: unknown) => mockSaveSnapshot(name, project),
     saveSnapshotText: (name: string, projectJson: string) => mockSaveSnapshot(name, projectJson),
