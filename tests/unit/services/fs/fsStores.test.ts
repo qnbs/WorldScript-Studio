@@ -67,7 +67,7 @@ import {
   ProjectFileLockedError,
   StaleProjectWriterError,
 } from '../../../../services/fs/fsCore';
-import { FsProjectStore } from '../../../../services/fs/projectFsStore';
+import { FsProjectStore, ProjectWritebackError } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 
 // QNBS-v3: shared Binder fixture keeps schema-complete asset nodes consistent across filesystem cleanup and routing tests.
@@ -2216,6 +2216,15 @@ describe('FsProjectStore — stale independently-loaded writer', () => {
         await store.saveProject(base as never);
         await new FsProjectStore().saveProject({ ...base, title: 'Other' } as never);
         await expect(write(new FsProjectStore())).resolves.toBeUndefined();
+      },
+    );
+
+    it.each(auxiliaryWrites)(
+      'fails %s closed when the fence cannot read the project file',
+      async (_label, write) => {
+        const [windowA] = await twoWindowsLoadedAtG0();
+        vi.spyOn(fake.apis, 'exists').mockRejectedValue(new Error('EIO'));
+        await expect(write(windowA)).rejects.toBeInstanceOf(ProjectWritebackError);
       },
     );
 

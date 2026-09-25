@@ -400,11 +400,17 @@ export class FsProjectStore extends FsAssetStore {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
-    if (!(await apis.exists(projectFile))) throw new StaleProjectWriterError(safeProjectId);
-    const admission = admitCanonicalProjectDocument(
-      decompressJsonText(await retryFs(() => apis.readTextFile(projectFile))),
-      storedProjectSchema,
-    );
+    let exists: boolean;
+    let raw = '';
+    try {
+      exists = await apis.exists(projectFile);
+      if (exists) raw = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+    } catch {
+      // QNBS-v3 (#553): an unreadable fence is an authority error, not a generic failure the delete wrappers would log and report as done.
+      throw new ProjectWritebackError(safeProjectId);
+    }
+    if (!exists) throw new StaleProjectWriterError(safeProjectId);
+    const admission = admitCanonicalProjectDocument(raw, storedProjectSchema);
     if (currentGenerationOf(admission) !== baseline) {
       throw new StaleProjectWriterError(safeProjectId);
     }
