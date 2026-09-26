@@ -1,3 +1,4 @@
+import { DesktopStorageAuthorityUnavailableError } from './fs/fsCore';
 import { ProjectLoadError } from './fs/projectFsStore';
 
 export type StartupStorageBackend = 'indexeddb' | 'filesystem';
@@ -21,6 +22,10 @@ export function getStartupRecoveryActions(
   backend: StartupStorageBackend,
 ): StartupRecoveryActions {
   const projectLoadError = error instanceof ProjectLoadError ? error : null;
+  // QNBS-v3 (#553 a8): desktop storage that could not be opened is an access problem of the filesystem store — retry only, never an IndexedDB reset or a quarantine.
+  if (error instanceof DesktopStorageAuthorityUnavailableError) {
+    return { failureKind: 'project-io', canQuarantine: false, canReset: false, canSafeOpen: false };
+  }
   const failureKind: StartupRecoveryFailureKind =
     projectLoadError?.classification === 'UNSUPPORTED_OLDER'
       ? 'project-migration-gap'
