@@ -1,0 +1,29 @@
+[package]
+name = "worldscript-secure-storage"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77.2"
+description = "Renderer-neutral R-15 protected-record primitives (WSR1 envelope, canonical AAD, AES-256-GCM) — Gate 1a, headless"
+publish = false
+
+[lib]
+name = "worldscript_secure_storage"
+
+[dependencies]
+# `zeroize` on both clears the AES key schedule (aes) and the derived GHASH key (aes-gcm) on drop.
+aes = { version = "0.8.4", default-features = false, features = ["zeroize"] }
+aes-gcm = { version = "0.10.3", default-features = false, features = ["aes", "alloc", "zeroize"] }
+getrandom = "0.2"
+sha2 = "0.10"
+# Held below 1.9, whose MSRV (1.85) exceeds this crate's 1.77.2; 1.8.x (MSRV 1.60) is API-compatible.
+zeroize = { version = "~1.8", features = ["derive"] }
+# Direct pin for the same reason: zeroize_derive 1.5 also requires Rust 1.85.
+zeroize_derive = "~1.4"
+
+[features]
+# Test-only: exposes `seal_with_random` and `RandomSource` so the fixed vectors can inject a known
+# nonce (§16). Production callers never enable it; the public `seal` always uses the OS CSPRNG.
+test-randomness = []
+
+[dev-dependencies]
+worldscript-secure-storage = { path = ".", features = ["test-randomness"] }
