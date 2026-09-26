@@ -17,9 +17,9 @@ import { storageService } from './storageService';
 /**
  * Persists one autosave snapshot through the authority that actually holds the project.
  *
- * IndexedDB storage (the web/PWA build, and a desktop build whose filesystem init fell back to it)
- * goes through the canonical generation-fenced writer; the desktop filesystem backend keeps its own
- * locked, fenced writer.
+ * IndexedDB storage (the web/PWA build) goes through the canonical generation-fenced writer; the
+ * desktop filesystem backend keeps its own locked, fenced writer. Desktop never falls back to
+ * IndexedDB (#553 a8).
  *
  * This is the single choke point shared by debounced autosave, lifecycle flushes, and manual save,
  * so the safe-session fence (a refused startup project must never gain write authority) lives here.
@@ -34,7 +34,7 @@ export async function persistProjectAutosaveSnapshot(
   const replacement = isReplacementPending(snapshot, authority, editorEpoch);
   const replacementRaw = (replacement && replacementCarrierFor(snapshot, editorEpoch)) || undefined;
   const options = replacementRaw === undefined ? { replacement } : { replacement, replacementRaw };
-  // QNBS-v3 (#553 a5): the writer follows the storage that really holds the project — a desktop build on its IndexedDB fallback uses the generation-fenced canonical writer, never the legacy whole-record save that ignores the replacement carrier.
+  // QNBS-v3 (#553 a5): the writer follows the storage that really holds the project — IndexedDB storage always uses the generation-fenced canonical writer, never the legacy whole-record save that ignores the replacement carrier.
   if (authority === 'fs') {
     await storageService.saveProject(saveEnvelopeFromProjectData(snapshot), options);
   } else {

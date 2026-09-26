@@ -179,6 +179,20 @@ const LOCK_ACQUIRE_ATTEMPTS = 3;
 const LOCK_ACQUIRE_BACKOFF_MS = [200, 500];
 
 // QNBS-v3 (#553): the one name for the stable sibling directory that holds every project's lock file, shared by projectFsStore.ts (which creates locks under it) and factoryResetService.ts (which must check it before wiping app data) — a second, independently-typed copy of this string in the latter would be exactly the kind of drift-prone duplication already flagged once in this PR.
+/**
+ * The desktop filesystem could not be established as project storage (#553 a8). Desktop projects
+ * live only there, so no other store stands in: every storage access fails with this until a
+ * restart succeeds, and nothing is read from or written to either store meanwhile.
+ */
+export class DesktopStorageAuthorityUnavailableError extends Error {
+  readonly code = 'DESKTOP_STORAGE_AUTHORITY_UNAVAILABLE';
+
+  constructor(cause: unknown) {
+    super('The desktop project storage could not be opened.', { cause });
+    this.name = 'DesktopStorageAuthorityUnavailableError';
+  }
+}
+
 export const PROJECT_LOCKS_DIR_NAME = 'project-locks';
 
 function lockPathFor(path: string): string {
