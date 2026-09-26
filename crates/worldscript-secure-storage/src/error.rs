@@ -5,6 +5,8 @@ use std::fmt;
 pub enum AadError {
     EmptyLogicalRecordId,
     EmptyProjectId,
+    /// An identity longer than `u32::MAX` bytes cannot be encoded as `u32be(full_byte_length)`.
+    IdentityTooLong,
     ExceedsMaximum,
 }
 

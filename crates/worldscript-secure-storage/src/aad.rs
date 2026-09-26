@@ -96,14 +96,27 @@ fn identity_form(context: &RecordContext<'_>) -> IdentityForm {
     }
 }
 
+/// Every identity length is encoded as `u32be(full_byte_length)` (§6.2), so a longer identity has no
+/// canonical binding and is refused rather than silently truncated.
+fn fits_wire_length(len: usize) -> bool {
+    u32::try_from(len).is_ok()
+}
+
 /// §6.2: a present identity is never empty. An empty ID would authenticate a record bound to no
 /// owner, and `Some("")` must never collapse into the absent (`None`, tag `0`) project binding.
-fn reject_empty_identities(context: &RecordContext<'_>) -> Result<(), AadError> {
+fn validate_identities(context: &RecordContext<'_>) -> Result<(), AadError> {
     if context.logical_record_id.is_empty() {
         return Err(AadError::EmptyLogicalRecordId);
     }
     if context.project_id == Some("") {
         return Err(AadError::EmptyProjectId);
+    }
+    let lengths_fit = fits_wire_length(context.logical_record_id.len())
+        && context
+            .project_id
+            .map_or(true, |id| fits_wire_length(id.len()));
+    if !lengths_fit {
+        return Err(AadError::IdentityTooLong);
     }
     Ok(())
 }
@@ -119,7 +132,7 @@ pub fn canonical_aad(
     context: &RecordContext<'_>,
     header: &[u8; HEADER_LEN],
 ) -> Result<Vec<u8>, AadError> {
-    reject_empty_identities(context)?;
+    validate_identities(context)?;
     let class = context.record_class.token();
     let form = identity_form(context);
     let project_len = context.project_id.map_or(1, |id| form.encoded_len(id));
@@ -145,4 +158,17 @@ pub fn canonical_aad(
     out.extend_from_slice(header);
     debug_assert_eq!(out.len(), total);
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fits_wire_length;
+
+    #[test]
+    fn identity_lengths_beyond_u32_have_no_canonical_binding() {
+        assert!(fits_wire_length(0));
+        assert!(fits_wire_length(u32::MAX as usize));
+        #[cfg(target_pointer_width = "64")]
+        assert!(!fits_wire_length(u32::MAX as usize + 1));
+    }
 }
