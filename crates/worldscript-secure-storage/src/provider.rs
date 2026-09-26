@@ -213,8 +213,10 @@ pub struct PrepareRootAnchor {
 /// store and takes no passphrase; the recovery passphrase belongs only to [`crate::recovery`].
 pub trait KeyProvider {
     /// Current authority state (§8.1): `Unconfigured` until the first root commits (step F),
-    /// whatever scope or bootstrap keys already exist.
-    fn state(&self) -> KeyState;
+    /// whatever scope or bootstrap keys already exist; `RecoveryRequired` for an inconsistent
+    /// anchor. An unavailable secure store or unsupported anchor format is returned as its own
+    /// error, never disguised as a key state.
+    fn state(&self) -> Result<KeyState, KeyProviderError>;
     /// Opaque key for a data epoch, or a typed unavailable result.
     fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError>;
     /// The trusted cold-start route: resolves exactly this reference, never searches (§5.3.1).

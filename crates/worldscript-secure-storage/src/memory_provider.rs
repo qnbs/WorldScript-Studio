@@ -195,24 +195,28 @@ impl MemoryKeyProvider {
 }
 
 impl KeyProvider for MemoryKeyProvider {
-    fn state(&self) -> KeyState {
-        let Ok(anchor) = self.read_root_anchor_state() else {
-            return KeyState::RecoveryRequired;
+    fn state(&self) -> Result<KeyState, KeyProviderError> {
+        let anchor = match self.read_root_anchor_state() {
+            Ok(anchor) => anchor,
+            Err(KeyProviderError::RecoveryRequired) => return Ok(KeyState::RecoveryRequired),
+            Err(other) => return Err(other),
         };
         let Some(root) = anchor.committed_root else {
             // Scope and bootstrap keys may already exist, but no root is published yet (§5.3.2).
-            return KeyState::Unconfigured;
+            return Ok(KeyState::Unconfigured);
         };
         if self.lost {
-            return KeyState::KeyLost;
+            return Ok(KeyState::KeyLost);
         }
         if !self.unlocked {
-            return KeyState::Locked;
+            return Ok(KeyState::Locked);
         }
-        match self.store.iter().find(|k| k.key_ref == root.root_key_ref) {
-            Some(key) => KeyState::Unlocked { epoch: key.epoch },
-            None => KeyState::RecoveryRequired,
-        }
+        Ok(
+            match self.store.iter().find(|k| k.key_ref == root.root_key_ref) {
+                Some(key) => KeyState::Unlocked { epoch: key.epoch },
+                None => KeyState::RecoveryRequired,
+            },
+        )
     }
 
     fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError> {
@@ -249,7 +253,7 @@ impl KeyProvider for MemoryKeyProvider {
             .map(|k| (k.key_ref.clone(), k.material.clone()))
             .collect();
         self.unlocked = true;
-        Ok(self.state())
+        self.state()
     }
 
     fn list_epochs(&self) -> Result<Vec<EpochInfo>, KeyProviderError> {

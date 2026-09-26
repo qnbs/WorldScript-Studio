@@ -63,13 +63,17 @@ fn commit_root(
 #[test]
 fn authority_stays_unconfigured_until_the_first_root_commits() {
     let mut provider = MemoryKeyProvider::new();
-    assert_eq!(provider.state(), KeyState::Unconfigured);
+    assert_eq!(provider.state().unwrap(), KeyState::Unconfigured);
     provider.read_or_provision_installation_scope().unwrap();
-    assert_eq!(provider.state(), KeyState::Unconfigured, "scope only");
+    assert_eq!(
+        provider.state().unwrap(),
+        KeyState::Unconfigured,
+        "scope only"
+    );
     let route = provider.provision_epoch_key(1).unwrap();
     provider.unlock().unwrap();
     assert_eq!(
-        provider.state(),
+        provider.state().unwrap(),
         KeyState::Unconfigured,
         "bootstrap key only"
     );
@@ -77,7 +81,7 @@ fn authority_stays_unconfigured_until_the_first_root_commits() {
         .prepare_root_anchor(&request(&provider, "boot", RootSlot::A, &route))
         .unwrap();
     assert_eq!(
-        provider.state(),
+        provider.state().unwrap(),
         KeyState::Unconfigured,
         "prepared, not committed"
     );
@@ -85,9 +89,9 @@ fn authority_stays_unconfigured_until_the_first_root_commits() {
     assert!(provider.resolve_ref(&route).is_ok());
 
     provider.commit_root_anchor("boot", 1).unwrap();
-    assert_eq!(provider.state(), KeyState::Unlocked { epoch: 1 });
+    assert_eq!(provider.state().unwrap(), KeyState::Unlocked { epoch: 1 });
     provider.lock();
-    assert_eq!(provider.state(), KeyState::Locked);
+    assert_eq!(provider.state().unwrap(), KeyState::Locked);
 }
 
 #[test]
@@ -164,12 +168,22 @@ fn lost_keys_fail_closed() {
     commit_root(&mut provider, "boot", RootSlot::A, &route);
     provider.unlock().unwrap();
     provider.lose_keys();
-    assert_eq!(provider.state(), KeyState::KeyLost);
+    assert_eq!(provider.state().unwrap(), KeyState::KeyLost);
     assert_eq!(
         provider.resolve(1).map(|_| ()),
         Err(KeyProviderError::KeyLost)
     );
     assert_eq!(provider.unlock(), Err(KeyProviderError::KeyLost));
+}
+
+#[test]
+fn state_reports_store_and_format_failures_as_errors_not_key_states() {
+    let mut provider = MemoryKeyProvider::new();
+    provider.set_available(false);
+    assert_eq!(
+        provider.state(),
+        Err(KeyProviderError::SecureAnchorUnavailable)
+    );
 }
 
 #[test]

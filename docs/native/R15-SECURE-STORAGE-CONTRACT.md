@@ -1592,8 +1592,10 @@ cryptography cannot provide.
 The Core contract is:
 
 ```text
-KeyProvider.state() -> §8.1 state; UNCONFIGURED until the first root commits (step F), whatever
-                             scope or bootstrap keys already exist
+KeyProvider.state() -> §8.1 state or typed failure; UNCONFIGURED until the first root commits
+                             (step F), whatever scope or bootstrap keys already exist;
+                             RECOVERY_REQUIRED for an inconsistent anchor; an unavailable secure
+                             store or unsupported anchor format is its own failure, never a state
 KeyProvider.resolve(epoch) -> opaque 32-byte key or typed unavailable result
 KeyProvider.resolve_ref(RootKeyRefV1) -> opaque root key or typed unavailable result; the trusted
                              cold-start root-key route (§5.3.1) — never key enumeration/search

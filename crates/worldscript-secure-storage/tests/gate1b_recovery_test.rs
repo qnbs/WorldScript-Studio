@@ -105,48 +105,64 @@ fn passphrases_are_nfc_normalized_utf8_before_derivation() {
 }
 
 #[test]
-fn profile_encoding_is_exact_and_only_the_admitted_profile_decodes() {
+fn profile_encoding_is_exact_and_round_trips() {
     let encoded = WSS_ARGON2ID_V1.encode();
-    assert_eq!(hex(&encoded), PROFILE_HEX);
+    assert_eq!(
+        (hex(&encoded), encoded.len()),
+        (PROFILE_HEX.to_owned(), PROFILE_ENCODED_LEN)
+    );
     assert_eq!(KdfProfile::decode(&encoded), Ok(WSS_ARGON2ID_V1));
+}
+
+#[test]
+fn any_changed_profile_parameter_is_refused() {
     // Weakening or changing any parameter under the same ID is a version mismatch, never accepted.
     for index in [3usize, 6, 11, 15, 19, 20] {
-        let mut changed = encoded;
+        let mut changed = WSS_ARGON2ID_V1.encode();
         changed[index] ^= 0x01;
         assert_eq!(
             KdfProfile::decode(&changed),
-            Err(KdfError::UnsupportedProfile)
+            Err(KdfError::UnsupportedProfile),
+            "byte {index}"
         );
     }
     let weaker = KdfProfile {
         memory_kib: 19 * 1024,
         ..WSS_ARGON2ID_V1
     };
-    assert_eq!(
-        derive_kek(&weaker, PASSPHRASE, &unhex(SALT_HEX)).map(|_| ()),
-        Err(KdfError::UnsupportedProfile)
-    );
-    assert_eq!(PROFILE_ENCODED_LEN, encoded.len());
+    let derived = derive_kek(&weaker, PASSPHRASE, &unhex(SALT_HEX)).map(|_| ());
+    assert_eq!(derived, Err(KdfError::UnsupportedProfile));
 }
 
 #[test]
-fn kdf_refuses_empty_passphrases_and_out_of_range_salts() {
-    let salt = [7u8; MAX_SALT_LEN + 1];
-    let derive = |pass: &str, salt: &[u8]| derive_kek(&WSS_ARGON2ID_V1, pass, salt).map(|_| ());
-    assert_eq!(
-        derive("", &salt[..MIN_SALT_LEN]),
-        Err(KdfError::EmptyPassphrase)
-    );
-    assert_eq!(
-        derive(&"a".repeat(1025), &salt[..MIN_SALT_LEN]),
-        Err(KdfError::PassphraseTooLong)
-    );
-    assert!(derive(&"a".repeat(1024), &salt[..MIN_SALT_LEN]).is_ok());
-    assert_eq!(
-        derive(PASSPHRASE, &salt[..MIN_SALT_LEN - 1]),
-        Err(KdfError::InvalidSalt)
-    );
-    assert_eq!(derive(PASSPHRASE, &salt), Err(KdfError::InvalidSalt));
+fn kdf_enforces_passphrase_and_salt_bounds() {
+    let long_salt = [7u8; MAX_SALT_LEN + 1];
+    let min_salt = &long_salt[..MIN_SALT_LEN];
+    let cases: [(&str, &[u8], Result<(), KdfError>); 5] = [
+        ("", min_salt, Err(KdfError::EmptyPassphrase)),
+        (
+            &"a".repeat(1025),
+            min_salt,
+            Err(KdfError::PassphraseTooLong),
+        ),
+        (&"a".repeat(1024), min_salt, Ok(())),
+        (
+            PASSPHRASE,
+            &long_salt[..MIN_SALT_LEN - 1],
+            Err(KdfError::InvalidSalt),
+        ),
+        (PASSPHRASE, &long_salt, Err(KdfError::InvalidSalt)),
+    ];
+    for (passphrase, salt, expected) in cases {
+        let result = derive_kek(&WSS_ARGON2ID_V1, passphrase, salt).map(|_| ());
+        assert_eq!(
+            result,
+            expected,
+            "passphrase {} bytes, salt {} bytes",
+            passphrase.len(),
+            salt.len()
+        );
+    }
 }
 
 // ---- Recovery package ----------------------------------------------------------------------
@@ -168,6 +184,9 @@ fn wrong_passphrase_is_refused() {
         Err(RecoveryError::WrongPassphraseOrTampered)
     );
 }
+
+/// An in-place change applied to the vector package before unwrapping.
+type Mutation = fn(&mut Vec<u8>);
 
 fn unwrap_after(mutate: impl FnOnce(&mut Vec<u8>)) -> Result<(), RecoveryError> {
     let mut package = unhex(PACKAGE_HEX);
@@ -213,25 +232,22 @@ fn every_modified_v1_field_is_indistinguishable_from_a_wrong_passphrase() {
 
 #[test]
 fn truncated_extended_and_malformed_v1_packages_are_tampered() {
-    let tampered = Err(RecoveryError::WrongPassphraseOrTampered);
-    assert_eq!(
-        unwrap_after(|p| {
+    let mutations: [(&str, Mutation); 5] = [
+        ("truncated tag", |p| {
             p.pop();
         }),
-        tampered
-    );
-    assert_eq!(unwrap_after(|p| p.push(0)), tampered);
-    assert_eq!(unwrap_after(|p| p.truncate(40)), tampered);
-    assert_eq!(
-        unwrap_after(|p| p[46] = b'G'),
-        tampered,
-        "non-canonical source scope"
-    );
-    assert_eq!(
-        unwrap_after(|p| p[29] = 15),
-        tampered,
-        "salt below 16 bytes"
-    );
+        ("trailing byte", |p| p.push(0)),
+        ("truncated header", |p| p.truncate(40)),
+        ("non-canonical source scope", |p| p[46] = b'G'),
+        ("salt below 16 bytes", |p| p[29] = 15),
+    ];
+    for (name, mutate) in mutations {
+        assert_eq!(
+            unwrap_after(mutate),
+            Err(RecoveryError::WrongPassphraseOrTampered),
+            "{name}"
+        );
+    }
 }
 
 #[test]
@@ -262,16 +278,18 @@ fn secrets_never_render_in_debug_and_sources_are_zeroized() {
 // ---- Identities ----------------------------------------------------------------------------
 
 #[test]
-fn root_key_ref_is_bounded_and_digests_per_contract() {
-    assert_eq!(
-        RootKeyRefV1::new(Vec::new()),
-        Err(KeyProviderError::MalformedKeyRef)
-    );
-    assert_eq!(
-        RootKeyRefV1::new(vec![1; 257]),
-        Err(KeyProviderError::MalformedKeyRef)
-    );
-    assert!(RootKeyRefV1::new(vec![1; 256]).is_ok());
+fn root_key_ref_length_is_bounded() {
+    for (len, accepted) in [(0usize, false), (1, true), (256, true), (257, false)] {
+        assert_eq!(
+            RootKeyRefV1::new(vec![1; len]).is_ok(),
+            accepted,
+            "length {len}"
+        );
+    }
+}
+
+#[test]
+fn root_key_ref_digest_matches_the_contract_vector() {
     let key_ref = RootKeyRefV1::new(b"route-001".to_vec()).unwrap();
     assert_eq!(hex(&key_ref.digest()), KEY_REF_DIGEST_HEX);
 }
@@ -360,14 +378,19 @@ fn huge_passphrases_are_refused_with_a_bounded_buffer() {
 
 #[test]
 fn root_slots_admit_only_codes_zero_and_one() {
-    assert_eq!(RootSlot::from_code(0), Ok(RootSlot::A));
-    assert_eq!(RootSlot::from_code(1), Ok(RootSlot::B));
-    for code in [2u8, 7, 255] {
-        assert_eq!(
-            RootSlot::from_code(code),
-            Err(KeyProviderError::MalformedRootSlot)
-        );
+    let expectations = [
+        (0u8, Ok(RootSlot::A)),
+        (1, Ok(RootSlot::B)),
+        (2, Err(KeyProviderError::MalformedRootSlot)),
+        (255, Err(KeyProviderError::MalformedRootSlot)),
+    ];
+    for (code, expected) in expectations {
+        assert_eq!(RootSlot::from_code(code), expected, "code {code}");
     }
+}
+
+#[test]
+fn root_slots_encode_and_alternate() {
     assert_eq!((RootSlot::A.code(), RootSlot::B.code()), (0, 1));
     assert_eq!(
         (RootSlot::A.other(), RootSlot::B.other()),
