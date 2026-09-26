@@ -14,7 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   21-byte versioned profile, NFC-normalized UTF-8 passphrases), the authenticated `WSRP` v1 portable
   recovery package, `RootKeyRefV1` and `InstallationScopeId`, the renderer-neutral `KeyProvider`
   contract, the pure §5.3.1 secure-anchor transitions every platform adapter applies, and a
-  fault-injecting in-memory provider for tests. KDF, package and key-ref vectors were cross-checked
+  fault-injecting in-memory provider for tests. Every anchor is validated as a version-1 state before
+  it is read or changed (unknown formats are refused, never mutated); a replayed commit succeeds only
+  for the exact last committed operation; root slots are A/B only and a new root always targets the
+  other slot; a preparation must name a key route the provider issued; authority stays
+  `UNCONFIGURED` until the first root commits; and reading an existing installation scope needs no
+  randomness. KDF, package and key-ref vectors were cross-checked
   against Node's independent Argon2id/AES-GCM/SHA-256 (itself checked against RFC 9106). The crate
   still honors Rust 1.77.2 (`argon2` 0.5.3, `base64ct` held on 1.6). The contract records the
   decision and specifies the KDF and package format (§8.2/§8.2.1). No platform secure store, no

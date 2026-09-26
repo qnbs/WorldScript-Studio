@@ -463,7 +463,11 @@ prepared_root_commit      optional; absent in steady state; recovery authorizati
   target_slot                the §5.3 generation-addressable slot identity this targets
   target_root_key_ref       opaque non-secret key/epoch reference this commit is advancing to
                              (target_epoch when represented as an epoch)
-  preparation_revision      disambiguates re-preparation after a retry of the same operation
+  preparation_revision      disambiguates re-preparation after a retry of the same operation;
+                             starts at 1
+last_committed_operation_id the operation_id whose step F produced committed_root; present exactly
+                           when committed_root is; the only evidence that makes a replayed F an
+                           idempotent success
 ```
 
 **Sequence**, run while the caller already holds its operation-level admission (§11) for this
@@ -535,7 +539,7 @@ completing a commit forward, and every other row leaves the prior committed root
 | After D is durable, before E1 is durable | The target root slot is durable but still `NOT_COMMITTED`; the filesystem pointer has not moved. It remains a non-authoritative candidate — discard it or retain it as a retry candidate for the same `operation_id`. Its own authenticated digest is never compared against `target_final_root_digest` at this point: a `NOT_COMMITTED` candidate's digest is expected to differ from the eventual `COMMITTED` representation's digest, so that difference is never treated as corruption. The prior committed root remains authority; `committed_floor` and `committed_root` are unchanged. |
 | After E1 is durable, before E2 is durable | The target slot is durably `COMMITTED` with digest exactly `target_final_root_digest`, but the filesystem pointer still names the prior root, and `committed_floor`/`committed_root` still name the prior generation. Ordinary readers still use the prior `committed_root` (§5.3.3); it remains authority. Startup authenticates `prepared_root_commit` and independently authenticates the target `COMMITTED` slot, and requires an EXACT match on `operation_id`, `target_root_generation`, `target_final_root_digest`, `target_slot`, and `target_root_key_ref`/expected key route between them. On an exact match this is a safe forward-completion case — C authorized exactly this target, E1 produced exactly this final filesystem root, and the old `committed_root` remained authoritative throughout — so startup idempotently completes E2, verifies E2's durability, and then performs F. No generation or recency guess is involved; on anything less than an exact match, authority never advances and this becomes `RECOVERY_REQUIRED` or, only when it is provably safe to retain the prior root untouched, an abort of the stale preparation. |
 | After E2 is durable, before F is durable | The filesystem pointer now names the target slot, which is durably `COMMITTED` and whose own re-derived digest is the final representation's digest, but `committed_floor`/`committed_root` still name the prior generation and `prepared_root_commit` still names this exact operation. Ordinary readers still use the prior `committed_root` (§5.3.3) — a filesystem pointer pointing at an unprepared, mismatched, malformed, or unauthorized target can never publish it. Startup re-authenticates `prepared_root_commit` against the durable target slot's own committed `root_commit_evidence` and re-derived digest — matching `operation_id`, `target_root_generation`, and `target_final_root_digest` exactly against the durable `COMMITTED` slot's own digest, never against D's earlier `NOT_COMMITTED` candidate digest, and never generation or recency alone — and only on an exact match performs F to complete the commit forward and set `committed_root` to the new binding. A `prepared_root_commit` that does not exactly match the durable target evidence is never used to advance the floor; that case is `RECOVERY_REQUIRED`, because the filesystem pointer has moved to a root the secure anchor cannot prove it authorized. |
-| After F is durable | `committed_floor` and `committed_root.root_generation` agree, `committed_root` names the newly committed `root_digest`/`root_slot`/`root_key_ref`, and `prepared_root_commit` is absent. This state is idempotent and replay-safe: re-running F against an absent preparation is a no-op. |
+| After F is durable | `committed_floor` and `committed_root.root_generation` agree, `committed_root` names the newly committed `root_digest`/`root_slot`/`root_key_ref`, and `prepared_root_commit` is absent. This state is idempotent and replay-safe: re-running F against an absent preparation is a no-op **only** for the exact `last_committed_operation_id` and its `target_root_generation` (= `committed_floor`); any other operation naming the current generation is refused, never accepted on generation or recency alone. |
 
 **Other authority-disagreement invariants** (follow from, but are not literally sequential crash
 windows in, the table above): a newer `COMMITTED` slot with no matching `prepared_root_commit`, or
@@ -610,7 +614,7 @@ pair (§8.2) with operations equivalent to:
 ```text
 KeyProvider.read_root_anchor_state() -> { anchor_format_version, scope_format_version,
                                  installation_scope_id, committed_floor, committed_root,
-                                 prepared_root_commit? }
+                                 last_committed_operation_id, prepared_root_commit? }
 KeyProvider.read_or_provision_installation_scope() -> InstallationScopeId (§5.3.2)
 KeyProvider.prepare_root_anchor(expected_floor, target_root_generation, target_final_root_digest,
                                  target_slot, target_root_key_ref, operation_id) -> committed /
@@ -825,6 +829,19 @@ ROOT_SLOT_B = u8(1)
 No other code is valid in version 1. The platform adapter maps A/B to physical paths or
 transactions; a physical filename or path is never wire authority for slot identity. The secure
 anchor's target/committed slot fields (§5.3.1) and root-commit recovery both use this same code.
+Once a committed root exists, a preparation must target the **other** slot, so the prior root
+stays recoverable authority until step F; only the bootstrap root (no committed root) may target
+either slot.
+
+**Anchor validity (version 1).** Before any anchor state is returned as authority or transitioned,
+the Core checks: `anchor_format_version` and `scope_format_version` are exactly 1 (another value is
+`UNSUPPORTED_ANCHOR_FORMAT` and is never mutated); `committed_root` and
+`last_committed_operation_id` are both present or both absent; with no root the floor is 0; with a
+root, a canonical `installation_scope_id` exists and `committed_floor ==
+committed_root.root_generation` is neither 0 nor `u64::MAX`; a `prepared_root_commit` has a valid
+`operation_id`, `preparation_revision >= 1`, `expected_prior_floor == committed_floor`,
+`target_root_generation == committed_floor + 1` (never `u64::MAX`), a slot other than the committed
+root's, and a present scope. Any other violation is `RECOVERY_REQUIRED`.
 
 **Authority-set uniqueness.** `marker_set_digest`, `key_epoch_set_digest`, and `catalog_set_digest`
 (§5.4 table) each sort by an explicit key — `(record_class, identity, scope)` for markers, `epoch`
@@ -1575,16 +1592,24 @@ cryptography cannot provide.
 The Core contract is:
 
 ```text
+KeyProvider.state() -> §8.1 state; UNCONFIGURED until the first root commits (step F), whatever
+                             scope or bootstrap keys already exist
 KeyProvider.resolve(epoch) -> opaque 32-byte key or typed unavailable result
 KeyProvider.resolve_ref(RootKeyRefV1) -> opaque root key or typed unavailable result; the trusted
                              cold-start root-key route (§5.3.1) — never key enumeration/search
-KeyProvider.unlock(input) -> authenticated epoch/state transition
+KeyProvider.unlock() -> loads the secure store's key handles for runtime use; under the Option C
+                             decision below it takes no passphrase (the recovery passphrase is
+                             only an input to §8.2.1)
 KeyProvider.lock() -> clear runtime key handles/material
 KeyProvider.list_epochs() -> non-secret key identities and availability; enumeration/diagnostic use
                              only — never a trust-routing mechanism for the root (§5.3.1)
-KeyProvider.read_root_anchor_state() -> { committed_floor, committed_root, prepared_root_commit? }
-                             (§5.3.1)
-KeyProvider.prepare_root_anchor(...) -> committed / typed failure (§5.3.1)
+KeyProvider.provision_epoch_key(epoch) -> RootKeyRefV1 for a fresh random 256-bit key; one key per
+                             epoch, never epoch 0 or u64::MAX
+KeyProvider.read_root_anchor_state() -> validated anchor state (§5.3.1)
+KeyProvider.read_or_provision_installation_scope() -> InstallationScopeId (§5.3.2); reading an
+                             existing scope needs no randomness and changes nothing
+KeyProvider.prepare_root_anchor(...) -> committed / typed failure (§5.3.1); the adapter first proves
+                             target_root_key_ref is a route it issued and can resolve
 KeyProvider.commit_root_anchor(...) -> committed / typed failure (§5.3.1)
 KeyProvider.abort_or_recover_root_anchor(operation_id) -> clears a discardable preparation (§5.3.1)
 ```
@@ -1638,8 +1663,9 @@ usable while the original secure store remains, and makes portable recovery unav
 Explicit user recovery onto another installation is an authorized recovery transition that
 provisions a NEW secure anchor and `InstallationScopeId` (§5.3.2); it is never presented as the old
 machine's anchor and never masks ordinary offline rollback, which §5.3.1 still detects. The
-provider surface adds `provision_epoch_key(epoch) -> RootKeyRefV1` (a fresh random key behind an
-opaque route) and `state()` to the operations listed above.
+operation list above is the exact surface of the Core `KeyProvider` trait. Gate 1b-core implements
+the trait's contract, the pure §5.3.1 transitions, and a headless fault-injecting provider; no
+platform adapter exists until 1b-platform.
 
 ### 8.2.1 Native recovery KDF and portable recovery package
 
@@ -1655,7 +1681,9 @@ a 2-core, 4 GiB reference machine; derivation happens only on explicit recovery 
 normal launch.
 
 **Passphrase encoding.** The Core — not a renderer — encodes the passphrase as the UTF-8 bytes of
-its Unicode NFC normalization. The normalized form must be non-empty and at most 1,024 bytes. No
+its Unicode NFC normalization. The normalized form must be non-empty and at most 1,024 bytes; the
+cap applies to the normalized bytes, and normalization is streamed into a fixed buffer that stops
+at the cap, so memory never grows with the input. No
 other trimming, case folding, or normalization is applied, so every implementation derives the same
 key for canonically equivalent input.
 
@@ -2994,7 +3022,8 @@ write_record(identity: RecordIdentity, payload, expected_generation) -> durabili
 delete_record(identity: RecordIdentity) -> durability result
 list_records(scope, filter, cursor) -> bounded authenticated descriptors + cursor
 query_secure_storage_state() -> key/epoch/migration state
-unlock(input) / lock()
+unlock() / lock()          (Option C, §8.2: no passphrase; a recovery passphrase is an input only
+                            to an explicit recovery operation, §8.2.1)
   begin_enable() / begin_rotation()
 resume_recovery(operation_id)
 observe_migration(operation_id)

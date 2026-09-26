@@ -79,16 +79,19 @@ fn admitted(profile: &KdfProfile) -> Result<(), KdfError> {
 }
 
 /// §8.2.1 passphrase encoding: the Unicode NFC normalization of the passphrase, encoded as UTF-8.
-/// It must be non-empty and at most [`MAX_PASSPHRASE_LEN`] bytes. The buffer is sized up front (NFC
-/// output is at most three times the input) so it never reallocates and leaves no unzeroized copy.
+/// It must be non-empty and at most [`MAX_PASSPHRASE_LEN`] bytes. Normalization is streamed into a
+/// fixed [`MAX_PASSPHRASE_LEN`]-byte buffer and stops as soon as the cap would be exceeded, so memory
+/// never grows with the input and the buffer never reallocates (no unzeroized copy is left behind).
 pub fn passphrase_bytes(passphrase: &str) -> Result<Zeroizing<String>, KdfError> {
-    let mut normalized = Zeroizing::new(String::with_capacity(passphrase.len().saturating_mul(3)));
-    normalized.extend(passphrase.nfc());
+    let mut normalized = Zeroizing::new(String::with_capacity(MAX_PASSPHRASE_LEN));
+    for ch in passphrase.nfc() {
+        if normalized.len() + ch.len_utf8() > MAX_PASSPHRASE_LEN {
+            return Err(KdfError::PassphraseTooLong);
+        }
+        normalized.push(ch);
+    }
     if normalized.is_empty() {
         return Err(KdfError::EmptyPassphrase);
-    }
-    if normalized.len() > MAX_PASSPHRASE_LEN {
-        return Err(KdfError::PassphraseTooLong);
     }
     Ok(normalized)
 }
@@ -102,9 +105,6 @@ pub fn derive_kek(
     salt: &[u8],
 ) -> Result<Zeroizing<[u8; KEK_LEN]>, KdfError> {
     admitted(profile)?;
-    if passphrase.len() > MAX_PASSPHRASE_LEN.saturating_mul(4) {
-        return Err(KdfError::PassphraseTooLong);
-    }
     let passphrase = passphrase_bytes(passphrase)?;
     if !(MIN_SALT_LEN..=MAX_SALT_LEN).contains(&salt.len()) {
         return Err(KdfError::InvalidSalt);

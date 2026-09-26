@@ -70,6 +70,8 @@ pub enum KeyProviderError {
     KeyLost,
     /// The platform cannot provide the required secure store; protected mode is not admitted.
     SecureAnchorUnavailable,
+    /// The anchor or scope format version is not one this Core admits; it is never mutated.
+    UnsupportedAnchorFormat,
     /// The anchor is inconsistent or at a terminal counter (§5.3.1, §5.3.2).
     RecoveryRequired,
     /// A two-phase anchor request does not match the current anchor state.
@@ -77,6 +79,8 @@ pub enum KeyProviderError {
     MalformedInstallationScope,
     MalformedKeyRef,
     MalformedOperationId,
+    /// A root-slot code other than `0` (A) or `1` (B).
+    MalformedRootSlot,
     UnknownKeyRef,
     UnknownEpoch,
     RandomnessUnavailable,

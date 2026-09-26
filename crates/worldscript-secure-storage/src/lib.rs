@@ -24,7 +24,7 @@ pub use error::{AadError, KdfError, KeyProviderError, OpenError, RecoveryError, 
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};
 pub use provider::{
     AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,
-    PrepareRootAnchor, PreparedRootCommit, RootKeyRefV1,
+    PrepareRootAnchor, PreparedRootCommit, RootKeyRefV1, RootSlot,
 };
 pub use random::{OsRandom, RandomSource, RandomnessUnavailable};
 pub use record_class::RecordClass;

@@ -77,6 +77,39 @@ impl RootKeyRefV1 {
     }
 }
 
+/// §5.4 root-slot codes: version 1 admits exactly `ROOT_SLOT_A = 0` and `ROOT_SLOT_B = 1`, so no
+/// other value is representable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RootSlot {
+    A,
+    B,
+}
+
+impl RootSlot {
+    pub fn code(self) -> u8 {
+        match self {
+            RootSlot::A => 0,
+            RootSlot::B => 1,
+        }
+    }
+
+    pub fn from_code(code: u8) -> Result<Self, KeyProviderError> {
+        match code {
+            0 => Ok(RootSlot::A),
+            1 => Ok(RootSlot::B),
+            _ => Err(KeyProviderError::MalformedRootSlot),
+        }
+    }
+
+    /// The slot a new root must target while this slot holds the committed root.
+    pub fn other(self) -> Self {
+        match self {
+            RootSlot::A => RootSlot::B,
+            RootSlot::B => RootSlot::A,
+        }
+    }
+}
+
 /// §8.1 key state machine as observed by Core.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyState {
@@ -103,7 +136,7 @@ pub struct EpochInfo {
 pub struct CommittedRoot {
     pub root_generation: u64,
     pub root_digest: [u8; 32],
-    pub root_slot: u32,
+    pub root_slot: RootSlot,
     pub root_key_ref: RootKeyRefV1,
 }
 
@@ -114,7 +147,7 @@ pub struct PreparedRootCommit {
     pub expected_prior_floor: u64,
     pub target_root_generation: u64,
     pub target_final_root_digest: [u8; 32],
-    pub target_slot: u32,
+    pub target_slot: RootSlot,
     pub target_root_key_ref: RootKeyRefV1,
     pub preparation_revision: u64,
 }
@@ -127,6 +160,9 @@ pub struct AnchorState {
     pub installation_scope_id: Option<InstallationScopeId>,
     pub committed_floor: u64,
     pub committed_root: Option<CommittedRoot>,
+    /// The `operation_id` whose step F produced `committed_root`: the exact evidence that makes a
+    /// replayed F an idempotent success (§5.3.1). Present exactly when `committed_root` is.
+    pub last_committed_operation_id: Option<String>,
     pub prepared_root_commit: Option<PreparedRootCommit>,
 }
 
@@ -153,6 +189,7 @@ impl AnchorState {
             installation_scope_id: None,
             committed_floor: 0,
             committed_root: None,
+            last_committed_operation_id: None,
             prepared_root_commit: None,
         }
     }
@@ -165,15 +202,18 @@ pub struct PrepareRootAnchor {
     pub expected_floor: u64,
     pub target_root_generation: u64,
     pub target_final_root_digest: [u8; 32],
-    pub target_slot: u32,
+    pub target_slot: RootSlot,
     pub target_root_key_ref: RootKeyRefV1,
 }
 
 /// The Core-facing provider boundary (§8.2, §5.3.1). A platform adapter persists [`AnchorState`] in
-/// its secure store (never the WorldScript filesystem) and must fail closed with
-/// [`KeyProviderError::SecureAnchorUnavailable`] when it cannot provide the required semantics.
+/// its secure store (never the WorldScript filesystem), applies the [`crate::anchor`] transitions,
+/// and must fail closed with [`KeyProviderError::SecureAnchorUnavailable`] when it cannot provide
+/// the required semantics. Under the Option C decision the normal runtime unlock reads the secure
+/// store and takes no passphrase; the recovery passphrase belongs only to [`crate::recovery`].
 pub trait KeyProvider {
-    /// Current key state (§8.1).
+    /// Current authority state (§8.1): `Unconfigured` until the first root commits (step F),
+    /// whatever scope or bootstrap keys already exist.
     fn state(&self) -> KeyState;
     /// Opaque key for a data epoch, or a typed unavailable result.
     fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError>;
@@ -181,7 +221,7 @@ pub trait KeyProvider {
     fn resolve_ref(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError>;
     /// Clears runtime key handles/material; afterwards every resolve is `Locked`.
     fn lock(&mut self);
-    /// Makes configured keys resolvable again from the secure store.
+    /// Loads the secure store's key handles for runtime use (no passphrase, §8.2).
     fn unlock(&mut self) -> Result<KeyState, KeyProviderError>;
     /// Enumeration/diagnostics only (§8.2).
     fn list_epochs(&self) -> Result<Vec<EpochInfo>, KeyProviderError>;
@@ -191,6 +231,7 @@ pub trait KeyProvider {
     fn read_or_provision_installation_scope(
         &mut self,
     ) -> Result<InstallationScopeId, KeyProviderError>;
+    /// Step C. The adapter first proves `target_root_key_ref` is a route it issued and can resolve.
     fn prepare_root_anchor(&mut self, request: &PrepareRootAnchor) -> Result<(), KeyProviderError>;
     fn commit_root_anchor(
         &mut self,

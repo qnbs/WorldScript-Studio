@@ -9,7 +9,7 @@ use crate::provider::{
     AnchorState, EpochInfo, InstallationScopeId, KeyProvider, KeyState, PrepareRootAnchor,
     RootKeyRefV1,
 };
-use crate::random::{OsRandom, RandomSource};
+use crate::random::{OsRandom, RandomSource, RandomnessUnavailable};
 use crate::seal::Key;
 
 /// Anchor operations a test can make fail, before or after the secure store persists the change.
@@ -30,6 +30,22 @@ pub enum Fault {
     AfterPersist(AnchorOp),
 }
 
+/// The provider's randomness, switchable to failing in tests.
+#[derive(Clone, Copy)]
+enum ScopeRandom {
+    Os,
+    Failing,
+}
+
+impl RandomSource for ScopeRandom {
+    fn fill(&mut self, buf: &mut [u8]) -> Result<(), RandomnessUnavailable> {
+        match self {
+            ScopeRandom::Os => OsRandom.fill(buf),
+            ScopeRandom::Failing => Err(RandomnessUnavailable),
+        }
+    }
+}
+
 struct StoredKey {
     epoch: u64,
     key_ref: RootKeyRefV1,
@@ -46,6 +62,7 @@ pub struct MemoryKeyProvider {
     lost: bool,
     fault: Option<Fault>,
     next_ref: u64,
+    random: ScopeRandom,
 }
 
 impl Default for MemoryKeyProvider {
@@ -65,6 +82,7 @@ impl MemoryKeyProvider {
             lost: false,
             fault: None,
             next_ref: 1,
+            random: ScopeRandom::Os,
         }
     }
 
@@ -78,6 +96,15 @@ impl MemoryKeyProvider {
         self.store.clear();
         self.runtime.clear();
         self.lost = true;
+    }
+
+    /// Makes the provider's CSPRNG fail, to prove which operations need fresh randomness.
+    pub fn set_randomness_available(&mut self, available: bool) {
+        self.random = if available {
+            ScopeRandom::Os
+        } else {
+            ScopeRandom::Failing
+        };
     }
 
     /// Arms one fault for the next matching anchor operation.
@@ -104,6 +131,25 @@ impl MemoryKeyProvider {
                 self.fault.take()
             }
             _ => None,
+        }
+    }
+
+    /// A data epoch is `1..u64::MAX` (§5.4) and gets exactly one key.
+    fn epoch_is_provisionable(&self, epoch: u64) -> bool {
+        let assigned = epoch != 0 && epoch != u64::MAX;
+        assigned && self.store.iter().all(|k| k.epoch != epoch)
+    }
+
+    /// A preparation may only name a route this provider issued and still holds (§5.3.1: the next
+    /// cold start resolves exactly that route).
+    fn ensure_issued_route(&self, key_ref: &RootKeyRefV1) -> Result<(), KeyProviderError> {
+        if self.lost {
+            return Err(KeyProviderError::KeyLost);
+        }
+        if self.store.iter().any(|k| &k.key_ref == key_ref) {
+            Ok(())
+        } else {
+            Err(KeyProviderError::UnknownKeyRef)
         }
     }
 
@@ -145,15 +191,22 @@ impl MemoryKeyProvider {
 
 impl KeyProvider for MemoryKeyProvider {
     fn state(&self) -> KeyState {
+        let Ok(anchor) = self.read_root_anchor_state() else {
+            return KeyState::RecoveryRequired;
+        };
+        let Some(root) = anchor.committed_root else {
+            // Scope and bootstrap keys may already exist, but no root is published yet (§5.3.2).
+            return KeyState::Unconfigured;
+        };
         if self.lost {
-            KeyState::KeyLost
-        } else if self.store.is_empty() && self.anchor.committed_root.is_none() {
-            KeyState::Unconfigured
-        } else if !self.unlocked {
-            KeyState::Locked
-        } else {
-            let epoch = self.store.iter().map(|k| k.epoch).max().unwrap_or(0);
-            KeyState::Unlocked { epoch }
+            return KeyState::KeyLost;
+        }
+        if !self.unlocked {
+            return KeyState::Locked;
+        }
+        match self.store.iter().find(|k| k.key_ref == root.root_key_ref) {
+            Some(key) => KeyState::Unlocked { epoch: key.epoch },
+            None => KeyState::RecoveryRequired,
         }
     }
 
@@ -209,13 +262,13 @@ impl KeyProvider for MemoryKeyProvider {
 
     fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
         self.ensure_available()?;
-        if epoch == 0 || epoch == u64::MAX || self.store.iter().any(|k| k.epoch == epoch) {
+        if !self.epoch_is_provisionable(epoch) {
             return Err(KeyProviderError::AnchorConflict(
                 "epoch is unassigned or already provisioned",
             ));
         }
         let mut material = Zeroizing::new([0u8; 32]);
-        OsRandom
+        self.random
             .fill(material.as_mut())
             .map_err(|_| KeyProviderError::RandomnessUnavailable)?;
         let key_ref =
@@ -234,14 +287,20 @@ impl KeyProvider for MemoryKeyProvider {
 
     fn read_root_anchor_state(&self) -> Result<AnchorState, KeyProviderError> {
         self.ensure_available()?;
+        anchor::validate(&self.anchor)?;
         Ok(self.anchor.clone())
     }
 
     fn read_or_provision_installation_scope(
         &mut self,
     ) -> Result<InstallationScopeId, KeyProviderError> {
+        self.ensure_available()?;
+        // §5.3.2: reading an existing scope needs no randomness and changes nothing.
+        if let Some(scope) = anchor::existing_installation_scope(&self.anchor)? {
+            return Ok(scope);
+        }
         let mut bits = [0u8; 16];
-        OsRandom
+        self.random
             .fill(&mut bits)
             .map_err(|_| KeyProviderError::RandomnessUnavailable)?;
         let mut scope = None;
@@ -254,6 +313,8 @@ impl KeyProvider for MemoryKeyProvider {
     }
 
     fn prepare_root_anchor(&mut self, request: &PrepareRootAnchor) -> Result<(), KeyProviderError> {
+        self.ensure_available()?;
+        self.ensure_issued_route(&request.target_root_key_ref)?;
         self.apply(AnchorOp::Prepare, |state| anchor::prepare(state, request))
     }
 
