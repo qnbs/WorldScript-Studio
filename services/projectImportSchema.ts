@@ -3,6 +3,7 @@
  * QNBS-v3: Einheitliches Schema verhindert divergierende Parse-Pfade und härter gegen korrupte Dateien.
  */
 import { z } from 'zod';
+import type { AIProvider } from '../types';
 import {
   admitCanonicalProjectDocument,
   type CanonicalProjectAdmission,
@@ -419,9 +420,26 @@ const plotConnectionSchema = z.object({
   color: z.string().optional(),
 });
 
+// QNBS-v3 (#553 a4/R2): the provider selects where AI requests go, so only a provider this build can dispatch is admitted; the tuple is compile-checked against AIProvider in both directions.
+const AI_PROVIDER_VALUES = [
+  'gemini',
+  'openai',
+  'anthropic',
+  'grok',
+  'ollama',
+  'openrouter',
+  'webllm',
+  'onnx',
+  'transformers',
+] as const satisfies readonly AIProvider[];
+type MissingAiProvider = Exclude<AIProvider, (typeof AI_PROVIDER_VALUES)[number]>;
+const aiProvidersExhaustive: [MissingAiProvider] extends [never] ? true : never = true;
+void aiProvidersExhaustive;
+
 const projectAiPresetSchema = z.object({
-  enabled: z.boolean(),
-  provider: z.string().optional(),
+  // QNBS-v3 (#553 a4/R2): an absent flag reads as disabled — a stored preset without it must not make the whole project unloadable.
+  enabled: z.boolean().optional(),
+  provider: z.enum(AI_PROVIDER_VALUES).optional(),
   model: z.string().optional(),
   creativity: z.string().optional(),
   temperature: z.number().optional(),
@@ -458,10 +476,18 @@ export const importedProjectJsonSchema = z.object({
   objectGroups: z.array(objectGroupSchema).optional(),
   mindMaps: z.array(mindMapSchema).optional(),
   characterInterviews: z.record(z.string(), z.array(characterInterviewSchema)).optional(),
-  plotConnections: z.array(plotConnectionSchema).optional(),
-  plotSubplots: z.array(subplotSchema).optional(),
-  // QNBS-v3 (#553 a4/R2): a non-finite tension score serializes as null; accepting it keeps one stored value from making the whole project unloadable.
-  plotTensionOverrides: z.record(z.string(), z.number().nullable()).optional(),
+  // QNBS-v3 (#553 a4/R2): the plot reducers address entries by id (update the first match, delete every match), so duplicate ids are refused like any entity collection.
+  plotConnections: entityArraySchema(plotConnectionSchema).optional(),
+  plotSubplots: entityArraySchema(subplotSchema).optional(),
+  // QNBS-v3 (#553 a4/R2): a non-finite tension score serializes as null; it is admitted (so one stored value never makes the project unloadable) but dropped from the editable projection, so it can never be read as a score of 0.
+  plotTensionOverrides: z
+    .record(z.string(), z.number().nullable())
+    .transform((overrides) =>
+      Object.fromEntries(
+        Object.entries(overrides).filter((entry): entry is [string, number] => entry[1] !== null),
+      ),
+    )
+    .optional(),
   aiPreset: projectAiPresetSchema.optional(),
 });
 

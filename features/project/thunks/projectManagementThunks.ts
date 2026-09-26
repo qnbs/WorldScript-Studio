@@ -157,8 +157,6 @@ export const importProjectThunk = createAsyncThunk<
     throw new Error('Invalid project file: duplicate character or world entity ID.');
   }
 
-  const manuscript = projectDataJson.manuscript ?? [];
-
   // QNBS-v3 (#553 a4/R2): every modeled field the import schema admitted reaches the editor, not a hand-picked subset — the autosave bridge owns these fields, so one left out of the projection would be removed from the carrier by the first save. Only identity, the entity collections (images moved to storage) and the established defaults are set here.
   const {
     id: _admittedId,
@@ -172,7 +170,7 @@ export const importProjectThunk = createAsyncThunk<
     characters: charactersState,
     worlds: worldsState,
     outline: admittedFields.outline ?? [],
-    manuscript,
+    manuscript: admittedFields.manuscript ?? [],
     projectGoals: admittedFields.projectGoals ?? {
       totalWordCount: 50000,
       targetDate: null,

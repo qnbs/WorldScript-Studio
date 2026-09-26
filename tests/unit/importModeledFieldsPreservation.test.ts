@@ -164,4 +164,56 @@ describe('import → editor → first save keeps every modeled field (#553 a4/R2
       }),
     ).rejects.toThrow(/import rejected/);
   });
+
+  // QNBS-v3 (#553 a4/R2): review corrections — routing, identity and score semantics stay safe in what import admits.
+  it.each([
+    [
+      'an AI provider this build cannot dispatch',
+      { aiPreset: { enabled: true, provider: 'unknown-ai' } },
+    ],
+    [
+      'duplicate plot connection ids',
+      {
+        plotConnections: [
+          { id: 'pc1', fromSectionId: 's1', toSectionId: 's1', type: 'parallel' },
+          { id: 'pc1', fromSectionId: 's1', toSectionId: 's1', type: 'temporal' },
+        ],
+      },
+    ],
+    [
+      'duplicate subplot ids',
+      {
+        plotSubplots: [
+          { id: 'sp1', name: 'A', color: '#000', sectionIds: [] },
+          { id: 'sp1', name: 'B', color: '#fff', sectionIds: [] },
+        ],
+      },
+    ],
+  ])('refuses %s', async (_label, fields) => {
+    await expect(
+      importFile({ schemaVersion: 1, id: 'p1', title: 'T', logline: 'L', ...fields }),
+    ).rejects.toThrow(/import rejected/);
+  });
+
+  it('keeps a preset without an enabled flag loadable', async () => {
+    const { payload } = await importFile({
+      schemaVersion: 1,
+      id: 'p1',
+      title: 'T',
+      logline: 'L',
+      aiPreset: { model: 'legacy-model' },
+    });
+    expect(payload['aiPreset']).toEqual({ model: 'legacy-model' });
+  });
+
+  it('admits a stored null tension score but never projects it as a score', async () => {
+    const { payload } = await importFile({
+      schemaVersion: 1,
+      id: 'p1',
+      title: 'T',
+      logline: 'L',
+      plotTensionOverrides: { s1: 4, s2: null },
+    });
+    expect(payload['plotTensionOverrides']).toEqual({ s1: 4 });
+  });
 });
