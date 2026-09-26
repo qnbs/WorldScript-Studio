@@ -71,6 +71,9 @@ const OWNED_TOP_LEVEL_FIELDS = new Set([
   'characterInterviews',
 ]);
 
+/** The top-level fields autosave writes as editor-owned; ingress must project each of them (#553 a4/R2). */
+export const AUTOSAVE_OWNED_TOP_LEVEL_FIELDS: ReadonlySet<string> = OWNED_TOP_LEVEL_FIELDS;
+
 const REMOVABLE_TOP_LEVEL_FIELDS = new Set([
   'author',
   'outline',

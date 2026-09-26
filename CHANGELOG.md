@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** importing a project file now keeps its plot board connections,
+  subplots and tension overrides, the per-project AI preset, story objects and groups, mind maps
+  and character interviews. Before, these were dropped when the file was imported and removed
+  from the saved project by the first save. PR #848.
 - **Data integrity (#553):** the JSON export in "Import & export" now saves the whole project —
   every field and any data this version does not know — the same way as the other JSON export
   buttons, instead of only the title, logline and manuscript. If the export has to be refused (for

@@ -157,29 +157,26 @@ export const importProjectThunk = createAsyncThunk<
     throw new Error('Invalid project file: duplicate character or world entity ID.');
   }
 
-  const manuscript = projectDataJson.manuscript ?? [];
-
+  // QNBS-v3 (#553 a4/R2): every modeled field the import schema admitted reaches the editor, not a hand-picked subset — the autosave bridge owns these fields, so one left out of the projection would be removed from the carrier by the first save. Only identity, the entity collections (images moved to storage) and the established defaults are set here.
+  const {
+    id: _admittedId,
+    characters: _admittedCharacters,
+    worlds: _admittedWorlds,
+    ...admittedFields
+  } = projectDataJson;
   const result = {
+    ...admittedFields,
     id: importedProjectId,
-    title: projectDataJson.title,
-    logline: projectDataJson.logline,
-    author: projectDataJson.author,
     characters: charactersState,
     worlds: worldsState,
-    outline: projectDataJson.outline ?? [],
-    manuscript,
-    relationships: projectDataJson.relationships,
-    projectGoals: projectDataJson.projectGoals ?? {
+    outline: admittedFields.outline ?? [],
+    manuscript: admittedFields.manuscript ?? [],
+    projectGoals: admittedFields.projectGoals ?? {
       totalWordCount: 50000,
       targetDate: null,
     },
-    writingHistory: projectDataJson.writingHistory ?? [],
-    writingSessions: projectDataJson.writingSessions,
-    writingGoals: projectDataJson.writingGoals,
-    sceneBoardLayout: projectDataJson.sceneBoardLayout,
-    binderNodes: projectDataJson.binderNodes ?? [],
-    compileProfile: projectDataJson.compileProfile,
-    persistedVersionControl: projectDataJson.persistedVersionControl,
+    writingHistory: admittedFields.writingHistory ?? [],
+    binderNodes: admittedFields.binderNodes ?? [],
   };
 
   // QNBS-v3: Zod inference uses | undefined for optional keys — ProjectData expects missing keys (exactOptionalPropertyTypes).
