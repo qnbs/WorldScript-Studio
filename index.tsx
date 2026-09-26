@@ -11,7 +11,7 @@ import { DEFAULT_OPENROUTER_MODEL_ID } from './services/ai/cloudModelCatalog';
 import {
   loadPersistedRootState,
   loadSafeOpenRootState,
-  normalizePersistedProjectForStore,
+  requirePersistedProjectForStore,
   shouldAllowInitialMetadataSeed,
 } from './services/appBootstrap';
 import { initializeStorage } from './services/dbInitialization';
@@ -145,16 +145,9 @@ async function mountApp(safeOpenRefusedProjectId?: string): Promise<void> {
     // We must manually reconstruct the undo envelope if we loaded flat data.
     if (preloadedState?.project) {
       const projectPart = preloadedState.project;
-      const normalizedProject = normalizePersistedProjectForStore(projectPart);
-
-      if (normalizedProject) {
-        logger.debug('Hydrating persisted project state into Redux-Undo envelope.');
-        preloadedState.project = normalizedProject;
-      } else {
-        // Fallback: Corrupt or empty project state
-        logger.warn('Project state corrupted. Resetting project.');
-        delete (preloadedState as Record<string, unknown>)['project'];
-      }
+      // QNBS-v3 (#553 a9): a stored project that cannot be normalized is refused, never replaced by a blank project that could save over it.
+      preloadedState.project = requirePersistedProjectForStore(projectPart);
+      logger.debug('Hydrating persisted project state into Redux-Undo envelope.');
     }
     // --------------------------------
 

@@ -270,7 +270,8 @@ export class IdbProjectStore extends IdbAssetStore {
     // Ensure Project Structure consistency
     if (validProject) {
       const rawData = validProject.present ? validProject.present.data : validProject.data;
-      if (rawData) {
+      // QNBS-v3 (#553 a9): only a project object gets defaults — anything else is passed through unchanged so startup refuses it as a project, instead of crashing here and being mistaken for a whole-database failure.
+      if (typeof rawData === 'object' && rawData !== null && !Array.isArray(rawData)) {
         // Ensure projectGoals exists
         if (!rawData.projectGoals) {
           rawData.projectGoals = { totalWordCount: 50000, targetDate: null };
