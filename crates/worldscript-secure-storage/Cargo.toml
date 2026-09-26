@@ -3,7 +3,7 @@ name = "worldscript-secure-storage"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.77.2"
-description = "Renderer-neutral R-15 protected-record primitives (WSR1 envelope, canonical AAD, AES-256-GCM) — Gate 1a, headless"
+description = "Renderer-neutral R-15 protected-record primitives, key-provider contract and recovery KDF — Gates 1a/1b, headless"
 publish = false
 
 [lib]
@@ -13,7 +13,14 @@ name = "worldscript_secure_storage"
 # `zeroize` on both clears the AES key schedule (aes) and the derived GHASH key (aes-gcm) on drop.
 aes = { version = "0.8.4", default-features = false, features = ["zeroize"] }
 aes-gcm = { version = "0.10.3", default-features = false, features = ["aes", "alloc", "zeroize"] }
+# Native recovery KDF (WSS_ARGON2ID_V1). 0.5.x is the newest line within this crate's Rust 1.77.2
+# minimum (0.6 needs 1.85); default features (password-hash/PHC strings) are not used.
+argon2 = { version = "0.5.3", default-features = false, features = ["alloc", "zeroize"] }
+# argon2 requires base64ct; 1.7+ needs Rust 1.81+, so hold the 1.6 line (MSRV 1.60).
+base64ct = "~1.6"
 getrandom = "0.2"
+# §8.2.1 passphrase encoding (NFC) — MSRV 1.36.
+unicode-normalization = "0.1.25"
 sha2 = "0.10"
 # Held below 1.9, whose MSRV (1.85) exceeds this crate's 1.77.2; 1.8.x (MSRV 1.60) is API-compatible.
 zeroize = { version = "~1.8", features = ["derive"] }
@@ -24,6 +31,8 @@ zeroize_derive = "~1.4"
 # Test-only: exposes `seal_with_random` and `RandomSource` so the fixed vectors can inject a known
 # nonce (§16). Production callers never enable it; the public `seal` always uses the OS CSPRNG.
 test-randomness = []
+# Test-only: exposes the in-memory, fault-injecting `memory_provider::MemoryKeyProvider` (§16).
+test-support = ["test-randomness"]
 
 [dev-dependencies]
-worldscript-secure-storage = { path = ".", features = ["test-randomness"] }
+worldscript-secure-storage = { path = ".", features = ["test-support"] }

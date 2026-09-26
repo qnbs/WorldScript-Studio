@@ -4,7 +4,7 @@
 
 **Status:** S5-A — admitted R-15 secure-storage architecture baseline; production implementation not
 started. `S5_A_ADMITTED = YES`, `S5_IMPLEMENTATION_READY = NO`, `S5_TERMINAL = YES` (PR #584 merged as `c24aa645`; its post-merge main CI — CI Success and CodeQL — completed green, 19 success / 3 skipped),
-`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are admitted, and the final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) is complete: five findings were made and corrected in this same change — two mechanical citation-drift notes (a stale "blocked pending S5-B1" disposition-count note in §10.4.1, and S5-B3's §6 crash-recovery paragraph citing S5-B1's migration-time reconciliation mechanism for an ordinary write's own orphaned staging chunk, where §9.2/§9 step 11's own ordinary-write staging-reconciliation rule actually applies) and three substantive gaps (S5-B3's chunk physical locator, §2, carried no operation/generation identity, so recovery could not distinguish a superseded attempt's orphaned chunk from the current attempt's — closed by giving each chunk's staging form the same `operation_id`/`target_generation` temp suffix §9 step 3 already defines for a whole record, and by making §6's recovery text check that exact suffix rather than the bare promoted-form locator; and §10.4.1's atomic-write-temporary-files carve-out was declared exempt from "exactly one of the three groups," directly contradicting that same exhaustiveness invariant — closed by making it an explicit fourth `REFUSE_AUTHORITY_SWITCH` group; that fix in turn made Gate 7's flat class-level rule ("blocked while any class is `REFUSE_AUTHORITY_SWITCH`") permanently unsatisfiable for this one class, since its class-level registry entry never changes even once every instance resolves — closed by making Gate 7's rule instance-aware, so only an *unresolved* `REFUSE_AUTHORITY_SWITCH` instance blocks it). No further inconsistency was found after these corrections. `S5_TERMINAL` and `S5_TERMINAL_R15_DESIGN_ADMITTED_MERGED_POSTMERGE_GREEN` are now YES, recorded in a dedicated follow-up after PR #584 merged and its post-merge main CI (including CodeQL) was confirmed green. **Gate 1a (§20) was re-admitted by the QNB-100 readiness verdict on 2026-09-26** (recorded on [#445](https://github.com/qnbs/WorldScript-Studio/issues/445#issuecomment-5847938516); no earlier Gate 1 admission is recorded). Gate 1a is the headless `WSR1` header and strict parser, the record-class registry, canonical AAD (§6.2), AES-256-GCM seal/open with a fail-closed OS nonce source, and the fixed-key/boundary/adversarial vectors §6.1 requires, in `crates/worldscript-secure-storage`. Gate 1b (the KDF/key-provider profile, §8.2) is **not admitted**. Status split: S5 design terminal/admitted = YES; Gate 1a = re-admitted and implemented headless; `S5_IMPLEMENTATION_READY = NO` for the R-15 program as a whole; Gate 1b and Gates 2–7 = not admitted; `PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. No current TypeScript/Tauri path reads or writes user data through this crate.
+`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are admitted, and the final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) is complete: five findings were made and corrected in this same change — two mechanical citation-drift notes (a stale "blocked pending S5-B1" disposition-count note in §10.4.1, and S5-B3's §6 crash-recovery paragraph citing S5-B1's migration-time reconciliation mechanism for an ordinary write's own orphaned staging chunk, where §9.2/§9 step 11's own ordinary-write staging-reconciliation rule actually applies) and three substantive gaps (S5-B3's chunk physical locator, §2, carried no operation/generation identity, so recovery could not distinguish a superseded attempt's orphaned chunk from the current attempt's — closed by giving each chunk's staging form the same `operation_id`/`target_generation` temp suffix §9 step 3 already defines for a whole record, and by making §6's recovery text check that exact suffix rather than the bare promoted-form locator; and §10.4.1's atomic-write-temporary-files carve-out was declared exempt from "exactly one of the three groups," directly contradicting that same exhaustiveness invariant — closed by making it an explicit fourth `REFUSE_AUTHORITY_SWITCH` group; that fix in turn made Gate 7's flat class-level rule ("blocked while any class is `REFUSE_AUTHORITY_SWITCH`") permanently unsatisfiable for this one class, since its class-level registry entry never changes even once every instance resolves — closed by making Gate 7's rule instance-aware, so only an *unresolved* `REFUSE_AUTHORITY_SWITCH` instance blocks it). No further inconsistency was found after these corrections. `S5_TERMINAL` and `S5_TERMINAL_R15_DESIGN_ADMITTED_MERGED_POSTMERGE_GREEN` are now YES, recorded in a dedicated follow-up after PR #584 merged and its post-merge main CI (including CodeQL) was confirmed green. **Gate 1a (§20) was re-admitted by the QNB-100 readiness verdict on 2026-09-26** (recorded on [#445](https://github.com/qnbs/WorldScript-Studio/issues/445#issuecomment-5847938516); no earlier Gate 1 admission is recorded). Gate 1a is the headless `WSR1` header and strict parser, the record-class registry, canonical AAD (§6.2), AES-256-GCM seal/open with a fail-closed OS nonce source, and the fixed-key/boundary/adversarial vectors §6.1 requires, in `crates/worldscript-secure-storage`. Gate 1b (the key-provider/KDF profile, §8.2/§8.2.1) was decided on 2026-09-26 as Option C and is in progress (1b-core, then 1b-platform). Status split: S5 design terminal/admitted = YES; Gate 1a = re-admitted and implemented headless; `S5_IMPLEMENTATION_READY = NO` for the R-15 program as a whole; Gate 1b = decided, implementation in progress; Gates 2–7 = not admitted; `PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. No current TypeScript/Tauri path reads or writes user data through this crate.
 
 **Baseline:** `main` at `7ce506ee771f6273e22c08ded049b48955cb40a5`
 
@@ -1610,6 +1610,77 @@ floor-verification rule and §5.3.1's crash-recovery table. An adapter that cann
 ordering and evidence-matching semantics §5.3.1 requires must fail closed per that section, not
 approximate it here.
 
+**Gate 1b provider decision (maintainer, 2026-09-26, recorded on #445 and QNB-118): Option C —
+asymmetric hybrid.** The roles are fixed:
+
+```text
+normal native runtime authority  = platform secure store (macOS Keychain, Windows Credential
+                                   Manager/DPAPI, Linux Secret Service); no WorldScript passphrase
+                                   is required for a normal launch
+optional portable recovery       = a passphrase-derived key-encryption key (§8.2.1) that wraps ONLY
+                                   the portable recovery material, never record keys
+record/epoch/root keys           = random 256-bit values from the OS CSPRNG; never derived from a
+                                   passphrase, project ID, path, user/host/machine name, file name,
+                                   or timestamp
+```
+
+The secure store holds the §5.3.1 anchor state (`installation_scope_id`, `committed_floor`,
+`committed_root`, `prepared_root_commit`, `RootKeyRefV1` routes) and the random key material or
+opaque protected references to it — never the WorldScript data directory. Capability is detected:
+a platform that cannot provide the required secure store yields `SECURE_ANCHOR_UNAVAILABLE`, and
+protected native mode is then not admitted. There is **no** fallback to plaintext, to a key file
+under app data, to a filesystem-only rollback floor, to path-derived keys, or to any weaker store.
+On Linux the only admitted store is Secret Service; the kernel keyring (`keyutils`) does not survive
+a reboot and is neither authority nor fallback, so an adapter must not enable a combined
+kernel-keyring + Secret Service mode. Key states stay truthful (§8.1): a lost secure-store key with
+no recovery package is `KEY_LOST`; a forgotten recovery passphrase leaves normal local runtime
+usable while the original secure store remains, and makes portable recovery unavailable otherwise.
+Explicit user recovery onto another installation is an authorized recovery transition that
+provisions a NEW secure anchor and `InstallationScopeId` (§5.3.2); it is never presented as the old
+machine's anchor and never masks ordinary offline rollback, which §5.3.1 still detects. The
+provider surface adds `provision_epoch_key(epoch) -> RootKeyRefV1` (a fresh random key behind an
+opaque route) and `state()` to the operations listed above.
+
+### 8.2.1 Native recovery KDF and portable recovery package
+
+**KDF profile `WSS_ARGON2ID_V1`** (profile ID `1`): Argon2id, version `0x13` (v1.3), memory 64 MiB
+(65,536 KiB), 3 iterations, parallelism 1, 32-byte output, salt of 16-64 random bytes (writers use
+16). The profile is authenticated metadata encoded as exactly 21 bytes: `u32be(profile_id)`,
+`u32be(memory_kib)`, `u32be(iterations)`, `u32be(parallelism)`, `u32be(output_len)`, `u8(0x13)`. A
+reader accepts only an exactly admitted profile; the same ID with any changed parameter is
+`UNSUPPORTED_PROFILE`. A later profile is a new ID and an explicit migration, never a silent
+parameter change or an automatic cost reduction. The browser PBKDF2-SHA-256/600,000 profile is
+migration/reference evidence only. Measured cost: about 0.8-0.9 s per derivation (release build) on
+a 2-core, 4 GiB reference machine; derivation happens only on explicit recovery actions, never on a
+normal launch.
+
+**Passphrase encoding.** The Core — not a renderer — encodes the passphrase as the UTF-8 bytes of
+its Unicode NFC normalization. The normalized form must be non-empty and at most 1,024 bytes. No
+other trimming, case folding, or normalization is applied, so every implementation derives the same
+key for canonically equivalent input.
+
+**Package `WSRP` version 1** (all integers big-endian, no implicit fields):
+
+```text
+magic                    4 bytes ASCII "WSRP"
+version                  u32 = 1
+kdf_profile              21 bytes (above)
+salt_len                 u8, 16..=64
+salt                     salt_len bytes
+source_installation_scope 32 bytes: the canonical InstallationScopeId (§5.2.2) it was exported from
+nonce                    12 bytes, CSPRNG
+ciphertext_len           u32 = 48
+ciphertext               AES-256-GCM(KEK, nonce, 32-byte recovery material) || 16-byte tag
+```
+
+`KEK = Argon2id(profile, NFC-UTF-8(passphrase), salt)`. The AAD is `u32be(27) ||
+"worldscript-r15/recovery/v1" || every byte from magic through ciphertext_len`, so the profile,
+salt, source installation, and nonce are all authenticated and cannot be substituted or
+downgraded. The package must end exactly after the tag. A wrong passphrase and a modified package
+are deliberately indistinguishable (`WRONG_PASSPHRASE_OR_TAMPERED`). The recovery material is
+portable recovery key material only; what it restores, and the recovery transition itself, belong to
+the later migration/recovery gates.
+
 ### 8.3 Epoch rules
 
 1. Epoch `N` is immutable once a record is committed under it.
@@ -3189,8 +3260,14 @@ Later implementation may be admitted only in these bounded gates:
      (§6.1.1), canonical AAD (§6.2), AES-256-GCM seal/open (§6.3), CSPRNG nonce generation that
      fails closed, and headless fixed vectors plus adversarial primitive tests. It adds no key
      provider, durable I/O, journal, or current-authority wiring.
-   - **Gate 1b** — the KDF/key-provider profile decision (§8.2). Not admitted; Gate 1a's admission
-     does not imply it.
+   - **Gate 1b** — the key-provider/KDF profile, decided 2026-09-26 as Option C (§8.2, §8.2.1) and
+     delivered in two bounded slices. **1b-core** (headless): the `WSS_ARGON2ID_V1` KDF and NFC
+     passphrase encoding with fixed vectors, the `WSRP` recovery package, `RootKeyRefV1` and
+     `InstallationScopeId`, the `KeyProvider` contract, the pure §5.3.1 anchor transitions that every
+     adapter applies, and a fault-injecting in-memory provider. **1b-platform**: the platform
+     secure-store adapter (audited candidate: `keyring` 3.6.x — MSRV 1.75 — with `apple-native`,
+     `windows-native`, and on Linux `sync-secret-service` only), with per-platform evidence
+     classified honestly. Gate 1b is terminal only when both slices are.
 
    AEAD authentication in Gate 1a proves the supplied envelope, including the `record_generation`
    in its header, is authentic for the key and context. It does not prove that generation is the
@@ -3234,4 +3311,4 @@ complete merely because a design document exists.
 
 ## 21. S5 admission decision
 
-This S5-A baseline, together with S5-B1/S5-B2/S5-B3, is admitted at the semantic level for everything each actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; canonical migration-source/payload evidence, race-free `AuthoritySnapshot` lifetime, and the chunked large-object envelope all admitted above; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready: no production implementation exists for any of the four documents. The final cross-contract consistency audit across all four documents is complete: every cross-reference, shared formula (`source_value_digest`, the marker-body `is_chunked`/`chunk_count` extension, the §6.3 nonce/AAD wording), and status flag was checked for mutual agreement; two mechanical citation-drift notes and three substantive gaps (S5-B3's chunk-locator operation-identity binding; §10.4.1's disposition-registry exhaustiveness; and Gate 7's resulting class-level-vs-instance-level contradiction that the exhaustiveness fix itself introduced) were corrected in this same change (see the header status line above), and no further inconsistency was found. This is **`S5_A_ADMITTED / S5_B1_ADMITTED / S5_B2_ADMITTED / S5_B3_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `IMPLEMENTATION_READY`; `S5_TERMINAL` was declared YES in a dedicated follow-up after PR #584 merged with green post-merge main CI. Gate 1a is re-admitted (QNB-100) and implemented headless (see the header status line); Gate 1b and Gates 2–7 remain unadmitted, and no production authority switch is allowed. Current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by any of these documents.
+This S5-A baseline, together with S5-B1/S5-B2/S5-B3, is admitted at the semantic level for everything each actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; canonical migration-source/payload evidence, race-free `AuthoritySnapshot` lifetime, and the chunked large-object envelope all admitted above; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready: no production implementation exists for any of the four documents. The final cross-contract consistency audit across all four documents is complete: every cross-reference, shared formula (`source_value_digest`, the marker-body `is_chunked`/`chunk_count` extension, the §6.3 nonce/AAD wording), and status flag was checked for mutual agreement; two mechanical citation-drift notes and three substantive gaps (S5-B3's chunk-locator operation-identity binding; §10.4.1's disposition-registry exhaustiveness; and Gate 7's resulting class-level-vs-instance-level contradiction that the exhaustiveness fix itself introduced) were corrected in this same change (see the header status line above), and no further inconsistency was found. This is **`S5_A_ADMITTED / S5_B1_ADMITTED / S5_B2_ADMITTED / S5_B3_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `IMPLEMENTATION_READY`; `S5_TERMINAL` was declared YES in a dedicated follow-up after PR #584 merged with green post-merge main CI. Gate 1a is re-admitted (QNB-100) and implemented headless (see the header status line); Gate 1b is decided (Option C, §8.2/§8.2.1) and in implementation; Gates 2–7 remain unadmitted, and no production authority switch is allowed. Current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by any of these documents.
