@@ -9,8 +9,11 @@ use aes_gcm::{Aes256Gcm, Nonce, Tag};
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::envelope::{NONCE_LEN, TAG_LEN};
+use crate::error::KdfError;
 use crate::error::RecoveryError;
-use crate::kdf::{derive_kek, KdfProfile, PROFILE_ENCODED_LEN, WSS_ARGON2ID_V1};
+use crate::kdf::{
+    derive_kek, KdfProfile, MAX_SALT_LEN, MIN_SALT_LEN, PROFILE_ENCODED_LEN, WSS_ARGON2ID_V1,
+};
 use crate::provider::{InstallationScopeId, INSTALLATION_SCOPE_ID_LEN};
 use crate::random::{OsRandom, RandomSource};
 
@@ -153,60 +156,92 @@ impl<'a> Cursor<'a> {
     }
 }
 
-/// Strictly parses, derives the key-encryption key, and authenticates the package. A wrong
-/// passphrase and modified bytes are indistinguishable by design (`WrongPassphraseOrTampered`).
-pub fn unwrap_recovery(
-    passphrase: &str,
-    package: &[u8],
-) -> Result<UnwrappedRecovery, RecoveryError> {
+/// The fields of a recognized version-1 package, borrowed from it.
+struct ParsedPackage<'a> {
+    profile: KdfProfile,
+    salt: &'a [u8],
+    source: InstallationScopeId,
+    nonce: [u8; NONCE_LEN],
+    header_len: usize,
+    ciphertext: &'a [u8],
+}
+
+/// Everything after magic and version. The header is authenticated, so once a package is known to
+/// be `WSRP` v1 any malformed field is a modification and reports `WrongPassphraseOrTampered`, like
+/// a failed tag. Only an unknown KDF profile ID stays `UnsupportedProfile`: that is a newer format,
+/// and reporting it reveals nothing about the passphrase.
+fn parse_v1(package: &[u8]) -> Result<ParsedPackage<'_>, RecoveryError> {
     let mut cursor = Cursor {
         bytes: package,
-        at: 0,
+        at: 8,
     };
-    if cursor.take(4)? != RECOVERY_MAGIC {
-        return Err(RecoveryError::UnsupportedFormat);
-    }
-    if cursor.u32()? != RECOVERY_VERSION {
-        return Err(RecoveryError::UnsupportedFormat);
-    }
     let mut profile_bytes = [0u8; PROFILE_ENCODED_LEN];
     profile_bytes.copy_from_slice(cursor.take(PROFILE_ENCODED_LEN)?);
-    let profile = KdfProfile::decode(&profile_bytes).map_err(RecoveryError::Kdf)?;
+    if profile_bytes[..4] != WSS_ARGON2ID_V1.profile_id.to_be_bytes() {
+        return Err(RecoveryError::Kdf(KdfError::UnsupportedProfile));
+    }
+    let profile =
+        KdfProfile::decode(&profile_bytes).map_err(|_| RecoveryError::WrongPassphraseOrTampered)?;
     let salt_len = usize::from(cursor.take(1)?[0]);
+    if !(MIN_SALT_LEN..=MAX_SALT_LEN).contains(&salt_len) {
+        return Err(RecoveryError::WrongPassphraseOrTampered);
+    }
     let salt = cursor.take(salt_len)?;
     let source = std::str::from_utf8(cursor.take(INSTALLATION_SCOPE_ID_LEN)?)
         .ok()
         .and_then(|s| InstallationScopeId::parse(s).ok())
-        .ok_or(RecoveryError::Corrupt(
-            "malformed source installation scope",
-        ))?;
+        .ok_or(RecoveryError::WrongPassphraseOrTampered)?;
     let mut nonce = [0u8; NONCE_LEN];
     nonce.copy_from_slice(cursor.take(NONCE_LEN)?);
     if cursor.u32()? as usize != CIPHERTEXT_LEN {
-        return Err(RecoveryError::Corrupt("unexpected ciphertext length"));
+        return Err(RecoveryError::WrongPassphraseOrTampered);
     }
     let header_len = cursor.at;
     let ciphertext = cursor.take(CIPHERTEXT_LEN)?;
     if cursor.at != package.len() {
-        return Err(RecoveryError::Corrupt(
-            "trailing bytes after recovery package",
-        ));
+        return Err(RecoveryError::WrongPassphraseOrTampered);
     }
+    Ok(ParsedPackage {
+        profile,
+        salt,
+        source,
+        nonce,
+        header_len,
+        ciphertext,
+    })
+}
 
-    let kek = derive_kek(&profile, passphrase, salt).map_err(RecoveryError::Kdf)?;
-    let aad = aad(&package[..header_len]);
+/// Strictly parses, derives the key-encryption key, and authenticates the package. Unknown magic or
+/// version is `UnsupportedFormat`; for a recognized v1 package a wrong passphrase and any
+/// modification (including truncation or trailing bytes) are one result, `WrongPassphraseOrTampered`.
+pub fn unwrap_recovery(
+    passphrase: &str,
+    package: &[u8],
+) -> Result<UnwrappedRecovery, RecoveryError> {
+    let recognized = package.len() >= 8
+        && package[..4] == RECOVERY_MAGIC
+        && package[4..8] == RECOVERY_VERSION.to_be_bytes();
+    if !recognized {
+        return Err(RecoveryError::UnsupportedFormat);
+    }
+    let parsed = parse_v1(package).map_err(|error| match error {
+        RecoveryError::Corrupt(_) => RecoveryError::WrongPassphraseOrTampered,
+        other => other,
+    })?;
+    let kek = derive_kek(&parsed.profile, passphrase, parsed.salt).map_err(RecoveryError::Kdf)?;
+    let aad = aad(&package[..parsed.header_len]);
     let mut material = Zeroizing::new([0u8; MATERIAL_LEN]);
-    material.copy_from_slice(&ciphertext[..MATERIAL_LEN]);
+    material.copy_from_slice(&parsed.ciphertext[..MATERIAL_LEN]);
     Aes256Gcm::new(aes_gcm::Key::<Aes256Gcm>::from_slice(kek.as_ref()))
         .decrypt_in_place_detached(
-            Nonce::from_slice(&nonce),
+            Nonce::from_slice(&parsed.nonce),
             &aad,
             material.as_mut(),
-            Tag::from_slice(&ciphertext[MATERIAL_LEN..]),
+            Tag::from_slice(&parsed.ciphertext[MATERIAL_LEN..]),
         )
         .map_err(|_| RecoveryError::WrongPassphraseOrTampered)?;
     Ok(UnwrappedRecovery {
         material: RecoveryMaterial::from_bytes(&mut material),
-        source_installation_scope_id: source,
+        source_installation_scope_id: parsed.source,
     })
 }

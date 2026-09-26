@@ -171,7 +171,7 @@ impl MemoryKeyProvider {
         Ok(())
     }
 
-    fn runtime_key(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
+    fn ensure_readable(&self) -> Result<(), KeyProviderError> {
         self.ensure_available()?;
         if self.lost {
             return Err(KeyProviderError::KeyLost);
@@ -179,6 +179,11 @@ impl MemoryKeyProvider {
         if !self.unlocked {
             return Err(KeyProviderError::Locked);
         }
+        Ok(())
+    }
+
+    fn runtime_key(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
+        self.ensure_readable()?;
         let (_, material) = self
             .runtime
             .iter()
@@ -211,16 +216,16 @@ impl KeyProvider for MemoryKeyProvider {
     }
 
     fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError> {
+        // Availability, loss and lock are decided before the store is consulted, so an inaccessible
+        // store never reports an epoch as unknown.
+        self.ensure_readable()?;
         let key_ref = self
             .store
             .iter()
             .find(|k| k.epoch == epoch)
-            .map(|k| k.key_ref.clone());
-        match key_ref {
-            Some(key_ref) => self.runtime_key(&key_ref),
-            None if self.lost => Err(KeyProviderError::KeyLost),
-            None => Err(KeyProviderError::UnknownEpoch),
-        }
+            .map(|k| k.key_ref.clone())
+            .ok_or(KeyProviderError::UnknownEpoch)?;
+        self.runtime_key(&key_ref)
     }
 
     fn resolve_ref(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {

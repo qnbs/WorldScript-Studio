@@ -5,7 +5,9 @@
 //! Node's `crypto.argon2Sync` / AES-256-GCM / SHA-256 from the contract text (Node's Argon2id was
 //! itself checked against the RFC 9106 §5.3 vector). They are cross-implementation vectors.
 
-use worldscript_secure_storage::kdf::{passphrase_bytes, MAX_PASSPHRASE_LEN};
+use worldscript_secure_storage::kdf::{
+    passphrase_bytes, MAX_PASSPHRASE_INPUT_LEN, MAX_PASSPHRASE_LEN,
+};
 use worldscript_secure_storage::kdf::{MAX_SALT_LEN, MIN_SALT_LEN, PROFILE_ENCODED_LEN};
 use worldscript_secure_storage::recovery::wrap_recovery_with_random;
 use worldscript_secure_storage::{
@@ -167,66 +169,68 @@ fn wrong_passphrase_is_refused() {
     );
 }
 
+fn unwrap_after(mutate: impl FnOnce(&mut Vec<u8>)) -> Result<(), RecoveryError> {
+    let mut package = unhex(PACKAGE_HEX);
+    mutate(&mut package);
+    unwrap_recovery(PASSPHRASE, &package).map(|_| ())
+}
+
 #[test]
-fn modifying_any_field_is_refused() {
-    let package = unhex(PACKAGE_HEX);
-    // magic, version, profile, salt length, salt, source scope, nonce, length, ciphertext, tag.
-    let cases: [(usize, Result<(), RecoveryError>); 10] = [
-        (0, Err(RecoveryError::UnsupportedFormat)),
-        (7, Err(RecoveryError::UnsupportedFormat)),
-        (12, Err(RecoveryError::Kdf(KdfError::UnsupportedProfile))),
-        (
-            29,
-            Err(RecoveryError::Corrupt(
-                "malformed source installation scope",
-            )),
-        ),
-        (35, Err(RecoveryError::WrongPassphraseOrTampered)),
-        (50, Err(RecoveryError::WrongPassphraseOrTampered)),
-        (80, Err(RecoveryError::WrongPassphraseOrTampered)),
-        (
-            93,
-            Err(RecoveryError::Corrupt("unexpected ciphertext length")),
-        ),
-        (100, Err(RecoveryError::WrongPassphraseOrTampered)),
-        (
-            package.len() - 1,
-            Err(RecoveryError::WrongPassphraseOrTampered),
-        ),
-    ];
-    for (index, expected) in cases {
-        let mut changed = package.clone();
-        changed[index] ^= 0x01;
+fn unknown_magic_or_version_is_an_unsupported_format() {
+    assert_eq!(
+        unwrap_after(|p| p[0] ^= 1),
+        Err(RecoveryError::UnsupportedFormat)
+    );
+    assert_eq!(
+        unwrap_after(|p| p[7] ^= 1),
+        Err(RecoveryError::UnsupportedFormat)
+    );
+    assert_eq!(
+        unwrap_after(|p| p.truncate(6)),
+        Err(RecoveryError::UnsupportedFormat)
+    );
+}
+
+#[test]
+fn an_unknown_kdf_profile_id_is_reported_as_unsupported() {
+    assert_eq!(
+        unwrap_after(|p| p[11] = 2),
+        Err(RecoveryError::Kdf(KdfError::UnsupportedProfile))
+    );
+}
+
+#[test]
+fn every_modified_v1_field_is_indistinguishable_from_a_wrong_passphrase() {
+    // Profile parameters, salt length, salt, source scope, nonce, length, ciphertext, and tag.
+    for index in [12usize, 28, 29, 35, 50, 80, 93, 100, 141] {
         assert_eq!(
-            unwrap_recovery(PASSPHRASE, &changed).map(|_| ()),
-            expected,
+            unwrap_after(|p| p[index] ^= 1),
+            Err(RecoveryError::WrongPassphraseOrTampered),
             "byte {index}"
         );
     }
 }
 
 #[test]
-fn truncated_extended_and_malformed_packages_are_corrupt() {
-    let package = unhex(PACKAGE_HEX);
+fn truncated_extended_and_malformed_v1_packages_are_tampered() {
+    let tampered = Err(RecoveryError::WrongPassphraseOrTampered);
     assert_eq!(
-        unwrap_recovery(PASSPHRASE, &package[..package.len() - 1]).map(|_| ()),
-        Err(RecoveryError::Corrupt("truncated recovery package"))
+        unwrap_after(|p| {
+            p.pop();
+        }),
+        tampered
     );
-    let mut extended = package.clone();
-    extended.push(0);
+    assert_eq!(unwrap_after(|p| p.push(0)), tampered);
+    assert_eq!(unwrap_after(|p| p.truncate(40)), tampered);
     assert_eq!(
-        unwrap_recovery(PASSPHRASE, &extended).map(|_| ()),
-        Err(RecoveryError::Corrupt(
-            "trailing bytes after recovery package"
-        ))
+        unwrap_after(|p| p[46] = b'G'),
+        tampered,
+        "non-canonical source scope"
     );
-    let mut bad_scope = package.clone();
-    bad_scope[46] = b'G';
     assert_eq!(
-        unwrap_recovery(PASSPHRASE, &bad_scope).map(|_| ()),
-        Err(RecoveryError::Corrupt(
-            "malformed source installation scope"
-        ))
+        unwrap_after(|p| p[29] = 15),
+        tampered,
+        "salt below 16 bytes"
     );
 }
 
@@ -323,6 +327,20 @@ fn passphrase_cap_counts_nfc_output_not_raw_input() {
     // 513 x U+00E9 is 1,026 bytes after NFC: refused at the cap.
     assert_eq!(
         passphrase_bytes(&"\u{e9}".repeat(513)).map(|_| ()),
+        Err(KdfError::PassphraseTooLong)
+    );
+}
+
+#[test]
+fn raw_input_over_4096_bytes_is_refused_before_normalization() {
+    assert!(
+        passphrase_bytes(&"a".repeat(MAX_PASSPHRASE_INPUT_LEN)).is_err(),
+        "4,096 x a is > 1,024 normalized"
+    );
+    // One starter followed by a long combining run: refused by the raw bound, never buffered by NFC.
+    let combining_run = format!("a{}", "\u{301}".repeat(4000));
+    assert_eq!(
+        passphrase_bytes(&combining_run).map(|_| ()),
         Err(KdfError::PassphraseTooLong)
     );
 }

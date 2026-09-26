@@ -11,6 +11,9 @@ pub const MIN_SALT_LEN: usize = 16;
 pub const MAX_SALT_LEN: usize = 64;
 /// §8.2.1: maximum passphrase length in bytes after NFC normalization.
 pub const MAX_PASSPHRASE_LEN: usize = 1024;
+/// §8.2.1: maximum raw (pre-normalization) passphrase length in UTF-8 bytes. It bounds the work the
+/// NFC iterator can do (it buffers whole combining sequences) before the normalized cap is reached.
+pub const MAX_PASSPHRASE_INPUT_LEN: usize = 4096;
 /// Length of the derived key-encryption key.
 pub const KEK_LEN: usize = 32;
 
@@ -79,10 +82,14 @@ fn admitted(profile: &KdfProfile) -> Result<(), KdfError> {
 }
 
 /// §8.2.1 passphrase encoding: the Unicode NFC normalization of the passphrase, encoded as UTF-8.
-/// It must be non-empty and at most [`MAX_PASSPHRASE_LEN`] bytes. Normalization is streamed into a
+/// The raw input must be at most [`MAX_PASSPHRASE_INPUT_LEN`] bytes, and the normalized form
+/// non-empty and at most [`MAX_PASSPHRASE_LEN`] bytes. Normalization is streamed into a
 /// fixed [`MAX_PASSPHRASE_LEN`]-byte buffer and stops as soon as the cap would be exceeded, so memory
 /// never grows with the input and the buffer never reallocates (no unzeroized copy is left behind).
 pub fn passphrase_bytes(passphrase: &str) -> Result<Zeroizing<String>, KdfError> {
+    if passphrase.len() > MAX_PASSPHRASE_INPUT_LEN {
+        return Err(KdfError::PassphraseTooLong);
+    }
     let mut normalized = Zeroizing::new(String::with_capacity(MAX_PASSPHRASE_LEN));
     for ch in passphrase.nfc() {
         if normalized.len() + ch.len_utf8() > MAX_PASSPHRASE_LEN {

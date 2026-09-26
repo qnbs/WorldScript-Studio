@@ -41,7 +41,7 @@ pub enum KdfError {
     /// The profile is not an exactly admitted one (e.g. `WSS_ARGON2ID_V1` with changed parameters).
     UnsupportedProfile,
     EmptyPassphrase,
-    /// Longer than 1024 bytes after NFC normalization.
+    /// Over 4,096 raw bytes, or over 1,024 bytes after NFC normalization.
     PassphraseTooLong,
     /// Salt shorter than 16 or longer than 64 bytes.
     InvalidSalt,

@@ -1681,9 +1681,10 @@ a 2-core, 4 GiB reference machine; derivation happens only on explicit recovery 
 normal launch.
 
 **Passphrase encoding.** The Core — not a renderer — encodes the passphrase as the UTF-8 bytes of
-its Unicode NFC normalization. The normalized form must be non-empty and at most 1,024 bytes; the
-cap applies to the normalized bytes, and normalization is streamed into a fixed buffer that stops
-at the cap, so memory never grows with the input. No
+its Unicode NFC normalization. The raw input must be at most 4,096 UTF-8 bytes (checked before
+normalization, which buffers whole combining sequences), and the normalized form must be non-empty
+and at most 1,024 bytes; normalization is streamed into a fixed buffer that stops at the cap, so
+memory and work never grow with the input. No
 other trimming, case folding, or normalization is applied, so every implementation derives the same
 key for canonically equivalent input.
 
@@ -1704,8 +1705,12 @@ ciphertext               AES-256-GCM(KEK, nonce, 32-byte recovery material) || 1
 `KEK = Argon2id(profile, NFC-UTF-8(passphrase), salt)`. The AAD is `u32be(27) ||
 "worldscript-r15/recovery/v1" || every byte from magic through ciphertext_len`, so the profile,
 salt, source installation, and nonce are all authenticated and cannot be substituted or
-downgraded. The package must end exactly after the tag. A wrong passphrase and a modified package
-are deliberately indistinguishable (`WRONG_PASSPHRASE_OR_TAMPERED`). The recovery material is
+downgraded. The package must end exactly after the tag. An unknown magic or package version is
+`UNSUPPORTED_FORMAT`, and an unknown KDF profile ID is `UNSUPPORTED_PROFILE` (a newer format; this
+reveals nothing about the passphrase). For a recognized `WSRP` v1 package, a wrong passphrase and
+every modification — changed profile parameters, an out-of-range salt length, a non-canonical
+source scope, a wrong length field, truncation, trailing bytes, or a failed tag — are deliberately
+one result, `WRONG_PASSPHRASE_OR_TAMPERED`. The recovery material is
 portable recovery key material only; what it restores, and the recovery transition itself, belong to
 the later migration/recovery gates.
 
