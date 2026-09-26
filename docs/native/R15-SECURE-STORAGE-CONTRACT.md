@@ -120,10 +120,13 @@ which `storageService.ts` uses whenever `fileSystemService.initialize()` succeed
 desktop, that same class's data can *also* physically exist in the packaged-desktop IndexedDB
 fallback (`dbService`, `worldscript-state-db`/`worldscript-data-db`) from a past session where
 filesystem initialization failed; the two physical authorities are never reconciled by any code path
-that exists today. Since #843 the current application no longer selects or creates that fallback:
-when `fileSystemService.initialize()` fails, startup fails closed
-(`DesktopStorageAuthorityUnavailableError`). Records written by pre-#843 fallback sessions may still
-physically exist, however, and remain mandatory migration-source candidates. §10.1.3 defines the mandatory dual-authority discovery, coalescing, and
+that exists today. Since #843 the current application no longer *selects* that IndexedDB store as the desktop
+Project authority: when `fileSystemService.initialize()` fails, startup fails closed
+(`DesktopStorageAuthorityUnavailableError`). The WebView IndexedDB databases themselves are still
+opened (and may be created) at startup by `initializeStorage()` for their independent stores and
+migration paths, so their presence alone does not prove a past fallback session. Project records
+written by pre-#843 fallback sessions may still physically exist, however, and remain mandatory
+migration-source candidates. §10.1.3 defines the mandatory dual-authority discovery, coalescing, and
 `SOURCE_AUTHORITY_CONFLICT` rules this implies for migration; it does not change this table's current
 `owner` column, which continues to describe the filesystem location `main` treats as primary today.
 
@@ -1876,7 +1879,8 @@ Codes are assigned only for physical authorities that actually exist in this app
 2   PACKAGED_IDB_STORAGE_BACKEND        services/dbService.ts (worldscript-state-db,
                                         worldscript-data-db) as written by a pre-#843
                                         session whose packaged-desktop fallback selected it;
-                                        current main no longer selects it (§3, §10.1.3)
+                                        current main no longer selects it as Project
+                                        authority (§3, §10.1.3)
 3   WEBVIEW_LOCALSTORAGE                browser/WebView localStorage keys (§3's scene-comments,
                                         plot-ui, mind-map-ui, progress, LoRA Redux mirror,
                                         idb-kdf-salt, and similar rows)

@@ -23,7 +23,7 @@ codebase).
 future semantics, and its migration state machine; and (2) a field-class-staged unknown-field
 policy that can never silently drop persisted user data. Defines the authority-switch admission
 gates issue #553 asks for. The admitted current-production implementation is complete through
-the #553 slices (PRs #773–#844); the Rust Core authority switch remains separate (#836). This
+the #553 slices (PRs #773–#849); the Rust Core authority switch remains separate (#836). This
 contract does not touch R-15/#445's separate encryption-envelope
 security contract and does not change current write authority (TypeScript remains sole authority;
 the Rust shadow comparison remains observation-only).
@@ -928,9 +928,9 @@ merge (§3.2), the write-back overlay mechanism (§3.1/§3.2), `LEGACY_TO_V1` (�
 downgrade barrier (§2.7), and the `MALFORMED` recovery fix (§2.4's correction) were
 `IMPLEMENTATION_REQUIRED` when this document was admitted. **Current status (#553 final acceptance,
 QNB-99):**
-- Implemented for the current TypeScript authority by the #553 PRs #773–#844: stored-project,
+- Implemented for the current TypeScript authority by the #553 PRs #773–#849: stored-project,
   filesystem and IDB load admission; file import; snapshot restore; the collection merge and
-  write-back overlay; `LEGACY_TO_V1` (in memory and durable); the §2.7 downgrade barrier; and
+  write-back overlay; `LEGACY_TO_V1` (in memory, and durable on both the IndexedDB and filesystem backends); the §2.7 downgrade barrier; and
   preserve-first refusal of unloadable or `MALFORMED` records.
 - Not implemented, and not required for #553: "recovery restore", which has no current product
   entry point, and "future native/Qt open", which belongs to the Rust Core authority switch (#836).
@@ -1001,6 +1001,6 @@ as `IMPLEMENTATION_REQUIRED` or a stated non-issue — never absorbed as another
 All 19 rows above are confirmed. This document's status line reflects `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
 criterion. The current-production implementation (admission, no-loss, migration, fencing and
-egress for the current TypeScript authority) is complete through the #553 PRs #773–#844, with final
+egress for the current TypeScript authority) is complete through the #553 PRs #773–#849, with final
 acceptance in QNB-99. The authority switch to a renderer-neutral Rust Project Core is not done; it is
 tracked as #836.
