@@ -3609,4 +3609,17 @@ describe('FsProjectStore — durable legacy migration (#553 R3)', () => {
     await expect(editor.loadProjectForEditing('legacy')).rejects.toThrow('disk full');
     expect(fake.text.get(SOURCE)).toBe(before);
   });
+
+  it('never lets two snapshots in the same millisecond replace each other', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      const editor = new FsProjectStore();
+      const first = await editor.saveSnapshotText('a', '{"title":"A"}');
+      const second = await editor.saveSnapshotText('b', '{"title":"B"}');
+      expect(second).not.toBe(first);
+      expect(snapshotTexts().sort()).toEqual(['{"title":"A"}', '{"title":"B"}']);
+    } finally {
+      now.mockRestore();
+    }
+  });
 });

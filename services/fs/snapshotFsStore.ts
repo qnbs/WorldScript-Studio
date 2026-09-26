@@ -23,6 +23,9 @@ interface SnapshotEnvelope {
   data: string; // compressData(projectData)
 }
 
+// QNBS-v3 (#553 R3): snapshot ids are millisecond timestamps; two snapshots in the same millisecond (e.g. two legacy migrations) must not share a file, since the later write would replace the earlier preserved text.
+let lastSnapshotId = 0;
+
 export class FsSnapshotStore extends FsCodexStore {
   async saveSnapshot(snapshotLabel: string, data: unknown): Promise<number> {
     return this.saveSnapshotText(snapshotLabel, JSON.stringify(data));
@@ -38,7 +41,10 @@ export class FsSnapshotStore extends FsCodexStore {
       await apis.mkdir(snapshotsPath, { recursive: true });
     }
 
-    const id = Date.now();
+    let id = Math.max(Date.now(), lastSnapshotId + 1);
+    // QNBS-v3 (#553 R3): another window may have used the same id; never replace an existing snapshot.
+    while (await apis.exists(await apis.join(snapshotsPath, `${id}.json`))) id++;
+    lastSnapshotId = id;
     const envelope: SnapshotEnvelope = {
       id,
       name: snapshotLabel,
