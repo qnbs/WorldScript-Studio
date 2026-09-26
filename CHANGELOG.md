@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** the JSON export in "Import & export" now saves the whole project —
+  every field and any data this version does not know — the same way as the other JSON export
+  buttons, instead of only the title, logline and manuscript. If the export has to be refused (for
+  example because the project changed in another window), it now reports a failure instead of a
+  success. PR #847.
 - **Data integrity (#553):** if the saved project cannot be loaded into the editor, startup now
   stops on the "project could not be opened" screen with Reload. Before, the browser version started
   a blank project in its place, and its first save could replace the saved project. The saved data is

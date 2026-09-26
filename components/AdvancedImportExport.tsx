@@ -6,6 +6,7 @@ import { projectActions } from '../features/project/projectSlice';
 import { importProjectThunk } from '../features/project/thunks/projectManagementThunks';
 import { useTranslation } from '../hooks/useTranslation';
 import { logger } from '../services/logger';
+import { downloadCanonicalProjectExport } from '../services/projectCanonicalEgress';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader } from './ui/Card';
 import { Modal } from './ui/Modal';
@@ -106,26 +107,30 @@ export const AdvancedImportExport: React.FC = () => {
       return;
     }
 
-    let content: string;
-    let filename: string;
+    // QNBS-v3 (#553 a1): JSON goes through the canonical project egress like every other JSON export — the stored canonical text with the editor's edits, never a re-serialized Redux projection — and only a completed download is reported as a success.
     if (exportFormat === 'json') {
-      content = JSON.stringify(
-        {
-          title: project.title,
-          logline: project.logline,
-          manuscript: project.manuscript,
-        },
-        null,
-        2,
-      );
-      filename = `${safeName}.json`;
-    } else {
-      content = project.manuscript.map((s) => `# ${s.title}\n\n${s.content}`).join('\n\n---\n\n');
-      filename = `${safeName}.md`;
+      setIsProcessing(true);
+      try {
+        const exported = await downloadCanonicalProjectExport(project.id, project, (error) => {
+          logger.error('JSON export refused:', error);
+        });
+        if (exported) {
+          toast.success(t('export.exportSuccess'), project.title);
+          setIsExportModalOpen(false);
+        } else {
+          toast.error(t('export.exportFailed'));
+        }
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
     }
-    const blob = new Blob([content], {
-      type: exportFormat === 'json' ? 'application/json' : 'text/markdown',
-    });
+
+    const content = project.manuscript
+      .map((s) => `# ${s.title}\n\n${s.content}`)
+      .join('\n\n---\n\n');
+    const filename = `${safeName}.md`;
+    const blob = new Blob([content], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
