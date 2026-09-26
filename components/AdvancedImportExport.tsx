@@ -42,8 +42,8 @@ export const AdvancedImportExport: React.FC = () => {
           await handleDocxImport(file);
         } else if (importFormat === 'json') {
           const resultAction = await dispatch(importProjectThunk(file));
-          if (!importProjectThunk.fulfilled.match(resultAction)) {
-            throw new Error(resultAction.error?.message ?? 'Import failed');
+          if (importProjectThunk.rejected.match(resultAction)) {
+            throw new Error(resultAction.error.message ?? 'Import failed');
           }
         } else {
           const text = await file.text();

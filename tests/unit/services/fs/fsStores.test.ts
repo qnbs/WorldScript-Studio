@@ -292,6 +292,29 @@ describe('FsProjectStore — projects', () => {
     expect(savedRaw).not.toContain('Project A');
   });
 
+  // QNBS-v3 (#553 a4): an imported project's first save keeps the admitted import text, under the id the import assigned.
+  it('persists an import carrier with the assigned identity and the admitted opaque data', async () => {
+    await fake.apis.mkdir('/app/projects/session-x', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/session-x/project.json',
+      '{"schemaVersion":1,"id":"session-x","title":"Before","logline":"A","manuscript":[],"characters":[],"worlds":[],"aOnly":1}',
+    );
+    const carrier =
+      '{"schemaVersion":1,"id":"default","title":"Imported","logline":"B","manuscript":[],"characters":[],"worlds":[],"importExact":9007199254740993}';
+
+    await store.saveProject(
+      { ...project, id: 'session-x', title: 'Imported', logline: 'B' } as never,
+      { replacement: true, replacementRaw: carrier },
+    );
+
+    const savedRaw = decompressJsonText(
+      fake.text.get('/app/projects/session-x/project.json') as string,
+    );
+    expect(savedRaw).toContain('"importExact":9007199254740993');
+    expect(JSON.parse(savedRaw)).toMatchObject({ id: 'session-x', title: 'Imported' });
+    expect(savedRaw).not.toContain('aOnly');
+  });
+
   it('keeps the editing-baseline fence for a replacement from a stale window', async () => {
     const sourcePath = '/app/projects/p1/project.json';
     await fake.apis.mkdir('/app/projects/p1', { recursive: true });

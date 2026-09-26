@@ -2,7 +2,8 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '../../../app/store';
 import { getPersistedProjectPayload } from '../../../services/appBootstrap';
 import { logger } from '../../../services/logger';
-import { parseImportedProjectJson } from '../../../services/projectImportSchema';
+import { buildImportReplacementCarrier } from '../../../services/projectImportCarrier';
+import { parseImportedProjectDocument } from '../../../services/projectImportSchema';
 import { getSafeSessionProjectId } from '../../../services/startupSafeSession';
 import { storageService } from '../../../services/storageService';
 import type { Character, World } from '../../../types';
@@ -51,9 +52,18 @@ function extractImportedEntities<T extends { id: string }>(
   return importedEntities;
 }
 
-export const importProjectThunk = createAsyncThunk('project/importProject', async (file: File) => {
+/** Carried on the fulfilled action only, like a restore's carrier (#553 a4). */
+export interface ImportProjectFulfilledMeta {
+  replacementCarrier: string | null;
+}
+
+export const importProjectThunk = createAsyncThunk<
+  ProjectData,
+  File,
+  { fulfilledMeta: ImportProjectFulfilledMeta }
+>('project/importProject', async (file, thunkApi) => {
   const text = await file.text();
-  const projectDataJson = parseImportedProjectJson(text);
+  const { project: projectDataJson, raw: admittedRaw } = parseImportedProjectDocument(text);
 
   const charactersToSet: Character[] = [];
   const worldsToSet: World[] = [];
@@ -173,7 +183,10 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
   };
 
   // QNBS-v3: Zod inference uses | undefined for optional keys — ProjectData expects missing keys (exactOptionalPropertyTypes).
-  return result as ProjectData;
+  // QNBS-v3 (#553 a4): the admitted text leaves only with the fulfilled action; the listener binds it to the imported project's epoch so its first save keeps what the projection could not hold.
+  return thunkApi.fulfillWithValue(result as ProjectData, {
+    replacementCarrier: buildImportReplacementCarrier(admittedRaw),
+  });
 });
 
 /** Carried on the fulfilled action only, so a restore discarded before it can never leave a carrier behind (#553 a5). */

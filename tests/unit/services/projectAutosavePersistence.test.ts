@@ -43,9 +43,9 @@ vi.mock('../../../services/projectAutosaveCanonicalWriter', () => ({
 
 import {
   _resetEditorProjectGenerationForTest,
-  bindRestoreCarrier,
+  bindReplacementCarrier,
   isReplacementPending,
-  restoreCarrierFor,
+  replacementCarrierFor,
   toEditorReplacementEpoch,
 } from '../../../services/editorProjectGeneration';
 import { StaleProjectWriterError } from '../../../services/fs/fsCore';
@@ -168,7 +168,7 @@ describe('persistProjectAutosaveSnapshot replacement baseline (#553 a10)', () =>
   it('routes a desktop IndexedDB-fallback restore through the canonical writer with its carrier', async () => {
     h.isTauriRuntime.mockReturnValue(true);
     h.projectAuthority.mockReturnValue('idb');
-    bindRestoreCarrier(snapshot, epoch(1), EXACT_CARRIER);
+    bindReplacementCarrier(snapshot, epoch(1), EXACT_CARRIER);
 
     await persistProjectAutosaveSnapshot(snapshot, epoch(1));
 
@@ -177,21 +177,30 @@ describe('persistProjectAutosaveSnapshot replacement baseline (#553 a10)', () =>
       replacement: true,
       replacementRaw: EXACT_CARRIER,
     });
-    expect(restoreCarrierFor(snapshot, epoch(1))).toBeNull();
+    expect(replacementCarrierFor(snapshot, epoch(1))).toBeNull();
     expect(isReplacementPending(snapshot, 'idb', epoch(1))).toBe(false);
     h.projectAuthority.mockReturnValue(undefined);
+  });
+
+  // QNBS-v3 (#553 a5): a committed save of another target at the carrier's epoch does not consume it — only the carrier's own target and epoch do.
+  it('keeps a carrier bound to another target when a different project’s save commits', async () => {
+    bindReplacementCarrier({ ...snapshot, id: 'other' }, epoch(1), EXACT_CARRIER);
+
+    await persistProjectAutosaveSnapshot(snapshot, epoch(1));
+
+    expect(replacementCarrierFor({ ...snapshot, id: 'other' }, epoch(1))).toBe(EXACT_CARRIER);
   });
 
   it('keeps the carrier when the canonical save of an IndexedDB-fallback restore fails', async () => {
     h.isTauriRuntime.mockReturnValue(true);
     h.projectAuthority.mockReturnValue('idb');
-    bindRestoreCarrier(snapshot, epoch(1), EXACT_CARRIER);
+    bindReplacementCarrier(snapshot, epoch(1), EXACT_CARRIER);
     h.saveAutosaveSnapshotCanonical.mockResolvedValueOnce({ status: 'CONFLICT' });
 
     await expect(persistProjectAutosaveSnapshot(snapshot, epoch(1))).rejects.toThrow();
 
     expect(h.saveProject).not.toHaveBeenCalled();
-    expect(restoreCarrierFor(snapshot, epoch(1))).toBe(EXACT_CARRIER);
+    expect(replacementCarrierFor(snapshot, epoch(1))).toBe(EXACT_CARRIER);
     h.projectAuthority.mockReturnValue(undefined);
   });
 
@@ -204,11 +213,11 @@ describe('persistProjectAutosaveSnapshot replacement baseline (#553 a10)', () =>
       }),
     );
     const oldSave = persistProjectAutosaveSnapshot(snapshot, epoch(0));
-    bindRestoreCarrier(snapshot, epoch(1), EXACT_CARRIER);
+    bindReplacementCarrier(snapshot, epoch(1), EXACT_CARRIER);
     releaseOld({ status: 'SAVED', generation: 'g0' });
     await oldSave;
 
-    expect(restoreCarrierFor(snapshot, epoch(1))).toBe(EXACT_CARRIER);
+    expect(replacementCarrierFor(snapshot, epoch(1))).toBe(EXACT_CARRIER);
 
     await persistProjectAutosaveSnapshot(snapshot, epoch(1));
 
@@ -216,7 +225,7 @@ describe('persistProjectAutosaveSnapshot replacement baseline (#553 a10)', () =>
       replacement: true,
       replacementRaw: EXACT_CARRIER,
     });
-    expect(restoreCarrierFor(snapshot, epoch(1))).toBeNull();
+    expect(replacementCarrierFor(snapshot, epoch(1))).toBeNull();
   });
 
   it('keeps the desktop generation/incarnation fence fail-closed and the baseline untouched', async () => {
@@ -230,27 +239,27 @@ describe('persistProjectAutosaveSnapshot replacement baseline (#553 a10)', () =>
   });
 
   it('passes a restore carrier bound to this target and epoch with the replacement, then drops it', async () => {
-    bindRestoreCarrier(snapshot, epoch(1), '{"carrier":true}');
+    bindReplacementCarrier(snapshot, epoch(1), '{"carrier":true}');
     await persistProjectAutosaveSnapshot(snapshot, epoch(1));
     expect(h.saveAutosaveSnapshotCanonical).toHaveBeenLastCalledWith(snapshot, {
       replacement: true,
       replacementRaw: '{"carrier":true}',
     });
-    expect(restoreCarrierFor(snapshot, epoch(1))).toBeNull();
+    expect(replacementCarrierFor(snapshot, epoch(1))).toBeNull();
   });
 
   it('keeps the carrier after a failed save so the retry still writes the restored text', async () => {
-    bindRestoreCarrier(snapshot, epoch(1), '{"carrier":true}');
+    bindReplacementCarrier(snapshot, epoch(1), '{"carrier":true}');
     h.saveAutosaveSnapshotCanonical.mockResolvedValueOnce({ status: 'CONFLICT' });
     await expect(persistProjectAutosaveSnapshot(snapshot, epoch(1))).rejects.toThrow();
-    expect(restoreCarrierFor(snapshot, epoch(1))).toBe('{"carrier":true}');
+    expect(replacementCarrierFor(snapshot, epoch(1))).toBe('{"carrier":true}');
   });
 
   it.each([
     ['a later epoch (reset/import after the restore, or an undo across it)', snapshot, 2],
     ['another target (switch or Safe-Session rekey)', { ...snapshot, id: 'other' }, 1],
   ])('never uses a carrier bound to %s', async (_label, project, at) => {
-    bindRestoreCarrier(snapshot, epoch(1), '{"carrier":true}');
+    bindReplacementCarrier(snapshot, epoch(1), '{"carrier":true}');
     await persistProjectAutosaveSnapshot(project as ProjectData, epoch(at));
     expect(h.saveAutosaveSnapshotCanonical).toHaveBeenLastCalledWith(project, {
       replacement: true,
@@ -259,7 +268,7 @@ describe('persistProjectAutosaveSnapshot replacement baseline (#553 a10)', () =>
 
   it('passes the carrier to the desktop backend as well', async () => {
     h.isTauriRuntime.mockReturnValue(true);
-    bindRestoreCarrier(snapshot, epoch(1), '{"carrier":true}');
+    bindReplacementCarrier(snapshot, epoch(1), '{"carrier":true}');
     await persistProjectAutosaveSnapshot(snapshot, epoch(1));
     expect(h.saveProject).toHaveBeenCalledWith(
       { data: snapshot },

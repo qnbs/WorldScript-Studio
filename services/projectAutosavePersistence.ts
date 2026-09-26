@@ -3,7 +3,7 @@ import {
   type EditorReplacementEpoch,
   isReplacementPending,
   notePersistedEditorEpoch,
-  restoreCarrierFor,
+  replacementCarrierFor,
   toEditorReplacementEpoch,
 } from './editorProjectGeneration';
 import {
@@ -32,7 +32,7 @@ export async function persistProjectAutosaveSnapshot(
   assertProjectPersistenceAdmitted(snapshot.id);
   const authority = await storageService.getProjectAuthority();
   const replacement = isReplacementPending(snapshot, authority, editorEpoch);
-  const replacementRaw = (replacement && restoreCarrierFor(snapshot, editorEpoch)) || undefined;
+  const replacementRaw = (replacement && replacementCarrierFor(snapshot, editorEpoch)) || undefined;
   const options = replacementRaw === undefined ? { replacement } : { replacement, replacementRaw };
   // QNBS-v3 (#553 a5): the writer follows the storage that really holds the project — a desktop build on its IndexedDB fallback uses the generation-fenced canonical writer, never the legacy whole-record save that ignores the replacement carrier.
   if (authority === 'fs') {

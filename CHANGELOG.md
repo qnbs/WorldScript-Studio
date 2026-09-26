@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** an imported project file is now first saved from the file's own
+  checked content, with any edits made since the import applied, instead of a re-serialized copy of
+  the editor state. Fields this version does not know are kept; on the desktop, very large whole
+  numbers are kept exactly. Inline character and world images are still moved to image storage and
+  are not stored twice, and machine-local folder and routing details from the file are still
+  ignored. PR #842.
 - **Data integrity (#553):** the encrypted library backup now includes each snapshot as it is
   stored, alongside the readable copy.
   - **Desktop:** the snapshot's stored text is kept exactly — fields this version does not know
