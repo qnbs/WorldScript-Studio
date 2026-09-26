@@ -348,3 +348,36 @@ fn record_class_registry_round_trips_and_refuses_unknown_tokens() {
         assert_eq!(RecordClass::from_token(unknown), None, "{unknown:?}");
     }
 }
+
+#[test]
+fn seal_builds_the_envelope_in_one_exactly_sized_buffer() {
+    let plaintext = vec![0x5A; 4096];
+    let envelope = seal(
+        &test_key(),
+        &mut FixedNonce,
+        &snapshot(Some("proj-1")),
+        META,
+        &plaintext,
+    )
+    .unwrap();
+    // The in-place path allocates header + plaintext + tag once and never grows or copies the buffer.
+    assert_eq!(envelope.len(), HEADER_LEN + plaintext.len() + 16);
+    assert_eq!(envelope.capacity(), envelope.len());
+    let parsed = parse_envelope(&envelope).unwrap();
+    assert_eq!(parsed.header.ciphertext_len, (plaintext.len() + 16) as u64);
+    assert_eq!(
+        open(&test_key(), &snapshot(Some("proj-1")), &parsed).unwrap(),
+        plaintext
+    );
+}
+
+#[test]
+fn seal_refuses_one_byte_past_the_64_mib_ciphertext_bound() {
+    // Plaintext + 16-byte tag may be exactly MAX_CIPHERTEXT_LEN; one more byte is refused before any
+    // nonce is drawn or encryption starts (the accepting side is covered by the parser bound tests).
+    let over = vec![0u8; (MAX_CIPHERTEXT_LEN - 16) as usize + 1];
+    assert_eq!(
+        seal(&test_key(), &mut NoRandomness, &snapshot(None), META, &over),
+        Err(SealError::TooLarge)
+    );
+}

@@ -1,4 +1,4 @@
-use aes_gcm::aead::{Aead, KeyInit, Payload};
+use aes_gcm::aead::{Aead, AeadInPlace, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -57,27 +57,31 @@ pub fn seal(
     }
     .encode();
     let aad = canonical_aad(context, &header).map_err(SealError::InvalidContext)?;
-    let ciphertext = cipher(key)
-        .encrypt(
-            Nonce::from_slice(&nonce),
-            Payload {
-                msg: plaintext,
-                aad: &aad,
-            },
-        )
+    // One allocation for the whole envelope: the plaintext is copied once behind the header, encrypted
+    // in place, and the tag appended, so no separate ciphertext buffer is ever materialized.
+    let mut out = Vec::with_capacity(header.len() + ciphertext_len as usize);
+    out.extend_from_slice(&header);
+    out.extend_from_slice(plaintext);
+    let tag = cipher(key)
+        .encrypt_in_place_detached(Nonce::from_slice(&nonce), &aad, &mut out[header.len()..])
         // QNBS-v3 (#445): AES-GCM encryption only fails on inputs already bounded above; surfaced as TooLarge rather than panicking.
         .map_err(|_| SealError::TooLarge)?;
-    debug_assert_eq!(ciphertext.len() as u64, ciphertext_len);
-    let mut out = Vec::with_capacity(header.len() + ciphertext.len());
-    out.extend_from_slice(&header);
-    out.extend_from_slice(&ciphertext);
+    out.extend_from_slice(&tag);
+    debug_assert_eq!(out.len() as u64, header.len() as u64 + ciphertext_len);
     Ok(out)
 }
 
 /// Authenticates and decrypts a parsed envelope under the caller's expected context. The caller must
 /// have already checked `envelope.header.key_epoch` against committed authority before resolving
 /// `key` (§6.4): this function never selects a key from the header. Any authentication failure —
-/// wrong key, modified bytes, or a different record/project/generation context — is `Tampered`.
+/// wrong key, modified header or ciphertext bytes, or a different record class/logical ID/project
+/// context — is `Tampered`.
+///
+/// Success proves only that this envelope, including the `record_generation` in its header, is
+/// authentic for this key and context. It does not prove that the envelope is the latest committed
+/// generation: an older authentic envelope for the same record also opens. Rejecting rollback is the
+/// caller's job, by comparing `envelope.header.record_generation` with the committed record marker
+/// (§5.4/§9), which later gates own.
 pub fn open(
     key: &Key,
     context: &RecordContext<'_>,

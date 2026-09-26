@@ -8,19 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **R-15 Gate 1a (#445):** first renderer-neutral protected-storage code, a new headless crate
-  `crates/worldscript-secure-storage`. It implements the contract's `WSR1` 52-byte envelope header
-  with strict version-1 parsing (§6.1/§6.1.2 bounds, checked arithmetic, unknown magic/version/suite
-  refused as unsupported, never parsed as plaintext), the 41-token record-class registry (§6.1.1),
-  canonical AAD with the deterministic direct-vs-hashed identity rule (§6.2, including the 256-byte
-  cap), and AES-256-GCM seal/open (RustCrypto `aes-gcm` 0.10.3) with a fresh OS-CSPRNG nonce per
-  encryption that fails closed when secure randomness is unavailable. Key material is opaque and
-  zeroized on drop. The fixed-key vectors (absent and present `project_id`, byte-identical to the
-  contract's normative header fixture) and the rule-D boundary fixture were cross-checked against an
-  independent non-Rust implementation; tests also cover every malformed-length case and record,
-  project, class, generation, header-byte and wrong-key substitution. Nothing reads or writes current
-  user data through this crate: Gate 1b (native KDF profile), Gates 2–7 and any authority switch
-  remain unadmitted. Also records `S5_TERMINAL = YES` for the R-15 design (PR #584's post-merge main
-  CI and CodeQL were green). PR #829.
+  `crates/worldscript-secure-storage`, re-admitted by the QNB-100 readiness verdict. It implements the
+  contract's `WSR1` 52-byte envelope header with strict version-1 parsing (§6.1/§6.1.2 bounds,
+  checked arithmetic, unknown magic/version/suite refused as unsupported, never parsed as
+  plaintext), the 41-token record-class registry (§6.1.1), canonical AAD with the deterministic
+  direct-vs-hashed identity rule (§6.2, including the 256-byte cap), and AES-256-GCM seal/open
+  (RustCrypto `aes-gcm` 0.10.3) with a fresh OS-CSPRNG nonce per encryption that fails closed when
+  secure randomness is unavailable. Sealing encrypts in place in a single envelope buffer. The key
+  type, the AES key schedule and the GHASH key are zeroized on drop via the `zeroize` crate (held on
+  1.8.x so the crate's Rust 1.77.2 minimum holds). The fixed-key vectors (absent and present
+  `project_id`, byte-identical to the contract's normative header fixture) and the rule-D boundary
+  fixture were cross-checked against an independent non-Rust implementation; tests also cover every
+  malformed-length case, the 64 MiB bound, and record, project, class, generation, header-byte and
+  wrong-key substitution. The contract now states that a present `project_id` must be non-empty,
+  that AEAD success does not prove an envelope is the latest committed generation, defines the
+  Gate 1a/1b split, and corrects its stale `S5_TERMINAL` status. Nothing reads or writes current
+  user data through this crate: Gate 1b (KDF/key-provider profile), Gates 2–7 and any authority
+  switch remain unadmitted. PR #829.
 - **Documentation (#553):** the Core Migration Ledger (row 9), the Project/Core Compatibility
   Contract and the R-15 storage contract now describe the current state after the #553 no-loss work.
   - Every current-production project load, save, import, snapshot, export and backup path is complete

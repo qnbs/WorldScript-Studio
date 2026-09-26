@@ -48,6 +48,18 @@ fn direct_binding_len(identity: &str) -> usize {
     1 + 4 + identity.len()
 }
 
+/// §6.2: a present identity is never empty. An empty ID would authenticate a record bound to no
+/// owner, and `Some("")` must never collapse into the absent (`None`, tag `0`) project binding.
+fn reject_empty_identities(context: &RecordContext<'_>) -> Result<(), AadError> {
+    if context.logical_record_id.is_empty() {
+        return Err(AadError::EmptyLogicalRecordId);
+    }
+    if context.project_id == Some("") {
+        return Err(AadError::EmptyProjectId);
+    }
+    Ok(())
+}
+
 /// Canonical AAD (§6.2) for `context` over the exact 52-byte routing header.
 ///
 /// Direct-vs-hashed selection is the contract's single deterministic rule: every present identity
@@ -59,13 +71,7 @@ pub fn canonical_aad(
     context: &RecordContext<'_>,
     header: &[u8; HEADER_LEN],
 ) -> Result<Vec<u8>, AadError> {
-    // QNBS-v3 (#445): an empty identity would authenticate a record bound to nothing — reject rather than bind it; an absent project is None, never "".
-    if context.logical_record_id.is_empty() {
-        return Err(AadError::EmptyLogicalRecordId);
-    }
-    if context.project_id == Some("") {
-        return Err(AadError::EmptyProjectId);
-    }
+    reject_empty_identities(context)?;
     let class = context.record_class.token();
     let hash_both = context.logical_record_id.len() > MAX_DIRECT_IDENTITY_LEN
         || context
