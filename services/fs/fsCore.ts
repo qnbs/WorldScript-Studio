@@ -237,6 +237,9 @@ async function tryCreateLock(apis: TauriApis, lockPath: string): Promise<boolean
   }
 }
 
+/** Exclusively creates an empty file (the lock's create_new primitive); false when another writer already holds the path. */
+export const tryCreateExclusiveEmptyFile = tryCreateLock;
+
 /**
  * Serializes an operation against a project file across OS processes via an exclusive-create
  * sibling lock file. Bounded retry only, never an unbounded wait, and never removes a lock it did

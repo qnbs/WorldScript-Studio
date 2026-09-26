@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** desktop projects saved by older versions (before project files carried
+  a schema version) can be opened for editing again. On first open, the file gets a schema version
+  added and nothing else about its content changes. The original file is kept as a "Before schema
+  migration" snapshot first. If the file changed meanwhile, was replaced, or the snapshot cannot be
+  written, the project is left exactly as it was. PR #849.
 - **Data integrity (#553):** importing a project file now keeps its plot board connections,
   subplots and tension overrides, the per-project AI preset, story objects and groups, mind maps
   and character interviews. Before, these were dropped when the file was imported and removed
