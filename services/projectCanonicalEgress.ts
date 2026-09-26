@@ -116,18 +116,20 @@ export async function downloadCanonicalProjectExport(
   project: ProjectData | StoryProject,
   onRefused: (error: unknown) => void,
 ): Promise<boolean> {
-  let raw: CanonicalProjectRawText;
+  // QNBS-v3 (#553 a1): one failure contract for loading and for the browser download itself — any error reports through onRefused and resolves false, and a created object URL is always revoked.
+  let url: string | undefined;
   try {
-    raw = await loadCanonicalEgressRaw(projectId, project);
+    const raw = await loadCanonicalEgressRaw(projectId, project);
+    url = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.download = `${project.title.replace(/\s+/g, '_')}_backup.json`;
+    link.href = url;
+    link.click();
+    return true;
   } catch (error) {
     onRefused(error);
     return false;
+  } finally {
+    if (url !== undefined) URL.revokeObjectURL(url);
   }
-  const url = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
-  const link = document.createElement('a');
-  link.download = `${project.title.replace(/\s+/g, '_')}_backup.json`;
-  link.href = url;
-  link.click();
-  URL.revokeObjectURL(url);
-  return true;
 }

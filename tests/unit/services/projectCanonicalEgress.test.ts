@@ -105,6 +105,40 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
     expect(createObjectURL).not.toHaveBeenCalled();
   });
 
+  // QNBS-v3 (#553 a1): browser-side download failures follow the same contract as a refusal.
+  it('resolves false and reports a failure when the object URL cannot be created', async () => {
+    URL.createObjectURL = vi.fn(() => {
+      throw new Error('blob URL unavailable');
+    });
+    const revoke = vi.fn();
+    URL.revokeObjectURL = revoke;
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+    const onRefused = vi.fn();
+
+    await expect(downloadCanonicalProjectExport('p1', edited as never, onRefused)).resolves.toBe(
+      false,
+    );
+    expect(onRefused).toHaveBeenCalledWith(expect.any(Error));
+    expect(revoke).not.toHaveBeenCalled();
+  });
+
+  it('resolves false and still revokes the URL when the download click fails', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    const revoke = vi.fn();
+    URL.revokeObjectURL = revoke;
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementationOnce(() => {
+      throw new Error('download blocked');
+    });
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+    const onRefused = vi.fn();
+
+    await expect(downloadCanonicalProjectExport('p1', edited as never, onRefused)).resolves.toBe(
+      false,
+    );
+    expect(onRefused).toHaveBeenCalledWith(expect.any(Error));
+    expect(revoke).toHaveBeenCalledWith('blob:x');
+  });
+
   // QNBS-v3 (#553 a1): a completed download resolves true, so callers report success only for a real export.
   it('resolves true after downloading the canonical document', async () => {
     URL.createObjectURL = vi.fn(() => 'blob:x');
