@@ -7,11 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Documentation (#553):** the Core Migration Ledger (row 9), the Project/Core Compatibility
+  Contract and the R-15 storage contract now describe the current state after the #553 no-loss work.
+  - Every current-production project load, save, import, snapshot, export and backup path is complete
+    and preserves stored data.
+  - The switch to a shared Rust project core is still separate future work (#836).
+  - The desktop app no longer falls back to browser storage when its project storage cannot be
+    opened. Browser-storage records from older desktop sessions remain part of the planned R-15
+    migration.
+  - Earlier changelog entries describing the previous fallback are left unchanged as history.
+    PR #846.
 - **Data integrity (#553):** desktop projects saved by older versions (before project files carried
   a schema version) can be opened for editing again. On first open, the file gets a schema version
   added and nothing else about its content changes. The original file is kept as a "Before schema
   migration" snapshot first. If the file changed meanwhile, was replaced, or the snapshot cannot be
-  written, the project is left exactly as it was. PR #849.
+  written, the project file is not replaced; a snapshot already written by then is kept. PR #849.
 - **Data integrity (#553):** importing a project file now keeps its plot board connections,
   subplots and tension overrides, the per-project AI preset, story objects and groups, mind maps
   and character interviews. Before, these were dropped when the file was imported and removed
@@ -23,7 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   success. PR #847.
 - **Data integrity (#553):** if the saved project cannot be loaded into the editor, startup now
   stops on the "project could not be opened" screen with Reload. Before, the browser version started
-  a blank project in its place, and its first save could replace the saved project. The saved data is
+  a blank project in its place, so the saved project was inaccessible in that session; for a saved
+  project the storage layer still accepted as current (for example one whose outline was not a
+  list), that blank project's first save could replace it. Stored values that the storage layer
+  already refused (such as an empty or `null` value) were never overwritten. The saved data is now
   not changed, and no database reset or quarantine is offered for this case. A saved project value
   that is not a project object no longer crashes startup into the "reset database" screen. PR #844.
 - **Data integrity (#553):** if the desktop app cannot open its project storage at startup, it now
