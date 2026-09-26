@@ -7,9 +7,9 @@
 use sha2::{Digest, Sha256};
 use worldscript_secure_storage::envelope::{HEADER_LEN, MAX_CIPHERTEXT_LEN};
 use worldscript_secure_storage::{
-    canonical_aad, open, parse_envelope, seal, AadError, EnvelopeHeader, Key, OpenError,
-    RandomSource, RandomnessUnavailable, RecordClass, RecordContext, RecordMeta, SealError,
-    SealTarget,
+    canonical_aad, open, parse_envelope, seal, seal_with_random, AadError, EnvelopeHeader, Key,
+    OpenError, RandomSource, RandomnessUnavailable, RecordClass, RecordContext, RecordMeta,
+    SealError, SealTarget,
 };
 
 /// §6.1 normative header fixture: epoch 7, generation 3, schema 1, nonce 00..0b, ciphertext_len 19.
@@ -104,7 +104,7 @@ fn canonical_aad_matches_independent_vectors_for_absent_and_present_project() {
 #[test]
 fn seal_produces_the_independent_vector_envelopes() {
     for (project, ct) in [(None, CT_ABSENT_HEX), (Some("proj-1"), CT_PRESENT_HEX)] {
-        let envelope = seal(
+        let envelope = seal_with_random(
             &test_key(),
             &mut FixedNonce,
             &SealTarget {
@@ -185,7 +185,7 @@ fn direct_cap_is_exactly_256_bytes_and_hashes_both_fields_above_it() {
 
 #[test]
 fn any_context_substitution_is_tampered() {
-    let envelope = seal(
+    let envelope = seal_with_random(
         &test_key(),
         &mut FixedNonce,
         &SealTarget {
@@ -229,7 +229,7 @@ fn any_context_substitution_is_tampered() {
 
 #[test]
 fn modifying_any_header_or_ciphertext_byte_is_tampered_or_rejected() {
-    let envelope = seal(
+    let envelope = seal_with_random(
         &test_key(),
         &mut FixedNonce,
         &SealTarget {
@@ -254,7 +254,7 @@ fn modifying_any_header_or_ciphertext_byte_is_tampered_or_rejected() {
 
 #[test]
 fn parser_rejects_malformed_and_unsupported_envelopes_without_plaintext_fallback() {
-    let good = seal(
+    let good = seal_with_random(
         &test_key(),
         &mut FixedNonce,
         &SealTarget {
@@ -316,7 +316,7 @@ fn parser_rejects_malformed_and_unsupported_envelopes_without_plaintext_fallback
 #[test]
 fn sealing_fails_closed_without_secure_randomness() {
     assert_eq!(
-        seal(
+        seal_with_random(
             &test_key(),
             &mut NoRandomness,
             &SealTarget {
@@ -331,10 +331,8 @@ fn sealing_fails_closed_without_secure_randomness() {
 
 #[test]
 fn os_randomness_produces_distinct_nonces() {
-    let mut random = worldscript_secure_storage::OsRandom;
     let a = seal(
         &test_key(),
-        &mut random,
         &SealTarget {
             context: snapshot(None),
             meta: META,
@@ -344,7 +342,6 @@ fn os_randomness_produces_distinct_nonces() {
     .unwrap();
     let b = seal(
         &test_key(),
-        &mut random,
         &SealTarget {
             context: snapshot(None),
             meta: META,
@@ -376,7 +373,7 @@ fn empty_identities_are_rejected_not_bound() {
         Err(AadError::EmptyProjectId)
     );
     assert_eq!(
-        seal(
+        seal_with_random(
             &test_key(),
             &mut FixedNonce,
             &SealTarget {
@@ -403,7 +400,7 @@ fn record_class_registry_round_trips_and_refuses_unknown_tokens() {
 #[test]
 fn seal_builds_the_envelope_in_one_exactly_sized_buffer() {
     let plaintext = vec![0x5A; 4096];
-    let envelope = seal(
+    let envelope = seal_with_random(
         &test_key(),
         &mut FixedNonce,
         &SealTarget {
@@ -433,7 +430,7 @@ fn seal_refuses_one_byte_past_the_64_mib_ciphertext_bound() {
     // nonce is drawn or encryption starts (the accepting side is covered by the parser bound tests).
     let over = vec![0u8; (MAX_CIPHERTEXT_LEN - 16) as usize + 1];
     assert_eq!(
-        seal(
+        seal_with_random(
             &test_key(),
             &mut NoRandomness,
             &SealTarget {
@@ -455,7 +452,7 @@ fn key_construction_zeroizes_the_source_buffer() {
 
 #[test]
 fn debug_output_never_contains_the_nonce() {
-    let envelope = seal(
+    let envelope = seal_with_random(
         &test_key(),
         &mut FixedNonce,
         &SealTarget {
@@ -476,7 +473,7 @@ fn debug_output_never_contains_the_nonce() {
 
 #[test]
 fn parsed_header_is_always_decoded_from_the_authenticated_bytes() {
-    let envelope = seal(
+    let envelope = seal_with_random(
         &test_key(),
         &mut FixedNonce,
         &SealTarget {
@@ -490,4 +487,42 @@ fn parsed_header_is_always_decoded_from_the_authenticated_bytes() {
     assert_eq!(parsed.header().encode(), *parsed.header_bytes());
     assert_eq!(&envelope[..HEADER_LEN], parsed.header_bytes());
     assert_eq!(&envelope[HEADER_LEN..], parsed.ciphertext());
+}
+
+#[test]
+fn unassigned_or_terminal_counters_are_refused_before_sealing() {
+    for (key_epoch, record_generation) in [(0, 3), (7, 0), (u64::MAX, 3), (7, u64::MAX)] {
+        let meta = RecordMeta {
+            key_epoch,
+            record_generation,
+            record_schema: 1,
+        };
+        assert_eq!(
+            seal_with_random(
+                &test_key(),
+                &mut NoRandomness,
+                &SealTarget {
+                    context: snapshot(None),
+                    meta
+                },
+                b"abc",
+            ),
+            Err(SealError::UnassignedCounter)
+        );
+    }
+}
+
+#[test]
+fn record_context_debug_redacts_identities() {
+    let context = snapshot(Some("proj-1"));
+    let rendered = format!(
+        "{:?}",
+        SealTarget {
+            context,
+            meta: META
+        }
+    );
+    assert!(!rendered.contains("snap-1"), "{rendered}");
+    assert!(!rendered.contains("proj-1"), "{rendered}");
+    assert!(rendered.contains("logical_record_id_len: 6"), "{rendered}");
 }

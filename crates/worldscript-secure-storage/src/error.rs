@@ -16,6 +16,8 @@ pub enum SealError {
     /// Plaintext plus tag exceeds the 64 MiB version-1 bound; larger records need the chunked envelope.
     TooLarge,
     InvalidContext(AadError),
+    /// §5.4: `key_epoch` or `record_generation` is `0` (unassigned) or `u64::MAX` (terminal).
+    UnassignedCounter,
 }
 
 /// Semantic open/parse failures, mapped from §7. Key-resolution outcomes (locked, wrong key) belong

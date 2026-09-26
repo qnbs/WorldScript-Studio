@@ -18,12 +18,23 @@ const TAG_HASHED: u8 = 2;
 const HASHED_BINDING_LEN: usize = 1 + 32;
 
 /// The caller-supplied logical context authenticated as AAD (§6.1.1): never stored in the envelope,
-/// so it must come from verified ownership records, not from the bytes being opened.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// so it must come from verified ownership records, not from the bytes being opened. `Debug` shows
+/// only the class and identity lengths: logical and project IDs may be user-derived (§14).
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct RecordContext<'a> {
     pub record_class: RecordClass,
     pub logical_record_id: &'a str,
     pub project_id: Option<&'a str>,
+}
+
+impl std::fmt::Debug for RecordContext<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RecordContext")
+            .field("record_class", &self.record_class)
+            .field("logical_record_id_len", &self.logical_record_id.len())
+            .field("project_id_len", &self.project_id.map(str::len))
+            .finish()
+    }
 }
 
 fn push_length_prefixed(out: &mut Vec<u8>, bytes: &[u8]) {

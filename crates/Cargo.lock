@@ -336,6 +336,7 @@ dependencies = [
  "aes-gcm",
  "getrandom",
  "sha2",
+ "worldscript-secure-storage",
  "zeroize",
  "zeroize_derive",
 ]

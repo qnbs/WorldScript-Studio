@@ -21,8 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fixture were cross-checked against an independent non-Rust implementation; tests also cover every
   malformed-length case, the 64 MiB bound, and record, project, class, generation, header-byte and
   wrong-key substitution. A parsed envelope is read-only, so the generation a caller checks is always
-  the one `open` authenticates; `Debug` output redacts the nonce; and building a `Key` clears the
-  caller's source buffer. The contract now states that a present `project_id` must be non-empty,
+  the one `open` authenticates; `Debug` output redacts the nonce and the logical/project IDs;
+  building a `Key` clears the caller's source buffer; the public `seal` always draws its nonce from
+  the OS CSPRNG (injection exists only behind a test-only feature); and sealing refuses an
+  unassigned (`0`) or terminal (`u64::MAX`) epoch or generation (§5.4). The contract now states that a present `project_id` must be non-empty,
   that AEAD success does not prove an envelope is the latest committed generation, defines the
   Gate 1a/1b split, and corrects its stale `S5_TERMINAL` status. Nothing reads or writes current
   user data through this crate: Gate 1b (KDF/key-provider profile), Gates 2–7 and any authority

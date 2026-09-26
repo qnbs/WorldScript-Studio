@@ -5,7 +5,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::aad::{canonical_aad, RecordContext};
 use crate::envelope::{EnvelopeHeader, ParsedEnvelope, MAX_CIPHERTEXT_LEN, NONCE_LEN, TAG_LEN};
 use crate::error::{OpenError, SealError};
-use crate::random::RandomSource;
+use crate::random::{OsRandom, RandomSource};
 
 /// Opaque 32-byte AES-256 key material, zeroized on drop. Deliberately not `Debug`/`Clone`, so it
 /// cannot be printed or silently duplicated.
@@ -41,16 +41,44 @@ fn cipher(key: &Key) -> Aes256Gcm {
     Aes256Gcm::new(aes_gcm::Key::<Aes256Gcm>::from_slice(&key.0))
 }
 
-/// Encrypts `plaintext` into a complete `WSR1` envelope (header ‖ ciphertext ‖ tag). A fresh nonce
-/// comes from `random` for every call; if it cannot be produced, sealing fails instead of reusing or
-/// deriving one (§6.3).
-pub fn seal(
+/// Encrypts `plaintext` into a complete `WSR1` envelope (header ‖ ciphertext ‖ tag). Every call draws
+/// a fresh nonce from the OS CSPRNG; if it cannot be produced, sealing fails instead of reusing or
+/// deriving one (§6.3). Callers cannot supply their own nonce source.
+pub fn seal(key: &Key, target: &SealTarget<'_>, plaintext: &[u8]) -> Result<Vec<u8>, SealError> {
+    seal_inner(key, &mut OsRandom, target, plaintext)
+}
+
+/// Test-vector hook (§16): [`seal`] with an injected nonce source. Only compiled with the
+/// `test-randomness` feature, which production builds never enable.
+#[cfg(feature = "test-randomness")]
+pub fn seal_with_random(
+    key: &Key,
+    random: &mut impl RandomSource,
+    target: &SealTarget<'_>,
+    plaintext: &[u8],
+) -> Result<Vec<u8>, SealError> {
+    seal_inner(key, random, target, plaintext)
+}
+
+/// §5.4: `0` means "unassigned" and reaching `u64::MAX` is `RECOVERY_REQUIRED`, so neither is ever a
+/// valid committed epoch or record generation.
+fn check_counters(meta: &RecordMeta) -> Result<(), SealError> {
+    let assigned = |value: u64| value != 0 && value != u64::MAX;
+    if assigned(meta.key_epoch) && assigned(meta.record_generation) {
+        Ok(())
+    } else {
+        Err(SealError::UnassignedCounter)
+    }
+}
+
+fn seal_inner(
     key: &Key,
     random: &mut impl RandomSource,
     target: &SealTarget<'_>,
     plaintext: &[u8],
 ) -> Result<Vec<u8>, SealError> {
     let SealTarget { context, meta } = *target;
+    check_counters(&meta)?;
     let ciphertext_len = (plaintext.len() as u64)
         .checked_add(TAG_LEN as u64)
         .filter(|len| *len <= MAX_CIPHERTEXT_LEN)

@@ -17,4 +17,6 @@ pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
 pub use error::{AadError, OpenError, SealError};
 pub use random::{OsRandom, RandomSource, RandomnessUnavailable};
 pub use record_class::RecordClass;
+#[cfg(feature = "test-randomness")]
+pub use seal::seal_with_random;
 pub use seal::{open, seal, Key, RecordMeta, SealTarget};

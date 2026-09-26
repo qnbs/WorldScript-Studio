@@ -19,3 +19,11 @@ sha2 = "0.10"
 zeroize = { version = "~1.8", features = ["derive"] }
 # Direct pin for the same reason: zeroize_derive 1.5 also requires Rust 1.85.
 zeroize_derive = "~1.4"
+
+[features]
+# Test-only: exposes `seal_with_random` and `RandomSource` so the fixed vectors can inject a known
+# nonce (§16). Production callers never enable it; the public `seal` always uses the OS CSPRNG.
+test-randomness = []
+
+[dev-dependencies]
+worldscript-secure-storage = { path = ".", features = ["test-randomness"] }
