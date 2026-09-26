@@ -19,7 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     PR #846.
 - **Data integrity (#553):** if the saved project cannot be loaded into the editor, startup now
   stops on the "project could not be opened" screen with Reload. Before, the browser version started
-  a blank project in its place, and its first save could replace the saved project. The saved data is
+  a blank project in its place, so the saved project was inaccessible in that session; for a saved
+  project the storage layer still accepted as current (for example one whose outline was not a
+  list), that blank project's first save could replace it. Stored values that the storage layer
+  already refused (such as an empty or `null` value) were never overwritten. The saved data is now
   not changed, and no database reset or quarantine is offered for this case. A saved project value
   that is not a project object no longer crashes startup into the "reset database" screen. PR #844.
 - **Data integrity (#553):** if the desktop app cannot open its project storage at startup, it now
