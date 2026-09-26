@@ -4,9 +4,11 @@
 
 **Status:** ADMITTED — maintainer-approved at the contract/design level, including §9's decision
 rows 1–19 and the post-signoff refinements recorded below them. `PROPOSED = YES`, `ADMITTED = YES`,
-`IMPLEMENTATION_STARTED = YES`, `authority switch = NO`, `implementation incomplete`. This
-document remains the binding contract while the admitted #553 implementation slices progress; it
-does not itself switch production authority. It resolves the two decisions that
+`IMPLEMENTATION_STARTED = YES`, `current-production implementation = COMPLETE (#553, final
+acceptance QNB-99)`, `authority switch = NO (#836)`. This document remains the binding semantic
+contract. #553 implemented it for the current TypeScript authority across every current-production
+Project ingress, writer and egress path. The renderer-neutral Rust Core authority switch it gates is
+separate future work (#836); this document does not itself switch production authority. It resolves the two decisions that
 `CORE-MIGRATION-LEDGER.md` row 9 and issue `#553` both identify as blocking further work on the Wave
 2 project state-shape compatibility adapter — and, transitively, the Wave 2 prerequisite gate that
 R-15 (`#445`) implementation sits behind.
@@ -20,12 +22,18 @@ codebase).
 **Scope:** Decides (1) where persisted project schema-version authority lives, its legacy/current/
 future semantics, and its migration state machine; and (2) a field-class-staged unknown-field
 policy that can never silently drop persisted user data. Defines the authority-switch admission
-gates issue #553 asks for. The admitted implementation is progressing in separate causal #553
-slices but remains incomplete; this contract does not touch R-15/#445's separate encryption-envelope
+gates issue #553 asks for. The admitted current-production implementation is complete through
+the #553 slices (PRs #773–#844); the Rust Core authority switch remains separate (#836). This
+contract does not touch R-15/#445's separate encryption-envelope
 security contract and does not change current write authority (TypeScript remains sole authority;
 the Rust shadow comparison remains observation-only).
 
 ## 1. Current truth (baseline)
+
+> Scope note: §1 describes the code at the baseline commit above, which is the analysis this
+> contract was decided on. Several baseline gaps it names (for example §1.4's default dropping of
+> unknown fields) have since been closed for the current TypeScript authority by the #553
+> implementation. `CORE-MIGRATION-LEDGER.md` row 9 records the current state.
 
 ### 1.1 The existing Rust migration proof is a harness demonstration, not production history
 
@@ -917,9 +925,18 @@ a contract invariant" is never mistaken for "already implemented"): the specific
 universal ingress admission (§2.8 — stored-project load, filesystem load, IDB load, file/backup
 import, snapshot restore, recovery restore, future native/Qt open), identity-bearing collection
 merge (§3.2), the write-back overlay mechanism (§3.1/§3.2), `LEGACY_TO_V1` (§2.4), the pre-contract
-downgrade barrier (§2.7), and the `MALFORMED` recovery fix (§2.4's correction) are all
-`IMPLEMENTATION_REQUIRED` — none exist in code today. This document admits the invariants they must
-satisfy; it does not implement any of them.
+downgrade barrier (§2.7), and the `MALFORMED` recovery fix (§2.4's correction) were
+`IMPLEMENTATION_REQUIRED` when this document was admitted. **Current status (#553 final acceptance,
+QNB-99):**
+- Implemented for the current TypeScript authority by the #553 PRs #773–#844: stored-project,
+  filesystem and IDB load admission; file import; snapshot restore; the collection merge and
+  write-back overlay; `LEGACY_TO_V1` (in memory and durable); the §2.7 downgrade barrier; and
+  preserve-first refusal of unloadable or `MALFORMED` records.
+- Not implemented, and not required for #553: "recovery restore", which has no current product
+  entry point, and "future native/Qt open", which belongs to the Rust Core authority switch (#836).
+
+This document admits the invariants; the implementations live in the code and tests cited in
+`CORE-MIGRATION-LEDGER.md` row 9.
 
 **Post-signoff refinements (do not reopen rows 1–19):** after maintainer sign-off on this document's
 decisions, automatic review surfaced six concrete gaps in how those already-approved decisions were
@@ -983,5 +1000,7 @@ as `IMPLEMENTATION_REQUIRED` or a stated non-issue — never absorbed as another
 
 All 19 rows above are confirmed. This document's status line reflects `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
-criterion. Implementation has begun in subsequent causal #553 PRs, while the authority switch and
-the remaining admission, no-loss, migration, fencing, and egress gates remain incomplete.
+criterion. The current-production implementation (admission, no-loss, migration, fencing and
+egress for the current TypeScript authority) is complete through the #553 PRs #773–#844, with final
+acceptance in QNB-99. The authority switch to a renderer-neutral Rust Project Core is not done; it is
+tracked as #836.

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Documentation (#553):** the Core Migration Ledger (row 9), the Project/Core Compatibility
+  Contract and the R-15 storage contract now describe the current state after the #553 no-loss work.
+  - Every current-production project load, save, import, snapshot, export and backup path is complete
+    and preserves stored data.
+  - The switch to a shared Rust project core is still separate future work (#836).
+  - The desktop app no longer falls back to browser storage when its project storage cannot be
+    opened. Browser-storage records from older desktop sessions remain part of the planned R-15
+    migration.
+  - Earlier changelog entries describing the previous fallback are left unchanged as history.
+    PR #846.
 - **Data integrity (#553):** if the saved project cannot be loaded into the editor, startup now
   stops on the "project could not be opened" screen with Reload. Before, the browser version started
   a blank project in its place, and its first save could replace the saved project. The saved data is
