@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still honors Rust 1.77.2 (`argon2` 0.5.3, `base64ct` held on 1.6). The contract records the
   decision and specifies the KDF and package format (§8.2/§8.2.1). No platform secure store, no
   TypeScript/Tauri wiring, and no user data are involved yet: the platform adapter is Gate 1b's
-  next slice, Gates 2–7 stay unadmitted, and there is no production authority switch. PR #PRNUM.
+  next slice, Gates 2–7 stay unadmitted, and there is no production authority switch. PR #850.
 - **R-15 Gate 1a (#445):** first renderer-neutral protected-storage code, a new headless crate
   `crates/worldscript-secure-storage`, re-admitted by the QNB-100 readiness verdict. It implements the
   contract's `WSR1` 52-byte envelope header with strict version-1 parsing (§6.1/§6.1.2 bounds,
