@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::error::OpenError;
 
 pub const MAGIC: [u8; 4] = *b"WSR1";
@@ -11,8 +13,9 @@ pub const TAG_LEN: usize = 16;
 pub const MAX_CIPHERTEXT_LEN: u64 = 64 * 1024 * 1024;
 
 /// The authenticated routing fields of a version-1 envelope (§6.1). Version and suite are fixed by
-/// the type rather than stored, so a header built here can never claim an unadmitted suite.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// the type rather than stored, so a header built here can never claim an unadmitted suite. `Debug`
+/// redacts the nonce (the AES-GCM IV), which must never reach logs.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct EnvelopeHeader {
     pub key_epoch: u64,
     pub record_generation: u64,
@@ -37,12 +40,54 @@ impl EnvelopeHeader {
     }
 }
 
+impl fmt::Debug for EnvelopeHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EnvelopeHeader")
+            .field("key_epoch", &self.key_epoch)
+            .field("record_generation", &self.record_generation)
+            .field("record_schema", &self.record_schema)
+            .field("nonce", &"<redacted>")
+            .field("ciphertext_len", &self.ciphertext_len)
+            .finish()
+    }
+}
+
 /// A parsed envelope borrowing its ciphertext — nothing is allocated from envelope-controlled lengths.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Only [`parse_envelope`] constructs it and its fields are private, so the decoded header a caller
+/// checks (epoch, generation) is always the one decoded from the exact header bytes that `open`
+/// authenticates; a caller cannot pair a fresh generation with an older envelope's bytes.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ParsedEnvelope<'a> {
-    pub header: EnvelopeHeader,
-    pub header_bytes: [u8; HEADER_LEN],
-    pub ciphertext: &'a [u8],
+    header: EnvelopeHeader,
+    header_bytes: [u8; HEADER_LEN],
+    ciphertext: &'a [u8],
+}
+
+impl<'a> ParsedEnvelope<'a> {
+    /// Routing fields decoded from [`Self::header_bytes`].
+    pub fn header(&self) -> &EnvelopeHeader {
+        &self.header
+    }
+
+    /// The exact 52 header bytes, authenticated as part of the AAD.
+    pub fn header_bytes(&self) -> &[u8; HEADER_LEN] {
+        &self.header_bytes
+    }
+
+    /// Ciphertext including the trailing 16-byte tag.
+    pub fn ciphertext(&self) -> &'a [u8] {
+        self.ciphertext
+    }
+}
+
+impl fmt::Debug for ParsedEnvelope<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ParsedEnvelope")
+            .field("header", &self.header)
+            .field("ciphertext_len", &self.ciphertext.len())
+            .finish_non_exhaustive()
+    }
 }
 
 fn be_u32(bytes: &[u8]) -> u32 {

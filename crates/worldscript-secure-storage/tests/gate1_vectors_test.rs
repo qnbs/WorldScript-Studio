@@ -9,6 +9,7 @@ use worldscript_secure_storage::envelope::{HEADER_LEN, MAX_CIPHERTEXT_LEN};
 use worldscript_secure_storage::{
     canonical_aad, open, parse_envelope, seal, AadError, EnvelopeHeader, Key, OpenError,
     RandomSource, RandomnessUnavailable, RecordClass, RecordContext, RecordMeta, SealError,
+    SealTarget,
 };
 
 /// §6.1 normative header fixture: epoch 7, generation 3, schema 1, nonce 00..0b, ciphertext_len 19.
@@ -43,7 +44,7 @@ fn test_key() -> Key {
     for (i, b) in bytes.iter_mut().enumerate() {
         *b = i as u8;
     }
-    Key::from_bytes(bytes)
+    Key::from_bytes(&mut bytes)
 }
 
 struct FixedNonce;
@@ -106,8 +107,10 @@ fn seal_produces_the_independent_vector_envelopes() {
         let envelope = seal(
             &test_key(),
             &mut FixedNonce,
-            &snapshot(project),
-            META,
+            &SealTarget {
+                context: snapshot(project),
+                meta: META,
+            },
             b"abc",
         )
         .unwrap();
@@ -121,8 +124,8 @@ fn open_round_trips_the_vectors() {
     for (project, ct) in [(None, CT_ABSENT_HEX), (Some("proj-1"), CT_PRESENT_HEX)] {
         let bytes = [unhex(CONTRACT_HEADER_HEX), unhex(ct)].concat();
         let parsed = parse_envelope(&bytes).unwrap();
-        assert_eq!(parsed.header.key_epoch, 7);
-        assert_eq!(parsed.header.record_generation, 3);
+        assert_eq!(parsed.header().key_epoch, 7);
+        assert_eq!(parsed.header().record_generation, 3);
         assert_eq!(
             open(&test_key(), &snapshot(project), &parsed).unwrap(),
             b"abc"
@@ -185,8 +188,10 @@ fn any_context_substitution_is_tampered() {
     let envelope = seal(
         &test_key(),
         &mut FixedNonce,
-        &snapshot(Some("proj-1")),
-        META,
+        &SealTarget {
+            context: snapshot(Some("proj-1")),
+            meta: META,
+        },
         b"abc",
     )
     .unwrap();
@@ -215,7 +220,7 @@ fn any_context_substitution_is_tampered() {
             Err(OpenError::Tampered)
         );
     }
-    let wrong_key = Key::from_bytes([0xAA; 32]);
+    let wrong_key = Key::from_bytes(&mut [0xAA; 32]);
     assert_eq!(
         open(&wrong_key, &snapshot(Some("proj-1")), &parsed),
         Err(OpenError::Tampered)
@@ -224,7 +229,16 @@ fn any_context_substitution_is_tampered() {
 
 #[test]
 fn modifying_any_header_or_ciphertext_byte_is_tampered_or_rejected() {
-    let envelope = seal(&test_key(), &mut FixedNonce, &snapshot(None), META, b"abc").unwrap();
+    let envelope = seal(
+        &test_key(),
+        &mut FixedNonce,
+        &SealTarget {
+            context: snapshot(None),
+            meta: META,
+        },
+        b"abc",
+    )
+    .unwrap();
     // Header routing fields that parse successfully must still be authenticated via AAD.
     for index in (12..44).chain(HEADER_LEN..envelope.len()) {
         let mut modified = envelope.clone();
@@ -240,7 +254,16 @@ fn modifying_any_header_or_ciphertext_byte_is_tampered_or_rejected() {
 
 #[test]
 fn parser_rejects_malformed_and_unsupported_envelopes_without_plaintext_fallback() {
-    let good = seal(&test_key(), &mut FixedNonce, &snapshot(None), META, b"abc").unwrap();
+    let good = seal(
+        &test_key(),
+        &mut FixedNonce,
+        &SealTarget {
+            context: snapshot(None),
+            meta: META,
+        },
+        b"abc",
+    )
+    .unwrap();
     let with = |offset: usize, bytes: &[u8]| {
         let mut out = good.clone();
         out[offset..offset + bytes.len()].copy_from_slice(bytes);
@@ -296,9 +319,11 @@ fn sealing_fails_closed_without_secure_randomness() {
         seal(
             &test_key(),
             &mut NoRandomness,
-            &snapshot(None),
-            META,
-            b"abc"
+            &SealTarget {
+                context: snapshot(None),
+                meta: META
+            },
+            b"abc",
         ),
         Err(SealError::RandomnessUnavailable)
     );
@@ -307,8 +332,26 @@ fn sealing_fails_closed_without_secure_randomness() {
 #[test]
 fn os_randomness_produces_distinct_nonces() {
     let mut random = worldscript_secure_storage::OsRandom;
-    let a = seal(&test_key(), &mut random, &snapshot(None), META, b"abc").unwrap();
-    let b = seal(&test_key(), &mut random, &snapshot(None), META, b"abc").unwrap();
+    let a = seal(
+        &test_key(),
+        &mut random,
+        &SealTarget {
+            context: snapshot(None),
+            meta: META,
+        },
+        b"abc",
+    )
+    .unwrap();
+    let b = seal(
+        &test_key(),
+        &mut random,
+        &SealTarget {
+            context: snapshot(None),
+            meta: META,
+        },
+        b"abc",
+    )
+    .unwrap();
     assert_ne!(a[32..44], b[32..44], "each encryption gets a fresh nonce");
     assert_eq!(
         open(&test_key(), &snapshot(None), &parse_envelope(&a).unwrap()).unwrap(),
@@ -333,7 +376,15 @@ fn empty_identities_are_rejected_not_bound() {
         Err(AadError::EmptyProjectId)
     );
     assert_eq!(
-        seal(&test_key(), &mut FixedNonce, &empty_id, META, b"abc"),
+        seal(
+            &test_key(),
+            &mut FixedNonce,
+            &SealTarget {
+                context: empty_id,
+                meta: META
+            },
+            b"abc",
+        ),
         Err(SealError::InvalidContext(AadError::EmptyLogicalRecordId))
     );
 }
@@ -355,8 +406,10 @@ fn seal_builds_the_envelope_in_one_exactly_sized_buffer() {
     let envelope = seal(
         &test_key(),
         &mut FixedNonce,
-        &snapshot(Some("proj-1")),
-        META,
+        &SealTarget {
+            context: snapshot(Some("proj-1")),
+            meta: META,
+        },
         &plaintext,
     )
     .unwrap();
@@ -364,7 +417,10 @@ fn seal_builds_the_envelope_in_one_exactly_sized_buffer() {
     assert_eq!(envelope.len(), HEADER_LEN + plaintext.len() + 16);
     assert_eq!(envelope.capacity(), envelope.len());
     let parsed = parse_envelope(&envelope).unwrap();
-    assert_eq!(parsed.header.ciphertext_len, (plaintext.len() + 16) as u64);
+    assert_eq!(
+        parsed.header().ciphertext_len,
+        (plaintext.len() + 16) as u64
+    );
     assert_eq!(
         open(&test_key(), &snapshot(Some("proj-1")), &parsed).unwrap(),
         plaintext
@@ -377,7 +433,61 @@ fn seal_refuses_one_byte_past_the_64_mib_ciphertext_bound() {
     // nonce is drawn or encryption starts (the accepting side is covered by the parser bound tests).
     let over = vec![0u8; (MAX_CIPHERTEXT_LEN - 16) as usize + 1];
     assert_eq!(
-        seal(&test_key(), &mut NoRandomness, &snapshot(None), META, &over),
+        seal(
+            &test_key(),
+            &mut NoRandomness,
+            &SealTarget {
+                context: snapshot(None),
+                meta: META
+            },
+            &over,
+        ),
         Err(SealError::TooLarge)
     );
+}
+
+#[test]
+fn key_construction_zeroizes_the_source_buffer() {
+    let mut source = [0x42u8; 32];
+    let _key = Key::from_bytes(&mut source);
+    assert_eq!(source, [0u8; 32]);
+}
+
+#[test]
+fn debug_output_never_contains_the_nonce() {
+    let envelope = seal(
+        &test_key(),
+        &mut FixedNonce,
+        &SealTarget {
+            context: snapshot(None),
+            meta: META,
+        },
+        b"abc",
+    )
+    .unwrap();
+    let parsed = parse_envelope(&envelope).unwrap();
+    let nonce_bytes = format!("{:?}", parsed.header().nonce);
+    for rendered in [format!("{:?}", parsed), format!("{:?}", parsed.header())] {
+        assert!(rendered.contains("<redacted>"), "{rendered}");
+        assert!(!rendered.contains(&nonce_bytes), "{rendered}");
+        assert!(!rendered.contains("000102030405060708090a0b"), "{rendered}");
+    }
+}
+
+#[test]
+fn parsed_header_is_always_decoded_from_the_authenticated_bytes() {
+    let envelope = seal(
+        &test_key(),
+        &mut FixedNonce,
+        &SealTarget {
+            context: snapshot(None),
+            meta: META,
+        },
+        b"abc",
+    )
+    .unwrap();
+    let parsed = parse_envelope(&envelope).unwrap();
+    assert_eq!(parsed.header().encode(), *parsed.header_bytes());
+    assert_eq!(&envelope[..HEADER_LEN], parsed.header_bytes());
+    assert_eq!(&envelope[HEADER_LEN..], parsed.ciphertext());
 }

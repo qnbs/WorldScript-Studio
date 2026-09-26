@@ -17,4 +17,4 @@ pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
 pub use error::{AadError, OpenError, SealError};
 pub use random::{OsRandom, RandomSource, RandomnessUnavailable};
 pub use record_class::RecordClass;
-pub use seal::{open, seal, Key, RecordMeta};
+pub use seal::{open, seal, Key, RecordMeta, SealTarget};

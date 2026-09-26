@@ -48,6 +48,43 @@ fn direct_binding_len(identity: &str) -> usize {
     1 + 4 + identity.len()
 }
 
+/// The one binding form shared by both identity fields (§6.2 rule D: never mixed).
+#[derive(Clone, Copy)]
+enum IdentityForm {
+    Direct,
+    Hashed,
+}
+
+impl IdentityForm {
+    fn encoded_len(self, identity: &str) -> usize {
+        match self {
+            IdentityForm::Direct => direct_binding_len(identity),
+            IdentityForm::Hashed => HASHED_BINDING_LEN,
+        }
+    }
+
+    fn push(self, out: &mut Vec<u8>, hash_domain: &[u8], identity: &str) {
+        match self {
+            IdentityForm::Direct => {
+                out.push(TAG_DIRECT);
+                push_length_prefixed(out, identity.as_bytes());
+            }
+            IdentityForm::Hashed => out.extend_from_slice(&hashed_binding(hash_domain, identity)),
+        }
+    }
+}
+
+/// Every present identity field is direct only if each is within the 256-byte cap; otherwise both
+/// present fields are hashed.
+fn identity_form(context: &RecordContext<'_>) -> IdentityForm {
+    let over_cap = |id: &str| id.len() > MAX_DIRECT_IDENTITY_LEN;
+    if over_cap(context.logical_record_id) || context.project_id.is_some_and(over_cap) {
+        IdentityForm::Hashed
+    } else {
+        IdentityForm::Direct
+    }
+}
+
 /// §6.2: a present identity is never empty. An empty ID would authenticate a record bound to no
 /// owner, and `Some("")` must never collapse into the absent (`None`, tag `0`) project binding.
 fn reject_empty_identities(context: &RecordContext<'_>) -> Result<(), AadError> {
@@ -73,22 +110,15 @@ pub fn canonical_aad(
 ) -> Result<Vec<u8>, AadError> {
     reject_empty_identities(context)?;
     let class = context.record_class.token();
-    let hash_both = context.logical_record_id.len() > MAX_DIRECT_IDENTITY_LEN
-        || context
-            .project_id
-            .is_some_and(|id| id.len() > MAX_DIRECT_IDENTITY_LEN);
-
-    let identity_len = if hash_both {
-        HASHED_BINDING_LEN
-    } else {
-        direct_binding_len(context.logical_record_id)
-    };
-    let project_len = match context.project_id {
-        None => 1,
-        Some(_) if hash_both => HASHED_BINDING_LEN,
-        Some(id) => direct_binding_len(id),
-    };
-    let total = 4 + DOMAIN.len() + 4 + class.len() + identity_len + project_len + HEADER_LEN;
+    let form = identity_form(context);
+    let project_len = context.project_id.map_or(1, |id| form.encoded_len(id));
+    let total = 4
+        + DOMAIN.len()
+        + 4
+        + class.len()
+        + form.encoded_len(context.logical_record_id)
+        + project_len
+        + HEADER_LEN;
     if total > MAX_AAD_LEN {
         return Err(AadError::ExceedsMaximum);
     }
@@ -96,22 +126,10 @@ pub fn canonical_aad(
     let mut out = Vec::with_capacity(total);
     push_length_prefixed(&mut out, DOMAIN.as_bytes());
     push_length_prefixed(&mut out, class.as_bytes());
-    if hash_both {
-        out.extend_from_slice(&hashed_binding(
-            LOGICAL_ID_HASH_DOMAIN,
-            context.logical_record_id,
-        ));
-    } else {
-        out.push(TAG_DIRECT);
-        push_length_prefixed(&mut out, context.logical_record_id.as_bytes());
-    }
+    form.push(&mut out, LOGICAL_ID_HASH_DOMAIN, context.logical_record_id);
     match context.project_id {
         None => out.push(TAG_ABSENT),
-        Some(id) if hash_both => out.extend_from_slice(&hashed_binding(PROJECT_ID_HASH_DOMAIN, id)),
-        Some(id) => {
-            out.push(TAG_DIRECT);
-            push_length_prefixed(&mut out, id.as_bytes());
-        }
+        Some(id) => form.push(&mut out, PROJECT_ID_HASH_DOMAIN, id),
     }
     out.extend_from_slice(header);
     debug_assert_eq!(out.len(), total);
