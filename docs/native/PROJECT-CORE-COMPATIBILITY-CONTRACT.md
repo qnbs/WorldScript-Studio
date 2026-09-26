@@ -4,8 +4,8 @@
 
 **Status:** ADMITTED — maintainer-approved at the contract/design level, including §9's decision
 rows 1–19 and the post-signoff refinements recorded below them. `PROPOSED = YES`, `ADMITTED = YES`,
-`IMPLEMENTATION_STARTED = YES`, `current-production implementation = COMPLETE (#553, final
-acceptance QNB-99)`, `authority switch = NO (#836)`. This document remains the binding semantic
+`IMPLEMENTATION_STARTED = YES`, `current-production implementation = COMPLETE (#553; terminal acceptance pending in
+QNB-99)`, `authority switch = NO (#836)`. This document remains the binding semantic
 contract. #553 implemented it for the current TypeScript authority across every current-production
 Project ingress, writer and egress path. The renderer-neutral Rust Core authority switch it gates is
 separate future work (#836); this document does not itself switch production authority. It resolves the two decisions that
@@ -926,8 +926,7 @@ universal ingress admission (§2.8 — stored-project load, filesystem load, IDB
 import, snapshot restore, recovery restore, future native/Qt open), identity-bearing collection
 merge (§3.2), the write-back overlay mechanism (§3.1/§3.2), `LEGACY_TO_V1` (§2.4), the pre-contract
 downgrade barrier (§2.7), and the `MALFORMED` recovery fix (§2.4's correction) were
-`IMPLEMENTATION_REQUIRED` when this document was admitted. **Current status (#553 final acceptance,
-QNB-99):**
+`IMPLEMENTATION_REQUIRED` when this document was admitted. **Current status (#553 implementation; terminal acceptance pending in QNB-99):**
 - Implemented for the current TypeScript authority by the #553 PRs #773–#849: stored-project,
   filesystem and IDB load admission; file import; snapshot restore; the collection merge and
   write-back overlay; `LEGACY_TO_V1` (in memory, and durable on both the IndexedDB and filesystem backends); the §2.7 downgrade barrier; and
@@ -1001,6 +1000,6 @@ as `IMPLEMENTATION_REQUIRED` or a stated non-issue — never absorbed as another
 All 19 rows above are confirmed. This document's status line reflects `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
 criterion. The current-production implementation (admission, no-loss, migration, fencing and
-egress for the current TypeScript authority) is complete through the #553 PRs #773–#849, with final
-acceptance in QNB-99. The authority switch to a renderer-neutral Rust Project Core is not done; it is
+egress for the current TypeScript authority) is complete through the #553 PRs #773–#849, with terminal
+acceptance pending in QNB-99. The authority switch to a renderer-neutral Rust Project Core is not done; it is
 tracked as #836.
