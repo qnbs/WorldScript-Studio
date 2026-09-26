@@ -224,29 +224,35 @@ class StorageManager {
     return backend.loadSettings();
   }
 
+  // QNBS-v3: API keys stay in the random-key IndexedDB store on every platform; filesystem-derived material is not a secret. While desktop storage could not be opened they are refused like every other access (#553 a8).
+  private async getApiKeyStore(): Promise<typeof dbService> {
+    await this.ready;
+    if (this.authorityFailure) throw this.authorityFailure;
+    return dbService;
+  }
+
   async saveGeminiApiKey(apiKey: string): Promise<void> {
-    // QNBS-v3: API keys stay in the random-key IndexedDB store; filesystem-derived material is not a secret.
-    return dbService.saveGeminiApiKey(apiKey);
+    return (await this.getApiKeyStore()).saveGeminiApiKey(apiKey);
   }
 
   async getGeminiApiKey(): Promise<string | null> {
-    return dbService.getGeminiApiKey();
+    return (await this.getApiKeyStore()).getGeminiApiKey();
   }
 
   async clearGeminiApiKey(): Promise<void> {
-    return dbService.clearGeminiApiKey();
+    return (await this.getApiKeyStore()).clearGeminiApiKey();
   }
 
   async saveApiKey(provider: string, apiKey: string): Promise<void> {
-    return dbService.saveApiKey(provider, apiKey);
+    return (await this.getApiKeyStore()).saveApiKey(provider, apiKey);
   }
 
   async getApiKey(provider: string): Promise<string | null> {
-    return dbService.getApiKey(provider);
+    return (await this.getApiKeyStore()).getApiKey(provider);
   }
 
   async clearApiKey(provider: string): Promise<void> {
-    return dbService.clearApiKey(provider);
+    return (await this.getApiKeyStore()).clearApiKey(provider);
   }
 
   async saveSnapshot(name: string, data: unknown): Promise<number> {

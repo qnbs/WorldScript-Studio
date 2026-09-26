@@ -10,6 +10,8 @@ function backendDouble(label: string) {
     loadProject: vi.fn().mockResolvedValue(null),
     saveProject: vi.fn().mockResolvedValue(undefined),
     loadSettings: vi.fn().mockResolvedValue(null),
+    getApiKey: vi.fn().mockResolvedValue('secret'),
+    saveApiKey: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -44,6 +46,9 @@ describe('desktop storage authority (#553 a8)', () => {
     await expect(storageService.listProjects()).resolves.toEqual(['fs-project']);
     expect(db.listProjects).not.toHaveBeenCalled();
     expect(fs.removeLegacyApiKeyFiles).toHaveBeenCalled();
+    // API keys keep their IndexedDB store once desktop storage is open.
+    await expect(storageService.getApiKey('openai')).resolves.toBe('secret');
+    expect(db.getApiKey).toHaveBeenCalledWith('openai');
   });
 
   it('never switches to IndexedDB when desktop storage cannot be opened', async () => {
@@ -71,6 +76,15 @@ describe('desktop storage authority (#553 a8)', () => {
       expect(store.loadSettings).not.toHaveBeenCalled();
     }
     expect(fs.removeLegacyApiKeyFiles).not.toHaveBeenCalled();
+    // API keys (IndexedDB on every platform) are refused too while storage is unavailable.
+    await expect(storageService.getApiKey('openai')).rejects.toBeInstanceOf(
+      DesktopStorageAuthorityUnavailableError,
+    );
+    await expect(storageService.saveApiKey('openai', 'k')).rejects.toBeInstanceOf(
+      DesktopStorageAuthorityUnavailableError,
+    );
+    expect(db.getApiKey).not.toHaveBeenCalled();
+    expect(db.saveApiKey).not.toHaveBeenCalled();
   });
 
   it('keeps the filesystem when only the legacy key cleanup fails', async () => {
