@@ -119,7 +119,7 @@ describe('IdbProjectStore#loadState — universal ingress admission observation'
   });
 
   it('observes a top-level falsy-but-present project record as itself', async () => {
-    // QNBS-v3: project !== undefined (not truthiness) gates this - a corrupted top-level null/false record is a real classification target, distinct from an absent IDB record (undefined), even though both trigger the same "no project to load" early return below.
+    // QNBS-v3: project !== undefined (not truthiness) gates this - a corrupted top-level null/false record is a real classification target, distinct from an absent IDB record (undefined); since #553 a9 it is also returned as a present project so startup refuses it instead of booting blank.
     const projectStore = new IdbProjectStore();
     const { store, projectRequest, settingsRequest } = makeFakeStore(null, undefined);
     vi.spyOn(
@@ -135,7 +135,7 @@ describe('IdbProjectStore#loadState — universal ingress admission observation'
 
     expect(h.observe).toHaveBeenCalledTimes(1);
     expect(h.observe).toHaveBeenCalledWith(null, 'idb-project-load');
-    expect(result).toBeUndefined();
+    expect(result).toEqual({ project: null });
   });
 
   it('classifies a flat record with its own schemaVersion directly, not via a coincidental data field', async () => {

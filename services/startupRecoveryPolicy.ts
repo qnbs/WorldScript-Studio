@@ -1,5 +1,6 @@
 import { DesktopStorageAuthorityUnavailableError } from './fs/fsCore';
 import { ProjectLoadError } from './fs/projectFsStore';
+import { PersistedProjectNotLoadableError } from './persistedProjectErrors';
 
 export type StartupStorageBackend = 'indexeddb' | 'filesystem';
 export type StartupRecoveryFailureKind =
@@ -23,6 +24,15 @@ export function getStartupRecoveryActions(
 ): StartupRecoveryActions {
   const projectLoadError = error instanceof ProjectLoadError ? error : null;
   // QNBS-v3 (#553 a8): desktop storage that could not be opened is an access problem of the filesystem store — retry only, never an IndexedDB reset or a quarantine.
+  // QNBS-v3 (#553 a9): a stored project the editor cannot load is kept as it is — reload only; no quarantine, no database reset.
+  if (error instanceof PersistedProjectNotLoadableError) {
+    return {
+      failureKind: 'project-corrupt',
+      canQuarantine: false,
+      canReset: false,
+      canSafeOpen: false,
+    };
+  }
   if (error instanceof DesktopStorageAuthorityUnavailableError) {
     return { failureKind: 'project-io', canQuarantine: false, canReset: false, canSafeOpen: false };
   }

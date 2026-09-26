@@ -9,9 +9,9 @@ import { I18nProvider } from './contexts/I18nContext';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
 import { DEFAULT_OPENROUTER_MODEL_ID } from './services/ai/cloudModelCatalog';
 import {
+  hydrateStoredProject,
   loadPersistedRootState,
   loadSafeOpenRootState,
-  normalizePersistedProjectForStore,
   shouldAllowInitialMetadataSeed,
 } from './services/appBootstrap';
 import { initializeStorage } from './services/dbInitialization';
@@ -143,19 +143,8 @@ async function mountApp(safeOpenRefusedProjectId?: string): Promise<void> {
     // The middleware saves only the 'present' state to save space/time.
     // However, redux-undo expects { past: [], present: ..., future: [] }.
     // We must manually reconstruct the undo envelope if we loaded flat data.
-    if (preloadedState?.project) {
-      const projectPart = preloadedState.project;
-      const normalizedProject = normalizePersistedProjectForStore(projectPart);
-
-      if (normalizedProject) {
-        logger.debug('Hydrating persisted project state into Redux-Undo envelope.');
-        preloadedState.project = normalizedProject;
-      } else {
-        // Fallback: Corrupt or empty project state
-        logger.warn('Project state corrupted. Resetting project.');
-        delete (preloadedState as Record<string, unknown>)['project'];
-      }
-    }
+    // QNBS-v3 (#553 a9): a stored project (present, even if falsy) is hydrated or refused — never replaced by a blank project that could save over it.
+    hydrateStoredProject(preloadedState);
     // --------------------------------
 
     // QNBS-v3: derive metadata seeding from the normalized persisted-project boundary, not the broader first-run flag.
