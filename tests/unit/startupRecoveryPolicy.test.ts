@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DesktopStorageAuthorityUnavailableError } from '../../services/fs/fsCore';
 import { ProjectLoadError } from '../../services/fs/projectFsStore';
 import { getStartupRecoveryActions } from '../../services/startupRecoveryPolicy';
 
@@ -105,4 +106,22 @@ describe('startup recovery action policy', () => {
       canSafeOpen: false,
     });
   });
+
+  // QNBS-v3 (#553 a8): a desktop store that failed to open is retry-only, whatever backend label accompanies it.
+  it.each(['filesystem', 'indexeddb'] as const)(
+    'never gives reset or quarantine authority to unopenable desktop storage (%s)',
+    (backend) => {
+      expect(
+        getStartupRecoveryActions(
+          new DesktopStorageAuthorityUnavailableError(new Error('io')),
+          backend,
+        ),
+      ).toEqual({
+        failureKind: 'project-io',
+        canQuarantine: false,
+        canReset: false,
+        canSafeOpen: false,
+      });
+    },
+  );
 });

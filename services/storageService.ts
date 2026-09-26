@@ -34,7 +34,7 @@ export {
 // Import existing services
 import { dbService } from './dbService';
 import { fileSystemService } from './fileSystemService';
-import { StaleProjectWriterError } from './fs/fsCore';
+import { DesktopStorageAuthorityUnavailableError, StaleProjectWriterError } from './fs/fsCore';
 import { ProjectLoadError } from './fs/projectFsStore';
 import { logger } from './logger';
 import { admitStructuredSnapshotRestore } from './snapshotRestoreAdmission';
@@ -80,6 +80,7 @@ export type ProjectAuthority = 'fs' | 'idb';
 
 class StorageManager {
   private backend: StorageBackend;
+  private authorityFailure: DesktopStorageAuthorityUnavailableError | null = null;
   private ready: Promise<void>;
 
   constructor() {
@@ -91,14 +92,21 @@ class StorageManager {
     // QNBS-v3 (T0): use the canonical isTauriRuntime() (now `__TAURI_INTERNALS__`-aware) instead of
     // a raw `window.__TAURI__` check, which was false in the real shell and forced IndexedDB.
     if (isTauriRuntime()) {
+      // QNBS-v3 (#553 a8): desktop projects live on the filesystem only — if it cannot be opened, startup stops visibly instead of continuing on an IndexedDB store that holds different data.
       try {
         await fileSystemService.initialize();
-        await fileSystemService.removeLegacyApiKeyFiles();
-        this.backend = fileSystemService;
-        logger.debug('Using file system storage backend');
       } catch (error) {
-        logger.warn('Failed to initialize file system storage, falling back to IndexedDB:', error);
-        this.backend = dbService;
+        logger.error('Desktop project storage could not be opened:', error);
+        this.authorityFailure = new DesktopStorageAuthorityUnavailableError(error);
+        return;
+      }
+      this.backend = fileSystemService;
+      logger.debug('Using file system storage backend');
+      // QNBS-v3 (#553 a8): legacy key cleanup is best-effort housekeeping once the filesystem is established — it never decides which store holds projects.
+      try {
+        await fileSystemService.removeLegacyApiKeyFiles();
+      } catch (error) {
+        logger.warn('Legacy API key file cleanup failed:', error);
       }
     } else {
       logger.debug('Using IndexedDB storage backend');
@@ -108,10 +116,11 @@ class StorageManager {
 
   private async getBackend(): Promise<StorageBackend> {
     await this.ready;
+    if (this.authorityFailure) throw this.authorityFailure;
     return this.backend;
   }
 
-  // QNBS-v3 (#553 a10): the replacement baseline is bound to the storage that really holds the project — a desktop build whose filesystem init failed runs on IndexedDB and must not share the 'fs' baseline.
+  // QNBS-v3 (#553 a10): the replacement baseline is bound to the storage that really holds the project; when desktop storage failed to open there is none, and this rejects like every other access (#553 a8).
   async getProjectAuthority(): Promise<ProjectAuthority> {
     const backend = await this.getBackend();
     return backend === fileSystemService ? 'fs' : 'idb';
@@ -377,8 +386,10 @@ class StorageManager {
   }
 
   // QNBS-v3: Explizites Backend-Label für Settings-Diagnostik — keine Heuristik über window allein.
+  // QNBS-v3 (#553 a8): resolves even when desktop storage failed to open (the desktop store is still the filesystem), so startup recovery can classify the failure without touching storage.
   async getStorageBackendKind(): Promise<'indexeddb' | 'filesystem'> {
     await this.ready;
+    if (this.authorityFailure) return 'filesystem';
     return this.backend === fileSystemService ? 'filesystem' : 'indexeddb';
   }
 }

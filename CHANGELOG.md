@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data integrity (#553):** if the desktop app cannot open its project storage at startup, it now
+  shows the "storage or file-access problem" screen with Retry instead of silently continuing on
+  separate browser storage that does not hold your desktop projects. Nothing is changed or reset in
+  either store, and no project is read or saved until the storage opens. A failure of the cleanup of
+  old API key files no longer affects which storage is used. PR #843.
 - **Data integrity (#553):** an imported project file is now first saved from the file's own
   checked content, with any edits made since the import applied, instead of a re-serialized copy of
   the editor state. Fields this version does not know are kept; on the desktop, very large whole
