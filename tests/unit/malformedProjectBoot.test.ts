@@ -97,6 +97,8 @@ describe('browser boot with a stored project the editor cannot load (#553 a9)', 
     ],
     ['characters that cannot be read', { data: { ...precious, characters: 'x', outline: [] } }],
     ['a project value that is not an object', { data: 'garbage' }],
+    ['a stored null project', null],
+    ['a stored empty-string project', ''],
   ])('refuses %s and leaves the stored record untouched', async (_label, record) => {
     const authority = new IdbProjectCanonicalAuthority();
     await seed(authority, record);
@@ -104,6 +106,8 @@ describe('browser boot with a stored project the editor cannot load (#553 a9)', 
 
     const loaded = await new IdbProjectStore().loadState();
 
+    // A present record — even a falsy one — reaches the boot decision instead of reading as "no project".
+    expect(loaded !== undefined && Object.hasOwn(loaded, 'project')).toBe(true);
     expect(() =>
       requirePersistedProjectForStore(loaded?.project as PersistedRootState['project']),
     ).toThrow(PersistedProjectNotLoadableError);

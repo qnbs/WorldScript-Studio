@@ -263,9 +263,10 @@ export class IdbProjectStore extends IdbAssetStore {
     }
 
     // If project is missing but we have settings, return partial to allow new user flow
-    if (!project && !settings) return undefined;
+    // QNBS-v3 (#553 a9): only an absent record (undefined) means "no project" — a stored null/0/"" is a present project startup must refuse, not a new-user blank boot.
+    if (project === undefined && !settings) return undefined;
 
-    const validProject = project ? (project as PersistedProjectState) : undefined;
+    const validProject = project !== undefined ? (project as PersistedProjectState) : undefined;
 
     // Ensure Project Structure consistency
     if (validProject) {
@@ -290,7 +291,7 @@ export class IdbProjectStore extends IdbAssetStore {
       : undefined;
 
     const result: PersistedState = {};
-    if (validProject) result.project = validProject;
+    if (validProject !== undefined) result.project = validProject;
     if (validSettings) result.settings = validSettings;
     return result;
   }
