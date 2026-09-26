@@ -28,9 +28,12 @@ import {
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
 import { logger } from '../logger';
-import type { SaveProjectInput } from '../storageBackend';
+import { admitCanonicalProjectDocument } from '../projectDocument';
+import { importedProjectJsonSchema } from '../projectImportSchema';
+import type { CanonicalProjectRawResult, SaveProjectInput } from '../storageBackend';
 import { IdbAssetStore } from './idbAssetStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
+import { idbProjectCanonicalAuthority } from './idbProjectCanonicalAuthority';
 import { withProtectedWriteAdmission } from './protectedWriteAdmission';
 import {
   assertIdbProtectedWriteAllowed,
@@ -237,6 +240,17 @@ function selectIdbProjectObservationTarget(project: unknown): unknown {
   return rawData === undefined ? project : rawData;
 }
 
+function storedProjectIdOf(raw: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const id =
+      parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>)['id'] : undefined;
+    // An empty id is id-less, like the importer's `projectDataJson.id || …` treats it.
+    return typeof id === 'string' && id !== '' ? id : null;
+  } catch {
+    return null;
+  }
+}
 export class IdbProjectStore extends IdbAssetStore {
   // Helper to validate state structure and fix common issues
   private validateAndFixState(project: unknown, settings: unknown): PersistedState | undefined {
@@ -249,14 +263,16 @@ export class IdbProjectStore extends IdbAssetStore {
     }
 
     // If project is missing but we have settings, return partial to allow new user flow
-    if (!project && !settings) return undefined;
+    // QNBS-v3 (#553 a9): only an absent record (undefined) means "no project" — a stored null/0/"" is a present project startup must refuse, not a new-user blank boot.
+    if (project === undefined && !settings) return undefined;
 
-    const validProject = project ? (project as PersistedProjectState) : undefined;
+    const validProject = project !== undefined ? (project as PersistedProjectState) : undefined;
 
     // Ensure Project Structure consistency
     if (validProject) {
       const rawData = validProject.present ? validProject.present.data : validProject.data;
-      if (rawData) {
+      // QNBS-v3 (#553 a9): only a project object gets defaults — anything else is passed through unchanged so startup refuses it as a project, instead of crashing here and being mistaken for a whole-database failure.
+      if (typeof rawData === 'object' && rawData !== null && !Array.isArray(rawData)) {
         // Ensure projectGoals exists
         if (!rawData.projectGoals) {
           rawData.projectGoals = { totalWordCount: 50000, targetDate: null };
@@ -275,7 +291,7 @@ export class IdbProjectStore extends IdbAssetStore {
       : undefined;
 
     const result: PersistedState = {};
-    if (validProject) result.project = validProject;
+    if (validProject !== undefined) result.project = validProject;
     if (validSettings) result.settings = validSettings;
     return result;
   }
@@ -426,6 +442,34 @@ export class IdbProjectStore extends IdbAssetStore {
     // (or if no ID is set yet, return it for any query — single-project behaviour).
     if (raw.id && raw.id !== projectId) return null;
     return raw as unknown as StoryProject;
+  }
+
+  // QNBS-v3 (#553 §2.8): IndexedDB stores a structured value, not text — the authority refuses unsafe integer literals at commit and only yields text that round-trips exactly, so this is the full stored content with no lexical precision left to lose. Admitted the same way import admits a file: full schema validation, and an in-memory LEGACY_TO_V1 stamp (never written back) so a pre-version record still exports.
+  async loadCanonicalProjectRaw(projectId: string): Promise<CanonicalProjectRawResult> {
+    const { admission, decodedRaw } =
+      await idbProjectCanonicalAuthority.loadCanonicalProjectEgress();
+    if (admission.status === 'ABSENT') return { status: 'ABSENT' };
+    if (admission.status === 'GENERATION_CONTRADICTION') {
+      return { status: 'REFUSED', classification: admission.classification };
+    }
+    const verdict =
+      decodedRaw === null
+        ? null
+        : admitCanonicalProjectDocument(decodedRaw, importedProjectJsonSchema);
+    if (!verdict?.canonical) {
+      return {
+        status: 'REFUSED',
+        classification: verdict?.source.classification ?? 'MALFORMED',
+      };
+    }
+    const storedId = storedProjectIdOf(verdict.canonical.raw);
+    if (storedId !== null && storedId !== projectId) return { status: 'ABSENT' };
+    return { status: 'CURRENT', raw: verdict.canonical.raw };
+  }
+
+  // QNBS-v3 (#553 §2.8): IndexedDB holds exactly one project and no per-window editing baseline (multi-tab authority is #480), so the editor's carrier is that record when its id matches.
+  async loadEditorExportCarrier(projectId: string | undefined): Promise<CanonicalProjectRawResult> {
+    return this.loadCanonicalProjectRaw(projectId ?? '');
   }
 
   async listProjects(): Promise<string[]> {

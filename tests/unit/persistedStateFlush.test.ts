@@ -31,6 +31,10 @@ vi.mock('../../services/factoryResetService', () => ({
 
 import { flushPersistedState } from '../../app/persistedStateFlush';
 import {
+  projectPersistenceCoordinator,
+  settingsPersistenceCoordinator,
+} from '../../app/persistenceCoordinator';
+import {
   _resetSafeSessionForTest,
   enterSafeSession,
   establishSafeSessionProject,
@@ -140,6 +144,139 @@ describe('flushPersistedState', () => {
   it('propagates a rejection when canonical autosave fails (fail-closed, not swallowed)', async () => {
     h.persistProjectAutosaveSnapshot.mockRejectedValueOnce(new Error('disk full'));
     await expect(flushPersistedState(buildState())).rejects.toThrow('disk full');
+  });
+
+  // QNBS-v3 (#553): the coordinator resolves (not rejects) a waiter whose own failed attempt had a queued successor; a quit flush must not read that as "saved", or it could skip the stale-writer discard consent.
+  it('rejects with the chain’s final failure when its own attempt was superseded', async () => {
+    let failOwnAttempt: (error: Error) => void = () => {};
+    h.persistProjectAutosaveSnapshot.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          failOwnAttempt = reject;
+        }),
+    );
+
+    const flushPromise = flushPersistedState(buildState());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const successor = projectPersistenceCoordinator
+      .enqueue(() => Promise.reject(new Error('successor refused')))
+      .catch(() => undefined);
+    failOwnAttempt(new Error('own attempt refused'));
+
+    await expect(flushPromise).rejects.toThrow('successor refused');
+    await successor;
+    // QNBS-v3: never replays the flush's own older snapshot — only its single original attempt ran.
+    expect(h.persistProjectAutosaveSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves when a newer queued save succeeded after its own attempt was superseded', async () => {
+    let failOwnAttempt: (error: Error) => void = () => {};
+    h.persistProjectAutosaveSnapshot.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          failOwnAttempt = reject;
+        }),
+    );
+
+    const flushPromise = flushPersistedState(buildState());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const successor = projectPersistenceCoordinator.enqueue(async () => {});
+    failOwnAttempt(new Error('own attempt refused'));
+
+    await expect(flushPromise).resolves.toBeUndefined();
+    await successor;
+    expect(h.persistProjectAutosaveSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies the same fail-closed rule to a superseded settings save', async () => {
+    let failOwnAttempt: (error: Error) => void = () => {};
+    h.saveSettings.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          failOwnAttempt = reject;
+        }),
+    );
+
+    const flushPromise = flushPersistedState(buildState());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const successor = settingsPersistenceCoordinator
+      .enqueue(() => Promise.reject(new Error('settings successor refused')))
+      .catch(() => undefined);
+    failOwnAttempt(new Error('own settings attempt refused'));
+
+    await expect(flushPromise).rejects.toThrow('settings successor refused');
+    await successor;
+    expect(h.saveSettings).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3 (#553): CodeAnt's case — a save that starts and fails after this flush's own results settled forms a separate chain, and must still stop a quit/reload.
+  it('rejects when a later chain started while the flush was in flight fails', async () => {
+    let finishSettings: () => void = () => {};
+    h.saveSettings.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSettings = resolve;
+        }),
+    );
+
+    const flushPromise = flushPersistedState(buildState());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await projectPersistenceCoordinator
+      .enqueue(() => Promise.reject(new Error('later autosave refused')))
+      .catch(() => undefined);
+    finishSettings();
+
+    await expect(flushPromise).rejects.toThrow('later autosave refused');
+  });
+
+  it('rechecks a settings chain started while the project outcomes were being awaited', async () => {
+    const original = projectPersistenceCoordinator.outcomesSince.bind(
+      projectPersistenceCoordinator,
+    );
+    let injected = false;
+    const spy = vi
+      .spyOn(projectPersistenceCoordinator, 'outcomesSince')
+      .mockImplementation((mark) => {
+        if (!injected) {
+          injected = true;
+          void settingsPersistenceCoordinator
+            .enqueue(() => Promise.reject(new Error('settings saved mid-check refused')))
+            .catch(() => undefined);
+        }
+        return original(mark);
+      });
+    try {
+      await expect(flushPersistedState(buildState())).rejects.toThrow(
+        'settings saved mid-check refused',
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('fails closed when persistence keeps changing across every verification pass', async () => {
+    const original = projectPersistenceCoordinator.outcomesSince.bind(
+      projectPersistenceCoordinator,
+    );
+    const spy = vi
+      .spyOn(projectPersistenceCoordinator, 'outcomesSince')
+      .mockImplementation((mark) => {
+        void settingsPersistenceCoordinator.enqueue(async () => {});
+        return original(mark);
+      });
+    try {
+      await expect(flushPersistedState(buildState())).rejects.toThrow('kept changing');
+    } finally {
+      spy.mockRestore();
+      await settingsPersistenceCoordinator.idle();
+    }
+  });
+
+  it('is not affected by a chain that starts only after it resolved', async () => {
+    await expect(flushPersistedState(buildState())).resolves.toBeUndefined();
+    await expect(
+      projectPersistenceCoordinator.enqueue(() => Promise.reject(new Error('after the flush'))),
+    ).rejects.toThrow('after the flush');
   });
 
   it('propagates a rejection when saveSettings fails (fail-closed, not swallowed)', async () => {

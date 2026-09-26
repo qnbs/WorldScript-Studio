@@ -3,6 +3,7 @@ import { charactersAdapter, worldsAdapter } from '../features/project/adapters';
 import type { ProjectData } from '../features/project/projectSlice';
 import type { PersistedRootState } from '../types';
 import { dbService } from './dbService';
+import { PersistedProjectNotLoadableError } from './persistedProjectErrors';
 import { storageService } from './storageService';
 import { isTauriRuntime } from './tauriRuntime';
 
@@ -151,4 +152,19 @@ export function shouldAllowInitialMetadataSeed(
   preloadedState: PersistedRootState | undefined,
 ): boolean {
   return getPersistedProjectPayload(preloadedState?.project) === undefined;
+}
+
+// QNBS-v3 (#553 a9): the boot decision for a stored project — normalized into the store, or refused; there is no third outcome where a blank project takes its place.
+export function requirePersistedProjectForStore(
+  project: PersistedRootState['project'],
+): NonNullable<PersistedRootState['project']> {
+  const normalized = normalizePersistedProjectForStore(project);
+  if (!normalized) throw new PersistedProjectNotLoadableError();
+  return normalized;
+}
+
+// QNBS-v3 (#553 a9): presence, not truthiness — a stored falsy project value is refused, never booted as a blank project; an absent project leaves the new-user flow untouched.
+export function hydrateStoredProject(preloadedState: PersistedRootState | undefined): void {
+  if (!preloadedState || !Object.hasOwn(preloadedState, 'project')) return;
+  preloadedState.project = requirePersistedProjectForStore(preloadedState.project);
 }

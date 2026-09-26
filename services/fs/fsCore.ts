@@ -164,11 +164,35 @@ export class ProjectFileLockedError extends Error {
   }
 }
 
+// QNBS-v3 (#553): the lock above serializes write ORDER only; this refuses a writer whose in-memory project descends from an older on-disk generation than the one now committed — overlaying its full snapshot onto the newer carrier would silently revert fields another WorldScript window changed. Distinct from lock contention: waiting never clears it, only reloading does.
+export class StaleProjectWriterError extends Error {
+  constructor(readonly projectId: string) {
+    super(
+      `project ${projectId} was changed by another WorldScript window after this window loaded it`,
+    );
+    this.name = 'StaleProjectWriterError';
+  }
+}
+
 const LOCK_SUFFIX = '.lock';
 const LOCK_ACQUIRE_ATTEMPTS = 3;
 const LOCK_ACQUIRE_BACKOFF_MS = [200, 500];
 
 // QNBS-v3 (#553): the one name for the stable sibling directory that holds every project's lock file, shared by projectFsStore.ts (which creates locks under it) and factoryResetService.ts (which must check it before wiping app data) — a second, independently-typed copy of this string in the latter would be exactly the kind of drift-prone duplication already flagged once in this PR.
+/**
+ * The desktop filesystem could not be established as project storage (#553 a8). Desktop projects
+ * live only there, so no other store stands in: every storage access fails with this until a
+ * restart succeeds, and nothing is read from or written to either store meanwhile.
+ */
+export class DesktopStorageAuthorityUnavailableError extends Error {
+  readonly code = 'DESKTOP_STORAGE_AUTHORITY_UNAVAILABLE';
+
+  constructor(cause: unknown) {
+    super('The desktop project storage could not be opened.', { cause });
+    this.name = 'DesktopStorageAuthorityUnavailableError';
+  }
+}
+
 export const PROJECT_LOCKS_DIR_NAME = 'project-locks';
 
 function lockPathFor(path: string): string {
@@ -212,6 +236,9 @@ async function tryCreateLock(apis: TauriApis, lockPath: string): Promise<boolean
     }
   }
 }
+
+/** Exclusively creates an empty file (the lock's create_new primitive); false when another writer already holds the path. */
+export const tryCreateExclusiveEmptyFile = tryCreateLock;
 
 /**
  * Serializes an operation against a project file across OS processes via an exclusive-create
@@ -469,6 +496,27 @@ export class FsCore {
 
   protected isProjectWriteAuthorityError(_error: unknown): boolean {
     return false;
+  }
+
+  // QNBS-v3 (#553): subclasses refuse an auxiliary write from a window whose editable project no longer matches disk.
+  protected runFencedAuxiliaryWrite<T>(
+    _fenceProjectIds: readonly string[],
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return operation();
+  }
+
+  // QNBS-v3 (#553): user-facing image/binder/codex mutations take the same stale-writer fence as saveProject; rollback, import and project-delete internals deliberately bypass it. fenceProjectIds are the directories the write actually lands in after legacy routing.
+  protected withAuxiliaryWriteOperation<T>(
+    operation: () => Promise<T>,
+    projectId: string,
+    fenceProjectIds: () => readonly string[] = () => [projectId],
+  ): Promise<T> {
+    // QNBS-v3 (#553): routes are resolved only once serialized, the same moment the write resolves its paths, so no queued policy change can split the fenced directory from the written one.
+    return this.withLegacyRoutingOperation(
+      () => this.runFencedAuxiliaryWrite(fenceProjectIds(), operation),
+      projectId,
+    );
   }
 
   // QNBS-v3: serialize complete filesystem operations so legacy route ownership cannot change between awaited mutations.

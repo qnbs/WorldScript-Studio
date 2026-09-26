@@ -1,7 +1,9 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '../../../app/store';
+import { getPersistedProjectPayload } from '../../../services/appBootstrap';
 import { logger } from '../../../services/logger';
-import { parseImportedProjectJson } from '../../../services/projectImportSchema';
+import { buildImportReplacementCarrier } from '../../../services/projectImportCarrier';
+import { parseImportedProjectDocument } from '../../../services/projectImportSchema';
 import { getSafeSessionProjectId } from '../../../services/startupSafeSession';
 import { storageService } from '../../../services/storageService';
 import type { Character, World } from '../../../types';
@@ -50,9 +52,18 @@ function extractImportedEntities<T extends { id: string }>(
   return importedEntities;
 }
 
-export const importProjectThunk = createAsyncThunk('project/importProject', async (file: File) => {
+/** Carried on the fulfilled action only, like a restore's carrier (#553 a4). */
+export interface ImportProjectFulfilledMeta {
+  replacementCarrier: string | null;
+}
+
+export const importProjectThunk = createAsyncThunk<
+  ProjectData,
+  File,
+  { fulfilledMeta: ImportProjectFulfilledMeta }
+>('project/importProject', async (file, thunkApi) => {
   const text = await file.text();
-  const projectDataJson = parseImportedProjectJson(text);
+  const { project: projectDataJson, raw: admittedRaw } = parseImportedProjectDocument(text);
 
   const charactersToSet: Character[] = [];
   const worldsToSet: World[] = [];
@@ -146,49 +157,64 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     throw new Error('Invalid project file: duplicate character or world entity ID.');
   }
 
-  const manuscript = projectDataJson.manuscript ?? [];
-
+  // QNBS-v3 (#553 a4/R2): every modeled field the import schema admitted reaches the editor, not a hand-picked subset — the autosave bridge owns these fields, so one left out of the projection would be removed from the carrier by the first save. Only identity, the entity collections (images moved to storage) and the established defaults are set here.
+  const {
+    id: _admittedId,
+    characters: _admittedCharacters,
+    worlds: _admittedWorlds,
+    ...admittedFields
+  } = projectDataJson;
   const result = {
+    ...admittedFields,
     id: importedProjectId,
-    title: projectDataJson.title,
-    logline: projectDataJson.logline,
-    author: projectDataJson.author,
     characters: charactersState,
     worlds: worldsState,
-    outline: projectDataJson.outline ?? [],
-    manuscript,
-    relationships: projectDataJson.relationships,
-    projectGoals: projectDataJson.projectGoals ?? {
+    outline: admittedFields.outline ?? [],
+    manuscript: admittedFields.manuscript ?? [],
+    projectGoals: admittedFields.projectGoals ?? {
       totalWordCount: 50000,
       targetDate: null,
     },
-    writingHistory: projectDataJson.writingHistory ?? [],
-    writingSessions: projectDataJson.writingSessions,
-    writingGoals: projectDataJson.writingGoals,
-    sceneBoardLayout: projectDataJson.sceneBoardLayout,
-    binderNodes: projectDataJson.binderNodes ?? [],
-    compileProfile: projectDataJson.compileProfile,
-    persistedVersionControl: projectDataJson.persistedVersionControl,
+    writingHistory: admittedFields.writingHistory ?? [],
+    binderNodes: admittedFields.binderNodes ?? [],
   };
 
   // QNBS-v3: Zod inference uses | undefined for optional keys — ProjectData expects missing keys (exactOptionalPropertyTypes).
-  return result as ProjectData;
+  // QNBS-v3 (#553 a4): the admitted text leaves only with the fulfilled action; the listener binds it to the imported project's epoch so its first save keeps what the projection could not hold.
+  return thunkApi.fulfillWithValue(result as ProjectData, {
+    replacementCarrier: buildImportReplacementCarrier(admittedRaw),
+  });
 });
 
-export const restoreSnapshotThunk = createAsyncThunk(
-  'project/restoreSnapshot',
-  async (snapshotId: number, thunkApi) => {
-    // QNBS-v3: capture ownership before snapshot I/O so payload contents cannot change the restore target.
-    const currentSlice = (thunkApi.getState() as RootState).project?.present;
-    if (!currentSlice?.data) {
-      throw new Error('Cannot restore a snapshot without an active project.');
-    }
-    const capturedTargetIdentity = getProjectTargetIdentity(currentSlice);
-    const restored = await storageService.restoreSnapshot(snapshotId, currentSlice.data);
-    const liveSlice = (thunkApi.getState() as RootState).project?.present;
-    if (!identityUnchanged(capturedTargetIdentity, getProjectTargetIdentity(liveSlice))) {
-      throw new Error('Cannot restore a snapshot after the active project changed.');
-    }
-    return restored;
-  },
-);
+/** Carried on the fulfilled action only, so a restore discarded before it can never leave a carrier behind (#553 a5). */
+export interface RestoreSnapshotFulfilledMeta {
+  restoreCarrier: string;
+}
+
+export const restoreSnapshotThunk = createAsyncThunk<
+  ProjectData,
+  number,
+  { fulfilledMeta: RestoreSnapshotFulfilledMeta }
+>('project/restoreSnapshot', async (snapshotId, thunkApi) => {
+  // QNBS-v3: capture ownership before snapshot I/O so payload contents cannot change the restore target.
+  const currentSlice = (thunkApi.getState() as RootState).project?.present;
+  if (!currentSlice?.data) {
+    throw new Error('Cannot restore a snapshot without an active project.');
+  }
+  const capturedTargetIdentity = getProjectTargetIdentity(currentSlice);
+  const { project: restored, raw } = await storageService.restoreSnapshot(
+    snapshotId,
+    currentSlice.data,
+  );
+  const liveSlice = (thunkApi.getState() as RootState).project?.present;
+  if (!identityUnchanged(capturedTargetIdentity, getProjectTargetIdentity(liveSlice))) {
+    throw new Error('Cannot restore a snapshot after the active project changed.');
+  }
+  // QNBS-v3 (#553 §2.8): a snapshot's stored text may use the portable array form for characters/worlds; normalize through the same boundary bootstrap uses before it reaches the entity adapters.
+  const normalized = getPersistedProjectPayload({ data: restored as ProjectData });
+  if (!normalized) {
+    throw new Error('Cannot restore a snapshot whose characters or worlds are malformed.');
+  }
+  // QNBS-v3 (#553 a5): the exact admitted text leaves the thunk only with the fulfilled action, after the live identity check; the listener binds it once the reducer assigned the new editor epoch.
+  return thunkApi.fulfillWithValue(normalized, { restoreCarrier: raw });
+});

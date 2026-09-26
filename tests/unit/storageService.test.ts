@@ -6,6 +6,8 @@ import { saveEnvelopeFromProjectData } from '../../services/storageBackend';
 const mockDb = {
   saveProject: vi.fn().mockResolvedValue(undefined),
   loadProject: vi.fn().mockResolvedValue(null),
+  loadCanonicalProjectRaw: vi.fn().mockResolvedValue({ status: 'ABSENT' }),
+  loadEditorExportCarrier: vi.fn().mockResolvedValue({ status: 'ABSENT' }),
   listProjects: vi.fn().mockResolvedValue([]),
   deleteProject: vi.fn().mockResolvedValue(undefined),
   saveImage: vi.fn().mockResolvedValue(undefined),
@@ -67,8 +69,50 @@ describe('storageService (IndexedDB backend in browser)', () => {
       outline: [],
       manuscript: [],
     });
-    await storageService.saveProject(payload);
-    expect(mockDb.saveProject).toHaveBeenCalledWith(payload);
+    await storageService.saveProject(payload, { replacement: true });
+    expect(mockDb.saveProject).toHaveBeenCalledWith(payload, { replacement: true });
+  });
+
+  it('names the storage that really holds the project as its replacement authority (#553 a10)', async () => {
+    await expect(storageService.getProjectAuthority()).resolves.toBe('idb');
+  });
+
+  it('returns the stored canonical raw, null when absent, and refuses a non-admitted record (#553 §2.8)', async () => {
+    mockDb.loadCanonicalProjectRaw.mockResolvedValueOnce({ status: 'CURRENT', raw: '{"id":"p1"}' });
+    await expect(storageService.loadCanonicalProjectRaw('p1')).resolves.toBe('{"id":"p1"}');
+
+    mockDb.loadCanonicalProjectRaw.mockResolvedValueOnce({ status: 'ABSENT' });
+    await expect(storageService.loadCanonicalProjectRaw('p1')).resolves.toBeNull();
+
+    mockDb.loadCanonicalProjectRaw.mockResolvedValueOnce({
+      status: 'REFUSED',
+      classification: 'FUTURE',
+    });
+    await expect(storageService.loadCanonicalProjectRaw('p1')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'unsupported-version',
+    });
+  });
+
+  it('refuses a stale editor and a backend without canonical text instead of reading either as absent', async () => {
+    mockDb.loadEditorExportCarrier.mockResolvedValueOnce({ status: 'STALE' });
+    await expect(storageService.loadEditorExportCarrier('p1')).rejects.toMatchObject({
+      name: 'StaleProjectWriterError',
+    });
+
+    mockDb.loadEditorExportCarrier.mockResolvedValueOnce({ status: 'UNSUPPORTED' });
+    await expect(storageService.loadEditorExportCarrier('p1')).rejects.toThrow(
+      'cannot provide the stored project text',
+    );
+
+    mockDb.loadEditorExportCarrier.mockResolvedValueOnce({
+      status: 'REFUSED',
+      classification: 'MALFORMED',
+    });
+    await expect(storageService.loadEditorExportCarrier(undefined)).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'corrupt',
+    });
   });
 
   it('delegates loadProject to dbService', async () => {
@@ -145,6 +189,26 @@ describe('storageService (IndexedDB backend in browser)', () => {
     delete (window as { __TAURI__?: unknown }).__TAURI__;
   });
 
+  it('serves a structured-value backend’s snapshot carrier as its stored value serialized (#553 a11)', async () => {
+    mockDb.getSnapshotData.mockResolvedValueOnce({ id: 'p1', title: 'Snap', opaque: { k: 1 } });
+    await expect(storageService.getSnapshotText(7)).resolves.toBe(
+      '{"id":"p1","title":"Snap","opaque":{"k":1}}',
+    );
+    mockDb.getSnapshotData.mockResolvedValueOnce(null);
+    await expect(storageService.getSnapshotText(8)).resolves.toBeNull();
+  });
+
+  it('serves a text-storing backend’s own snapshot text unchanged (#553 a11)', async () => {
+    const withText = mockDb as unknown as { getSnapshotText?: (id: number) => Promise<string> };
+    withText.getSnapshotText = vi.fn(async () => '{"exact":9007199254740993}');
+    try {
+      await expect(storageService.getSnapshotText(9)).resolves.toBe('{"exact":9007199254740993}');
+      expect(mockDb.getSnapshotData).not.toHaveBeenCalledWith(9);
+    } finally {
+      delete withText.getSnapshotText;
+    }
+  });
+
   it('delegates snapshot operations to dbService', async () => {
     mockDb.saveSnapshot.mockResolvedValueOnce(42);
     const id = await storageService.saveSnapshot('label', { data: 1 });
@@ -154,8 +218,32 @@ describe('storageService (IndexedDB backend in browser)', () => {
     expect(mockDb.getSnapshotData).toHaveBeenCalledWith(42);
 
     const currentProject = { id: 'p1', title: 'Current target' };
-    await storageService.restoreSnapshot(42, currentProject as never);
+    mockDb.getSnapshotData.mockResolvedValueOnce({
+      id: 'p1',
+      schemaVersion: 1,
+      title: 'Snapshot',
+      logline: 'L',
+      futureWidget: { k: 1 },
+    });
+    await expect(
+      storageService.restoreSnapshot(42, currentProject as never),
+    ).resolves.toMatchObject({
+      raw: expect.stringContaining('"futureWidget":{"k":1}'),
+      project: {
+        id: 'p1',
+        title: 'Snapshot',
+        futureWidget: { k: 1 },
+      },
+    });
     expect(mockDb.getSnapshotData).toHaveBeenCalledWith(42);
+
+    // QNBS-v3 (#553 §2.8, a6): a future-version snapshot never reaches the editor unchecked.
+    mockDb.getSnapshotData.mockResolvedValueOnce({ id: 'p1', schemaVersion: 99, title: 't' });
+    await expect(storageService.restoreSnapshot(42, currentProject as never)).rejects.toMatchObject(
+      {
+        reason: 'snapshot-invalid',
+      },
+    );
 
     await storageService.listSnapshots();
     expect(mockDb.listSnapshots).toHaveBeenCalled();

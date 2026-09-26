@@ -6,6 +6,7 @@ import { settingsActions } from '../../features/settings/settingsSlice';
 import { statusActions } from '../../features/status/statusSlice';
 import type { View } from '../../types';
 import type { I18nTranslate } from '../commands/commandTypes';
+import { toEditorReplacementEpoch } from '../editorProjectGeneration';
 import { logger } from '../logger';
 import { persistProjectAutosaveSnapshot } from '../projectAutosavePersistence';
 import { eventMatchesShortcutKeys } from './matchShortcut';
@@ -120,6 +121,7 @@ async function flushProjectSave(
   dispatch(statusActions.setSavingStatus('saving'));
 
   try {
+    const editorEpoch = toEditorReplacementEpoch(state.project.present?.generation);
     const enriched = {
       ...presentData,
       persistedVersionControl: {
@@ -130,7 +132,7 @@ async function flushProjectSave(
     };
     // QNBS-v3 (#553): manual saves share the same generation-fenced authority as autosave, so a delayed shortcut cannot bypass canonical admission or race a newer snapshot; superseded flushes still clear their transient UI state.
     const result = await projectPersistenceCoordinator.enqueue(() =>
-      persistProjectAutosaveSnapshot(enriched),
+      persistProjectAutosaveSnapshot(enriched, editorEpoch),
     );
     if (result.superseded) {
       dispatch(statusActions.setSavingStatus('idle'));

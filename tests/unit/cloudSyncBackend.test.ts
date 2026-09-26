@@ -84,6 +84,12 @@ describe('CloudSyncBackend.create() explicit-consent gate', () => {
 });
 
 describe('CloudSyncBackend', () => {
+  it('answers UNSUPPORTED for canonical egress instead of reading as nothing stored (#553 §2.8)', async () => {
+    const backend = makeBackend();
+    await expect(backend.loadCanonicalProjectRaw('p1')).resolves.toEqual({ status: 'UNSUPPORTED' });
+    await expect(backend.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'UNSUPPORTED' });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockGet.mockResolvedValue(null);

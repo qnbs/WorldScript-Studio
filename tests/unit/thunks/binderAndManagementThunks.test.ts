@@ -17,9 +17,17 @@ vi.mock('../../../services/storageService', () => ({
   },
 }));
 
-vi.mock('../../../services/projectImportSchema', () => ({
-  parseImportedProjectJson: vi.fn(),
-}));
+vi.mock('../../../services/projectImportSchema', () => {
+  const parseImportedProjectJson = vi.fn();
+  return {
+    parseImportedProjectJson,
+    // QNBS-v3 (#553 a4): the thunk reads projection and admitted text together; tests keep scripting the projection.
+    parseImportedProjectDocument: vi.fn((text: string) => ({
+      project: parseImportedProjectJson(text),
+      raw: text,
+    })),
+  };
+});
 
 import featureFlagsReducer from '../../../features/featureFlags/featureFlagsSlice';
 import { charactersAdapter, worldsAdapter } from '../../../features/project/adapters';
@@ -36,7 +44,10 @@ import settingsReducer from '../../../features/settings/settingsSlice';
 import statusReducer from '../../../features/status/statusSlice';
 import versionControlReducer from '../../../features/versionControl/versionControlSlice';
 import writerReducer from '../../../features/writer/writerSlice';
-import { parseImportedProjectJson } from '../../../services/projectImportSchema';
+import {
+  parseImportedProjectDocument,
+  parseImportedProjectJson,
+} from '../../../services/projectImportSchema';
 import {
   _resetSafeSessionForTest,
   enterSafeSession,
@@ -69,7 +80,7 @@ beforeEach(() => {
   vi.mocked(storageService.getQualifiedImage).mockResolvedValue(null);
   vi.mocked(storageService.deleteQualifiedImage).mockResolvedValue(undefined);
   vi.mocked(storageService.getSnapshotData).mockResolvedValue(null);
-  vi.mocked(storageService.restoreSnapshot).mockResolvedValue(null);
+  vi.mocked(storageService.restoreSnapshot).mockResolvedValue({ project: null, raw: '' });
 });
 
 // ---------------------------------------------------------------------------
@@ -304,6 +315,52 @@ describe('importProjectThunk', () => {
     const action = await store.dispatch(importProjectThunk(file));
 
     expect(action.type).toBe('project/importProject/fulfilled');
+  });
+
+  // QNBS-v3 (#553 a4): the admitted text travels only on the fulfilled action, without inline image copies.
+  it('carries the admitted import text on the fulfilled action, inline images removed', async () => {
+    const withImage = {
+      ...minimalProject,
+      characters: [{ id: 'c1', name: 'Ada', avatarBase64: 'QUJD' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(withImage as never);
+    // Admitted import text is always CURRENT (older documents are migrated on admission).
+    const text = JSON.stringify({ ...withImage, schemaVersion: 1 }).replace(
+      /}$/,
+      ',"opaque":9007199254740993}',
+    );
+
+    const action = await makeStore().dispatch(
+      importProjectThunk(new File([text], 'novel.json', { type: 'application/json' })),
+    );
+
+    const carrier = (action as unknown as { meta: { replacementCarrier: string | null } }).meta
+      .replacementCarrier;
+    expect(carrier).toContain('"opaque":9007199254740993');
+    expect(carrier).not.toContain('avatarBase64');
+  });
+
+  // QNBS-v3 (#553 a4): the real admission runs here, so the bound carrier is proven free of local metadata rather than echoed from the input.
+  it('binds a carrier from real import admission without local routing metadata', async () => {
+    const actual = await vi.importActual<typeof import('../../../services/projectImportSchema')>(
+      '../../../services/projectImportSchema',
+    );
+    vi.mocked(parseImportedProjectDocument).mockImplementationOnce(
+      actual.parseImportedProjectDocument,
+    );
+    const text =
+      '{"schemaVersion":1,"id":"proj-1","title":"T","logline":"L","manuscript":[],"characters":[],"worlds":[],' +
+      '"opaque":9007199254740993,"__worldscriptLegacyProjectDirectory":"dir","__worldscriptLegacyAuxiliary":{"k":1}}';
+
+    const action = await makeStore().dispatch(
+      importProjectThunk(new File([text], 'novel.json', { type: 'application/json' })),
+    );
+
+    expect(action.type).toBe('project/importProject/fulfilled');
+    const carrier = (action as unknown as { meta: { replacementCarrier: string | null } }).meta
+      .replacementCarrier;
+    expect(carrier).toContain('"opaque":9007199254740993');
+    expect(carrier).not.toContain('__worldscriptLegacy');
   });
 
   it('handles array-format characters without avatarBase64', async () => {
@@ -755,23 +812,56 @@ describe('importProjectThunk', () => {
 // restoreSnapshotThunk
 // ---------------------------------------------------------------------------
 describe('restoreSnapshotThunk', () => {
-  it('dispatches fulfilled with snapshot data from storageService', async () => {
-    const snapshotData = { title: 'Snapshot Title', manuscript: [] };
-    vi.mocked(storageService.restoreSnapshot).mockResolvedValue(snapshotData as never);
+  it('dispatches fulfilled with snapshot data normalized for the entity adapters (#553 §2.8)', async () => {
+    // Stored project text may use the portable array form for characters/worlds.
+    const snapshotData = {
+      title: 'Snapshot Title',
+      manuscript: [],
+      characters: [{ id: 'c1', name: 'Ada' }],
+      worlds: [],
+    };
+    const raw = JSON.stringify(snapshotData).replace(/}$/, ',"opaque":9007199254740993}');
+    vi.mocked(storageService.restoreSnapshot).mockResolvedValue({
+      project: snapshotData,
+      raw,
+    } as never);
 
     const store = makeStore();
     const action = await store.dispatch(restoreSnapshotThunk(42));
+    // QNBS-v3 (#553 a5): the exact admitted text travels only on the fulfilled action.
+    expect((action as { meta: { restoreCarrier?: string } }).meta.restoreCarrier).toBe(raw);
 
     expect(action.type).toBe('project/restoreSnapshot/fulfilled');
-    expect((action as { payload: typeof snapshotData }).payload).toEqual(snapshotData);
+    expect((action as { payload: Record<string, unknown> }).payload).toMatchObject({
+      title: 'Snapshot Title',
+      characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'Ada' } } },
+      worlds: { ids: [], entities: {} },
+    });
     expect(storageService.restoreSnapshot).toHaveBeenCalledWith(
       42,
       expect.objectContaining({ id: 'default' }),
     );
   });
 
+  it('rejects a restored snapshot whose collections cannot be normalized', async () => {
+    const bad = {
+      title: 'Bad',
+      manuscript: [],
+      characters: [{ id: 'dup' }, { id: 'dup' }],
+      worlds: [],
+    };
+    vi.mocked(storageService.restoreSnapshot).mockResolvedValue({
+      project: bad,
+      raw: JSON.stringify(bad),
+    });
+
+    const action = await makeStore().dispatch(restoreSnapshotThunk(7));
+
+    expect(action.type).toBe('project/restoreSnapshot/rejected');
+  });
+
   it('captures the current project before requesting snapshot data', async () => {
-    vi.mocked(storageService.restoreSnapshot).mockResolvedValue(null);
+    vi.mocked(storageService.restoreSnapshot).mockResolvedValue({ project: null, raw: '' });
 
     const store = makeStore();
     await store.dispatch(restoreSnapshotThunk(99));
@@ -784,7 +874,7 @@ describe('restoreSnapshotThunk', () => {
 
   // QNBS-v3: an async restore must not fulfill into a different Redux project than the captured target.
   it('rejects when the active project changes while snapshot I/O is pending', async () => {
-    let releaseRestore!: (value: unknown) => void;
+    let releaseRestore!: (value: { project: unknown; raw: string }) => void;
     vi.mocked(storageService.restoreSnapshot).mockReturnValue(
       new Promise((resolve) => {
         releaseRestore = resolve;
@@ -798,7 +888,7 @@ describe('restoreSnapshotThunk', () => {
       type: 'project/restoreSnapshot/fulfilled',
       payload: { ...currentData, id: 'p2' },
     });
-    releaseRestore({ ...currentData, id: 'default' });
+    releaseRestore({ project: { ...currentData, id: 'default' }, raw: '{}' });
 
     const action = await pending;
 
@@ -808,7 +898,7 @@ describe('restoreSnapshotThunk', () => {
 
   // QNBS-v3: a New Project reset keeps id:'default' (the same as almost every fresh project), so id alone cannot detect this race -- the generation counter must.
   it('rejects when the active project is reset (still id:default) while snapshot I/O is pending', async () => {
-    let releaseRestore!: (value: unknown) => void;
+    let releaseRestore!: (value: { project: unknown; raw: string }) => void;
     vi.mocked(storageService.restoreSnapshot).mockReturnValue(
       new Promise((resolve) => {
         releaseRestore = resolve;
@@ -820,7 +910,7 @@ describe('restoreSnapshotThunk', () => {
     store.dispatch(
       projectActions.resetProject({ title: 'Fresh', logline: '', chapter1Title: 'Ch1' }),
     );
-    releaseRestore({ title: 'Old snapshot content', id: 'default' });
+    releaseRestore({ project: { title: 'Old snapshot content', id: 'default' }, raw: '{}' });
 
     const action = await pending;
 

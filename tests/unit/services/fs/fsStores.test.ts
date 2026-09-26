@@ -65,8 +65,12 @@ import {
   decompressData,
   decompressJsonText,
   ProjectFileLockedError,
+  StaleProjectWriterError,
 } from '../../../../services/fs/fsCore';
-import { FsProjectStore } from '../../../../services/fs/projectFsStore';
+import {
+  FsProjectStore,
+  ProjectCanonicalWritebackError,
+} from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 
 // QNBS-v3: shared Binder fixture keeps schema-complete asset nodes consistent across filesystem cleanup and routing tests.
@@ -239,6 +243,92 @@ describe('FsProjectStore — projects', () => {
     expect(savedRaw).toContain('"opaqueTop":{"numeric":9007199254740993}');
   });
 
+  // QNBS-v3 (#553 a10): a replaced editor project (reset/import/restore B over same-ID A) is written whole — nothing of A's text, opaque data or routing metadata survives.
+  it('writes a replacement as a fresh document without the predecessor’s opaque data', async () => {
+    const source =
+      '{"schemaVersion":1,"id":"p1","title":"Project A","logline":"A","manuscript":[],"characters":[{"id":"c1","name":"Ada","opaqueNumber":9007199254740993}],"worlds":[],"opaqueTop":{"a":true},"__worldscriptLegacyAuxiliary":{"from":"A"}}';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/p1/project.json', source);
+    const projectB = { ...project, title: 'Restored B' };
+
+    await store.saveProject(projectB as never, { replacement: true });
+
+    const savedRaw = decompressJsonText(fake.text.get('/app/projects/p1/project.json') as string);
+    expect(savedRaw).not.toContain('opaque');
+    expect(savedRaw).not.toContain('Project A');
+    expect(savedRaw).not.toContain('__worldscriptLegacyAuxiliary');
+    expect(JSON.parse(savedRaw)).toEqual({ ...projectB, schemaVersion: 1 });
+  });
+
+  // QNBS-v3 (#553 a10): a first-ever save flagged as a replacement (a reset or Safe-Session identity) still takes the create branch — there is no predecessor to replace.
+  it('creates an absent project normally when the save is flagged as a replacement', async () => {
+    await store.saveProject(project as never, { replacement: true });
+
+    const savedRaw = decompressJsonText(fake.text.get('/app/projects/p1/project.json') as string);
+    expect(JSON.parse(savedRaw)).toEqual(project);
+    expect(fake.text.has('/app/projects/p1/.incarnation')).toBe(true);
+  });
+
+  // QNBS-v3 (#553 a5): a restored project is persisted from the snapshot's own admitted text — exact tokens and opaque fields survive, the editor's edit is applied, nothing of the replaced file remains.
+  it('persists a restore carrier byte-exactly with the editor edit applied', async () => {
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/p1/project.json',
+      '{"schemaVersion":1,"id":"p1","title":"Project A","logline":"A","manuscript":[],"characters":[],"worlds":[],"aOnly":true}',
+    );
+    const carrier =
+      '{"schemaVersion":1,"id":"p1","title":"Snapshot B","logline":"B","manuscript":[],"characters":[],"worlds":[],"exact":9007199254740993,"opaque":{"keep":true}}';
+
+    await store.saveProject({ ...project, title: 'Snapshot B, edited', logline: 'B' } as never, {
+      replacement: true,
+      replacementRaw: carrier,
+    });
+
+    const savedRaw = decompressJsonText(fake.text.get('/app/projects/p1/project.json') as string);
+    expect(savedRaw).toContain('"exact":9007199254740993');
+    expect(savedRaw).toContain('"opaque":{"keep":true}');
+    expect(savedRaw).toContain('"title":"Snapshot B, edited"');
+    expect(savedRaw).not.toContain('aOnly');
+    expect(savedRaw).not.toContain('Project A');
+  });
+
+  // QNBS-v3 (#553 a4): an imported project's first save keeps the admitted import text, under the id the import assigned.
+  it('persists an import carrier with the assigned identity and the admitted opaque data', async () => {
+    await fake.apis.mkdir('/app/projects/session-x', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/session-x/project.json',
+      '{"schemaVersion":1,"id":"session-x","title":"Before","logline":"A","manuscript":[],"characters":[],"worlds":[],"aOnly":1}',
+    );
+    const carrier =
+      '{"schemaVersion":1,"id":"default","title":"Imported","logline":"B","manuscript":[],"characters":[],"worlds":[],"importExact":9007199254740993}';
+
+    await store.saveProject(
+      { ...project, id: 'session-x', title: 'Imported', logline: 'B' } as never,
+      { replacement: true, replacementRaw: carrier },
+    );
+
+    const savedRaw = decompressJsonText(
+      fake.text.get('/app/projects/session-x/project.json') as string,
+    );
+    expect(savedRaw).toContain('"importExact":9007199254740993');
+    expect(JSON.parse(savedRaw)).toMatchObject({ id: 'session-x', title: 'Imported' });
+    expect(savedRaw).not.toContain('aOnly');
+  });
+
+  it('keeps the editing-baseline fence for a replacement from a stale window', async () => {
+    const sourcePath = '/app/projects/p1/project.json';
+    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+    await store.loadProjectForEditing('p1');
+    const otherWindowRaw = JSON.stringify({ ...project, title: 'Other window' });
+    await fake.apis.writeTextFile(sourcePath, otherWindowRaw);
+
+    await expect(
+      store.saveProject({ ...project, title: 'Replacement' } as never, { replacement: true }),
+    ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(otherWindowRaw);
+  });
+
   it('removes an owned optional field from the current filesystem raw carrier when the snapshot omits it', async () => {
     const sourcePath = '/app/projects/p1/project.json';
     const source = JSON.stringify({
@@ -253,32 +343,40 @@ describe('FsProjectStore — projects', () => {
     expect(decompressJsonText(fake.text.get(sourcePath) as string)).not.toContain('"aiPreset"');
   });
 
-  it('refuses an external source generation change before atomic filesystem replacement', async () => {
-    const sourcePath = '/app/projects/p1/project.json';
-    const concurrentRaw = JSON.stringify({
-      ...project,
-      title: 'Concurrent writer',
-    });
-    await fake.apis.mkdir('/app/projects/p1', { recursive: true });
-    await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
-    const originalWriteTextFile = fake.apis.writeTextFile;
-    fake.apis.writeTextFile = (path: string, content: string, opts?: { createNew?: boolean }) => {
-      if (path.startsWith(`${sourcePath}.tmp-`)) {
-        fake.text.set(sourcePath, compressJsonText(concurrentRaw));
-      }
-      return originalWriteTextFile(path, content, opts);
-    };
+  it.each([
+    ['an owned edit', undefined],
+    ['a replacement', { replacement: true }],
+  ])(
+    'refuses an external source generation change before atomic filesystem replacement (%s)',
+    async (_label, options) => {
+      const sourcePath = '/app/projects/p1/project.json';
+      const concurrentRaw = JSON.stringify({
+        ...project,
+        title: 'Concurrent writer',
+      });
+      await fake.apis.mkdir('/app/projects/p1', { recursive: true });
+      await fake.apis.writeTextFile(sourcePath, JSON.stringify(project));
+      const originalWriteTextFile = fake.apis.writeTextFile;
+      fake.apis.writeTextFile = (path: string, content: string, opts?: { createNew?: boolean }) => {
+        if (path.startsWith(`${sourcePath}.tmp-`)) {
+          fake.text.set(sourcePath, compressJsonText(concurrentRaw));
+        }
+        return originalWriteTextFile(path, content, opts);
+      };
 
-    await expect(
-      store.saveProject({ ...project, title: 'Local writer' } as never),
-    ).rejects.toMatchObject({
-      name: 'ProjectCanonicalWritebackError',
-      projectId: 'p1',
-      detail: expect.stringContaining('source generation changed before atomic replacement'),
-    });
-    expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(concurrentRaw);
-    expect([...fake.text.keys()].some((path) => path.startsWith(`${sourcePath}.tmp-`))).toBe(false);
-  });
+      await expect(
+        store.saveProject({ ...project, title: 'Local writer' } as never, options),
+      ).rejects.toMatchObject({
+        name: 'ProjectCanonicalWritebackError',
+        projectId: 'p1',
+        detail: expect.stringContaining('source generation changed before atomic replacement'),
+      });
+      expect(decompressJsonText(fake.text.get(sourcePath) as string)).toBe(concurrentRaw);
+      expect([...fake.text.keys()].some((path) => path.startsWith(`${sourcePath}.tmp-`))).toBe(
+        false,
+      );
+    },
+  );
 
   // QNBS-v3 (#553): the generation re-check above narrows the TOCTOU gap but does not close it — these prove the cross-process lock actually gates persistExistingCanonicalProject.
   it('acquires and releases a cross-process lock around an existing-project save', async () => {
@@ -326,13 +424,13 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
   });
 
-  // QNBS-v3 (#553): the specific regression a fresh review caught — a lock colocated inside projects/<id>/ would be relocated by quarantine's rename and deleted by deleteProject's recursive remove, letting a concurrent writer wrongly conclude the path is free once a new projects/<id>/ is recreated. Proves the lock's new stable location survives both operations untouched.
+  // QNBS-v3 (#553): quarantine and delete now take the project lock themselves, so neither can run under a concurrent writer; the lock, living outside projects/<id>/, is never moved or removed by the refused operation.
   it.each([
-    ['quarantine', () => store.quarantineProject('p1')],
-    ['delete', () => store.deleteProject('p1')],
+    ['quarantine', () => store.quarantineProject('p1'), 'ProjectQuarantineError'],
+    ['delete', () => store.deleteProject('p1'), 'ProjectFileLockedError'],
   ])(
-    'keeps an active lock intact across a concurrent %s of the same project directory',
-    async (_label, act) => {
+    'refuses a %s while another writer holds the project lock, leaving both intact',
+    async (_label, act, errorName) => {
       const sourcePath = '/app/projects/p1/project.json';
       const lockPath = '/app/project-locks/p1.lock';
       await fake.apis.mkdir('/app/projects/p1', { recursive: true });
@@ -340,10 +438,9 @@ describe('FsProjectStore — projects', () => {
       await fake.apis.mkdir('/app/project-locks', { recursive: true });
       await fake.apis.writeTextFile(lockPath, 'locked');
 
-      await act();
+      await expect(act()).rejects.toMatchObject({ name: errorName });
 
-      // QNBS-v3: both operations remove/rename projects/p1 entirely — the lock, living outside that directory, must be unaffected.
-      expect(fake.text.has(sourcePath)).toBe(false);
+      expect(fake.text.has(sourcePath)).toBe(true);
       expect(fake.text.has(lockPath)).toBe(true);
     },
   );
@@ -841,7 +938,8 @@ describe('FsProjectStore — projects', () => {
   });
 
   // QNBS-v3: readable legacy bytes remain available to inspection but cannot cross the editable bootstrap boundary.
-  it('refuses ID-less legacy admission for the editable application state without rewriting the source', async () => {
+  // QNBS-v3 (#553 R3): an ID-less legacy file is migrated durably and becomes a CURRENT ID-less project bound to its directory.
+  it('migrates an ID-less legacy project durably before it enters editing', async () => {
     const legacyProject = {
       title: 'ID-less Legacy',
       logline: 'L',
@@ -852,15 +950,14 @@ describe('FsProjectStore — projects', () => {
     const source = '/app/projects/idless-legacy/project.json';
     await fake.apis.mkdir('/app/projects/idless-legacy', { recursive: true });
     await fake.apis.writeTextFile(source, JSON.stringify(legacyProject));
-    const before = fake.text.get(source);
 
-    await expect(store.loadProjectForEditing('idless-legacy')).rejects.toMatchObject({
-      name: 'ProjectLoadError',
-      reason: 'unsupported-version',
-      classification: 'LEGACY_UNVERSIONED',
-      projectId: 'idless-legacy',
+    const project = await store.loadProjectForEditing('idless-legacy');
+
+    expect(project?.title).toBe('ID-less Legacy');
+    expect(JSON.parse(decompressJsonText(fake.text.get(source) as string))).toMatchObject({
+      ...legacyProject,
+      schemaVersion: 1,
     });
-    expect(fake.text.get(source)).toBe(before);
   });
 
   // QNBS-v3: authority is checked after queued work completes so a load cannot race a later mutation.
@@ -1529,7 +1626,10 @@ describe('FsProjectStore — projects', () => {
       name: 'ProjectDeleteError',
       reason: 'identity-inspection-failed',
     });
-    expect(removeSpy).not.toHaveBeenCalled();
+    // Only the delete's own project-lock release may remove anything.
+    expect(
+      removeSpy.mock.calls.every(([path]) => String(path).startsWith('/app/project-locks/')),
+    ).toBe(true);
     expect(fake.text.has('/app/projects/p1/project.json')).toBe(true);
   });
 
@@ -1593,7 +1693,7 @@ describe('FsProjectStore — projects', () => {
     });
     fake.text.set('/app/config/active-project-id.txt', 'p1');
 
-    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const { project: restored } = await store.restoreSnapshot(snapshotId, current as never);
 
     expect((restored as unknown as Record<string, unknown>)['id']).toBe('p2');
     expect(restored.title).toBe('Older second project content');
@@ -1609,7 +1709,7 @@ describe('FsProjectStore — projects', () => {
       manuscript: [{ id: 's-old', title: 'Older', content: 'previous draft' }],
     });
 
-    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const { project: restored } = await store.restoreSnapshot(snapshotId, current as never);
     const restoredRecord = restored as unknown as Record<string, unknown>;
 
     expect(restoredRecord['id']).toBe('p1');
@@ -1690,7 +1790,7 @@ describe('FsProjectStore — projects', () => {
       title: 'Legacy snapshot content',
     });
 
-    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const { project: restored } = await store.restoreSnapshot(snapshotId, current as never);
 
     expect(restored.title).toBe('Legacy snapshot content');
     expect((restored as unknown as Record<string, unknown>)['schemaVersion']).toBe(1);
@@ -1722,7 +1822,7 @@ describe('FsProjectStore — projects', () => {
       },
     });
 
-    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const { project: restored } = await store.restoreSnapshot(snapshotId, current as never);
     const restoredRecord = restored as unknown as Record<string, unknown>;
     const metadata = restoredRecord['__worldscriptLegacyAuxiliary'] as Record<string, unknown>;
 
@@ -2030,6 +2130,681 @@ describe('FsProjectStore — projects', () => {
     });
     expect((await store.loadProject('p1'))?.title).toBe('My Novel');
     expect([...fake.text.keys()].some((path) => path.includes('.tmp-'))).toBe(false);
+  });
+});
+
+// QNBS-v3 (#553): two FsProjectStore instances over one filesystem are two WorldScript processes. The #826 lock serializes their writes; these prove the load-generation baseline additionally refuses a writer whose snapshot predates another window's commit, instead of silently reverting that window's fields.
+describe('FsProjectStore — snapshot canonical carrier (#553 §2.8, a3/a5)', () => {
+  const PROJECT_FILE = '/app/projects/p1/project.json';
+  const doc = {
+    id: 'p1',
+    schemaVersion: 1,
+    title: 'Doc',
+    logline: 'L',
+    manuscript: [],
+    characters: [],
+    worlds: [],
+  };
+  const snapshotTexts = () =>
+    [...fake.text.entries()]
+      .filter(([path]) => path.startsWith('/app/snapshots/'))
+      .map(([, envelope]) => decompressJsonText(JSON.parse(envelope).data as string));
+
+  async function storedWithExactInteger(): Promise<string> {
+    await store.saveProject(doc as never);
+    const raw = decompressJsonText(fake.text.get(PROJECT_FILE) as string).replace(
+      /}$/,
+      ',"futureWidget":{"k":1},"bigCount":9007199254740993}',
+    );
+    fake.text.set(PROJECT_FILE, raw);
+    return raw;
+  }
+
+  it('auto-snapshots the exact text a save just committed, integer literals included', async () => {
+    await storedWithExactInteger();
+    const editor = new FsProjectStore();
+    await editor.loadProjectForEditing('p1');
+    // The interval starts at construction; make the next save due for its auto-snapshot.
+    (editor as unknown as { lastAutoSnapshotTime: number }).lastAutoSnapshotTime = 0;
+    await editor.saveProject({ ...doc, title: 'Edited' } as never);
+    await vi.waitFor(() => expect(snapshotTexts().length).toBeGreaterThan(0));
+
+    const snapshot = snapshotTexts().at(-1) as string;
+    expect(snapshot).toContain('"bigCount":9007199254740993');
+    expect(snapshot).toBe(decompressJsonText(fake.text.get(PROJECT_FILE) as string));
+  });
+
+  // QNBS-v3 (#553 a11): backup egress reads the stored snapshot text itself, never a parse of it.
+  it('returns a snapshot’s stored text byte-exact for backup egress, null when absent', async () => {
+    const storedRaw = await storedWithExactInteger();
+    const snapshotId = await store.saveSnapshotText('manual', storedRaw);
+
+    expect(await store.getSnapshotText(snapshotId)).toBe(storedRaw);
+    expect(await store.getSnapshotText(123456)).toBeNull();
+  });
+
+  it('admits the snapshot’s own content for the target without writing the project', async () => {
+    const storedRaw = await storedWithExactInteger();
+    const editor = new FsProjectStore();
+    await editor.loadProjectForEditing('p1');
+    const snapshotId = await editor.saveSnapshotText('manual', storedRaw);
+    await editor.saveProject({ ...doc, title: 'Changed after snapshot' } as never);
+    const before = fake.text.get(PROJECT_FILE);
+
+    const { project: restored } = await editor.restoreSnapshot(snapshotId, { ...doc } as never);
+
+    // Persisting a restore is the coordinated same-ID replacement write (#553 a10), never done here.
+    expect(fake.text.get(PROJECT_FILE)).toBe(before);
+    expect(restored).toMatchObject({ id: 'p1', title: 'Doc', futureWidget: { k: 1 } });
+  });
+
+  it('takes machine-local metadata from the restore target, never from the snapshot', async () => {
+    const storedRaw = await storedWithExactInteger();
+    const editor = new FsProjectStore();
+    await editor.loadProjectForEditing('p1');
+    const snapshotId = await editor.saveSnapshotText(
+      'manual',
+      storedRaw.replace(/}$/, ',"__worldscriptLegacyProjectDirectory":"elsewhere"}'),
+    );
+
+    const { project: restored } = await editor.restoreSnapshot(snapshotId, { ...doc } as never);
+
+    expect(restored).not.toHaveProperty('__worldscriptLegacyProjectDirectory');
+  });
+});
+
+describe('FsProjectStore — canonical raw egress (#553 §2.8)', () => {
+  it('returns the stored raw byte-for-byte, including integers the parsed projection rounds', async () => {
+    await store.saveProject({
+      id: 'p1',
+      schemaVersion: 1,
+      title: 'Raw egress',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    } as never);
+    const file = '/app/projects/p1/project.json';
+    const withOpaque = decompressJsonText(fake.text.get(file) as string).replace(
+      /}$/,
+      ',"futureWidget":{"k":1},"bigCount":9007199254740993}',
+    );
+    fake.text.set(file, withOpaque);
+
+    const result = await new FsProjectStore().loadCanonicalProjectRaw('p1');
+    const projection = await new FsProjectStore().loadProject('p1');
+
+    expect(result).toEqual({ status: 'CURRENT', raw: withOpaque });
+    // The parsed projection keeps the opaque object but cannot hold the exact integer.
+    expect(JSON.stringify(projection)).not.toContain('9007199254740993');
+  });
+
+  it('reports an absent project as ABSENT', async () => {
+    await expect(new FsProjectStore().loadCanonicalProjectRaw('missing')).resolves.toEqual({
+      status: 'ABSENT',
+    });
+  });
+
+  describe('editor export carrier', () => {
+    const doc = {
+      id: 'p1',
+      schemaVersion: 1,
+      title: 'Doc',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    };
+
+    async function editorsLoadedAtG0(): Promise<[FsProjectStore, FsProjectStore]> {
+      await store.saveProject(doc as never);
+      const windowA = new FsProjectStore();
+      const windowB = new FsProjectStore();
+      await windowA.loadProjectForEditing('p1');
+      await windowB.loadProjectForEditing('p1');
+      return [windowA, windowB];
+    }
+
+    it('returns the carrier for a current editor, including after its own saves', async () => {
+      const [windowA] = await editorsLoadedAtG0();
+      await expect(windowA.loadEditorExportCarrier('p1')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+      await windowA.saveProject({ ...doc, title: 'Own save' } as never);
+      await expect(windowA.loadEditorExportCarrier('p1')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+    });
+
+    it('refuses an editor another window moved past', async () => {
+      const [windowA, windowB] = await editorsLoadedAtG0();
+      await windowA.saveProject({ ...doc, title: 'Changed by A' } as never);
+      await expect(windowB.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+    });
+
+    it('refuses an editor whose project was deleted and recreated byte-identically', async () => {
+      const [windowA, windowB] = await editorsLoadedAtG0();
+      await windowA.deleteProject('p1');
+      await windowA.saveProject(doc as never);
+      await expect(windowB.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+    });
+
+    it('resolves an id-less project to the directory it was loaded from', async () => {
+      await store.saveProject(doc as never);
+      const file = '/app/projects/p1/project.json';
+      const { id: _id, ...idless } = JSON.parse(decompressJsonText(fake.text.get(file) as string));
+      fake.text.set(file, JSON.stringify(idless));
+      const editor = new FsProjectStore();
+      await editor.loadProjectForEditing('p1');
+
+      await expect(editor.loadEditorExportCarrier(undefined)).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+      await expect(editor.loadEditorExportCarrier('')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+    });
+
+    it('refuses an editor whose project another window deleted', async () => {
+      const [windowA, windowB] = await editorsLoadedAtG0();
+      await windowA.deleteProject('p1');
+      await expect(windowB.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+    });
+
+    it('refuses when the project is recreated while its text is being read', async () => {
+      const [windowA] = await editorsLoadedAtG0();
+      const incarnationFile = '/app/projects/p1/.incarnation';
+      const originalRead = fake.apis.readTextFile;
+      let incarnationReads = 0;
+      fake.apis.readTextFile = (path) =>
+        path === incarnationFile
+          ? Promise.resolve(incarnationReads++ === 0 ? 'before' : 'after')
+          : originalRead(path);
+
+      await expect(windowA.loadEditorExportCarrier('p1')).resolves.toEqual({ status: 'STALE' });
+      fake.apis.readTextFile = originalRead;
+    });
+
+    it('uses the loaded directory when the editor loaded a project whose stored id names another directory', async () => {
+      await store.saveProject({ ...doc, id: 'legacy-dir' } as never);
+      const file = '/app/projects/legacy-dir/project.json';
+      const aliased = JSON.parse(decompressJsonText(fake.text.get(file) as string));
+      fake.text.set(file, JSON.stringify({ ...aliased, id: 'stored-id' }));
+      const editor = new FsProjectStore();
+      await editor.loadProjectForEditing('legacy-dir');
+
+      await expect(editor.loadEditorExportCarrier('stored-id')).resolves.toMatchObject({
+        status: 'CURRENT',
+      });
+    });
+
+    it('refuses rather than guessing when an id-less project has no known source', async () => {
+      await expect(new FsProjectStore().loadEditorExportCarrier(undefined)).resolves.toEqual({
+        status: 'REFUSED',
+        classification: 'UNKNOWN_SOURCE',
+      });
+    });
+  });
+});
+
+describe('FsProjectStore — stale independently-loaded writer', () => {
+  const PROJECT_FILE = '/app/projects/p1/project.json';
+  const base = {
+    id: 'p1',
+    schemaVersion: 1,
+    title: 'Original',
+    logline: 'Original logline',
+    manuscript: [{ id: 's1', title: 'Ch1', content: 'hello' }],
+    characters: [],
+    worlds: [],
+  };
+  const persisted = () =>
+    JSON.parse(decompressJsonText(fake.text.get(PROJECT_FILE) as string)) as Record<
+      string,
+      unknown
+    >;
+
+  async function twoWindowsLoadedAtG0(): Promise<[FsProjectStore, FsProjectStore]> {
+    await store.saveProject(base as never);
+    const windowA = new FsProjectStore();
+    const windowB = new FsProjectStore();
+    await windowA.loadProjectForEditing('p1');
+    await windowB.loadProjectForEditing('p1');
+    return [windowA, windowB];
+  }
+
+  it('refuses the second window instead of reverting the first window’s committed field', async () => {
+    const [windowA, windowB] = await twoWindowsLoadedAtG0();
+
+    await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+    await expect(
+      windowB.saveProject({ ...base, logline: 'Changed by B' } as never),
+    ).rejects.toBeInstanceOf(StaleProjectWriterError);
+
+    expect(persisted()).toMatchObject({ title: 'Changed by A', logline: 'Original logline' });
+  });
+
+  it('lets the same window keep saving after its own commits', async () => {
+    const [windowA] = await twoWindowsLoadedAtG0();
+
+    await windowA.saveProject({ ...base, title: 'First' } as never);
+    await windowA.saveProject({ ...base, title: 'Second' } as never);
+    await windowA.saveProject({ ...base, title: 'Third' } as never);
+
+    expect(persisted()).toMatchObject({ title: 'Third' });
+  });
+
+  it('lets the refused window save again once it reloads the current generation', async () => {
+    const [windowA, windowB] = await twoWindowsLoadedAtG0();
+    await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+    await expect(windowB.saveProject({ ...base } as never)).rejects.toBeInstanceOf(
+      StaleProjectWriterError,
+    );
+
+    const reloaded = await windowB.loadProjectForEditing('p1');
+    await windowB.saveProject({ ...(reloaded as object), logline: 'B after reload' } as never);
+
+    expect(persisted()).toMatchObject({ title: 'Changed by A', logline: 'B after reload' });
+  });
+
+  it('does not let a background read move the editing baseline and mask the conflict', async () => {
+    const [windowA, windowB] = await twoWindowsLoadedAtG0();
+    await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+
+    // Backup/LoRA-style read of the newer generation by the stale window itself.
+    expect((await windowB.loadProject('p1'))?.title).toBe('Changed by A');
+    await expect(
+      windowB.saveProject({ ...base, logline: 'Changed by B' } as never),
+    ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    expect(persisted()).toMatchObject({ title: 'Changed by A' });
+  });
+
+  it('refuses a stale writer before anything is written, leaving no temp file behind', async () => {
+    const [windowA, windowB] = await twoWindowsLoadedAtG0();
+    await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+    const before = fake.text.get(PROJECT_FILE);
+
+    await expect(windowB.saveProject({ ...base } as never)).rejects.toBeInstanceOf(
+      StaleProjectWriterError,
+    );
+
+    expect(fake.text.get(PROJECT_FILE)).toBe(before);
+    expect([...fake.text.keys()].some((path) => path.includes('.tmp-'))).toBe(false);
+    expect([...fake.text.keys()].some((path) => path.endsWith('.lock'))).toBe(false);
+  });
+
+  it('keeps the creating window fenced if another window saves its new file first', async () => {
+    const creator = new FsProjectStore();
+    await creator.saveProject(base as never);
+    const other = new FsProjectStore();
+    await other.loadProjectForEditing('p1');
+    await other.saveProject({ ...base, title: 'Changed by other' } as never);
+
+    await expect(
+      creator.saveProject({ ...base, logline: 'Stale creator edit' } as never),
+    ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    expect(persisted()).toMatchObject({ title: 'Changed by other', logline: 'Original logline' });
+  });
+
+  it('lets the creating window keep saving its own new file', async () => {
+    const creator = new FsProjectStore();
+    await creator.saveProject(base as never);
+    await creator.saveProject({ ...base, title: 'Creator second save' } as never);
+    expect(persisted()).toMatchObject({ title: 'Creator second save' });
+  });
+
+  it.each([
+    ['deleted', (w: FsProjectStore) => w.deleteProject('p1')],
+    ['quarantined', (w: FsProjectStore) => w.quarantineProject('p1')],
+  ])('refuses to resurrect a project another window %s', async (_label, remove) => {
+    const [windowA, windowB] = await twoWindowsLoadedAtG0();
+    await remove(windowA);
+
+    await expect(
+      windowB.saveProject({ ...base, title: 'Stale resurrection' } as never),
+    ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    expect(fake.text.has(PROJECT_FILE)).toBe(false);
+  });
+
+  it('lets a window recreate a project it deleted itself', async () => {
+    const [windowA] = await twoWindowsLoadedAtG0();
+    await windowA.deleteProject('p1');
+    await windowA.saveProject({ ...base, title: 'Recreated by its own deleter' } as never);
+    expect(persisted()).toMatchObject({ title: 'Recreated by its own deleter' });
+  });
+
+  it('keeps today’s behavior for a window that never loaded the project for editing', async () => {
+    await store.saveProject(base as never);
+    const other = new FsProjectStore();
+    await other.saveProject({ ...base, title: 'Saved without an editing load' } as never);
+    expect(persisted()).toMatchObject({ title: 'Saved without an editing load' });
+  });
+
+  describe('project incarnation (delete then byte-identical recreate)', () => {
+    const INCARNATION_FILE = '/app/projects/p1/.incarnation';
+
+    async function recreatedIdentically(): Promise<[FsProjectStore, FsProjectStore]> {
+      const [windowA, windowB] = await twoWindowsLoadedAtG0();
+      const originalBytes = decompressJsonText(fake.text.get(PROJECT_FILE) as string);
+      await windowA.deleteProject('p1');
+      await windowA.saveProject(base as never);
+      // The ABA precondition: the recreated document is byte-identical to what B loaded.
+      expect(decompressJsonText(fake.text.get(PROJECT_FILE) as string)).toBe(originalBytes);
+      return [windowA, windowB];
+    }
+
+    it('refuses the old window’s project save against the recreated project', async () => {
+      const [, windowB] = await recreatedIdentically();
+      await expect(
+        windowB.saveProject({ ...base, title: 'Old incarnation edit' } as never),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+      expect(persisted()).toMatchObject({ title: 'Original' });
+    });
+
+    it('refuses the old window’s asset write against the recreated project', async () => {
+      const [, windowB] = await recreatedIdentically();
+      await expect(
+        windowB.saveImage('c1', 'data:image/png;base64,AAAA', 'p1'),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    });
+
+    it('lets the old window work again after reloading the recreated project', async () => {
+      const [, windowB] = await recreatedIdentically();
+      await windowB.loadProjectForEditing('p1');
+      await windowB.saveProject({ ...base, title: 'After reload' } as never);
+      expect(persisted()).toMatchObject({ title: 'After reload' });
+    });
+
+    it('detects the recreate for a project created before incarnation tokens existed', async () => {
+      await store.saveProject(base as never);
+      fake.text.delete(INCARNATION_FILE);
+      const windowA = new FsProjectStore();
+      const windowB = new FsProjectStore();
+      await windowA.loadProjectForEditing('p1');
+      await windowB.loadProjectForEditing('p1');
+      const originalBytes = decompressJsonText(fake.text.get(PROJECT_FILE) as string);
+      // A current window's save never lazily assigns a token (that would falsely strand other current windows).
+      await windowA.saveProject(base as never);
+      expect(fake.text.has(INCARNATION_FILE)).toBe(false);
+
+      await windowA.deleteProject('p1');
+      await windowA.saveProject(base as never);
+      expect(decompressJsonText(fake.text.get(PROJECT_FILE) as string)).toBe(originalBytes);
+      await expect(
+        windowB.saveProject({ ...base, title: 'Old incarnation edit' } as never),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    });
+
+    it('fails a save closed when the incarnation cannot be read', async () => {
+      const [windowA] = await twoWindowsLoadedAtG0();
+      const originalRead = fake.apis.readTextFile;
+      fake.apis.readTextFile = (path) =>
+        path === INCARNATION_FILE ? Promise.reject(new Error('EIO')) : originalRead(path);
+
+      await expect(
+        windowA.saveProject({ ...base, title: 'Blocked' } as never),
+      ).rejects.toBeInstanceOf(ProjectCanonicalWritebackError);
+      fake.apis.readTextFile = originalRead;
+      expect(persisted()).toMatchObject({ title: 'Original' });
+    });
+
+    it('refuses to pair a document with an incarnation that changed during the load', async () => {
+      await store.saveProject(base as never);
+      const originalRead = fake.apis.readTextFile;
+      let reads = 0;
+      fake.apis.readTextFile = (path) =>
+        path === INCARNATION_FILE ? Promise.resolve(`token-${reads++}`) : originalRead(path);
+
+      await expect(new FsProjectStore().loadProjectForEditing('p1')).rejects.toMatchObject({
+        name: 'ProjectLoadError',
+        reason: 'io-error',
+      });
+      fake.apis.readTextFile = originalRead;
+    });
+  });
+
+  describe('auxiliary image/binder/codex writes', () => {
+    const meta = { name: 'a.pdf', mimeType: 'application/pdf', byteSize: 0 } as never;
+    const auxiliaryWrites: [string, (w: FsProjectStore) => Promise<void>][] = [
+      ['saveImage', (w) => w.saveImage('c1', 'data:image/png;base64,AAAA', 'p1')],
+      ['deleteImage', (w) => w.deleteImage('c1', 'p1')],
+      ['saveBinderAsset', (w) => w.saveBinderAsset('p1', 'a1', new ArrayBuffer(3), meta)],
+      ['deleteBinderAsset', (w) => w.deleteBinderAsset('p1', 'a1')],
+      ['deleteAllBinderAssetsForProject', (w) => w.deleteAllBinderAssetsForProject('p1')],
+      ['saveStoryCodex', (w) => w.saveStoryCodex({ projectId: 'p1', entries: [] } as never)],
+      ['deleteStoryCodex', (w) => w.deleteStoryCodex('p1')],
+    ];
+    const diskSnapshot = () =>
+      [...fake.text.entries(), ...fake.bin.entries()].map(([k, v]) => `${k}=${String(v)}`);
+
+    it.each(auxiliaryWrites)(
+      'refuses %s from a window another window moved past',
+      async (_label, write) => {
+        const [windowA, windowB] = await twoWindowsLoadedAtG0();
+        await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+        const before = diskSnapshot();
+
+        await expect(write(windowB)).rejects.toBeInstanceOf(StaleProjectWriterError);
+        expect(diskSnapshot()).toEqual(before);
+      },
+    );
+
+    it.each(auxiliaryWrites)(
+      'refuses %s after another window deleted the project',
+      async (_label, write) => {
+        const [windowA, windowB] = await twoWindowsLoadedAtG0();
+        await windowA.deleteProject('p1');
+
+        await expect(write(windowB)).rejects.toBeInstanceOf(StaleProjectWriterError);
+      },
+    );
+
+    it.each(auxiliaryWrites)('lets a current window run %s', async (_label, write) => {
+      const [windowA] = await twoWindowsLoadedAtG0();
+      await windowA.saveProject({ ...base, title: 'Own commit' } as never);
+      await expect(write(windowA)).resolves.toBeUndefined();
+    });
+
+    it.each(auxiliaryWrites)(
+      'keeps %s unfenced for a window that never edit-loaded',
+      async (_label, write) => {
+        await store.saveProject(base as never);
+        await new FsProjectStore().saveProject({ ...base, title: 'Other' } as never);
+        await expect(write(new FsProjectStore())).resolves.toBeUndefined();
+      },
+    );
+
+    it.each(auxiliaryWrites)(
+      'fails %s closed when the fence cannot read the project file',
+      async (_label, write) => {
+        const [windowA] = await twoWindowsLoadedAtG0();
+        vi.spyOn(fake.apis, 'exists').mockRejectedValue(new Error('EIO'));
+        await expect(write(windowA)).rejects.toBeInstanceOf(ProjectCanonicalWritebackError);
+      },
+    );
+
+    it.each(auxiliaryWrites)(
+      'holds the project lock across %s so no commit can land between check and write',
+      async (_label, write) => {
+        const [windowA] = await twoWindowsLoadedAtG0();
+        await fake.apis.mkdir('/app/project-locks', { recursive: true });
+        await fake.apis.writeTextFile('/app/project-locks/p1.lock', 'held by another window');
+        const before = diskSnapshot();
+
+        await expect(write(windowA)).rejects.toBeInstanceOf(ProjectFileLockedError);
+        expect(diskSnapshot()).toEqual(before);
+      },
+    );
+
+    it('fences a codex write routed into a legacy directory under that directory’s baseline', async () => {
+      const [windowA, windowB] = await twoWindowsLoadedAtG0();
+      (
+        windowB as unknown as {
+          registerLegacyAuxiliaryPolicy(
+            projectId: string,
+            legacyProjectId: string,
+            policy: { codex: boolean; binderAssetIds: ReadonlySet<string> },
+          ): void;
+        }
+      ).registerLegacyAuxiliaryPolicy('alias', 'p1', { codex: true, binderAssetIds: new Set() });
+      await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+
+      await expect(
+        windowB.saveStoryCodex({ projectId: 'alias', entries: [] } as never),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+      expect(fake.text.has('/app/projects/p1/codex/codex.snap')).toBe(false);
+    });
+
+    it('fences a binder write only against the directory that asset is routed to', async () => {
+      await store.saveProject(base as never);
+      await store.saveProject({ ...base, id: 'legacy', title: 'Legacy' } as never);
+      const windowA = new FsProjectStore();
+      const windowB = new FsProjectStore();
+      await windowB.loadProjectForEditing('p1');
+      await windowB.loadProjectForEditing('legacy');
+      await windowA.loadProjectForEditing('legacy');
+      await windowA.saveProject({ ...base, id: 'legacy', title: 'Legacy changed by A' } as never);
+      (
+        windowB as unknown as {
+          registerLegacyAuxiliaryPolicy(
+            projectId: string,
+            legacyProjectId: string,
+            policy: { codex: boolean; binderAssetIds: ReadonlySet<string> },
+          ): void;
+        }
+      ).registerLegacyAuxiliaryPolicy('p1', 'legacy', {
+        codex: false,
+        binderAssetIds: new Set(['old']),
+      });
+
+      await expect(
+        windowB.saveBinderAsset('p1', 'fresh', new ArrayBuffer(3), meta),
+      ).resolves.toBeUndefined();
+      await expect(
+        windowB.saveBinderAsset('p1', 'old', new ArrayBuffer(3), meta),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+    });
+
+    const withPolicy = (w: FsProjectStore, projectId: string, legacyId: string, codex: boolean) =>
+      (
+        w as unknown as {
+          registerLegacyAuxiliaryPolicy(
+            projectId: string,
+            legacyProjectId: string,
+            policy: { codex: boolean; binderAssetIds: ReadonlySet<string> },
+          ): void;
+        }
+      ).registerLegacyAuxiliaryPolicy(projectId, legacyId, {
+        codex,
+        binderAssetIds: new Set(codex ? [] : ['old']),
+      });
+
+    it('fences a routed codex write by the logical project’s baseline too', async () => {
+      const [windowA, windowB] = await twoWindowsLoadedAtG0();
+      withPolicy(windowB, 'p1', 'legacy', true);
+      await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+
+      await expect(
+        windowB.saveStoryCodex({ projectId: 'p1', entries: [] } as never),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+      expect(fake.text.has('/app/projects/legacy/codex/codex.snap')).toBe(false);
+    });
+
+    it('locks a write even for a window with no baseline, so it cannot interleave with a delete', async () => {
+      await store.saveProject(base as never);
+      await fake.apis.mkdir('/app/project-locks', { recursive: true });
+      await fake.apis.writeTextFile('/app/project-locks/p1.lock', 'held by a delete');
+
+      await expect(
+        new FsProjectStore().saveStoryCodex({ projectId: 'p1', entries: [] } as never),
+      ).rejects.toBeInstanceOf(ProjectFileLockedError);
+      expect(fake.text.has('/app/projects/p1/codex/codex.snap')).toBe(false);
+    });
+
+    it('locks the routed legacy directory a delete also empties', async () => {
+      await store.saveProject(base as never);
+      withPolicy(store, 'p1', 'legacy', true);
+      await fake.apis.mkdir('/app/project-locks', { recursive: true });
+      await fake.apis.writeTextFile('/app/project-locks/legacy.lock', 'held by a codex write');
+
+      await expect(store.deleteProject('p1')).rejects.toBeInstanceOf(ProjectFileLockedError);
+      expect(fake.text.has(PROJECT_FILE)).toBe(true);
+    });
+
+    it('makes a delete take its project and routed locks in the same sorted order as asset writes', async () => {
+      await store.saveProject({ ...base, id: 'zeta', title: 'Zeta' } as never);
+      withPolicy(store, 'zeta', 'legacy', true);
+      const originalWrite = fake.apis.writeTextFile;
+      const lockOrder: string[] = [];
+      fake.apis.writeTextFile = (path, content, opts) => {
+        if (path.startsWith('/app/project-locks/')) lockOrder.push(path);
+        return originalWrite(path, content, opts);
+      };
+
+      await store.deleteProject('zeta');
+
+      expect(lockOrder).toEqual(['/app/project-locks/legacy.lock', '/app/project-locks/zeta.lock']);
+    });
+
+    it('locks the fallback directory an unusable project ID actually writes to', async () => {
+      await fake.apis.mkdir('/app/project-locks', { recursive: true });
+      await fake.apis.writeTextFile('/app/project-locks/project.lock', 'held by a delete');
+
+      await expect(
+        new FsProjectStore().saveStoryCodex({ projectId: '***', entries: [] } as never),
+      ).rejects.toBeInstanceOf(ProjectFileLockedError);
+      expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+    });
+
+    it('reports a partial delete-all instead of resolving while binder files remain', async () => {
+      await store.saveProject(base as never);
+      await store.saveBinderAsset('p1', 'a1', new ArrayBuffer(3), meta);
+      await store.saveBinderAsset('p1', 'a2', new ArrayBuffer(3), meta);
+      const originalRemove = fake.apis.remove;
+      fake.apis.remove = (path, opts) =>
+        path.endsWith('a1.bin') ? Promise.reject(new Error('EACCES')) : originalRemove(path, opts);
+
+      await expect(store.deleteAllBinderAssetsForProject('p1')).rejects.toThrow('EACCES');
+      expect(await store.listBinderAssetIds('p1')).toEqual(['a1']);
+    });
+
+    it('checks the fallback directory’s baseline, not just its lock, for an unusable project ID', async () => {
+      await store.saveProject({ ...base, id: 'project', title: 'Fallback' } as never);
+      const windowA = new FsProjectStore();
+      const windowB = new FsProjectStore();
+      await windowA.loadProjectForEditing('project');
+      await windowB.loadProjectForEditing('project');
+      await windowA.saveProject({ ...base, id: 'project', title: 'Changed by A' } as never);
+
+      await expect(
+        windowB.saveStoryCodex({ projectId: '***', entries: [] } as never),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+      expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+    });
+
+    it('fails delete-all when the asset list cannot be read', async () => {
+      await store.saveProject(base as never);
+      await store.saveBinderAsset('p1', 'a1', new ArrayBuffer(3), meta);
+      const originalReadDir = fake.apis.readDir;
+      fake.apis.readDir = (path) =>
+        path.endsWith('/binder') ? Promise.reject(new Error('EIO')) : originalReadDir(path);
+
+      await expect(store.deleteAllBinderAssetsForProject('p1')).rejects.toThrow('EIO');
+      fake.apis.readDir = originalReadDir;
+      expect(await store.listBinderAssetIds('p1')).toEqual(['a1']);
+    });
+
+    it('lets the refused window write assets again after reloading', async () => {
+      const [windowA, windowB] = await twoWindowsLoadedAtG0();
+      await windowA.saveProject({ ...base, title: 'Changed by A' } as never);
+      await expect(
+        windowB.saveImage('c1', 'data:image/png;base64,AAAA', 'p1'),
+      ).rejects.toBeInstanceOf(StaleProjectWriterError);
+
+      await windowB.loadProjectForEditing('p1');
+      await windowB.saveImage('c1', 'data:image/png;base64,AAAA', 'p1');
+      expect(await windowB.getImage('c1', 'p1')).toBe('data:image/png;base64,AAAA');
+    });
   });
 });
 
@@ -2741,5 +3516,151 @@ describe('FsProjectStore — export / import', () => {
     fake.apis.open = () => Promise.resolve('/app/import.json');
     const project = await store.importProject();
     expect(project?.title).toBe('JSON Novel');
+  });
+});
+
+// QNBS-v3 (#553 R3): durable LEGACY_TO_V1 for filesystem projects — the admitted overlay is committed under the project lock and source fences, with the exact legacy text kept as a snapshot; any failure leaves the legacy file untouched.
+describe('FsProjectStore — durable legacy migration (#553 R3)', () => {
+  const SOURCE = '/app/projects/legacy/project.json';
+  const LEGACY_TEXT =
+    '{"id":"legacy","title":"Old","logline":"L","manuscript":[{"id":"s1","title":"Ch","content":"words"}],' +
+    '"characters":[],"worlds":[],"opaque":{"exact":9007199254740993}}';
+  const snapshotTexts = () =>
+    [...fake.text.entries()]
+      .filter(([path]) => path.startsWith('/app/snapshots/'))
+      .map(([, envelope]) => decompressJsonText(JSON.parse(envelope).data as string));
+
+  async function seedLegacy(text = LEGACY_TEXT) {
+    await fake.apis.mkdir('/app/projects/legacy', { recursive: true });
+    await fake.apis.writeTextFile(SOURCE, text);
+  }
+
+  it('commits schemaVersion 1 with every legacy byte kept, snapshots the legacy text, then admits editing', async () => {
+    await seedLegacy();
+
+    const project = await new FsProjectStore().loadProjectForEditing('legacy');
+
+    expect(project?.title).toBe('Old');
+    const stored = decompressJsonText(fake.text.get(SOURCE) as string);
+    expect(stored).toContain('"exact":9007199254740993');
+    expect(stored).toContain('"schemaVersion":1');
+    expect(stored.replace(/"schemaVersion":1,|,"schemaVersion":1/, '')).toBe(LEGACY_TEXT);
+    expect(snapshotTexts()).toEqual([LEGACY_TEXT]);
+  });
+
+  it('is idempotent: a migrated project loads as CURRENT without another migration', async () => {
+    await seedLegacy();
+    await new FsProjectStore().loadProjectForEditing('legacy');
+    const migrated = fake.text.get(SOURCE);
+
+    await new FsProjectStore().loadProjectForEditing('legacy');
+
+    expect(fake.text.get(SOURCE)).toBe(migrated);
+    expect(snapshotTexts()).toHaveLength(1);
+  });
+
+  it('refuses a legacy file that is not a valid V1 shape without writing anything', async () => {
+    await seedLegacy('{"title":"Broken","logline":"L","characters":"not-a-list","worlds":[]}');
+    const before = fake.text.get(SOURCE);
+
+    await expect(new FsProjectStore().loadProjectForEditing('legacy')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+    });
+    expect(fake.text.get(SOURCE)).toBe(before);
+    expect(snapshotTexts()).toEqual([]);
+  });
+
+  it('refuses the migration when the project incarnation changed after it was loaded', async () => {
+    await seedLegacy();
+    const before = fake.text.get(SOURCE);
+    const editor = new FsProjectStore();
+    const reads = vi.spyOn(
+      editor as unknown as { readProjectIncarnation: () => Promise<string | null> },
+      'readProjectIncarnation',
+    );
+    let calls = 0;
+    reads.mockImplementation(async () => (++calls <= 2 ? 'loaded' : 'recreated'));
+
+    await expect(editor.loadProjectForEditing('legacy')).rejects.toBeInstanceOf(
+      StaleProjectWriterError,
+    );
+    expect(fake.text.get(SOURCE)).toBe(before);
+  });
+
+  it('never replaces a legacy file that changed before the migration commit', async () => {
+    await seedLegacy();
+    const concurrent = LEGACY_TEXT.replace('"Old"', '"Edited elsewhere"');
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (path: string, content: string, opts?: { createNew?: boolean }) => {
+      if (path.startsWith(`${SOURCE}.tmp-`)) fake.text.set(SOURCE, concurrent);
+      return originalWriteTextFile(path, content, opts);
+    };
+
+    await expect(new FsProjectStore().loadProjectForEditing('legacy')).rejects.toThrow();
+    expect(fake.text.get(SOURCE)).toBe(concurrent);
+  });
+
+  it('leaves the legacy file untouched when the pre-migration snapshot cannot be written', async () => {
+    await seedLegacy();
+    const before = fake.text.get(SOURCE);
+    const editor = new FsProjectStore();
+    vi.spyOn(editor, 'saveSnapshotText').mockRejectedValueOnce(new Error('disk full'));
+
+    await expect(editor.loadProjectForEditing('legacy')).rejects.toThrow('disk full');
+    expect(fake.text.get(SOURCE)).toBe(before);
+  });
+
+  describe('snapshot id ownership under concurrency', () => {
+    const FROZEN = 1_800_000_000_000;
+
+    it('gives two concurrent same-millisecond snapshots distinct files', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(FROZEN);
+      try {
+        const [first, second] = await Promise.all([
+          new FsProjectStore().saveSnapshotText('a', '{"title":"A"}'),
+          new FsProjectStore().saveSnapshotText('b', '{"title":"B"}'),
+        ]);
+        expect(second).not.toBe(first);
+        expect(snapshotTexts().sort()).toEqual(['{"title":"A"}', '{"title":"B"}']);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    // A second module copy has its own in-process counter, like another window's process: both writers start from the same candidate id at the same time, so only the exclusive reservation can separate them.
+    it('separates writers that start from the same candidate id in different processes', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(FROZEN + 10_000);
+      try {
+        vi.resetModules();
+        const { FsProjectStore: OtherProcessStore } = await import(
+          '../../../../services/fs/projectFsStore'
+        );
+        const [first, second] = await Promise.all([
+          new FsProjectStore().saveSnapshotText('a', '{"title":"A"}'),
+          new OtherProcessStore().saveSnapshotText('b', '{"title":"B"}'),
+        ]);
+        expect(second).not.toBe(first);
+        expect(snapshotTexts().sort()).toEqual(['{"title":"A"}', '{"title":"B"}']);
+        expect([...fake.text.keys()].some((path) => path.endsWith('.reserved'))).toBe(false);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    it('skips an id another writer has reserved and leaves its reservation alone', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(FROZEN + 20_000);
+      try {
+        await fake.apis.mkdir('/app/snapshots', { recursive: true });
+        await fake.apis.writeTextFile(`/app/snapshots/${FROZEN + 20_000}.reserved`, '');
+
+        const id = await new FsProjectStore().saveSnapshotText('a', '{"title":"A"}');
+
+        expect(id).not.toBe(FROZEN + 20_000);
+        expect(fake.text.has(`/app/snapshots/${FROZEN + 20_000}.reserved`)).toBe(true);
+        expect(fake.text.has(`/app/snapshots/${FROZEN + 20_000}.json`)).toBe(false);
+      } finally {
+        now.mockRestore();
+      }
+    });
   });
 });

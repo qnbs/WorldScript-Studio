@@ -15,12 +15,21 @@ import { DEFAULT_PIPELINE_CONFIG } from '../../features/proForge/types';
 import { getProjectTargetIdentity } from '../../features/project/projectIdentity';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import projectReducer, { projectActions } from '../../features/project/projectSlice';
-import { importProjectThunk } from '../../features/project/thunks/projectManagementThunks';
+import {
+  importProjectThunk,
+  restoreSnapshotThunk,
+} from '../../features/project/thunks/projectManagementThunks';
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
 import writerReducer, { writerActions } from '../../features/writer/writerSlice';
-import { ProjectFileLockedError } from '../../services/fs/fsCore';
+import {
+  _editorEpochForTest,
+  _resetEditorProjectGenerationForTest,
+  replacementCarrierFor,
+  toEditorReplacementEpoch,
+} from '../../services/editorProjectGeneration';
+import { ProjectFileLockedError, StaleProjectWriterError } from '../../services/fs/fsCore';
 import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionService';
 
 // ---------------------------------------------------------------------------
@@ -418,6 +427,23 @@ describe('auto-save project listener', () => {
     expect(errorNote?.description).not.toMatch(/local database/i);
   });
 
+  // QNBS-v3 (#553): a stale-writer refusal needs its own localized explanation, and — since it persists until reload — must not re-notify on every later debounce.
+  it('notifies a stale-writer refusal once per project with its own localized copy', async () => {
+    mockPersistProjectAutosaveSnapshot
+      .mockRejectedValueOnce(new StaleProjectWriterError('p-stale-once'))
+      .mockRejectedValueOnce(new StaleProjectWriterError('p-stale-once'));
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Stale edit 1'));
+    await vi.advanceTimersByTimeAsync(1500);
+    store.dispatch(projectActions.updateTitle('Stale edit 2'));
+    await vi.advanceTimersByTimeAsync(1500);
+
+    const errors = store.getState().status.notifications.filter((n) => n.type === 'error');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.title).toBe('desktop.staleWriter.title');
+    expect(errors[0]?.description).toBe('desktop.staleWriter.description');
+  });
+
   // QNBS-v3: a debounce armed just before a factory reset began must not fire after it and repopulate the database the reset just deleted.
   it('skips the debounced save entirely while a factory reset is in progress', async () => {
     mockIsFactoryResetInProgress.mockReturnValue(true);
@@ -446,6 +472,96 @@ describe('auto-save project listener', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(mockPersistProjectAutosaveSnapshot).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3 (#553 a10): a save suspended in the health check must not enqueue the state it was armed with — a newer save could already have enqueued, and this older capture would overwrite it.
+  it('saves the newest state, not the one captured before the health-check await', async () => {
+    let resolveHealth: (value: { ok: boolean; warning: string | null }) => void = () => {};
+    mockCheckStorageHealth.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHealth = resolve;
+      }),
+    );
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Armed'));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mockCheckStorageHealth).toHaveBeenCalled();
+
+    store.dispatch(projectActions.updateTitle('Newer'));
+    resolveHealth({ ok: true, warning: null });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenCalledTimes(1);
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: 'Newer' }),
+      store.getState().project.present.generation,
+    );
+  });
+
+  // QNBS-v3 (#553 a10): a restore reaches storage through the ordinary autosave, carrying the epoch read from the same state as its data, so persistence writes it as a replacement.
+  it('autosaves a same-id restore with the restored data and its new editor epoch together', async () => {
+    const store = makeFullStore();
+    const before = store.getState().project.present;
+    store.dispatch({
+      type: restoreSnapshotThunk.fulfilled.type,
+      payload: { ...before.data, title: 'Restored B' },
+      meta: { restoreCarrier: '{"exact":9007199254740993}' },
+    });
+    await vi.advanceTimersByTimeAsync(1500);
+
+    const present = store.getState().project.present;
+    expect(present.generation).not.toBe(before.generation);
+    // QNBS-v3 (#553 a5): bound to the restored project at the epoch the reducer assigned, not before.
+    const epoch = toEditorReplacementEpoch(present.generation);
+    expect(replacementCarrierFor(present.data, epoch)).toBe('{"exact":9007199254740993}');
+    expect(
+      replacementCarrierFor(present.data, toEditorReplacementEpoch(before.generation)),
+    ).toBeNull();
+    expect(mockPersistProjectAutosaveSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: before.data.id, title: 'Restored B' }),
+      present.generation,
+    );
+  });
+
+  // QNBS-v3 (#553 a4): an import's admitted text is bound at the epoch the reducer assigned.
+  it('binds an import’s carrier to the imported project and its new epoch', async () => {
+    const store = makeFullStore();
+    const before = store.getState().project.present;
+    store.dispatch({
+      type: importProjectThunk.fulfilled.type,
+      payload: { ...before.data, id: 'imported', title: 'Imported' },
+      meta: { replacementCarrier: '{"exact":9007199254740993}' },
+    });
+    const present = store.getState().project.present;
+    const epoch = toEditorReplacementEpoch(present.generation);
+    expect(replacementCarrierFor(present.data, epoch)).toBe('{"exact":9007199254740993}');
+    expect(replacementCarrierFor(before.data, epoch)).toBeNull();
+  });
+
+  it('binds nothing for an import without a preparable carrier', async () => {
+    const store = makeFullStore();
+    store.dispatch({
+      type: importProjectThunk.fulfilled.type,
+      payload: { ...store.getState().project.present.data, title: 'Imported' },
+      meta: { replacementCarrier: null },
+    });
+    const present = store.getState().project.present;
+    expect(
+      replacementCarrierFor(present.data, toEditorReplacementEpoch(present.generation)),
+    ).toBeNull();
+  });
+
+  it('leaves no restore carrier behind for a rejected restore', async () => {
+    const store = makeFullStore();
+    store.dispatch({
+      type: restoreSnapshotThunk.rejected.type,
+      error: { message: 'identity changed' },
+      meta: { restoreCarrier: '{"leak":true}' },
+    });
+    const present = store.getState().project.present;
+    expect(
+      replacementCarrierFor(present.data, toEditorReplacementEpoch(present.generation)),
+    ).toBeNull();
   });
 
   // QNBS-v3: enqueue() resolving already clears the coordinator's own active slot, so a reset starting right after is invisible to wipeAllAppData()'s drain -- the post-save writes need their own re-check.
@@ -889,6 +1005,44 @@ describe('desktop notification listener (ProForge stageCompleted)', () => {
 });
 
 // QNBS-v3 (#713): writer/copilot keep generation state in global Redux, so a project-incarnation change needs an explicit invalidation listener independent of component lifecycle.
+describe('export replacement signal (#553 §2.8)', () => {
+  function makeProjectStore() {
+    return configureStore({
+      reducer: {
+        project: undoable(projectReducer, { limit: 10 }) as unknown as Reducer,
+        writer: writerReducer,
+        copilot: copilotReducer,
+        proForge: proForgeReducer,
+      },
+      middleware: (getDefault) => getDefault().prepend(listenerMiddleware.middleware),
+    });
+  }
+
+  beforeEach(() => _resetEditorProjectGenerationForTest());
+
+  it('does not mark an ordinary edit of the same project as a replacement', () => {
+    const store = makeProjectStore();
+    store.dispatch(projectActions.updateTitle('Edited'));
+    expect(_editorEpochForTest()).toBe(0);
+  });
+
+  it.each([
+    [
+      'resetProject',
+      () => projectActions.resetProject({ title: 'B', logline: 'L', chapter1Title: 'C1' }),
+    ],
+    ['import', (data: unknown) => ({ type: importProjectThunk.fulfilled.type, payload: data })],
+    ['restore', (data: unknown) => ({ type: restoreSnapshotThunk.fulfilled.type, payload: data })],
+  ])('marks a same-id %s as a replacement', (_label, replace) => {
+    const store = makeProjectStore();
+    const sameId = store.getState().project.present.data;
+    store.dispatch(replace({ ...sameId, title: 'Replacement B' }) as never);
+    expect(store.getState().project.present.data.id).toBe(sameId.id);
+    expect(_editorEpochForTest()).toBe(store.getState().project.present.generation);
+    expect(_editorEpochForTest()).not.toBe(0);
+  });
+});
+
 describe('AI state invalidation listener (#713)', () => {
   function makeWriterCopilotStore() {
     return configureStore({

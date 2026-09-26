@@ -10,6 +10,10 @@ import {
 } from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
+import {
+  importProjectThunk,
+  restoreSnapshotThunk,
+} from '../features/project/thunks/projectManagementThunks';
 import { statusActions } from '../features/status/statusSlice';
 import { writerActions } from '../features/writer/writerSlice';
 import { DEFAULT_OPENROUTER_MODEL_ID } from '../services/ai/cloudModelCatalog';
@@ -23,8 +27,14 @@ import {
   loadLocalRagService,
   loadRagVectorMigration,
 } from '../services/duckdb/duckdbListenerLoader';
+import {
+  bindReplacementCarrier,
+  type EditorReplacementEpoch,
+  noteEditorEpoch,
+  toEditorReplacementEpoch,
+} from '../services/editorProjectGeneration';
 import { isFactoryResetInProgress } from '../services/factoryResetService';
-import { ProjectFileLockedError } from '../services/fs/fsCore';
+import { ProjectFileLockedError, StaleProjectWriterError } from '../services/fs/fsCore';
 import { logger } from '../services/logger';
 import { persistProjectAutosaveSnapshot } from '../services/projectAutosavePersistence';
 import { storageService } from '../services/storageService';
@@ -73,6 +83,10 @@ type DebouncedEffectApi = {
   dispatch: AppDispatch;
   delay: (ms: number) => Promise<void>;
 };
+
+function editorEpochOf(state: RootState): EditorReplacementEpoch {
+  return toEditorReplacementEpoch(state.project?.present?.generation);
+}
 
 function addDebouncedListener(
   predicate: (curr: RootState, prev: RootState) => boolean,
@@ -170,7 +184,59 @@ async function runPostProjectSaveSideEffects(
   await runDuckDbDualWrite(api, presentData);
 }
 
+type NotifyDispatch = (action: ReturnType<typeof statusActions.addNotification>) => unknown;
+
+// QNBS-v3: kept outside the autosave listener so its own control flow stays flat; each failure cause gets its own truthful message.
+async function notifyAutosaveProjectFailure(
+  error: unknown,
+  dispatch: NotifyDispatch,
+): Promise<void> {
+  if (error instanceof StaleProjectWriterError) {
+    await notifyStaleWriterOnce(error, dispatch);
+    return;
+  }
+  // QNBS-v3 (#553): distinct, truthful notification for lock contention — never auto-deletes anything; the recovery instruction requires closing other instances first. Does not promise an automatic retry: nothing currently schedules one, so the copy instead names the two things that do retry today (another edit, or Ctrl/Cmd+S). Deliberately hardcoded, matching this listener's own pre-existing (non-i18n) notification convention rather than AGENTS.md's i18n-system requirement — proper localization was attempted and reverted: it requires the same new key in all 19 locale sources, which alone saturates this PR's absolute file-count ceiling (see PR discussion). Tracked as an explicit, disclosed follow-up, not a hidden gap.
+  if (error instanceof ProjectFileLockedError) {
+    dispatch(
+      statusActions.addNotification({
+        type: 'error',
+        title: 'Save Delayed',
+        description:
+          "Another WorldScript window seems to be saving this project right now. Keep editing, or press Ctrl/Cmd+S in a moment to retry. If this continues after closing any other WorldScript windows, the project's save lock may need to be removed manually.",
+      }),
+    );
+    return;
+  }
+  dispatch(
+    statusActions.addNotification({
+      type: 'error',
+      title: 'Auto-Save Failed',
+      description: 'Your changes could not be saved to the local database.',
+    }),
+  );
+}
+
 // --- 1a. Auto-Save: Project ---
+// QNBS-v3 (#553): projects this window has already told the user about a stale-writer refusal for; the refusal only clears on reload, which also resets this module state.
+const staleWriterNotifiedProjects = new Set<string>();
+
+// QNBS-v3 (#553): permanent until this window reloads, so every later debounce would fail the same way — notify once per project instead of on every edit.
+async function notifyStaleWriterOnce(
+  error: StaleProjectWriterError,
+  dispatch: NotifyDispatch,
+): Promise<void> {
+  if (staleWriterNotifiedProjects.has(error.projectId)) return;
+  staleWriterNotifiedProjects.add(error.projectId);
+  const { getStaticTranslation, getCurrentLanguage } = await import(
+    '../services/i18n/staticTranslate'
+  );
+  const lang = getCurrentLanguage();
+  const [title, description] = await Promise.all([
+    getStaticTranslation('desktop.staleWriter.title', lang),
+    getStaticTranslation('desktop.staleWriter.description', lang),
+  ]);
+  dispatch(statusActions.addNotification({ type: 'error', title, description }));
+}
 addDebouncedListener(
   (curr, prev) => {
     const projectChanged = curr.project?.present !== prev.project?.present;
@@ -182,13 +248,13 @@ addDebouncedListener(
   },
   1000,
   async (api) => {
-    const state = api.getState();
+    const armedState = api.getState();
     const orig = api.getOriginalState();
-    const unchangedProject = state.project.present === orig.project.present;
+    const unchangedProject = armedState.project.present === orig.project.present;
     const unchangedVc =
-      state.versionControl.snapshots === orig.versionControl.snapshots &&
-      state.versionControl.branches === orig.versionControl.branches &&
-      state.versionControl.currentBranchId === orig.versionControl.currentBranchId;
+      armedState.versionControl.snapshots === orig.versionControl.snapshots &&
+      armedState.versionControl.branches === orig.versionControl.branches &&
+      armedState.versionControl.currentBranchId === orig.versionControl.currentBranchId;
     if (unchangedProject && unchangedVc) return;
 
     api.dispatch(statusActions.setSavingStatus('saving'));
@@ -209,6 +275,8 @@ addDebouncedListener(
       /* non-critical — don't block save if health check itself fails */
     }
 
+    // QNBS-v3 (#553 a10): read after the health-check await, so data and editor epoch are the newest state and a newer save that enqueued meanwhile cannot be overwritten by this older capture.
+    const state = api.getState();
     try {
       // QNBS-v3: RootState already infers state.project.present.data as ProjectData — no cast, no null-guard needed
       const presentData = selectProjectData(state);
@@ -240,8 +308,9 @@ addDebouncedListener(
         return;
       }
       // QNBS-v3 (#332): skip stale indexing after a newer project snapshot supersedes this save.
+      const editorEpoch = editorEpochOf(state);
       const projectSaveResult = await projectPersistenceCoordinator.enqueue(() =>
-        persistProjectAutosaveSnapshot(enriched),
+        persistProjectAutosaveSnapshot(enriched, editorEpoch),
       );
       if (projectSaveResult.superseded) return;
 
@@ -260,25 +329,7 @@ addDebouncedListener(
         return;
       }
       logger.error('Auto-save (project) failed:', error);
-      // QNBS-v3 (#553): distinct, truthful notification for lock contention — never auto-deletes anything; the recovery instruction requires closing other instances first. Does not promise an automatic retry: nothing currently schedules one, so the copy instead names the two things that do retry today (another edit, or Ctrl/Cmd+S). Deliberately hardcoded, matching this listener's own pre-existing (non-i18n) notification convention rather than AGENTS.md's i18n-system requirement — proper localization was attempted and reverted: it requires the same new key in all 19 locale sources, which alone saturates this PR's absolute file-count ceiling (see PR discussion). Tracked as an explicit, disclosed follow-up, not a hidden gap.
-      if (error instanceof ProjectFileLockedError) {
-        api.dispatch(
-          statusActions.addNotification({
-            type: 'error',
-            title: 'Save Delayed',
-            description:
-              "Another WorldScript window seems to be saving this project right now. Keep editing, or press Ctrl/Cmd+S in a moment to retry. If this continues after closing any other WorldScript windows, the project's save lock may need to be removed manually.",
-          }),
-        );
-      } else {
-        api.dispatch(
-          statusActions.addNotification({
-            type: 'error',
-            title: 'Auto-Save Failed',
-            description: 'Your changes could not be saved to the local database.',
-          }),
-        );
-      }
+      await notifyAutosaveProjectFailure(error, (action) => api.dispatch(action));
       api.dispatch(statusActions.setSavingStatus('idle'));
     }
   },
@@ -507,6 +558,12 @@ listenerMiddleware.startListening({
     );
   },
   effect: (_action, listenerApi) => {
+    if (
+      (listenerApi.getState() as RootState).project?.present?.generation !==
+      (listenerApi.getOriginalState() as RootState).project?.present?.generation
+    ) {
+      noteEditorEpoch(editorEpochOf(listenerApi.getState() as RootState));
+    }
     listenerApi.dispatch(writerActions.invalidateForProjectChange());
     listenerApi.dispatch(copilotActions.invalidateForProjectChange());
     // QNBS-v3 (#713): a mid-pipeline HITL review run is scoped to the manuscript it was generated against -- clearing it here (belt) is the primary defense; submitReview's own origin-identity check (suspenders) covers the race window before this listener fires.
@@ -970,3 +1027,27 @@ export const startAppListening = listenerMiddleware.startListening as TypedStart
   RootState,
   AppDispatch
 >;
+
+// QNBS-v3 (#553 a5): runs after the reducer assigned the restore's editor epoch, so the admitted snapshot text is bound to exactly the project and epoch it produced — never earlier, and never for a restore that was discarded.
+listenerMiddleware.startListening({
+  actionCreator: restoreSnapshotThunk.fulfilled,
+  effect: (action, listenerApi) => {
+    const state = listenerApi.getState() as RootState;
+    bindReplacementCarrier(
+      state.project?.present?.data,
+      editorEpochOf(state),
+      action.meta.restoreCarrier,
+    );
+  },
+});
+
+// QNBS-v3 (#553 a4): same boundary for an import — bound after the reducer assigned the imported project's epoch, never for a failed import; without a preparable carrier the first save stays the fresh document (#839).
+listenerMiddleware.startListening({
+  actionCreator: importProjectThunk.fulfilled,
+  effect: (action, listenerApi) => {
+    const carrier = action.meta.replacementCarrier;
+    if (carrier === null) return;
+    const state = listenerApi.getState() as RootState;
+    bindReplacementCarrier(state.project?.present?.data, editorEpochOf(state), carrier);
+  },
+});

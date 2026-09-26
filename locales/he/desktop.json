@@ -21,5 +21,8 @@
   "desktop.tray.quit": "Quit",
   "desktop.tray.settings": "Settings",
   "desktop.tray.show": "Show WorldScript Studio",
-  "desktop.tray.tooltip": "WorldScript Studio"
+  "desktop.tray.tooltip": "WorldScript Studio",
+  "desktop.staleWriter.title": "גרסה חדשה יותר נשמרה בחלון אחר",
+  "desktop.staleWriter.description": "חלון אחר של WorldScript שמר את הפרויקט הזה אחרי שנפתח בחלון הזה, ולכן החלון הזה הפסיק לשמור כדי לא לדרוס את השינויים האלה. העתיקו מהחלון הזה כל מה שעדיין דרוש לכם, ואז סגרו ופתחו מחדש את WorldScript כדי לטעון את הגרסה החדשה יותר.",
+  "desktop.staleWriter.quitConfirm": "חלון אחר של WorldScript שמר גרסה חדשה יותר של הפרויקט הזה, ולכן לא ניתן לשמור את השינויים האחרונים בחלון הזה בלי לדרוס אותה. לצאת בכל זאת ולבטל את השינויים שלא נשמרו בחלון הזה?"
 }

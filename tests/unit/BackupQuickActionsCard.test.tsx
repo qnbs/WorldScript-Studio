@@ -24,6 +24,7 @@ vi.mock('../../app/hooks', () => ({
           data: {
             id: 'proj-1',
             title: 'My Story',
+            logline: 'A logline',
             sections: [],
             characters: [],
             worlds: [],
@@ -51,6 +52,8 @@ vi.mock('../../features/status/statusSlice', () => ({
 vi.mock('../../services/storageService', () => ({
   storageService: {
     listSnapshots: (...args: unknown[]) => mockListSnapshots(...args),
+    loadEditorExportCarrier: vi.fn().mockResolvedValue(null),
+    getProjectAuthority: vi.fn().mockResolvedValue('idb'),
   },
 }));
 
@@ -113,6 +116,29 @@ describe('BackupQuickActionsCard', () => {
     setItemSpy.mockRestore();
   });
 
+  it('shows an error and starts no download when the export is refused (#553 §2.8)', async () => {
+    const { storageService } = await import('../../services/storageService');
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValueOnce('{"title":');
+    const clickSpy = vi.fn();
+    const origCreateElement = document.createElement.bind(document);
+    const createEl = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation((tag) =>
+        tag === 'a' ? ({ click: clickSpy } as unknown as HTMLElement) : origCreateElement(tag),
+      );
+    const user = userEvent.setup();
+    render(<BackupQuickActionsCard onNavigate={onNavigate} />);
+    await user.click(screen.getByText('dashboard.backup.exportJson'));
+
+    await waitFor(() =>
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ payload: expect.objectContaining({ type: 'error' }) }),
+      ),
+    );
+    expect(clickSpy).not.toHaveBeenCalled();
+    createEl.mockRestore();
+  });
+
   it('triggers export when export button is clicked', async () => {
     const clickSpy = vi.fn();
     const origCreateElement = document.createElement.bind(document);
@@ -126,7 +152,7 @@ describe('BackupQuickActionsCard', () => {
     render(<BackupQuickActionsCard onNavigate={onNavigate} />);
     await waitFor(() => expect(mockListSnapshots).toHaveBeenCalled());
     await user.click(screen.getByText('dashboard.backup.exportJson'));
-    expect(clickSpy).toHaveBeenCalled();
+    await waitFor(() => expect(clickSpy).toHaveBeenCalled());
     createEl.mockRestore();
   });
 

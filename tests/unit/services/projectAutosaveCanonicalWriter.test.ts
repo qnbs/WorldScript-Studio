@@ -8,6 +8,7 @@ import { APP_DATA_STORE } from '../../../services/dbConstants';
 import type { CanonicalAutosaveResult } from '../../../services/projectAutosaveCanonicalWriter';
 import {
   assertCanonicalAutosaveSucceeded,
+  buildInitialCanonicalRaw,
   saveAutosaveSnapshotCanonical,
 } from '../../../services/projectAutosaveCanonicalWriter';
 import { _resetDbForTest } from '../../../services/storage';
@@ -467,5 +468,141 @@ describe('saveAutosaveSnapshotCanonical', () => {
       request.onerror = () => reject(request.error);
     });
     expect(generation).toBeUndefined();
+  });
+});
+
+describe('saveAutosaveSnapshotCanonical replacement (#553 a10)', () => {
+  const predecessorA = {
+    schemaVersion: 1,
+    title: 'Project A',
+    futureWidget: { opaque: 'A-only' },
+    characters: { ids: ['a1'], entities: { a1: { id: 'a1', name: 'A-Char', aOnly: true } } },
+    worlds: { ids: [], entities: {} },
+  };
+
+  async function storedProject(authority: IdbProjectCanonicalAuthority) {
+    const admission = await authority.loadCanonicalProjectAdmission();
+    if (admission.status !== 'CURRENT') throw new Error('expected CURRENT');
+    return { raw: admission.currentRaw, generation: admission.generation };
+  }
+
+  it('an ordinary edit keeps the predecessor’s opaque data (owned overlay)', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: predecessorA });
+
+    const result = await saveAutosaveSnapshotCanonical(snapshot({ title: 'A edited' }), authority);
+
+    expect(result.status).toBe('SAVED');
+    expect((await storedProject(authority)).raw).toContain('A-only');
+  });
+
+  it('a replacement (reset/import/restore B) writes B as a fresh document with nothing of A', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: predecessorA });
+
+    const result = await saveAutosaveSnapshotCanonical(
+      snapshot({ title: 'Restored B' }),
+      authority,
+      {
+        replacement: true,
+      },
+    );
+
+    expect(result.status).toBe('SAVED');
+    const { raw, generation } = await storedProject(authority);
+    expect(raw).not.toContain('A-only');
+    expect(raw).not.toContain('aOnly');
+    expect(raw).not.toContain('Project A');
+    expect(JSON.parse(raw)).toEqual(
+      JSON.parse(buildInitialCanonicalRaw(snapshot({ title: 'Restored B' }))),
+    );
+    expect(result.status === 'SAVED' && result.generation).toBe(generation);
+    expect(Object.keys((await readProjectRecord(authority)) as object)).toEqual(['data']);
+  });
+
+  it('a restored replacement keeps the snapshot carrier’s own data and applies the editor edit', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: predecessorA });
+    const carrier = JSON.stringify({
+      schemaVersion: 1,
+      id: 'default',
+      title: 'Snapshot B',
+      snapshotOnly: { kept: true },
+      characters: { ids: [], entities: {} },
+      worlds: { ids: [], entities: {} },
+    });
+
+    const result = await saveAutosaveSnapshotCanonical(
+      snapshot({
+        title: 'Snapshot B, edited',
+        characters: { ids: [], entities: {} },
+        worlds: { ids: [], entities: {} },
+      }),
+      authority,
+      { replacement: true, replacementRaw: carrier },
+    );
+
+    expect(result.status).toBe('SAVED');
+    const { raw } = await storedProject(authority);
+    expect(JSON.parse(raw)).toMatchObject({
+      title: 'Snapshot B, edited',
+      snapshotOnly: { kept: true },
+    });
+    expect(raw).not.toContain('A-only');
+  });
+
+  it('fails closed when the restore carrier cannot take the editor edit', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: predecessorA });
+    const before = await readProjectRecord(authority);
+
+    const result = await saveAutosaveSnapshotCanonical(snapshot({ title: 'B' }), authority, {
+      replacement: true,
+      replacementRaw: '{"title":',
+    });
+
+    expect(result.status).toBe('VERIFICATION_FAILED');
+    expect(await readProjectRecord(authority)).toEqual(before);
+  });
+
+  it('a replacement over a legacy record migrates, then replaces without the legacy opaque field', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: legacyRecordPayload() });
+
+    const result = await saveAutosaveSnapshotCanonical(snapshot({ title: 'B' }), authority, {
+      replacement: true,
+    });
+
+    expect(result.status).toBe('MIGRATED_AND_SAVED');
+    expect((await storedProject(authority)).raw).not.toContain('Core-unmodeled');
+  });
+
+  it('refuses a replacement against a moved generation and leaves the record untouched', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: predecessorA });
+    const before = await readProjectRecord(authority);
+
+    const result = await authority.commitCanonicalProjectReplacement({
+      expectedGeneration: 'not-the-current-generation' as never,
+      currentRaw: buildInitialCanonicalRaw(snapshot({ title: 'B' })),
+    });
+
+    expect(result.status).toBe('CONFLICT');
+    expect(await readProjectRecord(authority)).toEqual(before);
+  });
+
+  it('refuses a replacement document that is not a valid CURRENT project, writing nothing', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seedProjectRecord(authority, { data: predecessorA });
+    const before = await readProjectRecord(authority);
+    const { generation } = await storedProject(authority);
+
+    const result = await authority.commitCanonicalProjectReplacement({
+      expectedGeneration: generation,
+      currentRaw: JSON.stringify({ title: 'no schema' }),
+    });
+
+    expect(result.status).toBe('MALFORMED_SOURCE');
+    expect(await readProjectRecord(authority)).toEqual(before);
   });
 });

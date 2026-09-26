@@ -21,6 +21,162 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   user data through this crate: Gate 1b (native KDF profile), Gates 2–7 and any authority switch
   remain unadmitted. Also records `S5_TERMINAL = YES` for the R-15 design (PR #584's post-merge main
   CI and CodeQL were green). PR #829.
+- **Documentation (#553):** the Core Migration Ledger (row 9), the Project/Core Compatibility
+  Contract and the R-15 storage contract now describe the current state after the #553 no-loss work.
+  - Every current-production project load, save, import, snapshot, export and backup path is complete
+    and preserves stored data.
+  - The switch to a shared Rust project core is still separate future work (#836).
+  - The desktop app no longer falls back to browser storage when its project storage cannot be
+    opened. Browser-storage records from older desktop sessions remain part of the planned R-15
+    migration.
+  - Earlier changelog entries describing the previous fallback are left unchanged as history.
+    PR #846.
+- **Data integrity (#553):** desktop projects saved by older versions (before project files carried
+  a schema version) can be opened for editing again. On first open, the file gets a schema version
+  added and nothing else about its content changes. The original file is kept as a "Before schema
+  migration" snapshot first. If the file changed meanwhile, was replaced, or the snapshot cannot be
+  written, the project file is not replaced; a snapshot already written by then is kept. PR #849.
+- **Data integrity (#553):** importing a project file now keeps its plot board connections,
+  subplots and tension overrides, the per-project AI preset, story objects and groups, mind maps
+  and character interviews. Before, these were dropped when the file was imported and removed
+  from the saved project by the first save. PR #848.
+- **Data integrity (#553):** the JSON export in "Import & export" now saves the whole project —
+  every field and any data this version does not know — the same way as the other JSON export
+  buttons, instead of only the title, logline and manuscript. If the export has to be refused (for
+  example because the project changed in another window), it now reports a failure instead of a
+  success. PR #847.
+- **Data integrity (#553):** if the saved project cannot be loaded into the editor, startup now
+  stops on the "project could not be opened" screen with Reload. Before, the browser version started
+  a blank project in its place, so the saved project was inaccessible in that session; for a saved
+  project the storage layer still accepted as current (for example one whose outline was not a
+  list), that blank project's first save could replace it. Stored values that the storage layer
+  already refused (such as an empty or `null` value) were never overwritten. The saved data is now
+  not changed, and no database reset or quarantine is offered for this case. A saved project value
+  that is not a project object no longer crashes startup into the "reset database" screen. PR #844.
+- **Data integrity (#553):** if the desktop app cannot open its project storage at startup, it now
+  shows the "storage or file-access problem" screen with Retry instead of silently continuing on
+  separate browser storage that does not hold your desktop projects. Nothing is changed or reset in
+  either store, and no project is read or saved until the storage opens. A failure of the cleanup of
+  old API key files no longer affects which storage is used. PR #843.
+- **Data integrity (#553):** an imported project file is now first saved from the file's own
+  checked content, with any edits made since the import applied, instead of a re-serialized copy of
+  the editor state. Fields this version does not know are kept; on the desktop, very large whole
+  numbers are kept exactly. Inline character and world images are still moved to image storage and
+  are not stored twice, and machine-local folder and routing details from the file are still
+  ignored. PR #842.
+- **Data integrity (#553):** the encrypted library backup now includes each snapshot as it is
+  stored, alongside the readable copy.
+  - **Desktop:** the snapshot's stored text is kept exactly — fields this version does not know
+    and very large whole numbers included.
+  - **Browser:** the stored snapshot data is included as stored.
+  - Machine-local folder and routing details are removed, as they already are for projects. Older
+    snapshots are included as stored. A snapshot that cannot be exported is listed without its
+    content instead of failing the whole backup. PR #841.
+- **Data integrity (#553):** a restored snapshot is now saved from the snapshot itself, with your
+  edits since the restore applied, instead of a re-serialized copy of the editor state.
+  - **Desktop:** the snapshot's stored text is kept exactly — fields this version does not know
+    and very large whole numbers included.
+  - **Browser:** snapshots are stored as structured data, so the restored snapshot's fields,
+    including ones this version does not know, are kept as stored; there is no stored text to
+    preserve beyond that.
+  - Export and "Create snapshot" of a restored project use the same content. A restore that is
+    discarded (because the open project changed meanwhile) leaves nothing behind. PR #840.
+- **Data integrity (#553):** after "New project", an import, or a snapshot restore replaces the open
+  project (usually keeping its ID), the next save now writes that project whole instead of merging
+  it into the stored predecessor, so no hidden data of the replaced project carries over. Ordinary
+  edits still keep the stored project's unknown fields and exact values. The same rule decides
+  whether export and "Create snapshot" may reuse the stored text. Saving a restored snapshot's
+  exact original text is part of a separate follow-up. PR #839.
+- **Data integrity (#553):** project snapshots now keep the project exactly as it is stored.
+  - **Creating a snapshot:** automatic desktop snapshots store the exact text a save just wrote,
+    and "Create snapshot" stores the project as it is stored with the editor's unsaved changes
+    applied — no longer a re-serialized copy that rounded very large whole numbers. The same
+    stale-window refusal as export applies. Snapshot files keep their existing format.
+  - **Restoring on desktop:** the snapshot's stored content is admitted for the current project
+    with identity and machine-local routing taken from that project, never from the snapshot;
+    characters and worlds stored in the portable list form are converted before they reach the
+    editor. Saving a restored project exactly (as a replacement, not merged into the current
+    project) is part of a separate follow-up.
+  - **Restoring in the browser:** a snapshot is now checked like an imported file before it can
+    reach the editor — a snapshot from a newer app version, a damaged one, or one belonging to
+    another project is refused instead of loaded. Browser storage keeps snapshots as structured
+    data, as it does projects. PR #838.
+
+- **Data integrity (#553):** project export and the encrypted library backup now write the
+  project's stored text instead of re-serializing a parsed copy of it.
+  - **JSON export** (Settings and Dashboard "Export JSON") writes the stored project with the
+    editor's unsaved changes applied. On desktop, very large whole numbers are kept exactly; a parse
+    used to round them. A never-saved project exports as a current-version file. If another window has saved
+    newer changes to the project since this window loaded it (or deleted and recreated it), the
+    export is refused, just as a save from this window would be. After the editor's project is replaced as a whole (a new project,
+    an import or a snapshot restore — even under the same id), the export is built from that
+    project alone, never from the previous project's stored text.
+  - **Encrypted library backup** stores each project's last saved text (unsaved changes still in
+    the editor are not included) and its readable `project` entry is now derived from that same
+    text, so the two always describe the same saved version. The exact text is added as
+    `projectRaw` for a future restore.
+  - Both drop two machine-local routing fields (`__worldscriptLegacyProjectDirectory`,
+    `__worldscriptLegacyAuxiliary`) that must never leave the machine, exactly as import already
+    does, and refuse — with an "Export failed" message and no file — rather than write a copy
+    that loses stored data or that this app would not import.
+  - Browser storage keeps projects as structured data, not text, so its export reproduces what is
+    stored; very large whole numbers could never be saved there. Older browser projects without a
+    version export as current files without being changed. Snapshots follow separately. PR #837.
+
+- **Data integrity (#553):** a desktop window can no longer write into a project that another
+  window deleted and then recreated under the same ID — even when the recreated project file is
+  byte-identical to what the old window loaded. Every newly created project now gets a random
+  identity token in a small file beside its project file; project saves and image, binder and
+  codex writes are refused when the window's token no longer matches, until the window reloads.
+  Loading re-checks the token so a delete-and-recreate during the load cannot be missed. Projects
+  created before this change have no token until they are next recreated, which is still
+  detected. PR #835.
+
+- **Data integrity (#553):** a desktop window whose copy of a project is out of date can no longer
+  save or delete that project's images, binder attachments, or story codex. Before, #830 blocked
+  only the project file itself, so a second window that had fallen behind (or whose project another
+  window had deleted) could still overwrite or remove assets the other window was using. These
+  writes now run the same check as project saves, under the same cross-process lock held through
+  the write (so another window cannot save, delete or quarantine the project in between —
+  deleting or quarantining now waits for that lock too, including for legacy directories a
+  delete also empties), checked against both the project and the directory each write actually
+  lands in (including data routed into a legacy project directory), and are refused until the
+  window reloads the project. Asset writes take that lock even from a window that never opened
+  the project for editing, so they can never interleave with a delete; such windows skip only the
+  out-of-date check. Project import and rollback writes are unchanged. A delete or quarantine,
+  and any asset write, can now be refused while another window holds the project's lock; a lock
+  left behind by a crashed window is tracked separately in #831. Deleting all of a project's
+  binder files now reports a partial failure instead of succeeding while files remain. PR #833.
+- **Data integrity (#553):** quitting or closing a desktop window can no longer mistake unsaved
+  data for saved data. The save queue deliberately resolves — rather than rejects — an older save
+  whose own attempt failed while a newer save was already queued, and the newer save's later
+  failure never reached it; so a pre-quit/pre-close flush racing another queued save (a
+  double-clicked Quit, or an autosave landing mid-quit) could report success and skip #830's
+  "discard this window's unsaved changes?" prompt. Every superseded result now carries the
+  terminal outcome of the exact save chain that superseded it — scoped to that chain, so a later,
+  independent chain can never change it — and the flush additionally requires every save chain that
+  was running when it began, or started while it was in flight (such as an autosave of an edit made
+  during quit), to have succeeded — re-verifying until a full pass sees no new chain in either
+  queue, and failing closed if that cannot be proven — for both the project and the settings queue. The older captured snapshot is never re-saved, since a newer successful
+  save may already have replaced it. PR #832.
+- **Data integrity (#553):** a second desktop WorldScript window can no longer silently revert
+  changes another window saved. #826's lock only serialized write *order*: two windows that both
+  opened a project at the same version, then edited independently, would each save in turn — and
+  the second overlaid its whole older in-memory snapshot onto the first's newer file, reverting
+  every field only the first had changed, while its read-then-write fence still passed. The desktop
+  filesystem store now remembers which on-disk generation each window's open project came from
+  (set by the editing load, by the window's own saves, and when the window creates the file;
+  background reads such as backups and LoRA datasets never move it) and refuses a save whose file
+  has since advanced — or has since been deleted or quarantined by another window, which it would
+  otherwise resurrect — before building any overwrite and leaving no temp or lock file behind. The refused window shows one localized
+  notice explaining the conflict and how to load the newer version, instead of failing on every
+  keystroke; quitting or closing that window asks, in its own language, whether to discard its
+  unsaved changes rather than trapping it open forever. Another window's committed data is never
+  touched either way. Not a 3-way merge: the refused window's own later edits are not merged in.
+  Scope: the desktop `project.json` save only — a stale window's image, binder-asset and Codex
+  writes are not yet fenced by this baseline (still open under #553), and the same risk between two
+  browser tabs is owned by #480's multi-tab program. A quit racing another queued save can still
+  skip the discard prompt, a pre-existing save-queue behavior tracked for an immediate follow-up. Non-cooperating external writers remain outside any application lock. PR #830.
 - **Privacy truth (#526):** Factory Reset's hint and confirmation text no longer imply that
   downloaded local AI and voice models are erased. Reset deletes only storage WorldScript can
   prove it owns; the WebLLM (`webllm/*`) and Transformers (`transformers-cache`) model caches carry

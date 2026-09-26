@@ -69,7 +69,9 @@ vi.mock('../../services/fs/projectFsStore', () => {
   return { ProjectLoadError, ProjectQuarantineError };
 });
 
+import { DesktopStorageAuthorityUnavailableError } from '../../services/fs/fsCore';
 import { ProjectLoadError } from '../../services/fs/projectFsStore';
+import { PersistedProjectNotLoadableError } from '../../services/persistedProjectErrors';
 import {
   renderProjectInitializationFailure,
   renderStorageInitializationFailure,
@@ -109,6 +111,40 @@ describe('startup recovery rendering', () => {
     expect(renderedScreenProps().copy).toBe(mockCopy);
     expect(renderedScreenProps().failureKind).toBe('storage');
     expect(renderedScreenProps().onReset).toEqual(expect.any(Function));
+  });
+
+  // QNBS-v3 (#553 a8): the screen renders from the tagged failure and the resolved backend label — it never needs the failed storage itself — and offers retry only.
+  it('renders a retry-only screen when desktop storage could not be opened', async () => {
+    mockBackendKind.mockResolvedValue('filesystem');
+    await renderProjectInitializationFailure(
+      mockRoot as never,
+      new DesktopStorageAuthorityUnavailableError(new Error('permission denied')),
+    );
+
+    const props = renderedScreenProps();
+    expect(props.failureKind).toBe('project-io');
+    expect(props.onRetry).toEqual(expect.any(Function));
+    expect(props.onReset).toBeUndefined();
+    expect(props.onRecover).toBeUndefined();
+    expect(props.onSafeOpen).toBeUndefined();
+    expect(mockReset).not.toHaveBeenCalled();
+    expect(mockQuarantine).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3 (#553 a9): the browser refusal of an unloadable stored project offers reload only.
+  it('renders a reload-only screen for a stored project the editor cannot load', async () => {
+    mockBackendKind.mockResolvedValue('indexeddb');
+    await renderProjectInitializationFailure(
+      mockRoot as never,
+      new PersistedProjectNotLoadableError(),
+    );
+
+    const props = renderedScreenProps();
+    expect(props.failureKind).toBe('project-corrupt');
+    expect(props.onReset).toBeUndefined();
+    expect(props.onRecover).toBeUndefined();
+    expect(props.onSafeOpen).toBeUndefined();
+    expect(mockReset).not.toHaveBeenCalled();
   });
 
   it('renders quarantine for corrupt filesystem projects and preserves the exact project ID', async () => {

@@ -119,7 +119,13 @@ which `storageService.ts` uses whenever `fileSystemService.initialize()` succeed
 desktop, that same class's data can *also* physically exist in the packaged-desktop IndexedDB
 fallback (`dbService`, `worldscript-state-db`/`worldscript-data-db`) from a past session where
 filesystem initialization failed; the two physical authorities are never reconciled by any code path
-that exists today. §10.1.3 defines the mandatory dual-authority discovery, coalescing, and
+that exists today. Since #843 the current application no longer *selects* that IndexedDB store as the desktop
+Project authority: when `fileSystemService.initialize()` fails, startup fails closed
+(`DesktopStorageAuthorityUnavailableError`). The WebView IndexedDB databases themselves are still
+opened (and may be created) at startup by `initializeStorage()` for their independent stores and
+migration paths, so their presence alone does not prove a past fallback session. Project records
+written by pre-#843 fallback sessions may still physically exist, however, and remain mandatory
+migration-source candidates. §10.1.3 defines the mandatory dual-authority discovery, coalescing, and
 `SOURCE_AUTHORITY_CONFLICT` rules this implies for migration; it does not change this table's current
 `owner` column, which continues to describe the filesystem location `main` treats as primary today.
 
@@ -1870,8 +1876,10 @@ Codes are assigned only for physical authorities that actually exist in this app
 1   TAURI_FILESYSTEM_STORAGE_BACKEND    services/fs/* (FsProjectStore, FsSettingsStore,
                                         FsSnapshotStore, FsAssetStore, FsCodexStore)
 2   PACKAGED_IDB_STORAGE_BACKEND        services/dbService.ts (worldscript-state-db,
-                                        worldscript-data-db) when storageService.ts's
-                                        packaged-desktop fallback selected it (§3, §10.1.3)
+                                        worldscript-data-db) as written by a pre-#843
+                                        session whose packaged-desktop fallback selected it;
+                                        current main no longer selects it as Project
+                                        authority (§3, §10.1.3)
 3   WEBVIEW_LOCALSTORAGE                browser/WebView localStorage keys (§3's scene-comments,
                                         plot-ui, mind-map-ui, progress, LoRA Redux mirror,
                                         idb-kdf-salt, and similar rows)
@@ -2273,10 +2281,12 @@ common `source_evidence_digest` (§5.4's `LEGACY_PLAINTEXT`-specific formula) bu
 
 ### 10.1.3 Multi-physical-source discovery and `SOURCE_AUTHORITY_CONFLICT`
 
-**The problem.** `storageService.ts` selects exactly one backend per session — `fileSystemService`
-(the Tauri filesystem, `TAURI_FILESYSTEM_STORAGE_BACKEND`) or `dbService` (the packaged-desktop
-IndexedDB fallback, `PACKAGED_IDB_STORAGE_BACKEND`) — and no code path in the current application
-reconciles the two. A record can therefore exist under one physical authority while a session that
+**The problem.** Before #843, `storageService.ts` selected exactly one backend per packaged-desktop
+session: `fileSystemService` (the Tauri filesystem, `TAURI_FILESYSTEM_STORAGE_BACKEND`) or
+`dbService` (the packaged-desktop IndexedDB fallback, `PACKAGED_IDB_STORAGE_BACKEND`). Since #843 a
+session that cannot initialize the filesystem fails closed instead of selecting the fallback, but
+installations that ran pre-#843 fallback sessions can still hold data under both authorities. No code
+path in the current application reconciles the two. A record can therefore exist under one physical authority while a session that
 initialized the other authority is completely unaware of it, and for a true singleton identity
 (`settings:global`'s installation-scoped analog, `active-project:<InstallationScopeId>`) the two
 authorities can hold genuinely divergent content with no timestamp, generation counter, or any other

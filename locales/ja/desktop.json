@@ -21,5 +21,8 @@
   "desktop.tray.quit": "Quit",
   "desktop.tray.settings": "Settings",
   "desktop.tray.show": "Show WorldScript Studio",
-  "desktop.tray.tooltip": "WorldScript Studio"
+  "desktop.tray.tooltip": "WorldScript Studio",
+  "desktop.staleWriter.title": "別のウィンドウで新しいバージョンが保存されました",
+  "desktop.staleWriter.description": "このウィンドウでプロジェクトを開いた後に、別の WorldScript ウィンドウがこのプロジェクトを保存しました。その変更を上書きしないよう、このウィンドウは保存を停止しています。このウィンドウで必要な内容をコピーしてから、WorldScript を閉じて開き直し、新しいバージョンを読み込んでください。",
+  "desktop.staleWriter.quitConfirm": "別の WorldScript ウィンドウがこのプロジェクトの新しいバージョンを保存したため、このウィンドウの最新の変更はそれを上書きせずに保存できません。このウィンドウの未保存の変更を破棄して終了しますか？"
 }

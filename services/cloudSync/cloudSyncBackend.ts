@@ -8,6 +8,7 @@ import { normalizePersistedSettings } from '../storage/idbProjectStore';
 import type {
   BinderAssetMeta,
   BinderAssetPayload,
+  CanonicalProjectRawResult,
   SaveProjectInput,
   StorageBackend,
 } from '../storageBackend';
@@ -105,6 +106,17 @@ export class CloudSyncBackend implements StorageBackend {
     const projectId = env?.present?.data?.id ?? env?.data?.id ?? 'default';
     // QNBS-v3: P2-1 — Use conflict-aware save with metadata
     await this.saveWithMetadata(`${KEY_PREFIX_PROJECT}${projectId}`, flat);
+  }
+
+  // QNBS-v3 (#553 §2.8): cloud sync holds no canonical text; egress must refuse rather than read this as nothing stored.
+  async loadCanonicalProjectRaw(_projectId: string): Promise<CanonicalProjectRawResult> {
+    return { status: 'UNSUPPORTED' };
+  }
+
+  async loadEditorExportCarrier(
+    _projectId: string | undefined,
+  ): Promise<CanonicalProjectRawResult> {
+    return { status: 'UNSUPPORTED' };
   }
 
   async loadProject(projectId: string): Promise<StoryProject | null> {
@@ -217,6 +229,10 @@ export class CloudSyncBackend implements StorageBackend {
   }
 
   async saveSnapshot(_label: string, _data: unknown): Promise<number> {
+    throw new Error('CloudSyncBackend: snapshots are local-only');
+  }
+
+  async saveSnapshotText(_label: string, _projectJson: string): Promise<number> {
     throw new Error('CloudSyncBackend: snapshots are local-only');
   }
 

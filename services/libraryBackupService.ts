@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import type { Settings, StoryProject } from '../types';
 import { ProjectLoadError } from './fs/projectFsStore';
 import { logger } from './logger';
+import { toPortableProjectRaw, toPortableSnapshotRaw } from './projectCanonicalEgress';
 import type { BinderAssetPayload } from './storageBackend';
 import { storageService } from './storageService';
 
@@ -15,7 +16,10 @@ const PBKDF2_ITERATIONS = 600_000;
 
 export interface LibraryProjectBundle {
   projectId: string;
+  /** Readable parsed view (portable: local metadata removed). A parse cannot hold integers beyond Number.MAX_SAFE_INTEGER exactly; `projectRaw` is the exact copy. */
   project: StoryProject | null;
+  /** QNBS-v3 (#553 §2.8): the stored canonical text of the last saved generation, portable — authoritative for any restore; null when the project could not be read. Unsaved editor changes are not included. */
+  projectRaw: string | null;
   storyCodex: unknown;
   ragVectors: unknown[];
   binderAssets: Array<{
@@ -32,7 +36,39 @@ export interface LibraryBackupPayload {
   storageBackend: 'indexeddb' | 'filesystem';
   settings: Settings | null;
   projects: LibraryProjectBundle[];
-  snapshots: Array<{ id: number; date: string; name: string; wordCount: number; data: unknown }>;
+  snapshots: LibrarySnapshotEntry[];
+}
+
+export interface LibrarySnapshotEntry {
+  id: number;
+  date: string;
+  name: string;
+  wordCount: number;
+  /** Readable parsed view of `dataRaw` (portable); null when the snapshot could not be exported. */
+  data: unknown;
+  /**
+   * QNBS-v3 (#553 a11): the snapshot's portable stored carrier — exact text on the filesystem, the
+   * stored structured value in IndexedDB; authoritative over `data`. Absent in archives written
+   * before it existed: those carry only `data`, which is never promoted to a raw carrier.
+   */
+  dataRaw?: string | null;
+}
+
+// QNBS-v3 (#553 a11): one unreadable or unadmittable historical snapshot is recorded as not exported instead of aborting the whole library backup.
+async function collectSnapshotEntry(
+  snapshot: Omit<LibrarySnapshotEntry, 'data' | 'dataRaw'>,
+): Promise<LibrarySnapshotEntry> {
+  try {
+    const storedRaw = await storageService.getSnapshotText(snapshot.id);
+    const dataRaw = storedRaw === null ? null : toPortableSnapshotRaw(storedRaw);
+    return { ...snapshot, data: dataRaw === null ? null : JSON.parse(dataRaw), dataRaw };
+  } catch (error) {
+    logger.warn('collectLibraryBackupPayload: skipping unexportable snapshot', {
+      snapshotId: snapshot.id,
+      error: String(error),
+    });
+    return { ...snapshot, data: null, dataRaw: null };
+  }
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -128,9 +164,11 @@ export async function collectLibraryBackupPayload(
 
   for (const projectId of projectIds) {
     // QNBS-v3 (DA-01): loadProject now throws on corrupt/unreadable data rather than returning null — one bad project must not abort the whole backup.
-    let project: StoryProject | null;
+    // QNBS-v3 (#553 §2.8): ONE read per project — the readable entry is parsed from the same portable text, so the two can never describe different generations.
+    let projectRaw: string | null;
     try {
-      project = await storageService.loadProject(projectId);
+      const storedRaw = await storageService.loadCanonicalProjectRaw(projectId);
+      projectRaw = storedRaw === null ? null : toPortableProjectRaw(storedRaw);
     } catch (error) {
       // QNBS-v3 (codex P1): only the expected corruption/I-O case is swallowed — an unexpected bug must still surface, not be silently absorbed as "skip this project".
       if (!(error instanceof ProjectLoadError)) throw error;
@@ -141,8 +179,9 @@ export async function collectLibraryBackupPayload(
         reason: error.reason,
         error: error.message,
       });
-      project = null;
+      projectRaw = null;
     }
+    const project = projectRaw === null ? null : (JSON.parse(projectRaw) as StoryProject);
     const codex = await storageService.getStoryCodex(projectId);
     const ragVectors = await storageService.getRagVectors(projectId);
     const binderIds = await storageService.listBinderAssetIds(projectId);
@@ -163,6 +202,7 @@ export async function collectLibraryBackupPayload(
     projects.push({
       projectId,
       project,
+      projectRaw,
       storyCodex: codex,
       ragVectors,
       binderAssets,
@@ -176,10 +216,11 @@ export async function collectLibraryBackupPayload(
   onProgress?.('settings', done, total);
 
   const snaps = await storageService.listSnapshots();
-  const snapshots = [];
+  const snapshots: LibrarySnapshotEntry[] = [];
   for (const s of snaps) {
-    const data = await storageService.getSnapshotData(s.id);
-    snapshots.push({ id: s.id, date: s.date, name: s.name, wordCount: s.wordCount, data });
+    snapshots.push(
+      await collectSnapshotEntry({ id: s.id, date: s.date, name: s.name, wordCount: s.wordCount }),
+    );
   }
   done++;
   onProgress?.('snapshots', done, total);

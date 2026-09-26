@@ -19,18 +19,22 @@ export class FsCodexStore extends FsSettingsStore {
   // Story Codex — projects/{projectId}/codex/codex.snap
 
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
-    await this.withLegacyRoutingOperation(async () => {
-      const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(
-        this.resolveAuxiliaryProjectId(codex.projectId, 'codex'),
-        'project',
-      );
-      const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
-      if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
-      const codexFile = await apis.join(codexDir, 'codex.snap');
-      await writeTextFileAtomic(apis, codexFile, compressData(codex));
-    }, codex.projectId);
+    await this.withAuxiliaryWriteOperation(
+      async () => {
+        const apis = await this.getApis();
+        const appDataPath = await this.ensureAppDataPath();
+        const safeId = sanitizePathSegment(
+          this.resolveAuxiliaryProjectId(codex.projectId, 'codex'),
+          'project',
+        );
+        const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
+        if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
+        const codexFile = await apis.join(codexDir, 'codex.snap');
+        await writeTextFileAtomic(apis, codexFile, compressData(codex));
+      },
+      codex.projectId,
+      () => [codex.projectId, this.resolveAuxiliaryProjectId(codex.projectId, 'codex')],
+    );
   }
 
   async getStoryCodex(projectId: string): Promise<StoryCodex | null> {
@@ -55,9 +59,10 @@ export class FsCodexStore extends FsSettingsStore {
 
   async deleteStoryCodex(projectId: string): Promise<void> {
     try {
-      await this.withLegacyRoutingOperation(
+      await this.withAuxiliaryWriteOperation(
         () => this.deleteStoryCodexStrict(projectId),
         projectId,
+        () => [projectId, this.resolveAuxiliaryProjectId(projectId, 'codex')],
       );
     } catch (error) {
       if (this.isProjectWriteAuthorityError(error)) throw error;

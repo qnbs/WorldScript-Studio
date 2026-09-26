@@ -91,11 +91,36 @@ export function normalizeSaveProjectInputToStoryProject(project: SaveProjectInpu
  * Contract implemented by IndexedDB (`dbService`) and Tauri filesystem (`fileSystemService`).
  * Single source of truth — import from here, not from `storageService`, to avoid circular deps.
  */
+// QNBS-v3 (#553 §2.8): STALE = another window moved the project past this editor's baseline (generation or incarnation); UNSUPPORTED = the backend cannot supply canonical text at all — never read as ABSENT.
+export type CanonicalProjectRawResult =
+  | { status: 'ABSENT' }
+  | { status: 'CURRENT'; raw: string }
+  | { status: 'REFUSED'; classification: string }
+  | { status: 'STALE' }
+  | { status: 'UNSUPPORTED' };
+
+// QNBS-v3 (#553 a10): replacement = the editable project was replaced wholesale since storage last received it; write it as a fresh canonical document, never an edit of the predecessor's text.
+export interface SaveProjectOptions {
+  replacement?: boolean;
+  /** The admitted text a restored project starts from; a replacement overlays the editor's edits onto it instead of writing a fresh document (#553 a5). */
+  replacementRaw?: string;
+}
+
+/** A restore's admitted project and the exact canonical text it was admitted from (#553 a5). */
+export interface RestoredSnapshot<Project = unknown> {
+  project: Project;
+  raw: string;
+}
+
 export interface StorageBackend {
-  saveProject(project: SaveProjectInput): Promise<void>;
+  saveProject(project: SaveProjectInput, options?: SaveProjectOptions): Promise<void>;
   loadProject(projectId: string): Promise<StoryProject | null>;
   /** QNBS-v3: editable desktop admission must reject readable legacy projections before Redux hydration. */
   loadProjectForEditing?(projectId: string): Promise<StoryProject | null>;
+  /** QNBS-v3 (#553 §2.8): one coherent read of a stored project's canonical text, by its storage key (listProjects). */
+  loadCanonicalProjectRaw(projectId: string): Promise<CanonicalProjectRawResult>;
+  /** QNBS-v3 (#553 §2.8): the canonical text behind the editor's open project, resolved to its real storage source and refused as STALE when another window moved past this editor's baseline. */
+  loadEditorExportCarrier(projectId: string | undefined): Promise<CanonicalProjectRawResult>;
   listProjects(): Promise<string[]>;
   deleteProject(projectId: string): Promise<void>;
   /** QNBS-v3 (#332): optional — only the multi-project Tauri filesystem backend implements this; IndexedDB's single-project contract has no "which one" ambiguity to resolve. */
@@ -128,9 +153,16 @@ export interface StorageBackend {
 
   /** Snapshot IDs: numeric (Date.now / IDB auto-increment). */
   saveSnapshot(snapshotLabel: string, data: unknown): Promise<number>;
+  /** QNBS-v3 (#553 §2.8): stores the canonical project text; a text-storing backend keeps it byte-for-byte. */
+  saveSnapshotText(snapshotLabel: string, projectJson: string): Promise<number>;
   getSnapshotData(snapshotId: number): Promise<unknown>;
+  /** QNBS-v3 (#553 a11): a text-storing backend returns the snapshot's stored text byte-for-byte (null when absent); others omit this and their structured value is the carrier. */
+  getSnapshotText?(snapshotId: number): Promise<string | null>;
   // QNBS-v3: filesystem restore validates this pre-read target; other backends retain their existing snapshot semantics.
-  restoreSnapshot?(snapshotId: number, currentProject: SnapshotRestoreTarget): Promise<unknown>;
+  restoreSnapshot?(
+    snapshotId: number,
+    currentProject: SnapshotRestoreTarget,
+  ): Promise<RestoredSnapshot>;
   listSnapshots(): Promise<ProjectSnapshot[]>;
   deleteSnapshot(snapshotId: number): Promise<void>;
 

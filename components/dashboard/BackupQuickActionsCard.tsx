@@ -5,6 +5,7 @@ import { selectAllCharacters, selectAllWorlds } from '../../features/project/pro
 import { importProjectThunk } from '../../features/project/thunks/projectManagementThunks';
 import { statusActions } from '../../features/status/statusSlice';
 import { useTranslation } from '../../hooks/useTranslation';
+import { downloadCanonicalProjectExport } from '../../services/projectCanonicalEgress';
 import { storageService } from '../../services/storageService';
 import type { ProjectSnapshot, StoryProject, View } from '../../types';
 import { Button } from '../ui/Button';
@@ -37,17 +38,15 @@ export const BackupQuickActionsCard: FC<BackupQuickActionsCardProps> = ({ onNavi
     void refreshSnapshots();
   }, [refreshSnapshots]);
 
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     if (!project) return;
-    const payload: StoryProject = { ...project, characters, worlds };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = `${project.title.replace(/\s+/g, '_')}_backup.json`;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [project, characters, worlds]);
+    await downloadCanonicalProjectExport(
+      project.id,
+      { ...project, characters, worlds } as StoryProject,
+      () =>
+        dispatch(statusActions.addNotification({ type: 'error', title: t('export.exportFailed') })),
+    );
+  }, [project, characters, worlds, dispatch, t]);
 
   const handleImport = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {

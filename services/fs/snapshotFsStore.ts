@@ -7,10 +7,12 @@ import type { ProjectSnapshot } from '../../types';
 import { logger } from '../logger';
 import { FsCodexStore } from './codexFsStore';
 import {
-  compressData,
+  compressJsonText,
   countProjectWords,
   decompressJsonText,
   retryFs,
+  type TauriApis,
+  tryCreateExclusiveEmptyFile,
   writeTextFileAtomic,
 } from './fsCore';
 
@@ -23,8 +25,17 @@ interface SnapshotEnvelope {
   data: string; // compressData(projectData)
 }
 
+// QNBS-v3 (#553 R3): snapshot ids are millisecond timestamps and the atomic write replaces its destination, so two snapshots in the same millisecond (e.g. two legacy migrations) would share a file. An id is owned only after an exclusive-create reservation (the project lock's primitive), which also holds across windows/processes; the in-process counter is claimed synchronously so concurrent calls here never even contend.
+let lastSnapshotId = 0;
+const SNAPSHOT_ID_ATTEMPTS = 1000;
+
 export class FsSnapshotStore extends FsCodexStore {
   async saveSnapshot(snapshotLabel: string, data: unknown): Promise<number> {
+    return this.saveSnapshotText(snapshotLabel, JSON.stringify(data));
+  }
+
+  // QNBS-v3 (#553 §2.8): stores the canonical project text exactly — same envelope format (compressData is compressJsonText of the JSON), so existing readers are unaffected.
+  async saveSnapshotText(snapshotLabel: string, projectJson: string): Promise<number> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const snapshotsPath = await apis.join(appDataPath, 'snapshots');
@@ -33,17 +44,40 @@ export class FsSnapshotStore extends FsCodexStore {
       await apis.mkdir(snapshotsPath, { recursive: true });
     }
 
-    const id = Date.now();
+    const { id, reservation } = await this.reserveSnapshotId(apis, snapshotsPath);
     const envelope: SnapshotEnvelope = {
       id,
       name: snapshotLabel,
       date: new Date().toISOString(),
-      wordCount: countProjectWords(data),
-      data: compressData(data),
+      wordCount: countProjectWords(JSON.parse(projectJson)),
+      data: compressJsonText(projectJson),
     };
     const snapshotFile = await apis.join(snapshotsPath, `${id}.json`);
-    await writeTextFileAtomic(apis, snapshotFile, JSON.stringify(envelope));
+    try {
+      await writeTextFileAtomic(apis, snapshotFile, JSON.stringify(envelope));
+    } finally {
+      // QNBS-v3: once the snapshot exists (or the write failed) the reservation has done its job; a leftover marker only keeps that id skipped.
+      await apis.remove(reservation).catch(() => undefined);
+    }
     return id;
+  }
+
+  private async reserveSnapshotId(
+    apis: TauriApis,
+    snapshotsPath: string,
+  ): Promise<{ id: number; reservation: string }> {
+    for (let attempt = 0; attempt < SNAPSHOT_ID_ATTEMPTS; attempt++) {
+      const id = Math.max(Date.now(), lastSnapshotId + 1);
+      lastSnapshotId = id;
+      const reservation = await apis.join(snapshotsPath, `${id}.reserved`);
+      if (!(await tryCreateExclusiveEmptyFile(apis, reservation))) continue;
+      if (await apis.exists(await apis.join(snapshotsPath, `${id}.json`))) {
+        await apis.remove(reservation).catch(() => undefined);
+        continue;
+      }
+      return { id, reservation };
+    }
+    throw new Error('No free snapshot id could be reserved.');
   }
 
   protected async getSnapshotJsonText(snapshotId: number): Promise<string | null> {
@@ -71,6 +105,11 @@ export class FsSnapshotStore extends FsCodexStore {
       return decompressJsonText((envelope as { data: string }).data);
     }
     return content;
+  }
+
+  // QNBS-v3 (#553 a11): the stored text itself, unparsed, so backup egress keeps exact tokens; read failures propagate so the caller can tell them from an absent snapshot.
+  async getSnapshotText(snapshotId: number): Promise<string | null> {
+    return this.getSnapshotJsonText(snapshotId);
   }
 
   async getSnapshotData(snapshotId: number): Promise<unknown> {

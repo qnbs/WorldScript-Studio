@@ -3,6 +3,7 @@
  * QNBS-v3: Einheitliches Schema verhindert divergierende Parse-Pfade und härter gegen korrupte Dateien.
  */
 import { z } from 'zod';
+import type { AIProvider } from '../types';
 import {
   admitCanonicalProjectDocument,
   type CanonicalProjectAdmission,
@@ -10,7 +11,8 @@ import {
   stripTopLevelObjectKeys,
 } from './projectDocument';
 
-const PORTABLE_IMPORT_LOCAL_METADATA_KEYS = new Set([
+// QNBS-v3 (#553 §2.8): machine-local trust/routing metadata — stripped at every portable boundary, import and export alike.
+export const PORTABLE_LOCAL_METADATA_KEYS: ReadonlySet<string> = new Set([
   '__worldscriptLegacyProjectDirectory',
   '__worldscriptLegacyAuxiliary',
 ]);
@@ -400,6 +402,53 @@ const characterInterviewSchema = z.object({
 });
 
 /** Full export / backup JSON shape (matches extended ProjectData on disk). */
+// QNBS-v3 (#553 a4/R2): the plot board and per-project AI preset are modeled ProjectData the editor owns; import validates their structure so they reach the editor instead of being stripped from the projection. Open value sets (connection type, provider, model) stay strings so a newer build's file is not refused over a value this build does not list.
+const subplotSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  color: z.string(),
+  sectionIds: z.array(z.string()),
+});
+
+const plotConnectionSchema = z.object({
+  id: z.string(),
+  fromSectionId: z.string(),
+  toSectionId: z.string(),
+  type: z.string(),
+  subplotId: z.string().optional(),
+  label: z.string().optional(),
+  color: z.string().optional(),
+});
+
+// QNBS-v3 (#553 a4/R2): the provider selects where AI requests go, so only a provider this build can dispatch is admitted; the tuple is compile-checked against AIProvider in both directions.
+const AI_PROVIDER_VALUES = [
+  'gemini',
+  'openai',
+  'anthropic',
+  'grok',
+  'ollama',
+  'openrouter',
+  'webllm',
+  'onnx',
+  'transformers',
+] as const satisfies readonly AIProvider[];
+type MissingAiProvider = Exclude<AIProvider, (typeof AI_PROVIDER_VALUES)[number]>;
+const aiProvidersExhaustive: [MissingAiProvider] extends [never] ? true : never = true;
+void aiProvidersExhaustive;
+
+const projectAiPresetSchema = z.object({
+  // QNBS-v3 (#553 a4/R2): an absent flag reads as disabled — a stored preset without it must not make the whole project unloadable.
+  enabled: z.boolean().optional(),
+  provider: z.enum(AI_PROVIDER_VALUES).optional(),
+  model: z.string().optional(),
+  creativity: z.string().optional(),
+  temperature: z.number().optional(),
+  maxTokens: z.number().optional(),
+  customSystemPrompt: z.string().optional(),
+  loraModelPath: z.string().optional(),
+  loraScale: z.number().optional(),
+});
+
 export const importedProjectJsonSchema = z.object({
   id: z.string().optional(),
   title: z.string(),
@@ -427,6 +476,19 @@ export const importedProjectJsonSchema = z.object({
   objectGroups: z.array(objectGroupSchema).optional(),
   mindMaps: z.array(mindMapSchema).optional(),
   characterInterviews: z.record(z.string(), z.array(characterInterviewSchema)).optional(),
+  // QNBS-v3 (#553 a4/R2): the plot reducers address entries by id (update the first match, delete every match), so duplicate ids are refused like any entity collection.
+  plotConnections: entityArraySchema(plotConnectionSchema).optional(),
+  plotSubplots: entityArraySchema(subplotSchema).optional(),
+  // QNBS-v3 (#553 a4/R2): a non-finite tension score serializes as null; it is admitted (so one stored value never makes the project unloadable) but dropped from the editable projection, so it can never be read as a score of 0.
+  plotTensionOverrides: z
+    .record(z.string(), z.number().nullable())
+    .transform((overrides) =>
+      Object.fromEntries(
+        Object.entries(overrides).filter((entry): entry is [string, number] => entry[1] !== null),
+      ),
+    )
+    .optional(),
+  aiPreset: projectAiPresetSchema.optional(),
 });
 
 export type ImportedProjectJson = z.infer<typeof importedProjectJsonSchema>;
@@ -444,7 +506,7 @@ export function admitImportedProjectJson(
 
   const portableRaw = stripTopLevelObjectKeys(
     admission.canonical.raw,
-    PORTABLE_IMPORT_LOCAL_METADATA_KEYS,
+    PORTABLE_LOCAL_METADATA_KEYS,
   );
   if (portableRaw === null) {
     return { source: admission.source, canonical: null, status: 'REFUSED' };
@@ -458,9 +520,21 @@ export function admitImportedProjectJson(
 
 // QNBS-v3: route file imports through the canonical admission boundary before exposing editable data.
 export function parseImportedProjectJson(text: string): ImportedProjectJson {
+  return parseImportedProjectDocument(text).project;
+}
+
+/** An admitted import: the editable projection plus the admitted portable text it came from (#553 a4). */
+export interface ImportedProjectDocument {
+  project: ImportedProjectJson;
+  raw: string;
+}
+
+// QNBS-v3 (#553 a4): the admitted canonical text is kept next to the projection, so the first save of an import can start from it instead of a re-serialization of the parsed projection.
+export function parseImportedProjectDocument(text: string): ImportedProjectDocument {
   const admission = admitImportedProjectJson(text);
-  if (admission.canonical?.projection !== null && admission.canonical?.projection !== undefined) {
-    return admission.canonical.projection;
+  const canonical = admission.canonical;
+  if (canonical?.projection !== null && canonical?.projection !== undefined) {
+    return { project: canonical.projection, raw: canonical.raw };
   }
   // QNBS-v3: distinguish a valid source refused by portable admission from malformed input.
   const fallbackError =

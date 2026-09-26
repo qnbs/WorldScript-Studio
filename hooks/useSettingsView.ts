@@ -20,6 +20,10 @@ import { useTranslation } from '../hooks/useTranslation';
 import { desktopPlatform } from '../services/desktopPlatform';
 import { wipeAllAppData } from '../services/factoryResetService';
 import { logger } from '../services/logger';
+import {
+  createCanonicalProjectSnapshot,
+  downloadCanonicalProjectExport,
+} from '../services/projectCanonicalEgress';
 import type { ProtectedStoreMigrationProgress } from '../services/storage/protectedStoreMigration';
 import {
   clearIdbEncryptionKey,
@@ -308,22 +312,14 @@ export const useSettingsView = () => {
     );
   }, [project.manuscript]);
 
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     if (!project) return;
-    const projectToExport: StoryProject = {
-      ...project,
-      characters,
-      worlds,
-    };
-    const dataStr = JSON.stringify(projectToExport, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.download = `${project.title.replace(/\s+/g, '_')}_backup.json`;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [project, characters, worlds]);
+    const projectToExport: StoryProject = { ...project, characters, worlds };
+    await downloadCanonicalProjectExport(project.id, projectToExport, (error) => {
+      logger.error('Project export refused', error);
+      toast.error(t('export.exportFailed'));
+    });
+  }, [project, characters, worlds, toast, t]);
 
   const handleImport = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -373,7 +369,7 @@ export const useSettingsView = () => {
   }, []);
 
   const handleCreateSnapshot = useCallback(async () => {
-    await storageService.saveSnapshot(snapshotName, project);
+    await createCanonicalProjectSnapshot(snapshotName, project.id, project);
     setSnapshotName('');
     setModal({ state: 'closed', payload: {} });
     refreshSnapshots();
