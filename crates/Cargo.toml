@@ -1,3 +1,11 @@
 [workspace]
 resolver = "2"
 members = ["worldscript-project", "worldscript-diagnostics", "worldscript-secure-storage"]
+
+# Argon2id at the WSS_ARGON2ID_V1 cost (64 MiB, t=3) is impractically slow unoptimized; optimize just
+# the KDF crates so debug test runs stay bounded. This does not change any output.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

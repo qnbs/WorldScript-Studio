@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 1b-core (#445):** the headless key-provider and recovery layer of
+  `crates/worldscript-secure-storage`, implementing the maintainer's Option C decision (platform
+  secure store as the runtime authority; optional passphrase recovery). It adds the
+  `WSS_ARGON2ID_V1` native recovery KDF (Argon2id v1.3, 64 MiB, t=3, p=1, 32-byte output; exact
+  21-byte versioned profile, NFC-normalized UTF-8 passphrases), the authenticated `WSRP` v1 portable
+  recovery package, `RootKeyRefV1` and `InstallationScopeId`, the renderer-neutral `KeyProvider`
+  contract, the pure §5.3.1 secure-anchor transitions every platform adapter applies, and a
+  fault-injecting in-memory provider for tests. Every anchor is validated as a version-1 state before
+  it is read or changed (unknown formats are refused, never mutated); a replayed commit succeeds only
+  for the exact last committed operation; root slots are A/B only and a new root always targets the
+  other slot; a preparation must name a key route the provider issued; authority stays
+  `UNCONFIGURED` until the first root commits; and reading an existing installation scope needs no
+  randomness. KDF, package and key-ref vectors were cross-checked
+  against Node's independent Argon2id/AES-GCM/SHA-256 (itself checked against RFC 9106). The crate
+  still honors Rust 1.77.2 (`argon2` 0.5.3, `base64ct` held on 1.6). The contract records the
+  decision and specifies the KDF and package format (§8.2/§8.2.1). No platform secure store, no
+  TypeScript/Tauri wiring, and no user data are involved yet: the platform adapter is Gate 1b's
+  next slice, Gates 2–7 stay unadmitted, and there is no production authority switch. PR #850.
 - **R-15 Gate 1a (#445):** first renderer-neutral protected-storage code, a new headless crate
   `crates/worldscript-secure-storage`, re-admitted by the QNB-100 readiness verdict. It implements the
   contract's `WSR1` 52-byte envelope header with strict version-1 parsing (§6.1/§6.1.2 bounds,
