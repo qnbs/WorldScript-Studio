@@ -3610,16 +3610,57 @@ describe('FsProjectStore — durable legacy migration (#553 R3)', () => {
     expect(fake.text.get(SOURCE)).toBe(before);
   });
 
-  it('never lets two snapshots in the same millisecond replace each other', async () => {
-    const now = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
-    try {
-      const editor = new FsProjectStore();
-      const first = await editor.saveSnapshotText('a', '{"title":"A"}');
-      const second = await editor.saveSnapshotText('b', '{"title":"B"}');
-      expect(second).not.toBe(first);
-      expect(snapshotTexts().sort()).toEqual(['{"title":"A"}', '{"title":"B"}']);
-    } finally {
-      now.mockRestore();
-    }
+  describe('snapshot id ownership under concurrency', () => {
+    const FROZEN = 1_800_000_000_000;
+
+    it('gives two concurrent same-millisecond snapshots distinct files', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(FROZEN);
+      try {
+        const [first, second] = await Promise.all([
+          new FsProjectStore().saveSnapshotText('a', '{"title":"A"}'),
+          new FsProjectStore().saveSnapshotText('b', '{"title":"B"}'),
+        ]);
+        expect(second).not.toBe(first);
+        expect(snapshotTexts().sort()).toEqual(['{"title":"A"}', '{"title":"B"}']);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    // A second module copy has its own in-process counter, like another window's process: both writers start from the same candidate id at the same time, so only the exclusive reservation can separate them.
+    it('separates writers that start from the same candidate id in different processes', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(FROZEN + 10_000);
+      try {
+        vi.resetModules();
+        const { FsProjectStore: OtherProcessStore } = await import(
+          '../../../../services/fs/projectFsStore'
+        );
+        const [first, second] = await Promise.all([
+          new FsProjectStore().saveSnapshotText('a', '{"title":"A"}'),
+          new OtherProcessStore().saveSnapshotText('b', '{"title":"B"}'),
+        ]);
+        expect(second).not.toBe(first);
+        expect(snapshotTexts().sort()).toEqual(['{"title":"A"}', '{"title":"B"}']);
+        expect([...fake.text.keys()].some((path) => path.endsWith('.reserved'))).toBe(false);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    it('skips an id another writer has reserved and leaves its reservation alone', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(FROZEN + 20_000);
+      try {
+        await fake.apis.mkdir('/app/snapshots', { recursive: true });
+        await fake.apis.writeTextFile(`/app/snapshots/${FROZEN + 20_000}.reserved`, '');
+
+        const id = await new FsProjectStore().saveSnapshotText('a', '{"title":"A"}');
+
+        expect(id).not.toBe(FROZEN + 20_000);
+        expect(fake.text.has(`/app/snapshots/${FROZEN + 20_000}.reserved`)).toBe(true);
+        expect(fake.text.has(`/app/snapshots/${FROZEN + 20_000}.json`)).toBe(false);
+      } finally {
+        now.mockRestore();
+      }
+    });
   });
 });
