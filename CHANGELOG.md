@@ -17,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     migration.
   - Earlier changelog entries describing the previous fallback are left unchanged as history.
     PR #846.
+- **Data integrity (#553):** desktop projects saved by older versions (before project files carried
+  a schema version) can be opened for editing again. On first open, the file gets a schema version
+  added and nothing else about its content changes. The original file is kept as a "Before schema
+  migration" snapshot first. If the file changed meanwhile, was replaced, or the snapshot cannot be
+  written, the project is left exactly as it was. PR #849.
+- **Data integrity (#553):** importing a project file now keeps its plot board connections,
+  subplots and tension overrides, the per-project AI preset, story objects and groups, mind maps
+  and character interviews. Before, these were dropped when the file was imported and removed
+  from the saved project by the first save. PR #848.
+- **Data integrity (#553):** the JSON export in "Import & export" now saves the whole project —
+  every field and any data this version does not know — the same way as the other JSON export
+  buttons, instead of only the title, logline and manuscript. If the export has to be refused (for
+  example because the project changed in another window), it now reports a failure instead of a
+  success. PR #847.
 - **Data integrity (#553):** if the saved project cannot be loaded into the editor, startup now
   stops on the "project could not be opened" screen with Reload. Before, the browser version started
   a blank project in its place, so the saved project was inaccessible in that session; for a saved

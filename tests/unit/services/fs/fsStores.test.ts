@@ -938,7 +938,8 @@ describe('FsProjectStore — projects', () => {
   });
 
   // QNBS-v3: readable legacy bytes remain available to inspection but cannot cross the editable bootstrap boundary.
-  it('refuses ID-less legacy admission for the editable application state without rewriting the source', async () => {
+  // QNBS-v3 (#553 R3): an ID-less legacy file is migrated durably and becomes a CURRENT ID-less project bound to its directory.
+  it('migrates an ID-less legacy project durably before it enters editing', async () => {
     const legacyProject = {
       title: 'ID-less Legacy',
       logline: 'L',
@@ -949,15 +950,14 @@ describe('FsProjectStore — projects', () => {
     const source = '/app/projects/idless-legacy/project.json';
     await fake.apis.mkdir('/app/projects/idless-legacy', { recursive: true });
     await fake.apis.writeTextFile(source, JSON.stringify(legacyProject));
-    const before = fake.text.get(source);
 
-    await expect(store.loadProjectForEditing('idless-legacy')).rejects.toMatchObject({
-      name: 'ProjectLoadError',
-      reason: 'unsupported-version',
-      classification: 'LEGACY_UNVERSIONED',
-      projectId: 'idless-legacy',
+    const project = await store.loadProjectForEditing('idless-legacy');
+
+    expect(project?.title).toBe('ID-less Legacy');
+    expect(JSON.parse(decompressJsonText(fake.text.get(source) as string))).toMatchObject({
+      ...legacyProject,
+      schemaVersion: 1,
     });
-    expect(fake.text.get(source)).toBe(before);
   });
 
   // QNBS-v3: authority is checked after queued work completes so a load cannot race a later mutation.
@@ -3516,5 +3516,151 @@ describe('FsProjectStore — export / import', () => {
     fake.apis.open = () => Promise.resolve('/app/import.json');
     const project = await store.importProject();
     expect(project?.title).toBe('JSON Novel');
+  });
+});
+
+// QNBS-v3 (#553 R3): durable LEGACY_TO_V1 for filesystem projects — the admitted overlay is committed under the project lock and source fences, with the exact legacy text kept as a snapshot; any failure leaves the legacy file untouched.
+describe('FsProjectStore — durable legacy migration (#553 R3)', () => {
+  const SOURCE = '/app/projects/legacy/project.json';
+  const LEGACY_TEXT =
+    '{"id":"legacy","title":"Old","logline":"L","manuscript":[{"id":"s1","title":"Ch","content":"words"}],' +
+    '"characters":[],"worlds":[],"opaque":{"exact":9007199254740993}}';
+  const snapshotTexts = () =>
+    [...fake.text.entries()]
+      .filter(([path]) => path.startsWith('/app/snapshots/'))
+      .map(([, envelope]) => decompressJsonText(JSON.parse(envelope).data as string));
+
+  async function seedLegacy(text = LEGACY_TEXT) {
+    await fake.apis.mkdir('/app/projects/legacy', { recursive: true });
+    await fake.apis.writeTextFile(SOURCE, text);
+  }
+
+  it('commits schemaVersion 1 with every legacy byte kept, snapshots the legacy text, then admits editing', async () => {
+    await seedLegacy();
+
+    const project = await new FsProjectStore().loadProjectForEditing('legacy');
+
+    expect(project?.title).toBe('Old');
+    const stored = decompressJsonText(fake.text.get(SOURCE) as string);
+    expect(stored).toContain('"exact":9007199254740993');
+    expect(stored).toContain('"schemaVersion":1');
+    expect(stored.replace(/"schemaVersion":1,|,"schemaVersion":1/, '')).toBe(LEGACY_TEXT);
+    expect(snapshotTexts()).toEqual([LEGACY_TEXT]);
+  });
+
+  it('is idempotent: a migrated project loads as CURRENT without another migration', async () => {
+    await seedLegacy();
+    await new FsProjectStore().loadProjectForEditing('legacy');
+    const migrated = fake.text.get(SOURCE);
+
+    await new FsProjectStore().loadProjectForEditing('legacy');
+
+    expect(fake.text.get(SOURCE)).toBe(migrated);
+    expect(snapshotTexts()).toHaveLength(1);
+  });
+
+  it('refuses a legacy file that is not a valid V1 shape without writing anything', async () => {
+    await seedLegacy('{"title":"Broken","logline":"L","characters":"not-a-list","worlds":[]}');
+    const before = fake.text.get(SOURCE);
+
+    await expect(new FsProjectStore().loadProjectForEditing('legacy')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+    });
+    expect(fake.text.get(SOURCE)).toBe(before);
+    expect(snapshotTexts()).toEqual([]);
+  });
+
+  it('refuses the migration when the project incarnation changed after it was loaded', async () => {
+    await seedLegacy();
+    const before = fake.text.get(SOURCE);
+    const editor = new FsProjectStore();
+    const reads = vi.spyOn(
+      editor as unknown as { readProjectIncarnation: () => Promise<string | null> },
+      'readProjectIncarnation',
+    );
+    let calls = 0;
+    reads.mockImplementation(async () => (++calls <= 2 ? 'loaded' : 'recreated'));
+
+    await expect(editor.loadProjectForEditing('legacy')).rejects.toBeInstanceOf(
+      StaleProjectWriterError,
+    );
+    expect(fake.text.get(SOURCE)).toBe(before);
+  });
+
+  it('never replaces a legacy file that changed before the migration commit', async () => {
+    await seedLegacy();
+    const concurrent = LEGACY_TEXT.replace('"Old"', '"Edited elsewhere"');
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (path: string, content: string, opts?: { createNew?: boolean }) => {
+      if (path.startsWith(`${SOURCE}.tmp-`)) fake.text.set(SOURCE, concurrent);
+      return originalWriteTextFile(path, content, opts);
+    };
+
+    await expect(new FsProjectStore().loadProjectForEditing('legacy')).rejects.toThrow();
+    expect(fake.text.get(SOURCE)).toBe(concurrent);
+  });
+
+  it('leaves the legacy file untouched when the pre-migration snapshot cannot be written', async () => {
+    await seedLegacy();
+    const before = fake.text.get(SOURCE);
+    const editor = new FsProjectStore();
+    vi.spyOn(editor, 'saveSnapshotText').mockRejectedValueOnce(new Error('disk full'));
+
+    await expect(editor.loadProjectForEditing('legacy')).rejects.toThrow('disk full');
+    expect(fake.text.get(SOURCE)).toBe(before);
+  });
+
+  describe('snapshot id ownership under concurrency', () => {
+    const FROZEN = 1_800_000_000_000;
+
+    it('gives two concurrent same-millisecond snapshots distinct files', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(FROZEN);
+      try {
+        const [first, second] = await Promise.all([
+          new FsProjectStore().saveSnapshotText('a', '{"title":"A"}'),
+          new FsProjectStore().saveSnapshotText('b', '{"title":"B"}'),
+        ]);
+        expect(second).not.toBe(first);
+        expect(snapshotTexts().sort()).toEqual(['{"title":"A"}', '{"title":"B"}']);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    // A second module copy has its own in-process counter, like another window's process: both writers start from the same candidate id at the same time, so only the exclusive reservation can separate them.
+    it('separates writers that start from the same candidate id in different processes', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(FROZEN + 10_000);
+      try {
+        vi.resetModules();
+        const { FsProjectStore: OtherProcessStore } = await import(
+          '../../../../services/fs/projectFsStore'
+        );
+        const [first, second] = await Promise.all([
+          new FsProjectStore().saveSnapshotText('a', '{"title":"A"}'),
+          new OtherProcessStore().saveSnapshotText('b', '{"title":"B"}'),
+        ]);
+        expect(second).not.toBe(first);
+        expect(snapshotTexts().sort()).toEqual(['{"title":"A"}', '{"title":"B"}']);
+        expect([...fake.text.keys()].some((path) => path.endsWith('.reserved'))).toBe(false);
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    it('skips an id another writer has reserved and leaves its reservation alone', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(FROZEN + 20_000);
+      try {
+        await fake.apis.mkdir('/app/snapshots', { recursive: true });
+        await fake.apis.writeTextFile(`/app/snapshots/${FROZEN + 20_000}.reserved`, '');
+
+        const id = await new FsProjectStore().saveSnapshotText('a', '{"title":"A"}');
+
+        expect(id).not.toBe(FROZEN + 20_000);
+        expect(fake.text.has(`/app/snapshots/${FROZEN + 20_000}.reserved`)).toBe(true);
+        expect(fake.text.has(`/app/snapshots/${FROZEN + 20_000}.json`)).toBe(false);
+      } finally {
+        now.mockRestore();
+      }
+    });
   });
 });

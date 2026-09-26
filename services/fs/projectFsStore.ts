@@ -1262,10 +1262,18 @@ export class FsProjectStore extends FsAssetStore {
   async loadProjectForEditing(projectId: string): Promise<StoryProject | null> {
     return this.withLegacyRoutingOperation(async () => {
       const safeProjectId = projectPathSegment(projectId);
-      const { project, generation, incarnation } = await this.loadProjectWithIncarnation(
+      let { project, generation, incarnation } = await this.loadProjectWithIncarnation(
         projectId,
         safeProjectId,
       );
+      // QNBS-v3 (#553 R3): a legacy (unversioned) file enters editing only through its durable LEGACY_TO_V1 migration — committed under the project lock and source fences, then reloaded through the ordinary CURRENT path.
+      if (project && safeProjectId && this.legacyAdmissionRecords.has(safeProjectId)) {
+        await this.commitLegacyToV1Migration(projectId, safeProjectId, incarnation);
+        ({ project, generation, incarnation } = await this.loadProjectWithIncarnation(
+          projectId,
+          safeProjectId,
+        ));
+      }
       if (project && safeProjectId && this.legacyAdmissionRecords.has(safeProjectId)) {
         throw new ProjectLoadError(
           'unsupported-version',
@@ -1282,6 +1290,47 @@ export class FsProjectStore extends FsAssetStore {
         if (project) this.editingSourceId = safeProjectId;
       }
       return project;
+    });
+  }
+
+  /**
+   * Durable LEGACY_TO_V1 for a filesystem project (#553 R3, contract §2.4 / row 11).
+   *
+   * Under the project lock it re-reads the file, checks it is still the legacy source that was
+   * loaded (same incarnation, still LEGACY_TO_V1), keeps the exact legacy text as a "Before schema
+   * migration" snapshot, verifies the admitted overlay (the legacy text with `schemaVersion` added,
+   * nothing else changed) admits as CURRENT, and replaces the file atomically only if its text is
+   * unchanged at rename. Any failure leaves the legacy file as it was; a concurrent migration that
+   * already committed is a no-op.
+   */
+  private async commitLegacyToV1Migration(
+    projectId: string,
+    safeProjectId: string,
+    loadedIncarnation: string | null,
+  ): Promise<void> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
+    const lockKeyPath = await this.projectLockKeyPath(apis, safeProjectId);
+    await withProjectFileLock(apis, lockKeyPath, async () => {
+      if ((await this.readProjectIncarnation(apis, safeProjectId)) !== loadedIncarnation) {
+        throw new StaleProjectWriterError(safeProjectId);
+      }
+      const sourceText = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+      const admission = admitCanonicalProjectDocument(sourceText, storedProjectSchema);
+      if (admission.status !== 'LEGACY_TO_V1' || admission.canonical === null) return;
+      const migratedRaw = admission.canonical.raw;
+      if (admitCanonicalProjectDocument(migratedRaw, storedProjectSchema).status !== 'CURRENT') {
+        throw new ProjectCanonicalWritebackError(
+          projectId,
+          'legacy migration did not produce a CURRENT document',
+        );
+      }
+      await this.saveSnapshotText('Before schema migration', sourceText);
+      await writeTextFileAtomic(apis, projectFile, compressJsonText(migratedRaw), async () => {
+        const latest = decompressJsonText(await retryFs(() => apis.readTextFile(projectFile)));
+        if (latest !== sourceText) throw new Error('legacy source changed before migration commit');
+      });
     });
   }
 
