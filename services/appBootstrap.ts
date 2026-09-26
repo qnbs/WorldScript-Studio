@@ -162,3 +162,9 @@ export function requirePersistedProjectForStore(
   if (!normalized) throw new PersistedProjectNotLoadableError();
   return normalized;
 }
+
+// QNBS-v3 (#553 a9): presence, not truthiness — a stored falsy project value is refused, never booted as a blank project; an absent project leaves the new-user flow untouched.
+export function hydrateStoredProject(preloadedState: PersistedRootState | undefined): void {
+  if (!preloadedState || !Object.hasOwn(preloadedState, 'project')) return;
+  preloadedState.project = requirePersistedProjectForStore(preloadedState.project);
+}

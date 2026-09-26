@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { requirePersistedProjectForStore } from '../../services/appBootstrap';
+import { hydrateStoredProject, requirePersistedProjectForStore } from '../../services/appBootstrap';
 import { APP_DATA_STORE } from '../../services/dbConstants';
 import { PersistedProjectNotLoadableError } from '../../services/persistedProjectErrors';
 import { _resetDbForTest } from '../../services/storage';
@@ -112,5 +112,42 @@ describe('browser boot with a stored project the editor cannot load (#553 a9)', 
       requirePersistedProjectForStore(loaded?.project as PersistedRootState['project']),
     ).toThrow(PersistedProjectNotLoadableError);
     expect(JSON.stringify(await stored(authority))).toBe(before);
+  });
+
+  it('keeps the new-user flow for an absent project and hydrates a stored one in place', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    const settingsOnly = { settings: {} } as PersistedRootState;
+    hydrateStoredProject(settingsOnly);
+    hydrateStoredProject(undefined);
+    expect(Object.hasOwn(settingsOnly, 'project')).toBe(false);
+
+    await seed(authority, { data: { ...precious, outline: [] } });
+    const loaded = (await new IdbProjectStore().loadState()) as PersistedRootState;
+    hydrateStoredProject(loaded);
+    expect(loaded.project?.present?.data?.title).toBe('Precious');
+  });
+
+  it('reports an absent project as absent when only settings are stored', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    const store = await (authority as unknown as StoreAccess).getObjectStore(
+      APP_DATA_STORE,
+      'readwrite',
+    );
+    await new Promise<void>((resolve) => {
+      store.put({ theme: 'dark' }, 'settings');
+      store.transaction.oncomplete = () => resolve();
+    });
+
+    const loaded = await new IdbProjectStore().loadState();
+
+    expect(loaded).toBeDefined();
+    expect(Object.hasOwn(loaded as object, 'project')).toBe(false);
+  });
+
+  it('refuses a stored falsy project through the boot hydration step', async () => {
+    const authority = new IdbProjectCanonicalAuthority();
+    await seed(authority, null);
+    const loaded = (await new IdbProjectStore().loadState()) as PersistedRootState;
+    expect(() => hydrateStoredProject(loaded)).toThrow(PersistedProjectNotLoadableError);
   });
 });
