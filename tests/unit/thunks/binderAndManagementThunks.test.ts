@@ -17,9 +17,17 @@ vi.mock('../../../services/storageService', () => ({
   },
 }));
 
-vi.mock('../../../services/projectImportSchema', () => ({
-  parseImportedProjectJson: vi.fn(),
-}));
+vi.mock('../../../services/projectImportSchema', () => {
+  const parseImportedProjectJson = vi.fn();
+  return {
+    parseImportedProjectJson,
+    // QNBS-v3 (#553 a4): the thunk reads projection and admitted text together; tests keep scripting the projection.
+    parseImportedProjectDocument: vi.fn((text: string) => ({
+      project: parseImportedProjectJson(text),
+      raw: text,
+    })),
+  };
+});
 
 import featureFlagsReducer from '../../../features/featureFlags/featureFlagsSlice';
 import { charactersAdapter, worldsAdapter } from '../../../features/project/adapters';
@@ -36,7 +44,10 @@ import settingsReducer from '../../../features/settings/settingsSlice';
 import statusReducer from '../../../features/status/statusSlice';
 import versionControlReducer from '../../../features/versionControl/versionControlSlice';
 import writerReducer from '../../../features/writer/writerSlice';
-import { parseImportedProjectJson } from '../../../services/projectImportSchema';
+import {
+  parseImportedProjectDocument,
+  parseImportedProjectJson,
+} from '../../../services/projectImportSchema';
 import {
   _resetSafeSessionForTest,
   enterSafeSession,
@@ -304,6 +315,52 @@ describe('importProjectThunk', () => {
     const action = await store.dispatch(importProjectThunk(file));
 
     expect(action.type).toBe('project/importProject/fulfilled');
+  });
+
+  // QNBS-v3 (#553 a4): the admitted text travels only on the fulfilled action, without inline image copies.
+  it('carries the admitted import text on the fulfilled action, inline images removed', async () => {
+    const withImage = {
+      ...minimalProject,
+      characters: [{ id: 'c1', name: 'Ada', avatarBase64: 'QUJD' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(withImage as never);
+    // Admitted import text is always CURRENT (older documents are migrated on admission).
+    const text = JSON.stringify({ ...withImage, schemaVersion: 1 }).replace(
+      /}$/,
+      ',"opaque":9007199254740993}',
+    );
+
+    const action = await makeStore().dispatch(
+      importProjectThunk(new File([text], 'novel.json', { type: 'application/json' })),
+    );
+
+    const carrier = (action as unknown as { meta: { replacementCarrier: string | null } }).meta
+      .replacementCarrier;
+    expect(carrier).toContain('"opaque":9007199254740993');
+    expect(carrier).not.toContain('avatarBase64');
+  });
+
+  // QNBS-v3 (#553 a4): the real admission runs here, so the bound carrier is proven free of local metadata rather than echoed from the input.
+  it('binds a carrier from real import admission without local routing metadata', async () => {
+    const actual = await vi.importActual<typeof import('../../../services/projectImportSchema')>(
+      '../../../services/projectImportSchema',
+    );
+    vi.mocked(parseImportedProjectDocument).mockImplementationOnce(
+      actual.parseImportedProjectDocument,
+    );
+    const text =
+      '{"schemaVersion":1,"id":"proj-1","title":"T","logline":"L","manuscript":[],"characters":[],"worlds":[],' +
+      '"opaque":9007199254740993,"__worldscriptLegacyProjectDirectory":"dir","__worldscriptLegacyAuxiliary":{"k":1}}';
+
+    const action = await makeStore().dispatch(
+      importProjectThunk(new File([text], 'novel.json', { type: 'application/json' })),
+    );
+
+    expect(action.type).toBe('project/importProject/fulfilled');
+    const carrier = (action as unknown as { meta: { replacementCarrier: string | null } }).meta
+      .replacementCarrier;
+    expect(carrier).toContain('"opaque":9007199254740993');
+    expect(carrier).not.toContain('__worldscriptLegacy');
   });
 
   it('handles array-format characters without avatarBase64', async () => {

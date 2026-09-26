@@ -10,7 +10,7 @@
 
 import type { ProjectData } from '../features/project/projectSlice';
 import type { StoryProject } from '../types';
-import { isReplacementPending, restoreCarrierFor } from './editorProjectGeneration';
+import { isReplacementPending, replacementCarrierFor } from './editorProjectGeneration';
 import { buildInitialCanonicalRaw } from './projectAutosaveCanonicalWriter';
 import { buildAutosaveOwnedProjectEdit } from './projectAutosaveEditBridge';
 import { admitCanonicalProjectDocument, stripTopLevelObjectKeys } from './projectDocument';
@@ -97,7 +97,7 @@ async function loadEditorCanonicalRaw(
   const storedRaw = await storageService.loadEditorExportCarrier(projectId);
   const replaced = isReplacementPending(project, await storageService.getProjectAuthority());
   // QNBS-v3 (#553 a5): a restored editor project exports the snapshot text it was restored from, not the replaced stored project and not a fresh re-serialization.
-  const base = replaced ? restoreCarrierFor(project) : storedRaw;
+  const base = replaced ? replacementCarrierFor(project) : storedRaw;
   return overlayOwnedEditOntoCanonicalRaw(project, base);
 }
 

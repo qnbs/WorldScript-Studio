@@ -83,13 +83,13 @@ export async function initTauriDeepLink(
           if (importProjectThunk.fulfilled.match(resultAction)) {
             // Navigate to manuscript view after successful import
             window.location.hash = '#/manuscript';
-          } else {
+          } else if (importProjectThunk.rejected.match(resultAction)) {
             // Show error notification
             dispatch(
               statusActions.addNotification({
                 type: 'error',
                 title: t('error.deepLink.title'),
-                description: resultAction.error?.message ?? t('error.deepLink.unknown'),
+                description: resultAction.error.message ?? t('error.deepLink.unknown'),
               }),
             );
           }

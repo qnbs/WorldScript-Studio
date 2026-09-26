@@ -10,7 +10,10 @@ import {
 } from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
-import { restoreSnapshotThunk } from '../features/project/thunks/projectManagementThunks';
+import {
+  importProjectThunk,
+  restoreSnapshotThunk,
+} from '../features/project/thunks/projectManagementThunks';
 import { statusActions } from '../features/status/statusSlice';
 import { writerActions } from '../features/writer/writerSlice';
 import { DEFAULT_OPENROUTER_MODEL_ID } from '../services/ai/cloudModelCatalog';
@@ -25,7 +28,7 @@ import {
   loadRagVectorMigration,
 } from '../services/duckdb/duckdbListenerLoader';
 import {
-  bindRestoreCarrier,
+  bindReplacementCarrier,
   type EditorReplacementEpoch,
   noteEditorEpoch,
   toEditorReplacementEpoch,
@@ -1030,10 +1033,21 @@ listenerMiddleware.startListening({
   actionCreator: restoreSnapshotThunk.fulfilled,
   effect: (action, listenerApi) => {
     const state = listenerApi.getState() as RootState;
-    bindRestoreCarrier(
+    bindReplacementCarrier(
       state.project?.present?.data,
       editorEpochOf(state),
       action.meta.restoreCarrier,
     );
+  },
+});
+
+// QNBS-v3 (#553 a4): same boundary for an import — bound after the reducer assigned the imported project's epoch, never for a failed import; without a preparable carrier the first save stays the fresh document (#839).
+listenerMiddleware.startListening({
+  actionCreator: importProjectThunk.fulfilled,
+  effect: (action, listenerApi) => {
+    const carrier = action.meta.replacementCarrier;
+    if (carrier === null) return;
+    const state = listenerApi.getState() as RootState;
+    bindReplacementCarrier(state.project?.present?.data, editorEpochOf(state), carrier);
   },
 });

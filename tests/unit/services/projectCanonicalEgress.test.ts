@@ -10,7 +10,7 @@ vi.mock('../../../services/storageService', () => ({
 
 import {
   _resetEditorProjectGenerationForTest,
-  bindRestoreCarrier,
+  bindReplacementCarrier,
   noteEditorEpoch,
   notePersistedEditorEpoch,
   toEditorReplacementEpoch,
@@ -117,7 +117,7 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
       ',"snapshotExact":9007199254740993}',
     );
     noteEditorEpoch(toEditorReplacementEpoch(1));
-    bindRestoreCarrier(edited, toEditorReplacementEpoch(1), carrier);
+    bindReplacementCarrier(edited, toEditorReplacementEpoch(1), carrier);
 
     const raw = await loadCanonicalEgressRaw('p1', {
       ...edited,

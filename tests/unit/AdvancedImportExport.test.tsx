@@ -36,6 +36,11 @@ vi.mock('../../features/project/projectSelectors', () => ({
 vi.mock('../../features/project/thunks/projectManagementThunks', () => ({
   importProjectThunk: Object.assign(vi.fn(), {
     fulfilled: { match: vi.fn(() => true) },
+    rejected: {
+      match: vi.fn(
+        (action: { type?: string }) => action?.type === 'project/importProject/rejected',
+      ),
+    },
   }),
 }));
 
@@ -99,6 +104,50 @@ vi.mock('../../components/ui/Select', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+// QNBS-v3 (#553 a4): a rejected JSON import surfaces the thunk's own error message (or the fallback) as an import failure.
+describe('AdvancedImportExport — rejected JSON import', () => {
+  async function importRejected(error: { message?: string }) {
+    const { useAppDispatch } = await import('../../app/hooks');
+    const { useToast } = await import('../../components/ui/Toast');
+    const { logger } = await import('../../services/logger');
+    const toastError = vi.fn();
+    vi.mocked(useToast).mockReturnValue({ success: vi.fn(), error: toastError } as never);
+    vi.mocked(useAppDispatch).mockReturnValue(
+      vi.fn(async () => ({ type: 'project/importProject/rejected', error })) as never,
+    );
+    let fileInput: HTMLInputElement | undefined;
+    const create = document.createElement.bind(document);
+    const spy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const element = create(tag);
+      if (tag === 'input') {
+        fileInput = element as HTMLInputElement;
+        vi.spyOn(fileInput, 'click').mockImplementation(() => {});
+      }
+      return element;
+    });
+    const user = userEvent.setup();
+    render(<AdvancedImportExport />);
+    await user.click(screen.getByText('export.importProject'));
+    await user.click(screen.getByText('export.import'));
+    spy.mockRestore();
+    const file = new File(['{}'], 'broken.json', { type: 'application/json' });
+    Object.defineProperty(fileInput as HTMLInputElement, 'files', { value: [file] });
+    await (fileInput as HTMLInputElement).onchange?.({ target: fileInput } as unknown as Event);
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('export.importFailed'));
+    return vi.mocked(logger.error).mock.calls.at(-1)?.[1] as Error;
+  }
+
+  it('reports the thunk’s error message', async () => {
+    expect((await importRejected({ message: 'Invalid project file: FUTURE' })).message).toBe(
+      'Invalid project file: FUTURE',
+    );
+  });
+
+  it('falls back to a generic message when the rejection has none', async () => {
+    expect((await importRejected({})).message).toBe('Import failed');
+  });
 });
 
 describe('AdvancedImportExport', () => {

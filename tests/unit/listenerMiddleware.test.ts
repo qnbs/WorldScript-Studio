@@ -26,7 +26,7 @@ import writerReducer, { writerActions } from '../../features/writer/writerSlice'
 import {
   _editorEpochForTest,
   _resetEditorProjectGenerationForTest,
-  restoreCarrierFor,
+  replacementCarrierFor,
   toEditorReplacementEpoch,
 } from '../../services/editorProjectGeneration';
 import { ProjectFileLockedError, StaleProjectWriterError } from '../../services/fs/fsCore';
@@ -513,12 +513,42 @@ describe('auto-save project listener', () => {
     expect(present.generation).not.toBe(before.generation);
     // QNBS-v3 (#553 a5): bound to the restored project at the epoch the reducer assigned, not before.
     const epoch = toEditorReplacementEpoch(present.generation);
-    expect(restoreCarrierFor(present.data, epoch)).toBe('{"exact":9007199254740993}');
-    expect(restoreCarrierFor(present.data, toEditorReplacementEpoch(before.generation))).toBeNull();
+    expect(replacementCarrierFor(present.data, epoch)).toBe('{"exact":9007199254740993}');
+    expect(
+      replacementCarrierFor(present.data, toEditorReplacementEpoch(before.generation)),
+    ).toBeNull();
     expect(mockPersistProjectAutosaveSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({ id: before.data.id, title: 'Restored B' }),
       present.generation,
     );
+  });
+
+  // QNBS-v3 (#553 a4): an import's admitted text is bound at the epoch the reducer assigned.
+  it('binds an import’s carrier to the imported project and its new epoch', async () => {
+    const store = makeFullStore();
+    const before = store.getState().project.present;
+    store.dispatch({
+      type: importProjectThunk.fulfilled.type,
+      payload: { ...before.data, id: 'imported', title: 'Imported' },
+      meta: { replacementCarrier: '{"exact":9007199254740993}' },
+    });
+    const present = store.getState().project.present;
+    const epoch = toEditorReplacementEpoch(present.generation);
+    expect(replacementCarrierFor(present.data, epoch)).toBe('{"exact":9007199254740993}');
+    expect(replacementCarrierFor(before.data, epoch)).toBeNull();
+  });
+
+  it('binds nothing for an import without a preparable carrier', async () => {
+    const store = makeFullStore();
+    store.dispatch({
+      type: importProjectThunk.fulfilled.type,
+      payload: { ...store.getState().project.present.data, title: 'Imported' },
+      meta: { replacementCarrier: null },
+    });
+    const present = store.getState().project.present;
+    expect(
+      replacementCarrierFor(present.data, toEditorReplacementEpoch(present.generation)),
+    ).toBeNull();
   });
 
   it('leaves no restore carrier behind for a rejected restore', async () => {
@@ -530,7 +560,7 @@ describe('auto-save project listener', () => {
     });
     const present = store.getState().project.present;
     expect(
-      restoreCarrierFor(present.data, toEditorReplacementEpoch(present.generation)),
+      replacementCarrierFor(present.data, toEditorReplacementEpoch(present.generation)),
     ).toBeNull();
   });
 
