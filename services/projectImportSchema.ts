@@ -401,6 +401,36 @@ const characterInterviewSchema = z.object({
 });
 
 /** Full export / backup JSON shape (matches extended ProjectData on disk). */
+// QNBS-v3 (#553 a4/R2): the plot board and per-project AI preset are modeled ProjectData the editor owns; import validates their structure so they reach the editor instead of being stripped from the projection. Open value sets (connection type, provider, model) stay strings so a newer build's file is not refused over a value this build does not list.
+const subplotSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  color: z.string(),
+  sectionIds: z.array(z.string()),
+});
+
+const plotConnectionSchema = z.object({
+  id: z.string(),
+  fromSectionId: z.string(),
+  toSectionId: z.string(),
+  type: z.string(),
+  subplotId: z.string().optional(),
+  label: z.string().optional(),
+  color: z.string().optional(),
+});
+
+const projectAiPresetSchema = z.object({
+  enabled: z.boolean(),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  creativity: z.string().optional(),
+  temperature: z.number().optional(),
+  maxTokens: z.number().optional(),
+  customSystemPrompt: z.string().optional(),
+  loraModelPath: z.string().optional(),
+  loraScale: z.number().optional(),
+});
+
 export const importedProjectJsonSchema = z.object({
   id: z.string().optional(),
   title: z.string(),
@@ -428,6 +458,11 @@ export const importedProjectJsonSchema = z.object({
   objectGroups: z.array(objectGroupSchema).optional(),
   mindMaps: z.array(mindMapSchema).optional(),
   characterInterviews: z.record(z.string(), z.array(characterInterviewSchema)).optional(),
+  plotConnections: z.array(plotConnectionSchema).optional(),
+  plotSubplots: z.array(subplotSchema).optional(),
+  // QNBS-v3 (#553 a4/R2): a non-finite tension score serializes as null; accepting it keeps one stored value from making the whole project unloadable.
+  plotTensionOverrides: z.record(z.string(), z.number().nullable()).optional(),
+  aiPreset: projectAiPresetSchema.optional(),
 });
 
 export type ImportedProjectJson = z.infer<typeof importedProjectJsonSchema>;
