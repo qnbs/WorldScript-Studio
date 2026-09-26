@@ -110,18 +110,18 @@ export async function createCanonicalProjectSnapshot(
   return storageService.saveSnapshotText(name, await loadEditorCanonicalRaw(projectId, project));
 }
 
-// QNBS-v3 (#553 §2.8): shared by both "Export JSON" buttons; a refusal writes no file and is reported through onRefused.
+// QNBS-v3 (#553 §2.8): shared by every "Export JSON" surface (settings, dashboard, advanced import/export); a refusal writes no file, is reported through onRefused and resolves false, so a caller never reports a download that did not happen.
 export async function downloadCanonicalProjectExport(
   projectId: string | undefined,
-  project: StoryProject,
+  project: ProjectData | StoryProject,
   onRefused: (error: unknown) => void,
-): Promise<void> {
+): Promise<boolean> {
   let raw: CanonicalProjectRawText;
   try {
     raw = await loadCanonicalEgressRaw(projectId, project);
   } catch (error) {
     onRefused(error);
-    return;
+    return false;
   }
   const url = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
   const link = document.createElement('a');
@@ -129,4 +129,5 @@ export async function downloadCanonicalProjectExport(
   link.href = url;
   link.click();
   URL.revokeObjectURL(url);
+  return true;
 }

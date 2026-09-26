@@ -98,10 +98,28 @@ describe('projectCanonicalEgress (#553 §2.8)', () => {
     vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue('{"title":');
     const onRefused = vi.fn();
 
-    await downloadCanonicalProjectExport('p1', edited as never, onRefused);
+    const exported = await downloadCanonicalProjectExport('p1', edited as never, onRefused);
 
+    expect(exported).toBe(false);
     expect(onRefused).toHaveBeenCalledWith(expect.any(ProjectEgressError));
     expect(createObjectURL).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3 (#553 a1): a completed download resolves true, so callers report success only for a real export.
+  it('resolves true after downloading the canonical document', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    vi.mocked(storageService.loadEditorExportCarrier).mockResolvedValue(storedRaw);
+    const onRefused = vi.fn();
+
+    await expect(downloadCanonicalProjectExport('p1', edited as never, onRefused)).resolves.toBe(
+      true,
+    );
+    expect(onRefused).not.toHaveBeenCalled();
+    expect(click).toHaveBeenCalledOnce();
   });
 
   it('overlays an ordinary edit onto the stored carrier of the same project', async () => {
