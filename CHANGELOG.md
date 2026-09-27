@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 1b-platform, slice A — secure-store item layout (#445):** the first of the small,
+  sequential slices that replace the oversized headless-provider PRs #852/#853. It adds only the
+  persistent formats and the store boundary in `crates/worldscript-secure-storage`: the narrow
+  `SecretStore` trait (with an in-memory store for tests), the strict `WSA1` anchor encoding, the
+  bounded `WSE1` epoch index (at most 32 entries, unique assigned epochs and routes), the exact
+  `wss-kr1-` route grammar, and the 2,560-byte item bound. Decoders reject every malformation;
+  unknown anchor or scope versions are reported as unsupported before any version-1 field is read,
+  and the index encoder refuses exactly what its decoder refuses. No provider lifecycle, OS store,
+  or app wiring is included; §8.2.2 of the contract specifies the layout. PR #854.
 - **R-15 Gate 1b-core (#445):** the headless key-provider and recovery layer of
   `crates/worldscript-secure-storage`, implementing the maintainer's Option C decision (platform
   secure store as the runtime authority; optional passphrase recovery). It adds the
