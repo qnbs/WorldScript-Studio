@@ -35,6 +35,7 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           set -euo pipefail
@@ -52,10 +53,18 @@ jobs:
             git show "$PR_BASE_SHA:scripts/workflow-policy-check.mjs" 2>/dev/null \
               | grep -c 'checkMergeAdmissionGate' || true
           )"
+          HEAD_HAS_ADMISSION_POLICY="$(
+            git show "$PR_HEAD_SHA:scripts/workflow-policy-check.mjs" 2>/dev/null \
+              | grep -c 'checkMergeAdmissionGate' || true
+          )"
           BOOTSTRAP_STATE=protected
-          test "$BASE_HAS_ADMISSION_POLICY" -eq 0 \
+          test "$PR_NUMBER" = "857" \
+            && test "$PR_HEAD_REPO" = "$GITHUB_REPOSITORY" \
+            && test "$BASE_HAS_ADMISSION_POLICY" -eq 0 \
+            && test "$HEAD_HAS_ADMISSION_POLICY" -gt 0 \
             && test "$PR_HEAD_REF" = "fix/675-main-context-admission" \
             && test "$PR_TITLE" = "ci(governance): prove main-context changelog truth before merge" \
+            && git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs \
             && BOOTSTRAP_STATE=authorised \
             || enforce_protected_policy_diff
           echo "::notice::admission-policy protection state: $BOOTSTRAP_STATE"
