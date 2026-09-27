@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   malformed authority data is preserved and fails closed; lost indexed keys are never silently
   re-created, existing key material is never overwritten, and no runtime cache, platform adapter,
   or production authority switch is included. PR #855.
+- **PR #855 implementation provenance — feat(core): add Gate 1b durable authority bootstrap.**
+- **PR #855 implementation provenance — fix(core): preserve diagnostics for lost root keys.**
+- **PR #855 implementation provenance — fix(core): gate injectable authority randomness.**
+- **PR #855 implementation provenance — fix(core): block provisioning after indexed key loss.**
 - **R-15 Gate 1b-platform, slice A — secure-store item layout (#445):** the first of the small,
   sequential slices that replace the oversized headless-provider PRs #852/#853. It adds only the
   persistent formats and the store boundary in `crates/worldscript-secure-storage`: the narrow
