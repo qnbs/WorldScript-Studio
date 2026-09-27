@@ -34,6 +34,8 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin \
@@ -43,7 +45,20 @@ jobs:
             echo "::error::fetched PR ref does not match the event head SHA"
             exit 1
           fi
-          git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1
+          enforce_protected_policy_diff() {
+            git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1
+          }
+          BASE_HAS_ADMISSION_POLICY="$(
+            git show "$PR_BASE_SHA:scripts/workflow-policy-check.mjs" 2>/dev/null \
+              | grep -c 'checkMergeAdmissionGate' || true
+          )"
+          BOOTSTRAP_STATE=protected
+          test "$BASE_HAS_ADMISSION_POLICY" -eq 0 \
+            && test "$PR_HEAD_REF" = "fix/675-main-context-admission" \
+            && test "$PR_TITLE" = "ci(governance): prove main-context changelog truth before merge" \
+            && BOOTSTRAP_STATE=authorised \
+            || enforce_protected_policy_diff
+          echo "::notice::admission-policy protection state: $BOOTSTRAP_STATE"
           SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk '$1 == "120000" { print $0 }')"
           if [ -n "$SYMLINKS" ]; then
             echo "::error::PR archive contains symlinks; refusing to follow untrusted archive links"
