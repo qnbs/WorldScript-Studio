@@ -19,6 +19,7 @@ pub mod record_class;
 pub mod recovery;
 pub mod seal;
 pub mod secure_store;
+pub mod store_authority;
 pub mod store_layout;
 
 pub use aad::{canonical_aad, RecordContext};
@@ -35,3 +36,4 @@ pub use recovery::{unwrap_recovery, wrap_recovery, RecoveryMaterial, UnwrappedRe
 #[cfg(feature = "test-randomness")]
 pub use seal::seal_with_random;
 pub use seal::{open, seal, Key, RecordMeta, SealTarget};
+pub use store_authority::SecureStoreAuthority;
