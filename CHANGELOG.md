@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 1b-platform, slice B — durable authority bootstrap (#445):** the durable
+  `SecureStoreAuthority` validates the installation scope, epoch index, key relationships, and
+  root-anchor state in one place, then provisions only fresh or exact-resume state. Missing or
+  malformed authority data is preserved and fails closed; lost indexed keys are never silently
+  re-created, existing key material is never overwritten, and no runtime cache, platform adapter,
+  or production authority switch is included. PR #855.
 - **R-15 Gate 1b-platform, slice A — secure-store item layout (#445):** the first of the small,
   sequential slices that replace the oversized headless-provider PRs #852/#853. It adds only the
   persistent formats and the store boundary in `crates/worldscript-secure-storage`: the narrow
