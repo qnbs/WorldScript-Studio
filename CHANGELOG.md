@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   malformed authority data is preserved and fails closed; lost indexed keys are never silently
   re-created, existing key material is never overwritten, and no runtime cache, platform adapter,
   or production authority switch is included. PR #855.
+- **PR #858 implementation provenance — fix(ci): bind merge-admission bootstrap to its introducing PR.**
+- **PR #858 implementation provenance — fix(ci): pin the merge-admission bootstrap implementation.**
+- **PR #859 implementation provenance — fix(docs): restore post-bootstrap release truth.**
 - **PR #855 implementation provenance — feat(core): add Gate 1b durable authority bootstrap.**
 - **PR #855 implementation provenance — fix(core): preserve diagnostics for lost root keys.**
 - **PR #855 implementation provenance — fix(core): gate injectable authority randomness.**
