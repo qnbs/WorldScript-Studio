@@ -94,8 +94,9 @@ mod memory {
         read_only: bool,
     }
 
-    /// Headless in-memory [`SecretStore`] for tests (test-support only). Clones share the same items, so a second
-    /// provider built on a clone behaves like the same installation after a restart.
+    /// Headless in-memory [`SecretStore`](super::SecretStore) for tests (test-support only). Clones
+    /// share the same items, so a second provider built on a clone behaves like the same
+    /// installation after a restart.
     #[derive(Clone, Default)]
     pub struct MemorySecretStore(Rc<RefCell<Inner>>);
 
