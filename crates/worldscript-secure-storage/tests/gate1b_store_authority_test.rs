@@ -54,10 +54,14 @@ fn epoch_provisioning_reuses_an_intact_route_without_rewriting() {
     first.read_or_provision_installation_scope().unwrap();
     let route = first.provision_epoch_key(1).unwrap();
     let accounts = store.accounts();
+    let key_name = key_account(&route);
+    let key_before = store.get(&key_name).unwrap().unwrap().to_vec();
+    store.set_read_only(true);
 
     let mut restarted = authority(store.clone());
     assert_eq!(restarted.provision_epoch_key(1), Ok(route.clone()));
     assert_eq!(store.accounts(), accounts);
+    assert_eq!(store.get(&key_name).unwrap().unwrap().to_vec(), key_before);
     assert_eq!(restarted.list_epochs().unwrap()[0].key_ref, route);
 }
 
