@@ -244,6 +244,25 @@ fn a_read_only_store_refuses_mutation_but_still_reads() {
 }
 
 #[test]
+fn the_store_boundary_enforces_the_item_bound_in_both_directions() {
+    let store = MemorySecretStore::new();
+    store.set("max", &vec![7; MAX_ITEM_LEN]).unwrap();
+    assert_eq!(store.get("max").unwrap().unwrap().len(), MAX_ITEM_LEN);
+    // A write of one byte more is refused before the store is touched.
+    assert!(matches!(
+        store.set("big", &vec![7; MAX_ITEM_LEN + 1]),
+        Err(KeyProviderError::AnchorConflict(_))
+    ));
+    assert_eq!(store.accounts(), vec!["max".to_owned()]);
+    // An oversized item written from outside the boundary is refused on read, not returned.
+    store.put_raw("big", &vec![7; MAX_ITEM_LEN + 1]);
+    assert_eq!(
+        store.get("big").map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+}
+
+#[test]
 fn clones_share_one_installation() {
     let store = MemorySecretStore::new();
     store.clone().set("a", b"x").unwrap();

@@ -1735,7 +1735,10 @@ A route (`RootKeyRefV1`) issued by this layout is `wss-kr1-` followed by 32 lowe
 characters of 16 random bytes (40 bytes); any other byte string is not an issued route. A key
 item's name is `r15-key-` plus the lowercase hex of the exact route bytes and is only ever derived
 from a route read from a decoded index. No item exceeds 2,560 bytes (the Windows
-generic-credential blob limit).
+generic-credential blob limit). The `SecretStore` boundary itself enforces this bound for every
+implementation: a larger write is refused before the store is touched, and a larger item read back
+(which only an out-of-band writer could create) is `RECOVERY_REQUIRED`. A store that cannot be
+reached is an error, never a missing item.
 
 **`WSE1` epoch index** (big-endian, exact end): `"WSE1"`, `u32(count)`, then per entry
 `u64(epoch)`, `u16(route_len)`, route. At most 32 entries; every epoch is assigned (never 0 or

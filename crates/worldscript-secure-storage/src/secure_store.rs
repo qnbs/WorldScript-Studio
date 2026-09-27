@@ -1,18 +1,46 @@
 //! The narrow secret-store boundary a platform secure store must provide (§8.2.2): named items that
-//! can be read, atomically replaced, and deleted. [`crate::store_provider::SecureStoreKeyProvider`]
-//! builds the whole §8.2 `KeyProvider` on top of it, so every platform shares one implementation.
+//! can be read, atomically replaced, and deleted. A later gate builds the §8.2 `KeyProvider` on top of
+//! it, so every platform shares one implementation.
+//!
+//! The version-1 item bound ([`MAX_ITEM_LEN`]) belongs to the boundary itself: implementations
+//! provide only the raw [`SecretStore::load`] / [`SecretStore::store`] operations, and the provided
+//! [`SecretStore::get`] / [`SecretStore::set`] refuse any larger item in either direction.
 
 use zeroize::Zeroizing;
 
 use crate::error::KeyProviderError;
+use crate::store_layout::MAX_ITEM_LEN;
 
 /// One secure store namespace (a service) holding named items (accounts).
+///
+/// Callers use [`SecretStore::get`] and [`SecretStore::set`]; implementations must not override them.
 pub trait SecretStore {
-    /// The item's bytes, or `None` if the item does not exist. Any failure to reach the store is an
-    /// error, never `None`.
-    fn get(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeyProviderError>;
-    /// Creates or atomically replaces the item.
-    fn set(&self, account: &str, secret: &[u8]) -> Result<(), KeyProviderError>;
+    /// Raw read: the item's bytes, or `None` if the item does not exist. Any failure to reach the
+    /// store is an error, never `None`.
+    fn load(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeyProviderError>;
+    /// Raw write: creates or atomically replaces the item.
+    fn store(&self, account: &str, secret: &[u8]) -> Result<(), KeyProviderError>;
+
+    /// The item's bytes, or `None` if it does not exist. An item larger than [`MAX_ITEM_LEN`] can
+    /// only come from outside this boundary and is refused as `RecoveryRequired`.
+    fn get(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeyProviderError> {
+        match self.load(account)? {
+            Some(item) if item.len() > MAX_ITEM_LEN => Err(KeyProviderError::RecoveryRequired),
+            item => Ok(item),
+        }
+    }
+
+    /// Creates or atomically replaces the item. An item larger than [`MAX_ITEM_LEN`] is refused
+    /// before the store is touched.
+    fn set(&self, account: &str, secret: &[u8]) -> Result<(), KeyProviderError> {
+        if secret.len() > MAX_ITEM_LEN {
+            return Err(KeyProviderError::AnchorConflict(
+                "secure-store item exceeds the version-1 size bound",
+            ));
+        }
+        self.store(account, secret)
+    }
+
     /// Removes the item; removing a missing item succeeds.
     fn delete(&self, account: &str) -> Result<(), KeyProviderError>;
 }
@@ -87,12 +115,12 @@ mod memory {
     }
 
     impl SecretStore for MemorySecretStore {
-        fn get(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeyProviderError> {
+        fn load(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeyProviderError> {
             self.check()?;
             Ok(self.0.borrow().items.get(account).cloned())
         }
 
-        fn set(&self, account: &str, secret: &[u8]) -> Result<(), KeyProviderError> {
+        fn store(&self, account: &str, secret: &[u8]) -> Result<(), KeyProviderError> {
             self.check_writable()?;
             self.put_raw(account, secret);
             Ok(())
