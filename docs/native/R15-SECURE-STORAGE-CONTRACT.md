@@ -1742,7 +1742,7 @@ most an unreferenced item. No item exceeds 2,560 bytes (the Windows generic-cred
 version 1 indexes at most 32 epochs and refuses a 33rd before writing anything; retiring epochs
 belongs to the later rotation lifecycle. The index is a control item, so any malformation of it —
 including a wrong magic or a route that does not match the exact `wss-kr1-` + 32-lowercase-hex
-grammar — is `RECOVERY_REQUIRED`, and it is validated even before the first root commits. A missing
+grammar — is `RECOVERY_REQUIRED`, and it is validated even before the first root commits. Before the first PREPARE records a target route, nothing the provider owns can prove that a deleted index ever existed (the store cannot be enumerated), so the §10.2 bootstrap journal (Gate 4) must durably bind the bootstrap target epoch and route (`BOOTSTRAP_TARGET`) before anything is sealed under that key; a later retry then detects a missing index instead of provisioning a replacement. Provisioning never overwrites an existing key item, so an earlier key survives such a retry. A missing
 anchor item is a fresh installation only when no index item exists either: bootstrap writes the
 scope before any epoch, so an index without an anchor is `RECOVERY_REQUIRED` and the scope is never
 re-provisioned (§5.3.2).

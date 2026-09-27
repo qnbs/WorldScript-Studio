@@ -6,7 +6,7 @@ use crate::anchor;
 use crate::error::KeyProviderError;
 use crate::provider::{
     AnchorState, CommittedRoot, InstallationScopeId, PreparedRootCommit, RootKeyRefV1, RootSlot,
-    INSTALLATION_SCOPE_ID_LEN,
+    ANCHOR_FORMAT_VERSION, INSTALLATION_SCOPE_ID_LEN, SCOPE_FORMAT_VERSION,
 };
 
 pub const ANCHOR_MAGIC: [u8; 4] = *b"WSA1";
@@ -174,16 +174,17 @@ pub fn decode(bytes: &[u8]) -> Result<AnchorState, KeyProviderError> {
     if r.take(4).ok() != Some(&ANCHOR_MAGIC[..]) {
         return Err(KeyProviderError::UnsupportedAnchorFormat);
     }
+    // A newer anchor format may lay out everything after its version differently, so it is refused
+    // before any version-1 field (including the scope format version) is read.
     let anchor_format_version = r.u32()?;
+    if anchor_format_version != ANCHOR_FORMAT_VERSION {
+        return Err(KeyProviderError::UnsupportedAnchorFormat);
+    }
     let scope_format_version = r.u32()?;
+    if scope_format_version != SCOPE_FORMAT_VERSION {
+        return Err(KeyProviderError::UnsupportedAnchorFormat);
+    }
     let mut state = AnchorState::empty();
-    state.anchor_format_version = anchor_format_version;
-    state.scope_format_version = scope_format_version;
-    // Refuse a newer format before interpreting any of its fields.
-    anchor::validate(&state).or_else(|e| match e {
-        KeyProviderError::UnsupportedAnchorFormat => Err(e),
-        _ => Ok(()),
-    })?;
     state.installation_scope_id = if r.flag()? { Some(r.scope()?) } else { None };
     state.committed_floor = r.u64()?;
     if r.flag()? {
