@@ -1766,6 +1766,14 @@ transition and that key provisioning also runs under. A transition that leaves t
 access is `SECURE_ANCHOR_UNAVAILABLE`; a missing key item for an indexed route is `KEY_LOST` (for
 the root it fails `unlock`; for another epoch it fails only that epoch's resolution); a malformed key
 item or index, or a committed root whose route is absent from the index, is `RECOVERY_REQUIRED`.
+**One authority check.** `state()`, key resolution, every anchor write, and key provisioning all
+run the same validation first: the anchor decodes; an epoch index next to a missing anchor or a
+scope-less anchor is `RECOVERY_REQUIRED` (the scope was lost; it is never re-provisioned); the index
+is valid; the epoch-to-route bindings observed at unlock are still indexed unchanged; and a
+committed root is indexed with its key item present (`KEY_LOST`) and, if cached, byte-identical
+(`RECOVERY_REQUIRED`). `state()` reports every recovery-class failure — including a malformed root
+key item — as the `RECOVERY_REQUIRED` state rather than an error.
+
 **Key resolution.** `unlock` snapshots the epoch-to-route bindings and caches each key. A key is
 resolved only while the durable state still backs that snapshot, checked in this order before any
 "unknown" answer: the anchor decodes and the index is valid; every binding observed at unlock is

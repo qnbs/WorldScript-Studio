@@ -293,3 +293,43 @@ fn state_agrees_with_resolution_about_swapped_bindings() {
     store.put_raw(EPOCH_INDEX_ACCOUNT, &swapped);
     assert_eq!(provider.state(), Ok(KeyState::RecoveryRequired));
 }
+
+fn swap_first_two_routes(store: &MemorySecretStore) {
+    let index = store.get(EPOCH_INDEX_ACCOUNT).unwrap().unwrap().to_vec();
+    let mut swapped = index.clone();
+    let (a, b) = (8 + 10, 8 + 50 + 10);
+    swapped[a..a + 40].copy_from_slice(&index[b..b + 40]);
+    swapped[b..b + 40].copy_from_slice(&index[a..a + 40]);
+    store.put_raw(EPOCH_INDEX_ACCOUNT, &swapped);
+}
+
+#[test]
+fn a_commit_refuses_swapped_bindings() {
+    let (store, _, second, mut provider) = two_epochs_unlocked();
+    provider
+        .prepare_root_anchor(&request(&provider, "rotate", RootSlot::B, &second))
+        .unwrap();
+    swap_first_two_routes(&store);
+    assert_eq!(
+        provider.commit_root_anchor("rotate", 2),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+}
+
+#[test]
+fn provisioning_refuses_a_replaced_cached_root_key() {
+    let (store, root, _, mut provider) = two_epochs_unlocked();
+    store.put_raw(&key_account(&root), &[9; 32]);
+    let before = store.accounts();
+    let result = provider.provision_epoch_key(3).map(|_| ());
+    assert_eq!(result, Err(KeyProviderError::RecoveryRequired));
+    assert_eq!(store.accounts(), before, "nothing was written");
+}
+
+#[test]
+fn a_malformed_root_key_is_the_recovery_state_not_an_error() {
+    let (store, root) = configured();
+    store.put_raw(&key_account(&root), &[1; 31]);
+    let provider = Provider::new(store);
+    assert_eq!(provider.state(), Ok(KeyState::RecoveryRequired));
+}
