@@ -135,11 +135,6 @@ impl MemoryKeyProvider {
     }
 
     /// A data epoch is `1..u64::MAX` (§5.4) and gets exactly one key.
-    fn epoch_is_provisionable(&self, epoch: u64) -> bool {
-        let assigned = epoch != 0 && epoch != u64::MAX;
-        assigned && self.store.iter().all(|k| k.epoch != epoch)
-    }
-
     /// A preparation may only name a route this provider issued and still holds (§5.3.1: the next
     /// cold start resolves exactly that route).
     fn ensure_issued_route(&self, key_ref: &RootKeyRefV1) -> Result<(), KeyProviderError> {
@@ -271,10 +266,17 @@ impl KeyProvider for MemoryKeyProvider {
 
     fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
         self.ensure_available()?;
-        if !self.epoch_is_provisionable(epoch) {
-            return Err(KeyProviderError::AnchorConflict(
-                "epoch is unassigned or already provisioned",
-            ));
+        if epoch == 0 || epoch == u64::MAX {
+            return Err(KeyProviderError::AnchorConflict("epoch is unassigned"));
+        }
+        // Resumable (§10.2), like every KeyProvider: an already provisioned epoch whose key is intact
+        // returns its existing route instead of failing a restarted bootstrap.
+        if let Some(existing) = self.store.iter().find(|k| k.epoch == epoch) {
+            return if self.lost {
+                Err(KeyProviderError::KeyLost)
+            } else {
+                Ok(existing.key_ref.clone())
+            };
         }
         let mut material = Zeroizing::new([0u8; 32]);
         self.random

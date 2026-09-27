@@ -1606,7 +1606,8 @@ KeyProvider.lock() -> clear runtime key handles/material
 KeyProvider.list_epochs() -> non-secret key identities and availability; enumeration/diagnostic use
                              only — never a trust-routing mechanism for the root (§5.3.1)
 KeyProvider.provision_epoch_key(epoch) -> RootKeyRefV1 for a fresh random 256-bit key; one key per
-                             epoch, never epoch 0 or u64::MAX
+                             epoch, never epoch 0 or u64::MAX; resumable: an epoch already
+                             provisioned with an intact key returns its existing route (§10.2)
 KeyProvider.read_root_anchor_state() -> validated anchor state (§5.3.1)
 KeyProvider.read_or_provision_installation_scope() -> InstallationScopeId (§5.3.2); reading an
                              existing scope needs no randomness and changes nothing
@@ -1781,7 +1782,7 @@ still indexed unchanged (bindings and per-route key bytes are immutable, so a ch
 `RECOVERY_REQUIRED`); the committed root is indexed and its own key item still matches the cache
 (missing is `KEY_LOST` for every epoch); then the requested entry is looked up and its item
 re-validated. A root this instance never cached (committed by another instance) makes every
-resolution `LOCKED` until re-unlock. `state()` reports `UNLOCKED` only if the same validation accepts the root, and every anchor write
+resolution `LOCKED` until re-unlock. `read_root_anchor_state` and PREPARE also run this check first (a broken installation is never reported as an unknown target or as an ordinary bootstrap anchor). `state()` reports `UNLOCKED` only if the same validation accepts the root, and every anchor write
 applies it to each route it publishes (a cached target whose item changed is
 `RECOVERY_REQUIRED`). Key provisioning uses the checked anchor read, refuses while the committed
 root key is unusable, and draws a fresh route that is neither indexed nor backed by an existing
