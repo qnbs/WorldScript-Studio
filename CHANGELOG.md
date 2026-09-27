@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PR #858 implementation provenance — fix(ci): bind merge-admission bootstrap to its introducing PR.**
 - **PR #858 implementation provenance — fix(ci): pin the merge-admission bootstrap implementation.**
 - **PR #859 implementation provenance — fix(docs): restore post-bootstrap release truth.**
+- **PR #860 implementation provenance — fix(docs): include recovery PR in release truth.**
 - **PR #855 implementation provenance — feat(core): add Gate 1b durable authority bootstrap.**
 - **PR #855 implementation provenance — fix(core): preserve diagnostics for lost root keys.**
 - **PR #855 implementation provenance — fix(core): gate injectable authority randomness.**
