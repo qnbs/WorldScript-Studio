@@ -227,7 +227,9 @@ pub trait KeyProvider {
     fn unlock(&mut self) -> Result<KeyState, KeyProviderError>;
     /// Enumeration/diagnostics only (§8.2).
     fn list_epochs(&self) -> Result<Vec<EpochInfo>, KeyProviderError>;
-    /// Provisions a fresh random 256-bit key for `epoch` and returns its opaque route.
+    /// Provisions a fresh random 256-bit key for `epoch` and returns its opaque route. Resumable
+    /// (§10.2): if `epoch` is already provisioned with an intact key, its existing route is returned
+    /// and nothing is rewritten. Epochs `0` and `u64::MAX` are refused.
     fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError>;
     fn read_root_anchor_state(&self) -> Result<AnchorState, KeyProviderError>;
     fn read_or_provision_installation_scope(
