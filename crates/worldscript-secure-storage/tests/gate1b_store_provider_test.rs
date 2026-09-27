@@ -551,3 +551,21 @@ fn provisioning_refuses_an_installation_whose_root_is_unindexed() {
     assert_eq!(result, Err(KeyProviderError::RecoveryRequired));
     assert_eq!(store.accounts(), before, "nothing was written");
 }
+
+#[test]
+fn cached_keys_stop_resolving_once_the_durable_authority_is_refused() {
+    let (store, route) = configured();
+    let mut provider = Provider::new(store.clone());
+    provider.unlock().unwrap();
+    store.put_raw(EPOCH_INDEX_ACCOUNT, b"XXXX\0\0\0\0");
+    assert_eq!(provider.state(), Ok(KeyState::RecoveryRequired));
+    assert_eq!(
+        provider.resolve_ref(&route).map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+    store.delete(EPOCH_INDEX_ACCOUNT).unwrap();
+    assert_eq!(
+        provider.resolve_ref(&route).map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+}
