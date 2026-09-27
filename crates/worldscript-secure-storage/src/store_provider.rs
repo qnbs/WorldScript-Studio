@@ -280,14 +280,6 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         Ok(())
     }
 
-    /// The anchor as cold start sees it: decoded, validated, and its committed root route present in
-    /// the index (a root whose route is not indexed is `RecoveryRequired`).
-    fn read_anchor_checked(&self) -> Result<AnchorState, KeyProviderError> {
-        let anchor = self.read_anchor()?;
-        self.root_entry(&anchor)?;
-        Ok(anchor)
-    }
-
     fn read_index(&self) -> Result<Vec<IndexEntry>, KeyProviderError> {
         match self.store.get(EPOCH_INDEX_ACCOUNT)? {
             None => Ok(Vec::new()),
@@ -376,17 +368,6 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             .find(|e| select(e))
             .ok_or(unknown)?;
         self.cached_key(&entry.key_ref)
-    }
-
-    fn root_entry(&self, anchor: &AnchorState) -> Result<Option<IndexEntry>, KeyProviderError> {
-        let Some(root) = &anchor.committed_root else {
-            return Ok(None);
-        };
-        self.read_index()?
-            .into_iter()
-            .find(|e| e.key_ref == root.root_key_ref)
-            .map(Some)
-            .ok_or_else(corrupt)
     }
 
     /// The §8.1 state from the shared authority check; every recovery-class failure — including a
@@ -589,7 +570,9 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
     }
 
     fn read_root_anchor_state(&self) -> Result<AnchorState, KeyProviderError> {
-        self.read_anchor_checked()
+        // The shared authority check validates the index even before the first root commits, so
+        // corrupted control state is never returned as an ordinary bootstrap anchor.
+        self.authority().map(|authority| authority.anchor)
     }
 
     fn read_or_provision_installation_scope(
@@ -612,6 +595,9 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
     }
 
     fn prepare_root_anchor(&mut self, request: &PrepareRootAnchor) -> Result<(), KeyProviderError> {
+        // The current authority is validated first, so a broken installation is always reported as
+        // such rather than as an ordinary unknown target route.
+        self.authority()?;
         let entry = self.issued(&request.target_root_key_ref)?;
         self.read_key(&entry.key_ref)?;
         self.apply(|state| anchor::prepare(state, request))

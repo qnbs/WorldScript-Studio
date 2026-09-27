@@ -343,3 +343,27 @@ fn resuming_a_cached_epoch_refuses_a_replaced_key_item() {
         Err(KeyProviderError::RecoveryRequired)
     );
 }
+
+#[test]
+fn prepare_reports_a_broken_authority_before_an_unknown_target() {
+    let (store, _) = configured();
+    store.delete(EPOCH_INDEX_ACCOUNT).unwrap();
+    store.put_raw(EPOCH_INDEX_ACCOUNT, b"WSE1\0\0\0\0");
+    let mut provider = Provider::new(store);
+    let fabricated =
+        RootKeyRefV1::new(b"wss-kr1-00000000000000000000000000000000".to_vec()).unwrap();
+    let result = provider.prepare_root_anchor(&request_unchecked("op", fabricated));
+    assert_eq!(result, Err(KeyProviderError::RecoveryRequired));
+}
+
+#[test]
+fn the_cold_start_anchor_read_validates_the_index_before_the_first_root() {
+    let store = MemorySecretStore::new();
+    let mut provider = scoped(&store);
+    provider.provision_epoch_key(1).unwrap();
+    store.put_raw(EPOCH_INDEX_ACCOUNT, b"XXXX\0\0\0\0");
+    assert_eq!(
+        provider.read_root_anchor_state().map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+}
