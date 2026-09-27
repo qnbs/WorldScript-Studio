@@ -551,6 +551,8 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         // must not strand bootstrap. An epoch that is already indexed with an intact key item
         // returns its existing route; nothing is rewritten.
         if let Some(existing) = index.iter().find(|e| e.epoch == epoch) {
+            // "Intact" includes matching this instance's cache: a replaced item is not resumed.
+            self.durable_key_matches_cache(&existing.key_ref)?;
             let key = self.read_key(&existing.key_ref)?;
             let key_ref = existing.key_ref.clone();
             self.remember(epoch, &key_ref, key);

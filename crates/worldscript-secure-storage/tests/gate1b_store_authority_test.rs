@@ -333,3 +333,13 @@ fn a_malformed_root_key_is_the_recovery_state_not_an_error() {
     let provider = Provider::new(store);
     assert_eq!(provider.state(), Ok(KeyState::RecoveryRequired));
 }
+
+#[test]
+fn resuming_a_cached_epoch_refuses_a_replaced_key_item() {
+    let (store, _, second, mut provider) = two_epochs_unlocked();
+    store.put_raw(&key_account(&second), &[4; 32]);
+    assert_eq!(
+        provider.provision_epoch_key(2),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+}
