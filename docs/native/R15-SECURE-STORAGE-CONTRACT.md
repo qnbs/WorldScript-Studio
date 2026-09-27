@@ -1749,7 +1749,11 @@ from caller-supplied bytes. Provisioning writes the key item before the index, s
 most an unreferenced item. No item exceeds 2,560 bytes (the Windows generic-credential blob limit):
 version 1 indexes at most 32 epochs and refuses a 33rd before writing anything; retiring epochs
 belongs to the later rotation lifecycle. The index is a control item, so any malformation of it —
-including a wrong magic — is `RECOVERY_REQUIRED`.
+including a wrong magic or a route that does not match the exact `wss-kr1-` + 32-lowercase-hex
+grammar — is `RECOVERY_REQUIRED`, and it is validated even before the first root commits. A missing
+anchor item is a fresh installation only when no index item exists either: bootstrap writes the
+scope before any epoch, so an index without an anchor is `RECOVERY_REQUIRED` and the scope is never
+re-provisioned (§5.3.2).
 
 **Serialization.** The secure store offers no compare-and-swap. The provider serializes its own
 read-modify-write sequences within a process; across processes it relies on the caller holding the
@@ -1771,7 +1775,7 @@ transition and that key provisioning also runs under. A transition that leaves t
 access is `SECURE_ANCHOR_UNAVAILABLE`; a missing key item for an indexed route is `KEY_LOST` (for
 the root it fails `unlock`; for another epoch it fails only that epoch's resolution); a malformed key
 item or index, or a committed root whose route is absent from the index, is `RECOVERY_REQUIRED`.
-A failed `unlock` leaves no runtime key handles behind. No outcome falls back to plaintext, a data-directory file, or a
+`unlock` starts by locking the provider, so a failed unlock — including a failed re-unlock of an already unlocked provider — leaves no runtime key handles behind. No outcome falls back to plaintext, a data-directory file, or a
 weaker store.
 
 **Evidence (maturity stated honestly).** Headless: the same provider over an in-memory store
