@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   corruption, a lost anchor next to a surviving index, or a root route missing from the index is
   `RECOVERY_REQUIRED`; a missing key stays `KEY_LOST`; a failed unlock leaves the provider locked;
   every anchor write re-validates the routes it publishes; a root committed by another instance
-  reads as `LOCKED` until re-unlock; and an exact replay performs no write. The contract (§8.2.2)
+  reads as `LOCKED` until re-unlock; a cached key stops resolving once its item is lost; and an
+  exact replay performs no write. The contract (§8.2.2)
   specifies the item layout, both encodings, and the failure rules. Nothing in the app uses the
   provider yet. PR #852.
 - **R-15 Gate 1b-core (#445):** the headless key-provider and recovery layer of

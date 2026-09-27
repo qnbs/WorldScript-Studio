@@ -512,3 +512,42 @@ fn a_root_committed_elsewhere_reads_as_locked_until_re_unlock() {
     );
     assert_eq!(stale.unlock(), Ok(KeyState::Unlocked { epoch: 2 }));
 }
+
+#[test]
+fn a_cached_key_stops_resolving_once_its_item_is_lost() {
+    let (store, route) = configured();
+    let mut provider = Provider::new(store.clone());
+    provider.unlock().unwrap();
+    store.delete(&key_account(&route)).unwrap();
+    assert_eq!(
+        provider.resolve_ref(&route).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
+    );
+    assert_eq!(
+        provider.resolve(1).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
+    );
+}
+
+#[test]
+fn a_cached_key_whose_item_was_replaced_requires_recovery() {
+    let (store, route) = configured();
+    let mut provider = Provider::new(store.clone());
+    provider.unlock().unwrap();
+    store.put_raw(&key_account(&route), &[9; 32]);
+    assert_eq!(
+        provider.resolve_ref(&route).map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+}
+
+#[test]
+fn provisioning_refuses_an_installation_whose_root_is_unindexed() {
+    let (store, _) = configured();
+    store.delete(EPOCH_INDEX_ACCOUNT).unwrap();
+    let before = store.accounts();
+    let mut provider = Provider::new(store.clone());
+    let result = provider.provision_epoch_key(2).map(|_| ());
+    assert_eq!(result, Err(KeyProviderError::RecoveryRequired));
+    assert_eq!(store.accounts(), before, "nothing was written");
+}

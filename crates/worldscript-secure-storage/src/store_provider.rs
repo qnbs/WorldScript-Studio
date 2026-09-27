@@ -294,6 +294,12 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
                 Err(other) => other,
             });
         };
+        // Re-validate against the durable item before handing out a write-capable key: a key whose
+        // item was lost (or replaced) since unlock must not seal records that cannot be reopened.
+        let durable = self.read_key(key_ref)?;
+        if *durable != **material {
+            return Err(corrupt());
+        }
         let mut copy = **material;
         Ok(Key::from_bytes(&mut copy))
     }
@@ -433,7 +439,8 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         let _guard = write_guard();
         // Bootstrap order (§5.3.2): the scope exists before any epoch; otherwise an index would exist
         // without an anchor and the installation would read as a lost anchor.
-        if self.read_anchor()?.installation_scope_id.is_none() {
+        // The checked read also refuses an installation whose committed root route is unindexed.
+        if self.read_anchor_checked()?.installation_scope_id.is_none() {
             return Err(KeyProviderError::AnchorConflict(
                 "the installation scope must be provisioned first",
             ));
