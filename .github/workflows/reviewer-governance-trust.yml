@@ -37,6 +37,7 @@ jobs:
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          EXPECTED_ADMISSION_POLICY_SHA256: 0a3b584a4460ab49d3e95d3fd235bd34edd10fa903ff4e6b1d0fcae2a4ac432b
         run: |
           set -euo pipefail
           git fetch --no-tags origin \
@@ -57,11 +58,16 @@ jobs:
             git show "$PR_HEAD_SHA:scripts/workflow-policy-check.mjs" 2>/dev/null \
               | grep -c 'checkMergeAdmissionGate' || true
           )"
+          HEAD_ADMISSION_POLICY_SHA256="$(
+            git show "$PR_HEAD_SHA:scripts/workflow-policy-check.mjs" \
+              | sha256sum | awk '{print $1}'
+          )"
           BOOTSTRAP_STATE=protected
           test "$PR_NUMBER" = "857" \
             && test "$PR_HEAD_REPO" = "$GITHUB_REPOSITORY" \
             && test "$BASE_HAS_ADMISSION_POLICY" -eq 0 \
             && test "$HEAD_HAS_ADMISSION_POLICY" -gt 0 \
+            && test "$HEAD_ADMISSION_POLICY_SHA256" = "$EXPECTED_ADMISSION_POLICY_SHA256" \
             && test "$PR_HEAD_REF" = "fix/675-main-context-admission" \
             && test "$PR_TITLE" = "ci(governance): prove main-context changelog truth before merge" \
             && git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs \
