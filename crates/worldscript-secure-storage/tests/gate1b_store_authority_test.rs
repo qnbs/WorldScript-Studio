@@ -406,3 +406,46 @@ fn a_malformed_non_root_key_item_blocks_state_and_provisioning() {
     );
     assert_eq!(store.accounts(), before, "the index was not extended");
 }
+
+#[test]
+fn a_re_unlock_never_adopts_swapped_bindings() {
+    let (store, _, _, mut provider) = two_epochs_unlocked();
+    swap_first_two_routes(&store);
+    assert_eq!(provider.unlock(), Err(KeyProviderError::RecoveryRequired));
+    assert_eq!(
+        provider.resolve(1).map(|_| ()),
+        Err(KeyProviderError::Locked)
+    );
+}
+
+#[test]
+fn unlock_refuses_a_prepared_target_missing_from_the_index() {
+    let store = MemorySecretStore::new();
+    let mut provider = scoped(&store);
+    let route = provider.provision_epoch_key(1).unwrap();
+    provider
+        .prepare_root_anchor(&request(&provider, "boot", RootSlot::A, &route))
+        .unwrap();
+    store.delete(EPOCH_INDEX_ACCOUNT).unwrap();
+    let mut restarted = Provider::new(store);
+    assert_eq!(restarted.unlock(), Err(KeyProviderError::RecoveryRequired));
+}
+
+#[test]
+fn a_restored_key_resumed_by_provisioning_resolves_again() {
+    let (store, _, second, _) = two_epochs_unlocked();
+    let saved = store.get(&key_account(&second)).unwrap().unwrap().to_vec();
+    store.delete(&key_account(&second)).unwrap();
+    let mut provider = Provider::new(store.clone());
+    provider.unlock().unwrap();
+    assert_eq!(
+        provider.resolve(2).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
+    );
+    store.put_raw(&key_account(&second), &saved);
+    assert_eq!(provider.provision_epoch_key(2), Ok(second.clone()));
+    assert!(
+        provider.resolve(2).is_ok(),
+        "the restored route is no longer treated as lost"
+    );
+}

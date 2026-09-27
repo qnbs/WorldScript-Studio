@@ -1776,7 +1776,7 @@ and a prepared target are indexed with their key items present (`KEY_LOST`) and,
 byte-identical (`RECOVERY_REQUIRED`). `state()` reports every recovery-class failure — including a malformed root
 key item — as the `RECOVERY_REQUIRED` state rather than an error.
 
-**Key resolution.** `unlock` snapshots the epoch-to-route bindings and caches each key. A key is
+**Key resolution.** `unlock` runs the same authority check, then snapshots the epoch-to-route bindings and caches each key. The non-secret bindings are kept for the provider instance's lifetime across `lock`/`unlock`, so a re-unlock validates the index against them and can only extend them, never adopt a swapped index; detecting a swap across a process restart is the job of the key-epoch registry, whose entries bind each epoch to its route digest (§8.3, Gate 4). A key is
 resolved only while the durable state still backs that snapshot, checked in this order before any
 "unknown" answer: the anchor decodes and the index is valid; every binding observed at unlock is
 still indexed unchanged (bindings and per-route key bytes are immutable, so a change is
