@@ -1728,7 +1728,7 @@ here. All items live under the service `worldscript-r15`:
 
 ```text
 r15-anchor-v1           the WSA1-encoded anchor state (below)
-r15-epochs-v1           the WSE1 epoch index: u32be(count), then per entry u64be(epoch),
+r15-epochs-v1           the WSE1 epoch index: "WSE1", u32be(count), then per entry u64be(epoch),
                         u16be(route_len), route; at most 32 entries; epochs and routes unique,
                         epochs never 0 or u64::MAX; exact end
 r15-key-<hex(route)>    exactly 32 random key bytes for one issued route
@@ -1766,7 +1766,7 @@ transition and that key provisioning also runs under. A transition that leaves t
 access is `SECURE_ANCHOR_UNAVAILABLE`; a missing key item for an indexed route is `KEY_LOST` (for
 the root it fails `unlock`; for another epoch it fails only that epoch's resolution); a malformed key
 item or index, or a committed root whose route is absent from the index, is `RECOVERY_REQUIRED`.
-`unlock` starts by locking the provider, so a failed unlock — including a failed re-unlock of an already unlocked provider — leaves no runtime key handles behind. A root committed by another instance after this provider
+Every key resolution re-validates the cached handle against its durable item (missing is `KEY_LOST`, different bytes are `RECOVERY_REQUIRED`), so a key whose item was lost after unlock never seals new records. Key provisioning uses the checked anchor read, so it refuses an installation whose committed root route is unindexed. `unlock` starts by locking the provider, so a failed unlock — including a failed re-unlock of an already unlocked provider — leaves no runtime key handles behind. A root committed by another instance after this provider
 unlocked reads as `LOCKED` (and its route resolves as `LOCKED`) until the caller re-unlocks.
 `read_root_anchor_state` refuses a committed root whose route is not indexed. Every anchor write
 re-validates, under the write guard, that each route the new anchor references is issued and
