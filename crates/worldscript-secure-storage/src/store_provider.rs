@@ -214,11 +214,26 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
     /// 5. a committed root and a prepared target are indexed, and their key items are present
     ///    (`KEY_LOST`) and, if cached, byte-identical to the cache (`RECOVERY_REQUIRED`).
     fn authority(&self) -> Result<Authority, KeyProviderError> {
+        self.authority_for(PreparedTarget::Validate)
+    }
+
+    /// [`Self::authority`], except that a transition which discards the preparation (abort /
+    /// recover) does not require the prepared target it is removing to be intact; the committed
+    /// authority it retains is still fully validated.
+    fn authority_for(
+        &self,
+        prepared_target: PreparedTarget,
+    ) -> Result<Authority, KeyProviderError> {
         let anchor = self.read_anchor()?;
         let index = self.read_index()?;
         self.check_bindings(&index)?;
         self.check_key_items(&index)?;
-        if let Some(prepared) = &anchor.prepared_root_commit {
+        let validate_prepared = prepared_target == PreparedTarget::Validate;
+        if let Some(prepared) = anchor
+            .prepared_root_commit
+            .as_ref()
+            .filter(|_| validate_prepared)
+        {
             // An anchor that names a prepared target proves that route was issued.
             self.indexed_and_intact(&index, &prepared.target_root_key_ref)?;
         }
@@ -280,8 +295,16 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         &mut self,
         transition: impl FnOnce(&AnchorState) -> Result<AnchorState, KeyProviderError>,
     ) -> Result<AnchorState, KeyProviderError> {
+        self.apply_for(PreparedTarget::Validate, transition)
+    }
+
+    fn apply_for(
+        &mut self,
+        prepared_target: PreparedTarget,
+        transition: impl FnOnce(&AnchorState) -> Result<AnchorState, KeyProviderError>,
+    ) -> Result<AnchorState, KeyProviderError> {
         let _guard = write_guard();
-        let current = self.authority()?.anchor;
+        let current = self.authority_for(prepared_target)?.anchor;
         let next = transition(&current)?;
         if next != current {
             // Re-validated under the same guard: never publish a root (or preparation) whose key
@@ -443,6 +466,37 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         }
     }
 
+    /// Re-validates against the existing snapshot BEFORE replacing it (the cached key bytes and
+    /// bindings are authority evidence): the shared check compares the durable root with any cached
+    /// root bytes, and every newly loaded key must equal previously cached bytes for its route.
+    fn unlock_validated(&mut self) -> Result<KeyState, KeyProviderError> {
+        let _guard = write_guard();
+        let authority = self.authority()?;
+        let loaded = self.load_keys(&authority.index)?;
+        for (route, key) in &loaded.runtime {
+            let changed = self
+                .runtime
+                .iter()
+                .any(|(cached_route, cached)| cached_route == route && **cached != **key);
+            if changed {
+                return Err(corrupt());
+            }
+        }
+        if let Some(root) = &authority.root {
+            if loaded.lost.contains(&root.key_ref) {
+                return Err(KeyProviderError::KeyLost);
+            }
+        }
+        self.runtime = loaded.runtime;
+        self.lost = loaded.lost;
+        self.bindings = authority.index;
+        self.unlocked = true;
+        Ok(match authority.root {
+            Some(entry) => KeyState::Unlocked { epoch: entry.epoch },
+            None => KeyState::Unconfigured,
+        })
+    }
+
     /// A random route that is neither indexed nor already backed by a key item, so a repeated draw
     /// can never overwrite existing key material (retried a few times, then refused).
     fn fresh_route(&self, index: &[IndexEntry]) -> Result<RootKeyRefV1, KeyProviderError> {
@@ -470,6 +524,13 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         }
         Ok(loaded)
     }
+}
+
+/// Whether an authority check validates the anchor's prepared target (see `authority_for`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PreparedTarget {
+    Validate,
+    Discarding,
 }
 
 /// The validated durable authority (see `SecureStoreKeyProvider::authority`).
@@ -509,35 +570,25 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
 
     /// The provider is locked first and every check runs before runtime handles are installed, so a
     /// failed unlock leaves no runtime key handles.
+    /// Any failure leaves the provider locked with no runtime key handles.
     fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
-        // Re-validation starts from a locked provider: previously cached handles never survive a
-        // failed unlock.
-        self.lock();
-        let _guard = write_guard();
-        // The shared authority check (bindings, key items, prepared target, committed root) runs
-        // first; its index then feeds the cached keys and the extended bindings snapshot.
-        let authority = self.authority()?;
-        let root = authority.root;
-        let loaded = self.load_keys(&authority.index)?;
-        let bindings = authority.index;
-        if let Some(root) = &root {
-            if loaded.lost.contains(&root.key_ref) {
-                return Err(KeyProviderError::KeyLost);
-            }
+        let result = self.unlock_validated();
+        if result.is_err() {
+            self.lock();
         }
-        self.runtime = loaded.runtime;
-        self.lost = loaded.lost;
-        self.bindings = bindings;
-        self.unlocked = true;
-        Ok(match root {
-            Some(entry) => KeyState::Unlocked { epoch: entry.epoch },
-            None => KeyState::Unconfigured,
-        })
+        result
     }
 
     fn list_epochs(&self) -> Result<Vec<EpochInfo>, KeyProviderError> {
+        // Diagnostics answer with the same error precedence as every other path; a lost root key
+        // is still listable (that is what the listing reports).
+        let index = match self.authority() {
+            Ok(authority) => authority.index,
+            Err(KeyProviderError::KeyLost) => self.read_index()?,
+            Err(other) => return Err(other),
+        };
         let mut out = Vec::new();
-        for entry in self.read_index()? {
+        for entry in index {
             let available = match self.read_key(&entry.key_ref) {
                 Ok(_) => true,
                 Err(KeyProviderError::KeyLost) => false,
@@ -607,6 +658,12 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
     fn read_or_provision_installation_scope(
         &mut self,
     ) -> Result<InstallationScopeId, KeyProviderError> {
+        // The shared check runs first so a broken installation is never answered with its scope;
+        // a lost key is tolerated because the non-secret scope is still needed for recovery.
+        match self.authority() {
+            Ok(_) | Err(KeyProviderError::KeyLost) => {}
+            Err(other) => return Err(other),
+        }
         if let Some(scope) = anchor::existing_installation_scope(&self.read_anchor()?)? {
             return Ok(scope);
         }
@@ -643,7 +700,11 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
     }
 
     fn abort_or_recover_root_anchor(&mut self, operation_id: &str) -> Result<(), KeyProviderError> {
-        self.apply(|state| anchor::abort_or_recover(state, operation_id))
-            .map(|_| ())
+        // Discarding a preparation must not require its target to be intact: a lost prepared key is
+        // exactly a case the retained committed authority recovers from (§5.3.1).
+        self.apply_for(PreparedTarget::Discarding, |state| {
+            anchor::abort_or_recover(state, operation_id)
+        })
+        .map(|_| ())
     }
 }
