@@ -321,3 +321,16 @@ fn re_provisioning_an_indexed_epoch_resumes_with_its_existing_route() {
         Err(KeyProviderError::KeyLost)
     );
 }
+
+#[test]
+fn a_scope_less_anchor_next_to_an_epoch_index_is_never_fresh() {
+    let (store, _) = configured();
+    store.put_raw(
+        ANCHOR_ACCOUNT,
+        &anchor_codec::encode(&worldscript_secure_storage::AnchorState::empty()).unwrap(),
+    );
+    let mut provider = Provider::new(store.clone());
+    assert_eq!(provider.state(), Ok(KeyState::RecoveryRequired));
+    let scope = provider.read_or_provision_installation_scope().map(|_| ());
+    assert_eq!(scope, Err(KeyProviderError::RecoveryRequired));
+}

@@ -190,15 +190,55 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         self.runtime.len()
     }
 
-    /// A missing anchor is a fresh installation only if no epoch index exists either: bootstrap
-    /// provisions the scope (anchor) before any epoch, so an index without an anchor means the
-    /// anchor was lost and must never be silently re-provisioned (§5.3.2).
+    /// Bootstrap provisions the scope (in the anchor) before any epoch, so an epoch index next to a
+    /// missing anchor, or next to an anchor without a scope, means the scope was lost: it is
+    /// `RECOVERY_REQUIRED` and never silently re-provisioned (§5.3.2).
     fn read_anchor(&self) -> Result<AnchorState, KeyProviderError> {
-        match self.store.get(ANCHOR_ACCOUNT)? {
-            Some(bytes) => anchor_codec::decode(&bytes),
-            None if self.store.get(EPOCH_INDEX_ACCOUNT)?.is_some() => Err(corrupt()),
-            None => Ok(AnchorState::empty()),
+        let anchor = match self.store.get(ANCHOR_ACCOUNT)? {
+            Some(bytes) => anchor_codec::decode(&bytes)?,
+            None => AnchorState::empty(),
+        };
+        if anchor.installation_scope_id.is_none() && self.store.get(EPOCH_INDEX_ACCOUNT)?.is_some()
+        {
+            return Err(corrupt());
         }
+        Ok(anchor)
+    }
+
+    /// The single durable-authority check every read and write path uses:
+    /// 1. the anchor decodes (and its scope is consistent with the index, see `read_anchor`);
+    /// 2. the epoch index is valid;
+    /// 3. every epoch-to-route binding this instance observed at unlock is still indexed unchanged;
+    /// 4. a committed root is indexed, and its key item is present (`KEY_LOST`) and, if cached,
+    ///    byte-identical to the cache (`RECOVERY_REQUIRED`).
+    fn authority(&self) -> Result<Authority, KeyProviderError> {
+        let anchor = self.read_anchor()?;
+        let index = self.read_index()?;
+        let bindings_hold = self.bindings.iter().all(|bound| {
+            index
+                .iter()
+                .any(|e| e.epoch == bound.epoch && e.key_ref == bound.key_ref)
+        });
+        if !bindings_hold {
+            return Err(corrupt());
+        }
+        let root = match &anchor.committed_root {
+            None => None,
+            Some(root) => {
+                let entry = index
+                    .iter()
+                    .find(|e| e.key_ref == root.root_key_ref)
+                    .cloned()
+                    .ok_or_else(corrupt)?;
+                self.durable_key_matches_cache(&entry.key_ref)?;
+                Some(entry)
+            }
+        };
+        Ok(Authority {
+            anchor,
+            index,
+            root,
+        })
     }
 
     /// Reads, transitions and — only if the anchor actually changed — replaces the anchor item, so an
@@ -208,7 +248,7 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         transition: impl FnOnce(&AnchorState) -> Result<AnchorState, KeyProviderError>,
     ) -> Result<AnchorState, KeyProviderError> {
         let _guard = write_guard();
-        let current = self.read_anchor()?;
+        let current = self.authority()?.anchor;
         let next = transition(&current)?;
         if next != current {
             // Re-validated under the same guard: never publish a root (or preparation) whose key
@@ -326,20 +366,15 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         if !self.unlocked {
             return Err(KeyProviderError::Locked);
         }
-        let anchor = self.read_anchor()?;
-        let index = self.read_index()?;
-        let bindings_hold = self.bindings.iter().all(|bound| {
-            index
-                .iter()
-                .any(|e| e.epoch == bound.epoch && e.key_ref == bound.key_ref)
-        });
-        if !bindings_hold {
-            return Err(corrupt());
-        }
-        if let Some(root) = self.root_entry(&anchor)? {
+        let authority = self.authority()?;
+        if let Some(root) = &authority.root {
             self.cached_key(&root.key_ref)?;
         }
-        let entry = index.into_iter().find(|e| select(e)).ok_or(unknown)?;
+        let entry = authority
+            .index
+            .into_iter()
+            .find(|e| select(e))
+            .ok_or(unknown)?;
         self.cached_key(&entry.key_ref)
     }
 
@@ -354,33 +389,22 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             .ok_or_else(corrupt)
     }
 
-    fn committed_state(&self, anchor: &AnchorState) -> Result<KeyState, KeyProviderError> {
-        // The index is validated even before the first root, so control-item corruption is never
-        // reported as a fresh `Unconfigured` installation.
-        match self.read_index() {
-            Ok(_) => {}
+    /// The §8.1 state from the shared authority check; every recovery-class failure — including a
+    /// malformed root key item — is reported as the `RecoveryRequired` state, not as an error.
+    fn authority_state(&self) -> Result<KeyState, KeyProviderError> {
+        let root = match self.authority() {
+            Ok(authority) => authority.root,
             Err(KeyProviderError::RecoveryRequired) => return Ok(KeyState::RecoveryRequired),
-            Err(other) => return Err(other),
-        }
-        let entry = match self.root_entry(anchor) {
-            Ok(Some(entry)) => entry,
-            Ok(None) => return Ok(KeyState::Unconfigured),
-            Err(KeyProviderError::RecoveryRequired) => return Ok(KeyState::RecoveryRequired),
+            Err(KeyProviderError::KeyLost) => return Ok(KeyState::KeyLost),
             Err(other) => return Err(other),
         };
-        match self.read_key(&entry.key_ref) {
-            Err(KeyProviderError::KeyLost) => Ok(KeyState::KeyLost),
-            Err(other) => Err(other),
-            Ok(_) if !self.has_runtime_key(&entry.key_ref) => Ok(KeyState::Locked),
-            // Unlocked only if resolution would accept it: same snapshot and cache validation.
-            Ok(_) => match self.resolve_validated(|e| e.key_ref == entry.key_ref, corrupt()) {
-                Ok(_) => Ok(KeyState::Unlocked { epoch: entry.epoch }),
-                Err(KeyProviderError::RecoveryRequired) => Ok(KeyState::RecoveryRequired),
-                Err(KeyProviderError::KeyLost) => Ok(KeyState::KeyLost),
-                Err(KeyProviderError::Locked) => Ok(KeyState::Locked),
-                Err(other) => Err(other),
-            },
-        }
+        Ok(match root {
+            None => KeyState::Unconfigured,
+            Some(entry) if self.has_runtime_key(&entry.key_ref) => {
+                KeyState::Unlocked { epoch: entry.epoch }
+            }
+            Some(_) => KeyState::Locked,
+        })
     }
 
     /// Unlocked for this route: its handle is cached. A root committed by another instance after this
@@ -430,6 +454,13 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
     }
 }
 
+/// The validated durable authority (see `SecureStoreKeyProvider::authority`).
+struct Authority {
+    anchor: AnchorState,
+    index: Vec<IndexEntry>,
+    root: Option<IndexEntry>,
+}
+
 #[derive(Default)]
 struct LoadedKeys {
     runtime: Vec<(RootKeyRefV1, Zeroizing<[u8; KEY_LEN]>)>,
@@ -438,11 +469,7 @@ struct LoadedKeys {
 
 impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
     fn state(&self) -> Result<KeyState, KeyProviderError> {
-        match self.read_anchor() {
-            Ok(anchor) => self.committed_state(&anchor),
-            Err(KeyProviderError::RecoveryRequired) => Ok(KeyState::RecoveryRequired),
-            Err(other) => Err(other),
-        }
+        self.authority_state()
     }
 
     fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError> {
@@ -508,17 +535,15 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         // Bootstrap order (§5.3.2): the scope exists before any epoch; otherwise an index would exist
         // without an anchor and the installation would read as a lost anchor.
         // The checked read also refuses an installation whose committed root route is unindexed.
-        let anchor = self.read_anchor_checked()?;
-        if anchor.installation_scope_id.is_none() {
+        // The shared authority check also refuses an unindexed, lost, malformed or replaced root key
+        // and broken unlock bindings, so provisioning never extends an authority `state()` refuses.
+        let authority = self.authority()?;
+        if authority.anchor.installation_scope_id.is_none() {
             return Err(KeyProviderError::AnchorConflict(
                 "the installation scope must be provisioned first",
             ));
         }
-        // Never extend an installation whose committed root key is unusable.
-        if let Some(root) = self.root_entry(&anchor)? {
-            self.read_key(&root.key_ref)?;
-        }
-        let mut index = self.read_index()?;
+        let mut index = authority.index;
         if epoch == 0 || epoch == u64::MAX {
             return Err(KeyProviderError::AnchorConflict("epoch is unassigned"));
         }
