@@ -44,7 +44,10 @@ where
 
     /// Reads the validated cold-start anchor without selecting runtime authority.
     pub fn read_root_anchor_state(&self) -> Result<AnchorState, KeyProviderError> {
-        Ok(self.read_authority()?.0)
+        let (anchor_state, index) = self.read_authority()?;
+        self.validate_root_key_material(&anchor_state)?;
+        self.validate_indexed_keys(&index)?;
+        Ok(anchor_state)
     }
 
     /// Lists non-secret epoch identities while preserving the distinct key-loss result.
@@ -75,6 +78,7 @@ where
         &mut self,
     ) -> Result<InstallationScopeId, KeyProviderError> {
         let (anchor_state, index) = self.read_authority()?;
+        self.validate_root_key_material(&anchor_state)?;
         if let Some(scope) = anchor_state.installation_scope_id.clone() {
             return Ok(scope);
         }
@@ -110,6 +114,7 @@ where
     /// authority is granted; journaled orphan reconciliation belongs to a later bootstrap gate.
     pub fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
         let (anchor_state, mut index) = self.read_authority()?;
+        self.validate_root_key_material(&anchor_state)?;
         if anchor_state.installation_scope_id.is_none() {
             return Err(KeyProviderError::AnchorConflict(
                 "the installation scope must be provisioned first",
@@ -197,7 +202,24 @@ where
         anchor_state: &AnchorState,
         index: &[IndexEntry],
     ) -> Result<(), KeyProviderError> {
-        for route in anchor_state
+        for route in Self::root_routes(anchor_state) {
+            self.require_indexed_route(index, route)?;
+        }
+        Ok(())
+    }
+
+    fn validate_root_key_material(
+        &self,
+        anchor_state: &AnchorState,
+    ) -> Result<(), KeyProviderError> {
+        for route in Self::root_routes(anchor_state) {
+            self.read_key(route)?;
+        }
+        Ok(())
+    }
+
+    fn root_routes(anchor_state: &AnchorState) -> impl Iterator<Item = &RootKeyRefV1> {
+        anchor_state
             .committed_root
             .iter()
             .map(|root| &root.root_key_ref)
@@ -207,11 +229,6 @@ where
                     .iter()
                     .map(|prepared| &prepared.target_root_key_ref),
             )
-        {
-            self.require_indexed_route(index, route)?;
-            self.read_key(route)?;
-        }
-        Ok(())
     }
 
     fn require_indexed_route(

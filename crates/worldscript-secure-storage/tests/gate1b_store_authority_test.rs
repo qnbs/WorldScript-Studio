@@ -4,7 +4,7 @@ use worldscript_secure_storage::anchor_codec;
 use worldscript_secure_storage::secure_store::{MemorySecretStore, SecretStore};
 use worldscript_secure_storage::store_layout::{key_account, ANCHOR_ACCOUNT, EPOCH_INDEX_ACCOUNT};
 use worldscript_secure_storage::{
-    AnchorState, KeyProviderError, RandomSource, SecureStoreAuthority,
+    AnchorState, CommittedRoot, KeyProviderError, RandomSource, RootSlot, SecureStoreAuthority,
 };
 
 #[derive(Clone)]
@@ -90,6 +90,42 @@ fn missing_indexed_key_is_listed_as_key_loss_and_cannot_be_reprovisioned() {
     assert!(!listed[0].available);
     assert_eq!(
         restarted.provision_epoch_key(1),
+        Err(KeyProviderError::KeyLost)
+    );
+}
+
+#[test]
+fn missing_anchored_key_is_listed_as_loss_but_blocks_authority_reads_and_writes() {
+    let (store, route) = store_with_indexed_epoch();
+    let mut anchor_state = AnchorState::empty();
+    anchor_state.installation_scope_id = Some(
+        worldscript_secure_storage::InstallationScopeId::parse("01010101010101010101010101010101")
+            .unwrap(),
+    );
+    anchor_state.committed_floor = 1;
+    anchor_state.committed_root = Some(CommittedRoot {
+        root_generation: 1,
+        root_digest: [0; 32],
+        root_slot: RootSlot::A,
+        root_key_ref: route.clone(),
+    });
+    anchor_state.last_committed_operation_id = Some("bootstrap".to_owned());
+    store
+        .set(
+            ANCHOR_ACCOUNT,
+            &anchor_codec::encode(&anchor_state).unwrap(),
+        )
+        .unwrap();
+    store.delete(&key_account(&route)).unwrap();
+
+    let mut restarted = authority(store);
+    assert!(!restarted.list_epochs().unwrap()[0].available);
+    assert_eq!(
+        restarted.read_root_anchor_state(),
+        Err(KeyProviderError::KeyLost)
+    );
+    assert_eq!(
+        restarted.provision_epoch_key(2),
         Err(KeyProviderError::KeyLost)
     );
 }
