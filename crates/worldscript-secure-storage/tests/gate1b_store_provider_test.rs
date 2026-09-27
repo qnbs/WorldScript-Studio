@@ -569,3 +569,18 @@ fn cached_keys_stop_resolving_once_the_durable_authority_is_refused() {
         Err(KeyProviderError::RecoveryRequired)
     );
 }
+
+#[test]
+fn losing_the_root_key_blocks_every_epoch() {
+    let (store, route) = configured();
+    let mut provider = Provider::new(store.clone());
+    provider.provision_epoch_key(2).unwrap();
+    provider.unlock().unwrap();
+    assert!(provider.resolve(2).is_ok());
+    store.delete(&key_account(&route)).unwrap();
+    assert_eq!(provider.state(), Ok(KeyState::KeyLost));
+    assert_eq!(
+        provider.resolve(2).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
+    );
+}

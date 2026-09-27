@@ -280,8 +280,19 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             .ok_or(KeyProviderError::UnknownKeyRef)
     }
 
-    /// Returns a write-capable key only while the durable authority still backs it: the anchor
-    /// decodes with its root route indexed, `key_ref` is still an issued route, and its item still
+    /// The same durable authority `state()` accepts: the anchor decodes with its root route indexed,
+    /// and a committed root's own key item is still present (`KEY_LOST` otherwise), whichever epoch
+    /// is being resolved.
+    fn ensure_authority_usable(&self) -> Result<(), KeyProviderError> {
+        let anchor = self.read_anchor()?;
+        if let Some(root) = self.root_entry(&anchor)? {
+            self.read_key(&root.key_ref)?;
+        }
+        Ok(())
+    }
+
+    /// Returns a write-capable key only while the durable authority still backs it (see
+    /// [`Self::ensure_authority_usable`]), `key_ref` is still an issued route, and its item still
     /// holds the cached bytes. The runtime cache never outlives what `state()` would accept.
     fn runtime_key(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
         if !self.unlocked {
@@ -290,7 +301,7 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         if self.lost.contains(key_ref) {
             return Err(KeyProviderError::KeyLost);
         }
-        self.read_anchor_checked()?;
+        self.ensure_authority_usable()?;
         self.issued(key_ref)?;
         let Some((_, material)) = self.runtime.iter().find(|(r, _)| r == key_ref) else {
             // Issued after this provider unlocked (e.g. by another instance): re-unlock first.
