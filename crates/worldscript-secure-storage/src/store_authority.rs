@@ -45,7 +45,7 @@ where
     /// Reads the validated cold-start anchor without selecting runtime authority.
     pub fn read_root_anchor_state(&self) -> Result<AnchorState, KeyProviderError> {
         let (anchor_state, index) = self.read_authority()?;
-        self.validate_root_key_material(&anchor_state)?;
+        self.validate_root_routes(&anchor_state, &index, true)?;
         self.validate_indexed_keys(&index)?;
         Ok(anchor_state)
     }
@@ -78,7 +78,7 @@ where
         &mut self,
     ) -> Result<InstallationScopeId, KeyProviderError> {
         let (anchor_state, index) = self.read_authority()?;
-        self.validate_root_key_material(&anchor_state)?;
+        self.validate_root_routes(&anchor_state, &index, true)?;
         if let Some(scope) = anchor_state.installation_scope_id.clone() {
             return Ok(scope);
         }
@@ -114,7 +114,7 @@ where
     /// authority is granted; journaled orphan reconciliation belongs to a later bootstrap gate.
     pub fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
         let (anchor_state, mut index) = self.read_authority()?;
-        self.validate_root_key_material(&anchor_state)?;
+        self.validate_root_routes(&anchor_state, &index, true)?;
         if anchor_state.installation_scope_id.is_none() {
             return Err(KeyProviderError::AnchorConflict(
                 "the installation scope must be provisioned first",
@@ -169,7 +169,7 @@ where
         let index = self.read_index()?;
         self.validate_scope_index(&anchor_state, &index)?;
         self.validate_indexed_keys(&index)?;
-        self.validate_root_routes(&anchor_state, &index)?;
+        self.validate_root_routes(&anchor_state, &index, false)?;
         Ok((anchor_state, index))
     }
 
@@ -201,19 +201,13 @@ where
         &self,
         anchor_state: &AnchorState,
         index: &[IndexEntry],
+        require_key_material: bool,
     ) -> Result<(), KeyProviderError> {
         for route in Self::root_routes(anchor_state) {
             self.require_indexed_route(index, route)?;
-        }
-        Ok(())
-    }
-
-    fn validate_root_key_material(
-        &self,
-        anchor_state: &AnchorState,
-    ) -> Result<(), KeyProviderError> {
-        for route in Self::root_routes(anchor_state) {
-            self.read_key(route)?;
+            if require_key_material {
+                self.read_key(route)?;
+            }
         }
         Ok(())
     }
