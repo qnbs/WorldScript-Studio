@@ -269,6 +269,10 @@ impl KeyProvider for MemoryKeyProvider {
         if epoch == 0 || epoch == u64::MAX {
             return Err(KeyProviderError::AnchorConflict("epoch is unassigned"));
         }
+        // Like the secure-store provider, a store that has lost its keys is never re-provisioned.
+        if self.lost {
+            return Err(KeyProviderError::KeyLost);
+        }
         // Resumable (§10.2), like every KeyProvider: an already provisioned epoch whose key is intact
         // returns its existing route instead of failing a restarted bootstrap.
         if let Some(existing) = self.store.iter().find(|k| k.epoch == epoch) {

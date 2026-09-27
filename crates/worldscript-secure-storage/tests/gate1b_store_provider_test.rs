@@ -334,3 +334,13 @@ fn a_scope_less_anchor_next_to_an_epoch_index_is_never_fresh() {
     let scope = provider.read_or_provision_installation_scope().map(|_| ());
     assert_eq!(scope, Err(KeyProviderError::RecoveryRequired));
 }
+
+#[test]
+fn a_future_anchor_version_is_refused_before_reading_v1_fields() {
+    // "WSA1", anchor_format_version 2, then a truncated/changed future layout.
+    let future = [b"WSA1".as_slice(), &2u32.to_be_bytes(), &[0x01]].concat();
+    assert_eq!(
+        anchor_codec::decode(&future).map(|_| ()),
+        Err(KeyProviderError::UnsupportedAnchorFormat)
+    );
+}

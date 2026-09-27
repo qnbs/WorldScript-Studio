@@ -255,3 +255,17 @@ fn a_scope_persisted_before_a_reported_failure_is_reused() {
         persisted
     );
 }
+
+#[test]
+fn a_store_that_lost_its_keys_is_never_re_provisioned() {
+    let (mut provider, _) = provisioned();
+    provider.lose_keys();
+    assert_eq!(
+        provider.provision_epoch_key(1).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
+    );
+    assert_eq!(
+        provider.provision_epoch_key(2).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
+    );
+}
