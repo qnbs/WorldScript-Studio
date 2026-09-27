@@ -92,6 +92,10 @@ fn missing_indexed_key_is_listed_as_key_loss_and_cannot_be_reprovisioned() {
         restarted.provision_epoch_key(1),
         Err(KeyProviderError::KeyLost)
     );
+    assert_eq!(
+        restarted.provision_epoch_key(2),
+        Err(KeyProviderError::KeyLost)
+    );
 }
 
 #[test]

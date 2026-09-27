@@ -115,6 +115,7 @@ where
     /// authority is granted; journaled orphan reconciliation belongs to a later bootstrap gate.
     pub fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
         let (anchor_state, mut index) = self.read_authority()?;
+        self.validate_indexed_key_material(&index)?;
         self.validate_root_routes(&anchor_state, &index, true)?;
         if anchor_state.installation_scope_id.is_none() {
             return Err(KeyProviderError::AnchorConflict(
@@ -194,6 +195,13 @@ where
                 Ok(_) | Err(KeyProviderError::KeyLost) => {}
                 Err(other) => return Err(other),
             }
+        }
+        Ok(())
+    }
+
+    fn validate_indexed_key_material(&self, index: &[IndexEntry]) -> Result<(), KeyProviderError> {
+        for entry in index {
+            self.read_key(&entry.key_ref)?;
         }
         Ok(())
     }
