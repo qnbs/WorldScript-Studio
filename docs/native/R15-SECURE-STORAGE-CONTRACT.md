@@ -4,7 +4,7 @@
 
 **Status:** S5-A — admitted R-15 secure-storage architecture baseline; production implementation not
 started. `S5_A_ADMITTED = YES`, `S5_IMPLEMENTATION_READY = NO`, `S5_TERMINAL = YES` (PR #584 merged as `c24aa645`; its post-merge main CI — CI Success and CodeQL — completed green, 19 success / 3 skipped),
-`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are admitted, and the final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) is complete: five findings were made and corrected in this same change — two mechanical citation-drift notes (a stale "blocked pending S5-B1" disposition-count note in §10.4.1, and S5-B3's §6 crash-recovery paragraph citing S5-B1's migration-time reconciliation mechanism for an ordinary write's own orphaned staging chunk, where §9.2/§9 step 11's own ordinary-write staging-reconciliation rule actually applies) and three substantive gaps (S5-B3's chunk physical locator, §2, carried no operation/generation identity, so recovery could not distinguish a superseded attempt's orphaned chunk from the current attempt's — closed by giving each chunk's staging form the same `operation_id`/`target_generation` temp suffix §9 step 3 already defines for a whole record, and by making §6's recovery text check that exact suffix rather than the bare promoted-form locator; and §10.4.1's atomic-write-temporary-files carve-out was declared exempt from "exactly one of the three groups," directly contradicting that same exhaustiveness invariant — closed by making it an explicit fourth `REFUSE_AUTHORITY_SWITCH` group; that fix in turn made Gate 7's flat class-level rule ("blocked while any class is `REFUSE_AUTHORITY_SWITCH`") permanently unsatisfiable for this one class, since its class-level registry entry never changes even once every instance resolves — closed by making Gate 7's rule instance-aware, so only an *unresolved* `REFUSE_AUTHORITY_SWITCH` instance blocks it). No further inconsistency was found after these corrections. `S5_TERMINAL` and `S5_TERMINAL_R15_DESIGN_ADMITTED_MERGED_POSTMERGE_GREEN` are now YES, recorded in a dedicated follow-up after PR #584 merged and its post-merge main CI (including CodeQL) was confirmed green. **Gate 1a (§20) was re-admitted by the QNB-100 readiness verdict on 2026-09-26** (recorded on [#445](https://github.com/qnbs/WorldScript-Studio/issues/445#issuecomment-5847938516); no earlier Gate 1 admission is recorded). Gate 1a is the headless `WSR1` header and strict parser, the record-class registry, canonical AAD (§6.2), AES-256-GCM seal/open with a fail-closed OS nonce source, and the fixed-key/boundary/adversarial vectors §6.1 requires, in `crates/worldscript-secure-storage`. Gate 1b (the key-provider/KDF profile, §8.2/§8.2.1) was decided on 2026-09-26 as Option C and is in progress (1b-core, then 1b-platform). Status split: S5 design terminal/admitted = YES; Gate 1a = re-admitted and implemented headless; `S5_IMPLEMENTATION_READY = NO` for the R-15 program as a whole; Gate 1b = decided, implementation in progress; Gates 2–7 = not admitted; `PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. No current TypeScript/Tauri path reads or writes user data through this crate.
+`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are admitted, and the final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) is complete: five findings were made and corrected in this same change — two mechanical citation-drift notes (a stale "blocked pending S5-B1" disposition-count note in §10.4.1, and S5-B3's §6 crash-recovery paragraph citing S5-B1's migration-time reconciliation mechanism for an ordinary write's own orphaned staging chunk, where §9.2/§9 step 11's own ordinary-write staging-reconciliation rule actually applies) and three substantive gaps (S5-B3's chunk physical locator, §2, carried no operation/generation identity, so recovery could not distinguish a superseded attempt's orphaned chunk from the current attempt's — closed by giving each chunk's staging form the same `operation_id`/`target_generation` temp suffix §9 step 3 already defines for a whole record, and by making §6's recovery text check that exact suffix rather than the bare promoted-form locator; and §10.4.1's atomic-write-temporary-files carve-out was declared exempt from "exactly one of the three groups," directly contradicting that same exhaustiveness invariant — closed by making it an explicit fourth `REFUSE_AUTHORITY_SWITCH` group; that fix in turn made Gate 7's flat class-level rule ("blocked while any class is `REFUSE_AUTHORITY_SWITCH`") permanently unsatisfiable for this one class, since its class-level registry entry never changes even once every instance resolves — closed by making Gate 7's rule instance-aware, so only an *unresolved* `REFUSE_AUTHORITY_SWITCH` instance blocks it). No further inconsistency was found after these corrections. `S5_TERMINAL` and `S5_TERMINAL_R15_DESIGN_ADMITTED_MERGED_POSTMERGE_GREEN` are now YES, recorded in a dedicated follow-up after PR #584 merged and its post-merge main CI (including CodeQL) was confirmed green. **Gate 1a (§20) was re-admitted by the QNB-100 readiness verdict on 2026-09-26** (recorded on [#445](https://github.com/qnbs/WorldScript-Studio/issues/445#issuecomment-5847938516); no earlier Gate 1 admission is recorded). Gate 1a is the headless `WSR1` header and strict parser, the record-class registry, canonical AAD (§6.2), AES-256-GCM seal/open with a fail-closed OS nonce source, and the fixed-key/boundary/adversarial vectors §6.1 requires, in `crates/worldscript-secure-storage`. Gate 1b (the key-provider/KDF profile, §8.2/§8.2.1/§8.2.2) was decided on 2026-09-26 as Option C; 1b-core landed in #850; 1b-platform is in progress (the headless §8.2.2 provider, then the OS secure-store adapter in #851), with Gate 1b terminal status recorded only after its post-merge gate. Status split: S5 design terminal/admitted = YES; Gate 1a = re-admitted and implemented headless; `S5_IMPLEMENTATION_READY = NO` for the R-15 program as a whole; Gate 1b = in progress (1b-core #850 landed; 1b-platform headless provider, then OS adapter #851); Gates 2–7 = not admitted; `PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. No current TypeScript/Tauri path reads or writes user data through this crate.
 
 **Baseline:** `main` at `7ce506ee771f6273e22c08ded049b48955cb40a5`
 
@@ -1606,7 +1606,8 @@ KeyProvider.lock() -> clear runtime key handles/material
 KeyProvider.list_epochs() -> non-secret key identities and availability; enumeration/diagnostic use
                              only — never a trust-routing mechanism for the root (§5.3.1)
 KeyProvider.provision_epoch_key(epoch) -> RootKeyRefV1 for a fresh random 256-bit key; one key per
-                             epoch, never epoch 0 or u64::MAX
+                             epoch, never epoch 0 or u64::MAX; resumable: an epoch already
+                             provisioned with an intact key returns its existing route (§10.2)
 KeyProvider.read_root_anchor_state() -> validated anchor state (§5.3.1)
 KeyProvider.read_or_provision_installation_scope() -> InstallationScopeId (§5.3.2); reading an
                              existing scope needs no randomness and changes nothing
@@ -1715,6 +1716,91 @@ source scope, a wrong length field, truncation, trailing bytes, or a failed tag 
 one result, `WRONG_PASSPHRASE_OR_TAMPERED`. The recovery material is
 portable recovery key material only; what it restores, and the recovery transition itself, belong to
 the later migration/recovery gates.
+
+### 8.2.2 Platform secure-store adapter (Gate 1b-platform)
+
+The §8.2 `KeyProvider` is implemented once, over a narrow secret-store boundary (named items that
+can be read, atomically replaced, and deleted), so every platform shares the same anchor,
+validation, and key-routing logic. This subsection's provider, encodings and failure rules are
+delivered headless first (proved over an in-memory store); the OS secure-store adapter that plugs
+into the same boundary — macOS Keychain, Windows Credential Manager, and on Linux the Secret Service
+only, with per-platform evidence — is the second Gate 1b-platform slice (PR #851) and is not claimed
+here. All items live under the service `worldscript-r15`:
+
+```text
+r15-anchor-v1           the WSA1-encoded anchor state (below)
+r15-epochs-v1           the WSE1 epoch index: "WSE1", u32be(count), then per entry u64be(epoch),
+                        u16be(route_len), route; at most 32 entries; epochs and routes unique,
+                        epochs never 0 or u64::MAX; exact end
+r15-key-<hex(route)>    exactly 32 random key bytes for one issued route
+```
+
+A route (`RootKeyRefV1`) is `wss-kr1-` followed by 32 lowercase hex characters of 16 random bytes.
+Key-item names are derived only from routes the provider issued and recorded in the index, never
+from caller-supplied bytes. Provisioning writes the key item before the index, so a crash leaves at
+most an unreferenced item. No item exceeds 2,560 bytes (the Windows generic-credential blob limit):
+version 1 indexes at most 32 epochs and refuses a 33rd before writing anything; retiring epochs
+belongs to the later rotation lifecycle. The index is a control item, so any malformation of it —
+including a wrong magic or a route that does not match the exact `wss-kr1-` + 32-lowercase-hex
+grammar — is `RECOVERY_REQUIRED`, and it is validated even before the first root commits. Before the first PREPARE records a target route, nothing the provider owns can prove that a deleted index ever existed (the store cannot be enumerated), so the §10.2 bootstrap journal (Gate 4) must durably bind the bootstrap target epoch and route (`BOOTSTRAP_TARGET`) before anything is sealed under that key; a later retry then detects a missing index instead of provisioning a replacement. Provisioning never overwrites an existing key item, so an earlier key survives such a retry. A missing
+anchor item is a fresh installation only when no index item exists either: bootstrap writes the
+scope before any epoch, so an index without an anchor is `RECOVERY_REQUIRED` and the scope is never
+re-provisioned (§5.3.2).
+
+**Serialization.** The secure store offers no compare-and-swap. The provider serializes its own
+read-modify-write sequences within a process; across processes it relies on the caller holding the
+§11 operation admission and `root_commit_mutex` that §5.3.1 already requires for every anchor
+transition and that key provisioning also runs under. A transition that leaves the anchor unchanged
+(an exact step-F replay, an abort with nothing prepared) performs no write.
+
+**`WSA1` anchor encoding** (big-endian, exact end): `"WSA1"`, `u32(anchor_format_version)`,
+`u32(scope_format_version)`, `u8(has_scope)` + 32-byte scope, `u64(committed_floor)`,
+`u8(has_root)` + [`u64(root_generation)`, 32-byte `root_digest`, `u8(root_slot)`,
+`u16(len)` + `root_key_ref`, `u8(len)` + `last_committed_operation_id`], `u8(has_prepared)` +
+[`u8(len)` + `operation_id`, `u64(expected_prior_floor)`, `u64(target_root_generation)`, 32-byte
+`target_final_root_digest`, `u8(target_slot)`, `u16(len)` + `target_root_key_ref`,
+`u64(preparation_revision)`]. Flags are exactly 0 or 1. An unknown magic or format version is
+`UNSUPPORTED_ANCHOR_FORMAT` and is never rewritten; any other malformation is
+`RECOVERY_REQUIRED`; every decoded anchor then passes the §5.4 anchor-validity check.
+
+**Failure mapping.** A store that cannot be reached, is locked without a usable unlock, or refuses
+access is `SECURE_ANCHOR_UNAVAILABLE`; a missing key item for an indexed route is `KEY_LOST` (for
+the root it fails `unlock`; for another epoch it fails only that epoch's resolution); a malformed key
+item or index, or a committed root whose route is absent from the index, is `RECOVERY_REQUIRED`.
+**One authority check.** `state()`, key resolution, every anchor write, and key provisioning all
+run the same validation first: the anchor decodes; an epoch index next to a missing anchor or a
+scope-less anchor is `RECOVERY_REQUIRED` (the scope was lost; it is never re-provisioned); the index
+is valid; the epoch-to-route bindings observed at unlock are still indexed unchanged; every present indexed
+key item is well-formed (a missing one only makes its own epoch `KEY_LOST`); and a committed root
+and a prepared target are indexed with their key items present (`KEY_LOST`) and, if cached,
+byte-identical (`RECOVERY_REQUIRED`). `state()` reports every recovery-class failure — including a malformed root
+key item — as the `RECOVERY_REQUIRED` state rather than an error.
+
+**Key resolution.** `unlock` runs the same authority check, then snapshots the epoch-to-route bindings and caches each key. The non-secret bindings are kept for the provider instance's lifetime across `lock`/`unlock`, so a re-unlock validates the index against them and can only extend them, never adopt a swapped index; detecting a swap across a process restart is the job of the key-epoch registry, whose entries bind each epoch to its route digest (§8.3, Gate 4). A key is
+resolved only while the durable state still backs that snapshot, checked in this order before any
+"unknown" answer: the anchor decodes and the index is valid; every binding observed at unlock is
+still indexed unchanged (bindings and per-route key bytes are immutable, so a change is
+`RECOVERY_REQUIRED`); the committed root is indexed and its own key item still matches the cache
+(missing is `KEY_LOST` for every epoch); then the requested entry is looked up and its item
+re-validated. A root this instance never cached (committed by another instance) makes every
+resolution `LOCKED` until re-unlock. `read_root_anchor_state` and PREPARE also run this check first (a broken installation is never reported as an unknown target or as an ordinary bootstrap anchor). `state()` reports `UNLOCKED` only if the same validation accepts the root, and every anchor write
+applies it to each route it publishes (a cached target whose item changed is
+`RECOVERY_REQUIRED`). Key provisioning uses the checked anchor read, refuses while the committed
+root key is unusable, and draws a fresh route that is neither indexed nor backed by an existing
+item; provisioning an epoch that is already indexed with an intact key item (present and, if cached,
+byte-identical) returns its existing route unchanged, so a bootstrap interrupted after the index write resumes (§10.2). `unlock` starts by locking the provider, so a failed unlock — including a failed re-unlock of an already unlocked provider — leaves no runtime key handles behind. A root committed by another instance after this provider
+unlocked reads as `LOCKED` (and its route resolves as `LOCKED`) until the caller re-unlocks.
+`read_root_anchor_state` refuses a committed root whose route is not indexed. Every anchor write
+re-validates, under the write guard, that each route the new anchor references is issued and
+present, so a lost index after PREPARE can never publish an unusable root. Key provisioning
+requires an already-provisioned installation scope (bootstrap order, §5.3.2). No outcome falls back to plaintext, a data-directory file, or a
+weaker store.
+
+**Evidence (maturity stated honestly).** Headless: the provider over an in-memory store — restart
+persistence, strict decoding, corruption, key loss, unavailability, bootstrap order, index loss
+after PREPARE, cross-instance commits, and cold-start route checks. Real OS-store evidence arrives
+with the platform adapter slice; packaged-application evidence (Tauri/Qt bundling, signing,
+entitlements, user-session prompts) belongs to §20 Gate 6.
 
 ### 8.3 Epoch rules
 
@@ -3300,10 +3386,11 @@ Later implementation may be admitted only in these bounded gates:
      delivered in two bounded slices. **1b-core** (headless): the `WSS_ARGON2ID_V1` KDF and NFC
      passphrase encoding with fixed vectors, the `WSRP` recovery package, `RootKeyRefV1` and
      `InstallationScopeId`, the `KeyProvider` contract, the pure §5.3.1 anchor transitions that every
-     adapter applies, and a fault-injecting in-memory provider. **1b-platform**: the platform
-     secure-store adapter (audited candidate: `keyring` 3.6.x — MSRV 1.75 — with `apple-native`,
-     `windows-native`, and on Linux `sync-secret-service` only), with per-platform evidence
-     classified honestly. Gate 1b is terminal only when both slices are.
+     adapter applies, and a fault-injecting in-memory provider. **1b-platform**, in two
+     slices: the headless secure-store provider of §8.2.2 (anchor and index encodings, failure
+     rules, in-memory evidence), then the OS secure-store adapter (`keyring` 3.6.3 with
+     `apple-native`, `windows-native`, and on Linux `sync-secret-service` only) with CI-runner
+     evidence on macOS, Windows and Linux (PR #851). Gate 1b is terminal only when all of it is.
 
    AEAD authentication in Gate 1a proves the supplied envelope, including the `record_generation`
    in its header, is authentic for the key and context. It does not prove that generation is the
@@ -3347,4 +3434,4 @@ complete merely because a design document exists.
 
 ## 21. S5 admission decision
 
-This S5-A baseline, together with S5-B1/S5-B2/S5-B3, is admitted at the semantic level for everything each actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; canonical migration-source/payload evidence, race-free `AuthoritySnapshot` lifetime, and the chunked large-object envelope all admitted above; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready: no production implementation exists for any of the four documents. The final cross-contract consistency audit across all four documents is complete: every cross-reference, shared formula (`source_value_digest`, the marker-body `is_chunked`/`chunk_count` extension, the §6.3 nonce/AAD wording), and status flag was checked for mutual agreement; two mechanical citation-drift notes and three substantive gaps (S5-B3's chunk-locator operation-identity binding; §10.4.1's disposition-registry exhaustiveness; and Gate 7's resulting class-level-vs-instance-level contradiction that the exhaustiveness fix itself introduced) were corrected in this same change (see the header status line above), and no further inconsistency was found. This is **`S5_A_ADMITTED / S5_B1_ADMITTED / S5_B2_ADMITTED / S5_B3_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `IMPLEMENTATION_READY`; `S5_TERMINAL` was declared YES in a dedicated follow-up after PR #584 merged with green post-merge main CI. Gate 1a is re-admitted (QNB-100) and implemented headless (see the header status line); Gate 1b is decided (Option C, §8.2/§8.2.1) and in implementation; Gates 2–7 remain unadmitted, and no production authority switch is allowed. Current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by any of these documents.
+This S5-A baseline, together with S5-B1/S5-B2/S5-B3, is admitted at the semantic level for everything each actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; canonical migration-source/payload evidence, race-free `AuthoritySnapshot` lifetime, and the chunked large-object envelope all admitted above; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready: no production implementation exists for any of the four documents. The final cross-contract consistency audit across all four documents is complete: every cross-reference, shared formula (`source_value_digest`, the marker-body `is_chunked`/`chunk_count` extension, the §6.3 nonce/AAD wording), and status flag was checked for mutual agreement; two mechanical citation-drift notes and three substantive gaps (S5-B3's chunk-locator operation-identity binding; §10.4.1's disposition-registry exhaustiveness; and Gate 7's resulting class-level-vs-instance-level contradiction that the exhaustiveness fix itself introduced) were corrected in this same change (see the header status line above), and no further inconsistency was found. This is **`S5_A_ADMITTED / S5_B1_ADMITTED / S5_B2_ADMITTED / S5_B3_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `IMPLEMENTATION_READY`; `S5_TERMINAL` was declared YES in a dedicated follow-up after PR #584 merged with green post-merge main CI. Gate 1a is re-admitted (QNB-100) and implemented headless (see the header status line); Gate 1b is in progress (1b-core landed; 1b-platform headless provider, then the OS adapter) and becomes terminal only after its post-merge gate; Gates 2–7 remain unadmitted, and no production authority switch is allowed. Current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by any of these documents.

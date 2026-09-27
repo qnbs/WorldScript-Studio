@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 1b-platform, headless provider (#445):** the secure-store–backed key provider in
+  `crates/worldscript-secure-storage`, proved over an in-memory store before any OS store is wired
+  (that adapter is PR #851). One `SecureStoreKeyProvider` implements the §8.2 `KeyProvider` over a
+  narrow `SecretStore` boundary: the anchor state in a strict, validated `WSA1` encoding, a bounded
+  `WSE1` epoch index (at most 32 epochs, every item at most 2,560 bytes), and each random 256-bit key
+  as its own item, with key-item names derived only from routes it issued. It fails closed:
+  corruption, a lost anchor next to a surviving index, or a root route missing from the index is
+  `RECOVERY_REQUIRED`; a missing key stays `KEY_LOST`; a failed unlock leaves the provider locked;
+  every anchor write re-validates the routes it publishes; a root committed by another instance
+  reads as `LOCKED` until re-unlock; a cached key stops resolving once its item is lost; and an
+  exact replay performs no write. The contract (§8.2.2)
+  specifies the item layout, both encodings, and the failure rules. Nothing in the app uses the
+  provider yet. PR #852.
 - **R-15 Gate 1b-core (#445):** the headless key-provider and recovery layer of
   `crates/worldscript-secure-storage`, implementing the maintainer's Option C decision (platform
   secure store as the runtime authority; optional passphrase recovery). It adds the

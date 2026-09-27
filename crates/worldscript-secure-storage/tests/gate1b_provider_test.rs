@@ -153,13 +153,15 @@ fn routing_resolves_exact_issued_references_only() {
 
 #[test]
 fn epochs_are_provisioned_once_and_never_as_sentinels() {
-    let (mut provider, _) = provisioned();
-    for epoch in [0, 1, u64::MAX] {
+    let (mut provider, route) = provisioned();
+    for epoch in [0, u64::MAX] {
         assert!(
             is_conflict(provider.provision_epoch_key(epoch)),
             "epoch {epoch}"
         );
     }
+    // Resumable: provisioning epoch 1 again returns its existing route.
+    assert_eq!(provider.provision_epoch_key(1), Ok(route));
 }
 
 #[test]
@@ -251,5 +253,19 @@ fn a_scope_persisted_before_a_reported_failure_is_reused() {
     assert_eq!(
         provider.read_or_provision_installation_scope().unwrap(),
         persisted
+    );
+}
+
+#[test]
+fn a_store_that_lost_its_keys_is_never_re_provisioned() {
+    let (mut provider, _) = provisioned();
+    provider.lose_keys();
+    assert_eq!(
+        provider.provision_epoch_key(1).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
+    );
+    assert_eq!(
+        provider.provision_epoch_key(2).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
     );
 }
