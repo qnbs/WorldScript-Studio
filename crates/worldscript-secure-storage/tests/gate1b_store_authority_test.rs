@@ -449,3 +449,73 @@ fn a_restored_key_resumed_by_provisioning_resolves_again() {
         "the restored route is no longer treated as lost"
     );
 }
+
+#[test]
+fn a_re_unlock_never_adopts_replaced_root_key_bytes() {
+    let (store, root, _, mut provider) = two_epochs_unlocked();
+    store.put_raw(&key_account(&root), &[9; 32]);
+    assert_eq!(provider.unlock(), Err(KeyProviderError::RecoveryRequired));
+    assert_eq!(
+        provider.runtime_key_count(),
+        0,
+        "a failed unlock leaves no handles"
+    );
+    assert_eq!(
+        provider.resolve(2).map(|_| ()),
+        Err(KeyProviderError::Locked)
+    );
+}
+
+#[test]
+fn a_re_unlock_never_adopts_replaced_non_root_key_bytes() {
+    let (store, _, second, mut provider) = two_epochs_unlocked();
+    store.put_raw(&key_account(&second), &[8; 32]);
+    assert_eq!(provider.unlock(), Err(KeyProviderError::RecoveryRequired));
+}
+
+#[test]
+fn an_abort_discards_a_preparation_whose_target_key_is_lost() {
+    let (store, _, second, mut provider) = two_epochs_unlocked();
+    provider
+        .prepare_root_anchor(&request(&provider, "rotate", RootSlot::B, &second))
+        .unwrap();
+    store.delete(&key_account(&second)).unwrap();
+    assert_eq!(provider.abort_or_recover_root_anchor("rotate"), Ok(()));
+    let anchor = provider.read_root_anchor_state().unwrap();
+    assert!(anchor.prepared_root_commit.is_none());
+    assert_eq!(
+        anchor.committed_floor, 1,
+        "the retained committed authority is unchanged"
+    );
+}
+
+#[test]
+fn diagnostics_and_scope_reads_share_the_authority_error_precedence() {
+    let (store, _) = configured();
+    store.put_raw(EPOCH_INDEX_ACCOUNT, b"WSE1\0\0\0\0");
+    let mut provider = Provider::new(store);
+    assert_eq!(
+        provider.list_epochs().map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+    let scope = provider.read_or_provision_installation_scope().map(|_| ());
+    assert_eq!(scope, Err(KeyProviderError::RecoveryRequired));
+}
+
+#[test]
+fn the_scope_stays_readable_when_the_root_key_is_lost() {
+    let (store, root) = configured();
+    let scope = scoped_scope(&store);
+    store.delete(&key_account(&root)).unwrap();
+    let mut provider = Provider::new(store);
+    assert_eq!(provider.read_or_provision_installation_scope(), Ok(scope));
+    assert!(provider.list_epochs().unwrap().iter().all(|e| !e.available));
+}
+
+fn scoped_scope(store: &MemorySecretStore) -> worldscript_secure_storage::InstallationScopeId {
+    Provider::new(store.clone())
+        .read_root_anchor_state()
+        .unwrap()
+        .installation_scope_id
+        .unwrap()
+}

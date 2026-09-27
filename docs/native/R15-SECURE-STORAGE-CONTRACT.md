@@ -1776,14 +1776,14 @@ and a prepared target are indexed with their key items present (`KEY_LOST`) and,
 byte-identical (`RECOVERY_REQUIRED`). `state()` reports every recovery-class failure — including a malformed root
 key item — as the `RECOVERY_REQUIRED` state rather than an error.
 
-**Key resolution.** `unlock` runs the same authority check, then snapshots the epoch-to-route bindings and caches each key. The non-secret bindings are kept for the provider instance's lifetime across `lock`/`unlock`, so a re-unlock validates the index against them and can only extend them, never adopt a swapped index; detecting a swap across a process restart is the job of the key-epoch registry, whose entries bind each epoch to its route digest (§8.3, Gate 4). A key is
+**Key resolution.** `unlock` runs the same authority check against the existing snapshot — cached key bytes and bindings are authority evidence and are never cleared before validation — and every newly loaded key must equal any previously cached bytes for its route; only then are the bindings snapshotted and the keys cached, and any failure leaves the provider locked with no handles. The non-secret bindings are kept for the provider instance's lifetime across `lock`/`unlock`, so a re-unlock validates the index against them and can only extend them, never adopt a swapped index; detecting a swap across a process restart is the job of the key-epoch registry, whose entries bind each epoch to its route digest (§8.3, Gate 4). A key is
 resolved only while the durable state still backs that snapshot, checked in this order before any
 "unknown" answer: the anchor decodes and the index is valid; every binding observed at unlock is
 still indexed unchanged (bindings and per-route key bytes are immutable, so a change is
 `RECOVERY_REQUIRED`); the committed root is indexed and its own key item still matches the cache
 (missing is `KEY_LOST` for every epoch); then the requested entry is looked up and its item
 re-validated. A root this instance never cached (committed by another instance) makes every
-resolution `LOCKED` until re-unlock. `read_root_anchor_state` and PREPARE also run this check first (a broken installation is never reported as an unknown target or as an ordinary bootstrap anchor). `state()` reports `UNLOCKED` only if the same validation accepts the root, and every anchor write
+resolution `LOCKED` until re-unlock. `read_root_anchor_state`, PREPARE, `list_epochs` and `read_or_provision_installation_scope` also run this check first (the latter two tolerate `KEY_LOST`, so the listing and the non-secret scope stay available for recovery); an abort/recover validates the retained committed authority but not the prepared target it discards, so a lost prepared key never blocks recovery; (a broken installation is never reported as an unknown target or as an ordinary bootstrap anchor). `state()` reports `UNLOCKED` only if the same validation accepts the root, and every anchor write
 applies it to each route it publishes (a cached target whose item changed is
 `RECOVERY_REQUIRED`). Key provisioning uses the checked anchor read, refuses while the committed
 root key is unusable, and draws a fresh route that is neither indexed nor backed by an existing
