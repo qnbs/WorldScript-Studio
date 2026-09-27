@@ -440,10 +440,10 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         Err(KeyProviderError::Unavailable)
     }
 
-    /// Loads every indexed key; a missing item is recorded as lost, anything else is an error.
-    fn load_keys(&self) -> Result<LoadedKeys, KeyProviderError> {
+    /// Loads every key of `index`; a missing item is recorded as lost, anything else is an error.
+    fn load_keys(&self, index: &[IndexEntry]) -> Result<LoadedKeys, KeyProviderError> {
         let mut loaded = LoadedKeys::default();
-        for entry in self.read_index()? {
+        for entry in index.iter().cloned() {
             match self.read_key(&entry.key_ref) {
                 Ok(key) => loaded.runtime.push((entry.key_ref, key)),
                 Err(KeyProviderError::KeyLost) => loaded.lost.push(entry.key_ref),
@@ -494,10 +494,22 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         // Re-validation starts from a locked provider: previously cached handles never survive a
         // failed unlock.
         self.lock();
+        let _guard = write_guard();
+        // One index read feeds the root lookup, the cached keys and the bindings snapshot, so they
+        // can never describe two different index versions.
         let anchor = self.read_anchor()?;
-        let root = self.root_entry(&anchor)?;
-        let loaded = self.load_keys()?;
         let bindings = self.read_index()?;
+        let root = match &anchor.committed_root {
+            None => None,
+            Some(root) => Some(
+                bindings
+                    .iter()
+                    .find(|e| e.key_ref == root.root_key_ref)
+                    .cloned()
+                    .ok_or_else(corrupt)?,
+            ),
+        };
+        let loaded = self.load_keys(&bindings)?;
         if let Some(root) = &root {
             if loaded.lost.contains(&root.key_ref) {
                 return Err(KeyProviderError::KeyLost);
@@ -532,11 +544,9 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
 
     fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
         let _guard = write_guard();
-        // Bootstrap order (§5.3.2): the scope exists before any epoch; otherwise an index would exist
-        // without an anchor and the installation would read as a lost anchor.
-        // The checked read also refuses an installation whose committed root route is unindexed.
-        // The shared authority check also refuses an unindexed, lost, malformed or replaced root key
-        // and broken unlock bindings, so provisioning never extends an authority `state()` refuses.
+        // The shared authority check refuses an unindexed, lost, malformed or replaced root key and
+        // broken unlock bindings, so provisioning never extends an authority `state()` refuses; the
+        // scope must exist first (§5.3.2 bootstrap order), or an index would outlive its anchor.
         let authority = self.authority()?;
         if authority.anchor.installation_scope_id.is_none() {
             return Err(KeyProviderError::AnchorConflict(
