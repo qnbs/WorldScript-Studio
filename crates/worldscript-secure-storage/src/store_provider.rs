@@ -216,45 +216,62 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
     fn authority(&self) -> Result<Authority, KeyProviderError> {
         let anchor = self.read_anchor()?;
         let index = self.read_index()?;
-        for entry in &index {
-            match self.read_key(&entry.key_ref) {
-                Ok(_) | Err(KeyProviderError::KeyLost) => {}
-                Err(other) => return Err(other),
-            }
-        }
+        self.check_bindings(&index)?;
+        self.check_key_items(&index)?;
         if let Some(prepared) = &anchor.prepared_root_commit {
             // An anchor that names a prepared target proves that route was issued.
-            let target = &prepared.target_root_key_ref;
-            if !index.iter().any(|e| &e.key_ref == target) {
-                return Err(corrupt());
-            }
-            self.durable_key_matches_cache(target)?;
-        }
-        let bindings_hold = self.bindings.iter().all(|bound| {
-            index
-                .iter()
-                .any(|e| e.epoch == bound.epoch && e.key_ref == bound.key_ref)
-        });
-        if !bindings_hold {
-            return Err(corrupt());
+            self.indexed_and_intact(&index, &prepared.target_root_key_ref)?;
         }
         let root = match &anchor.committed_root {
             None => None,
-            Some(root) => {
-                let entry = index
-                    .iter()
-                    .find(|e| e.key_ref == root.root_key_ref)
-                    .cloned()
-                    .ok_or_else(corrupt)?;
-                self.durable_key_matches_cache(&entry.key_ref)?;
-                Some(entry)
-            }
+            Some(root) => Some(self.indexed_and_intact(&index, &root.root_key_ref)?),
         };
         Ok(Authority {
             anchor,
             index,
             root,
         })
+    }
+
+    /// Every epoch-to-route binding this instance has observed is still indexed unchanged.
+    fn check_bindings(&self, index: &[IndexEntry]) -> Result<(), KeyProviderError> {
+        let holds = |bound: &IndexEntry| {
+            index
+                .iter()
+                .any(|e| e.epoch == bound.epoch && e.key_ref == bound.key_ref)
+        };
+        if self.bindings.iter().all(holds) {
+            Ok(())
+        } else {
+            Err(corrupt())
+        }
+    }
+
+    /// Every present indexed key item is well-formed; a missing one is only its own epoch's loss.
+    fn check_key_items(&self, index: &[IndexEntry]) -> Result<(), KeyProviderError> {
+        for entry in index {
+            match self.read_key(&entry.key_ref) {
+                Ok(_) | Err(KeyProviderError::KeyLost) => {}
+                Err(other) => return Err(other),
+            }
+        }
+        Ok(())
+    }
+
+    /// `route` is indexed (`RECOVERY_REQUIRED` otherwise) and its key item is present and, if cached,
+    /// byte-identical.
+    fn indexed_and_intact(
+        &self,
+        index: &[IndexEntry],
+        route: &RootKeyRefV1,
+    ) -> Result<IndexEntry, KeyProviderError> {
+        let entry = index
+            .iter()
+            .find(|e| &e.key_ref == route)
+            .cloned()
+            .ok_or_else(corrupt)?;
+        self.durable_key_matches_cache(&entry.key_ref)?;
+        Ok(entry)
     }
 
     /// Reads, transitions and — only if the anchor actually changed — replaces the anchor item, so an
@@ -415,11 +432,15 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         if !self.unlocked || self.runtime.iter().any(|(r, _)| r == key_ref) {
             return;
         }
+        // A route whose item was restored is no longer lost.
+        self.lost.retain(|lost| lost != key_ref);
         self.runtime.push((key_ref.clone(), material));
-        self.bindings.push(IndexEntry {
-            epoch,
-            key_ref: key_ref.clone(),
-        });
+        if !self.bindings.iter().any(|b| &b.key_ref == key_ref) {
+            self.bindings.push(IndexEntry {
+                epoch,
+                key_ref: key_ref.clone(),
+            });
+        }
     }
 
     /// A random route that is neither indexed nor already backed by a key item, so a repeated draw
@@ -479,9 +500,10 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
 
     fn lock(&mut self) {
         // Dropping each Zeroizing handle clears its bytes.
+        // The non-secret epoch-to-route bindings are kept for this instance's lifetime, so a later
+        // re-unlock can never adopt a swapped index as a fresh snapshot.
         self.runtime.clear();
         self.lost.clear();
-        self.bindings.clear();
         self.unlocked = false;
     }
 
@@ -492,21 +514,12 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         // failed unlock.
         self.lock();
         let _guard = write_guard();
-        // One index read feeds the root lookup, the cached keys and the bindings snapshot, so they
-        // can never describe two different index versions.
-        let anchor = self.read_anchor()?;
-        let bindings = self.read_index()?;
-        let root = match &anchor.committed_root {
-            None => None,
-            Some(root) => Some(
-                bindings
-                    .iter()
-                    .find(|e| e.key_ref == root.root_key_ref)
-                    .cloned()
-                    .ok_or_else(corrupt)?,
-            ),
-        };
-        let loaded = self.load_keys(&bindings)?;
+        // The shared authority check (bindings, key items, prepared target, committed root) runs
+        // first; its index then feeds the cached keys and the extended bindings snapshot.
+        let authority = self.authority()?;
+        let root = authority.root;
+        let loaded = self.load_keys(&authority.index)?;
+        let bindings = authority.index;
         if let Some(root) = &root {
             if loaded.lost.contains(&root.key_ref) {
                 return Err(KeyProviderError::KeyLost);
