@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Service, and builds with the real Rust 1.77.2. The lockfile pins the crates that would otherwise
   break that minimum. This is CI-runner evidence, not packaged-app evidence, and nothing in the app
   uses the provider yet: Gates 2–7 stay unadmitted and there is no production authority switch.
-  PR #PRNUM.
+  PR #851.
 - **R-15 Gate 1b-core (#445):** the headless key-provider and recovery layer of
   `crates/worldscript-secure-storage`, implementing the maintainer's Option C decision (platform
   secure store as the runtime authority; optional passphrase recovery). It adds the
