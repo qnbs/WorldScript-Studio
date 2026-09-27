@@ -254,12 +254,31 @@ fn the_store_boundary_enforces_the_item_bound_in_both_directions() {
         Err(KeyProviderError::AnchorConflict(_))
     ));
     assert_eq!(store.accounts(), vec!["max".to_owned()]);
+    // A write of exactly one byte more is refused even over an existing item, which stays intact.
+    assert!(store.set("max", &vec![8; MAX_ITEM_LEN + 1]).is_err());
+    assert_eq!(
+        store.get("max").unwrap().unwrap().as_slice(),
+        &vec![7; MAX_ITEM_LEN][..]
+    );
     // An oversized item written from outside the boundary is refused on read, not returned.
     store.put_raw("big", &vec![7; MAX_ITEM_LEN + 1]);
     assert_eq!(
         store.get("big").map(|_| ()),
         Err(KeyProviderError::RecoveryRequired)
     );
+}
+
+#[test]
+fn every_store_is_reached_only_through_the_checked_boundary() {
+    // Generic callers see only the sealed trait; the bound holds for any implementation. (That the
+    // raw backend can be neither implemented nor called from outside is proven by the
+    // compile_fail doctests on the `secure_store` module.)
+    fn write<S: SecretStore>(store: &S, len: usize) -> Result<(), KeyProviderError> {
+        store.set("item", &vec![1; len])
+    }
+    let store = MemorySecretStore::new();
+    assert!(write(&store, MAX_ITEM_LEN).is_ok());
+    assert!(write(&store, MAX_ITEM_LEN + 1).is_err());
 }
 
 #[test]

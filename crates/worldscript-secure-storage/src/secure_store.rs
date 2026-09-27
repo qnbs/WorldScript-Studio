@@ -2,27 +2,51 @@
 //! can be read, atomically replaced, and deleted. A later gate builds the §8.2 `KeyProvider` on top of
 //! it, so every platform shares one implementation.
 //!
-//! The version-1 item bound ([`MAX_ITEM_LEN`]) belongs to the boundary itself: implementations
-//! provide only the raw [`SecretStore::load`] / [`SecretStore::store`] operations, and the provided
-//! [`SecretStore::get`] / [`SecretStore::set`] refuse any larger item in either direction.
+//! The version-1 item bound ([`MAX_ITEM_LEN`]) belongs to the boundary itself. The raw operations
+//! live in a crate-private backend trait that code outside this crate can neither name, implement,
+//! nor call, and [`SecretStore`] has exactly one blanket implementation over it, so no store can
+//! replace the checked [`SecretStore::get`] / [`SecretStore::set`]:
+//!
+//! ```compile_fail
+//! # use worldscript_secure_storage::secure_store::SecretStore;
+//! struct Unchecked;
+//! impl SecretStore for Unchecked {} // the trait is sealed
+//! ```
+//!
+//! ```compile_fail
+//! # use worldscript_secure_storage::secure_store::MemorySecretStore;
+//! MemorySecretStore::new().store("item", &[0; 2561]); // the raw write is not reachable
+//! ```
 
 use zeroize::Zeroizing;
 
 use crate::error::KeyProviderError;
 use crate::store_layout::MAX_ITEM_LEN;
 
-/// One secure store namespace (a service) holding named items (accounts).
-///
-/// Callers use [`SecretStore::get`] and [`SecretStore::set`]; implementations must not override them.
-pub trait SecretStore {
-    /// Raw read: the item's bytes, or `None` if the item does not exist. Any failure to reach the
-    /// store is an error, never `None`.
-    fn load(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeyProviderError>;
-    /// Raw write: creates or atomically replaces the item.
-    fn store(&self, account: &str, secret: &[u8]) -> Result<(), KeyProviderError>;
+mod backend {
+    use zeroize::Zeroizing;
 
+    use crate::error::KeyProviderError;
+
+    /// The raw platform operations. Public inside a private module (sealed): only this crate can
+    /// implement or call them, and every caller reaches them through [`super::SecretStore`].
+    pub trait Backend {
+        /// The item's bytes, or `None` if it does not exist. Any failure to reach the store is an
+        /// error, never `None`.
+        fn load(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeyProviderError>;
+        /// Creates or atomically replaces the item.
+        fn store(&self, account: &str, secret: &[u8]) -> Result<(), KeyProviderError>;
+        /// Removes the item; removing a missing item succeeds.
+        fn remove(&self, account: &str) -> Result<(), KeyProviderError>;
+    }
+}
+
+/// One secure store namespace (a service) holding named items (accounts). Sealed: implemented only
+/// through the crate-private backend, so every item passes the version-1 bound.
+pub trait SecretStore: backend::Backend {
     /// The item's bytes, or `None` if it does not exist. An item larger than [`MAX_ITEM_LEN`] can
-    /// only come from outside this boundary and is refused as `RecoveryRequired`.
+    /// only come from outside this boundary and is refused as `RecoveryRequired`. A store that
+    /// cannot be reached is an error, never `None`.
     fn get(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeyProviderError> {
         match self.load(account)? {
             Some(item) if item.len() > MAX_ITEM_LEN => Err(KeyProviderError::RecoveryRequired),
@@ -42,8 +66,12 @@ pub trait SecretStore {
     }
 
     /// Removes the item; removing a missing item succeeds.
-    fn delete(&self, account: &str) -> Result<(), KeyProviderError>;
+    fn delete(&self, account: &str) -> Result<(), KeyProviderError> {
+        self.remove(account)
+    }
 }
+
+impl<T: backend::Backend> SecretStore for T {}
 
 #[cfg(feature = "test-support")]
 pub use memory::MemorySecretStore;
@@ -56,7 +84,7 @@ mod memory {
 
     use zeroize::Zeroizing;
 
-    use super::SecretStore;
+    use super::backend::Backend;
     use crate::error::KeyProviderError;
 
     #[derive(Default)]
@@ -66,7 +94,7 @@ mod memory {
         read_only: bool,
     }
 
-    /// Headless in-memory [`SecretStore`] for tests. Clones share the same items, so a second
+    /// Headless in-memory [`SecretStore`] for tests (test-support only). Clones share the same items, so a second
     /// provider built on a clone behaves like the same installation after a restart.
     #[derive(Clone, Default)]
     pub struct MemorySecretStore(Rc<RefCell<Inner>>);
@@ -95,7 +123,8 @@ mod memory {
             }
         }
 
-        /// Overwrites an item directly, bypassing the provider (to simulate corruption).
+        /// Test-only corruption hook: writes an item directly, bypassing the boundary's bound (to
+        /// simulate an out-of-band writer).
         pub fn put_raw(&self, account: &str, bytes: &[u8]) {
             let value = Zeroizing::new(bytes.to_vec());
             self.0.borrow_mut().items.insert(account.to_owned(), value);
@@ -114,7 +143,7 @@ mod memory {
         }
     }
 
-    impl SecretStore for MemorySecretStore {
+    impl Backend for MemorySecretStore {
         fn load(&self, account: &str) -> Result<Option<Zeroizing<Vec<u8>>>, KeyProviderError> {
             self.check()?;
             Ok(self.0.borrow().items.get(account).cloned())
@@ -126,7 +155,7 @@ mod memory {
             Ok(())
         }
 
-        fn delete(&self, account: &str) -> Result<(), KeyProviderError> {
+        fn remove(&self, account: &str) -> Result<(), KeyProviderError> {
             self.check_writable()?;
             self.0.borrow_mut().items.remove(account);
             Ok(())
