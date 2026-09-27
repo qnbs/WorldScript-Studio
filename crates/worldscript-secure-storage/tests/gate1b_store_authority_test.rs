@@ -110,9 +110,10 @@ fn a_commit_after_index_loss_is_refused_and_leaves_the_preparation() {
         .prepare_root_anchor(&request(&provider, "boot", RootSlot::A, &route))
         .unwrap();
     store.delete(EPOCH_INDEX_ACCOUNT).unwrap();
+    // The prepared target proves the route was issued, so its absence is a broken authority.
     assert_eq!(
         provider.commit_root_anchor("boot", 1),
-        Err(KeyProviderError::UnknownKeyRef)
+        Err(KeyProviderError::RecoveryRequired)
     );
     let anchor = anchor_codec::decode(&store.get(ANCHOR_ACCOUNT).unwrap().unwrap()).unwrap();
     assert_eq!(anchor.committed_floor, 0, "the floor was not advanced");
@@ -268,7 +269,8 @@ fn a_commit_refuses_a_target_key_replaced_since_unlock() {
         provider.commit_root_anchor("rotate", 2),
         Err(KeyProviderError::RecoveryRequired)
     );
-    let anchor = provider.read_root_anchor_state().unwrap();
+    // The provider now refuses the whole authority, so inspect the stored anchor directly.
+    let anchor = anchor_codec::decode(&store.get(ANCHOR_ACCOUNT).unwrap().unwrap()).unwrap();
     assert_eq!(
         anchor.committed_floor, 1,
         "the replaced key was not published"
@@ -366,4 +368,41 @@ fn the_cold_start_anchor_read_validates_the_index_before_the_first_root() {
         provider.read_root_anchor_state().map(|_| ()),
         Err(KeyProviderError::RecoveryRequired)
     );
+}
+
+#[test]
+fn a_prepared_target_missing_from_the_index_requires_recovery() {
+    let store = MemorySecretStore::new();
+    let mut provider = scoped(&store);
+    let route = provider.provision_epoch_key(1).unwrap();
+    provider
+        .prepare_root_anchor(&request(&provider, "boot", RootSlot::A, &route))
+        .unwrap();
+    store.delete(EPOCH_INDEX_ACCOUNT).unwrap();
+    let mut restarted = Provider::new(store.clone());
+    assert_eq!(restarted.state(), Ok(KeyState::RecoveryRequired));
+    let before = store.accounts();
+    assert_eq!(
+        restarted.provision_epoch_key(1).map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+    assert_eq!(
+        store.accounts(),
+        before,
+        "no replacement route was provisioned"
+    );
+}
+
+#[test]
+fn a_malformed_non_root_key_item_blocks_state_and_provisioning() {
+    let (store, _, second, _) = two_epochs_unlocked();
+    store.put_raw(&key_account(&second), &[3; 5]);
+    let mut provider = Provider::new(store.clone());
+    assert_eq!(provider.state(), Ok(KeyState::RecoveryRequired));
+    let before = store.accounts();
+    assert_eq!(
+        provider.provision_epoch_key(3).map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+    assert_eq!(store.accounts(), before, "the index was not extended");
 }

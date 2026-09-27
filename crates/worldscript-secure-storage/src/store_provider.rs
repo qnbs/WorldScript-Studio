@@ -209,11 +209,27 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
     /// 1. the anchor decodes (and its scope is consistent with the index, see `read_anchor`);
     /// 2. the epoch index is valid;
     /// 3. every epoch-to-route binding this instance observed at unlock is still indexed unchanged;
-    /// 4. a committed root is indexed, and its key item is present (`KEY_LOST`) and, if cached,
-    ///    byte-identical to the cache (`RECOVERY_REQUIRED`).
+    /// 4. every indexed key item that is present is well-formed (a missing one only makes its own
+    ///    epoch `KEY_LOST`; a malformed one is `RECOVERY_REQUIRED`);
+    /// 5. a committed root and a prepared target are indexed, and their key items are present
+    ///    (`KEY_LOST`) and, if cached, byte-identical to the cache (`RECOVERY_REQUIRED`).
     fn authority(&self) -> Result<Authority, KeyProviderError> {
         let anchor = self.read_anchor()?;
         let index = self.read_index()?;
+        for entry in &index {
+            match self.read_key(&entry.key_ref) {
+                Ok(_) | Err(KeyProviderError::KeyLost) => {}
+                Err(other) => return Err(other),
+            }
+        }
+        if let Some(prepared) = &anchor.prepared_root_commit {
+            // An anchor that names a prepared target proves that route was issued.
+            let target = &prepared.target_root_key_ref;
+            if !index.iter().any(|e| &e.key_ref == target) {
+                return Err(corrupt());
+            }
+            self.durable_key_matches_cache(target)?;
+        }
         let bindings_hold = self.bindings.iter().all(|bound| {
             index
                 .iter()

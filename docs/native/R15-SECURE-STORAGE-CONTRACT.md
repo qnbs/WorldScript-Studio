@@ -1770,9 +1770,10 @@ item or index, or a committed root whose route is absent from the index, is `REC
 **One authority check.** `state()`, key resolution, every anchor write, and key provisioning all
 run the same validation first: the anchor decodes; an epoch index next to a missing anchor or a
 scope-less anchor is `RECOVERY_REQUIRED` (the scope was lost; it is never re-provisioned); the index
-is valid; the epoch-to-route bindings observed at unlock are still indexed unchanged; and a
-committed root is indexed with its key item present (`KEY_LOST`) and, if cached, byte-identical
-(`RECOVERY_REQUIRED`). `state()` reports every recovery-class failure — including a malformed root
+is valid; the epoch-to-route bindings observed at unlock are still indexed unchanged; every present indexed
+key item is well-formed (a missing one only makes its own epoch `KEY_LOST`); and a committed root
+and a prepared target are indexed with their key items present (`KEY_LOST`) and, if cached,
+byte-identical (`RECOVERY_REQUIRED`). `state()` reports every recovery-class failure — including a malformed root
 key item — as the `RECOVERY_REQUIRED` state rather than an error.
 
 **Key resolution.** `unlock` snapshots the epoch-to-route bindings and caches each key. A key is
