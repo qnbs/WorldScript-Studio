@@ -168,6 +168,9 @@ pub struct SecureStoreKeyProvider<S: SecretStore> {
     runtime: Vec<(RootKeyRefV1, Zeroizing<[u8; KEY_LEN]>)>,
     /// Indexed routes whose key item was missing at the last unlock (`KEY_LOST`, not unknown).
     lost: Vec<RootKeyRefV1>,
+    /// The epoch-to-route bindings observed at unlock (plus this instance's own provisions). They are
+    /// immutable, so a durable index that no longer contains one is `RECOVERY_REQUIRED`.
+    bindings: Vec<IndexEntry>,
     unlocked: bool,
 }
 
@@ -177,6 +180,7 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             store,
             runtime: Vec::new(),
             lost: Vec::new(),
+            bindings: Vec::new(),
             unlocked: false,
         }
     }
@@ -280,31 +284,14 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             .ok_or(KeyProviderError::UnknownKeyRef)
     }
 
-    /// The same durable authority `state()` accepts: the anchor decodes with its root route indexed,
-    /// and a committed root's own key item is still present (`KEY_LOST` otherwise), whichever epoch
-    /// is being resolved.
-    fn ensure_authority_usable(&self) -> Result<(), KeyProviderError> {
-        let anchor = self.read_anchor()?;
-        if let Some(root) = self.root_entry(&anchor)? {
-            self.read_key(&root.key_ref)?;
-        }
-        Ok(())
-    }
-
-    /// Returns a write-capable key only while the durable authority still backs it (see
-    /// [`Self::ensure_authority_usable`]), `key_ref` is still an issued route, and its item still
-    /// holds the cached bytes. The runtime cache never outlives what `state()` would accept.
-    fn runtime_key(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
-        if !self.unlocked {
-            return Err(KeyProviderError::Locked);
-        }
+    /// The cached handle for an issued route, re-validated against its durable item: lost at unlock
+    /// or missing now is `KEY_LOST`, different bytes are `RECOVERY_REQUIRED` (key items are
+    /// immutable per route), and a route this instance never cached is `LOCKED` (re-unlock).
+    fn cached_key(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
         if self.lost.contains(key_ref) {
             return Err(KeyProviderError::KeyLost);
         }
-        self.ensure_authority_usable()?;
-        self.issued(key_ref)?;
         let Some((_, material)) = self.runtime.iter().find(|(r, _)| r == key_ref) else {
-            // Issued after this provider unlocked (e.g. by another instance): re-unlock first.
             return Err(KeyProviderError::Locked);
         };
         let durable = self.read_key(key_ref)?;
@@ -313,6 +300,37 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         }
         let mut copy = **material;
         Ok(Key::from_bytes(&mut copy))
+    }
+
+    /// Resolves a key only while the durable state still backs what this instance unlocked:
+    /// 1. the anchor decodes and the index is valid;
+    /// 2. every epoch-to-route binding observed at unlock is still indexed unchanged;
+    /// 3. the committed root is indexed and its own key item still matches the cache;
+    /// 4. only then is the requested entry looked up (`unknown` if absent) and its cached key
+    ///    re-validated. Validation always precedes an "unknown" answer.
+    fn resolve_validated(
+        &self,
+        select: impl Fn(&IndexEntry) -> bool,
+        unknown: KeyProviderError,
+    ) -> Result<Key, KeyProviderError> {
+        if !self.unlocked {
+            return Err(KeyProviderError::Locked);
+        }
+        let anchor = self.read_anchor()?;
+        let index = self.read_index()?;
+        let bindings_hold = self.bindings.iter().all(|bound| {
+            index
+                .iter()
+                .any(|e| e.epoch == bound.epoch && e.key_ref == bound.key_ref)
+        });
+        if !bindings_hold {
+            return Err(corrupt());
+        }
+        if let Some(root) = self.root_entry(&anchor)? {
+            self.cached_key(&root.key_ref)?;
+        }
+        let entry = index.into_iter().find(|e| select(e)).ok_or(unknown)?;
+        self.cached_key(&entry.key_ref)
     }
 
     fn root_entry(&self, anchor: &AnchorState) -> Result<Option<IndexEntry>, KeyProviderError> {
@@ -354,6 +372,21 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         self.unlocked && self.runtime.iter().any(|(r, _)| r == key_ref)
     }
 
+    /// A random route that is neither indexed nor already backed by a key item, so a repeated draw
+    /// can never overwrite existing key material (retried a few times, then refused).
+    fn fresh_route(&self, index: &[IndexEntry]) -> Result<RootKeyRefV1, KeyProviderError> {
+        for _ in 0..4 {
+            let mut route = [0u8; 16];
+            OsRandom.fill(&mut route).map_err(random_error)?;
+            let key_ref = RootKeyRefV1::new(format!("{ROUTE_PREFIX}{}", hex(&route)).into_bytes())?;
+            let indexed = index.iter().any(|e| e.key_ref == key_ref);
+            if !indexed && self.store.get(&Self::key_account(&key_ref))?.is_none() {
+                return Ok(key_ref);
+            }
+        }
+        Err(KeyProviderError::Unavailable)
+    }
+
     /// Loads every indexed key; a missing item is recorded as lost, anything else is an error.
     fn load_keys(&self) -> Result<LoadedKeys, KeyProviderError> {
         let mut loaded = LoadedKeys::default();
@@ -384,25 +417,18 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
     }
 
     fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError> {
-        if !self.unlocked {
-            return Err(KeyProviderError::Locked);
-        }
-        let entry = self
-            .read_index()?
-            .into_iter()
-            .find(|e| e.epoch == epoch)
-            .ok_or(KeyProviderError::UnknownEpoch)?;
-        self.runtime_key(&entry.key_ref)
+        self.resolve_validated(|e| e.epoch == epoch, KeyProviderError::UnknownEpoch)
     }
 
     fn resolve_ref(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
-        self.runtime_key(key_ref)
+        self.resolve_validated(|e| &e.key_ref == key_ref, KeyProviderError::UnknownKeyRef)
     }
 
     fn lock(&mut self) {
         // Dropping each Zeroizing handle clears its bytes.
         self.runtime.clear();
         self.lost.clear();
+        self.bindings.clear();
         self.unlocked = false;
     }
 
@@ -415,6 +441,7 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         let anchor = self.read_anchor()?;
         let root = self.root_entry(&anchor)?;
         let loaded = self.load_keys()?;
+        let bindings = self.read_index()?;
         if let Some(root) = &root {
             if loaded.lost.contains(&root.key_ref) {
                 return Err(KeyProviderError::KeyLost);
@@ -422,6 +449,7 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         }
         self.runtime = loaded.runtime;
         self.lost = loaded.lost;
+        self.bindings = bindings;
         self.unlocked = true;
         Ok(match root {
             Some(entry) => KeyState::Unlocked { epoch: entry.epoch },
@@ -451,10 +479,15 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         // Bootstrap order (§5.3.2): the scope exists before any epoch; otherwise an index would exist
         // without an anchor and the installation would read as a lost anchor.
         // The checked read also refuses an installation whose committed root route is unindexed.
-        if self.read_anchor_checked()?.installation_scope_id.is_none() {
+        let anchor = self.read_anchor_checked()?;
+        if anchor.installation_scope_id.is_none() {
             return Err(KeyProviderError::AnchorConflict(
                 "the installation scope must be provisioned first",
             ));
+        }
+        // Never extend an installation whose committed root key is unusable.
+        if let Some(root) = self.root_entry(&anchor)? {
+            self.read_key(&root.key_ref)?;
         }
         let mut index = self.read_index()?;
         let assigned = epoch != 0 && epoch != u64::MAX;
@@ -467,11 +500,9 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         if index.len() >= MAX_INDEXED_EPOCHS {
             return Err(KeyProviderError::AnchorConflict("the epoch index is full"));
         }
-        let mut route = [0u8; 16];
+        let key_ref = self.fresh_route(&index)?;
         let mut material = Zeroizing::new([0u8; KEY_LEN]);
-        OsRandom.fill(&mut route).map_err(random_error)?;
         OsRandom.fill(material.as_mut()).map_err(random_error)?;
-        let key_ref = RootKeyRefV1::new(format!("{ROUTE_PREFIX}{}", hex(&route)).into_bytes())?;
         index.push(IndexEntry {
             epoch,
             key_ref: key_ref.clone(),
@@ -483,6 +514,10 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         self.store.set(EPOCH_INDEX_ACCOUNT, &encoded_index)?;
         if self.unlocked {
             self.runtime.push((key_ref.clone(), material));
+            self.bindings.push(IndexEntry {
+                epoch,
+                key_ref: key_ref.clone(),
+            });
         }
         Ok(key_ref)
     }

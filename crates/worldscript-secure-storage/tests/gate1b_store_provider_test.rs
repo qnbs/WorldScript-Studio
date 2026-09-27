@@ -506,9 +506,11 @@ fn a_root_committed_elsewhere_reads_as_locked_until_re_unlock() {
         stale.resolve_ref(&new_route).map(|_| ()),
         Err(KeyProviderError::Locked)
     );
-    assert!(
-        stale.resolve_ref(&route).is_ok(),
-        "already cached keys stay usable"
+    // The authority advanced to a root this instance never cached: every resolution waits for a
+    // re-unlock, including routes it had cached.
+    assert_eq!(
+        stale.resolve_ref(&route).map(|_| ()),
+        Err(KeyProviderError::Locked)
     );
     assert_eq!(stale.unlock(), Ok(KeyState::Unlocked { epoch: 2 }));
 }
@@ -583,4 +585,62 @@ fn losing_the_root_key_blocks_every_epoch() {
         provider.resolve(2).map(|_| ()),
         Err(KeyProviderError::KeyLost)
     );
+}
+
+/// A configured store plus a cached second epoch; returns (store, root route, second route).
+fn two_epochs_unlocked() -> (MemorySecretStore, RootKeyRefV1, RootKeyRefV1, Provider) {
+    let (store, root) = configured();
+    let mut provider = Provider::new(store.clone());
+    let second = provider.provision_epoch_key(2).unwrap();
+    provider.unlock().unwrap();
+    (store, root, second, provider)
+}
+
+#[test]
+fn a_replaced_root_key_blocks_other_epochs() {
+    let (store, root, _, provider) = two_epochs_unlocked();
+    store.put_raw(&key_account(&root), &[9; 32]);
+    assert_eq!(
+        provider.resolve(2).map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+}
+
+#[test]
+fn swapped_epoch_bindings_are_refused() {
+    let (store, _, _, provider) = two_epochs_unlocked();
+    let index = store.get(EPOCH_INDEX_ACCOUNT).unwrap().unwrap().to_vec();
+    // Swap the two 40-byte routes in the well-formed index (header 8 bytes, entries of 8+2+40).
+    let mut swapped = index.clone();
+    let (a, b) = (8 + 10, 8 + 50 + 10);
+    swapped[a..a + 40].copy_from_slice(&index[b..b + 40]);
+    swapped[b..b + 40].copy_from_slice(&index[a..a + 40]);
+    store.put_raw(EPOCH_INDEX_ACCOUNT, &swapped);
+    assert_eq!(
+        provider.resolve(1).map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+}
+
+#[test]
+fn validation_precedes_an_unknown_epoch_answer() {
+    let (store, _, _, provider) = two_epochs_unlocked();
+    store.delete(EPOCH_INDEX_ACCOUNT).unwrap();
+    assert_eq!(
+        provider.resolve(9).map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+}
+
+#[test]
+fn provisioning_refuses_while_the_root_key_is_lost() {
+    let (store, root) = configured();
+    store.delete(&key_account(&root)).unwrap();
+    let before = store.accounts();
+    let mut provider = Provider::new(store.clone());
+    assert_eq!(
+        provider.provision_epoch_key(2).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
+    );
+    assert_eq!(store.accounts(), before, "nothing was written");
 }
