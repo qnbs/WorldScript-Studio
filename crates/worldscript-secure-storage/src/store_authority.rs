@@ -38,6 +38,7 @@ where
     R: RandomSource,
 {
     /// Creates an authority with an injected randomness source for deterministic tests.
+    #[cfg(feature = "test-randomness")]
     pub fn with_random(store: S, random: R) -> Self {
         Self { store, random }
     }
