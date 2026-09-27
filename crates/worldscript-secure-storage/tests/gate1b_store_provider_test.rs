@@ -377,3 +377,60 @@ fn an_exact_replay_needs_no_write() {
     assert_eq!(provider.commit_root_anchor("boot", 1), Ok(()));
     assert_eq!(provider.abort_or_recover_root_anchor("boot"), Ok(()));
 }
+
+#[test]
+fn a_missing_anchor_next_to_an_epoch_index_is_never_a_fresh_install() {
+    let (store, _) = configured();
+    store.delete(ANCHOR_ACCOUNT).unwrap();
+    let mut provider = Provider::new(store.clone());
+    assert_eq!(provider.state(), Ok(KeyState::RecoveryRequired));
+    let scope = provider.read_or_provision_installation_scope().map(|_| ());
+    assert_eq!(scope, Err(KeyProviderError::RecoveryRequired));
+    assert!(
+        store.get(ANCHOR_ACCOUNT).unwrap().is_none(),
+        "no new scope was provisioned"
+    );
+}
+
+#[test]
+fn a_failed_re_unlock_drops_previously_cached_keys() {
+    let (store, route) = configured();
+    let mut provider = Provider::new(store.clone());
+    provider.unlock().unwrap();
+    assert!(provider.resolve_ref(&route).is_ok());
+    store.delete(&key_account(&route)).unwrap();
+    assert_eq!(provider.unlock(), Err(KeyProviderError::KeyLost));
+    assert_eq!(provider.runtime_key_count(), 0);
+    assert_eq!(
+        provider.resolve_ref(&route).map(|_| ()),
+        Err(KeyProviderError::Locked)
+    );
+}
+
+#[test]
+fn a_corrupted_index_is_reported_during_bootstrap() {
+    let store = MemorySecretStore::new();
+    let mut provider = Provider::new(store.clone());
+    provider.read_or_provision_installation_scope().unwrap();
+    provider.provision_epoch_key(1).unwrap();
+    store.put_raw(EPOCH_INDEX_ACCOUNT, b"XXXX\0\0\0\0");
+    assert_eq!(provider.state(), Ok(KeyState::RecoveryRequired));
+}
+
+#[test]
+fn a_non_canonical_indexed_route_requires_recovery() {
+    let (store, route) = configured();
+    let mut index = store.get(EPOCH_INDEX_ACCOUNT).unwrap().unwrap().to_vec();
+    let position = index
+        .windows(route.as_bytes().len())
+        .position(|w| w == route.as_bytes())
+        .unwrap();
+    index[position + 8] = b'G';
+    store.put_raw(EPOCH_INDEX_ACCOUNT, &index);
+    let provider = Provider::new(store);
+    assert_eq!(
+        provider.list_epochs().map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+    assert_eq!(provider.state(), Ok(KeyState::RecoveryRequired));
+}

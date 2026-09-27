@@ -119,8 +119,18 @@ impl<'a> IndexReader<'a> {
     }
 }
 
+/// The exact route grammar this adapter issues: `wss-kr1-` plus 32 lowercase hexadecimal characters.
+fn is_issued_route(route: &[u8]) -> bool {
+    route.len() == ROUTE_PREFIX.len() + 32
+        && route.starts_with(ROUTE_PREFIX.as_bytes())
+        && route[ROUTE_PREFIX.len()..]
+            .iter()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(b))
+}
+
 fn admissible(entries: &[IndexEntry], entry: &IndexEntry) -> bool {
-    let assigned = entry.epoch != 0 && entry.epoch != u64::MAX;
+    let assigned =
+        entry.epoch != 0 && entry.epoch != u64::MAX && is_issued_route(entry.key_ref.as_bytes());
     let unique = entries
         .iter()
         .all(|e| e.epoch != entry.epoch && e.key_ref != entry.key_ref);
@@ -176,10 +186,14 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         self.runtime.len()
     }
 
+    /// A missing anchor is a fresh installation only if no epoch index exists either: bootstrap
+    /// provisions the scope (anchor) before any epoch, so an index without an anchor means the
+    /// anchor was lost and must never be silently re-provisioned (§5.3.2).
     fn read_anchor(&self) -> Result<AnchorState, KeyProviderError> {
         match self.store.get(ANCHOR_ACCOUNT)? {
-            None => Ok(AnchorState::empty()),
             Some(bytes) => anchor_codec::decode(&bytes),
+            None if self.store.get(EPOCH_INDEX_ACCOUNT)?.is_some() => Err(corrupt()),
+            None => Ok(AnchorState::empty()),
         }
     }
 
@@ -263,6 +277,13 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
     }
 
     fn committed_state(&self, anchor: &AnchorState) -> Result<KeyState, KeyProviderError> {
+        // The index is validated even before the first root, so control-item corruption is never
+        // reported as a fresh `Unconfigured` installation.
+        match self.read_index() {
+            Ok(_) => {}
+            Err(KeyProviderError::RecoveryRequired) => return Ok(KeyState::RecoveryRequired),
+            Err(other) => return Err(other),
+        }
         let entry = match self.root_entry(anchor) {
             Ok(Some(entry)) => entry,
             Ok(None) => return Ok(KeyState::Unconfigured),
@@ -329,9 +350,12 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         self.unlocked = false;
     }
 
-    /// Every check runs before any runtime state changes, so a failed unlock leaves the provider
-    /// exactly as it was.
+    /// The provider is locked first and every check runs before runtime handles are installed, so a
+    /// failed unlock leaves no runtime key handles.
     fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
+        // Re-validation starts from a locked provider: previously cached handles never survive a
+        // failed unlock.
+        self.lock();
         let anchor = self.read_anchor()?;
         let root = self.root_entry(&anchor)?;
         let loaded = self.load_keys()?;
