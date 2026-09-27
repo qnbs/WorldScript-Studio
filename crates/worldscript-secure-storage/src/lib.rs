@@ -7,16 +7,21 @@
 
 pub mod aad;
 pub mod anchor;
+pub mod anchor_codec;
 pub mod envelope;
 pub mod error;
 pub mod kdf;
 #[cfg(feature = "test-support")]
 pub mod memory_provider;
+#[cfg(feature = "platform-keystore")]
+pub mod platform_store;
 pub mod provider;
 pub mod random;
 pub mod record_class;
 pub mod recovery;
 pub mod seal;
+pub mod secure_store;
+pub mod store_provider;
 
 pub use aad::{canonical_aad, RecordContext};
 pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
