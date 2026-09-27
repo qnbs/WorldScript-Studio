@@ -4,7 +4,7 @@
 
 **Status:** S5-A — admitted R-15 secure-storage architecture baseline; production implementation not
 started. `S5_A_ADMITTED = YES`, `S5_IMPLEMENTATION_READY = NO`, `S5_TERMINAL = YES` (PR #584 merged as `c24aa645`; its post-merge main CI — CI Success and CodeQL — completed green, 19 success / 3 skipped),
-`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are admitted, and the final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) is complete: five findings were made and corrected in this same change — two mechanical citation-drift notes (a stale "blocked pending S5-B1" disposition-count note in §10.4.1, and S5-B3's §6 crash-recovery paragraph citing S5-B1's migration-time reconciliation mechanism for an ordinary write's own orphaned staging chunk, where §9.2/§9 step 11's own ordinary-write staging-reconciliation rule actually applies) and three substantive gaps (S5-B3's chunk physical locator, §2, carried no operation/generation identity, so recovery could not distinguish a superseded attempt's orphaned chunk from the current attempt's — closed by giving each chunk's staging form the same `operation_id`/`target_generation` temp suffix §9 step 3 already defines for a whole record, and by making §6's recovery text check that exact suffix rather than the bare promoted-form locator; and §10.4.1's atomic-write-temporary-files carve-out was declared exempt from "exactly one of the three groups," directly contradicting that same exhaustiveness invariant — closed by making it an explicit fourth `REFUSE_AUTHORITY_SWITCH` group; that fix in turn made Gate 7's flat class-level rule ("blocked while any class is `REFUSE_AUTHORITY_SWITCH`") permanently unsatisfiable for this one class, since its class-level registry entry never changes even once every instance resolves — closed by making Gate 7's rule instance-aware, so only an *unresolved* `REFUSE_AUTHORITY_SWITCH` instance blocks it). No further inconsistency was found after these corrections. `S5_TERMINAL` and `S5_TERMINAL_R15_DESIGN_ADMITTED_MERGED_POSTMERGE_GREEN` are now YES, recorded in a dedicated follow-up after PR #584 merged and its post-merge main CI (including CodeQL) was confirmed green. **Gate 1a (§20) was re-admitted by the QNB-100 readiness verdict on 2026-09-26** (recorded on [#445](https://github.com/qnbs/WorldScript-Studio/issues/445#issuecomment-5847938516); no earlier Gate 1 admission is recorded). Gate 1a is the headless `WSR1` header and strict parser, the record-class registry, canonical AAD (§6.2), AES-256-GCM seal/open with a fail-closed OS nonce source, and the fixed-key/boundary/adversarial vectors §6.1 requires, in `crates/worldscript-secure-storage`. Gate 1b (the key-provider/KDF profile, §8.2/§8.2.1) was decided on 2026-09-26 as Option C and is in progress (1b-core, then 1b-platform). Status split: S5 design terminal/admitted = YES; Gate 1a = re-admitted and implemented headless; `S5_IMPLEMENTATION_READY = NO` for the R-15 program as a whole; Gate 1b = decided, implementation in progress; Gates 2–7 = not admitted; `PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. No current TypeScript/Tauri path reads or writes user data through this crate.
+`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are admitted, and the final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) is complete: five findings were made and corrected in this same change — two mechanical citation-drift notes (a stale "blocked pending S5-B1" disposition-count note in §10.4.1, and S5-B3's §6 crash-recovery paragraph citing S5-B1's migration-time reconciliation mechanism for an ordinary write's own orphaned staging chunk, where §9.2/§9 step 11's own ordinary-write staging-reconciliation rule actually applies) and three substantive gaps (S5-B3's chunk physical locator, §2, carried no operation/generation identity, so recovery could not distinguish a superseded attempt's orphaned chunk from the current attempt's — closed by giving each chunk's staging form the same `operation_id`/`target_generation` temp suffix §9 step 3 already defines for a whole record, and by making §6's recovery text check that exact suffix rather than the bare promoted-form locator; and §10.4.1's atomic-write-temporary-files carve-out was declared exempt from "exactly one of the three groups," directly contradicting that same exhaustiveness invariant — closed by making it an explicit fourth `REFUSE_AUTHORITY_SWITCH` group; that fix in turn made Gate 7's flat class-level rule ("blocked while any class is `REFUSE_AUTHORITY_SWITCH`") permanently unsatisfiable for this one class, since its class-level registry entry never changes even once every instance resolves — closed by making Gate 7's rule instance-aware, so only an *unresolved* `REFUSE_AUTHORITY_SWITCH` instance blocks it). No further inconsistency was found after these corrections. `S5_TERMINAL` and `S5_TERMINAL_R15_DESIGN_ADMITTED_MERGED_POSTMERGE_GREEN` are now YES, recorded in a dedicated follow-up after PR #584 merged and its post-merge main CI (including CodeQL) was confirmed green. **Gate 1a (§20) was re-admitted by the QNB-100 readiness verdict on 2026-09-26** (recorded on [#445](https://github.com/qnbs/WorldScript-Studio/issues/445#issuecomment-5847938516); no earlier Gate 1 admission is recorded). Gate 1a is the headless `WSR1` header and strict parser, the record-class registry, canonical AAD (§6.2), AES-256-GCM seal/open with a fail-closed OS nonce source, and the fixed-key/boundary/adversarial vectors §6.1 requires, in `crates/worldscript-secure-storage`. Gate 1b (the key-provider/KDF profile, §8.2/§8.2.1) was decided on 2026-09-26 as Option C; 1b-core landed in #850 and 1b-platform is in progress as small sequential slices (§8.2.2 item layout first). Status split: S5 design terminal/admitted = YES; Gate 1a = re-admitted and implemented headless; `S5_IMPLEMENTATION_READY = NO` for the R-15 program as a whole; Gate 1b = decided, implementation in progress; Gates 2–7 = not admitted; `PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. No current TypeScript/Tauri path reads or writes user data through this crate.
 
 **Baseline:** `main` at `7ce506ee771f6273e22c08ded049b48955cb40a5`
 
@@ -1715,6 +1715,46 @@ source scope, a wrong length field, truncation, trailing bytes, or a failed tag 
 one result, `WRONG_PASSPHRASE_OR_TAMPERED`. The recovery material is
 portable recovery key material only; what it restores, and the recovery transition itself, belong to
 the later migration/recovery gates.
+
+### 8.2.2 Secure-store item layout (Gate 1b-platform, slice A)
+
+The §8.2 `KeyProvider` is implemented over a narrow **secret-store boundary**: named items that can
+be read, atomically replaced, and deleted, where a failure to reach the store is an error and never
+reads as a missing item. This subsection fixes the item layout and encodings only; the provider
+rules that use them (durable-authority validation, provisioning, key resolution, anchor
+transitions) and the OS secure-store adapters are later Gate 1b-platform slices and are not claimed
+here. All items live under the service `worldscript-r15`:
+
+```text
+r15-anchor-v1           the WSA1-encoded anchor state (below)
+r15-epochs-v1           the WSE1 epoch index (below)
+r15-key-<hex(route)>    exactly 32 random key bytes for one issued route
+```
+
+A route (`RootKeyRefV1`) issued by this layout is `wss-kr1-` followed by 32 lowercase hexadecimal
+characters of 16 random bytes (40 bytes); any other byte string is not an issued route. A key
+item's name is `r15-key-` plus the lowercase hex of the exact route bytes and is only ever derived
+from a route read from a decoded index. No item exceeds 2,560 bytes (the Windows
+generic-credential blob limit).
+
+**`WSE1` epoch index** (big-endian, exact end): `"WSE1"`, `u32(count)`, then per entry
+`u64(epoch)`, `u16(route_len)`, route. At most 32 entries; every epoch is assigned (never 0 or
+`u64::MAX`); every route has the issued grammar; neither epochs nor routes repeat. The index is a
+control item, not a versioned format a newer Core could have written, so any malformation —
+including a wrong magic — is `RECOVERY_REQUIRED`, and the encoder refuses exactly what the decoder
+refuses.
+
+**`WSA1` anchor encoding** (big-endian, exact end): `"WSA1"`, `u32(anchor_format_version)`,
+`u32(scope_format_version)`, `u8(has_scope)` + 32-byte scope, `u64(committed_floor)`,
+`u8(has_root)` + [`u64(root_generation)`, 32-byte `root_digest`, `u8(root_slot)`,
+`u16(len)` + `root_key_ref`, `u8(len)` + `last_committed_operation_id`], `u8(has_prepared)` +
+[`u8(len)` + `operation_id`, `u64(expected_prior_floor)`, `u64(target_root_generation)`, 32-byte
+`target_final_root_digest`, `u8(target_slot)`, `u16(len)` + `target_root_key_ref`,
+`u64(preparation_revision)`]. Flags are exactly 0 or 1. An unknown magic, or an anchor or scope
+format version other than 1, is `UNSUPPORTED_ANCHOR_FORMAT`; the anchor version is checked
+immediately after it is read, before any version-1 field, so a changed future layout is never
+misread as corruption. Any other malformation is `RECOVERY_REQUIRED`; every decoded anchor then
+passes the §5.4 anchor-validity check, and an anchor that fails it is never encoded.
 
 ### 8.3 Epoch rules
 
