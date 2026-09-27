@@ -235,7 +235,7 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             );
         for route in routes {
             let entry = self.issued(route)?;
-            self.read_key(&entry.key_ref)?;
+            self.durable_key_matches_cache(&entry.key_ref)?;
         }
         Ok(())
     }
@@ -282,6 +282,16 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             .into_iter()
             .find(|e| &e.key_ref == key_ref)
             .ok_or(KeyProviderError::UnknownKeyRef)
+    }
+
+    /// The durable key item exists and, if this instance cached the route, still holds exactly the
+    /// cached bytes (key items are immutable per route: a difference is `RECOVERY_REQUIRED`).
+    fn durable_key_matches_cache(&self, key_ref: &RootKeyRefV1) -> Result<(), KeyProviderError> {
+        let durable = self.read_key(key_ref)?;
+        match self.runtime.iter().find(|(r, _)| r == key_ref) {
+            Some((_, cached)) if **cached != *durable => Err(corrupt()),
+            _ => Ok(()),
+        }
     }
 
     /// The cached handle for an issued route, re-validated against its durable item: lost at unlock
@@ -362,7 +372,14 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             Err(KeyProviderError::KeyLost) => Ok(KeyState::KeyLost),
             Err(other) => Err(other),
             Ok(_) if !self.has_runtime_key(&entry.key_ref) => Ok(KeyState::Locked),
-            Ok(_) => Ok(KeyState::Unlocked { epoch: entry.epoch }),
+            // Unlocked only if resolution would accept it: same snapshot and cache validation.
+            Ok(_) => match self.resolve_validated(|e| e.key_ref == entry.key_ref, corrupt()) {
+                Ok(_) => Ok(KeyState::Unlocked { epoch: entry.epoch }),
+                Err(KeyProviderError::RecoveryRequired) => Ok(KeyState::RecoveryRequired),
+                Err(KeyProviderError::KeyLost) => Ok(KeyState::KeyLost),
+                Err(KeyProviderError::Locked) => Ok(KeyState::Locked),
+                Err(other) => Err(other),
+            },
         }
     }
 
@@ -370,6 +387,18 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
     /// provider unlocked therefore reports `Locked` until the caller re-unlocks.
     fn has_runtime_key(&self, key_ref: &RootKeyRefV1) -> bool {
         self.unlocked && self.runtime.iter().any(|(r, _)| r == key_ref)
+    }
+
+    /// Adds this instance's own provisioned key to the unlocked snapshot and cache (once).
+    fn remember(&mut self, epoch: u64, key_ref: &RootKeyRefV1, material: Zeroizing<[u8; KEY_LEN]>) {
+        if !self.unlocked || self.runtime.iter().any(|(r, _)| r == key_ref) {
+            return;
+        }
+        self.runtime.push((key_ref.clone(), material));
+        self.bindings.push(IndexEntry {
+            epoch,
+            key_ref: key_ref.clone(),
+        });
     }
 
     /// A random route that is neither indexed nor already backed by a key item, so a repeated draw
@@ -490,11 +519,17 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
             self.read_key(&root.key_ref)?;
         }
         let mut index = self.read_index()?;
-        let assigned = epoch != 0 && epoch != u64::MAX;
-        if !assigned || index.iter().any(|e| e.epoch == epoch) {
-            return Err(KeyProviderError::AnchorConflict(
-                "epoch is unassigned or already provisioned",
-            ));
+        if epoch == 0 || epoch == u64::MAX {
+            return Err(KeyProviderError::AnchorConflict("epoch is unassigned"));
+        }
+        // Resumable (§10.2): a crash after the index write but before the route reached the caller
+        // must not strand bootstrap. An epoch that is already indexed with an intact key item
+        // returns its existing route; nothing is rewritten.
+        if let Some(existing) = index.iter().find(|e| e.epoch == epoch) {
+            let key = self.read_key(&existing.key_ref)?;
+            let key_ref = existing.key_ref.clone();
+            self.remember(epoch, &key_ref, key);
+            return Ok(key_ref);
         }
         // Refuse before anything is written, so a full index never leaves an orphaned key item.
         if index.len() >= MAX_INDEXED_EPOCHS {
@@ -512,13 +547,7 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
         self.store
             .set(&Self::key_account(&key_ref), material.as_ref())?;
         self.store.set(EPOCH_INDEX_ACCOUNT, &encoded_index)?;
-        if self.unlocked {
-            self.runtime.push((key_ref.clone(), material));
-            self.bindings.push(IndexEntry {
-                epoch,
-                key_ref: key_ref.clone(),
-            });
-        }
+        self.remember(epoch, &key_ref, material);
         Ok(key_ref)
     }
 

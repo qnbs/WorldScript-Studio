@@ -1773,9 +1773,12 @@ still indexed unchanged (bindings and per-route key bytes are immutable, so a ch
 `RECOVERY_REQUIRED`); the committed root is indexed and its own key item still matches the cache
 (missing is `KEY_LOST` for every epoch); then the requested entry is looked up and its item
 re-validated. A root this instance never cached (committed by another instance) makes every
-resolution `LOCKED` until re-unlock. Key provisioning uses the checked anchor read, refuses while the
-committed root key is unusable, and draws a fresh route that is neither indexed nor backed by an
-existing item. `unlock` starts by locking the provider, so a failed unlock — including a failed re-unlock of an already unlocked provider — leaves no runtime key handles behind. A root committed by another instance after this provider
+resolution `LOCKED` until re-unlock. `state()` reports `UNLOCKED` only if the same validation accepts the root, and every anchor write
+applies it to each route it publishes (a cached target whose item changed is
+`RECOVERY_REQUIRED`). Key provisioning uses the checked anchor read, refuses while the committed
+root key is unusable, and draws a fresh route that is neither indexed nor backed by an existing
+item; provisioning an epoch that is already indexed with an intact key item returns its existing
+route unchanged, so a bootstrap interrupted after the index write resumes (§10.2). `unlock` starts by locking the provider, so a failed unlock — including a failed re-unlock of an already unlocked provider — leaves no runtime key handles behind. A root committed by another instance after this provider
 unlocked reads as `LOCKED` (and its route resolves as `LOCKED`) until the caller re-unlocks.
 `read_root_anchor_state` refuses a committed root whose route is not indexed. Every anchor write
 re-validates, under the write guard, that each route the new anchor references is issued and
