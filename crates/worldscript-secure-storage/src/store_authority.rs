@@ -68,6 +68,9 @@ where
     }
 
     /// Returns the exact durable scope, or provisions it once before any epoch/index write.
+    ///
+    /// Cross-process bootstrap serialization is a later Gate 4 responsibility. This Slice B
+    /// boundary never treats concurrent empty-state observations as an authority guarantee.
     pub fn read_or_provision_installation_scope(
         &mut self,
     ) -> Result<InstallationScopeId, KeyProviderError> {
@@ -75,10 +78,13 @@ where
         if let Some(scope) = anchor_state.installation_scope_id.clone() {
             return Ok(scope);
         }
-        if !index.is_empty()
-            || anchor_state.committed_root.is_some()
-            || anchor_state.prepared_root_commit.is_some()
-        {
+        if !index.is_empty() {
+            return Err(KeyProviderError::RecoveryRequired);
+        }
+        if anchor_state.committed_root.is_some() {
+            return Err(KeyProviderError::RecoveryRequired);
+        }
+        if anchor_state.prepared_root_commit.is_some() {
             return Err(KeyProviderError::RecoveryRequired);
         }
 
@@ -98,6 +104,10 @@ where
     }
 
     /// Provisions one epoch without replacing any existing route or key material.
+    ///
+    /// Key material is written before its index relationship so an index can never authorize a
+    /// missing key. If the later index write fails, the unreferenced key is preserved and no
+    /// authority is granted; journaled orphan reconciliation belongs to a later bootstrap gate.
     pub fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
         let (anchor_state, mut index) = self.read_authority()?;
         if anchor_state.installation_scope_id.is_none() {
@@ -152,16 +162,41 @@ where
     fn read_authority(&self) -> Result<(AnchorState, Vec<IndexEntry>), KeyProviderError> {
         let anchor_state = self.read_anchor()?;
         let index = self.read_index()?;
-        if anchor_state.installation_scope_id.is_none() && !index.is_empty() {
-            return Err(KeyProviderError::RecoveryRequired);
-        }
+        self.validate_scope_index(&anchor_state, &index)?;
+        self.validate_indexed_keys(&index)?;
+        self.validate_root_routes(&anchor_state, &index)?;
+        Ok((anchor_state, index))
+    }
 
-        for entry in &index {
+    fn validate_scope_index(
+        &self,
+        anchor_state: &AnchorState,
+        index: &[IndexEntry],
+    ) -> Result<(), KeyProviderError> {
+        match (
+            anchor_state.installation_scope_id.is_some(),
+            index.is_empty(),
+        ) {
+            (false, false) => Err(KeyProviderError::RecoveryRequired),
+            _ => Ok(()),
+        }
+    }
+
+    fn validate_indexed_keys(&self, index: &[IndexEntry]) -> Result<(), KeyProviderError> {
+        for entry in index {
             match self.read_key(&entry.key_ref) {
                 Ok(_) | Err(KeyProviderError::KeyLost) => {}
                 Err(other) => return Err(other),
             }
         }
+        Ok(())
+    }
+
+    fn validate_root_routes(
+        &self,
+        anchor_state: &AnchorState,
+        index: &[IndexEntry],
+    ) -> Result<(), KeyProviderError> {
         for route in anchor_state
             .committed_root
             .iter()
@@ -173,13 +208,22 @@ where
                     .map(|prepared| &prepared.target_root_key_ref),
             )
         {
-            let indexed = index.iter().any(|entry| &entry.key_ref == route);
-            if !indexed {
-                return Err(KeyProviderError::RecoveryRequired);
-            }
+            self.require_indexed_route(index, route)?;
             self.read_key(route)?;
         }
-        Ok((anchor_state, index))
+        Ok(())
+    }
+
+    fn require_indexed_route(
+        &self,
+        index: &[IndexEntry],
+        route: &RootKeyRefV1,
+    ) -> Result<(), KeyProviderError> {
+        if index.iter().any(|entry| &entry.key_ref == route) {
+            Ok(())
+        } else {
+            Err(KeyProviderError::RecoveryRequired)
+        }
     }
 
     fn read_key(

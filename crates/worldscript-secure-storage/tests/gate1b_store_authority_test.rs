@@ -27,6 +27,14 @@ fn authority(store: MemorySecretStore) -> SecureStoreAuthority<MemorySecretStore
     SecureStoreAuthority::with_random(store, FixedRandom { next: 1 })
 }
 
+fn store_with_indexed_epoch() -> (MemorySecretStore, worldscript_secure_storage::RootKeyRefV1) {
+    let store = MemorySecretStore::new();
+    let mut seeded = authority(store.clone());
+    seeded.read_or_provision_installation_scope().unwrap();
+    let route = seeded.provision_epoch_key(1).unwrap();
+    (store, route)
+}
+
 #[test]
 fn scope_provisioning_is_exactly_resumed_after_restart() {
     let store = MemorySecretStore::new();
@@ -70,10 +78,7 @@ fn missing_scope_next_to_an_index_is_recovery_not_fresh_installation() {
 
 #[test]
 fn missing_indexed_key_is_listed_as_key_loss_and_cannot_be_reprovisioned() {
-    let store = MemorySecretStore::new();
-    let mut seeded = authority(store.clone());
-    seeded.read_or_provision_installation_scope().unwrap();
-    let route = seeded.provision_epoch_key(1).unwrap();
+    let (store, route) = store_with_indexed_epoch();
     store.delete(&key_account(&route)).unwrap();
 
     let mut restarted = authority(store);
@@ -87,10 +92,7 @@ fn missing_indexed_key_is_listed_as_key_loss_and_cannot_be_reprovisioned() {
 
 #[test]
 fn malformed_indexed_key_blocks_listing_and_new_provisioning() {
-    let store = MemorySecretStore::new();
-    let mut seeded = authority(store.clone());
-    seeded.read_or_provision_installation_scope().unwrap();
-    let route = seeded.provision_epoch_key(1).unwrap();
+    let (store, route) = store_with_indexed_epoch();
     store.put_raw(&key_account(&route), &[7; 31]);
 
     let mut restarted = authority(store);
