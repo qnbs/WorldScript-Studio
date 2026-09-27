@@ -10,8 +10,9 @@ use worldscript_secure_storage::store_provider::{
     SecureStoreKeyProvider, ANCHOR_ACCOUNT, EPOCH_INDEX_ACCOUNT,
 };
 use worldscript_secure_storage::{
-    open, parse_envelope, seal, KeyProvider, KeyState, OsRandom, PrepareRootAnchor, RandomSource,
-    RecordClass, RecordContext, RecordMeta, RootSlot, SealTarget,
+    open, parse_envelope, seal, InstallationScopeId, KeyProvider, KeyState, OsRandom,
+    PrepareRootAnchor, RandomSource, RecordClass, RecordContext, RecordMeta, RootKeyRefV1,
+    RootSlot, SealTarget,
 };
 
 fn evidence_service() -> String {
@@ -32,90 +33,111 @@ fn remove_all(service: &str, key_accounts: &[String]) {
     }
 }
 
-#[test]
-#[ignore = "touches the real OS secure store; run by the platform evidence job with --ignored"]
-fn full_lifecycle_against_the_real_os_secure_store() {
-    let service = evidence_service();
-    let mut provider =
-        SecureStoreKeyProvider::new(PlatformSecretStore::with_service(&service).unwrap());
-    assert_eq!(provider.state(), Ok(KeyState::Unconfigured));
-    let scope = provider.read_or_provision_installation_scope().unwrap();
-    let route = provider.provision_epoch_key(1).unwrap();
-    let key_account = format!(
-        "r15-key-{}",
-        route
-            .as_bytes()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect::<String>()
+type PlatformProvider = SecureStoreKeyProvider<PlatformSecretStore>;
+
+fn provider(service: &str) -> PlatformProvider {
+    SecureStoreKeyProvider::new(PlatformSecretStore::with_service(service).unwrap())
+}
+
+fn key_account(route: &RootKeyRefV1) -> String {
+    let hex: String = route
+        .as_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("r15-key-{hex}")
+}
+
+fn target() -> SealTarget<'static> {
+    SealTarget {
+        context: RecordContext {
+            record_class: RecordClass::Settings,
+            logical_record_id: "settings:global",
+            project_id: None,
+        },
+        meta: RecordMeta {
+            key_epoch: 1,
+            record_generation: 1,
+            record_schema: 1,
+        },
+    }
+}
+
+/// Bootstraps the first root and returns an envelope sealed under its key.
+fn bootstrap_and_seal(provider: &mut PlatformProvider, route: &RootKeyRefV1) -> Vec<u8> {
+    let prepare = PrepareRootAnchor {
+        operation_id: "evidence-boot".into(),
+        expected_floor: 0,
+        target_root_generation: 1,
+        target_final_root_digest: [5; 32],
+        target_slot: RootSlot::A,
+        target_root_key_ref: route.clone(),
+    };
+    provider.prepare_root_anchor(&prepare).unwrap();
+    assert_eq!(
+        provider.state(),
+        Ok(KeyState::Unconfigured),
+        "prepared is not committed"
     );
+    provider.commit_root_anchor("evidence-boot", 1).unwrap();
+    provider.unlock().unwrap();
+    seal(
+        &provider.resolve_ref(route).unwrap(),
+        &target(),
+        b"evidence",
+    )
+    .unwrap()
+}
 
-    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        provider
-            .prepare_root_anchor(&PrepareRootAnchor {
-                operation_id: "evidence-boot".into(),
-                expected_floor: 0,
-                target_root_generation: 1,
-                target_final_root_digest: [5; 32],
-                target_slot: RootSlot::A,
-                target_root_key_ref: route.clone(),
-            })
-            .unwrap();
-        assert_eq!(
-            provider.state(),
-            Ok(KeyState::Unconfigured),
-            "prepared is not committed"
-        );
-        provider.commit_root_anchor("evidence-boot", 1).unwrap();
+/// A fresh provider on the same service must read everything back from the OS store.
+fn verify_after_restart(service: &str, scope: &InstallationScopeId, envelope: &[u8]) {
+    let mut restarted = provider(service);
+    assert_eq!(restarted.state(), Ok(KeyState::Locked));
+    assert_eq!(
+        &restarted.read_or_provision_installation_scope().unwrap(),
+        scope
+    );
+    let anchor = restarted.read_root_anchor_state().unwrap();
+    assert_eq!(anchor.committed_floor, 1);
+    assert_eq!(
+        anchor.last_committed_operation_id.as_deref(),
+        Some("evidence-boot")
+    );
+    assert_eq!(restarted.unlock(), Ok(KeyState::Unlocked { epoch: 1 }));
+    let parsed = parse_envelope(envelope).unwrap();
+    let opened = open(&restarted.resolve(1).unwrap(), &target().context, &parsed).unwrap();
+    assert_eq!(opened, b"evidence");
+    restarted.lock();
+    assert_eq!(restarted.runtime_key_count(), 0);
+}
 
-        let target = SealTarget {
-            context: RecordContext {
-                record_class: RecordClass::Settings,
-                logical_record_id: "settings:global",
-                project_id: None,
-            },
-            meta: RecordMeta {
-                key_epoch: 1,
-                record_generation: 1,
-                record_schema: 1,
-            },
-        };
-        provider.unlock().unwrap();
-        let envelope = seal(&provider.resolve_ref(&route).unwrap(), &target, b"evidence").unwrap();
-
-        // A fresh provider on the same service reads everything back from the OS store.
-        let mut restarted =
-            SecureStoreKeyProvider::new(PlatformSecretStore::with_service(&service).unwrap());
-        assert_eq!(restarted.state(), Ok(KeyState::Locked));
-        assert_eq!(
-            restarted.read_or_provision_installation_scope().unwrap(),
-            scope
-        );
-        let anchor = restarted.read_root_anchor_state().unwrap();
-        assert_eq!(anchor.committed_floor, 1);
-        assert_eq!(
-            anchor.last_committed_operation_id.as_deref(),
-            Some("evidence-boot")
-        );
-        assert_eq!(restarted.unlock(), Ok(KeyState::Unlocked { epoch: 1 }));
-        let parsed = parse_envelope(&envelope).unwrap();
-        assert_eq!(
-            open(&restarted.resolve(1).unwrap(), &target.context, &parsed).unwrap(),
-            b"evidence"
-        );
-        restarted.lock();
-        assert_eq!(restarted.runtime_key_count(), 0);
-    }));
-    remove_all(&service, std::slice::from_ref(&key_account));
-    let store = PlatformSecretStore::with_service(&service).unwrap();
+fn assert_cleaned(service: &str, key_account: &str) {
+    let store = PlatformSecretStore::with_service(service).unwrap();
     assert!(
         store.get(ANCHOR_ACCOUNT).unwrap().is_none(),
         "cleanup left the anchor behind"
     );
     assert!(
-        store.get(&key_account).unwrap().is_none(),
+        store.get(key_account).unwrap().is_none(),
         "cleanup left the key behind"
     );
+}
+
+#[test]
+#[ignore = "touches the real OS secure store; run by the platform evidence job with --ignored"]
+fn full_lifecycle_against_the_real_os_secure_store() {
+    let service = evidence_service();
+    let mut first = provider(&service);
+    assert_eq!(first.state(), Ok(KeyState::Unconfigured));
+    let scope = first.read_or_provision_installation_scope().unwrap();
+    let route = first.provision_epoch_key(1).unwrap();
+    let account = key_account(&route);
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let envelope = bootstrap_and_seal(&mut first, &route);
+        verify_after_restart(&service, &scope, &envelope);
+    }));
+    remove_all(&service, std::slice::from_ref(&account));
+    assert_cleaned(&service, &account);
     if let Err(panic) = outcome {
         std::panic::resume_unwind(panic);
     }

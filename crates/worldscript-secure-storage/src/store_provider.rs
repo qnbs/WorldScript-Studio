@@ -1,6 +1,12 @@
 //! The §8.2 [`KeyProvider`] over any [`SecretStore`] (§8.2.2). Anchor state, the epoch index and
 //! every random 256-bit key live as items in the secure store — never in the WorldScript data
 //! directory. Platform adapters differ only in the `SecretStore` they supply.
+//!
+//! The store has no compare-and-swap, so read-modify-write sequences are serialized in-process by a
+//! mutex; across processes they rely on the caller holding the §11 operation admission that §5.3.1
+//! already requires for every anchor transition.
+
+use std::sync::Mutex;
 
 use zeroize::Zeroizing;
 
@@ -19,10 +25,26 @@ use crate::secure_store::SecretStore;
 pub const ANCHOR_ACCOUNT: &str = "r15-anchor-v1";
 /// Store item holding the `WSE1`-encoded epoch-to-route index.
 pub const EPOCH_INDEX_ACCOUNT: &str = "r15-epochs-v1";
+/// §8.2.2: version 1 indexes at most this many epochs, so the index item stays well inside the
+/// smallest platform limit (a Windows generic credential blob is 2,560 bytes). Retiring epochs is
+/// part of the later rotation lifecycle.
+pub const MAX_INDEXED_EPOCHS: usize = 32;
+/// §8.2.2: no secure-store item this provider writes may exceed this many bytes.
+pub const MAX_ITEM_LEN: usize = 2560;
 const KEY_ACCOUNT_PREFIX: &str = "r15-key-";
 const ROUTE_PREFIX: &str = "wss-kr1-";
 const EPOCH_INDEX_MAGIC: [u8; 4] = *b"WSE1";
 const KEY_LEN: usize = 32;
+
+/// Serializes every read-modify-write of secure-store items within this process.
+static STORE_WRITES: Mutex<()> = Mutex::new(());
+
+fn write_guard() -> std::sync::MutexGuard<'static, ()> {
+    // A poisoned lock only means another writer panicked; the store itself is still consistent.
+    STORE_WRITES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 fn random_error<T>(_: T) -> KeyProviderError {
     KeyProviderError::RandomnessUnavailable
@@ -32,6 +54,10 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+fn corrupt() -> KeyProviderError {
+    KeyProviderError::RecoveryRequired
+}
+
 /// One indexed epoch key: its epoch and the opaque route this provider issued for it.
 #[derive(Clone)]
 struct IndexEntry {
@@ -39,8 +65,8 @@ struct IndexEntry {
     key_ref: RootKeyRefV1,
 }
 
-fn encode_index(entries: &[IndexEntry]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(8 + entries.len() * 64);
+fn encode_index(entries: &[IndexEntry]) -> Result<Vec<u8>, KeyProviderError> {
+    let mut out = Vec::with_capacity(8 + entries.len() * 50);
     out.extend_from_slice(&EPOCH_INDEX_MAGIC);
     out.extend_from_slice(&(entries.len() as u32).to_be_bytes());
     for entry in entries {
@@ -48,41 +74,79 @@ fn encode_index(entries: &[IndexEntry]) -> Vec<u8> {
         out.extend_from_slice(&(entry.key_ref.as_bytes().len() as u16).to_be_bytes());
         out.extend_from_slice(entry.key_ref.as_bytes());
     }
-    out
+    check_item_len(out)
 }
 
-fn decode_index(bytes: &[u8]) -> Result<Vec<IndexEntry>, KeyProviderError> {
-    let corrupt = || KeyProviderError::RecoveryRequired;
-    let mut at = 0usize;
-    let mut take = |len: usize| -> Result<&[u8], KeyProviderError> {
-        let end = at
-            .checked_add(len)
-            .filter(|e| *e <= bytes.len())
-            .ok_or_else(corrupt)?;
-        let slice = &bytes[at..end];
-        at = end;
-        Ok(slice)
-    };
-    if take(4)? != EPOCH_INDEX_MAGIC {
-        return Err(KeyProviderError::UnsupportedAnchorFormat);
+fn check_item_len(item: Vec<u8>) -> Result<Vec<u8>, KeyProviderError> {
+    if item.len() > MAX_ITEM_LEN {
+        Err(KeyProviderError::AnchorConflict(
+            "secure-store item exceeds the version-1 size bound",
+        ))
+    } else {
+        Ok(item)
     }
-    let count = u32::from_be_bytes(take(4)?.try_into().map_err(|_| corrupt())?);
-    let mut entries: Vec<IndexEntry> = Vec::new();
+}
+
+struct IndexReader<'a> {
+    bytes: &'a [u8],
+    at: usize,
+}
+
+impl<'a> IndexReader<'a> {
+    fn take<const N: usize>(&mut self) -> Result<[u8; N], KeyProviderError> {
+        let slice = self.slice(N)?;
+        let mut out = [0u8; N];
+        out.copy_from_slice(slice);
+        Ok(out)
+    }
+
+    fn slice(&mut self, len: usize) -> Result<&'a [u8], KeyProviderError> {
+        let end = self
+            .at
+            .checked_add(len)
+            .filter(|e| *e <= self.bytes.len())
+            .ok_or_else(corrupt)?;
+        let slice = &self.bytes[self.at..end];
+        self.at = end;
+        Ok(slice)
+    }
+
+    fn entry(&mut self) -> Result<IndexEntry, KeyProviderError> {
+        let epoch = u64::from_be_bytes(self.take()?);
+        let len = usize::from(u16::from_be_bytes(self.take()?));
+        let key_ref = RootKeyRefV1::new(self.slice(len)?.to_vec()).map_err(|_| corrupt())?;
+        Ok(IndexEntry { epoch, key_ref })
+    }
+}
+
+fn admissible(entries: &[IndexEntry], entry: &IndexEntry) -> bool {
+    let assigned = entry.epoch != 0 && entry.epoch != u64::MAX;
+    let unique = entries
+        .iter()
+        .all(|e| e.epoch != entry.epoch && e.key_ref != entry.key_ref);
+    assigned && unique
+}
+
+/// Strict `WSE1` decode. Any malformation — including a wrong magic — is `RecoveryRequired`: the
+/// index is a control item, not a versioned format a newer Core could legitimately have written.
+fn decode_index(bytes: &[u8]) -> Result<Vec<IndexEntry>, KeyProviderError> {
+    let mut reader = IndexReader { bytes, at: 0 };
+    if reader.take::<4>()? != EPOCH_INDEX_MAGIC {
+        return Err(corrupt());
+    }
+    let count = u32::from_be_bytes(reader.take()?) as usize;
+    if count > MAX_INDEXED_EPOCHS {
+        return Err(corrupt());
+    }
+    let mut entries = Vec::with_capacity(count);
     for _ in 0..count {
-        let epoch = u64::from_be_bytes(take(8)?.try_into().map_err(|_| corrupt())?);
-        let len = usize::from(u16::from_be_bytes(
-            take(2)?.try_into().map_err(|_| corrupt())?,
-        ));
-        let key_ref = RootKeyRefV1::new(take(len)?.to_vec()).map_err(|_| corrupt())?;
-        let duplicate = entries
-            .iter()
-            .any(|e| e.epoch == epoch || e.key_ref == key_ref);
-        if duplicate || epoch == 0 || epoch == u64::MAX {
+        let entry = reader.entry()?;
+        if !admissible(&entries, &entry) {
             return Err(corrupt());
         }
-        entries.push(IndexEntry { epoch, key_ref });
+        entries.push(entry);
     }
-    if at != bytes.len() {
+    if reader.at != bytes.len() {
         return Err(corrupt());
     }
     Ok(entries)
@@ -92,6 +156,8 @@ fn decode_index(bytes: &[u8]) -> Result<Vec<IndexEntry>, KeyProviderError> {
 pub struct SecureStoreKeyProvider<S: SecretStore> {
     store: S,
     runtime: Vec<(RootKeyRefV1, Zeroizing<[u8; KEY_LEN]>)>,
+    /// Indexed routes whose key item was missing at the last unlock (`KEY_LOST`, not unknown).
+    lost: Vec<RootKeyRefV1>,
     unlocked: bool,
 }
 
@@ -100,6 +166,7 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         SecureStoreKeyProvider {
             store,
             runtime: Vec::new(),
+            lost: Vec::new(),
             unlocked: false,
         }
     }
@@ -116,13 +183,19 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         }
     }
 
+    /// Reads, transitions and — only if the anchor actually changed — replaces the anchor item, so an
+    /// exact replay never needs a write.
     fn apply(
         &mut self,
         transition: impl FnOnce(&AnchorState) -> Result<AnchorState, KeyProviderError>,
     ) -> Result<AnchorState, KeyProviderError> {
-        let next = transition(&self.read_anchor()?)?;
-        self.store
-            .set(ANCHOR_ACCOUNT, &anchor_codec::encode(&next)?)?;
+        let _guard = write_guard();
+        let current = self.read_anchor()?;
+        let next = transition(&current)?;
+        if next != current {
+            let encoded = check_item_len(anchor_codec::encode(&next)?)?;
+            self.store.set(ANCHOR_ACCOUNT, &encoded)?;
+        }
         Ok(next)
     }
 
@@ -147,10 +220,10 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             .store
             .get(&Self::key_account(key_ref))?
             .ok_or(KeyProviderError::KeyLost)?;
-        let mut key = Zeroizing::new([0u8; KEY_LEN]);
         if bytes.len() != KEY_LEN {
-            return Err(KeyProviderError::RecoveryRequired);
+            return Err(corrupt());
         }
+        let mut key = Zeroizing::new([0u8; KEY_LEN]);
         key.copy_from_slice(&bytes);
         Ok(key)
     }
@@ -166,6 +239,9 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         if !self.unlocked {
             return Err(KeyProviderError::Locked);
         }
+        if self.lost.contains(key_ref) {
+            return Err(KeyProviderError::KeyLost);
+        }
         let (_, material) = self
             .runtime
             .iter()
@@ -175,16 +251,23 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         Ok(Key::from_bytes(&mut copy))
     }
 
-    fn committed_state(&self, anchor: &AnchorState) -> Result<KeyState, KeyProviderError> {
+    fn root_entry(&self, anchor: &AnchorState) -> Result<Option<IndexEntry>, KeyProviderError> {
         let Some(root) = &anchor.committed_root else {
-            return Ok(KeyState::Unconfigured);
+            return Ok(None);
         };
-        let Some(entry) = self
-            .read_index()?
+        self.read_index()?
             .into_iter()
             .find(|e| e.key_ref == root.root_key_ref)
-        else {
-            return Ok(KeyState::RecoveryRequired);
+            .map(Some)
+            .ok_or_else(corrupt)
+    }
+
+    fn committed_state(&self, anchor: &AnchorState) -> Result<KeyState, KeyProviderError> {
+        let entry = match self.root_entry(anchor) {
+            Ok(Some(entry)) => entry,
+            Ok(None) => return Ok(KeyState::Unconfigured),
+            Err(KeyProviderError::RecoveryRequired) => return Ok(KeyState::RecoveryRequired),
+            Err(other) => return Err(other),
         };
         match self.read_key(&entry.key_ref) {
             Err(KeyProviderError::KeyLost) => Ok(KeyState::KeyLost),
@@ -193,6 +276,25 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             Ok(_) => Ok(KeyState::Unlocked { epoch: entry.epoch }),
         }
     }
+
+    /// Loads every indexed key; a missing item is recorded as lost, anything else is an error.
+    fn load_keys(&self) -> Result<LoadedKeys, KeyProviderError> {
+        let mut loaded = LoadedKeys::default();
+        for entry in self.read_index()? {
+            match self.read_key(&entry.key_ref) {
+                Ok(key) => loaded.runtime.push((entry.key_ref, key)),
+                Err(KeyProviderError::KeyLost) => loaded.lost.push(entry.key_ref),
+                Err(other) => return Err(other),
+            }
+        }
+        Ok(loaded)
+    }
+}
+
+#[derive(Default)]
+struct LoadedKeys {
+    runtime: Vec<(RootKeyRefV1, Zeroizing<[u8; KEY_LEN]>)>,
+    lost: Vec<RootKeyRefV1>,
 }
 
 impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
@@ -223,36 +325,38 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
     fn lock(&mut self) {
         // Dropping each Zeroizing handle clears its bytes.
         self.runtime.clear();
+        self.lost.clear();
         self.unlocked = false;
     }
 
+    /// Every check runs before any runtime state changes, so a failed unlock leaves the provider
+    /// exactly as it was.
     fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
         let anchor = self.read_anchor()?;
-        let mut runtime = Vec::new();
-        for entry in self.read_index()? {
-            match self.read_key(&entry.key_ref) {
-                Ok(key) => runtime.push((entry.key_ref, key)),
-                Err(KeyProviderError::KeyLost) => {}
-                Err(other) => return Err(other),
-            }
-        }
-        if let Some(root) = &anchor.committed_root {
-            if !runtime.iter().any(|(r, _)| r == &root.root_key_ref) {
+        let root = self.root_entry(&anchor)?;
+        let loaded = self.load_keys()?;
+        if let Some(root) = &root {
+            if loaded.lost.contains(&root.key_ref) {
                 return Err(KeyProviderError::KeyLost);
             }
         }
-        self.runtime = runtime;
+        self.runtime = loaded.runtime;
+        self.lost = loaded.lost;
         self.unlocked = true;
-        self.committed_state(&anchor)
+        Ok(match root {
+            Some(entry) => KeyState::Unlocked { epoch: entry.epoch },
+            None => KeyState::Unconfigured,
+        })
     }
 
     fn list_epochs(&self) -> Result<Vec<EpochInfo>, KeyProviderError> {
         let mut out = Vec::new();
         for entry in self.read_index()? {
-            let available = self
-                .store
-                .get(&Self::key_account(&entry.key_ref))?
-                .is_some();
+            let available = match self.read_key(&entry.key_ref) {
+                Ok(_) => true,
+                Err(KeyProviderError::KeyLost) => false,
+                Err(other) => return Err(other),
+            };
             out.push(EpochInfo {
                 epoch: entry.epoch,
                 key_ref: entry.key_ref,
@@ -263,6 +367,7 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
     }
 
     fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
+        let _guard = write_guard();
         let mut index = self.read_index()?;
         let assigned = epoch != 0 && epoch != u64::MAX;
         if !assigned || index.iter().any(|e| e.epoch == epoch) {
@@ -270,19 +375,24 @@ impl<S: SecretStore> KeyProvider for SecureStoreKeyProvider<S> {
                 "epoch is unassigned or already provisioned",
             ));
         }
+        // Refuse before anything is written, so a full index never leaves an orphaned key item.
+        if index.len() >= MAX_INDEXED_EPOCHS {
+            return Err(KeyProviderError::AnchorConflict("the epoch index is full"));
+        }
         let mut route = [0u8; 16];
         let mut material = Zeroizing::new([0u8; KEY_LEN]);
         OsRandom.fill(&mut route).map_err(random_error)?;
         OsRandom.fill(material.as_mut()).map_err(random_error)?;
         let key_ref = RootKeyRefV1::new(format!("{ROUTE_PREFIX}{}", hex(&route)).into_bytes())?;
-        // Key first, then index: a crash in between leaves only an unreferenced item.
-        self.store
-            .set(&Self::key_account(&key_ref), material.as_ref())?;
         index.push(IndexEntry {
             epoch,
             key_ref: key_ref.clone(),
         });
-        self.store.set(EPOCH_INDEX_ACCOUNT, &encode_index(&index))?;
+        let encoded_index = encode_index(&index)?;
+        // Key first, then index: a crash in between leaves only an unreferenced item.
+        self.store
+            .set(&Self::key_account(&key_ref), material.as_ref())?;
+        self.store.set(EPOCH_INDEX_ACCOUNT, &encoded_index)?;
         if self.unlocked {
             self.runtime.push((key_ref.clone(), material));
         }

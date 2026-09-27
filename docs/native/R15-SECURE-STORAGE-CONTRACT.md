@@ -1738,14 +1738,24 @@ could select the kernel keyring). All items live under the service `worldscript-
 ```text
 r15-anchor-v1           the WSA1-encoded anchor state (below)
 r15-epochs-v1           the WSE1 epoch index: u32be(count), then per entry u64be(epoch),
-                        u16be(route_len), route; epochs unique, never 0 or u64::MAX; exact end
+                        u16be(route_len), route; at most 32 entries; epochs and routes unique,
+                        epochs never 0 or u64::MAX; exact end
 r15-key-<hex(route)>    exactly 32 random key bytes for one issued route
 ```
 
 A route (`RootKeyRefV1`) is `wss-kr1-` followed by 32 lowercase hex characters of 16 random bytes.
 Key-item names are derived only from routes the provider issued and recorded in the index, never
 from caller-supplied bytes. Provisioning writes the key item before the index, so a crash leaves at
-most an unreferenced item.
+most an unreferenced item. No item exceeds 2,560 bytes (the Windows generic-credential blob limit):
+version 1 indexes at most 32 epochs and refuses a 33rd before writing anything; retiring epochs
+belongs to the later rotation lifecycle. The index is a control item, so any malformation of it —
+including a wrong magic — is `RECOVERY_REQUIRED`.
+
+**Serialization.** The secure store offers no compare-and-swap. The provider serializes its own
+read-modify-write sequences within a process; across processes it relies on the caller holding the
+§11 operation admission and `root_commit_mutex` that §5.3.1 already requires for every anchor
+transition and that key provisioning also runs under. A transition that leaves the anchor unchanged
+(an exact step-F replay, an abort with nothing prepared) performs no write.
 
 **`WSA1` anchor encoding** (big-endian, exact end): `"WSA1"`, `u32(anchor_format_version)`,
 `u32(scope_format_version)`, `u8(has_scope)` + 32-byte scope, `u64(committed_floor)`,
@@ -1758,8 +1768,10 @@ most an unreferenced item.
 `RECOVERY_REQUIRED`; every decoded anchor then passes the §5.4 anchor-validity check.
 
 **Failure mapping.** A store that cannot be reached, is locked without a usable unlock, or refuses
-access is `SECURE_ANCHOR_UNAVAILABLE`; a missing root key item is `KEY_LOST`; a malformed key item
-or index is `RECOVERY_REQUIRED`. No outcome falls back to plaintext, a data-directory file, or a
+access is `SECURE_ANCHOR_UNAVAILABLE`; a missing key item for an indexed route is `KEY_LOST` (for
+the root it fails `unlock`; for another epoch it fails only that epoch's resolution); a malformed key
+item or index, or a committed root whose route is absent from the index, is `RECOVERY_REQUIRED`.
+A failed `unlock` leaves no runtime key handles behind. No outcome falls back to plaintext, a data-directory file, or a
 weaker store.
 
 **Evidence (maturity stated honestly).** Headless: the same provider over an in-memory store

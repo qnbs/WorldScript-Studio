@@ -35,6 +35,7 @@ mod memory {
     struct Inner {
         items: BTreeMap<String, Zeroizing<Vec<u8>>>,
         unavailable: bool,
+        read_only: bool,
     }
 
     /// Headless in-memory [`SecretStore`] for tests. Clones share the same items, so a second
@@ -50,6 +51,20 @@ mod memory {
         /// Makes every call fail as an unreachable store would.
         pub fn set_unavailable(&self, unavailable: bool) {
             self.0.borrow_mut().unavailable = unavailable;
+        }
+
+        /// Makes writes and deletes fail while reads keep working (a store refusing mutation).
+        pub fn set_read_only(&self, read_only: bool) {
+            self.0.borrow_mut().read_only = read_only;
+        }
+
+        fn check_writable(&self) -> Result<(), KeyProviderError> {
+            self.check()?;
+            if self.0.borrow().read_only {
+                Err(KeyProviderError::Unavailable)
+            } else {
+                Ok(())
+            }
         }
 
         /// Overwrites an item directly, bypassing the provider (to simulate corruption).
@@ -78,13 +93,13 @@ mod memory {
         }
 
         fn set(&self, account: &str, secret: &[u8]) -> Result<(), KeyProviderError> {
-            self.check()?;
+            self.check_writable()?;
             self.put_raw(account, secret);
             Ok(())
         }
 
         fn delete(&self, account: &str) -> Result<(), KeyProviderError> {
-            self.check()?;
+            self.check_writable()?;
             self.0.borrow_mut().items.remove(account);
             Ok(())
         }
