@@ -5,7 +5,7 @@
 use worldscript_secure_storage::anchor_codec;
 use worldscript_secure_storage::secure_store::{MemorySecretStore, SecretStore};
 use worldscript_secure_storage::store_provider::{
-    SecureStoreKeyProvider, ANCHOR_ACCOUNT, EPOCH_INDEX_ACCOUNT,
+    SecureStoreKeyProvider, ANCHOR_ACCOUNT, EPOCH_INDEX_ACCOUNT, MAX_INDEXED_EPOCHS,
 };
 use worldscript_secure_storage::{
     open, parse_envelope, seal, KeyProvider, KeyProviderError, KeyState, PrepareRootAnchor,
@@ -278,4 +278,102 @@ fn with_byte(bytes: &[u8], index: usize, value: u8) -> Vec<u8> {
     let mut out = bytes.to_vec();
     out[index] = value;
     out
+}
+
+fn key_account(route: &RootKeyRefV1) -> String {
+    let hex: String = route
+        .as_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("r15-key-{hex}")
+}
+
+#[test]
+fn a_full_epoch_index_is_refused_before_anything_is_written() {
+    let store = MemorySecretStore::new();
+    let mut provider = Provider::new(store.clone());
+    for epoch in 1..=MAX_INDEXED_EPOCHS as u64 {
+        provider.provision_epoch_key(epoch).unwrap();
+    }
+    let before = store.accounts();
+    let next = provider
+        .provision_epoch_key(MAX_INDEXED_EPOCHS as u64 + 1)
+        .map(|_| ());
+    assert!(matches!(next, Err(KeyProviderError::AnchorConflict(_))));
+    assert_eq!(store.accounts(), before, "no orphaned key item");
+    let index = store.get(EPOCH_INDEX_ACCOUNT).unwrap().unwrap();
+    assert!(
+        index.len() <= 2560,
+        "index {} bytes exceeds the Windows blob bound",
+        index.len()
+    );
+}
+
+#[test]
+fn a_lost_non_root_key_is_key_lost_not_unknown() {
+    let (store, _) = configured();
+    let mut provider = Provider::new(store.clone());
+    let second = provider.provision_epoch_key(2).unwrap();
+    store.delete(&key_account(&second)).unwrap();
+    let mut restarted = Provider::new(store);
+    restarted.unlock().unwrap();
+    assert_eq!(
+        restarted.resolve(2).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
+    );
+    assert_eq!(
+        restarted.resolve_ref(&second).map(|_| ()),
+        Err(KeyProviderError::KeyLost)
+    );
+    let listed = restarted.list_epochs().unwrap();
+    assert_eq!(
+        listed
+            .iter()
+            .map(|e| (e.epoch, e.available))
+            .collect::<Vec<_>>(),
+        vec![(1, true), (2, false)]
+    );
+}
+
+#[test]
+fn a_malformed_key_item_requires_recovery_when_listed() {
+    let (store, route) = configured();
+    store.put_raw(&key_account(&route), &[0; 31]);
+    let provider = Provider::new(store);
+    assert_eq!(
+        provider.list_epochs().map(|_| ()),
+        Err(KeyProviderError::RecoveryRequired)
+    );
+}
+
+#[test]
+fn a_corrupted_epoch_index_requires_recovery() {
+    let (store, _) = configured();
+    store.put_raw(EPOCH_INDEX_ACCOUNT, b"XXXX\0\0\0\0");
+    let mut provider = Provider::new(store);
+    assert_eq!(provider.state(), Ok(KeyState::RecoveryRequired));
+    assert_eq!(provider.unlock(), Err(KeyProviderError::RecoveryRequired));
+}
+
+#[test]
+fn a_failed_unlock_leaves_the_provider_unchanged() {
+    let (store, _) = configured();
+    store.put_raw(EPOCH_INDEX_ACCOUNT, b"XXXX\0\0\0\0");
+    let mut provider = Provider::new(store);
+    assert!(provider.unlock().is_err());
+    assert_eq!(provider.runtime_key_count(), 0);
+    assert_eq!(
+        provider.resolve(1).map(|_| ()),
+        Err(KeyProviderError::Locked)
+    );
+}
+
+#[test]
+fn an_exact_replay_needs_no_write() {
+    let (store, _) = configured();
+    store.set_read_only(true);
+    let mut provider = Provider::new(store);
+    assert_eq!(provider.commit_root_anchor("boot", 1), Ok(()));
+    assert_eq!(provider.abort_or_recover_root_anchor("boot"), Ok(()));
 }

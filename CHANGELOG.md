@@ -10,22 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **R-15 Gate 1b-platform (#445):** the OS secure-store half of the key provider in
   `crates/worldscript-secure-storage`, behind the off-by-default `platform-keystore` feature. One
   provider implementation stores the anchor state (strict `WSA1` encoding, validated on every read),
-  an epoch index and each random 256-bit key as secure-store items under `worldscript-r15`:
-  - macOS: Keychain.
-  - Windows: Credential Manager.
-  - Linux: Secret Service only. The kernel keyring is never used and is never a fallback, and any
-    other target does not build.
-
-  Credentials are constructed explicitly, never through the library's default builder, which can
-  silently fall back to an in-memory mock. A locked, missing or refusing store is
-  `SECURE_ANCHOR_UNAVAILABLE`.
-
-  A new CI job, `secure-store-platform`, runs the real lifecycle on macOS, Windows and Linux (an
-  isolated D-Bus session with a throwaway keyring), proves fail-closed behavior without a Secret
-  Service, and builds with the real Rust 1.77.2. The lockfile pins the crates that would otherwise
-  break that minimum. This is CI-runner evidence, not packaged-app evidence, and nothing in the app
-  uses the provider yet: Gates 2–7 stay unadmitted and there is no production authority switch.
-  PR #851.
+  a bounded epoch index (at most 32 epochs, so every item fits the smallest platform limit) and each
+  random 256-bit key as secure-store items under `worldscript-r15`: macOS Keychain, Windows
+  Credential Manager, and on Linux the Secret Service only (never the kernel keyring, never a
+  fallback; other targets do not build). Credentials are constructed explicitly, never through the
+  library's default builder, which can silently fall back to an in-memory mock. A locked, missing or
+  refusing store is `SECURE_ANCHOR_UNAVAILABLE`, a lost key stays `KEY_LOST`, and a failed unlock
+  changes nothing. A new CI job, `secure-store-platform`, runs the real lifecycle on macOS, Windows
+  and Linux (an isolated D-Bus session with a throwaway keyring), proves fail-closed behavior without
+  a Secret Service, and builds with the real Rust 1.77.2; the lockfile pins the crates that would
+  otherwise break that minimum. This is CI-runner evidence, not packaged-app evidence, and nothing in
+  the app uses the provider yet: Gates 2–7 stay unadmitted and there is no production authority
+  switch. PR #851.
 - **R-15 Gate 1b-core (#445):** the headless key-provider and recovery layer of
   `crates/worldscript-secure-storage`, implementing the maintainer's Option C decision (platform
   secure store as the runtime authority; optional passphrase recovery). It adds the
