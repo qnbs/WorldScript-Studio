@@ -280,6 +280,9 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
             .ok_or(KeyProviderError::UnknownKeyRef)
     }
 
+    /// Returns a write-capable key only while the durable authority still backs it: the anchor
+    /// decodes with its root route indexed, `key_ref` is still an issued route, and its item still
+    /// holds the cached bytes. The runtime cache never outlives what `state()` would accept.
     fn runtime_key(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
         if !self.unlocked {
             return Err(KeyProviderError::Locked);
@@ -287,15 +290,12 @@ impl<S: SecretStore> SecureStoreKeyProvider<S> {
         if self.lost.contains(key_ref) {
             return Err(KeyProviderError::KeyLost);
         }
+        self.read_anchor_checked()?;
+        self.issued(key_ref)?;
         let Some((_, material)) = self.runtime.iter().find(|(r, _)| r == key_ref) else {
             // Issued after this provider unlocked (e.g. by another instance): re-unlock first.
-            return Err(match self.issued(key_ref) {
-                Ok(_) => KeyProviderError::Locked,
-                Err(other) => other,
-            });
+            return Err(KeyProviderError::Locked);
         };
-        // Re-validate against the durable item before handing out a write-capable key: a key whose
-        // item was lost (or replaced) since unlock must not seal records that cannot be reopened.
         let durable = self.read_key(key_ref)?;
         if *durable != **material {
             return Err(corrupt());
