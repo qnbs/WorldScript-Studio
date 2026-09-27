@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every anchor write re-validates the routes it publishes; a root committed by another instance
   reads as `LOCKED` until re-unlock; and an exact replay performs no write. The contract (§8.2.2)
   specifies the item layout, both encodings, and the failure rules. Nothing in the app uses the
-  provider yet. PR #PRNUM.
+  provider yet. PR #852.
 - **R-15 Gate 1b-core (#445):** the headless key-provider and recovery layer of
   `crates/worldscript-secure-storage`, implementing the maintainer's Option C decision (platform
   secure store as the runtime authority; optional passphrase recovery). It adds the
