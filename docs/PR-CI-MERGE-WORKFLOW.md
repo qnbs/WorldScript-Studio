@@ -5,18 +5,22 @@ Full pre-push gate mechanics, worktree bootstrap, CI pipeline order, the PR revi
 **Context-sensitive merge invariant:** GREEN PR CI IS NECESSARY BUT NOT SUFFICIENT. A required gate
 whose result changes between a feature branch, pull-request event, synthetic merge ref, detached
 checkout, and `main` must have a deterministic current-base + PR resulting-merge/main-semantics
-proof before merge. That proof must be consumed by the required CI aggregate; a green PR head or
+proof before merge. That proof must be part of a required status check; a green PR head or
 branch-local pre-push result alone is never evidence that the resulting main will pass.
 
-The main-context admission proof is itself base-governed. The trusted base-ref workflow-policy
-checker must retain the required quality step, and the step executes the base ref's evaluator plus
-its local script dependencies against the current PR merge workspace. Only the introducing
-transition, where the base has no evaluator yet, may execute the PR copy; once the transition is
-merged, an ordinary PR cannot remove or replace the proof and still satisfy the structural gate.
-The step runs directly after the SHA-pinned checkout and `setup-node` steps, before the local setup
-action, dependency install scripts, or any PR-controlled `run` step could write `$GITHUB_ENV` or
-`$GITHUB_PATH`. The policy also rejects job- or workflow-level `env`/`defaults`, job `if`/
-`continue-on-error`/`container`, and matrix `exclude`/expressions for that lane.
+The main-context admission proof is itself base-governed. It runs as a step of the required
+`pr-changelog-reference.yml` guard job (`Require this PR's own number in CHANGELOG.md [Unreleased]
+before merge`), which triggers on `opened`, `edited`, `synchronize`, and `reopened`. A title edit,
+which changes the prospective squash subject, therefore re-runs the proof, while body-only edits
+never start or cancel the heavyweight `ci.yml` pipeline (`ci.yml` must not trigger on `edited`).
+The trusted base-ref workflow-policy checker must retain that step with its exact job name, and the
+step executes the base ref's evaluator plus its local script dependencies against the current PR
+merge workspace. Only the introducing transition, where the base has no evaluator yet, may execute
+the PR copy; once the transition is merged, an ordinary PR cannot remove or replace the proof and
+still satisfy the structural gate. The step runs directly after the SHA-pinned checkout and a
+literal Node 22 `setup-node`, before any PR-controlled `run` step could write `$GITHUB_ENV` or
+`$GITHUB_PATH`. The policy also rejects job or step `if`/`continue-on-error`, job `env`, and
+workflow-level `env`/`defaults`/`concurrency` for that guard.
 The admission task runs directly in the workflow rather than through a cached Turbo task because
 its result depends on the PR number, base/head SHAs, merge ref, event payload, and Git history.
 
