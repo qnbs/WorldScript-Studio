@@ -95,6 +95,10 @@ jobs:
           else
             if [ "$PR_NUMBER" = "857" ]; then
               echo "::notice::merge-admission evaluator is absent on the base ref; using the bounded PR #857 bootstrap once."
+              test "$(sha256sum scripts/check-merge-admission.mjs | awk '{print $1}')" = "ad95a14aa9da873243e801600af3f6d7a20d128aab989cdec6ca88b6ef649387"
+              test "$(sha256sum scripts/check-doc-metrics.mjs | awk '{print $1}')" = "bdfdd55bd20426da320cce593a4294400b0c0a29afcf592f88351e741e53ffb8"
+              test "$(sha256sum scripts/i18n-locales.mjs | awk '{print $1}')" = "ae22dfcad13f0f82cfa8cbf39013422660a8e099e00dfa137266f2ccf5e40d58"
+              test "$(sha256sum scripts/test-metrics.mjs | awk '{print $1}')" = "27992ffcaeea146d4ac64b64e9dcd6bc9420b9f895393e205bcab209c5764505"
               node scripts/check-merge-admission.mjs
             else
               echo "::error::trusted merge-admission evaluator is absent outside the introducing transition"
@@ -192,6 +196,38 @@ describe('checkMergeAdmissionGate', () => {
       failures,
     );
     expect(failures.some((failure) => failure.message.includes('must not exclude'))).toBe(true);
+  });
+
+  it('rejects extra environment controls on the admission step', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkMergeAdmissionGate(
+      'ci.yml',
+      doc(
+        canonicalMergeAdmissionGate.replace(
+          `          PR_NUMBER: \${{ github.event.pull_request.number }}`,
+          `          PR_NUMBER: \${{ github.event.pull_request.number }}\n          NODE_OPTIONS: --require ./exit-zero.cjs`,
+        ),
+      ),
+      failures,
+    );
+    expect(
+      failures.some((failure) => failure.message.includes('unapproved step environment key')),
+    ).toBe(true);
+  });
+
+  it('rejects failure tolerance on the quality job', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkMergeAdmissionGate(
+      'ci.yml',
+      doc(
+        canonicalMergeAdmissionGate.replace(
+          '  quality:\n',
+          `  quality:\n    continue-on-error: \${{ matrix.node-version == '22' }}\n`,
+        ),
+      ),
+      failures,
+    );
+    expect(failures.some((failure) => failure.message.includes('failure tolerance'))).toBe(true);
   });
 
   it('rejects a successful early exit in the admission script', () => {

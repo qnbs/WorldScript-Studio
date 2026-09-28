@@ -234,6 +234,16 @@ function checkMergeAdmissionMatrix(fileName, doc, failures) {
   }
 }
 
+function checkMergeAdmissionJob(fileName, doc, failures) {
+  const qualityJob = jobMap(doc).get('quality');
+  if (qualityJob?.get?.('continue-on-error', true) !== undefined) {
+    failures.push({
+      file: fileName,
+      message: 'quality job must not override failure tolerance for the required admission lane',
+    });
+  }
+}
+
 const CANONICAL_MERGE_ADMISSION_RUN = [
   'set -euo pipefail',
   'git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"',
@@ -247,6 +257,10 @@ const CANONICAL_MERGE_ADMISSION_RUN = [
   'else',
   'if [ "$PR_NUMBER" = "857" ]; then',
   'echo "::notice::merge-admission evaluator is absent on the base ref; using the bounded PR #857 bootstrap once."',
+  'test "$(sha256sum scripts/check-merge-admission.mjs | awk \'{print $1}\')" = "ad95a14aa9da873243e801600af3f6d7a20d128aab989cdec6ca88b6ef649387"',
+  'test "$(sha256sum scripts/check-doc-metrics.mjs | awk \'{print $1}\')" = "bdfdd55bd20426da320cce593a4294400b0c0a29afcf592f88351e741e53ffb8"',
+  'test "$(sha256sum scripts/i18n-locales.mjs | awk \'{print $1}\')" = "ae22dfcad13f0f82cfa8cbf39013422660a8e099e00dfa137266f2ccf5e40d58"',
+  'test "$(sha256sum scripts/test-metrics.mjs | awk \'{print $1}\')" = "27992ffcaeea146d4ac64b64e9dcd6bc9420b9f895393e205bcab209c5764505"',
   'node scripts/check-merge-admission.mjs',
   'else',
   'echo "::error::trusted merge-admission evaluator is absent outside the introducing transition"',
@@ -338,6 +352,14 @@ function checkMergeAdmissionGateStep(fileName, gateStep, doc, failures) {
       message: 'Main-context merge admission proof must bind PR_NUMBER to the PR event',
     });
   }
+  const allowedEnvironmentKeys = new Set(['BASE_SHA', 'PR_NUMBER']);
+  for (const key of Object.keys(environment ?? {})) {
+    if (allowedEnvironmentKeys.has(key)) continue;
+    failures.push({
+      file: fileName,
+      message: `Main-context merge admission proof must not expose unapproved step environment key ${key}`,
+    });
+  }
   for (const field of ['continue-on-error', 'shell', 'working-directory']) {
     if (gateStep.get(field, true) !== undefined) {
       failures.push({
@@ -361,6 +383,7 @@ export function checkMergeAdmissionGate(fileName, doc, failures) {
     return;
   }
   checkMergeAdmissionGateStep(fileName, gateStep, doc, failures);
+  checkMergeAdmissionJob(fileName, doc, failures);
   checkMergeAdmissionTrigger(fileName, doc, failures);
   checkMergeAdmissionMatrix(fileName, doc, failures);
 }

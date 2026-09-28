@@ -490,6 +490,9 @@ function computeMaxSlugMatching(subjects, entries, reservedEntryIndices = new Se
       matchedSubjects[commitIndex] = true;
     }
   }
+  entryOwner.forEach((owner, entryIndex) => {
+    if (owner >= 0) reservedEntryIndices.add(entryIndex);
+  });
   return matchedSubjects;
 }
 
@@ -534,6 +537,7 @@ function findUndocumentedGovernedCommits(
   branchLocalIndices = new Set(),
   mergeCommitIndices = new Set(),
   logicalPrNumber = null,
+  reservedEntryIndices = new Set(),
 ) {
   const entries = splitUnreleasedEntries(unreleasedSection);
   const logicalPrEntryPresent =
@@ -541,7 +545,19 @@ function findUndocumentedGovernedCommits(
     entries.some((entry) => isReferencedByPrNumber(logicalPrNumber, entry));
   const undocumented = [];
   const slugCandidates = [];
-  const reservedEntryIndices = new Set();
+  const logicalEntryIndices = new Set(
+    entries.flatMap((entry, index) =>
+      logicalPrEntryPresent && isReferencedByPrNumber(logicalPrNumber, entry) ? [index] : [],
+    ),
+  );
+  const integratedMergeOwnsLogicalEntry = [...mergeCommitIndices].some((index) =>
+    candidateEntryIndices(postReleaseCommitSubjects[index], entries).some((entryIndex) =>
+      logicalEntryIndices.has(entryIndex),
+    ),
+  );
+  if (logicalPrEntryPresent && !integratedMergeOwnsLogicalEntry) {
+    reserveEntryForNumberedCommit(logicalPrNumber, entries, reservedEntryIndices);
+  }
   for (let index = 0; index < postReleaseCommitSubjects.length; index++) {
     const subject = postReleaseCommitSubjects[index];
     if (!GOVERNED_COMMIT_TYPE.test(subject)) continue;
@@ -621,31 +637,34 @@ export function getMergeAdmissionCommitRecords(baseSha, headSha, repositoryRoot 
   if (!latestTagged) return null;
   const baseRecords = readCommitRecords(repositoryRoot, `v${latestTagged}..${baseSha}`, true);
   const branchRecords = readCommitRecords(repositoryRoot, `${baseSha}..${headSha}`, false);
-  if (!baseRecords || !branchRecords) return null;
+  const baseSideBranchRecords = getDirectMainSideBranchRecords(repositoryRoot, baseSha);
+  if (!baseRecords || !branchRecords || !baseSideBranchRecords) return null;
   const records = [...baseRecords, ...branchRecords];
   const branchLocalIndices = new Set(branchRecords.map((_, index) => baseRecords.length + index));
   const mergeCommitIndices = new Set(
     records.flatMap((record, index) => (record.parents.length > 1 ? [index] : [])),
   );
-  return { records, branchLocalIndices, mergeCommitIndices };
+  return { records, branchLocalIndices, mergeCommitIndices, baseSideBranchRecords };
 }
 
 // QNBS-v3 (codex, P2): first-parent history collapses canonical PR merges, so direct-main checks must retain second-parent records to prevent hidden governed commits.
-export function getDirectMainSideBranchRecords(repositoryRoot = root) {
+export function getDirectMainSideBranchRecords(repositoryRoot = root, endSha = 'HEAD') {
   const latestTagged = getLatestTaggedVersion(repositoryRoot);
   if (!latestTagged) return null;
-  const records = readCommitRecords(repositoryRoot, `v${latestTagged}..HEAD`, false);
+  const records = readCommitRecords(repositoryRoot, `v${latestTagged}..${endSha}`, false);
   if (!records) return null;
   const merges = [];
   for (const record of records.filter(({ parents }) => parents.length > 1)) {
-    const sideRecords = readCommitRecords(
-      repositoryRoot,
-      `v${latestTagged}..${record.parents[1]}`,
-      false,
-      ['--not', record.parents[0]],
-    );
-    if (!sideRecords) return null;
-    merges.push({ mergeSubject: record.subject, sideRecords });
+    for (const sideParent of record.parents.slice(1)) {
+      const sideRecords = readCommitRecords(
+        repositoryRoot,
+        `v${latestTagged}..${sideParent}`,
+        false,
+        ['--not', record.parents[0]],
+      );
+      if (!sideRecords) return null;
+      merges.push({ mergeSubject: record.subject, sideRecords });
+    }
   }
   return merges;
 }
@@ -717,6 +736,7 @@ export function scanUnreleasedTruth(
   branchLocalIndices = new Set(),
   mergeCommitIndices = new Set(),
   logicalPrNumber = null,
+  reservedEntryIndices = new Set(),
 ) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
   const candidateVersion = changelog.match(
@@ -746,6 +766,7 @@ export function scanUnreleasedTruth(
     branchLocalIndices,
     mergeCommitIndices,
     logicalPrNumber,
+    reservedEntryIndices,
   );
   if (undocumented.length === 0) return [];
   return [
@@ -754,10 +775,18 @@ export function scanUnreleasedTruth(
 }
 
 // QNBS-v3 (codex, P2): direct-main merges may carry one integrated logical entry; otherwise inspect second-parent commits with the strict matcher.
-export function scanDirectMainMergeTruth({ changelog, mergeBranches }) {
+export function scanDirectMainMergeTruth({
+  changelog,
+  mergeBranches,
+  logicalPrNumber = null,
+  reservedEntryIndices = new Set(),
+}) {
   if (!mergeBranches || mergeBranches.length === 0) return [];
   const unreleasedSection = getUnreleasedSectionText(changelog);
   const entries = splitUnreleasedEntries(unreleasedSection);
+  if (logicalPrNumber !== null) {
+    reserveEntryForNumberedCommit(logicalPrNumber, entries, reservedEntryIndices);
+  }
   const findings = [];
   for (const { mergeSubject, sideRecords } of mergeBranches) {
     const sideSubjects = sideRecords.map(({ subject }) => subject);
@@ -775,6 +804,8 @@ export function scanDirectMainMergeTruth({ changelog, mergeBranches }) {
       false,
       new Set(),
       sideMergeIndices,
+      null,
+      reservedEntryIndices,
     );
     if (undocumented.length > 0) {
       findings.push(
@@ -795,7 +826,9 @@ export function scanMergeAdmissionTruth({
   mergeCommitIndices,
   prNumber,
   prTitle,
+  baseSideBranchRecords = [],
 }) {
+  const reservedEntryIndices = new Set();
   const isGovernedPr = GOVERNED_COMMIT_TYPE.test(prTitle ?? '');
   // QNBS-v3: non-governed squash titles still validate integrated base history while their future squash identity remains exempt.
   if (!isGovernedPr) {
@@ -806,7 +839,7 @@ export function scanMergeAdmissionTruth({
     const baseMergeIndices = new Set(
       baseIndices.flatMap((index, baseIndex) => (mergeCommitIndices.has(index) ? [baseIndex] : [])),
     );
-    return scanUnreleasedTruth(
+    const findings = scanUnreleasedTruth(
       changelog,
       baseSubjects,
       packageVersion,
@@ -814,7 +847,17 @@ export function scanMergeAdmissionTruth({
       false,
       new Set(),
       baseMergeIndices,
+      null,
+      reservedEntryIndices,
     );
+    return [
+      ...findings,
+      ...scanDirectMainMergeTruth({
+        changelog,
+        mergeBranches: baseSideBranchRecords,
+        reservedEntryIndices,
+      }),
+    ];
   }
   const unreleasedSection = getUnreleasedSectionText(changelog);
   const entries = splitUnreleasedEntries(unreleasedSection);
@@ -830,7 +873,7 @@ export function scanMergeAdmissionTruth({
       `CHANGELOG.md — logical PR #${prNumber} release-note entry does not match prospective merge subject "${prTitle}"`,
     ];
   }
-  return scanUnreleasedTruth(
+  const findings = scanUnreleasedTruth(
     changelog,
     postReleaseCommitSubjects,
     packageVersion,
@@ -839,7 +882,17 @@ export function scanMergeAdmissionTruth({
     branchLocalIndices,
     mergeCommitIndices,
     prNumber,
+    reservedEntryIndices,
   );
+  return [
+    ...findings,
+    ...scanDirectMainMergeTruth({
+      changelog,
+      mergeBranches: baseSideBranchRecords,
+      logicalPrNumber: prNumber,
+      reservedEntryIndices,
+    }),
+  ];
 }
 
 /**
@@ -1199,6 +1252,7 @@ function main() {
     postReleaseRecords?.flatMap((record, index) => (record.parents.length > 1 ? [index] : [])) ??
       [],
   );
+  const reservedEntryIndices = new Set();
   const allFindings = [];
   allFindings.push(
     ...scanReleaseTruth(changelog, packageVersion, taggedVersions),
@@ -1212,6 +1266,8 @@ function main() {
         ? getBranchLocalSubjectIndices(undefined, { firstParent: true })
         : new Set(),
       mergeCommitIndices,
+      null,
+      reservedEntryIndices,
     ),
   );
   if (!isFeatureBranchContext) {
@@ -1225,6 +1281,7 @@ function main() {
         ...scanDirectMainMergeTruth({
           changelog,
           mergeBranches: sideBranches,
+          reservedEntryIndices,
         }),
       );
     }

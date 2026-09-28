@@ -32,6 +32,10 @@ type DocMetricsModule = {
     mergeCommitIndices: Set<number>;
     prNumber: number;
     prTitle: string;
+    baseSideBranchRecords?: Array<{
+      mergeSubject: string;
+      sideRecords: Array<{ subject: string; parents: string[] }>;
+    }>;
   }) => string[];
   scanDirectMainMergeTruth: (input: {
     changelog: string;
@@ -234,6 +238,38 @@ describe('scanMergeAdmissionTruth', () => {
         }),
       ),
     ).toEqual([expect.stringContaining('1 commit(s) exist after the latest release tag')]);
+  });
+
+  it('reserves the logical PR entry from matching an unrelated base commit', async () => {
+    const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
+    expect(
+      scanMergeAdmissionTruth(
+        admissionInput({
+          changelog: '## [Unreleased]\n\n- Search support. PR #900.\n',
+          postReleaseCommitSubjects: ['feat(core): search support', 'feat(core): search support'],
+          branchLocalIndices: new Set([1]),
+          prNumber: 900,
+          prTitle: 'feat(core): search support',
+        }),
+      ),
+    ).toEqual([expect.stringContaining('does not reference 1 post-tag')]);
+  });
+
+  it('validates governed side-parent history from the current base', async () => {
+    const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
+    expect(
+      scanMergeAdmissionTruth(
+        admissionInput({
+          changelog: '## [Unreleased]\n\n- Durable authority bootstrap. PR #855.\n',
+          baseSideBranchRecords: [
+            {
+              mergeSubject: 'Merge branch feature',
+              sideRecords: [{ subject: 'feat(core): hidden base change', parents: [] }],
+            },
+          ],
+        }),
+      ),
+    ).toEqual([expect.stringContaining('hides 1 governed side-parent commit')]);
   });
 });
 
