@@ -297,7 +297,11 @@ describe('getDirectMainSideBranchRecords', () => {
     const { getDirectMainSideBranchRecords } = await loadDocMetricsModule();
     const repositoryRoot = mkdtempSync(join(process.cwd(), '.tmp-worldscript-side-parents-'));
     const git = (...args: string[]) =>
-      execFileSync('git', ['-C', repositoryRoot, ...args], { encoding: 'utf8' });
+      execFileSync('git', ['-C', repositoryRoot, ...args], {
+        encoding: 'utf8',
+        // QNBS-v3: the fixture must not inherit a developer's global signing, hooks, or editor config.
+        env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+      });
     const commitOn = (branch: string, subject: string) => {
       git('switch', '--quiet', '-C', branch, 'main');
       git('commit', '--quiet', '--allow-empty', '-m', subject);
