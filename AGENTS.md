@@ -12,7 +12,10 @@ needs their detail. Dynamic facts belong in `package.json`, `.nvmrc`, scripts, o
   repository dependency operations.
 - Before every push, run `pnpm run ci:prepush`. On a new worktree or after dependency/lock
   changes, use `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile`),
-  never a bare install.
+  never a bare install. If `node_modules` is missing or pnpm's `verifyDepsBeforeRun` blocks
+  the `pnpm run` launcher, use the direct Node reconcile entrypoint; the pnpm command is only
+  the convenience wrapper when pnpm can already launch scripts. Never disable
+  `verifyDepsBeforeRun`, weaken `allowBuilds`, or use a bare install as a bypass.
 - Local default is the quick gate plus a focused test for every non-trivial behavior change;
   add or update the narrowest relevant test rather than silently shipping unverified behavior.
   Never run `pnpm test`, an untargeted Vitest wrapper, full
@@ -111,6 +114,12 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   threads and leave no actionable finding. Never add a suppression to silence review.
 - Keep PRs comfortably below the repository’s absolute governance tier. Do not self-authorize
   exceptions, weaken the checker, bypass protection, or use an admin merge.
+- GREEN PR CI IS NECESSARY BUT NOT SUFFICIENT for context-sensitive gates. When a required gate
+  changes behavior across feature, pull-request, merge-ref, detached-HEAD, or main context, prove
+  the current-base + PR resulting merge/main semantics before merge and make that proof part of
+  a required status check; do not infer resulting-main safety from PR-head green alone. The
+  trusted base-ref workflow-policy checker must retain that proof and the evaluator must run from
+  trusted base code after the introducing bootstrap; a PR must not certify its own admission logic.
 - After a merge, wait for exact resulting-main CI and CodeQL success, then follow
   `docs/VERCEL-PREVIEW-RETENTION-POLICY.md`. Use a dry-run manifest, protect Production/main,
   rollback history, active-PR previews, and uncertain metadata; redact provider secrets and

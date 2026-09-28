@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseDocument } from 'yaml';
@@ -8,6 +9,7 @@ import {
   checkAggregatorNeeds,
   checkAllWorkflows,
   checkJobWriteScopeAllowlist,
+  checkMergeAdmissionGate,
   checkNeedsGraph,
   checkPublishingBoundary,
   checkReviewerGovernanceGate,
@@ -91,6 +93,157 @@ describe('checkTopLevelPermissions', () => {
     checkTopLevelPermissions('x.yml', doc('jobs: {}\n'), failures);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/missing/);
+  });
+});
+
+describe('checkMergeAdmissionGate', () => {
+  const gha = (expression: string) => ['$', '{{ ', expression, ' }}'].join('');
+  const readWorkflow = (fileName: string) =>
+    readFileSync(join(__dirname, '../../../.github/workflows', fileName), 'utf8');
+  const guardWorkflow = readWorkflow('pr-changelog-reference.yml');
+  const ciWorkflow = readWorkflow('ci.yml');
+  const failuresFor = (fileName: string, yaml: string) => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkMergeAdmissionGate(fileName, doc(yaml), failures);
+    return failures.map((failure) => failure.message);
+  };
+  const mutate = (source: string, search: string, replacement: string) => {
+    expect(source).toContain(search);
+    return source.replace(search, replacement);
+  };
+  const guardTypes = '    types: [opened, edited, synchronize, reopened]';
+  const setupNodeStep = `      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0\n        with:\n          node-version: '22'\n`;
+  const gateEnv = `          PR_NUMBER: ${gha('github.event.pull_request.number')}\n`;
+  const jobHeader = '    timeout-minutes: 5\n';
+
+  it('accepts the repository guard and CI workflows', () => {
+    expect(failuresFor('pr-changelog-reference.yml', guardWorkflow)).toEqual([]);
+    expect(failuresFor('ci.yml', ciWorkflow)).toEqual([]);
+  });
+
+  it('rejects a body-only edited trigger on the heavyweight CI pipeline', () => {
+    expect(
+      failuresFor(
+        'ci.yml',
+        mutate(
+          ciWorkflow,
+          '  pull_request:\n    branches: [main]\n',
+          '  pull_request:\n    branches: [main]\n    types: [opened, synchronize, reopened, edited]\n',
+        ),
+      ),
+    ).toEqual([expect.stringContaining('ci.yml must not run on pull_request edited')]);
+  });
+
+  it('requires the admission step to exist', () => {
+    expect(
+      failuresFor(
+        'pr-changelog-reference.yml',
+        mutate(guardWorkflow, '- name: Main-context merge admission proof', '- name: Renamed'),
+      ),
+    ).toEqual([expect.stringContaining('must retain')]);
+  });
+
+  it.each([
+    [
+      'a title edit that no longer re-runs admission',
+      guardTypes,
+      '    types: [opened, synchronize, reopened]',
+      'must include edited',
+    ],
+    [
+      'a head update that no longer re-runs admission',
+      guardTypes,
+      '    types: [opened, edited, reopened]',
+      'must include synchronize',
+    ],
+    [
+      'a renamed required status context',
+      "    name: Require this PR's own number in CHANGELOG.md [Unreleased] before merge\n",
+      '    name: Optional changelog check\n',
+      'required status context name',
+    ],
+    [
+      'a skippable guard job',
+      jobHeader,
+      `${jobHeader}    if: ${gha("github.event.action != 'edited'")}\n`,
+      'job must not declare unapproved key if',
+    ],
+    [
+      'a failure-tolerant guard job',
+      jobHeader,
+      `${jobHeader}    continue-on-error: true\n`,
+      'job must not declare unapproved key continue-on-error',
+    ],
+    [
+      'a skippable admission step',
+      '      - name: Main-context merge admission proof\n',
+      `      - name: Main-context merge admission proof\n        if: ${gha("github.event.action != 'edited'")}\n`,
+      'must not declare unapproved key if',
+    ],
+    [
+      'shared cancellation with other workflows',
+      'permissions:\n  contents: read\n',
+      `permissions:\n  contents: read\nconcurrency:\n  group: ci-CI / CD-${gha('github.head_ref')}\n  cancel-in-progress: true\n`,
+      'must not declare workflow-level concurrency',
+    ],
+    [
+      'workflow-level shell defaults',
+      'permissions:\n  contents: read\n',
+      'permissions:\n  contents: read\ndefaults:\n  run:\n    shell: ./evil {0}\n',
+      'workflow-level defaults',
+    ],
+    [
+      'job-level environment controls',
+      jobHeader,
+      `${jobHeader}    env:\n      NODE_OPTIONS: --require ./exit-zero.cjs\n`,
+      'job must not declare unapproved key env',
+    ],
+    [
+      'extra step environment controls',
+      gateEnv,
+      `${gateEnv}          NODE_OPTIONS: --require ./exit-zero.cjs\n`,
+      'env must be exactly BASE_SHA and PR_NUMBER',
+    ],
+    [
+      'a PR-controlled evaluator run',
+      'CHECKER=/tmp/base-scripts/check-merge-admission.mjs',
+      'CHECKER=scripts/check-merge-admission.mjs',
+      'canonical trusted evaluator run',
+    ],
+    [
+      'a successful early exit',
+      '          set -euo pipefail\n          git fetch',
+      '          set -euo pipefail\n          exit 0\n          git fetch',
+      'canonical trusted evaluator run',
+    ],
+    [
+      'a non-22 Node runtime',
+      "          node-version: '22'\n",
+      "          node-version: '24'\n",
+      'must use exactly',
+    ],
+    [
+      'a PR-controlled Node version file',
+      "          node-version: '22'\n",
+      '          node-version-file: .nvmrc\n',
+      'must use exactly',
+    ],
+    [
+      'PR-controlled setup before admission',
+      setupNodeStep,
+      '      - uses: ./.github/actions/setup\n',
+      'SHA-pinned checkout then setup-node prelude',
+    ],
+    [
+      'an extra run step before admission',
+      setupNodeStep,
+      `${setupNodeStep}      - run: echo "NODE_OPTIONS=--require ./x.cjs" >> "$GITHUB_ENV"\n`,
+      'directly after the checkout and setup-node prelude',
+    ],
+  ])('rejects %s', (_label, search, replacement, message) => {
+    expect(
+      failuresFor('pr-changelog-reference.yml', mutate(guardWorkflow, search, replacement)),
+    ).toContainEqual(expect.stringContaining(message));
   });
 });
 
@@ -1069,6 +1222,10 @@ describe('checkAllWorkflows', () => {
         file: 'ci.yml',
         message: 'canonical CI workflow must remain present for reviewer governance',
       },
+      {
+        file: 'pr-changelog-reference.yml',
+        message: 'required PR CHANGELOG guard must remain present for main-context merge admission',
+      },
     ]);
   });
 
@@ -1122,7 +1279,7 @@ describe('checkAllWorkflows', () => {
         throw new Error('symlink not allowed under .github/actions: /repo/.github/actions/setup');
       },
     });
-    expect(failures).toHaveLength(3);
+    expect(failures).toHaveLength(4);
     expect(failures.some((failure) => failure.file === 'reviewer-governance-trust.yml')).toBe(true);
     expect(failures.some((failure) => /symlink/i.test(failure.message))).toBe(true);
   });

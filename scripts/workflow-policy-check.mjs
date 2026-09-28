@@ -180,6 +180,231 @@ export function checkReviewerGovernanceGate(fileName, doc, failures) {
   validateReviewerGovernanceGateOverrides(fileName, gateStep, failures);
 }
 
+const MERGE_ADMISSION_STEP_NAME = 'Main-context merge admission proof';
+// QNBS-v3: the admission proof lives in the cheap, already-required PR CHANGELOG guard so title edits re-run it without re-triggering or cancelling the heavyweight ci.yml pipeline.
+const MERGE_ADMISSION_WORKFLOW = 'pr-changelog-reference.yml';
+const MERGE_ADMISSION_JOB_ID = 'check';
+const MERGE_ADMISSION_JOB_NAME =
+  "Require this PR's own number in CHANGELOG.md [Unreleased] before merge";
+const MERGE_ADMISSION_EVENT_TYPES = ['opened', 'edited', 'synchronize', 'reopened'];
+
+function mapKeys(node, doc) {
+  const resolved = resolveNode(node, doc);
+  return (resolved?.items ?? []).map((pair) => String(pair.key?.value ?? pair.key));
+}
+
+function pushUnapprovedKeys(fileName, keys, allowed, label, failures) {
+  for (const key of keys.filter((candidate) => !allowed.has(candidate))) {
+    failures.push({ file: fileName, message: `${label} must not declare unapproved key ${key}` });
+  }
+}
+
+function pullRequestTypes(doc) {
+  const pullRequest = resolveNode(getWorkflowTriggerNode(doc)?.get?.('pull_request', true), doc);
+  return nodeValue(pullRequest?.get?.('types', true), doc);
+}
+
+// QNBS-v3: only the checkout and a literal Node 22 pin may precede admission — SHA-pinned upstream actions that read no PR file, so nothing PR-controlled can alter its environment, PATH, or shell first.
+const MERGE_ADMISSION_PRELUDE = [
+  {
+    uses: /^actions\/checkout@[0-9a-f]{40}$/,
+    with: { 'persist-credentials': false, 'fetch-tags': true, 'fetch-depth': 0 },
+  },
+  { uses: /^actions\/setup-node@[0-9a-f]{40}$/, with: { 'node-version': '22' } },
+];
+const MERGE_ADMISSION_PRELUDE_STEP_KEYS = new Set(['uses', 'with']);
+
+function checkMergeAdmissionPreludeStep(fileName, step, expected, doc, failures) {
+  const label = `${MERGE_ADMISSION_WORKFLOW} step before ${MERGE_ADMISSION_STEP_NAME}`;
+  const uses = String(nodeValue(step?.get?.('uses', true), doc) ?? '');
+  if (!expected?.uses.test(uses)) {
+    failures.push({
+      file: fileName,
+      message: `${label} must be the SHA-pinned checkout then setup-node prelude, found ${uses || 'a run step'}`,
+    });
+    return;
+  }
+  pushUnapprovedKeys(
+    fileName,
+    mapKeys(step, doc),
+    MERGE_ADMISSION_PRELUDE_STEP_KEYS,
+    label,
+    failures,
+  );
+  const inputs = nodeValue(step.get('with', true), doc) ?? {};
+  const expectedKeys = Object.keys(expected.with);
+  const exact =
+    Object.keys(inputs).length === expectedKeys.length &&
+    expectedKeys.every((key) => inputs[key] === expected.with[key]);
+  if (!exact) {
+    failures.push({
+      file: fileName,
+      message: `${label} must use exactly ${JSON.stringify(expected.with)} as inputs`,
+    });
+  }
+}
+
+function checkMergeAdmissionStepOrder(fileName, steps, gateIndex, doc, failures) {
+  if (gateIndex !== MERGE_ADMISSION_PRELUDE.length) {
+    failures.push({
+      file: fileName,
+      message: `${MERGE_ADMISSION_STEP_NAME} must be step ${MERGE_ADMISSION_PRELUDE.length + 1} of ${MERGE_ADMISSION_WORKFLOW}, directly after the checkout and setup-node prelude`,
+    });
+  }
+  steps.slice(0, gateIndex).forEach((step, index) => {
+    checkMergeAdmissionPreludeStep(fileName, step, MERGE_ADMISSION_PRELUDE[index], doc, failures);
+  });
+}
+
+// QNBS-v3: title edits change the prospective squash subject, so the guard must re-run on edited as well as on every head/base event.
+function checkMergeAdmissionTrigger(fileName, doc, failures) {
+  const types = pullRequestTypes(doc);
+  const missing = MERGE_ADMISSION_EVENT_TYPES.filter(
+    (type) => !Array.isArray(types) || !types.includes(type),
+  );
+  if (missing.length > 0) {
+    failures.push({
+      file: fileName,
+      message: `${MERGE_ADMISSION_WORKFLOW} pull_request trigger must include ${missing.join(', ')} so head and title changes re-run admission`,
+    });
+  }
+}
+
+const MERGE_ADMISSION_JOB_KEYS = new Set(['name', 'runs-on', 'timeout-minutes', 'steps']);
+
+// QNBS-v3: the job name is the required status context; job/workflow env, defaults, concurrency, if, container, and continue-on-error could rename, preload, cancel, skip, or tolerate the proof, so none may be declared.
+function checkMergeAdmissionExecutionControls(fileName, job, doc, failures) {
+  pushUnapprovedKeys(
+    fileName,
+    mapKeys(job, doc),
+    MERGE_ADMISSION_JOB_KEYS,
+    `${MERGE_ADMISSION_WORKFLOW} job`,
+    failures,
+  );
+  if (nodeValue(job.get('name', true), doc) !== MERGE_ADMISSION_JOB_NAME) {
+    failures.push({
+      file: fileName,
+      message: `${MERGE_ADMISSION_WORKFLOW} job must keep the required status context name "${MERGE_ADMISSION_JOB_NAME}"`,
+    });
+  }
+  for (const key of ['env', 'defaults', 'concurrency', '<<']) {
+    if (doc.get(key, true) !== undefined) {
+      failures.push({
+        file: fileName,
+        message: `${MERGE_ADMISSION_WORKFLOW} must not declare workflow-level ${key}`,
+      });
+    }
+  }
+}
+
+const MERGE_ADMISSION_STEP_KEYS = new Set(['name', 'env', 'run']);
+const MERGE_ADMISSION_STEP_ENV = {
+  BASE_SHA: '$' + '{{ github.event.pull_request.base.sha }}',
+  PR_NUMBER: '$' + '{{ github.event.pull_request.number }}',
+};
+
+function checkMergeAdmissionStepShape(fileName, gateStep, doc, failures) {
+  pushUnapprovedKeys(
+    fileName,
+    mapKeys(gateStep, doc),
+    MERGE_ADMISSION_STEP_KEYS,
+    MERGE_ADMISSION_STEP_NAME,
+    failures,
+  );
+  const environment = nodeValue(gateStep.get('env', true), doc) ?? {};
+  const keys = Object.keys(environment);
+  const exact =
+    keys.length === 2 && keys.every((key) => environment[key] === MERGE_ADMISSION_STEP_ENV[key]);
+  if (!exact) {
+    failures.push({
+      file: fileName,
+      message: `${MERGE_ADMISSION_STEP_NAME} env must be exactly BASE_SHA and PR_NUMBER bound to the pull-request event`,
+    });
+  }
+}
+
+const CANONICAL_MERGE_ADMISSION_RUN = [
+  'set -euo pipefail',
+  'git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"',
+  'mkdir -p /tmp/base-scripts',
+  'if git show "$BASE_SHA:scripts/check-merge-admission.mjs" > /tmp/base-scripts/check-merge-admission.mjs 2>/dev/null \\',
+  '&& git show "$BASE_SHA:scripts/check-doc-metrics.mjs" > /tmp/base-scripts/check-doc-metrics.mjs 2>/dev/null \\',
+  '&& git show "$BASE_SHA:scripts/i18n-locales.mjs" > /tmp/base-scripts/i18n-locales.mjs 2>/dev/null \\',
+  '&& git show "$BASE_SHA:scripts/test-metrics.mjs" > /tmp/base-scripts/test-metrics.mjs 2>/dev/null; then',
+  'CHECKER=/tmp/base-scripts/check-merge-admission.mjs',
+  'WORLDSCRIPT_REPOSITORY_ROOT="$GITHUB_WORKSPACE" node "$CHECKER"',
+  'else',
+  'if [ "$PR_NUMBER" = "857" ]; then',
+  'echo "::notice::merge-admission evaluator is absent on the base ref; using the bounded PR #857 bootstrap once."',
+  'test "$(sha256sum scripts/check-merge-admission.mjs | awk \'{print $1}\')" = "47689edebf7651f92ed9efb56ef80ff7648815201787a15c02f2e3a84a156b70"',
+  'test "$(sha256sum scripts/check-doc-metrics.mjs | awk \'{print $1}\')" = "0ad96e40d206083b03867aca2474941cfeeedc608faacf3be5d2bad7753602ca"',
+  'test "$(sha256sum scripts/i18n-locales.mjs | awk \'{print $1}\')" = "ae22dfcad13f0f82cfa8cbf39013422660a8e099e00dfa137266f2ccf5e40d58"',
+  'test "$(sha256sum scripts/test-metrics.mjs | awk \'{print $1}\')" = "27992ffcaeea146d4ac64b64e9dcd6bc9420b9f895393e205bcab209c5764505"',
+  'node scripts/check-merge-admission.mjs',
+  'else',
+  'echo "::error::trusted merge-admission evaluator is absent outside the introducing transition"',
+  'exit 1',
+  'fi',
+  'fi',
+];
+
+function normalizedRunLines(run) {
+  return typeof run === 'string'
+    ? run
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+    : [];
+}
+
+// QNBS-v3: exact canonical equality (not substring checks) so no early exit, wrapper, CHECKER reassignment, or widened bootstrap path can coexist with the trusted evaluator call.
+function checkMergeAdmissionRun(fileName, gateStep, doc, failures) {
+  const run = nodeValue(gateStep.get('run', true), doc);
+  if (normalizedRunLines(run).join('\n') !== CANONICAL_MERGE_ADMISSION_RUN.join('\n')) {
+    failures.push({
+      file: fileName,
+      message: `${MERGE_ADMISSION_STEP_NAME} must use the canonical trusted evaluator run; unreviewed control-flow variants are rejected`,
+    });
+  }
+}
+
+// QNBS-v3: body-only PR edits must never start or cancel the heavyweight pipeline; the separate cheap guard owns every edited-event revalidation.
+function checkCiEditedIsolation(fileName, doc, failures) {
+  const types = pullRequestTypes(doc);
+  if (Array.isArray(types) && types.includes('edited')) {
+    failures.push({
+      file: fileName,
+      message: `ci.yml must not run on pull_request edited; title-sensitive admission runs in ${MERGE_ADMISSION_WORKFLOW}`,
+    });
+  }
+}
+
+function checkMergeAdmissionWorkflow(fileName, doc, failures) {
+  const job = jobMap(doc).get(MERGE_ADMISSION_JOB_ID);
+  const steps = resolveSteps(job?.get?.('steps', true), doc);
+  const gateIndex = steps.findIndex(
+    (step) => nodeValue(step?.get?.('name', true), doc) === MERGE_ADMISSION_STEP_NAME,
+  );
+  if (gateIndex < 0) {
+    failures.push({
+      file: fileName,
+      message: `${MERGE_ADMISSION_WORKFLOW} job ${MERGE_ADMISSION_JOB_ID} must retain the ${MERGE_ADMISSION_STEP_NAME} step`,
+    });
+    return;
+  }
+  checkMergeAdmissionStepOrder(fileName, steps, gateIndex, doc, failures);
+  checkMergeAdmissionStepShape(fileName, steps[gateIndex], doc, failures);
+  checkMergeAdmissionRun(fileName, steps[gateIndex], doc, failures);
+  checkMergeAdmissionExecutionControls(fileName, job, doc, failures);
+  checkMergeAdmissionTrigger(fileName, doc, failures);
+}
+
+// QNBS-v3: after introduction, the base-ref checker owns this contract; the evaluator may inspect the PR workspace only through the exact, bounded bootstrap path.
+export function checkMergeAdmissionGate(fileName, doc, failures) {
+  if (fileName === 'ci.yml') checkCiEditedIsolation(fileName, doc, failures);
+  if (fileName === MERGE_ADMISSION_WORKFLOW) checkMergeAdmissionWorkflow(fileName, doc, failures);
+}
+
 function isPullRequestTargetOnlyTrigger(triggers) {
   if (!triggers) return false;
   if (typeof triggers !== 'object') return false;
@@ -877,6 +1102,7 @@ export function checkWorkflowFile(filePath, dependencies = {}) {
   checkAggregatorNeeds(fileName, doc, failures);
   checkPublishingBoundary(fileName, doc, failures);
   checkReviewerGovernanceGate(fileName, doc, failures);
+  checkMergeAdmissionGate(fileName, doc, failures);
   checkReviewerGovernanceTrustWorkflow(fileName, doc, failures);
   return failures;
 }
@@ -905,6 +1131,10 @@ export function checkAllWorkflows(root = projectRoot, dependencies = {}) {
       'required reviewer governance trust workflow must remain present',
     ],
     ['ci.yml', 'canonical CI workflow must remain present for reviewer governance'],
+    [
+      'pr-changelog-reference.yml',
+      'required PR CHANGELOG guard must remain present for main-context merge admission',
+    ],
   ];
   const requiredWorkflowFailures = requiredWorkflows
     .filter(([fileName]) => {

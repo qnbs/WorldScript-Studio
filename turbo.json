@@ -12,6 +12,7 @@
     "DEPLOY_TARGET",
     "DEV",
     "GITHUB_EVENT_NAME",
+    "WORLDSCRIPT_REPOSITORY_ROOT",
     "GRAPHIFY_SKIP",
     "LANG",
     "LC_ALL",
@@ -25,6 +26,7 @@
     "USERPROFILE",
     "XDG_RUNTIME_DIR"
   ],
+  "globalPassThroughEnv": ["GITHUB_EVENT_PATH", "GITHUB_SHA"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

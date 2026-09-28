@@ -75,11 +75,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "${TRUSTED_BASE_WORKSPACE:-}" ] \
-             && [ -f "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs" ]; then
+             && [ -f "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs" ] \
+             && grep -q 'checkMergeAdmissionGate' "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs"; then
             WORKFLOW_POLICY_ROOT="${{ github.workspace }}" \
               node "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs"
           else
-            node scripts/workflow-policy-check.mjs
+            echo "::notice::trusted base lacks the merge-admission structural policy (introducing transition); validating the PR copy once."
+            WORKFLOW_POLICY_ROOT="${{ github.workspace }}" \
+              node scripts/workflow-policy-check.mjs
           fi
       # QNBS-v3: use the trusted base checker for PRs; config and checker remain the PR workspace.
       - name: Reviewer governance configuration gate
