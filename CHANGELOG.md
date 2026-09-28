@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Protected evaluator transitions (#675):** the merge-admission evaluator graph
+  (`check-merge-admission.mjs`, `check-doc-metrics.mjs`, `i18n-locales.mjs`, `test-metrics.mjs`)
+  can now change only through an exact, base-owned transition: a manifest-only PR first records the
+  file's current and next SHA-256, then the evaluator PR lands exactly those bytes. The base-owned
+  verifier also protects itself and the reviewer trust workflow, fails closed on deletes, renames,
+  mode or symlink changes, stale or replayed authorizations, and any evaluator import other than
+  `node:` builtins and protected relative modules, and never trusts a PR's own manifest. PR #868.
 - **Main-context merge admission (#675):** the required PR CHANGELOG guard now also proves, on
   Node 22 and from the base ref, that the pull request's exact current-base merge would keep
   `main`'s release truth green. It rebuilds the resulting `main` history for both default GitHub
