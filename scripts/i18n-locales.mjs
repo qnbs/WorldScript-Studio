@@ -5,10 +5,12 @@
 // (tests/unit/i18n/localesRegistry.test.ts) asserts these match the TS registry, so the two cannot
 // drift. Net effect: the locale list is no longer hand-maintained in three separate scripts.
 import { existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+const root = process.env.WORLDSCRIPT_REPOSITORY_ROOT
+  ? resolve(process.env.WORLDSCRIPT_REPOSITORY_ROOT)
+  : join(fileURLToPath(new URL('.', import.meta.url)), '..');
 export const LOCALES_DIR = join(root, 'locales');
 export const REF_LANG = 'en';
 

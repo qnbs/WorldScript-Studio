@@ -1,8 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const DEFAULT_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const DEFAULT_ROOT = process.env.WORLDSCRIPT_REPOSITORY_ROOT
+  ? resolve(process.env.WORLDSCRIPT_REPOSITORY_ROOT)
+  : join(dirname(fileURLToPath(import.meta.url)), '..');
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.(?:ts|tsx)$/;
 
 function collectTestSources(directory, repositoryRoot, sources) {

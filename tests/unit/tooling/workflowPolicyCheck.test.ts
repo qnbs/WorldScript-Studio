@@ -8,6 +8,7 @@ import {
   checkAggregatorNeeds,
   checkAllWorkflows,
   checkJobWriteScopeAllowlist,
+  checkMergeAdmissionGate,
   checkNeedsGraph,
   checkPublishingBoundary,
   checkReviewerGovernanceGate,
@@ -65,6 +66,43 @@ ${canonicalWorkflowPolicyCommand}          REVIEWER_CONFIG_ROOT="$PR_ROOT" \\
             node scripts/check-reviewer-config.mjs
 `;
 
+const canonicalMergeAdmissionGate = `
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+jobs:
+  quality:
+    strategy:
+      matrix:
+        node-version: ['22', '24']
+    steps:
+      - name: Main-context merge admission proof
+        if: github.event_name == 'pull_request' && matrix.node-version == '22'
+        env:
+          BASE_SHA: \${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: \${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"
+          mkdir -p /tmp/base-scripts
+          if git show "$BASE_SHA:scripts/check-merge-admission.mjs" > /tmp/base-scripts/check-merge-admission.mjs 2>/dev/null \\
+             && git show "$BASE_SHA:scripts/check-doc-metrics.mjs" > /tmp/base-scripts/check-doc-metrics.mjs 2>/dev/null \\
+             && git show "$BASE_SHA:scripts/i18n-locales.mjs" > /tmp/base-scripts/i18n-locales.mjs 2>/dev/null \\
+             && git show "$BASE_SHA:scripts/test-metrics.mjs" > /tmp/base-scripts/test-metrics.mjs 2>/dev/null; then
+            CHECKER=/tmp/base-scripts/check-merge-admission.mjs
+            WORLDSCRIPT_REPOSITORY_ROOT="$GITHUB_WORKSPACE" node "$CHECKER"
+          else
+            if [ "$PR_NUMBER" = "857" ]; then
+              echo "::notice::merge-admission evaluator is absent on the base ref; using the bounded PR #857 bootstrap once."
+              node scripts/check-merge-admission.mjs
+            else
+              echo "::error::trusted merge-admission evaluator is absent outside the introducing transition"
+              exit 1
+            fi
+          fi
+`;
+
 // QNBS-v3: contents:read is the only safe top-level default — every other form is a policy gap.
 describe('checkTopLevelPermissions', () => {
   it('passes for the canonical {contents: read} form', () => {
@@ -91,6 +129,101 @@ describe('checkTopLevelPermissions', () => {
     checkTopLevelPermissions('x.yml', doc('jobs: {}\n'), failures);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/missing/);
+  });
+});
+
+describe('checkMergeAdmissionGate', () => {
+  it('requires the trusted base evaluator and bounded bootstrap fallback', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkMergeAdmissionGate('ci.yml', doc(canonicalMergeAdmissionGate), failures);
+    expect(failures).toEqual([]);
+  });
+
+  it('rejects a gate that only runs the PR-controlled evaluator', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkMergeAdmissionGate(
+      'ci.yml',
+      doc(canonicalMergeAdmissionGate.replace(/if git show[\s\S]*?else/, 'if true; then')),
+      failures,
+    );
+    expect(
+      failures.some((failure) => /trusted base file|absent-base bootstrap/i.test(failure.message)),
+    ).toBe(true);
+  });
+  it('requires the exact trusted checker assignment', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkMergeAdmissionGate(
+      'ci.yml',
+      doc(
+        canonicalMergeAdmissionGate.replace(
+          'CHECKER=/tmp/base-scripts/check-merge-admission.mjs',
+          'CHECKER=scripts/check-merge-admission.mjs',
+        ),
+      ),
+      failures,
+    );
+    expect(
+      failures.some((failure) => /assign CHECKER.*exact trusted base/i.test(failure.message)),
+    ).toBe(true);
+  });
+
+  it('requires the Node 22 matrix lane', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkMergeAdmissionGate(
+      'ci.yml',
+      doc(
+        canonicalMergeAdmissionGate.replace("node-version: ['22', '24']", "node-version: ['24']"),
+      ),
+      failures,
+    );
+    expect(failures.some((failure) => failure.message.includes('Node 22 lane'))).toBe(true);
+  });
+
+  it('rejects excluding the Node 22 admission lane', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkMergeAdmissionGate(
+      'ci.yml',
+      doc(
+        canonicalMergeAdmissionGate.replace(
+          "        node-version: ['22', '24']",
+          "        node-version: ['22', '24']\n        exclude:\n          - node-version: '22'",
+        ),
+      ),
+      failures,
+    );
+    expect(failures.some((failure) => failure.message.includes('must not exclude'))).toBe(true);
+  });
+
+  it('rejects a successful early exit in the admission script', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkMergeAdmissionGate(
+      'ci.yml',
+      doc(
+        canonicalMergeAdmissionGate.replace(
+          '          set -euo pipefail',
+          '          set -euo pipefail\n          exit 0',
+        ),
+      ),
+      failures,
+    );
+    expect(failures.some((failure) => failure.message.includes('successful early exit'))).toBe(
+      true,
+    );
+  });
+
+  it('requires admission to rerun after PR title edits', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkMergeAdmissionGate(
+      'ci.yml',
+      doc(
+        canonicalMergeAdmissionGate.replace(
+          '    types: [opened, synchronize, reopened, ready_for_review, edited]',
+          '    types: [opened, synchronize]',
+        ),
+      ),
+      failures,
+    );
+    expect(failures.some((failure) => failure.message.includes('include edited'))).toBe(true);
   });
 });
 

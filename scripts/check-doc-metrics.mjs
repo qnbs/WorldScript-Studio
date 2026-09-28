@@ -15,7 +15,9 @@ import { fileURLToPath } from 'node:url';
 import { getLocales, getModules, REF_LANG } from './i18n-locales.mjs';
 import { getVitestTestCaseCount, getVitestTestFileCount } from './test-metrics.mjs';
 
-const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+const root = process.env.WORLDSCRIPT_REPOSITORY_ROOT
+  ? resolve(process.env.WORLDSCRIPT_REPOSITORY_ROOT)
+  : join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const BUNDLE_BUDGET_DOCS = ['README.md', '.github/CI-AUDIT.md'];
 const BUNDLE_BUDGET_CONFIG = 'config/bundle-budget.json';
 
@@ -163,12 +165,13 @@ export function scanReadmeTestMetrics(readme) {
     /(\d+)\+ tests \/ (\d+) files/g,
     /Vitest 5\.x \((\d+)\+ tests \/ (\d+) files\)/g,
     /Vitest unit tests \((\d+)\+ tests, (\d+) files\)/g,
+    /Vitest unit tests \(the (\d+)\+ total/g,
     /\*\*(\d+)\+ unit tests\*\* across \*\*(\d+) test files\*\*/g,
   ];
   for (const pattern of patterns) {
     for (const match of readme.matchAll(pattern)) {
       const tests = Number(match[1]);
-      const files = Number(match[2]);
+      const files = match[2] === undefined ? expectedFiles : Number(match[2]);
       if (tests !== expectedTests || files !== expectedFiles) {
         findings.push(
           `README.md — test metrics report ${tests} tests/${files} files, expected ${expectedTests} tests/${expectedFiles} files from the Vitest source set`,
@@ -431,7 +434,7 @@ function hasNegationMarker(text) {
 // QNBS-v3 (codex): the set of entry indices a given commit's slug could match — match ratio is
 // computed PER changelog entry (see findUndocumentedGovernedCommits's header comment for why).
 function candidateEntryIndices(subject, unreleasedEntries) {
-  const description = subject.replace(GOVERNED_COMMIT_TYPE, '').replace(TRAILING_PR_REF, '');
+  const description = subject.replace(GOVERNED_COMMIT_TYPE, '').replace(/(?:\s+\(#\d+\))+\s*$/, '');
   const words = significantSlugWords(description);
   if (words.length === 0) return [];
   const isNegated = hasNegationMarker(description);
@@ -440,6 +443,11 @@ function candidateEntryIndices(subject, unreleasedEntries) {
     const matched = words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(entry));
     return matched.length / words.length >= SLUG_MATCH_RATIO ? [index] : [];
   });
+}
+
+// QNBS-v3: GitHub squash subjects add a deterministic PR suffix; matching retains title issue references as proof.
+export function getProspectiveMergeSubject(prTitle, prNumber) {
+  return `${String(prTitle ?? '').trim()} (#${prNumber})`;
 }
 
 // QNBS-v3 (codex): unlike an entry merely held by another slug-matched commit, a reserved entry can never be freed up via recursive reassignment.
@@ -495,7 +503,15 @@ function computeMaxSlugMatching(subjects, entries, reservedEntryIndices = new Se
 // QNBS-v3 (codex): a branch-local commit's trailing "(#NNN)" may be an in-flight issue reference rather than the real PR number GitHub only appends at squash time, so isBranchLocal skips the exact-PR-match path entirely instead of trusting that number.
 // QNBS-v3 (codex): checks parsed bullet entries, not the raw section text — a PR number mentioned only in surrounding prose (never inside an actual release-note bullet) must not count as documentation.
 // QNBS-v3 (CodeScene): extracted so findUndocumentedGovernedCommits stays a flat loop with zero nested conditionals — returns 'documented', 'undocumented', or 'needsSlugCheck' for one subject.
-function classifyGovernedCommit(subject, entries, isFeatureBranchContext, isBranchLocal) {
+function classifyGovernedCommit(
+  subject,
+  entries,
+  isFeatureBranchContext,
+  isBranchLocal,
+  isMergeCommit,
+) {
+  // QNBS-v3: a merge commit is the integrated logical change; its trailing issue reference may be an umbrella issue rather than the PR number, so prove it by subject-to-entry matching instead of trusting that suffix.
+  if (isMergeCommit) return 'needsSlugCheck';
   const prMatch = TRAILING_PR_REF.exec(subject);
   if (prMatch && !isBranchLocal) {
     const isDocumented = entries.some((entry) => isReferencedByPrNumber(prMatch[1], entry));
@@ -516,8 +532,13 @@ function findUndocumentedGovernedCommits(
   unreleasedSection,
   isFeatureBranchContext,
   branchLocalIndices = new Set(),
+  mergeCommitIndices = new Set(),
+  logicalPrNumber = null,
 ) {
   const entries = splitUnreleasedEntries(unreleasedSection);
+  const logicalPrEntryPresent =
+    logicalPrNumber !== null &&
+    entries.some((entry) => isReferencedByPrNumber(logicalPrNumber, entry));
   const undocumented = [];
   const slugCandidates = [];
   const reservedEntryIndices = new Set();
@@ -525,8 +546,18 @@ function findUndocumentedGovernedCommits(
     const subject = postReleaseCommitSubjects[index];
     if (!GOVERNED_COMMIT_TYPE.test(subject)) continue;
     const isBranchLocal = branchLocalIndices.has(index);
+    const isMergeCommit = mergeCommitIndices.has(index);
     const prMatch = TRAILING_PR_REF.exec(subject);
-    const status = classifyGovernedCommit(subject, entries, isFeatureBranchContext, isBranchLocal);
+    const status =
+      logicalPrEntryPresent && isBranchLocal
+        ? 'documented'
+        : classifyGovernedCommit(
+            subject,
+            entries,
+            isFeatureBranchContext,
+            isBranchLocal,
+            isMergeCommit,
+          );
     if (status === 'undocumented') undocumented.push(subject);
     if (status === 'needsSlugCheck') slugCandidates.push(subject);
     if (status === 'documented' && prMatch && !isBranchLocal)
@@ -544,23 +575,79 @@ function findUndocumentedGovernedCommits(
  * A tagless or shallow checkout intentionally returns null, so CI does not turn missing history
  * into a false release failure.
  */
-export function getPostReleaseCommitSubjects(repositoryRoot = root) {
-  const taggedVersions = getTaggedVersions(repositoryRoot);
-  const latestTagged = [...taggedVersions].sort(semverCompare).at(-1);
-  if (!latestTagged) return null;
+function readCommitRecords(repositoryRoot, range, firstParent, additionalArgs = []) {
   try {
-    const output = execFileSync('git', ['log', '--format=%s', `v${latestTagged}..HEAD`], {
+    const args = ['log'];
+    if (firstParent) args.push('--first-parent');
+    args.push('--format=%H%x00%P%x00%s', range, ...additionalArgs);
+    const output = execFileSync('git', args, {
       cwd: repositoryRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
     return output
       .split('\n')
-      .map((subject) => subject.trim())
-      .filter(Boolean);
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [sha, parentText, subject] = line.split('\0');
+        return { sha, parents: parentText ? parentText.split(' ') : [], subject };
+      });
   } catch {
     return null;
   }
+}
+
+function getLatestTaggedVersion(repositoryRoot) {
+  const taggedVersions = getTaggedVersions(repositoryRoot);
+  const latestTagged = [...taggedVersions].sort(semverCompare).at(-1);
+  return latestTagged ?? null;
+}
+
+// QNBS-v3: main-context release truth follows first-parent history so one integrated PR is one logical release change; internal review commits remain covered by the pre-merge PR-range proof below.
+export function getPostReleaseCommitRecords(repositoryRoot = root, { firstParent = false } = {}) {
+  const latestTagged = getLatestTaggedVersion(repositoryRoot);
+  if (!latestTagged) return null;
+  return readCommitRecords(repositoryRoot, `v${latestTagged}..HEAD`, firstParent);
+}
+
+export function getPostReleaseCommitSubjects(repositoryRoot = root) {
+  return getPostReleaseCommitRecords(repositoryRoot)?.map(({ subject }) => subject) ?? null;
+}
+
+// QNBS-v3: the merge-admission proof checks the current base's integrated history plus every commit unique to the PR head, without treating a synthetic merge commit as the release identity.
+export function getMergeAdmissionCommitRecords(baseSha, headSha, repositoryRoot = root) {
+  const latestTagged = getLatestTaggedVersion(repositoryRoot);
+  if (!latestTagged) return null;
+  const baseRecords = readCommitRecords(repositoryRoot, `v${latestTagged}..${baseSha}`, true);
+  const branchRecords = readCommitRecords(repositoryRoot, `${baseSha}..${headSha}`, false);
+  if (!baseRecords || !branchRecords) return null;
+  const records = [...baseRecords, ...branchRecords];
+  const branchLocalIndices = new Set(branchRecords.map((_, index) => baseRecords.length + index));
+  const mergeCommitIndices = new Set(
+    records.flatMap((record, index) => (record.parents.length > 1 ? [index] : [])),
+  );
+  return { records, branchLocalIndices, mergeCommitIndices };
+}
+
+// QNBS-v3 (codex, P2): first-parent history collapses canonical PR merges, so direct-main checks must retain second-parent records to prevent hidden governed commits.
+export function getDirectMainSideBranchRecords(repositoryRoot = root) {
+  const latestTagged = getLatestTaggedVersion(repositoryRoot);
+  if (!latestTagged) return null;
+  const records = readCommitRecords(repositoryRoot, `v${latestTagged}..HEAD`, false);
+  if (!records) return null;
+  const merges = [];
+  for (const record of records.filter(({ parents }) => parents.length > 1)) {
+    const sideRecords = readCommitRecords(
+      repositoryRoot,
+      `v${latestTagged}..${record.parents[1]}`,
+      false,
+      ['--not', record.parents[0]],
+    );
+    if (!sideRecords) return null;
+    merges.push({ mergeSubject: record.subject, sideRecords });
+  }
+  return merges;
 }
 
 // QNBS-v3 (codex): checks the branch name directly (not just GITHUB_EVENT_NAME) so the un-numbered-commit exemption also covers a local pre-push run, but fails closed on detached HEAD (`git rev-parse --abbrev-ref HEAD` prints "HEAD" there, actions/checkout's default for every event including push) so push-to-main enforcement never silently weakens.
@@ -594,27 +681,12 @@ function resolveMainRef(repositoryRoot) {
 }
 
 // QNBS-v3 (codex): a merge-base cutoff plus a positional window mis-splits history once the branch has merged main back in — git log's default order can interleave an already-merged main commit between branch-local ones — so each commit's OWN ancestry (merge-base --is-ancestor against main) is checked individually instead.
-export function getBranchLocalSubjectIndices(repositoryRoot = root) {
-  const taggedVersions = getTaggedVersions(repositoryRoot);
-  const latestTagged = [...taggedVersions].sort(semverCompare).at(-1);
+export function getBranchLocalSubjectIndices(repositoryRoot = root, { firstParent = false } = {}) {
   const mainRef = resolveMainRef(repositoryRoot);
-  if (!latestTagged || !mainRef) return new Set();
-  let shas;
-  try {
-    const output = execFileSync('git', ['log', '--format=%H', `v${latestTagged}..HEAD`], {
-      cwd: repositoryRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    shas = output
-      .split('\n')
-      .map((sha) => sha.trim())
-      .filter(Boolean);
-  } catch {
-    return new Set();
-  }
+  const records = getPostReleaseCommitRecords(repositoryRoot, { firstParent });
+  if (!records || !mainRef) return new Set();
   const branchLocalIndices = new Set();
-  shas.forEach((sha, index) => {
+  records.forEach(({ sha }, index) => {
     try {
       execFileSync('git', ['merge-base', '--is-ancestor', sha, mainRef], {
         cwd: repositoryRoot,
@@ -643,6 +715,8 @@ export function scanUnreleasedTruth(
   taggedVersions,
   isFeatureBranchContext = false,
   branchLocalIndices = new Set(),
+  mergeCommitIndices = new Set(),
+  logicalPrNumber = null,
 ) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
   const candidateVersion = changelog.match(
@@ -670,11 +744,102 @@ export function scanUnreleasedTruth(
     unreleasedSection,
     isFeatureBranchContext,
     branchLocalIndices,
+    mergeCommitIndices,
+    logicalPrNumber,
   );
   if (undocumented.length === 0) return [];
   return [
     `CHANGELOG.md — [Unreleased] does not reference ${undocumented.length} post-tag feat/fix/perf commit(s) by PR number or subject: ${undocumented.map((s) => `"${s}"`).join('; ')}`,
   ];
+}
+
+// QNBS-v3 (codex, P2): direct-main merges may carry one integrated logical entry; otherwise inspect second-parent commits with the strict matcher.
+export function scanDirectMainMergeTruth({ changelog, mergeBranches }) {
+  if (!mergeBranches || mergeBranches.length === 0) return [];
+  const unreleasedSection = getUnreleasedSectionText(changelog);
+  const entries = splitUnreleasedEntries(unreleasedSection);
+  const findings = [];
+  for (const { mergeSubject, sideRecords } of mergeBranches) {
+    const sideSubjects = sideRecords.map(({ subject }) => subject);
+    if (!sideSubjects.some((subject) => GOVERNED_COMMIT_TYPE.test(subject))) continue;
+    const mergeHasLogicalEntry =
+      GOVERNED_COMMIT_TYPE.test(mergeSubject) &&
+      candidateEntryIndices(mergeSubject, entries).length > 0;
+    if (mergeHasLogicalEntry) continue;
+    const sideMergeIndices = new Set(
+      sideRecords.flatMap(({ parents }, index) => (parents.length > 1 ? [index] : [])),
+    );
+    const undocumented = findUndocumentedGovernedCommits(
+      sideSubjects,
+      unreleasedSection,
+      false,
+      new Set(),
+      sideMergeIndices,
+    );
+    if (undocumented.length > 0) {
+      findings.push(
+        `CHANGELOG.md — direct-main merge "${mergeSubject}" hides ${undocumented.length} governed side-parent commit(s) without a logical release entry: ${undocumented.map((subject) => `"${subject}"`).join('; ')}`,
+      );
+    }
+  }
+  return findings;
+}
+
+// QNBS-v3: pre-merge admission binds all governed commits unique to one PR to its real GitHub number, while the current base remains under the strict integrated-history rules.
+export function scanMergeAdmissionTruth({
+  changelog,
+  postReleaseCommitSubjects,
+  packageVersion,
+  taggedVersions,
+  branchLocalIndices,
+  mergeCommitIndices,
+  prNumber,
+  prTitle,
+}) {
+  const isGovernedPr = GOVERNED_COMMIT_TYPE.test(prTitle ?? '');
+  // QNBS-v3: non-governed squash titles still validate integrated base history while their future squash identity remains exempt.
+  if (!isGovernedPr) {
+    const baseIndices = [...Array(postReleaseCommitSubjects.length).keys()].filter(
+      (index) => !branchLocalIndices.has(index),
+    );
+    const baseSubjects = baseIndices.map((index) => postReleaseCommitSubjects[index]);
+    const baseMergeIndices = new Set(
+      baseIndices.flatMap((index, baseIndex) => (mergeCommitIndices.has(index) ? [baseIndex] : [])),
+    );
+    return scanUnreleasedTruth(
+      changelog,
+      baseSubjects,
+      packageVersion,
+      taggedVersions,
+      false,
+      new Set(),
+      baseMergeIndices,
+    );
+  }
+  const unreleasedSection = getUnreleasedSectionText(changelog);
+  const entries = splitUnreleasedEntries(unreleasedSection);
+  if (!entries.some((entry) => isReferencedByPrNumber(prNumber, entry))) {
+    return [
+      `CHANGELOG.md — [Unreleased] does not reference logical PR #${prNumber} in a release-note bullet`,
+    ];
+  }
+  const logicalEntries = entries.filter((entry) => isReferencedByPrNumber(prNumber, entry));
+  const prospectiveMergeSubject = getProspectiveMergeSubject(prTitle, prNumber);
+  if (!computeMaxSlugMatching([prospectiveMergeSubject], logicalEntries).some(Boolean)) {
+    return [
+      `CHANGELOG.md — logical PR #${prNumber} release-note entry does not match prospective merge subject "${prTitle}"`,
+    ];
+  }
+  return scanUnreleasedTruth(
+    changelog,
+    postReleaseCommitSubjects,
+    packageVersion,
+    taggedVersions,
+    false,
+    branchLocalIndices,
+    mergeCommitIndices,
+    prNumber,
+  );
 }
 
 /**
@@ -1028,18 +1193,42 @@ function main() {
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
   const isFeatureBranchContext =
     process.env.GITHUB_EVENT_NAME === 'pull_request' || isOnFeatureBranch();
+  const postReleaseRecords = getPostReleaseCommitRecords(undefined, { firstParent: true });
+  const postReleaseCommitSubjects = postReleaseRecords?.map(({ subject }) => subject) ?? null;
+  const mergeCommitIndices = new Set(
+    postReleaseRecords?.flatMap((record, index) => (record.parents.length > 1 ? [index] : [])) ??
+      [],
+  );
   const allFindings = [];
   allFindings.push(
     ...scanReleaseTruth(changelog, packageVersion, taggedVersions),
     ...scanUnreleasedTruth(
       changelog,
-      getPostReleaseCommitSubjects(),
+      postReleaseCommitSubjects,
       packageVersion,
       taggedVersions,
       isFeatureBranchContext,
-      isFeatureBranchContext ? getBranchLocalSubjectIndices() : new Set(),
+      isFeatureBranchContext
+        ? getBranchLocalSubjectIndices(undefined, { firstParent: true })
+        : new Set(),
+      mergeCommitIndices,
     ),
   );
+  if (!isFeatureBranchContext) {
+    const sideBranches = getDirectMainSideBranchRecords();
+    if (sideBranches === null) {
+      allFindings.push(
+        'CHANGELOG.md — direct-main side-parent history is unavailable; release truth cannot be proven safely',
+      );
+    } else {
+      allFindings.push(
+        ...scanDirectMainMergeTruth({
+          changelog,
+          mergeBranches: sideBranches,
+        }),
+      );
+    }
+  }
   allFindings.push(
     ...scanReadmeReleaseTruth(readFileSync(join(root, 'README.md'), 'utf8'), taggedVersions),
   );

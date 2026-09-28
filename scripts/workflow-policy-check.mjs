@@ -180,6 +180,191 @@ export function checkReviewerGovernanceGate(fileName, doc, failures) {
   validateReviewerGovernanceGateOverrides(fileName, gateStep, failures);
 }
 
+function findMergeAdmissionGateStep(doc) {
+  const qualityJob = jobMap(doc).get('quality');
+  const steps = resolveSteps(qualityJob?.get?.('steps', true), doc);
+  return steps.find(
+    (step) => nodeValue(step?.get?.('name', true), doc) === 'Main-context merge admission proof',
+  );
+}
+
+function findQualityNodeVersions(doc) {
+  const matrix = findQualityMatrix(doc);
+  return nodeValue(matrix?.get?.('node-version', true), doc);
+}
+
+function findQualityMatrix(doc) {
+  const qualityJob = jobMap(doc).get('quality');
+  const strategy = resolveNode(qualityJob?.get?.('strategy', true), doc);
+  return resolveNode(strategy?.get?.('matrix', true), doc);
+}
+
+function checkMergeAdmissionTrigger(fileName, doc, failures) {
+  const triggers = getWorkflowTriggerNode(doc);
+  const pullRequest = resolveNode(triggers?.get?.('pull_request', true), doc);
+  const types = nodeValue(pullRequest?.get?.('types', true), doc);
+  if (!Array.isArray(types) || !types.includes('edited')) {
+    failures.push({
+      file: fileName,
+      message: 'ci.yml pull_request trigger must include edited for title-sensitive admission',
+    });
+  }
+}
+
+function checkMergeAdmissionMatrix(fileName, doc, failures) {
+  const matrix = findQualityMatrix(doc);
+  const versions = findQualityNodeVersions(doc);
+  if (!Array.isArray(versions) || !versions.some((version) => String(version) === '22')) {
+    failures.push({
+      file: fileName,
+      message: 'quality matrix must retain a Node 22 lane for main-context merge admission',
+    });
+  }
+  const excluded = nodeValue(matrix?.get?.('exclude', true), doc);
+  if (
+    Array.isArray(excluded) &&
+    excluded.some(
+      (entry) => entry && typeof entry === 'object' && String(entry['node-version']) === '22',
+    )
+  ) {
+    failures.push({
+      file: fileName,
+      message: 'quality matrix must not exclude the Node 22 lane used for main-context admission',
+    });
+  }
+}
+
+const CANONICAL_MERGE_ADMISSION_RUN = [
+  'set -euo pipefail',
+  'git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"',
+  'mkdir -p /tmp/base-scripts',
+  'if git show "$BASE_SHA:scripts/check-merge-admission.mjs" > /tmp/base-scripts/check-merge-admission.mjs 2>/dev/null \\',
+  '&& git show "$BASE_SHA:scripts/check-doc-metrics.mjs" > /tmp/base-scripts/check-doc-metrics.mjs 2>/dev/null \\',
+  '&& git show "$BASE_SHA:scripts/i18n-locales.mjs" > /tmp/base-scripts/i18n-locales.mjs 2>/dev/null \\',
+  '&& git show "$BASE_SHA:scripts/test-metrics.mjs" > /tmp/base-scripts/test-metrics.mjs 2>/dev/null; then',
+  'CHECKER=/tmp/base-scripts/check-merge-admission.mjs',
+  'WORLDSCRIPT_REPOSITORY_ROOT="$GITHUB_WORKSPACE" node "$CHECKER"',
+  'else',
+  'if [ "$PR_NUMBER" = "857" ]; then',
+  'echo "::notice::merge-admission evaluator is absent on the base ref; using the bounded PR #857 bootstrap once."',
+  'node scripts/check-merge-admission.mjs',
+  'else',
+  'echo "::error::trusted merge-admission evaluator is absent outside the introducing transition"',
+  'exit 1',
+  'fi',
+  'fi',
+];
+
+function normalizedRunLines(run) {
+  return typeof run === 'string'
+    ? run
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+    : [];
+}
+
+function checkMergeAdmissionRun(fileName, run, failures) {
+  const lines = normalizedRunLines(run);
+  const requiredTrustedCopies = [
+    'git show "$BASE_SHA:scripts/check-merge-admission.mjs" > /tmp/base-scripts/check-merge-admission.mjs',
+    'git show "$BASE_SHA:scripts/check-doc-metrics.mjs" > /tmp/base-scripts/check-doc-metrics.mjs',
+    'git show "$BASE_SHA:scripts/i18n-locales.mjs" > /tmp/base-scripts/i18n-locales.mjs',
+    'git show "$BASE_SHA:scripts/test-metrics.mjs" > /tmp/base-scripts/test-metrics.mjs',
+  ];
+  if (typeof run !== 'string' || !run.includes('set -euo pipefail')) {
+    failures.push({
+      file: fileName,
+      message: 'Main-context merge admission proof must fail closed in a strict shell',
+    });
+  }
+  if (typeof run === 'string' && /\b(?:exit|return)\s+0\b|\bcontinue\b/.test(run)) {
+    failures.push({
+      file: fileName,
+      message: 'Main-context merge admission proof must not contain a successful early exit',
+    });
+  }
+  for (const command of requiredTrustedCopies) {
+    if (typeof run !== 'string' || !run.includes(command)) {
+      failures.push({
+        file: fileName,
+        message: `Main-context merge admission proof must materialize trusted base file: ${command}`,
+      });
+    }
+  }
+  if (!lines.includes('CHECKER=/tmp/base-scripts/check-merge-admission.mjs')) {
+    failures.push({
+      file: fileName,
+      message:
+        'Main-context merge admission proof must assign CHECKER to the exact trusted base file',
+    });
+  }
+  if (!lines.includes('WORLDSCRIPT_REPOSITORY_ROOT="$GITHUB_WORKSPACE" node "$CHECKER"')) {
+    failures.push({
+      file: fileName,
+      message: 'Main-context merge admission proof must invoke the exact trusted base checker',
+    });
+  }
+  if (typeof run !== 'string' || lines.join('\n') !== CANONICAL_MERGE_ADMISSION_RUN.join('\n')) {
+    failures.push({
+      file: fileName,
+      message:
+        'Main-context merge admission proof must use the canonical trusted evaluator run; unreviewed control-flow variants are rejected',
+    });
+  }
+}
+
+function checkMergeAdmissionGateStep(fileName, gateStep, doc, failures) {
+  const condition = nodeValue(gateStep.get('if', true), doc);
+  if (condition !== "github.event_name == 'pull_request' && matrix.node-version == '22'") {
+    failures.push({
+      file: fileName,
+      message:
+        'Main-context merge admission proof must run only for pull requests on the Node 22 quality lane',
+    });
+  }
+  const environment = nodeValue(gateStep.get('env', true), doc);
+  const expectedBaseSha = '$' + '{{ github.event.pull_request.base.sha }}';
+  const expectedPrNumber = '$' + '{{ github.event.pull_request.number }}';
+  if (environment?.BASE_SHA !== expectedBaseSha) {
+    failures.push({
+      file: fileName,
+      message: 'Main-context merge admission proof must bind BASE_SHA to the PR base SHA',
+    });
+  }
+  if (environment?.PR_NUMBER !== expectedPrNumber) {
+    failures.push({
+      file: fileName,
+      message: 'Main-context merge admission proof must bind PR_NUMBER to the PR event',
+    });
+  }
+  for (const field of ['continue-on-error', 'shell', 'working-directory']) {
+    if (gateStep.get(field, true) !== undefined) {
+      failures.push({
+        file: fileName,
+        message: `Main-context merge admission proof must not override ${field}`,
+      });
+    }
+  }
+  checkMergeAdmissionRun(fileName, nodeValue(gateStep.get('run', true), doc), failures);
+}
+
+// QNBS-v3: after introduction, the base-ref checker owns this contract; the evaluator may inspect the PR workspace only through the exact, bounded bootstrap path.
+export function checkMergeAdmissionGate(fileName, doc, failures) {
+  if (fileName !== 'ci.yml') return;
+  const gateStep = findMergeAdmissionGateStep(doc);
+  if (!gateStep) {
+    failures.push({
+      file: fileName,
+      message: 'quality must retain the Main-context merge admission proof step',
+    });
+    return;
+  }
+  checkMergeAdmissionGateStep(fileName, gateStep, doc, failures);
+  checkMergeAdmissionTrigger(fileName, doc, failures);
+  checkMergeAdmissionMatrix(fileName, doc, failures);
+}
+
 function isPullRequestTargetOnlyTrigger(triggers) {
   if (!triggers) return false;
   if (typeof triggers !== 'object') return false;
@@ -877,6 +1062,7 @@ export function checkWorkflowFile(filePath, dependencies = {}) {
   checkAggregatorNeeds(fileName, doc, failures);
   checkPublishingBoundary(fileName, doc, failures);
   checkReviewerGovernanceGate(fileName, doc, failures);
+  checkMergeAdmissionGate(fileName, doc, failures);
   checkReviewerGovernanceTrustWorkflow(fileName, doc, failures);
   return failures;
 }
