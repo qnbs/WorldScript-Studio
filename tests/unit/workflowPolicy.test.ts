@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { EVALUATOR_PATHS, VERIFIER_PATH } from '../../scripts/check-protected-transitions.mjs';
 import {
   extractJobBlock,
   extractJobIf,
@@ -93,8 +94,8 @@ describe('CI workflow policy', () => {
     expect(reviewerTrustWorkflowSource).not.toContain('pull-requests: write');
   });
 
-  // QNBS-v3: the PR-immutable set must be exactly the trusted roots plus the evaluator import closure, enforced at top level (no function wrapper, no PR-specific bypass).
-  it('locks trusted roots and the whole merge-admission evaluator graph unconditionally', () => {
+  // QNBS-v3: trusted roots stay under the top-level literal lock; the evaluator graph is guarded by an unconditional top-level call to the base-owned verifier whose protected set equals the real import closure.
+  it('locks trusted roots and routes the evaluator graph through the base-owned verifier', () => {
     const runStart = reviewerTrustWorkflowSource.indexOf('set -euo pipefail');
     const runLines = reviewerTrustWorkflowSource
       .slice(runStart)
@@ -108,11 +109,15 @@ describe('CI workflow policy', () => {
       return paths;
     });
     expect(new Set(lockedPaths)).toEqual(
-      new Set([
-        'scripts/check-reviewer-config.mjs',
-        'scripts/workflow-policy-check.mjs',
-        ...evaluatorImportClosure('scripts/check-merge-admission.mjs'),
-      ]),
+      new Set(['scripts/check-reviewer-config.mjs', 'scripts/workflow-policy-check.mjs']),
+    );
+    const verifierCall = `node "$GITHUB_WORKSPACE/${VERIFIER_PATH}" "$PR_BASE_SHA" "$PR_HEAD_SHA"`;
+    const verifierIndex = runLines.indexOf(verifierCall);
+    expect(verifierIndex).toBeGreaterThan(0);
+    expect(runLines.filter((line) => line.includes(VERIFIER_PATH))).toEqual([verifierCall]);
+    expect(isTopLevelShellCommand(runLines, verifierIndex)).toBe(true);
+    expect(new Set(EVALUATOR_PATHS)).toEqual(
+      new Set(evaluatorImportClosure('scripts/check-merge-admission.mjs')),
     );
     expect(reviewerTrustWorkflowSource).not.toMatch(/\(\)\s*\{/);
     expect(reviewerTrustWorkflowSource).not.toMatch(/PR_NUMBER"?\s*=\s*"\d+"/);
