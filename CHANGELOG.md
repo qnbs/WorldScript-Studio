@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **No PR-copy workflow-policy fallback (#675):** pull requests are now always graded by the trusted
+  base copy of `workflow-policy-check.mjs`. The one-time introducing-transition branch that ran the
+  PR's own checker is removed; a missing trusted base workspace fails the step instead. PR #869.
 - **Protected evaluator transitions (#675):** the merge-admission evaluator graph
   (`check-merge-admission.mjs`, `check-doc-metrics.mjs`, `i18n-locales.mjs`, `test-metrics.mjs`)
   can now change only through an exact, base-owned transition: a manifest-only PR first records the
