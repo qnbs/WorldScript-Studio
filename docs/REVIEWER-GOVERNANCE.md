@@ -21,7 +21,8 @@ Vendor adapters are narrow implementations of this policy, not competing policy 
 The CI reviewer-governance gate has two layers. The ordinary `pull_request` workflow materializes
 the complete base workspace (including workspace packages and pinned patches), then executes the
 base-ref copies of `workflow-policy-check.mjs` and `check-reviewer-config.mjs` against the PR tree
-as data. It has a one-time head-copy fallback only while the checker is first introduced. In
+as data. The structural checker has no PR-copy fallback for pull requests: if the trusted base
+workspace is missing, the step fails. In
 addition, `.github/workflows/reviewer-governance-trust.yml` is a base-owned
 `pull_request_target` guard: it executes only trusted base code, fetches the PR head as an archive,
 and validates that archive without running PR scripts or dependencies. This second layer prevents
