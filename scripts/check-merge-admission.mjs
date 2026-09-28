@@ -69,6 +69,9 @@ export function validateCurrentBase({ eventBaseSha, currentMainSha }) {
   return findings;
 }
 
+// QNBS-v3: the cheap required PR CHANGELOG guard owns admission so title edits never re-trigger ci.yml.
+const ADMISSION_WORKFLOW_PATH = '.github/workflows/pr-changelog-reference.yml';
+
 const CANONICAL_ADMISSION_RUN = [
   'set -euo pipefail',
   'git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"',
@@ -120,13 +123,8 @@ function normalizeAdmissionDigestLines(lines) {
 // QNBS-v3: trusted-base loading prevents PR-controlled early exits and bootstrap-path widening.
 export function validateAdmissionWorkflow(workflowText) {
   const findings = [];
-  if (!workflowText.includes('types: [opened, synchronize, reopened, ready_for_review, edited]')) {
-    findings.push('merge admission — CI must rerun for title edits and source changes');
-  }
-  if (
-    !workflowText.includes("if: github.event_name == 'pull_request' && matrix.node-version == '22'")
-  ) {
-    findings.push('merge admission — the Node 22 quality lane is not the required admission lane');
+  if (!workflowText.includes('types: [opened, edited, synchronize, reopened]')) {
+    findings.push('merge admission — the guard must rerun for title edits and source changes');
   }
   if (!workflowText.includes('PR_NUMBER: $' + '{{ github.event.pull_request.number }}')) {
     findings.push('merge admission — bootstrap PR identity is not event-bound');
@@ -194,9 +192,9 @@ function readMergeState(pr) {
 function collectReleaseFindings(pr, mergeState) {
   let workflowText;
   try {
-    workflowText = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
+    workflowText = readFileSync(join(root, ADMISSION_WORKFLOW_PATH), 'utf8');
   } catch (error) {
-    return [`merge admission — CI workflow is unavailable: ${formatError(error)}`];
+    return [`merge admission — admission workflow is unavailable: ${formatError(error)}`];
   }
   const workflowFindings = validateAdmissionWorkflow(workflowText);
   if (workflowFindings.length > 0) return workflowFindings;

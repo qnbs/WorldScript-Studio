@@ -117,7 +117,7 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
 - GREEN PR CI IS NECESSARY BUT NOT SUFFICIENT for context-sensitive gates. When a required gate
   changes behavior across feature, pull-request, merge-ref, detached-HEAD, or main context, prove
   the current-base + PR resulting merge/main semantics before merge and make that proof part of
-  the required aggregate; do not infer resulting-main safety from PR-head green alone. The
+  a required status check; do not infer resulting-main safety from PR-head green alone. The
   trusted base-ref workflow-policy checker must retain that proof and the evaluator must run from
   trusted base code after the introducing bootstrap; a PR must not certify its own admission logic.
 - After a merge, wait for exact resulting-main CI and CodeQL success, then follow

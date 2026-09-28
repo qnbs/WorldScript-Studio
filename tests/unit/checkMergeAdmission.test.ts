@@ -30,17 +30,25 @@ type DocMetricsModule = {
     prNumber: number;
     prCommitSubjects: string[];
   }) => string;
-  getDirectMainSideBranchRecords: (
-    repositoryRoot?: string,
-  ) => Array<{ mergeSubject: string; sideRecords: Array<{ subject: string }> }> | null;
+  getDirectMainSideBranchRecords: (repositoryRoot?: string) => Array<{
+    mergeSubject: string;
+    sideRecords: Array<{ subject: string; boundPr?: string }>;
+  }> | null;
   scanMergeAdmissionTruth: (input: {
     changelog: string;
     packageVersion: string;
     taggedVersions: Set<string>;
     baseRecords: Array<{ sha: string; parents: string[]; subject: string }>;
     baseMergeBranches: Array<{
+      mergeSha?: string;
       mergeSubject: string;
-      sideRecords: Array<{ sha: string; parents: string[]; subject: string }>;
+      sideRecords: Array<{
+        sha: string;
+        parents: string[];
+        subject: string;
+        boundPr?: string;
+        boundOwner?: string;
+      }>;
     }>;
     prRecords: Array<{ sha: string; parents: string[]; subject: string }>;
     prNumber: number;
@@ -124,7 +132,7 @@ describe('validateAdmissionWorkflow', () => {
   it('accepts the canonical trusted run and rejects a control-flow wrapper', async () => {
     const { validateAdmissionWorkflow } = await loadMergeAdmissionModule();
     const workflow = readFileSync(
-      new URL('../../.github/workflows/ci.yml', import.meta.url),
+      new URL('../../.github/workflows/pr-changelog-reference.yml', import.meta.url),
       'utf8',
     );
     expect(validateAdmissionWorkflow(workflow)).toEqual([]);
@@ -218,6 +226,46 @@ describe('main-context release truth for prospective landings', () => {
         ),
       },
     ],
+    [
+      'side histories whose only valid assignment spans two merges',
+      {
+        baseRecords: [record('Merge branch x', ['p', 'q']), record('Merge branch y', ['p', 'q'])],
+        baseMergeBranches: [
+          hiddenSideCommit('Merge branch x', 'feat(core): alpha beta'),
+          hiddenSideCommit('Merge branch y', 'feat(core): alpha gamma'),
+        ],
+        changelog: unreleased(
+          'Durable authority bootstrap. PR #855.',
+          'Alpha beta gamma.',
+          'Alpha beta.',
+        ),
+      },
+    ],
+    [
+      'an active release candidate for side-parent history too',
+      {
+        changelog: `<!-- release-candidate: v1.29.0 -->\n${unreleased('Earlier entry. PR #1.')}`,
+        packageVersion: '1.29.0',
+        prTitle: 'ci(governance): tidy',
+      },
+    ],
+    [
+      'a nested canonical merge whose descendants keep their PR-number binding',
+      {
+        baseRecords: [record('Merge branch integration', ['p', 'q'])],
+        baseMergeBranches: [
+          {
+            mergeSha: 'integration',
+            mergeSubject: 'Merge branch integration',
+            sideRecords: [
+              { ...record('Merge pull request #123 from qnbs/x', ['a', 'b']), sha: 'm123' },
+              { ...record('feat(core): nested change'), boundPr: '123', boundOwner: 'm123' },
+            ],
+          },
+        ],
+        changelog: unreleased('Durable authority bootstrap. PR #855.', 'Nested work. PR #123.'),
+      },
+    ],
   ])('admits %s', async (_label, overrides) => {
     const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
     expect(scanMergeAdmissionTruth(admission(overrides))).toEqual([]);
@@ -285,6 +333,32 @@ describe('main-context release truth for prospective landings', () => {
       },
       ['squash landing', 'merge-commit landing'],
     ],
+    [
+      "a second merge reusing another merge's canonical PR number",
+      {
+        baseRecords: [
+          { ...record('Merge pull request #123 from qnbs/x', ['p', 'q']), sha: 'm1' },
+          { ...record('Merge pull request #123 from qnbs/x', ['p', 'q']), sha: 'm2' },
+        ],
+        baseMergeBranches: [
+          {
+            mergeSha: 'm1',
+            mergeSubject: 'Merge pull request #123 from qnbs/x',
+            sideRecords: [record('feat(core): legitimate change')],
+          },
+          {
+            mergeSha: 'm2',
+            mergeSubject: 'Merge pull request #123 from qnbs/x',
+            sideRecords: [record('feat(core): unrelated hidden change')],
+          },
+        ],
+        changelog: unreleased(
+          'Durable authority bootstrap. PR #855.',
+          'Legitimate change. PR #123.',
+        ),
+      },
+      ['squash landing', 'merge-commit landing'],
+    ],
   ])('rejects %s', async (_label, overrides, prefixes) => {
     const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
     const findings = scanMergeAdmissionTruth(admission(overrides));
@@ -318,7 +392,7 @@ describe('getDirectMainSideBranchRecords', () => {
       commitOn('c', 'fix: gamma');
       commitOn('e', 'fix: epsilon');
       commitOn('d', 'feat: delta');
-      git('merge', '--quiet', '--no-ff', '-m', 'Merge e into d', 'e');
+      git('merge', '--quiet', '--no-ff', '-m', 'Merge pull request #7 from test/e', 'e');
       git('switch', '--quiet', 'main');
       git('merge', '--quiet', '--no-ff', '-m', 'Octopus merge', 'a', 'b', 'c');
       git('merge', '--quiet', '--no-ff', '-m', 'Merge d', 'd');
@@ -329,9 +403,15 @@ describe('getDirectMainSideBranchRecords', () => {
           sideRecords.map(({ subject }) => subject).sort(),
         ]),
       ).toEqual([
-        ['Merge d', ['Merge e into d', 'feat: delta', 'fix: epsilon']],
+        ['Merge d', ['Merge pull request #7 from test/e', 'feat: delta', 'fix: epsilon']],
         ['Octopus merge', ['feat: alpha', 'feat: beta', 'fix: gamma']],
       ]);
+      const nestedBindings = merges[0]?.sideRecords.map(({ subject, boundPr }) => [
+        subject,
+        boundPr,
+      ]);
+      expect(nestedBindings).toContainEqual(['fix: epsilon', '7']);
+      expect(nestedBindings).toContainEqual(['feat: delta', undefined]);
     } finally {
       rmSync(repositoryRoot, { recursive: true, force: true });
     }
