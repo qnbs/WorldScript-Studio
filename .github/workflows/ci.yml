@@ -74,13 +74,11 @@ jobs:
       - name: Workflow-policy structural gate (permissions, needs graph, action pins)
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "${TRUSTED_BASE_WORKSPACE:-}" ] \
-             && [ -f "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs" ] \
-             && grep -q 'checkMergeAdmissionGate' "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs"; then
+          # QNBS-v3: PRs always run the trusted base checker; a missing base workspace fails via set -u instead of falling back to the PR copy.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             WORKFLOW_POLICY_ROOT="${{ github.workspace }}" \
               node "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs"
           else
-            echo "::notice::trusted base lacks the merge-admission structural policy (introducing transition); validating the PR copy once."
             WORKFLOW_POLICY_ROOT="${{ github.workspace }}" \
               node scripts/workflow-policy-check.mjs
           fi
