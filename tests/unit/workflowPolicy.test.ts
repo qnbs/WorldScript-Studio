@@ -48,7 +48,9 @@ function evaluatorImportClosure(entry: string): string[] {
     if (seen.has(current)) continue;
     seen.add(current);
     const source = readFileSync(`${repositoryRoot}${current}`, 'utf8');
-    for (const [, specifier = ''] of source.matchAll(/from '(\.[^']+)'/g)) {
+    for (const [, specifier = ''] of source.matchAll(
+      /(?:\bfrom\s+|\bimport\s*\(?\s*)["'](\.[^"']+)["']/g,
+    )) {
       pending.push(posix.normalize(posix.join(posix.dirname(current), specifier)));
     }
   }
