@@ -82,6 +82,10 @@ const CANONICAL_ADMISSION_RUN = [
   'else',
   'if [ "$PR_NUMBER" = "857" ]; then',
   'echo "::notice::merge-admission evaluator is absent on the base ref; using the bounded PR #857 bootstrap once."',
+  'test "$(sha256sum scripts/check-merge-admission.mjs | awk \'{print $1}\')" = "<sha256>"',
+  'test "$(sha256sum scripts/check-doc-metrics.mjs | awk \'{print $1}\')" = "<sha256>"',
+  'test "$(sha256sum scripts/i18n-locales.mjs | awk \'{print $1}\')" = "<sha256>"',
+  'test "$(sha256sum scripts/test-metrics.mjs | awk \'{print $1}\')" = "<sha256>"',
   'node scripts/check-merge-admission.mjs',
   'else',
   'echo "::error::trusted merge-admission evaluator is absent outside the introducing transition"',
@@ -104,6 +108,15 @@ function extractAdmissionRun(workflowText) {
     .filter(Boolean);
 }
 
+function normalizeAdmissionDigestLines(lines) {
+  return lines.map((line) =>
+    line.replace(
+      /^(test "\$\(sha256sum scripts\/(?:check-merge-admission|check-doc-metrics|i18n-locales|test-metrics)\.mjs \| awk '\{print \$1\}'\)" = )"[0-9a-f]{64}"$/,
+      '$1"<sha256>"',
+    ),
+  );
+}
+
 // QNBS-v3: trusted-base loading prevents PR-controlled early exits and bootstrap-path widening.
 export function validateAdmissionWorkflow(workflowText) {
   const findings = [];
@@ -121,7 +134,9 @@ export function validateAdmissionWorkflow(workflowText) {
   const actualRun = extractAdmissionRun(workflowText);
   if (!actualRun) {
     findings.push('merge admission — canonical admission run is missing');
-  } else if (actualRun.join('\n') !== CANONICAL_ADMISSION_RUN.join('\n')) {
+  } else if (
+    normalizeAdmissionDigestLines(actualRun).join('\n') !== CANONICAL_ADMISSION_RUN.join('\n')
+  ) {
     findings.push(
       'merge admission — canonical trusted evaluator run changed; refusing an unreviewed control-flow variant',
     );
@@ -140,9 +155,13 @@ function formatError(error) {
 
 function parsePullRequestEvent(event) {
   const pr = event?.pull_request;
-  if (!pr || !Number.isSafeInteger(pr.number) || !pr.base?.sha || !pr.head?.sha) {
-    throw new Error('pull_request event is missing safe number, base SHA, or head SHA');
-  }
+  const invalidField = [
+    [Boolean(pr), 'pull_request event is missing the pull_request object'],
+    [Number.isSafeInteger(pr?.number), 'pull_request event is missing a safe number'],
+    [Boolean(pr?.base?.sha), 'pull_request event is missing the base SHA'],
+    [Boolean(pr?.head?.sha), 'pull_request event is missing the head SHA'],
+  ].find(([isValid]) => !isValid);
+  if (invalidField) throw new Error(invalidField[1]);
   return pr;
 }
 
@@ -213,6 +232,7 @@ function collectReleaseFindings(pr, mergeState) {
       taggedVersions,
       branchLocalIndices: records.branchLocalIndices,
       mergeCommitIndices: records.mergeCommitIndices,
+      baseSideBranchRecords: records.baseSideBranchRecords,
       prNumber: pr.number,
       prTitle: pr.title,
     }),
