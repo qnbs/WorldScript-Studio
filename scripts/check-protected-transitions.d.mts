@@ -28,7 +28,7 @@ export function parseManifest(
 export function evaluatorImportClosure(
   readHeadFile: (path: string) => string | null,
   entry?: string,
-): string[];
+): { files: string[]; violations: string[] };
 export function evaluateProtectedTransitions(input: {
   changes: RawChange[];
   baseManifestText: string | null;
