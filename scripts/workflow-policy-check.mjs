@@ -344,7 +344,7 @@ const CANONICAL_MERGE_ADMISSION_RUN = [
   'else',
   'if [ "$PR_NUMBER" = "857" ]; then',
   'echo "::notice::merge-admission evaluator is absent on the base ref; using the bounded PR #857 bootstrap once."',
-  'test "$(sha256sum scripts/check-merge-admission.mjs | awk \'{print $1}\')" = "369a8ae59c671d28de059d2263dba3d92d03349fed7336f72bff1be5c8166b2f"',
+  'test "$(sha256sum scripts/check-merge-admission.mjs | awk \'{print $1}\')" = "aa54e54c84cdf62fa055066a5f1c002f24c4d2000c467f4430d087c9ef7a3b89"',
   'test "$(sha256sum scripts/check-doc-metrics.mjs | awk \'{print $1}\')" = "900304466d7dd9b7afe22a69ac1a3f58dde6d7f18ef7fd6c0513a835323afd8d"',
   'test "$(sha256sum scripts/i18n-locales.mjs | awk \'{print $1}\')" = "ae22dfcad13f0f82cfa8cbf39013422660a8e099e00dfa137266f2ccf5e40d58"',
   'test "$(sha256sum scripts/test-metrics.mjs | awk \'{print $1}\')" = "27992ffcaeea146d4ac64b64e9dcd6bc9420b9f895393e205bcab209c5764505"',

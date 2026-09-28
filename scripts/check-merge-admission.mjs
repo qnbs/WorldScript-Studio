@@ -153,16 +153,18 @@ function formatError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+const REQUIRED_PULL_REQUEST_FIELDS = [
+  [(pr) => Number.isSafeInteger(pr.number), 'a safe number'],
+  [(pr) => Boolean(pr.base?.sha), 'the base SHA'],
+  [(pr) => Boolean(pr.head?.sha), 'the head SHA'],
+  [(pr) => typeof pr.title === 'string', 'the title'],
+];
+
 function parsePullRequestEvent(event) {
   const pr = event?.pull_request;
-  const invalidField = [
-    [Boolean(pr), 'pull_request event is missing the pull_request object'],
-    [Number.isSafeInteger(pr?.number), 'pull_request event is missing a safe number'],
-    [Boolean(pr?.base?.sha), 'pull_request event is missing the base SHA'],
-    [Boolean(pr?.head?.sha), 'pull_request event is missing the head SHA'],
-    [typeof pr?.title === 'string', 'pull_request event is missing the title'],
-  ].find(([isValid]) => !isValid);
-  if (invalidField) throw new Error(invalidField[1]);
+  if (!pr) throw new Error('pull_request event is missing the pull_request object');
+  const missing = REQUIRED_PULL_REQUEST_FIELDS.find(([isValid]) => !isValid(pr));
+  if (missing) throw new Error(`pull_request event is missing ${missing[1]}`);
   return pr;
 }
 
