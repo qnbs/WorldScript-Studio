@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Third-party notices and SBOM for desktop releases (#871):** every desktop bundle job now
+  generates, for its own target, a third-party notices file (bundled into the installer as
+  `THIRD_PARTY_NOTICES.txt`) and a CycloneDX 1.5 SBOM bound to the exact commit. The tagged release
+  attaches all three per-target pairs and fails if one is missing. The inventory covers the Rust
+  crates linked into the binary and the pnpm production dependency graph (a documented superset of
+  the bundled JavaScript). A component without license metadata fails the build. Copyleft, font,
+  non-SPDX, and license-text-less components are listed for human review. The inventory is not a
+  legal opinion. PR #881.
 - **No PR-copy workflow-policy fallback (#675):** pull requests are now always graded by the trusted
   base copy of `workflow-policy-check.mjs`. The one-time introducing-transition branch that ran the
   PR's own checker is removed; a missing trusted base workspace fails the step instead. PR #869.
