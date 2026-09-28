@@ -43,9 +43,9 @@ jobs:
             echo "::error::fetched PR ref does not match the event head SHA"
             exit 1
           fi
-          # QNBS-v3: trusted roots and the merge-admission evaluator graph are immutable from a PR; the unchanged base copies must never grade their own replacement.
+          # QNBS-v3: trusted roots are immutable from a PR; the evaluator graph changes only by an exact base-manifest transition checked by the base-owned verifier.
           git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1
-          git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-merge-admission.mjs scripts/check-doc-metrics.mjs scripts/i18n-locales.mjs scripts/test-metrics.mjs || exit 1
+          node "$GITHUB_WORKSPACE/scripts/check-protected-transitions.mjs" "$PR_BASE_SHA" "$PR_HEAD_SHA"
           SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk '$1 == "120000" { print $0 }')"
           if [ -n "$SYMLINKS" ]; then
             echo "::error::PR archive contains symlinks; refusing to follow untrusted archive links"
