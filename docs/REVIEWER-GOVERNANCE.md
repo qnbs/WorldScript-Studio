@@ -29,6 +29,14 @@ a later PR from deleting or neutralizing the invocation step in the ordinary PR 
 initial introduction is necessarily bootstrap-validated because the base ref predates both the
 checker and the base-owned target workflow. Pushes and manual runs execute the checked-out copy.
 
+The same base-owned guard makes the trusted roots (`workflow-policy-check.mjs`,
+`check-reviewer-config.mjs`) and the whole merge-admission evaluator import closure
+(`check-merge-admission.mjs`, `check-doc-metrics.mjs`, `i18n-locales.mjs`, `test-metrics.mjs`)
+immutable from a pull request, including deletion, rename, mode or symlink changes. Otherwise a PR
+could pass against the unchanged base evaluator and install a weakened one as the next trusted
+base. There is intentionally no in-PR authorization path yet: a legitimate change to these files
+waits for an explicit, base-owned protected-transition mechanism.
+
 ## Provider roles and configuration ownership
 
 | Provider | Durable role | Repository surface | Current state source |
