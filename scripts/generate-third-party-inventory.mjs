@@ -21,7 +21,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -69,23 +69,27 @@ const SCOPE_STATEMENT = [
   'This inventory is generated from package metadata and is not a legal opinion.',
 ];
 
+function depthDelta(token) {
+  if (token === '(') return 1;
+  if (token === ')') return -1;
+  return 0;
+}
+
+/** True when the first character's parenthesis closes only at the last character. */
+function isWrappedByOnePair(text) {
+  if (!text.startsWith('(') || !text.endsWith(')')) return false;
+  let depth = 0;
+  for (const character of text.slice(0, -1)) {
+    depth += depthDelta(character);
+    if (depth === 0) return false;
+  }
+  return true;
+}
+
 /** Removes parentheses only when one balanced pair encloses the whole expression. */
 function stripOuterParens(expression) {
   let text = expression.trim();
-  while (text.startsWith('(') && text.endsWith(')')) {
-    let depth = 0;
-    let enclosesAll = true;
-    for (let index = 0; index < text.length - 1; index++) {
-      if (text[index] === '(') depth++;
-      if (text[index] === ')') depth--;
-      if (depth === 0) {
-        enclosesAll = false;
-        break;
-      }
-    }
-    if (!enclosesAll) break;
-    text = text.slice(1, -1).trim();
-  }
+  while (isWrappedByOnePair(text)) text = text.slice(1, -1).trim();
   return text;
 }
 
@@ -106,8 +110,7 @@ function splitTopLevel(expression, operator) {
   let current = '';
   const tokens = expression.split(/(\(|\)|\s+)/).filter((token) => token !== '');
   for (const token of tokens) {
-    if (token === '(') depth++;
-    if (token === ')') depth--;
+    depth += depthDelta(token);
     if (depth === 0 && token === operator) {
       parts.push(current.trim());
       current = '';
@@ -136,82 +139,100 @@ export function packageUrl(ecosystem, name, version) {
   return `pkg:cargo/${name}@${version}`;
 }
 
+function licenseFileNames(directory, extraFiles) {
+  const matches = readdirSync(directory).filter((entry) => LICENSE_FILE_PATTERN.test(entry));
+  return [...new Set([...extraFiles, ...matches])].sort();
+}
+
+function readNormalizedText(path) {
+  if (!existsSync(path) || !statSync(path).isFile()) return '';
+  // QNBS-v3: CRLF is normalized so Windows and Unix runners produce byte-identical notices.
+  return readFileSync(path, 'utf8').replace(/\r\n?/g, '\n').trim();
+}
+
 export function readLicenseTexts(directory, extraFiles = []) {
   if (!directory || !existsSync(directory)) return [];
-  const names = new Set(extraFiles);
-  for (const entry of readdirSync(directory)) {
-    if (LICENSE_FILE_PATTERN.test(entry)) names.add(entry);
-  }
-  const texts = [];
-  for (const name of [...names].sort()) {
-    const path = join(directory, name);
-    if (!existsSync(path) || !statSync(path).isFile()) continue;
-    // QNBS-v3: CRLF is normalized so Windows and Unix runners produce byte-identical notices.
-    const text = readFileSync(path, 'utf8').replace(/\r\n?/g, '\n').trim();
-    if (text !== '') texts.push({ file: name, text });
-  }
-  return texts;
+  return licenseFileNames(directory, extraFiles)
+    .map((file) => ({ file, text: readNormalizedText(join(directory, file)) }))
+    .filter(({ text }) => text !== '');
+}
+
+/** A pnpm store directory is `<name with + for />@<version>` followed by `_<peer suffix>` or `/`. */
+function isStoreDirectoryFor(path, name, version) {
+  const storeKey = `/${name.replace('/', '+')}@${version}`;
+  const normalized = path.replaceAll('\\', '/');
+  const at = normalized.indexOf(storeKey);
+  return at !== -1 && /[_/]/.test(normalized.charAt(at + storeKey.length));
+}
+
+function storeDirectory(entry, version) {
+  const match = entry.paths.find((path) => isStoreDirectoryFor(path, entry.name, version));
+  if (match) return match;
+  return entry.versions.length === 1 ? entry.paths[0] : undefined;
 }
 
 /** Parses `pnpm licenses list --prod --json` output into components (one per name@version). */
 export function collectJsComponents(pnpmLicenses, readTexts = readLicenseTexts) {
-  const components = [];
-  for (const entries of Object.values(pnpmLicenses)) {
-    for (const entry of entries) {
-      for (const version of entry.versions) {
-        // A pnpm store directory is `<name with + for />@<version>` followed by `_<peer suffix>` or `/`.
-        const storeKey = `/${entry.name.replace('/', '+')}@${version}`;
-        const directory =
-          entry.paths.find((path) => {
-            const normalized = path.replaceAll('\\', '/');
-            const at = normalized.indexOf(storeKey);
-            return at !== -1 && /[_/]/.test(normalized.charAt(at + storeKey.length));
-          }) ?? (entry.versions.length === 1 ? entry.paths[0] : undefined);
-        components.push({
-          ecosystem: 'npm',
-          name: entry.name,
-          version,
-          license: normalizeLicenseExpression(entry.license),
-          homepage: entry.homepage ?? null,
-          texts: readTexts(directory),
-        });
-      }
-    }
-  }
-  return components;
+  return Object.values(pnpmLicenses)
+    .flat()
+    .flatMap((entry) =>
+      entry.versions.map((version) => ({
+        ecosystem: 'npm',
+        name: entry.name,
+        version,
+        license: normalizeLicenseExpression(entry.license),
+        homepage: entry.homepage ?? null,
+        texts: readTexts(storeDirectory(entry, version)),
+      })),
+    );
 }
 
-/** Walks `cargo metadata` from the resolve root through normal edges only. */
-export function collectRustComponents(metadata, readTexts = readLicenseTexts) {
-  const packages = new Map(metadata.packages.map((pkg) => [pkg.id, pkg]));
+function isProcMacro(pkg) {
+  return pkg.targets.every((target) => target.kind.includes('proc-macro'));
+}
+
+function normalDependencies(node) {
+  return (node?.deps ?? [])
+    .filter((dependency) => dependency.dep_kinds.some((kind) => kind.kind === null))
+    .map((dependency) => dependency.pkg);
+}
+
+/**
+ * Package ids linked into the binary: reachable from the root through normal edges, never
+ * through a proc-macro crate, whose own dependencies run only inside the compiler.
+ */
+function linkedPackageIds(metadata, packages) {
   const nodes = new Map(metadata.resolve.nodes.map((node) => [node.id, node]));
-  const reachable = new Set();
+  const linked = new Set();
   const stack = [metadata.resolve.root];
   while (stack.length > 0) {
     const id = stack.pop();
-    if (reachable.has(id)) continue;
-    reachable.add(id);
-    for (const dependency of nodes.get(id)?.deps ?? []) {
-      if (dependency.dep_kinds.some((kind) => kind.kind === null)) stack.push(dependency.pkg);
-    }
-  }
-  const components = [];
-  for (const id of reachable) {
     const pkg = packages.get(id);
-    // First-party path/workspace crates carry no registry source; they are WorldScript itself.
-    if (!pkg || pkg.source === null) continue;
-    if (pkg.targets.every((target) => target.kind.includes('proc-macro'))) continue;
-    const directory = dirname(pkg.manifest_path);
-    components.push({
-      ecosystem: 'cargo',
-      name: pkg.name,
-      version: pkg.version,
-      license: normalizeLicenseExpression(pkg.license),
-      homepage: pkg.homepage ?? pkg.repository ?? null,
-      texts: readTexts(directory, pkg.license_file ? [pkg.license_file] : []),
-    });
+    if (linked.has(id) || !pkg || isProcMacro(pkg)) continue;
+    linked.add(id);
+    stack.push(...normalDependencies(nodes.get(id)));
   }
-  return components;
+  return linked;
+}
+
+function rustComponent(pkg, readTexts) {
+  return {
+    ecosystem: 'cargo',
+    name: pkg.name,
+    version: pkg.version,
+    license: normalizeLicenseExpression(pkg.license),
+    homepage: pkg.homepage ?? pkg.repository ?? null,
+    texts: readTexts(dirname(pkg.manifest_path), pkg.license_file ? [pkg.license_file] : []),
+  };
+}
+
+/** Components for the crates linked into the desktop binary for the metadata's target. */
+export function collectRustComponents(metadata, readTexts = readLicenseTexts) {
+  const packages = new Map(metadata.packages.map((pkg) => [pkg.id, pkg]));
+  return [...linkedPackageIds(metadata, packages)]
+    .map((id) => packages.get(id))
+    .filter((pkg) => pkg.source !== null) // path/workspace crates are WorldScript itself
+    .map((pkg) => rustComponent(pkg, readTexts));
 }
 
 export function compareComponents(a, b) {
@@ -247,9 +268,39 @@ function scopeLines(context) {
   ];
 }
 
+function bulletList(title, entries) {
+  const items = entries.length > 0 ? entries.map((entry) => `  - ${entry}`) : ['  (none)'];
+  return [`${title} (${entries.length}):`, ...items, ''];
+}
+
+/** Prints each distinct license text once; later identical texts reference the first owner. */
+function licenseTextLines(id, texts, firstSeen) {
+  return texts.flatMap(({ file, text }) => {
+    const digest = createHash('sha256').update(text).digest('hex');
+    const earlier = firstSeen.get(digest);
+    if (earlier) return ['', `[${file}: identical to the text printed for ${earlier}]`];
+    firstSeen.set(digest, id);
+    return ['', `[${file}]`, text];
+  });
+}
+
+function componentLines(component, firstSeen) {
+  const id = `${component.ecosystem}:${component.name}@${component.version}`;
+  const homepage = component.homepage ? [`Homepage: ${component.homepage}`] : [];
+  return [
+    '-'.repeat(78),
+    id,
+    `License: ${component.license}`,
+    ...homepage,
+    ...licenseTextLines(id, component.texts, firstSeen),
+    '',
+  ];
+}
+
 export function renderNotices(components, context) {
   const sorted = [...components].sort(compareComponents);
   const { review, missingText } = classifyComponents(sorted);
+  const firstSeen = new Map();
   const lines = [
     'THIRD-PARTY SOFTWARE NOTICES',
     '============================',
@@ -258,30 +309,10 @@ export function renderNotices(components, context) {
     '',
     `Components: ${sorted.length}`,
     '',
-    `Licenses flagged for human review (${review.length}):`,
-    ...(review.length > 0 ? review.map((entry) => `  - ${entry}`) : ['  (none)']),
-    '',
-    `Components whose package ships no license text (${missingText.length}):`,
-    ...(missingText.length > 0 ? missingText.map((entry) => `  - ${entry}`) : ['  (none)']),
-    '',
+    ...bulletList('Licenses flagged for human review', review),
+    ...bulletList('Components whose package ships no license text', missingText),
+    ...sorted.flatMap((component) => componentLines(component, firstSeen)),
   ];
-  const firstSeen = new Map();
-  for (const component of sorted) {
-    const id = `${component.ecosystem}:${component.name}@${component.version}`;
-    lines.push('-'.repeat(78), id, `License: ${component.license}`);
-    if (component.homepage) lines.push(`Homepage: ${component.homepage}`);
-    for (const { file, text } of component.texts) {
-      const digest = createHash('sha256').update(text).digest('hex');
-      const earlier = firstSeen.get(digest);
-      if (earlier) {
-        lines.push('', `[${file}: identical to the text printed for ${earlier}]`);
-      } else {
-        firstSeen.set(digest, id);
-        lines.push('', `[${file}]`, text);
-      }
-    }
-    lines.push('');
-  }
   return `${lines.join('\n')}\n`;
 }
 
@@ -360,71 +391,69 @@ function run(command, args) {
   });
 }
 
+const OPTION_KEYS = { '--out': 'out', '--target': 'target' };
+
 function parseArgs(argv) {
   const options = { out: 'third-party', target: null };
-  for (let index = 0; index < argv.length; index++) {
-    if (argv[index] === '--out') options.out = argv[++index];
-    else if (argv[index] === '--target') options.target = argv[++index];
-    else throw new Error(`unknown argument: ${argv[index]}`);
+  for (let index = 0; index < argv.length; index += 2) {
+    const key = OPTION_KEYS[argv[index]];
+    if (!key || argv[index + 1] === undefined) throw new Error(`invalid argument: ${argv[index]}`);
+    options[key] = argv[index + 1];
   }
   return options;
 }
 
-export function main(argv = process.argv.slice(2)) {
-  const options = parseArgs(argv);
-  const target = options.target ?? /host: (\S+)/.exec(run('rustc', ['-vV']))?.[1];
+function resolveContext(requestedTarget) {
+  const target = requestedTarget ?? /host: (\S+)/.exec(run('rustc', ['-vV']))?.[1];
   if (!target) throw new Error('cannot determine the Rust host target triple');
   const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
   const commit = process.env.GITHUB_SHA || run('git', ['rev-parse', 'HEAD']).trim();
   const epoch = Number(run('git', ['log', '-1', '--format=%ct', commit]).trim());
-  const context = { version, commit, target, timestamp: new Date(epoch * 1000).toISOString() };
+  return { version, commit, target, timestamp: new Date(epoch * 1000).toISOString() };
+}
 
-  const metadata = JSON.parse(
-    run('cargo', [
-      'metadata',
-      '--locked',
-      '--format-version',
-      '1',
-      '--manifest-path',
-      'src-tauri/Cargo.toml',
-      '--filter-platform',
-      target,
-    ]),
-  );
-  const components = [
-    ...collectRustComponents(metadata),
-    ...collectJsComponents(JSON.parse(run('pnpm', ['licenses', 'list', '--prod', '--json']))),
+function collectAllComponents(target) {
+  const cargoArgs = ['metadata', '--locked', '--format-version', '1'];
+  cargoArgs.push('--manifest-path', 'src-tauri/Cargo.toml', '--filter-platform', target);
+  const pnpmLicenses = JSON.parse(run('pnpm', ['licenses', 'list', '--prod', '--json']));
+  return [
+    ...collectRustComponents(JSON.parse(run('cargo', cargoArgs))),
+    ...collectJsComponents(pnpmLicenses),
   ];
+}
+
+function writeInventory(outDir, components, context) {
+  mkdirSync(outDir, { recursive: true });
+  const prefix = `worldscript-studio-${context.version}-${context.target}`;
+  const notices = `${prefix}.third-party-notices.txt`;
+  const sbom = `${prefix}.cdx.json`;
+  writeFileSync(join(outDir, notices), renderNotices(components, context));
+  writeFileSync(join(outDir, sbom), renderSbom(components, context));
+  return { notices, sbom };
+}
+
+export function main(argv = process.argv.slice(2)) {
+  const options = parseArgs(argv);
+  const context = resolveContext(options.target);
+  const components = collectAllComponents(context.target);
   const { unclassified, review, missingText } = classifyComponents(components);
   if (unclassified.length > 0) {
-    console.error(`::error::${unclassified.length} shipped component(s) have no license metadata:`);
-    for (const id of unclassified) console.error(`  - ${id}`);
+    const list = unclassified.map((id) => `  - ${id}`).join('\n');
+    console.error(`::error::${unclassified.length} shipped component(s) lack license metadata:`);
+    console.error(list);
     process.exitCode = 1;
     return;
   }
-
   const outDir = resolve(root, options.out);
-  mkdirSync(outDir, { recursive: true });
-  const prefix = `worldscript-studio-${version}-${target}`;
-  const noticesPath = join(outDir, `${prefix}.third-party-notices.txt`);
-  const sbomPath = join(outDir, `${prefix}.cdx.json`);
-  writeFileSync(noticesPath, renderNotices(components, context));
-  writeFileSync(sbomPath, renderSbom(components, context));
-
-  const summary = [
-    `Third-party inventory for ${target}: ${components.length} components`,
-    `  review: ${review.length}, without license text: ${missingText.length}`,
-    `  ${noticesPath}`,
-    `  ${sbomPath}`,
-  ];
-  console.log(summary.join('\n'));
+  const files = writeInventory(outDir, components, context);
+  console.log(
+    `Third-party inventory for ${context.target}: ${components.length} components ` +
+      `(review: ${review.length}, without license text: ${missingText.length}) → ${outDir}`,
+  );
+  // Bare file names: the workflow composes platform-neutral relative paths from them.
   if (process.env.GITHUB_OUTPUT) {
-    // Bare file names: the workflow composes platform-neutral relative paths from them.
-    writeFileSync(
-      process.env.GITHUB_OUTPUT,
-      `notices_file=${basename(noticesPath)}\nsbom_file=${basename(sbomPath)}\n`,
-      { flag: 'a' },
-    );
+    const output = `notices_file=${files.notices}\nsbom_file=${files.sbom}\n`;
+    writeFileSync(process.env.GITHUB_OUTPUT, output, { flag: 'a' });
   }
 }
 

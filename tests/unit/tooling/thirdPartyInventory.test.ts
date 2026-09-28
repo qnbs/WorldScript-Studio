@@ -76,7 +76,7 @@ describe('license expressions', () => {
 });
 
 describe('component collection', () => {
-  it('follows only normal edges and skips first-party and proc-macro crates', () => {
+  it('follows only normal edges, never through a proc-macro, and skips first-party crates', () => {
     const pkg = (id: string, overrides: Partial<CargoMetadata['packages'][number]> = {}) => ({
       id,
       name: id,
@@ -94,6 +94,8 @@ describe('component collection', () => {
         pkg('linked'),
         pkg('transitive', { license: 'MIT/Apache-2.0' }),
         pkg('macro', { targets: [{ kind: ['proc-macro'] }] }),
+        pkg('macro-helper'),
+        pkg('shared'),
         pkg('dev-only'),
         pkg('build-only'),
         pkg('first-party', { source: null }),
@@ -111,9 +113,23 @@ describe('component collection', () => {
               { pkg: 'build-only', dep_kinds: [{ kind: 'build' }] },
             ],
           },
-          { id: 'linked', deps: [{ pkg: 'transitive', dep_kinds: normal }] },
+          {
+            id: 'linked',
+            deps: [
+              { pkg: 'transitive', dep_kinds: normal },
+              { pkg: 'shared', dep_kinds: normal },
+            ],
+          },
           { id: 'transitive', deps: [] },
-          { id: 'macro', deps: [] },
+          {
+            id: 'macro',
+            deps: [
+              { pkg: 'macro-helper', dep_kinds: normal },
+              { pkg: 'shared', dep_kinds: normal },
+            ],
+          },
+          { id: 'macro-helper', deps: [] },
+          { id: 'shared', deps: [] },
           { id: 'dev-only', deps: [] },
           { id: 'build-only', deps: [] },
           { id: 'first-party', deps: [] },
@@ -125,9 +141,10 @@ describe('component collection', () => {
       seen.push(directory);
       return [];
     });
-    expect(result.map((entry) => entry.name).sort()).toEqual(['linked', 'transitive']);
+    // macro-helper is reachable only through the proc-macro; shared is also linked via `linked`.
+    expect(result.map((entry) => entry.name).sort()).toEqual(['linked', 'shared', 'transitive']);
     expect(result.find((entry) => entry.name === 'transitive')?.license).toBe('MIT OR Apache-2.0');
-    expect(seen.sort()).toEqual(['/registry/linked', '/registry/transitive']);
+    expect(seen.sort()).toEqual(['/registry/linked', '/registry/shared', '/registry/transitive']);
   });
 
   it('reads each npm version from its own store directory', () => {

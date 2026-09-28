@@ -54,7 +54,7 @@ Scope: Rust crates reachable from the desktop crate through normal dependency ed
 
 ### GitHub Releases (tags only)
 
-When the workflow runs on a **`v*`** tag (not on manual `workflow_dispatch` alone), a follow-up **`release`** job downloads all `tauri-bundle-*` artifacts, collects `.deb`, `.AppImage`, `.rpm`, `.msi`, `.exe`, and `.dmg` files together with the three per-target SBOMs and notices (the job fails unless exactly one pair per bundle target is present), and publishes them on a **GitHub Release** for that tag (`softprops/action-gh-release`). If no matching bundle files are found, the release step is skipped with a warning.
+When the workflow runs on a **`v*`** tag (not on manual `workflow_dispatch` alone), a follow-up **`release`** job downloads all `tauri-bundle-*` artifacts, collects `.deb`, `.AppImage`, `.rpm`, `.msi`, `.exe`, and `.dmg` files and, only when such installer files exist, adds the three per-target SBOMs and notices (the job then fails unless exactly one pair per bundle target is present). It publishes them on a **GitHub Release** for that tag (`softprops/action-gh-release`). If no matching bundle files are found, the release step is skipped with a warning.
 
 This workflow is **independent** of the web PWA pipeline ([`docs/CI.md`](CI.md)); it does not gate GitHub Pages deploy.
 
