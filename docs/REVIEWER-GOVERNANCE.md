@@ -29,13 +29,29 @@ a later PR from deleting or neutralizing the invocation step in the ordinary PR 
 initial introduction is necessarily bootstrap-validated because the base ref predates both the
 checker and the base-owned target workflow. Pushes and manual runs execute the checked-out copy.
 
-The same base-owned guard makes the trusted roots (`workflow-policy-check.mjs`,
-`check-reviewer-config.mjs`) and the whole merge-admission evaluator import closure
-(`check-merge-admission.mjs`, `check-doc-metrics.mjs`, `i18n-locales.mjs`, `test-metrics.mjs`)
-immutable from a pull request, including deletion, rename, mode or symlink changes. Otherwise a PR
-could pass against the unchanged base evaluator and install a weakened one as the next trusted
-base. There is intentionally no in-PR authorization path yet: a legitimate change to these files
-waits for an explicit, base-owned protected-transition mechanism.
+The same base-owned guard keeps the trusted roots (`workflow-policy-check.mjs`,
+`check-reviewer-config.mjs`) immutable from a pull request. Under the current policy there is no
+normally governed path to change them, so they stay fixed; the dormant `PR_NUMBER == 857` branch
+that those roots pin in `pr-changelog-reference.yml` is kept and documented for the same reason.
+
+The merge-admission evaluator import closure (`check-merge-admission.mjs`, `check-doc-metrics.mjs`,
+`i18n-locales.mjs`, `test-metrics.mjs`) evolves only through the base-owned verifier
+`scripts/check-protected-transitions.mjs`, which the guard runs unconditionally. Otherwise a PR
+could pass against the unchanged base evaluator and install a weakened one as the next trusted base.
+An evaluator edit is admitted only when the **base** copy of
+`.github/governance/protected-transitions.json` lists that exact path with the current base
+SHA-256 (`from`) and the PR head SHA-256 (`to`). The two-step flow is:
+
+1. A manifest-only PR adds the `{ path, from, to }` entry; it changes nothing else and only takes
+   effect once merged.
+2. The evaluator PR then lands exactly those bytes. After it merges, the base digest equals `to`,
+   so the entry can never match again (no replay, no reverse replay).
+
+The verifier fails closed on anything else: unlisted, deleted, renamed, retyped, symlinked or
+re-moded evaluator files; wildcard or unknown manifest paths; a manifest, verifier or trust-workflow
+change in the same PR as an evaluator; and an evaluator import closure that reaches an unprotected
+file. The PR's own manifest is never consulted. Stale entries are harmless and can be removed by a
+later manifest-only PR.
 
 ## Provider roles and configuration ownership
 
