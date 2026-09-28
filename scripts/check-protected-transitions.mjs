@@ -47,43 +47,63 @@ export function parseRawDiff(raw) {
   return changes;
 }
 
-function isValidTransition(entry) {
+function hasExactKeys(value, keys) {
   return (
-    entry !== null &&
-    typeof entry === 'object' &&
-    Object.keys(entry).sort().join(',') === 'from,path,to' &&
-    AUTHORIZABLE_PATHS.has(entry.path) &&
-    DIGEST.test(entry.from) &&
-    DIGEST.test(entry.to) &&
-    entry.from !== entry.to
+    value !== null && typeof value === 'object' && Object.keys(value).sort().join(',') === keys
   );
+}
+
+const TRANSITION_RULES = [
+  (entry) => hasExactKeys(entry, 'from,path,to'),
+  (entry) => AUTHORIZABLE_PATHS.has(entry.path),
+  (entry) => DIGEST.test(entry.from) && DIGEST.test(entry.to),
+  (entry) => entry.from !== entry.to,
+];
+
+const MANIFEST_RULES = [
+  (manifest) => hasExactKeys(manifest, 'transitions,version'),
+  (manifest) => manifest.version === 1,
+  (manifest) => Array.isArray(manifest.transitions),
+];
+
+function isValidTransition(entry) {
+  return TRANSITION_RULES.every((rule) => rule(entry));
+}
+
+function parseJson(text) {
+  try {
+    return { value: JSON.parse(text) };
+  } catch {
+    return { error: 'protected-transition manifest is not valid JSON' };
+  }
+}
+
+function transitionListError(transitions) {
+  const invalid = transitions.find((entry) => !isValidTransition(entry));
+  if (invalid !== undefined)
+    return `invalid protected transition entry: ${JSON.stringify(invalid)}`;
+  const paths = transitions.map((entry) => entry.path);
+  return new Set(paths).size === paths.length
+    ? null
+    : 'protected-transition manifest lists a path more than once';
 }
 
 // QNBS-v3: strict schema, exact paths only (no globs), one entry per path; anything else fails closed.
 export function parseManifest(text) {
-  let manifest;
-  try {
-    manifest = JSON.parse(text);
-  } catch {
-    return { error: 'protected-transition manifest is not valid JSON' };
-  }
-  const shapeOk =
-    manifest !== null &&
-    typeof manifest === 'object' &&
-    Object.keys(manifest).sort().join(',') === 'transitions,version' &&
-    manifest.version === 1 &&
-    Array.isArray(manifest.transitions);
-  if (!shapeOk)
+  const parsed = parseJson(text);
+  if (parsed.error) return parsed;
+  if (!MANIFEST_RULES.every((rule) => rule(parsed.value))) {
     return { error: 'protected-transition manifest must be {"version":1,"transitions":[...]}' };
-  const invalid = manifest.transitions.find((entry) => !isValidTransition(entry));
-  if (invalid !== undefined) {
-    return { error: `invalid protected transition entry: ${JSON.stringify(invalid)}` };
   }
-  const paths = manifest.transitions.map((entry) => entry.path);
-  if (new Set(paths).size !== paths.length) {
-    return { error: 'protected-transition manifest lists a path more than once' };
-  }
-  return { transitions: manifest.transitions };
+  const error = transitionListError(parsed.value.transitions);
+  return error ? { error } : { transitions: parsed.value.transitions };
+}
+
+function mixesControlWithEvaluator(changedPaths) {
+  const touchesControl = changedPaths.some(
+    (path) => CONTROL_PATHS.has(path) && path !== MANIFEST_PATH,
+  );
+  return touchesControl && changedPaths.some((path) => EVALUATOR_PATHS.includes(path));
 }
 
 function checkControlIsolation(changes) {
@@ -91,34 +111,39 @@ function checkControlIsolation(changes) {
   if (changedPaths.includes(MANIFEST_PATH) && changedPaths.length !== 1) {
     return ['the protected-transition manifest must change alone, in its own PR'];
   }
-  const touchesControl = changedPaths.some(
-    (path) => CONTROL_PATHS.has(path) && path !== MANIFEST_PATH,
-  );
-  const touchesEvaluator = changedPaths.some((path) => EVALUATOR_PATHS.includes(path));
-  return touchesControl && touchesEvaluator
+  return mixesControlWithEvaluator(changedPaths)
     ? ['the verifier or trust workflow must not change in the same PR as an evaluator']
     : [];
 }
 
-function checkAuthorizedChange(change, transitions, readBlob) {
-  const where = `${change.path}:`;
-  if (change.status !== 'M') return [`${where} status ${change.status} is not an in-place edit`];
-  if (change.oldMode !== REGULAR_FILE_MODE || change.newMode !== REGULAR_FILE_MODE) {
-    return [`${where} mode ${change.oldMode}→${change.newMode} is not a regular file edit`];
-  }
-  const entry = transitions.find((candidate) => candidate.path === change.path);
-  if (entry === undefined) return [`${where} no base-owned transition authorizes this change`];
+function editShapeFinding(change) {
+  if (change.status !== 'M') return `status ${change.status} is not an in-place edit`;
+  const regular = change.oldMode === REGULAR_FILE_MODE && change.newMode === REGULAR_FILE_MODE;
+  return regular ? null : `mode ${change.oldMode}→${change.newMode} is not a regular file edit`;
+}
+
+function digestFinding(entry, change, readBlob) {
   const fromDigest = sha256(readBlob(change.oldBlob));
-  const toDigest = sha256(readBlob(change.newBlob));
   if (entry.from !== fromDigest) {
-    return [
-      `${where} authorization is stale (base digest ${fromDigest}, authorized from ${entry.from})`,
-    ];
+    return `authorization is stale (base digest ${fromDigest}, authorized from ${entry.from})`;
   }
-  if (entry.to !== toDigest) {
-    return [`${where} head digest ${toDigest} differs from the authorized ${entry.to}`];
-  }
-  return [];
+  const toDigest = sha256(readBlob(change.newBlob));
+  return entry.to === toDigest
+    ? null
+    : `head digest ${toDigest} differs from the authorized ${entry.to}`;
+}
+
+function authorizationFinding(change, transitions, readBlob) {
+  const shape = editShapeFinding(change);
+  if (shape) return shape;
+  const entry = transitions.find((candidate) => candidate.path === change.path);
+  if (entry === undefined) return 'no base-owned transition authorizes this change';
+  return digestFinding(entry, change, readBlob);
+}
+
+function checkAuthorizedChange(change, transitions, readBlob) {
+  const finding = authorizationFinding(change, transitions, readBlob);
+  return finding ? [`${change.path}: ${finding}`] : [];
 }
 
 function checkManifestOnlyChange(change, readBlob) {
@@ -146,6 +171,20 @@ export function evaluatorImportClosure(readHeadFile, entry = EVALUATOR_ENTRY) {
   return [...seen];
 }
 
+function checkProtectedChange(change, parsed, readBlob) {
+  if (change.path === MANIFEST_PATH) return checkManifestOnlyChange(change, readBlob);
+  return parsed.error ? [] : checkAuthorizedChange(change, parsed.transitions, readBlob);
+}
+
+function checkClosure(readHeadFile) {
+  const unguarded = evaluatorImportClosure(readHeadFile).filter(
+    (path) => !EVALUATOR_PATHS.includes(path),
+  );
+  return unguarded.length > 0
+    ? [`evaluator import closure reaches unprotected files: ${unguarded.join(', ')}`]
+    : [];
+}
+
 export function evaluateProtectedTransitions({
   changes,
   baseManifestText,
@@ -156,18 +195,9 @@ export function evaluateProtectedTransitions({
   const parsed = baseManifestText === null ? { transitions: [] } : parseManifest(baseManifestText);
   if (parsed.error) findings.push(`${MANIFEST_PATH} (base): ${parsed.error}`);
   for (const change of changes.filter((candidate) => PROTECTED_SET.has(candidate.path))) {
-    if (change.path === MANIFEST_PATH) {
-      findings.push(...checkManifestOnlyChange(change, readBlob));
-    } else if (!parsed.error) {
-      findings.push(...checkAuthorizedChange(change, parsed.transitions, readBlob));
-    }
+    findings.push(...checkProtectedChange(change, parsed, readBlob));
   }
-  const unguarded = evaluatorImportClosure(readHeadFile).filter(
-    (path) => !EVALUATOR_PATHS.includes(path),
-  );
-  if (unguarded.length > 0) {
-    findings.push(`evaluator import closure reaches unprotected files: ${unguarded.join(', ')}`);
-  }
+  findings.push(...checkClosure(readHeadFile));
   return findings;
 }
 
