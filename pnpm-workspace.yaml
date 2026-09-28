@@ -75,7 +75,7 @@ overrides:
   axios: ">=1.18.0"
   basic-ftp: ">=5.3.1"
   fast-uri: ">=3.1.6 <4"
-  ip-address: "10.3.1"
+  ip-address: "10.5.1" # GHSA-2vr4-cq9g-pvrc + GHSA-rpw4-54j3-4h4q (fixed 10.5.1); dev-only via @lhci/cli -> socks
   ws: ">=8.21.0"
   form-data: ">=4.0.6"
   brace-expansion: ">=5.0.9"
@@ -85,7 +85,7 @@ overrides:
   fflate: ">=0.8.3"
   dompurify: ">=3.4.13"
   "@babel/core": ">=7.29.6 <8"
-  undici: ">=7.29.0 <8"
+  undici: ">=7.29.1 <8" # floor raised for GHSA-3wwx-pv8p-q78v (fixed 7.29.1); stays within 7.x (see header)
   js-yaml: ">=4.3.2 <5" # GHSA-2883-xcg3-v3hh (jest/babel-istanbul transitive, dev-only)
   nanoid@^3: "3.3.18"
   nanoid@^5: "5.1.16"
