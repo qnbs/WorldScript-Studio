@@ -34,10 +34,15 @@ type ReleaseTruthModule = {
     taggedVersions?: Set<string>,
     isFeatureBranchContext?: boolean,
     branchLocalIndices?: Set<number>,
+    mergeCommitIndices?: Set<number>,
+    reservedEntryIndices?: Set<number>,
   ) => string[];
   isOnFeatureBranch: (repositoryRoot?: string) => boolean;
   getBranchLocalSubjectIndices: (repositoryRoot?: string) => Set<number>;
   getPostReleaseCommitSubjects: (repositoryRoot?: string) => string[] | null;
+  getPostReleaseCommitRecords: (
+    repositoryRoot?: string,
+  ) => Array<{ sha: string; parents: string[]; subject: string }> | null;
 };
 // QNBS-v3: load the runtime-only scanners without making tsgo infer untyped .mjs exports.
 const loadReleaseTruthModule = async () =>
@@ -149,6 +154,12 @@ describe('README test metrics truth', () => {
   // QNBS-v3: stale badges must fail docs:check instead of preserving an old count during local sync.
   it('rejects stale test counts instead of silently preserving them', () => {
     expect(scanReadmeTestMetrics('![Tests-1%2B_%2F_1_files](badge.svg)')).not.toEqual([]);
+  });
+
+  it('checks the README tree prose test total as well as structured metrics', () => {
+    expect(
+      scanReadmeTestMetrics('Vitest unit tests (the 8456+ total also includes packages/*/tests)'),
+    ).not.toEqual([]);
   });
 });
 

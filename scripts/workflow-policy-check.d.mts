@@ -93,6 +93,12 @@ export function checkReviewerGovernanceGate(
   failures: WorkflowPolicyFailure[],
 ): void;
 
+export function checkMergeAdmissionGate(
+  fileName: string,
+  doc: Document,
+  failures: WorkflowPolicyFailure[],
+): void;
+
 export function checkReviewerGovernanceTrustWorkflow(
   fileName: string,
   doc: Document,
