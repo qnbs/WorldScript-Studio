@@ -242,9 +242,15 @@ jobs:
             -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \
             -o -name '*.msi' -o -name '*.exe' \
             -o -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \
-            -o -name '*.third-party-notices.txt' -o -name '*.cdx.json' \
             \) -exec cp {} release-assets/ \;
-          echo "Files to upload:" && ls -la release-assets/ || true
+          # QNBS-v3: only installer/updater files decide whether a release is published; the #871 inventory is attached afterwards, so inventories alone can never publish an installer-less release.
+          if [ -z "$(ls -A release-assets 2>/dev/null)" ]; then
+            echo "has_assets=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No bundle files found to attach. Check Tauri bundle output paths."
+            exit 0
+          fi
+          find downloaded -type f \( -name '*.third-party-notices.txt' -o -name '*.cdx.json' \) \
+            -exec cp {} release-assets/ \;
           # QNBS-v3: every bundled target must publish its own SBOM and notices (#871); a missing pair means the release would ship installers without their inventory.
           for suffix in cdx.json third-party-notices.txt; do
             count="$(find release-assets -maxdepth 1 -type f -name "*.${suffix}" | wc -l)"
@@ -253,12 +259,8 @@ jobs:
               exit 1
             fi
           done
-          if [ -z "$(ls -A release-assets 2>/dev/null)" ]; then
-            echo "has_assets=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No bundle files found to attach. Check Tauri bundle output paths."
-          else
-            echo "has_assets=true" >> "$GITHUB_OUTPUT"
-          fi
+          echo "Files to upload:" && ls -la release-assets/
+          echo "has_assets=true" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         if: steps.collect.outputs.has_assets == 'true'
