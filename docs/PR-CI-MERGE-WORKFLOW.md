@@ -13,8 +13,19 @@ checker must retain the required quality step, and the step executes the base re
 its local script dependencies against the current PR merge workspace. Only the introducing
 transition, where the base has no evaluator yet, may execute the PR copy; once the transition is
 merged, an ordinary PR cannot remove or replace the proof and still satisfy the structural gate.
+The step runs directly after the SHA-pinned checkout and `setup-node` steps, before the local setup
+action, dependency install scripts, or any PR-controlled `run` step could write `$GITHUB_ENV` or
+`$GITHUB_PATH`. The policy also rejects job- or workflow-level `env`/`defaults`, job `if`/
+`continue-on-error`/`container`, and matrix `exclude`/expressions for that lane.
 The admission task runs directly in the workflow rather than through a cached Turbo task because
 its result depends on the PR number, base/head SHAs, merge ref, event payload, and Git history.
+
+The evaluator rebuilds the resulting first-parent `main` history for both default GitHub landings:
+the squash commit (GitHub's `COMMIT_OR_PR_TITLE` subject plus ` (#N)`) and the default
+`Merge pull request #N from …` merge commit. It then runs `scanMainContextTruth`, the exact rule
+`docs:check` enforces on `main`. One `PR #N` entry therefore covers a PR's internal review commits
+under either landing. A merge title edited by hand at merge time and rebase landings cannot be
+predicted before merge and stay outside this proof; use the protected squash auto-merge path.
 
 **Mandatory pre-push gate:** Run `pnpm run ci:prepush` before every push and again after every local correction before re-pushing. It includes the lightweight cumulative PR-budget preflight when a trustworthy base is available; an unresolved base is reported explicitly and requires `pnpm run pr:budget -- --base <ref>`. It always resolves a change-aware classification (`scripts/ci-prepush-classifier.mjs`) from the outgoing evidence first, then runs docs/release-truth, CSP, desktop-import-boundary, native-readiness, Tauri plugin version-parity, and dependency-state checks unconditionally — it does **not** run Biome lint; that stays the pre-commit hook's job on staged files only (`lint-staged`), and full-repository lint is CI-owned. The single-checker (`--checkers 1`) local typecheck and the i18n/content-guard checks run only when the classification requires them — `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, and non-TypeScript `TEST_ONLY` changes report typecheck as `DEFERRED_TO_REQUIRED_CI` instead of running it locally, and i18n/content-guard checks run only for changes matching their own governed paths or implementation files (see `scripts/ci-prepush-check-registry.mjs`). It is the same `tsgo --noEmit` check as CI, not literally identical to it — CI uses `--checkers 4`. Whenever outgoing path evidence is incomplete, unresolved, or the manual committed-range diff fails, the gate fails closed into full local admission (every conditional check runs) rather than deferring anything. A targeted test or changed-file lint run alone is insufficient. If pnpm reports a dependency verification failure after a branch or lockfile change, run `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile`) first, then rerun the gate. The pre-commit hook does not replace this gate. Required GitHub CI remains the unconditional authority for the complete lint, TypeScript, and i18n validation regardless of what the local gate deferred.
 

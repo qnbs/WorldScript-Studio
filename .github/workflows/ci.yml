@@ -353,6 +353,39 @@ jobs:
           persist-credentials: false
           fetch-tags: true
           fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ matrix.node-version }}
+      # QNBS-v3: admission runs before any PR-controlled action, install script, or run step can write $GITHUB_ENV/$GITHUB_PATH; the base-owned policy pins this order and the evaluator runs from the base ref.
+      - name: Main-context merge admission proof
+        if: github.event_name == 'pull_request' && matrix.node-version == '22'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"
+          mkdir -p /tmp/base-scripts
+          if git show "$BASE_SHA:scripts/check-merge-admission.mjs" > /tmp/base-scripts/check-merge-admission.mjs 2>/dev/null \
+             && git show "$BASE_SHA:scripts/check-doc-metrics.mjs" > /tmp/base-scripts/check-doc-metrics.mjs 2>/dev/null \
+             && git show "$BASE_SHA:scripts/i18n-locales.mjs" > /tmp/base-scripts/i18n-locales.mjs 2>/dev/null \
+             && git show "$BASE_SHA:scripts/test-metrics.mjs" > /tmp/base-scripts/test-metrics.mjs 2>/dev/null; then
+            CHECKER=/tmp/base-scripts/check-merge-admission.mjs
+            WORLDSCRIPT_REPOSITORY_ROOT="$GITHUB_WORKSPACE" node "$CHECKER"
+          else
+            if [ "$PR_NUMBER" = "857" ]; then
+              echo "::notice::merge-admission evaluator is absent on the base ref; using the bounded PR #857 bootstrap once."
+              test "$(sha256sum scripts/check-merge-admission.mjs | awk '{print $1}')" = "369a8ae59c671d28de059d2263dba3d92d03349fed7336f72bff1be5c8166b2f"
+              test "$(sha256sum scripts/check-doc-metrics.mjs | awk '{print $1}')" = "900304466d7dd9b7afe22a69ac1a3f58dde6d7f18ef7fd6c0513a835323afd8d"
+              test "$(sha256sum scripts/i18n-locales.mjs | awk '{print $1}')" = "ae22dfcad13f0f82cfa8cbf39013422660a8e099e00dfa137266f2ccf5e40d58"
+              test "$(sha256sum scripts/test-metrics.mjs | awk '{print $1}')" = "27992ffcaeea146d4ac64b64e9dcd6bc9420b9f895393e205bcab209c5764505"
+              node scripts/check-merge-admission.mjs
+            else
+              echo "::error::trusted merge-admission evaluator is absent outside the introducing transition"
+              exit 1
+            fi
+          fi
+
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
@@ -374,36 +407,6 @@ jobs:
 
       - name: Doc metrics drift gate (locale/key counts, stale PLANNED status)
         run: pnpm run docs:check
-
-      # QNBS-v3: base-owned policy requires this step; the evaluator and its local dependencies run from the base ref after bootstrap, against the current PR merge workspace.
-      - name: Main-context merge admission proof
-        if: github.event_name == 'pull_request' && matrix.node-version == '22'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"
-          mkdir -p /tmp/base-scripts
-          if git show "$BASE_SHA:scripts/check-merge-admission.mjs" > /tmp/base-scripts/check-merge-admission.mjs 2>/dev/null \
-             && git show "$BASE_SHA:scripts/check-doc-metrics.mjs" > /tmp/base-scripts/check-doc-metrics.mjs 2>/dev/null \
-             && git show "$BASE_SHA:scripts/i18n-locales.mjs" > /tmp/base-scripts/i18n-locales.mjs 2>/dev/null \
-             && git show "$BASE_SHA:scripts/test-metrics.mjs" > /tmp/base-scripts/test-metrics.mjs 2>/dev/null; then
-            CHECKER=/tmp/base-scripts/check-merge-admission.mjs
-            WORLDSCRIPT_REPOSITORY_ROOT="$GITHUB_WORKSPACE" node "$CHECKER"
-          else
-            if [ "$PR_NUMBER" = "857" ]; then
-              echo "::notice::merge-admission evaluator is absent on the base ref; using the bounded PR #857 bootstrap once."
-              test "$(sha256sum scripts/check-merge-admission.mjs | awk '{print $1}')" = "ad95a14aa9da873243e801600af3f6d7a20d128aab989cdec6ca88b6ef649387"
-              test "$(sha256sum scripts/check-doc-metrics.mjs | awk '{print $1}')" = "bdfdd55bd20426da320cce593a4294400b0c0a29afcf592f88351e741e53ffb8"
-              test "$(sha256sum scripts/i18n-locales.mjs | awk '{print $1}')" = "ae22dfcad13f0f82cfa8cbf39013422660a8e099e00dfa137266f2ccf5e40d58"
-              test "$(sha256sum scripts/test-metrics.mjs | awk '{print $1}')" = "27992ffcaeea146d4ac64b64e9dcd6bc9420b9f895393e205bcab209c5764505"
-              node scripts/check-merge-admission.mjs
-            else
-              echo "::error::trusted merge-admission evaluator is absent outside the introducing transition"
-              exit 1
-            fi
-          fi
 
       - name: CSP source synchronization and parity
         run: pnpm run csp:verify

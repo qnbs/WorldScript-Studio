@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseDocument } from 'yaml';
@@ -66,47 +67,6 @@ ${canonicalWorkflowPolicyCommand}          REVIEWER_CONFIG_ROOT="$PR_ROOT" \\
             node scripts/check-reviewer-config.mjs
 `;
 
-const canonicalMergeAdmissionGate = `
-on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review, edited]
-jobs:
-  quality:
-    strategy:
-      matrix:
-        node-version: ['22', '24']
-    steps:
-      - name: Main-context merge admission proof
-        if: github.event_name == 'pull_request' && matrix.node-version == '22'
-        env:
-          BASE_SHA: \${{ github.event.pull_request.base.sha }}
-          PR_NUMBER: \${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"
-          mkdir -p /tmp/base-scripts
-          if git show "$BASE_SHA:scripts/check-merge-admission.mjs" > /tmp/base-scripts/check-merge-admission.mjs 2>/dev/null \\
-             && git show "$BASE_SHA:scripts/check-doc-metrics.mjs" > /tmp/base-scripts/check-doc-metrics.mjs 2>/dev/null \\
-             && git show "$BASE_SHA:scripts/i18n-locales.mjs" > /tmp/base-scripts/i18n-locales.mjs 2>/dev/null \\
-             && git show "$BASE_SHA:scripts/test-metrics.mjs" > /tmp/base-scripts/test-metrics.mjs 2>/dev/null; then
-            CHECKER=/tmp/base-scripts/check-merge-admission.mjs
-            WORLDSCRIPT_REPOSITORY_ROOT="$GITHUB_WORKSPACE" node "$CHECKER"
-          else
-            if [ "$PR_NUMBER" = "857" ]; then
-              echo "::notice::merge-admission evaluator is absent on the base ref; using the bounded PR #857 bootstrap once."
-              test "$(sha256sum scripts/check-merge-admission.mjs | awk '{print $1}')" = "ad95a14aa9da873243e801600af3f6d7a20d128aab989cdec6ca88b6ef649387"
-              test "$(sha256sum scripts/check-doc-metrics.mjs | awk '{print $1}')" = "bdfdd55bd20426da320cce593a4294400b0c0a29afcf592f88351e741e53ffb8"
-              test "$(sha256sum scripts/i18n-locales.mjs | awk '{print $1}')" = "ae22dfcad13f0f82cfa8cbf39013422660a8e099e00dfa137266f2ccf5e40d58"
-              test "$(sha256sum scripts/test-metrics.mjs | awk '{print $1}')" = "27992ffcaeea146d4ac64b64e9dcd6bc9420b9f895393e205bcab209c5764505"
-              node scripts/check-merge-admission.mjs
-            else
-              echo "::error::trusted merge-admission evaluator is absent outside the introducing transition"
-              exit 1
-            fi
-          fi
-`;
-
 // QNBS-v3: contents:read is the only safe top-level default — every other form is a policy gap.
 describe('checkTopLevelPermissions', () => {
   it('passes for the canonical {contents: read} form', () => {
@@ -137,129 +97,113 @@ describe('checkTopLevelPermissions', () => {
 });
 
 describe('checkMergeAdmissionGate', () => {
-  it('requires the trusted base evaluator and bounded bootstrap fallback', () => {
+  const gha = (expression: string) => ['$', '{{ ', expression, ' }}'].join('');
+  const ciWorkflow = readFileSync(join(__dirname, '../../../.github/workflows/ci.yml'), 'utf8');
+  const admissionFailures = (yaml: string) => {
     const failures: WorkflowPolicyFailure[] = [];
-    checkMergeAdmissionGate('ci.yml', doc(canonicalMergeAdmissionGate), failures);
-    expect(failures).toEqual([]);
+    checkMergeAdmissionGate('ci.yml', doc(yaml), failures);
+    return failures.map((failure) => failure.message);
+  };
+  const mutate = (search: string, replacement: string) => {
+    expect(ciWorkflow).toContain(search);
+    return ciWorkflow.replace(search, replacement);
+  };
+  const setupNodeStep = `      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0\n        with:\n          node-version: ${gha('matrix.node-version')}\n`;
+  const gateEnv = `          PR_NUMBER: ${gha('github.event.pull_request.number')}\n`;
+
+  it('accepts the repository workflow', () => {
+    expect(admissionFailures(ciWorkflow)).toEqual([]);
   });
 
-  it('rejects a gate that only runs the PR-controlled evaluator', () => {
-    const failures: WorkflowPolicyFailure[] = [];
-    checkMergeAdmissionGate(
-      'ci.yml',
-      doc(canonicalMergeAdmissionGate.replace(/if git show[\s\S]*?else/, 'if true; then')),
-      failures,
-    );
+  it('requires the admission step to exist', () => {
     expect(
-      failures.some((failure) => /trusted base file|absent-base bootstrap/i.test(failure.message)),
-    ).toBe(true);
-  });
-  it('requires the exact trusted checker assignment', () => {
-    const failures: WorkflowPolicyFailure[] = [];
-    checkMergeAdmissionGate(
-      'ci.yml',
-      doc(
-        canonicalMergeAdmissionGate.replace(
-          'CHECKER=/tmp/base-scripts/check-merge-admission.mjs',
-          'CHECKER=scripts/check-merge-admission.mjs',
-        ),
-      ),
-      failures,
-    );
-    expect(
-      failures.some((failure) => /assign CHECKER.*exact trusted base/i.test(failure.message)),
-    ).toBe(true);
+      admissionFailures(mutate('- name: Main-context merge admission proof', '- name: Renamed')),
+    ).toEqual([expect.stringContaining('must retain')]);
   });
 
-  it('requires the Node 22 matrix lane', () => {
-    const failures: WorkflowPolicyFailure[] = [];
-    checkMergeAdmissionGate(
-      'ci.yml',
-      doc(
-        canonicalMergeAdmissionGate.replace("node-version: ['22', '24']", "node-version: ['24']"),
-      ),
-      failures,
+  it.each([
+    [
+      'a PR-controlled evaluator run',
+      'CHECKER=/tmp/base-scripts/check-merge-admission.mjs',
+      'CHECKER=scripts/check-merge-admission.mjs',
+      'canonical trusted evaluator run',
+    ],
+    [
+      'a successful early exit',
+      '          set -euo pipefail\n          git fetch',
+      '          set -euo pipefail\n          exit 0\n          git fetch',
+      'canonical trusted evaluator run',
+    ],
+    [
+      'a missing Node 22 lane',
+      "node-version: ['22', '24']",
+      "node-version: ['24']",
+      'literal Node 22 lane',
+    ],
+    [
+      'an excluded Node 22 lane',
+      "        node-version: ['22', '24']\n",
+      `        node-version: ['22', '24']\n        exclude: ${gha('fromJSON(\'[{"node-version":"22"}]\')')}\n`,
+      'quality matrix must not declare unapproved key exclude',
+    ],
+    [
+      'extra step environment controls',
+      gateEnv,
+      `${gateEnv}          NODE_OPTIONS: --require ./exit-zero.cjs\n`,
+      'env must be exactly BASE_SHA and PR_NUMBER',
+    ],
+    [
+      'job-level environment controls',
+      '    timeout-minutes: 22\n',
+      '    timeout-minutes: 22\n    env:\n      NODE_OPTIONS: --require ./exit-zero.cjs\n',
+      'quality job must not declare unapproved key env',
+    ],
+    [
+      'workflow-level shell defaults',
+      'permissions:\n  contents: read\n',
+      'permissions:\n  contents: read\ndefaults:\n  run:\n    shell: ./evil {0}\n',
+      'workflow-level defaults',
+    ],
+    [
+      'job failure tolerance',
+      '    timeout-minutes: 22\n',
+      `    timeout-minutes: 22\n    continue-on-error: ${gha("matrix.node-version == '22'")}\n`,
+      'quality job must not declare unapproved key continue-on-error',
+    ],
+    [
+      'step failure tolerance',
+      `${gateEnv}        run: |`,
+      `${gateEnv}        continue-on-error: true\n        run: |`,
+      'must not declare unapproved key continue-on-error',
+    ],
+    [
+      'PR-controlled setup before admission',
+      setupNodeStep,
+      `      - uses: ./.github/actions/setup\n        with:\n          node-version: ${gha('matrix.node-version')}\n`,
+      'SHA-pinned checkout then setup-node prelude',
+    ],
+    [
+      'an extra run step before admission',
+      setupNodeStep,
+      `${setupNodeStep}      - run: echo "NODE_OPTIONS=--require ./x.cjs" >> "$GITHUB_ENV"\n`,
+      'directly after the checkout and setup-node prelude',
+    ],
+    [
+      'a PR-controlled Node version file',
+      `          node-version: ${gha('matrix.node-version')}\n      # QNBS-v3: admission`,
+      '          node-version-file: .nvmrc\n      # QNBS-v3: admission',
+      'must not declare unapproved key node-version-file',
+    ],
+    [
+      'no rerun after PR title edits',
+      '    types: [opened, synchronize, reopened, ready_for_review, edited]',
+      '    types: [opened, synchronize]',
+      'include edited',
+    ],
+  ])('rejects %s', (_label, search, replacement, message) => {
+    expect(admissionFailures(mutate(search, replacement))).toContainEqual(
+      expect.stringContaining(message),
     );
-    expect(failures.some((failure) => failure.message.includes('Node 22 lane'))).toBe(true);
-  });
-
-  it('rejects excluding the Node 22 admission lane', () => {
-    const failures: WorkflowPolicyFailure[] = [];
-    checkMergeAdmissionGate(
-      'ci.yml',
-      doc(
-        canonicalMergeAdmissionGate.replace(
-          "        node-version: ['22', '24']",
-          "        node-version: ['22', '24']\n        exclude:\n          - node-version: '22'",
-        ),
-      ),
-      failures,
-    );
-    expect(failures.some((failure) => failure.message.includes('must not exclude'))).toBe(true);
-  });
-
-  it('rejects extra environment controls on the admission step', () => {
-    const failures: WorkflowPolicyFailure[] = [];
-    checkMergeAdmissionGate(
-      'ci.yml',
-      doc(
-        canonicalMergeAdmissionGate.replace(
-          `          PR_NUMBER: \${{ github.event.pull_request.number }}`,
-          `          PR_NUMBER: \${{ github.event.pull_request.number }}\n          NODE_OPTIONS: --require ./exit-zero.cjs`,
-        ),
-      ),
-      failures,
-    );
-    expect(
-      failures.some((failure) => failure.message.includes('unapproved step environment key')),
-    ).toBe(true);
-  });
-
-  it('rejects failure tolerance on the quality job', () => {
-    const failures: WorkflowPolicyFailure[] = [];
-    checkMergeAdmissionGate(
-      'ci.yml',
-      doc(
-        canonicalMergeAdmissionGate.replace(
-          '  quality:\n',
-          `  quality:\n    continue-on-error: \${{ matrix.node-version == '22' }}\n`,
-        ),
-      ),
-      failures,
-    );
-    expect(failures.some((failure) => failure.message.includes('failure tolerance'))).toBe(true);
-  });
-
-  it('rejects a successful early exit in the admission script', () => {
-    const failures: WorkflowPolicyFailure[] = [];
-    checkMergeAdmissionGate(
-      'ci.yml',
-      doc(
-        canonicalMergeAdmissionGate.replace(
-          '          set -euo pipefail',
-          '          set -euo pipefail\n          exit 0',
-        ),
-      ),
-      failures,
-    );
-    expect(failures.some((failure) => failure.message.includes('successful early exit'))).toBe(
-      true,
-    );
-  });
-
-  it('requires admission to rerun after PR title edits', () => {
-    const failures: WorkflowPolicyFailure[] = [];
-    checkMergeAdmissionGate(
-      'ci.yml',
-      doc(
-        canonicalMergeAdmissionGate.replace(
-          '    types: [opened, synchronize, reopened, ready_for_review, edited]',
-          '    types: [opened, synchronize]',
-        ),
-      ),
-      failures,
-    );
-    expect(failures.some((failure) => failure.message.includes('include edited'))).toBe(true);
   });
 });
 

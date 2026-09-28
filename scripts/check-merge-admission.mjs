@@ -97,7 +97,7 @@ const CANONICAL_ADMISSION_RUN = [
 function extractAdmissionRun(workflowText) {
   const stepStart = workflowText.indexOf('      - name: Main-context merge admission proof');
   if (stepStart < 0) return null;
-  const nextStep = workflowText.indexOf('\n      - name:', stepStart + 1);
+  const nextStep = workflowText.indexOf('\n      - ', stepStart + 1);
   const step = workflowText.slice(stepStart, nextStep < 0 ? workflowText.length : nextStep);
   const runStart = step.indexOf('\n        run: |\n');
   if (runStart < 0) return null;
@@ -160,6 +160,7 @@ function parsePullRequestEvent(event) {
     [Number.isSafeInteger(pr?.number), 'pull_request event is missing a safe number'],
     [Boolean(pr?.base?.sha), 'pull_request event is missing the base SHA'],
     [Boolean(pr?.head?.sha), 'pull_request event is missing the head SHA'],
+    [typeof pr?.title === 'string', 'pull_request event is missing the title'],
   ].find(([isValid]) => !isValid);
   if (invalidField) throw new Error(invalidField[1]);
   return pr;
@@ -223,21 +224,18 @@ function collectReleaseFindings(pr, mergeState) {
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
   const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
   const taggedVersions = getTaggedVersions(root);
-  const findings = [
+  return [
     ...scanReleaseTruth(changelog, packageVersion, taggedVersions),
     ...scanMergeAdmissionTruth({
       changelog,
-      postReleaseCommitSubjects: records.records.map(({ subject }) => subject),
       packageVersion,
       taggedVersions,
-      branchLocalIndices: records.branchLocalIndices,
-      mergeCommitIndices: records.mergeCommitIndices,
-      baseSideBranchRecords: records.baseSideBranchRecords,
+      ...records,
       prNumber: pr.number,
       prTitle: pr.title,
+      prHeadLabel: String(pr.head.label ?? pr.head.ref ?? 'head').replace(':', '/'),
     }),
   ];
-  return findings;
 }
 
 function main() {

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Main-context merge admission (#675):** a required, trusted Node 22 CI step now proves that
+  the pull request's exact current-base merge would keep `main`'s release truth green before it
+  can merge. It rebuilds the resulting `main` history for both default GitHub landings (the
+  squash commit and the `Merge pull request` merge commit) and runs the same release-truth rule
+  `docs:check` enforces on `main`, so one PR-numbered entry covers a PR's internal review commits.
+  The evaluator runs from the base ref, before any PR-controlled setup, and the base-owned
+  workflow policy rejects removing, reordering, or neutralizing that step. PR #857.
 - **R-15 Gate 1b-platform, slice B — durable authority bootstrap (#445):** the durable
   `SecureStoreAuthority` validates the installation scope, epoch index, key relationships, and
   root-anchor state in one place, then provisions only fresh or exact-resume state. Missing or
