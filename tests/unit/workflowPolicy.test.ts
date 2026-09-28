@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
+import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
@@ -37,6 +38,40 @@ const setupActionSource = readFileSync(setupActionPath, 'utf8');
 const cloudflareWorkflowSource = readFileSync(cloudflareWorkflowPath, 'utf8');
 const scheduledSecurityWorkflowSource = readFileSync(scheduledSecurityWorkflowPath, 'utf8');
 const reviewerTrustWorkflowSource = readFileSync(reviewerTrustWorkflowPath, 'utf8');
+
+// QNBS-v3: follow relative ESM imports so a new evaluator dependency fails this test until it is locked too.
+function evaluatorImportClosure(entry: string): string[] {
+  const seen = new Set<string>();
+  const pending = [entry];
+  while (pending.length > 0) {
+    const current = pending.pop() as string;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    const source = readFileSync(`${repositoryRoot}${current}`, 'utf8');
+    for (const [, specifier = ''] of source.matchAll(
+      /(?:\bfrom\s+|\bimport\s*\(?\s*)["'](\.[^"']+)["']/g,
+    )) {
+      pending.push(posix.normalize(posix.join(posix.dirname(current), specifier)));
+    }
+  }
+  return [...seen];
+}
+
+// QNBS-v3: a lock line counts only when nothing before it leaves an if/loop/case/function/subshell open and it is not chained onto another command.
+function isTopLevelShellCommand(lines: readonly string[], index: number): boolean {
+  let depth = 0;
+  for (const line of lines.slice(0, index)) {
+    if (/^(?:if|for|while|until|case)\b/.exec(line) !== null || /[{(]$/.exec(line) !== null)
+      depth += 1;
+    if (/^(?:fi|done|esac)\b/.exec(line) !== null || /^[})]/.exec(line) !== null) depth -= 1;
+  }
+  const previous = lines.slice(0, index).findLast((line) => line.length > 0) ?? '';
+  const chained =
+    /(?:\\|&&|\|\||\|)$/.exec(previous) !== null ||
+    /^(?:&&|\|\||\|)/.exec(lines[index] ?? '') !== null;
+  return depth === 0 && !chained;
+}
+
 const packageJson = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
 ) as {
@@ -56,6 +91,34 @@ describe('CI workflow policy', () => {
     expect(reviewerTrustWorkflowSource).toContain('REVIEWER_DEPENDENCY_ROOT="$GITHUB_WORKSPACE"');
     expect(reviewerTrustWorkflowSource).not.toContain('pull_request:');
     expect(reviewerTrustWorkflowSource).not.toContain('pull-requests: write');
+  });
+
+  // QNBS-v3: the PR-immutable set must be exactly the trusted roots plus the evaluator import closure, enforced at top level (no function wrapper, no PR-specific bypass).
+  it('locks trusted roots and the whole merge-admission evaluator graph unconditionally', () => {
+    const runStart = reviewerTrustWorkflowSource.indexOf('set -euo pipefail');
+    const runLines = reviewerTrustWorkflowSource
+      .slice(runStart)
+      .split('\n')
+      .map((line) => line.trim());
+    const lockPattern =
+      /^git diff --quiet "\$PR_BASE_SHA" "\$PR_HEAD_SHA" -- (scripts\/\S+(?: scripts\/\S+)*) \|\| exit 1$/;
+    const lockedPaths = runLines.flatMap((line, index) => {
+      const paths = lockPattern.exec(line)?.[1]?.split(' ') ?? [];
+      if (paths.length > 0) expect(isTopLevelShellCommand(runLines, index), line).toBe(true);
+      return paths;
+    });
+    expect(new Set(lockedPaths)).toEqual(
+      new Set([
+        'scripts/check-reviewer-config.mjs',
+        'scripts/workflow-policy-check.mjs',
+        ...evaluatorImportClosure('scripts/check-merge-admission.mjs'),
+      ]),
+    );
+    expect(reviewerTrustWorkflowSource).not.toMatch(/\(\)\s*\{/);
+    expect(reviewerTrustWorkflowSource).not.toMatch(/PR_NUMBER"?\s*=\s*"\d+"/);
+    for (const bypassInput of ['PR_TITLE', 'PR_HEAD_REF', 'PR_HEAD_REPO', 'EXPECTED_']) {
+      expect(reviewerTrustWorkflowSource).not.toContain(bypassInput);
+    }
   });
 
   // QNBS-v3: the first package-manager binary must be patched and explicit before repository caching/install.

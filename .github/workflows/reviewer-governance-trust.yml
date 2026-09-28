@@ -34,10 +34,6 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          EXPECTED_ADMISSION_POLICY_SHA256: fc4eab0a9cd5d9e3161f454213bbf2485b109f743367989da619f77c954be9f7
         run: |
           set -euo pipefail
           git fetch --no-tags origin \
@@ -47,33 +43,9 @@ jobs:
             echo "::error::fetched PR ref does not match the event head SHA"
             exit 1
           fi
-          enforce_protected_policy_diff() {
-            git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1
-          }
-          BASE_HAS_ADMISSION_POLICY="$(
-            git show "$PR_BASE_SHA:scripts/workflow-policy-check.mjs" 2>/dev/null \
-              | grep -c 'checkMergeAdmissionGate' || true
-          )"
-          HEAD_HAS_ADMISSION_POLICY="$(
-            git show "$PR_HEAD_SHA:scripts/workflow-policy-check.mjs" 2>/dev/null \
-              | grep -c 'checkMergeAdmissionGate' || true
-          )"
-          HEAD_ADMISSION_POLICY_SHA256="$(
-            git show "$PR_HEAD_SHA:scripts/workflow-policy-check.mjs" \
-              | sha256sum | awk '{print $1}'
-          )"
-          BOOTSTRAP_STATE=protected
-          test "$PR_NUMBER" = "857" \
-            && test "$PR_HEAD_REPO" = "$GITHUB_REPOSITORY" \
-            && test "$BASE_HAS_ADMISSION_POLICY" -eq 0 \
-            && test "$HEAD_HAS_ADMISSION_POLICY" -gt 0 \
-            && test "$HEAD_ADMISSION_POLICY_SHA256" = "$EXPECTED_ADMISSION_POLICY_SHA256" \
-            && test "$PR_HEAD_REF" = "fix/675-main-context-admission" \
-            && test "$PR_TITLE" = "ci(governance): prove main-context changelog truth before merge" \
-            && git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs \
-            && BOOTSTRAP_STATE=authorised \
-            || enforce_protected_policy_diff
-          echo "::notice::admission-policy protection state: $BOOTSTRAP_STATE"
+          # QNBS-v3: trusted roots and the merge-admission evaluator graph are immutable from a PR; the unchanged base copies must never grade their own replacement.
+          git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-reviewer-config.mjs scripts/workflow-policy-check.mjs || exit 1
+          git diff --quiet "$PR_BASE_SHA" "$PR_HEAD_SHA" -- scripts/check-merge-admission.mjs scripts/check-doc-metrics.mjs scripts/i18n-locales.mjs scripts/test-metrics.mjs || exit 1
           SYMLINKS="$(git ls-tree -r --full-tree "$PR_HEAD_SHA" -- | awk '$1 == "120000" { print $0 }')"
           if [ -n "$SYMLINKS" ]; then
             echo "::error::PR archive contains symlinks; refusing to follow untrusted archive links"
