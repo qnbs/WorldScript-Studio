@@ -35,7 +35,7 @@ type ReleaseTruthModule = {
     isFeatureBranchContext?: boolean,
     branchLocalIndices?: Set<number>,
     mergeCommitIndices?: Set<number>,
-    logicalPrNumber?: number | null,
+    reservedEntryIndices?: Set<number>,
   ) => string[];
   isOnFeatureBranch: (repositoryRoot?: string) => boolean;
   getBranchLocalSubjectIndices: (repositoryRoot?: string) => Set<number>;

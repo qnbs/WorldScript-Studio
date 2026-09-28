@@ -4,7 +4,9 @@
  * passing PR CI and failing only after the merge reaches main.
  */
 
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 type MergeAdmissionModule = {
@@ -23,26 +25,27 @@ type MergeAdmissionModule = {
 };
 
 type DocMetricsModule = {
+  getProspectiveSquashSubject: (input: {
+    prTitle: string;
+    prNumber: number;
+    prCommitSubjects: string[];
+  }) => string;
+  getDirectMainSideBranchRecords: (
+    repositoryRoot?: string,
+  ) => Array<{ mergeSubject: string; sideRecords: Array<{ subject: string }> }> | null;
   scanMergeAdmissionTruth: (input: {
     changelog: string;
-    postReleaseCommitSubjects: string[];
     packageVersion: string;
     taggedVersions: Set<string>;
-    branchLocalIndices: Set<number>;
-    mergeCommitIndices: Set<number>;
+    baseRecords: Array<{ sha: string; parents: string[]; subject: string }>;
+    baseMergeBranches: Array<{
+      mergeSubject: string;
+      sideRecords: Array<{ sha: string; parents: string[]; subject: string }>;
+    }>;
+    prRecords: Array<{ sha: string; parents: string[]; subject: string }>;
     prNumber: number;
     prTitle: string;
-    baseSideBranchRecords?: Array<{
-      mergeSubject: string;
-      sideRecords: Array<{ subject: string; parents: string[] }>;
-    }>;
-  }) => string[];
-  scanDirectMainMergeTruth: (input: {
-    changelog: string;
-    mergeBranches: Array<{
-      mergeSubject: string;
-      sideRecords: Array<{ subject: string; parents: string[] }>;
-    }>;
+    prHeadLabel: string;
   }) => string[];
 };
 
@@ -136,174 +139,197 @@ describe('validateAdmissionWorkflow', () => {
   });
 });
 
-describe('scanMergeAdmissionTruth', () => {
+describe('main-context release truth for prospective landings', () => {
+  type CommitRecord = { sha: string; parents: string[]; subject: string };
   type AdmissionInput = Parameters<DocMetricsModule['scanMergeAdmissionTruth']>[0];
-  const subjects = [
-    'feat(core): durable authority bootstrap',
-    'fix(core): preserve diagnostics for lost root keys',
-    'fix(core): block provisioning after indexed key loss',
-  ];
-  const admissionInput = (overrides: Partial<AdmissionInput> = {}): AdmissionInput => ({
-    changelog: '## [Unreleased]\n\n- Durable authority bootstrap. PR #855.\n',
-    postReleaseCommitSubjects: subjects,
+  const record = (subject: string, parents = ['p']): CommitRecord => ({
+    sha: subject,
+    parents,
+    subject,
+  });
+  const unreleased = (...bullets: string[]) =>
+    `## [Unreleased]\n\n${bullets.map((bullet) => `- ${bullet}`).join('\n')}\n`;
+  const admission = (overrides: Partial<AdmissionInput> = {}): AdmissionInput => ({
+    changelog: unreleased('Durable authority bootstrap. PR #855.'),
     packageVersion: '1.28.8',
     taggedVersions: new Set(['1.28.8']),
-    branchLocalIndices: new Set([0, 1, 2]),
-    mergeCommitIndices: new Set(),
+    baseRecords: [],
+    baseMergeBranches: [],
+    prRecords: [
+      record('fix(core): block provisioning after indexed key loss'),
+      record('feat(core): add Gate 1b durable authority bootstrap'),
+    ],
     prNumber: 855,
-    prTitle: 'feat(core): Gate 1b durable authority bootstrap',
+    prTitle: 'feat(core): R-15 Gate 1b-platform Slice B — durable authority bootstrap (#445)',
+    prHeadLabel: 'qnbs/feat/445-gate1b',
     ...overrides,
   });
-
-  it('accepts multiple internal governed commits under one logical PR entry', async () => {
-    const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
-    expect(scanMergeAdmissionTruth(admissionInput())).toEqual([]);
+  const hiddenSideCommit = (mergeSubject: string, subject: string) => ({
+    mergeSubject,
+    sideRecords: [record(subject)],
   });
 
-  it('slug-checks an integrated merge commit instead of trusting its umbrella issue suffix', async () => {
-    const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
+  it('uses the commit subject for a one-commit squash and the PR title otherwise', async () => {
+    const { getProspectiveSquashSubject } = await loadDocMetricsModule();
     expect(
-      scanMergeAdmissionTruth(
-        admissionInput({
-          postReleaseCommitSubjects: [
-            'feat(core): Gate 1b durable authority bootstrap (#445)',
-            ...subjects.slice(1),
-          ],
-          branchLocalIndices: new Set([1, 2]),
-          mergeCommitIndices: new Set([0]),
-        }),
-      ),
-    ).toEqual([]);
+      getProspectiveSquashSubject({
+        prTitle: 'docs: t',
+        prNumber: 7,
+        prCommitSubjects: ['feat: c'],
+      }),
+    ).toBe('feat: c (#7)');
+    expect(
+      getProspectiveSquashSubject({
+        prTitle: 'docs: t',
+        prNumber: 7,
+        prCommitSubjects: ['a', 'b'],
+      }),
+    ).toBe('docs: t (#7)');
   });
 
-  it('rejects a governed PR when its logical entry is missing', async () => {
+  it.each<[string, Partial<AdmissionInput>]>([
+    ['one numbered entry covers internal review commits in both landings', {}],
+    [
+      'an issue-suffixed title lands as a numbered squash subject',
+      {
+        changelog: unreleased('Search support. PR #900.'),
+        prNumber: 900,
+        prTitle: 'feat(core): search support (#445)',
+      },
+    ],
+    [
+      'a non-governed PR with only non-governed commits',
+      {
+        changelog: unreleased('Earlier entry. PR #1.'),
+        prRecords: [record('docs: a'), record('docs: b')],
+        prTitle: 'docs(core): reconcile history',
+      },
+    ],
+    [
+      'a canonical base merge whose side commits are bound to its numbered entry',
+      {
+        baseRecords: [record('Merge pull request #858 from qnbs/x', ['p', 'q'])],
+        baseMergeBranches: [
+          hiddenSideCommit('Merge pull request #858 from qnbs/x', 'fix(ci): bind bootstrap'),
+        ],
+        changelog: unreleased(
+          'Durable authority bootstrap. PR #855.',
+          'Bootstrap binding. PR #858.',
+        ),
+      },
+    ],
+  ])('admits %s', async (_label, overrides) => {
     const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
-    expect(
-      scanMergeAdmissionTruth(
-        admissionInput({ changelog: '## [Unreleased]\n\n- Unrelated change. PR #999.\n' }),
-      ),
-    ).toEqual([expect.stringContaining('logical PR #855')]);
+    expect(scanMergeAdmissionTruth(admission(overrides))).toEqual([]);
   });
 
-  it('rejects a correct PR number when the logical entry does not match the title', async () => {
+  it.each<[string, Partial<AdmissionInput>, string[]]>([
+    [
+      'a governed PR without its numbered entry',
+      { changelog: unreleased('Unrelated change. PR #999.') },
+      ['squash landing', 'merge-commit landing'],
+    ],
+    [
+      'governed internal commits under a non-governed multi-commit title',
+      { changelog: unreleased('Earlier entry. PR #1.'), prTitle: 'ci(governance): tidy' },
+      ['merge-commit landing of PR #855 — CHANGELOG.md — direct-main merge'],
+    ],
+    [
+      'a one-commit PR whose governed commit subject becomes the squash subject',
+      {
+        changelog: unreleased('Earlier entry. PR #1.'),
+        prRecords: [record('feat(core): add search')],
+        prTitle: 'docs: add search',
+      },
+      ['squash landing', 'merge-commit landing'],
+    ],
+    [
+      'undocumented integrated base history under a non-governed title',
+      {
+        changelog: unreleased('Earlier entry. PR #1.'),
+        baseRecords: [record('feat(core): already merged change')],
+        prRecords: [record('docs: a')],
+        prTitle: 'docs: a',
+      },
+      ['squash landing', 'merge-commit landing'],
+    ],
+    [
+      'a base merge that would lose the entry the squash commit reserves',
+      {
+        changelog: unreleased('Search support. PR #900.'),
+        baseRecords: [record('feat(core): search support', ['p', 'q'])],
+        prNumber: 900,
+        prTitle: 'feat(core): search support',
+      },
+      ['squash landing', 'merge-commit landing'],
+    ],
+    [
+      'governed base side-parent history behind a noncanonical merge',
+      {
+        baseRecords: [record('Merge branch feature', ['p', 'q'])],
+        baseMergeBranches: [hiddenSideCommit('Merge branch feature', 'feat(core): hidden change')],
+      },
+      ['squash landing', 'merge-commit landing'],
+    ],
+    [
+      'one entry documenting both a numbered commit and a hidden side commit',
+      {
+        changelog: unreleased('Add durable authority bootstrap. PR #123.', 'Other. PR #855.'),
+        baseRecords: [
+          record('Merge branch feature', ['p', 'q']),
+          record('feat(core): add durable authority bootstrap (#123)'),
+        ],
+        baseMergeBranches: [
+          hiddenSideCommit('Merge branch feature', 'feat(core): add durable authority bootstrap'),
+        ],
+      },
+      ['squash landing', 'merge-commit landing'],
+    ],
+  ])('rejects %s', async (_label, overrides, prefixes) => {
     const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
-    expect(
-      scanMergeAdmissionTruth(
-        admissionInput({ changelog: '## [Unreleased]\n\n- Unrelated cleanup. PR #855.\n' }),
-      ),
-    ).toEqual([expect.stringContaining('does not match prospective merge subject')]);
-  });
-
-  it('matches the actual squash subject when the title already has an issue suffix', async () => {
-    const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
-    expect(
-      scanMergeAdmissionTruth(
-        admissionInput({
-          changelog: '## [Unreleased]\n\n- Search support. PR #900.\n',
-          prNumber: 900,
-          prTitle: 'feat(core): search support (#445)',
-          postReleaseCommitSubjects: ['feat(core): search support'],
-          branchLocalIndices: new Set([0]),
-        }),
-      ),
-    ).toEqual([]);
-  });
-
-  it('does not require a release note for a non-governed PR title', async () => {
-    const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
-    expect(
-      scanMergeAdmissionTruth(
-        admissionInput({
-          changelog: '## [Unreleased]\n',
-          prNumber: 856,
-          prTitle: 'docs(core): reconcile post-merge changelog history',
-        }),
-      ),
-    ).toEqual([]);
-  });
-
-  it('still validates integrated base history for a non-governed PR', async () => {
-    const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
-    expect(
-      scanMergeAdmissionTruth(
-        admissionInput({
-          changelog: '## [Unreleased]\n',
-          postReleaseCommitSubjects: [
-            'feat(core): already merged change',
-            'docs(core): reconcile post-merge changelog history',
-          ],
-          branchLocalIndices: new Set([1]),
-          prNumber: 856,
-          prTitle: 'docs(core): reconcile post-merge changelog history',
-        }),
-      ),
-    ).toEqual([expect.stringContaining('1 commit(s) exist after the latest release tag')]);
-  });
-
-  it('reserves the logical PR entry from matching an unrelated base commit', async () => {
-    const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
-    expect(
-      scanMergeAdmissionTruth(
-        admissionInput({
-          changelog: '## [Unreleased]\n\n- Search support. PR #900.\n',
-          postReleaseCommitSubjects: ['feat(core): search support', 'feat(core): search support'],
-          branchLocalIndices: new Set([1]),
-          prNumber: 900,
-          prTitle: 'feat(core): search support',
-        }),
-      ),
-    ).toEqual([expect.stringContaining('does not reference 1 post-tag')]);
-  });
-
-  it('validates governed side-parent history from the current base', async () => {
-    const { scanMergeAdmissionTruth } = await loadDocMetricsModule();
-    expect(
-      scanMergeAdmissionTruth(
-        admissionInput({
-          changelog: '## [Unreleased]\n\n- Durable authority bootstrap. PR #855.\n',
-          baseSideBranchRecords: [
-            {
-              mergeSubject: 'Merge branch feature',
-              sideRecords: [{ subject: 'feat(core): hidden base change', parents: [] }],
-            },
-          ],
-        }),
-      ),
-    ).toEqual([expect.stringContaining('hides 1 governed side-parent commit')]);
+    const findings = scanMergeAdmissionTruth(admission(overrides));
+    expect(findings).toEqual(prefixes.map((prefix) => expect.stringContaining(prefix)));
   });
 });
 
-describe('scanDirectMainMergeTruth', () => {
-  it('rejects governed side-parent commits behind a noncanonical merge subject', async () => {
-    const { scanDirectMainMergeTruth } = await loadDocMetricsModule();
-    expect(
-      scanDirectMainMergeTruth({
-        changelog: '## [Unreleased]\n\n- Unrelated cleanup. PR #999.\n',
-        mergeBranches: [
-          {
-            mergeSubject: 'Merge branch feature',
-            sideRecords: [{ subject: 'feat(core): hidden side change', parents: [] }],
-          },
-        ],
-      }),
-    ).toEqual([expect.stringContaining('hides 1 governed side-parent commit')]);
-  });
-
-  it('covers internal side-parent commits when the integrated subject has a matching entry', async () => {
-    const { scanDirectMainMergeTruth } = await loadDocMetricsModule();
-    expect(
-      scanDirectMainMergeTruth({
-        changelog: '## [Unreleased]\n\n- Durable authority bootstrap. PR #855.\n',
-        mergeBranches: [
-          {
-            mergeSubject: 'feat(core): durable authority bootstrap (#445)',
-            sideRecords: [
-              { subject: 'feat(core): add durable authority bootstrap', parents: [] },
-              { subject: 'fix(core): preserve diagnostics for lost root keys', parents: [] },
-            ],
-          },
-        ],
-      }),
-    ).toEqual([]);
+describe('getDirectMainSideBranchRecords', () => {
+  it('lists each first-parent merge once with every commit it introduced', async () => {
+    const { getDirectMainSideBranchRecords } = await loadDocMetricsModule();
+    const repositoryRoot = mkdtempSync(join(process.cwd(), '.tmp-worldscript-side-parents-'));
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-C', repositoryRoot, ...args], { encoding: 'utf8' });
+    const commitOn = (branch: string, subject: string) => {
+      git('switch', '--quiet', '-C', branch, 'main');
+      git('commit', '--quiet', '--allow-empty', '-m', subject);
+    };
+    try {
+      git('init', '--quiet', '--initial-branch=main');
+      git('config', 'user.email', 'test@example.com');
+      git('config', 'user.name', 'Test');
+      git('config', 'commit.gpgsign', 'false');
+      git('commit', '--quiet', '--allow-empty', '-m', 'init');
+      git('tag', 'v1.0.0');
+      commitOn('a', 'feat: alpha');
+      commitOn('b', 'feat: beta');
+      commitOn('c', 'fix: gamma');
+      commitOn('e', 'fix: epsilon');
+      commitOn('d', 'feat: delta');
+      git('merge', '--quiet', '--no-ff', '-m', 'Merge e into d', 'e');
+      git('switch', '--quiet', 'main');
+      git('merge', '--quiet', '--no-ff', '-m', 'Octopus merge', 'a', 'b', 'c');
+      git('merge', '--quiet', '--no-ff', '-m', 'Merge d', 'd');
+      const merges = getDirectMainSideBranchRecords(repositoryRoot) ?? [];
+      expect(
+        merges.map(({ mergeSubject, sideRecords }) => [
+          mergeSubject,
+          sideRecords.map(({ subject }) => subject).sort(),
+        ]),
+      ).toEqual([
+        ['Merge d', ['Merge e into d', 'feat: delta', 'fix: epsilon']],
+        ['Octopus merge', ['feat: alpha', 'feat: beta', 'fix: gamma']],
+      ]);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
   });
 });
