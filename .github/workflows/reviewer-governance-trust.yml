@@ -37,7 +37,7 @@ jobs:
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           PR_TITLE: ${{ github.event.pull_request.title }}
-          EXPECTED_ADMISSION_POLICY_SHA256: e07e55bb0e0ae962c18f7775ba8884f7d154a15172fa08a9a700a2a01372de77
+          EXPECTED_ADMISSION_POLICY_SHA256: e582771bf3baa567cdbe6a803328a9e1e8df34561f53ca3180949e0c8a0368de
         run: |
           set -euo pipefail
           git fetch --no-tags origin \
