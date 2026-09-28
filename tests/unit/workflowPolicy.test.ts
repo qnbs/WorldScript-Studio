@@ -126,6 +126,25 @@ describe('CI workflow policy', () => {
     }
   });
 
+  it('grades PRs only with the trusted base workflow-policy checker, never a PR-copy fallback', () => {
+    const gate = extractStepBlock(
+      extractJobBlock(workflowSource, 'workflow-policy'),
+      'Workflow-policy structural gate (permissions, needs graph, action pins)',
+    );
+    const lines = gate.split('\n').map((line) => line.trim());
+    const prBranch = lines.indexOf('if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then');
+    const elseBranch = lines.indexOf('else');
+    expect(lines).toContain('set -euo pipefail');
+    expect(prBranch).toBeGreaterThan(0);
+    expect(lines.slice(prBranch + 1, elseBranch)).toEqual([
+      'WORKFLOW_POLICY_ROOT="$' + '{{ github.workspace }}" \\',
+      'node "$TRUSTED_BASE_WORKSPACE/scripts/workflow-policy-check.mjs"',
+    ]);
+    expect(lines.filter((line) => line.startsWith('if '))).toHaveLength(1);
+    expect(gate).not.toContain('TRUSTED_BASE_WORKSPACE:-');
+    expect(gate).not.toContain('introducing transition');
+  });
+
   // QNBS-v3: the first package-manager binary must be patched and explicit before repository caching/install.
   it('bootstraps the exact secure pnpm before setup-node cache or install', () => {
     const expectedVersion = packageJson.packageManager.replace('pnpm@', '');
