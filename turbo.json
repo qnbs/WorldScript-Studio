@@ -26,6 +26,7 @@
     "USERPROFILE",
     "XDG_RUNTIME_DIR"
   ],
+  "globalPassThroughEnv": ["GITHUB_EVENT_PATH", "GITHUB_SHA"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
