@@ -47,10 +47,13 @@ SHA-256 (`from`) and the PR head SHA-256 (`to`). The two-step flow is:
 2. The evaluator PR then lands exactly those bytes. After it merges, the base digest equals `to`,
    so the entry can never match again (no replay, no reverse replay).
 
+The verifier itself and `reviewer-governance-trust.yml` are protected the same way, so a later PR
+cannot silently remove the verifier call (the immutable base checker cannot require that line).
 The verifier fails closed on anything else: unlisted, deleted, renamed, retyped, symlinked or
-re-moded evaluator files; wildcard or unknown manifest paths; a manifest, verifier or trust-workflow
-change in the same PR as an evaluator; and an evaluator import closure that reaches an unprotected
-file. The PR's own manifest is never consulted. Stale entries are harmless and can be removed by a
+re-moded protected files; wildcard or unknown manifest paths; a manifest, verifier or trust-workflow
+change in the same PR as an evaluator; an evaluator import closure that reaches an unprotected
+file; and any evaluator import other than `node:` builtins and protected relative modules (bare
+packages, non-literal `import()`, `require()` and `createRequire` are rejected). The PR's own manifest is never consulted. Stale entries are harmless and can be removed by a
 later manifest-only PR.
 
 ## Provider roles and configuration ownership

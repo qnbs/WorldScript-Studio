@@ -268,6 +268,76 @@ describe('protected evaluator transitions: rejected', () => {
     );
   });
 
+  it('rejects a trust-workflow-only PR that is not authorized (e.g. dropping the verifier call)', () => {
+    const head = commitFrom(base, () =>
+      write(TRUST_WORKFLOW_PATH, 'name: trust without verifier\n'),
+    );
+    expect(verify(base, head).join('\n')).toMatch(
+      /reviewer-governance-trust\.yml: no base-owned transition/,
+    );
+  });
+
+  it('admits an exactly authorized trust-workflow-only change', () => {
+    const next = 'name: trust v2\n';
+    const authorized = authorizedBase([
+      { path: TRUST_WORKFLOW_PATH, from: digestOf('name: trust\n'), to: digestOf(next) },
+    ]);
+    expect(
+      verify(
+        authorized,
+        commitFrom(authorized, () => write(TRUST_WORKFLOW_PATH, next)),
+      ),
+    ).toEqual([]);
+  });
+
+  for (const [label, source, pattern] of [
+    [
+      'a bare package import',
+      "import leftpad from 'left-pad';\nexport const count = 1;\n",
+      /imports non-builtin 'left-pad'/,
+    ],
+    [
+      'a non-literal dynamic import',
+      'const m = "./x.mjs";\nexport const load = () => import(m);\n',
+      /non-literal dynamic import/,
+    ],
+    ['require()', 'const fs = require("node:fs");\nexport const count = 1;\n', /uses require\(\)/],
+    [
+      'createRequire',
+      "import { createRequire } from 'node:module';\nexport const r = createRequire(import.meta.url);\n",
+      /uses createRequire/,
+    ],
+  ] as const) {
+    it(`rejects an authorized evaluator edit that adds ${label}`, () => {
+      const authorized = authorizedBase([
+        {
+          path: TEST_METRICS,
+          from: digestOf(EVALUATOR_SOURCES[TEST_METRICS] ?? ''),
+          to: digestOf(source),
+        },
+      ]);
+      const head = commitFrom(authorized, () => write(TEST_METRICS, source));
+      expect(verify(authorized, head).join('\n')).toMatch(pattern);
+    });
+  }
+
+  it('admits an authorized evaluator edit that only adds a node: builtin import', () => {
+    const source = "import { EOL } from 'node:os';\nexport const count = EOL.length;\n";
+    const authorized = authorizedBase([
+      {
+        path: TEST_METRICS,
+        from: digestOf(EVALUATOR_SOURCES[TEST_METRICS] ?? ''),
+        to: digestOf(source),
+      },
+    ]);
+    expect(
+      verify(
+        authorized,
+        commitFrom(authorized, () => write(TEST_METRICS, source)),
+      ),
+    ).toEqual([]);
+  });
+
   it('rejects a head manifest that is malformed in a manifest-only PR', () => {
     const head = commitFrom(base, () =>
       write(MANIFEST_PATH, manifestWith([{ path: 'scripts/*', from: 'a', to: 'b' }])),

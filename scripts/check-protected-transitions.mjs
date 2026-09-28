@@ -15,15 +15,26 @@ export const EVALUATOR_PATHS = Object.freeze([
   'scripts/i18n-locales.mjs',
   'scripts/test-metrics.mjs',
 ]);
-export const PROTECTED_PATHS = Object.freeze([...EVALUATOR_PATHS, VERIFIER_PATH, MANIFEST_PATH]);
+// QNBS-v3: the trust workflow is protected too, so a later PR cannot silently drop the verifier call; the base checker (an immutable root) cannot require that line itself.
+export const PROTECTED_PATHS = Object.freeze([
+  ...EVALUATOR_PATHS,
+  VERIFIER_PATH,
+  TRUST_WORKFLOW_PATH,
+  MANIFEST_PATH,
+]);
 
-const AUTHORIZABLE_PATHS = new Set([...EVALUATOR_PATHS, VERIFIER_PATH]);
+const AUTHORIZABLE_PATHS = new Set([...EVALUATOR_PATHS, VERIFIER_PATH, TRUST_WORKFLOW_PATH]);
 const PROTECTED_SET = new Set(PROTECTED_PATHS);
 const CONTROL_PATHS = new Set([MANIFEST_PATH, VERIFIER_PATH, TRUST_WORKFLOW_PATH]);
 const REGULAR_FILE_MODE = '100644';
 const DIGEST = /^[0-9a-f]{64}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
-const RELATIVE_IMPORT = /(?:\bfrom\s+|\bimport\s*\(?\s*)["'](\.[^"']+)["']/g;
+const IMPORT_SPECIFIER = /(?:\bfrom\s+|\bimport\s*\(?\s*)["']([^"']+)["']/g;
+const OPAQUE_LOADERS = [
+  [/\bimport\s*\(\s*(?!["'])/, 'non-literal dynamic import()'],
+  [/\brequire\s*\(/, 'require()'],
+  [/\bcreateRequire\b/, 'createRequire'],
+];
 
 export function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -31,7 +42,12 @@ export function sha256(bytes) {
 
 function createGit(cwd) {
   return (args) =>
-    execFileSync('git', args, { cwd, encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 });
+    execFileSync('git', args, {
+      cwd,
+      encoding: 'buffer',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
 }
 
 // QNBS-v3: --raw -z gives modes, blob ids, status and path per entry; --no-renames makes a rename a delete plus an add, so neither side can slip through as a move.
@@ -154,9 +170,25 @@ function checkManifestOnlyChange(change, readBlob) {
   return error ? [`${MANIFEST_PATH} (head): ${error}`] : [];
 }
 
-// QNBS-v3: follow every relative import form from the entry evaluator at the PR head; a dependency outside the protected set would be an unguarded authority.
+// QNBS-v3: the evaluator graph may load only node: builtins and protected relative modules; bare packages and opaque loaders fail closed because the verifier cannot pin what they resolve to.
+function scanImports(path, source) {
+  const relatives = [];
+  const violations = OPAQUE_LOADERS.filter(([pattern]) => pattern.exec(source) !== null).map(
+    ([, label]) => `${path} uses ${label}`,
+  );
+  for (const [, specifier = ''] of source.matchAll(IMPORT_SPECIFIER)) {
+    if (specifier.startsWith('.')) {
+      relatives.push(posix.normalize(posix.join(posix.dirname(path), specifier)));
+    } else if (!specifier.startsWith('node:')) {
+      violations.push(`${path} imports non-builtin '${specifier}'`);
+    }
+  }
+  return { relatives, violations };
+}
+
 export function evaluatorImportClosure(readHeadFile, entry = EVALUATOR_ENTRY) {
   const seen = new Set();
+  const violations = [];
   const pending = [entry];
   while (pending.length > 0) {
     const current = pending.pop();
@@ -164,11 +196,11 @@ export function evaluatorImportClosure(readHeadFile, entry = EVALUATOR_ENTRY) {
     seen.add(current);
     const source = readHeadFile(current);
     if (source === null) continue;
-    for (const [, specifier = ''] of source.matchAll(RELATIVE_IMPORT)) {
-      pending.push(posix.normalize(posix.join(posix.dirname(current), specifier)));
-    }
+    const scanned = scanImports(current, source);
+    pending.push(...scanned.relatives);
+    violations.push(...scanned.violations);
   }
-  return [...seen];
+  return { files: [...seen], violations };
 }
 
 function checkProtectedChange(change, parsed, readBlob) {
@@ -177,12 +209,13 @@ function checkProtectedChange(change, parsed, readBlob) {
 }
 
 function checkClosure(readHeadFile) {
-  const unguarded = evaluatorImportClosure(readHeadFile).filter(
-    (path) => !EVALUATOR_PATHS.includes(path),
-  );
-  return unguarded.length > 0
-    ? [`evaluator import closure reaches unprotected files: ${unguarded.join(', ')}`]
-    : [];
+  const { files, violations } = evaluatorImportClosure(readHeadFile);
+  const unguarded = files.filter((path) => !EVALUATOR_PATHS.includes(path));
+  const findings = violations.map((violation) => `evaluator graph: ${violation}`);
+  if (unguarded.length > 0) {
+    findings.push(`evaluator import closure reaches unprotected files: ${unguarded.join(', ')}`);
+  }
+  return findings;
 }
 
 export function evaluateProtectedTransitions({
