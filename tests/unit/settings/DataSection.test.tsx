@@ -281,10 +281,15 @@ describe('DataSection encrypted library export desktop notification', () => {
     desktopPlatformMocks.isTauri = false;
     mockSendDesktopNotification.mockClear();
     mockSendDesktopNotification.mockResolvedValue(true);
+    // QNBS-v3: jsdom >=30.1 installs its own URL.createObjectURL, which rejects the Node-realm Blob the mocked backup service returns; stub the download statics as the other export tests do.
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     mockUseSettingsViewContext.mockReturnValue(baseContextValue);
+    vi.restoreAllMocks();
   });
 
   it('sends a desktop notification on successful export when enabled', async () => {
