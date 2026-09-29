@@ -26,8 +26,9 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   truth, `docs/RELEASE-V1.29.1-EVIDENCE.md`).
 - ⬜ Pre-tag re-qualification on the new exact candidate SHA (the full gate set in
   `docs/RELEASE-V1.29.1-EVIDENCE.md`), then the signed `v1.29.1` tag only if
-  every gate is green. At tag time, the CI/CD security audit must be green before the desktop
-  release job publishes.
+  every gate is green, including a newly executed Security Audit on the exact candidate. At tag
+  time, the tag's Security Audit is watched and the desktop release run is cancelled if it is red
+  (a procedural guard; mechanical enforcement is #911).
 - ⬜ Post-release: published-asset verification, `latest.json`, GHCR `1.29`/`latest` moved to the
   v1.29.1 image, truth sync.
 

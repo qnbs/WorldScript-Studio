@@ -27,7 +27,8 @@ lesson from the v1.29.0 tag:
 - **v1.29.0:** a new advisory against a development-only dependency appeared between the
   candidate's resulting-main run and the tag. The tag-triggered CI/CD then failed while the
   desktop release job, which does not depend on CI/CD, would still have published. **Gate:** the
-  Security Audit is re-checked on the exact candidate immediately before tagging. At tag time,
+  Security Audit is newly executed on the exact candidate immediately before tagging (see the
+  "Security Audit freshness" gate below). At tag time,
   the maintainer or agent watches the tag's Security Audit (about 1–2 minutes) and cancels the
   Tauri release run if it is red, before `release` can start after the bundles (at least 12
   minutes). This is a **procedural** guard: `tauri-build.yml` `release` still has
@@ -42,7 +43,7 @@ with results recorded here (see its "Reused for v1.29.1" note).
 | Gate | Method | Evidence | Status |
 |---|---|---|---|
 | Resulting-main CI/CD + CodeQL | push-triggered runs on the candidate SHA, including the Security Audit | run IDs | PENDING |
-| Security Audit freshness | re-run or re-check of the OSV scan on the candidate right before the tag; at tag time, watch the tag's audit and cancel the Tauri run if it is red (procedural, #911) | run IDs | PENDING |
+| Security Audit freshness | After the candidate is frozen and immediately before the tag, **newly execute** the OSV scan on the exact candidate SHA by re-running the `🔒 Security Audit` job of the candidate's resulting-main CI/CD run (`gh run rerun <run-id> --job <job-id>`), so the scan queries the current OSV database. An earlier successful run is **not** freshness evidence. `RELEASE_READY=YES` requires this new execution to be green. At tag time, the tag's own audit is still watched separately, and the Tauri run is cancelled if it is red (procedural; mechanical enforcement is #911) | new run and job ID, start timestamp, SHA, result | PENDING |
 | Production truth | Vercel production deployment READY on the candidate SHA, canonical HTTP 200 | deployment ID | PENDING |
 | Tauri plugin parity | `pnpm run tauri-plugins:check` on the candidate | output | PENDING |
 | 3-OS native build | `tauri-build.yml` `workflow_dispatch` on the candidate: Linux, Windows, macOS ARM | run ID, per-OS result | PENDING |
