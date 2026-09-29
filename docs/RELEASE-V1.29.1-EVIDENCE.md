@@ -27,8 +27,12 @@ lesson from the v1.29.0 tag:
 - **v1.29.0:** a new advisory against a development-only dependency appeared between the
   candidate's resulting-main run and the tag. The tag-triggered CI/CD then failed while the
   desktop release job, which does not depend on CI/CD, would still have published. **Gate:** the
-  Security Audit is re-checked on the exact candidate immediately before tagging, and at tag
-  time its result is confirmed before the desktop release job publishes.
+  Security Audit is re-checked on the exact candidate immediately before tagging. At tag time,
+  the maintainer or agent watches the tag's Security Audit (about 1–2 minutes) and cancels the
+  Tauri release run if it is red, before `release` can start after the bundles (at least 12
+  minutes). This is a **procedural** guard: `tauri-build.yml` `release` still has
+  `needs: [bundle]` only, and `docker.yml` publishes GHCR tags independently, so neither is
+  mechanically blocked by the audit. Mechanical enforcement is tracked in #911.
 
 ## Pre-tag gates (exact candidate SHA)
 
@@ -37,7 +41,7 @@ Protocols: `docs/RELEASE-V1.29.0-PACKAGED-QUALIFICATION.md` (unchanged for v1.29
 | Gate | Method | Evidence | Status |
 |---|---|---|---|
 | Resulting-main CI/CD + CodeQL | push-triggered runs on the candidate SHA, including the Security Audit | run IDs | PENDING |
-| Security Audit freshness | re-run or re-check of the OSV scan on the candidate right before the tag | run ID | PENDING |
+| Security Audit freshness | re-run or re-check of the OSV scan on the candidate right before the tag; at tag time, watch the tag's audit and cancel the Tauri run if it is red (procedural, #911) | run IDs | PENDING |
 | Production truth | Vercel production deployment READY on the candidate SHA, canonical HTTP 200 | deployment ID | PENDING |
 | Tauri plugin parity | `pnpm run tauri-plugins:check` on the candidate | output | PENDING |
 | 3-OS native build | `tauri-build.yml` `workflow_dispatch` on the candidate: Linux, Windows, macOS ARM | run ID, per-OS result | PENDING |
