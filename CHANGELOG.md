@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > exist for `v1.29.0`. The separate Docker workflow for this tag had already succeeded, so the
 > container image `ghcr.io/qnbs/worldscript-studio:1.29.0` does exist. That image serves only the
 > static web build, which does not contain `joi`. The `v1.29.0` tag is kept and never moved; the
-> same changes are published as v1.29.1.
+> same changes are to be released as v1.29.1.
 
 - **v1.29.0:** accumulated data-integrity and persistence work since v1.28.8 (the #553
   lineage), third-party notices and CycloneDX SBOMs for every desktop target (#871), and a
