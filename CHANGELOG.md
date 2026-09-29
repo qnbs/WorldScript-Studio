@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `[1.29.0]` below. The `v1.29.0` tag stays as it is, but its desktop release was never published
   (see the note there). If you are upgrading from v1.28.8, read the
   [`[1.29.0]` section](https://github.com/qnbs/WorldScript-Studio/blob/v1.29.1/CHANGELOG.md#1290--2026-09-29)
-  for the full list of changes. PR #TBD.
+  for the full list of changes. PR #910.
 - **Development dependency `joi` updated to 18.2.9 (GHSA-6h2x-m376-mqjq):** `joi` 18.2.5, which
   the `wait-on` CI tool pulled in, failed the enforced OSV scan on the `v1.29.0` tag. The shipped
   desktop and web builds do not contain `joi` (their SBOMs list no `joi` or `wait-on`
