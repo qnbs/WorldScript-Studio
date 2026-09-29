@@ -11,13 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- release-candidate: v1.29.0 -->
 
-- **v1.29.0 release candidate:** accumulated data-integrity and persistence work since v1.28.8
-  (the #553 lineage), third-party notices and CycloneDX SBOMs for every desktop target (#871),
-  and a qualified dependency train (#872). No tag, GitHub Release, or published artifacts exist
-  yet. #743's Release invariant is re-verified against the exact candidate SHA before any tag;
-  the pre-tag evidence record and its state ladder live in `docs/RELEASE-V1.29.0-EVIDENCE.md`.
-  Intel macOS is not claimed. PR #905. The post-release truth sync will finalize this entry to
-  "released" once the tag and assets are published.
+- **v1.29.0:** accumulated data-integrity and persistence work since v1.28.8 (the #553
+  lineage), third-party notices and CycloneDX SBOMs for every desktop target (#871), and a
+  qualified dependency train (#872). #743's Release invariant is verified against the exact
+  release SHA; the release evidence and its state ladder are recorded in
+  `docs/RELEASE-V1.29.0-EVIDENCE.md`. Intel macOS is not claimed. PR #905.
 - **In-app Help no longer claims code-signed desktop installers (#574, #549):** the Tauri desktop
   Help page stated that the macOS `.dmg` and Windows `.msi`/`.exe` installers are code-signed, in
   17 of 19 locales. No Apple Developer ID signing/notarization or Windows Authenticode signing is

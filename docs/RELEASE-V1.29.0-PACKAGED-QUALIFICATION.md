@@ -66,8 +66,11 @@ from the virtual display. No mocked UI and no dev server.
 5. Create a new blank project and let it save. Expect the marker to change to a new
    `project-<uuid>`, the new project's files (including auxiliary `codex/…` writes) under that new
    ID, and the refused project's directory untouched (same hash, same file list).
-6. Quit and relaunch. The refused project still refuses the same way; the new project is
-   unaffected.
+6. Quit. Step 5 moved the marker to the new project, so a plain relaunch would open that project
+   and prove nothing about the refusal. Record the new project's hashes, write the refused ID back
+   into `config/active-project-id.txt` (a user returning to the old project), and relaunch. Expect
+   the same refusal copy and Safe Open again, the refused project still byte-identical, and the new
+   project's files unchanged on disk.
 
 **B. UNSUPPORTED_OLDER:** the same steps as A on its own fixture, expecting the
 `projectMigrationGap` copy.
@@ -98,8 +101,17 @@ Run as your normal user on your Linux desktop. Everything lives under one throwa
 
 ```bash
 # 0. One throwaway root; the real WorldScript data dir is only hashed, never used.
+#    Fail closed: a missing dir is recorded explicitly, and a hashing error aborts
+#    instead of producing an empty file that would compare as "unchanged".
 export Q="$(mktemp -d /tmp/wss-v129-qual.XXXXXX)"
-find ~/.local/share/com.worldscript.studio -type f -exec sha256sum {} + 2>/dev/null | sort > "$Q/real-before.txt"
+REAL="$HOME/.local/share/com.worldscript.studio"
+real_snapshot() {
+  if [ ! -e "$REAL" ]; then echo "NO_REAL_DATA_DIR" > "$1"; return 0; fi
+  [ -d "$REAL" ] && [ -r "$REAL" ] || { echo "ERROR: $REAL not a readable directory" >&2; return 1; }
+  find "$REAL" -type f -exec sha256sum {} + > "$1.unsorted" || { echo "ERROR: hashing $REAL failed" >&2; return 1; }
+  sort "$1.unsorted" > "$1" && rm "$1.unsorted"
+}
+real_snapshot "$Q/real-before.txt" || exit 1
 
 # 1. Candidate artifacts (the run ID is given in the evidence record).
 gh run download <DISPATCH_RUN_ID> --repo qnbs/WorldScript-Studio --name tauri-bundle-ubuntu-22.04 --dir "$Q/art"
@@ -122,8 +134,8 @@ run_isolated() { P="$Q/profile-$1"; mkdir -p "$P"/{home,data,config,cache,state}
 
 ```bash
 find "$Q"/profile-* -type f \( -name project.json -o -name active-project-id.txt \) -exec sha256sum {} + | sort > "$Q/fixtures-after.txt"
-find ~/.local/share/com.worldscript.studio -type f -exec sha256sum {} + 2>/dev/null | sort > "$Q/real-after.txt"
-diff "$Q/real-before.txt" "$Q/real-after.txt" && echo "REAL DATA UNCHANGED"
+real_snapshot "$Q/real-after.txt" || exit 1
+if diff "$Q/real-before.txt" "$Q/real-after.txt"; then echo "REAL DATA UNCHANGED"; else echo "REAL DATA CHANGED — stop and report"; fi
 tar czf "$Q.tgz" -C "$Q" artifact.sha256 fixtures-after.txt real-before.txt real-after.txt
 ```
 
