@@ -124,9 +124,19 @@ jobs:
         if: contains(matrix.os, 'macos')
         run: brew install create-dmg
 
+      # QNBS-v3: per-target inventory (#871) — the linked crate set differs per OS, so each bundle job generates the notices it ships and the SBOM the release attaches; a component without license metadata fails the build here.
+      - name: Generate third-party notices and SBOM
+        id: third_party
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/generate-third-party-inventory.mjs --out third-party
+          cat third-party/*.third-party-notices.txt | sed -n '/^Licenses flagged/,/^------/p' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build Tauri app
         shell: bash
         env:
+          NOTICES_FILE: ${{ steps.third_party.outputs.notices_file }}
           # Updater signing (minisign) — required for auto-update functionality
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -157,15 +167,21 @@ jobs:
             exit 1
           fi
 
+          # QNBS-v3: the notices are merged into bundle.resources only for this build, so local `tauri dev/build` never depends on a generated file.
+          test -s "third-party/${NOTICES_FILE}"
+          RESOURCES="$(jq -cn --arg src "../third-party/${NOTICES_FILE}" '{bundle: {resources: {($src): "THIRD_PARTY_NOTICES.txt"}}}')"
+
           echo "Building Tauri app for ${{ matrix.os }}..."
-          pnpm exec tauri build
+          pnpm exec tauri build --config "$RESOURCES"
           echo "Tauri build completed successfully"
 
       - name: Upload bundle directory
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tauri-bundle-${{ matrix.os }}
-          path: src-tauri/target/release/bundle/
+          path: |
+            src-tauri/target/release/bundle/
+            third-party/
           if-no-files-found: warn
           retention-days: 14
 
@@ -227,13 +243,24 @@ jobs:
             -o -name '*.msi' -o -name '*.exe' \
             -o -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \
             \) -exec cp {} release-assets/ \;
-          echo "Files to upload:" && ls -la release-assets/ || true
+          # QNBS-v3: only installer/updater files decide whether a release is published; the #871 inventory is attached afterwards, so inventories alone can never publish an installer-less release.
           if [ -z "$(ls -A release-assets 2>/dev/null)" ]; then
             echo "has_assets=false" >> "$GITHUB_OUTPUT"
             echo "::warning::No bundle files found to attach. Check Tauri bundle output paths."
-          else
-            echo "has_assets=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          find downloaded -type f \( -name '*.third-party-notices.txt' -o -name '*.cdx.json' \) \
+            -exec cp {} release-assets/ \;
+          # QNBS-v3: every bundled target must publish its own SBOM and notices (#871); a missing pair means the release would ship installers without their inventory.
+          for suffix in cdx.json third-party-notices.txt; do
+            count="$(find release-assets -maxdepth 1 -type f -name "*.${suffix}" | wc -l)"
+            if [ "$count" -ne 3 ]; then
+              echo "::error::expected 3 *.${suffix} release assets (one per bundle target), found ${count}"
+              exit 1
+            fi
+          done
+          echo "Files to upload:" && ls -la release-assets/
+          echo "has_assets=true" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         if: steps.collect.outputs.has_assets == 'true'
