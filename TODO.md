@@ -8,9 +8,35 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Current Sprint — v1.29.0 release cut (2026-09-29)
+## Current Sprint — v1.29.1 release (successor of the unpublished v1.29.0 tag, 2026-09-29)
 
-> **Status: 🔄 in progress — release candidate, not published.** v1.29.0 carries the
+> **Status: 🔄 in progress — release candidate, not published.** The signed `v1.29.0` tag
+> (`cf72dc6d`) passed full pre-tag qualification, but its tag-triggered CI/CD failed the enforced
+> OSV scan on the development-only `joi` 18.2.5 (GHSA-6h2x-m376-mqjq). The desktop release run
+> was cancelled before its GitHub Release job, so v1.29.0 has no GitHub Release or desktop
+> assets; its GHCR image `1.29.0` exists and contains only the static web build. The tag stays
+> immutable; v1.29.1 ships the same content plus the fix. Record: #872,
+> `docs/RELEASE-V1.29.0-EVIDENCE.md`, `docs/RELEASE-V1.29.1-EVIDENCE.md`.
+
+- ✅ v1.29.0 pre-tag qualification on `cf72dc6d` (3-OS build, notices/SBOM, release-job dry
+  runs, #743 invariant, real-artifact packaged states A–D, v1.28.8 upgrade, fresh-install save).
+  The packaged gate found and closed P0 #907 (#908) before the tag.
+- ✅ `joi` fix (#909): lockfile resolves 18.2.9; override floor raised to 18.2.6.
+- 🔄 Release-prep PR (version 1.29.1 in all five sync authorities, CHANGELOG, README/AUDIT/TODO
+  truth, `docs/RELEASE-V1.29.1-EVIDENCE.md`).
+- ⬜ Pre-tag re-qualification on the new exact candidate SHA (the full gate set in
+  `docs/RELEASE-V1.29.1-EVIDENCE.md`), then the signed `v1.29.1` tag only if
+  every gate is green. At tag time, the CI/CD security audit must be green before the desktop
+  release job publishes.
+- ⬜ Post-release: published-asset verification, `latest.json`, GHCR `1.29`/`latest` moved to the
+  v1.29.1 image, truth sync.
+
+<details>
+<summary>v1.29.0 release cut (superseded by v1.29.1; kept for the record)</summary>
+
+### v1.29.0 release cut (2026-09-29)
+
+> **Status: ⛔ tagged, never published — superseded by v1.29.1 (above).** v1.29.0 carries the
 > current-production #553 persistence/data-integrity closure (ledger row 9: every current
 > Project path canonical and no-loss; Rust Core authority switch not started, #836), desktop
 > third-party notices and per-target CycloneDX SBOMs (#871), the qualified dependency train
@@ -26,15 +52,17 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ Dependency convergence (#872): 13 dependency PRs merged one at a time with full
   resulting-main CI + CodeQL after each; #883–#888, #891, #893, #901 dispositioned with evidence
   and owners (not part of v1.29).
-- 🔄 Release-prep PR (version 1.29.0 in all five sync authorities, CHANGELOG cut, README/AUDIT/TODO
+- ✅ Release-prep PR #905 (version 1.29.0 in all five sync authorities, CHANGELOG cut, README/AUDIT/TODO
   truth, `docs/RELEASE-V1.29.0-EVIDENCE.md`, `docs/RELEASE-V1.29.0-PACKAGED-QUALIFICATION.md`).
-- ⬜ Pre-tag qualification on the exact candidate SHA (state ladder in the evidence record):
+- ✅ Pre-tag qualification on the exact candidate SHA `cf72dc6d` (record on #872):
   resulting-main CI/CD + CodeQL + Production, `tauri-plugins:check`, Linux/Windows/macOS-ARM
   `tauri-build.yml` dispatch, notices/SBOM per target, release-job collect/count and
   release-notes dry-run, real-artifact packaged-state qualification (FUTURE, UNSUPPORTED_OLDER,
   legacy migration + reopen, stale-writer), #743 invariant check. Then a hard stop before tag.
-- ⬜ Tag, GitHub Release, `latest.json`/updater signatures, tag-triggered Docker publish, and the
-  post-release truth sync happen only after explicit maintainer authorization.
+- ⛔ Signed tag `v1.29.0` created; the tag-time OSV gate failed, the desktop release was cancelled
+  before publication, and the GHCR image `1.29.0` was published (see the v1.29.1 sprint above).
+
+</details>
 
 ## Previous Sprint — v1.28.8 desktop startup-recovery patch release (2026-09-22)
 

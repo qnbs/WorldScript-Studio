@@ -1,6 +1,6 @@
 [package]
 name = "worldscript-studio"
-version = "1.29.0"
+version = "1.29.1"
 description = "AI-powered creative writing and world-building application"
 authors = ["QNBS"]
 license = "MIT"
