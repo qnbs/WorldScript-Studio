@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   manual backups (`…/WorldScript Studio`, `~/.local/share/worldscript-studio`) and a Windows-only
   `$APPDATA/logs/…` log path; it now names Tauri's real app-data directory,
   `com.worldscript.studio` under `%APPDATA%`, `~/Library/Application Support`, or `~/.local/share`,
-  and `{appDataDir}/logs/…` for the JSONL logs. OS-native signing itself remains tracked by #574.
+  and `com.worldscript.studio/logs/…` inside it for the JSONL logs. OS-native signing itself remains tracked by #574.
   PR #904.
 - **Third-party notices and SBOM for desktop releases (#871):** every desktop bundle job now
   generates, for its own target, a third-party notices file (bundled into the installer as
