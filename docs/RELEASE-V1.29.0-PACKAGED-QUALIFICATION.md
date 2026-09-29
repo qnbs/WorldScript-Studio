@@ -3,7 +3,12 @@
 Purpose: prove that the **real built v1.29.0 candidate** boots correctly on top of persisted state
 written by older builds. This is the v1.28.7 failure class (a published AppImage dead-ended on a
 refused active project) and the v1.28.8 recovery. Green CI or a successful build does not satisfy
-this protocol. Results go to `docs/RELEASE-V1.29.0-EVIDENCE.md` and #872.
+this protocol. Results for the original v1.29.0 run go to `docs/RELEASE-V1.29.0-EVIDENCE.md` and #872.
+
+> **Reused for v1.29.1.** The v1.29.0 tag was never published as a desktop release, so this protocol
+> applies unchanged to the v1.29.1 candidate: read "v1.29.0 candidate" as the exact v1.29.1
+> candidate SHA and its artifacts, and record the results in `docs/RELEASE-V1.29.1-EVIDENCE.md`
+> and #872. The v1.28.8 baseline artifact and the fixtures stay the same.
 
 Part 1 is the primary gate: a reproducible, headless reconstruction of the v1.28.8 real-artifact
 method recorded in `AUDIT.md`. Part 2 is additional target-environment evidence on the maintainer's
@@ -91,6 +96,24 @@ from the virtual display. No mocked UI and no dev server.
 2. Packaged check: while the app runs, start the AppImage a second time on the same profile.
    Expect no second app process to remain (`tauri-plugin-single-instance` focuses the first), and
    no concurrent writer: the project file hash changes only through the first instance's saves.
+
+**E. Upgrade from v1.28.8 and fresh-install save** (added after P0 #907, which only these two
+checks caught)
+1. Launch the candidate on a fresh copy of the **unmodified** v1.28.8 base profile (fixture 1).
+   Expect the v1.28.8 project to open in the editor with its content, with no storage error or
+   Retry-only screen and no error-level entry in `logs/*.jsonl`. Opening alone must not change
+   `project.json` or `config/active-project-id.txt` (hashes before and after).
+   Then edit that upgraded project, let it save, quit and relaunch on the same profile. Expect
+   the save to succeed on the existing project directory (including any identity file it creates
+   there), the same project to reopen with the edit, and no storage error or error-level log
+   entry.
+2. Launch the candidate on an empty profile, create a blank project and let it save. Expect
+   `projects/<id>/project.json`, `projects/<id>/.incarnation` and
+   `config/active-project-id.txt` to be written, and no "forbidden path" error in the UI or the
+   logs.
+3. Add some content to that project, let it save, quit and relaunch on the same profile. Expect
+   the same project (same ID in the marker and the same `.incarnation` value) to open with the
+   saved content, with no storage error and no error-level log entry.
 
 Pass criteria: every expectation above holds, and the real profile proof is unchanged. Any
 deviation is a release blocker until classified.

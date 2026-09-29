@@ -7,8 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Included in the 1.29.0 section below:** the desktop dotfile fs-scope fix (#907), merged after
-  the release-prep cut and before the release tag. PR #908.
+## [1.29.1] — 2026-09-29
+
+<!-- release-candidate: v1.29.1 -->
+
+- **v1.29.1 succeeds the unpublished `v1.29.0` tag.** It ships everything listed under
+  `[1.29.0]` below. The `v1.29.0` tag stays as it is, but its desktop release was never published
+  (see the note there). If you are upgrading from v1.28.8, read the
+  [`[1.29.0]` section](https://github.com/qnbs/WorldScript-Studio/blob/v1.29.1/CHANGELOG.md#1290--2026-09-29)
+  for the full list of changes. PR #910. The main changes since v1.28.8 are:
+  - Desktop projects save and open again on Linux and macOS (#907, PR #908).
+  - Project persistence and data integrity work across web and desktop (#553).
+  - Third-party notices and a CycloneDX SBOM in every desktop release (#871).
+  - In-app Help no longer claims code-signed installers and names the correct data and log
+    paths (#574, PR #904).
+  - Visual Maturity remediation (editorial foundation, core primitives, overlays, product
+    identity, loading and trust surfaces).
+  - A qualified dependency update train (#872) and hardened CI and merge governance (#675, #447).
 - **Development dependency `joi` updated to 18.2.9 (GHSA-6h2x-m376-mqjq):** `joi` 18.2.5, which
   the `wait-on` CI tool pulled in, failed the enforced OSV scan on the `v1.29.0` tag. The shipped
   desktop and web builds do not contain `joi` (their SBOMs list no `joi` or `wait-on`
@@ -17,7 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.29.0] — 2026-09-29
 
-<!-- release-candidate: v1.29.0 -->
+> **This tagged release was never published as a desktop release.** The signed `v1.29.0` tag
+> points at `cf72dc6d`. Its tag-triggered CI/CD run failed the enforced OSV scan on the
+> development-only dependency `joi` 18.2.5 (fixed in `[1.29.1]` above). The desktop release run
+> was cancelled before its GitHub Release job, so no GitHub Release, installers or updater assets
+> exist for `v1.29.0`. The separate Docker workflow for this tag had already succeeded, so the
+> container image `ghcr.io/qnbs/worldscript-studio:1.29.0` does exist. That image serves only the
+> static web build, which does not contain `joi`. The `v1.29.0` tag is kept and never moved; the
+> same changes are to be released as v1.29.1.
 
 - **v1.29.0:** accumulated data-integrity and persistence work since v1.28.8 (the #553
   lineage), third-party notices and CycloneDX SBOMs for every desktop target (#871), and a
