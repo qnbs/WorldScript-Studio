@@ -66,7 +66,7 @@ These cannot be produced before the tag:
   image to the v1.29.1 image;
 - `verify-release-tag` on the signed tag.
 
-## Known limitations shipped in v1.29.1
+## Known limitations of the v1.29.1 candidate
 
 Unchanged from v1.29.0 (`docs/RELEASE-V1.29.0-EVIDENCE.md`): #614, #602, #518, no OS-native code
 signing or notarization (#574), Intel macOS is not claimed (#507), and the JavaScript inventory is
