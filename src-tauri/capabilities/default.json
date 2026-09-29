@@ -12,6 +12,18 @@
       "allow": [
         {
           "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA/projects/*/.incarnation"
+        },
+        {
+          "path": "$APPDATA/projects/*/.incarnation.tmp-*"
+        },
+        {
+          "path": "$APPDATA/images/.legacy-owner"
+        },
+        {
+          "path": "$APPDATA/images/.legacy-owner.tmp-*"
         }
       ]
     },
@@ -20,6 +32,18 @@
       "allow": [
         {
           "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA/projects/*/.incarnation"
+        },
+        {
+          "path": "$APPDATA/projects/*/.incarnation.tmp-*"
+        },
+        {
+          "path": "$APPDATA/images/.legacy-owner"
+        },
+        {
+          "path": "$APPDATA/images/.legacy-owner.tmp-*"
         }
       ]
     },
@@ -39,6 +63,18 @@
         },
         {
           "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA/projects/*/.incarnation"
+        },
+        {
+          "path": "$APPDATA/projects/*/.incarnation.tmp-*"
+        },
+        {
+          "path": "$APPDATA/images/.legacy-owner"
+        },
+        {
+          "path": "$APPDATA/images/.legacy-owner.tmp-*"
         }
       ]
     },
@@ -58,6 +94,18 @@
       "allow": [
         {
           "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA/projects/*/.incarnation"
+        },
+        {
+          "path": "$APPDATA/projects/*/.incarnation.tmp-*"
+        },
+        {
+          "path": "$APPDATA/images/.legacy-owner"
+        },
+        {
+          "path": "$APPDATA/images/.legacy-owner.tmp-*"
         }
       ]
     },
@@ -66,6 +114,18 @@
       "allow": [
         {
           "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA/projects/*/.incarnation"
+        },
+        {
+          "path": "$APPDATA/projects/*/.incarnation.tmp-*"
+        },
+        {
+          "path": "$APPDATA/images/.legacy-owner"
+        },
+        {
+          "path": "$APPDATA/images/.legacy-owner.tmp-*"
         }
       ]
     },

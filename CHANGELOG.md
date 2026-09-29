@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Included in the 1.29.0 section below:** the desktop dotfile fs-scope fix (#907), merged after
+  the release-prep cut and before the release tag. PR #908.
+
 ## [1.29.0] — 2026-09-29
 
 <!-- release-candidate: v1.29.0 -->
@@ -16,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   qualified dependency train (#872). #743's Release invariant is verified against the exact
   release SHA; the release evidence and its state ladder are recorded in
   `docs/RELEASE-V1.29.0-EVIDENCE.md`. Intel macOS is not claimed. PR #905.
+- **Desktop projects save and open again on Linux and macOS (#907):** the desktop app keeps a
+  per-project identity file (`.incarnation`) and a legacy image-ownership marker
+  (`images/.legacy-owner`). Tauri's filesystem scope does not match file names that start with a
+  dot on Linux and macOS, so on those platforms every project save failed with "forbidden path"
+  and a project written by v1.28.8 stopped at startup with a Retry-only storage error (the data
+  itself was never changed). The app's filesystem permissions now name exactly these files and
+  their temporary write files, still limited to the app data directory. A guard test binds every
+  dotfile the desktop stores use to those permissions. Windows was not affected. PR #908.
 - **In-app Help no longer claims code-signed desktop installers (#574, #549):** the Tauri desktop
   Help page stated that the macOS `.dmg` and Windows `.msi`/`.exe` installers are code-signed, in
   17 of 19 locales. No Apple Developer ID signing/notarization or Windows Authenticode signing is
