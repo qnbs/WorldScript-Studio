@@ -65,7 +65,7 @@ overrides:
   playwright: "1.61.0"
   playwright-core: "1.61.0"
   esbuild: ">=0.28.1"
-  joi: ">=18.2.5 <19" # GHSA-6w3j-5fw6-r9vr + GHSA-gg4h-3hg2-grpc; capped at major 18 (wait-on's own declared range) so a future major can't force-install
+  joi: ">=18.2.6 <19" # GHSA-6w3j-5fw6-r9vr + GHSA-gg4h-3hg2-grpc + GHSA-6h2x-m376-mqjq; capped at major 18 (wait-on's own declared range) so a future major can't force-install
   typescript: "6.0.3"
   serialize-javascript: ">=7.0.3"
   chrome-launcher: "^1.2.1"
