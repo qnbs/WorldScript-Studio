@@ -60,18 +60,22 @@ The gates come from the release precedent audit on #872:
 | #743 Release invariant | invariant list re-verified on the candidate; AI changes since v1.28.8 are #900/#895 (dependency-only, qualified with 1,039 targeted AI tests) | checklist | PASS: no AI source changes since v1.28.8 |
 | Target environment (maintainer) | protocol part 2 on the maintainer's Linux system | returned hashes/logs/screenshots | OPEN (additional evidence, not a gate) |
 
-## `TAG_ONLY_PENDING`
+## `TAG_ONLY_PENDING` (outcome at the v1.29.0 tag)
 
-These cannot be produced before the tag: `workflow_dispatch` builds run with
+These items could not be produced before the tag: `workflow_dispatch` builds run with
 `createUpdaterArtifacts=false` and without signing secrets, and publishing jobs are tag-restricted.
-They are not pre-tag failures as long as the logic has been dry-run where possible:
+Their outcome on the `v1.29.0` tag (see "Tag-time outcome" above):
 
-- updater `.sig` files and the signed macOS `.app.tar.gz` updater bundle;
-- `latest.json` generation (version, platform keys without Intel macOS, asset URLs, signatures);
-- GitHub Release publication and the attached asset set, including the three notices/SBOM pairs;
-- the tag-triggered `docker.yml` run, which is the first execution of the #894/#898 action bumps
-  and affects only the container image;
-- `verify-release-tag` on the signed tag.
+- `verify-release-tag` on the signed tag: **passed**.
+- the tag-triggered `docker.yml` run (the first execution of the #894/#898 action bumps):
+  **succeeded and published** the GHCR image.
+- updater `.sig` files and the signed macOS `.app.tar.gz` updater bundle: **not produced**, because
+  the bundle jobs were cancelled.
+- `latest.json` generation: **not reached**.
+- GitHub Release publication and its asset set, including the three notices/SBOM pairs: **not
+  reached**, because the `GitHub Release` job was cancelled.
+
+The items that were not reached move to v1.29.1 (`docs/RELEASE-V1.29.1-EVIDENCE.md`).
 
 ## Known limitations shipped in v1.29.0
 

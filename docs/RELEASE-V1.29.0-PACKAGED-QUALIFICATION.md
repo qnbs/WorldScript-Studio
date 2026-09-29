@@ -97,6 +97,17 @@ from the virtual display. No mocked UI and no dev server.
    Expect no second app process to remain (`tauri-plugin-single-instance` focuses the first), and
    no concurrent writer: the project file hash changes only through the first instance's saves.
 
+**E. Upgrade from v1.28.8 and fresh-install save** (added after P0 #907, which only these two
+checks caught)
+1. Launch the candidate on a fresh copy of the **unmodified** v1.28.8 base profile (fixture 1).
+   Expect the v1.28.8 project to open in the editor with its content, with no storage error or
+   Retry-only screen and no error-level entry in `logs/*.jsonl`. Opening alone must not change
+   `project.json` or `config/active-project-id.txt` (hashes before and after).
+2. Launch the candidate on an empty profile, create a blank project and let it save. Expect
+   `projects/<id>/project.json`, `projects/<id>/.incarnation` and
+   `config/active-project-id.txt` to be written, and no "forbidden path" error in the UI or the
+   logs.
+
 Pass criteria: every expectation above holds, and the real profile proof is unchanged. Any
 deviation is a release blocker until classified.
 

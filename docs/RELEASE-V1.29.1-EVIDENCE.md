@@ -48,7 +48,7 @@ with results recorded here (see its "Reused for v1.29.1" note).
 | 3-OS native build | `tauri-build.yml` `workflow_dispatch` on the candidate: Linux, Windows, macOS ARM | run ID, per-OS result | PENDING |
 | Notices + SBOM | notices inside each installer (byte-identical to the generated file), one `*.cdx.json` per target bound to the candidate SHA | per-target hashes and component counts | PENDING |
 | Release-job dry run | `release` collect logic and the exactly-3 notices/SBOM count against the dispatch artifacts; release-notes `awk` extraction for `1.29.1` | command output | PENDING |
-| Packaged: v1.28.8 profile first boot + fresh-install save | real candidate AppImage | hashes, screenshots | PENDING |
+| Packaged: v1.28.8 profile first boot + fresh-install save | protocol E | hashes, screenshots | PENDING |
 | Packaged state: FUTURE | protocol A | hashes, marker, screenshots | PENDING |
 | Packaged state: UNSUPPORTED_OLDER | protocol B | hashes, marker, screenshots | PENDING |
 | Packaged state: legacy migration + reopen | protocol C | before/after content, snapshot, hashes | PENDING |
