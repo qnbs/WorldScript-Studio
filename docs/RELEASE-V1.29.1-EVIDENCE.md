@@ -36,7 +36,8 @@ lesson from the v1.29.0 tag:
 
 ## Pre-tag gates (exact candidate SHA)
 
-Protocols: `docs/RELEASE-V1.29.0-PACKAGED-QUALIFICATION.md` (unchanged for v1.29.1).
+Protocols: `docs/RELEASE-V1.29.0-PACKAGED-QUALIFICATION.md`, applied to the exact v1.29.1 candidate
+with results recorded here (see its "Reused for v1.29.1" note).
 
 | Gate | Method | Evidence | Status |
 |---|---|---|---|

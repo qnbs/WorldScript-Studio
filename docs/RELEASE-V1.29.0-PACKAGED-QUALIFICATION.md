@@ -5,6 +5,11 @@ written by older builds. This is the v1.28.7 failure class (a published AppImage
 refused active project) and the v1.28.8 recovery. Green CI or a successful build does not satisfy
 this protocol. Results go to `docs/RELEASE-V1.29.0-EVIDENCE.md` and #872.
 
+> **Reused for v1.29.1.** The v1.29.0 tag was never published as a desktop release, so this protocol
+> applies unchanged to the v1.29.1 candidate: read "v1.29.0 candidate" as the exact v1.29.1
+> candidate SHA and its artifacts, and record the results in `docs/RELEASE-V1.29.1-EVIDENCE.md`
+> and #872. The v1.28.8 baseline artifact and the fixtures stay the same.
+
 Part 1 is the primary gate: a reproducible, headless reconstruction of the v1.28.8 real-artifact
 method recorded in `AUDIT.md`. Part 2 is additional target-environment evidence on the maintainer's
 own Linux system. It does not replace Part 1.
