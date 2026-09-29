@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- release-candidate: v1.29.1 -->
 
-- **v1.29.1 is the first published v1.29 desktop release.** It ships everything listed under
+- **v1.29.1 succeeds the unpublished `v1.29.0` tag.** It ships everything listed under
   `[1.29.0]` below. The `v1.29.0` tag stays as it is, but its desktop release was never published
   (see the note there). If you are upgrading from v1.28.8, read the
   [`[1.29.0]` section](https://github.com/qnbs/WorldScript-Studio/blob/v1.29.1/CHANGELOG.md#1290--2026-09-29)
