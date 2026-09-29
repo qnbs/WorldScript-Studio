@@ -41,11 +41,20 @@ changes once that decision is made.
 
 ## Outputs
 
-Each matrix job uploads **`tauri-bundle-<os>`** containing `src-tauri/target/release/bundle/` (`.deb`, `.msi`/`.exe`, `.dmg`/`.app` depending on OS).
+Each matrix job uploads **`tauri-bundle-<os>`** containing `src-tauri/target/release/bundle/` (`.deb`, `.msi`/`.exe`, `.dmg`/`.app` depending on OS) plus its `third-party/` inventory.
+
+### Third-party notices and SBOM (#871)
+
+Before `tauri build`, each matrix job runs `node scripts/generate-third-party-inventory.mjs` for its Rust host target and writes:
+
+- `worldscript-studio-<version>-<target>.third-party-notices.txt`, bundled into the installer as `THIRD_PARTY_NOTICES.txt` through a build-only `--config` merge of `bundle.resources` (so local `tauri dev`/`build` never needs the generated file);
+- `worldscript-studio-<version>-<target>.cdx.json`, a CycloneDX 1.5 SBOM bound to the exact commit and target.
+
+Scope: Rust crates reachable from the desktop crate through normal dependency edges for that target (first-party path crates and compile-time-only proc-macro crates excluded), and the pnpm production dependency graph for JavaScript. The JavaScript part is a documented superset of what Vite bundles. Outputs are deterministic for a given commit, lockfiles, and target. The step fails when a component has no license metadata. Licenses outside the permissive auto-accepted set, non-SPDX identifiers, and packages that ship no license text are listed at the top of the notices and in the job summary for human review. The inventory is not a legal opinion; the durable compliance policy (including future Qt admission) is owned by #575.
 
 ### GitHub Releases (tags only)
 
-When the workflow runs on a **`v*`** tag (not on manual `workflow_dispatch` alone), a follow-up **`release`** job downloads all `tauri-bundle-*` artifacts, collects `.deb`, `.AppImage`, `.rpm`, `.msi`, `.exe`, and `.dmg` files, and publishes them on a **GitHub Release** for that tag (`softprops/action-gh-release`). If no matching bundle files are found, the release step is skipped with a warning.
+When the workflow runs on a **`v*`** tag (not on manual `workflow_dispatch` alone), a follow-up **`release`** job downloads all `tauri-bundle-*` artifacts, collects `.deb`, `.AppImage`, `.rpm`, `.msi`, `.exe`, and `.dmg` files and, only when such installer files exist, adds the three per-target SBOMs and notices (the job then fails unless exactly one pair per bundle target is present). It publishes them on a **GitHub Release** for that tag (`softprops/action-gh-release`). If no matching bundle files are found, the release step is skipped with a warning.
 
 This workflow is **independent** of the web PWA pipeline ([`docs/CI.md`](CI.md)); it does not gate GitHub Pages deploy.
 

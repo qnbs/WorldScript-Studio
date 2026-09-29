@@ -16,6 +16,8 @@ dist-ssr
 *.local
 coverage/
 reports/
+# Generated third-party notices/SBOM (scripts/generate-third-party-inventory.mjs)
+third-party/
 tests/bench/baseline/
 
 # Nested git worktree checkouts (git worktree add .worktrees/<name>) — never tracked
