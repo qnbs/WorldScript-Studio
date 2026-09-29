@@ -191,6 +191,11 @@ function isProcMacro(pkg) {
   return pkg.targets.every((target) => target.kind.includes('proc-macro'));
 }
 
+/** Known crates are entered unless they are proc-macros (compile-time only). */
+function isLinkable(pkg) {
+  return pkg !== undefined && !isProcMacro(pkg);
+}
+
 function normalDependencies(node) {
   return (node?.deps ?? [])
     .filter((dependency) => dependency.dep_kinds.some((kind) => kind.kind === null))
@@ -207,8 +212,7 @@ function linkedPackageIds(metadata, packages) {
   const stack = [metadata.resolve.root];
   while (stack.length > 0) {
     const id = stack.pop();
-    const pkg = packages.get(id);
-    if (linked.has(id) || !pkg || isProcMacro(pkg)) continue;
+    if (linked.has(id) || !isLinkable(packages.get(id))) continue;
     linked.add(id);
     stack.push(...normalDependencies(nodes.get(id)));
   }
