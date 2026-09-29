@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Development dependency `joi` updated to 18.2.9 (GHSA-6h2x-m376-mqjq):** `joi` 18.2.5, which
   the `wait-on` CI tool pulled in, failed the enforced OSV scan on the `v1.29.0` tag. The shipped
   desktop and web builds do not contain `joi` (their SBOMs list no `joi` or `wait-on`
-  component). Only the lockfile changed. PR #909.
+  component). The `joi` override floor rises from 18.2.5 to 18.2.6, so a later re-resolution
+  cannot fall back to an affected version. PR #909.
 
 ## [1.29.0] — 2026-09-29
 
