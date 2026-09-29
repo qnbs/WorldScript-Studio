@@ -107,6 +107,9 @@ checks caught)
    `projects/<id>/project.json`, `projects/<id>/.incarnation` and
    `config/active-project-id.txt` to be written, and no "forbidden path" error in the UI or the
    logs.
+3. Add some content to that project, let it save, quit and relaunch on the same profile. Expect
+   the same project (same ID in the marker and the same `.incarnation` value) to open with the
+   saved content, with no storage error and no error-level log entry.
 
 Pass criteria: every expectation above holds, and the real profile proof is unchanged. Any
 deviation is a release blocker until classified.
