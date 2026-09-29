@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Included in the 1.29.0 section below:** the desktop dotfile fs-scope fix (#907), merged after
   the release-prep cut and before the release tag. PR #908.
+- **Development dependency `joi` updated to 18.2.9 (GHSA-6h2x-m376-mqjq):** `joi` 18.2.5, which
+  the `wait-on` CI tool pulled in, failed the enforced OSV scan on the `v1.29.0` tag. The shipped
+  desktop and web builds do not contain `joi` (their SBOMs list no `joi` or `wait-on`
+  component). Only the lockfile changed. PR #909.
 
 ## [1.29.0] — 2026-09-29
 
