@@ -8,7 +8,35 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Current Sprint — v1.28.8 desktop startup-recovery patch release (2026-09-22)
+## Current Sprint — v1.29.0 release cut (2026-09-29)
+
+> **Status: 🔄 in progress — release candidate, not published.** v1.29.0 carries the
+> current-production #553 persistence/data-integrity closure (ledger row 9: every current
+> Project path canonical and no-loss; Rust Core authority switch not started, #836), desktop
+> third-party notices and per-target CycloneDX SBOMs (#871), the qualified dependency train
+> (#872), and the Help truth fix (#904). R-15 (ledger row 10) stays where it is: Gate 1a headless,
+> Gate 1b-platform in progress, Gates 2–7 not admitted, `PRODUCTION_AUTHORITY_SWITCH_ALLOWED=NO`.
+> No R-15, Qt, GPUI, or governance expansion is part of this cut. #743's Release invariant is
+> re-verified against the exact candidate SHA before any tag (durable reconciliation, no reused
+> exception).
+
+- ✅ Release blockers resolved before the cut: #879 timebox terminal (#614 reproduced exactly as
+  documented → P2; #602/#870 non-blocking; #871 implemented via #881), and the only current P0/P1
+  blocker (#574 Help overclaim) fixed by #904.
+- ✅ Dependency convergence (#872): 13 dependency PRs merged one at a time with full
+  resulting-main CI + CodeQL after each; #883–#888, #891, #893, #901 dispositioned with evidence
+  and owners (not part of v1.29).
+- 🔄 Release-prep PR (version 1.29.0 in all five sync authorities, CHANGELOG cut, README/AUDIT/TODO
+  truth, `docs/RELEASE-V1.29.0-EVIDENCE.md`, `docs/RELEASE-V1.29.0-PACKAGED-QUALIFICATION.md`).
+- ⬜ Pre-tag qualification on the exact candidate SHA (state ladder in the evidence record):
+  resulting-main CI/CD + CodeQL + Production, `tauri-plugins:check`, Linux/Windows/macOS-ARM
+  `tauri-build.yml` dispatch, notices/SBOM per target, release-job collect/count and
+  release-notes dry-run, real-artifact packaged-state qualification (FUTURE, UNSUPPORTED_OLDER,
+  legacy migration + reopen, stale-writer), #743 invariant check. Then a hard stop before tag.
+- ⬜ Tag, GitHub Release, `latest.json`/updater signatures, tag-triggered Docker publish, and the
+  post-release truth sync happen only after explicit maintainer authorization.
+
+## Previous Sprint — v1.28.8 desktop startup-recovery patch release (2026-09-22)
 
 > **Status: ✅ released.** `#743`'s prior one-time maintainer exception was explicitly for
 > v1.28.7 and does not carry forward. v1.28.8 instead relies on the durable governance
