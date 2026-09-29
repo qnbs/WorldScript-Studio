@@ -11,7 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Help page stated that the macOS `.dmg` and Windows `.msi`/`.exe` installers are code-signed, in
   17 of 19 locales. No Apple Developer ID signing/notarization or Windows Authenticode signing is
   in place yet (only the Tauri updater signature is), so the claim has been removed from every
-  locale rather than softened. OS-native signing itself remains tracked by #574. PR #904.
+  locale rather than softened. The same Help page also named the wrong desktop data directory for
+  manual backups (`…/WorldScript Studio`, `~/.local/share/worldscript-studio`) and a Windows-only
+  `$APPDATA/logs/…` log path; it now names Tauri's real app-data directory,
+  `com.worldscript.studio` under `%APPDATA%`, `~/Library/Application Support`, or `~/.local/share`,
+  and `{appDataDir}/logs/…` for the JSONL logs. OS-native signing itself remains tracked by #574.
+  PR #904.
 - **Third-party notices and SBOM for desktop releases (#871):** every desktop bundle job now
   generates, for its own target, a third-party notices file (bundled into the installer as
   `THIRD_PARTY_NOTICES.txt`) and a CycloneDX 1.5 SBOM bound to the exact commit. The tagged release
