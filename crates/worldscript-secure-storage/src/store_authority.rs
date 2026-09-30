@@ -1,15 +1,17 @@
 //! Durable Gate 1b-platform authority and bootstrap primitives.
 //!
 //! This module owns only the secure-store relationships between the validated anchor, epoch index,
-//! and per-route key items. Runtime key handles live in `store_runtime` (Slice C1); anchor
-//! transitions remain in a later slice.
+//! and per-route key items, and applies the §5.3.1 anchor transitions to them (Slice C2). Runtime
+//! key handles live in `store_runtime` (Slice C1).
 
 use zeroize::Zeroizing;
 
 use crate::anchor;
 use crate::anchor_codec;
 use crate::error::KeyProviderError;
-use crate::provider::{AnchorState, EpochInfo, InstallationScopeId, RootKeyRefV1};
+use crate::provider::{
+    AnchorState, EpochInfo, InstallationScopeId, PrepareRootAnchor, RootKeyRefV1,
+};
 use crate::random::{OsRandom, RandomSource, RandomnessUnavailable};
 use crate::secure_store::SecretStore;
 use crate::store_layout::{
@@ -152,6 +154,53 @@ where
         Ok(key_ref)
     }
 
+    /// Step C (§5.3.1): records the preparation, after proving that the target route is issued (in
+    /// the index) and resolvable (its key item is present and exactly one key).
+    pub fn prepare_root_anchor(
+        &mut self,
+        request: &PrepareRootAnchor,
+    ) -> Result<(), KeyProviderError> {
+        let (anchor_state, index) = self.read_authority()?;
+        if !index
+            .iter()
+            .any(|entry| entry.key_ref == request.target_root_key_ref)
+        {
+            return Err(KeyProviderError::UnknownKeyRef);
+        }
+        self.read_key(&request.target_root_key_ref)?;
+        let next = anchor::prepare(&anchor_state, request)?;
+        self.replace_anchor(&anchor_state, &next).map(|_| ())
+    }
+
+    /// Step F (§5.3.1): publishes exactly the matching preparation and returns the durably
+    /// confirmed anchor. An exact replay of the last committed operation writes nothing; a root whose
+    /// key item was lost after preparation is never published.
+    pub fn commit_root_anchor(
+        &mut self,
+        operation_id: &str,
+        target_root_generation: u64,
+    ) -> Result<AnchorState, KeyProviderError> {
+        let (anchor_state, _) = self.read_authority()?;
+        let next = anchor::commit(&anchor_state, operation_id, target_root_generation)?;
+        if next != anchor_state {
+            if let Some(root) = &next.committed_root {
+                self.read_key(&root.root_key_ref)?;
+            }
+        }
+        self.replace_anchor(&anchor_state, &next)
+    }
+
+    /// Clears the discardable preparation of `operation_id`; with nothing prepared it writes
+    /// nothing. It never raises the floor or changes the committed root.
+    pub fn abort_or_recover_root_anchor(
+        &mut self,
+        operation_id: &str,
+    ) -> Result<(), KeyProviderError> {
+        let (anchor_state, _) = self.read_authority()?;
+        let next = anchor::abort_or_recover(&anchor_state, operation_id)?;
+        self.replace_anchor(&anchor_state, &next).map(|_| ())
+    }
+
     /// The structurally validated anchor for the Slice C1 runtime layer: the scope, index and
     /// root-route relationships are checked, but key presence is left to the caller, so the loss of
     /// a prepared (recovery-only, §5.3.1) target key is not mistaken for loss of the committed root.
@@ -277,6 +326,24 @@ where
         let mut key = Zeroizing::new([0u8; KEY_LEN]);
         key.copy_from_slice(&bytes);
         Ok(key)
+    }
+
+    /// One anchor replacement. A no-op transition writes nothing; otherwise the durable anchor must
+    /// read back exactly as computed. A refused write leaves the prior anchor, and a different
+    /// read-back (an ambiguous or concurrent outcome) is `Unavailable`: the caller re-reads and
+    /// replays exactly (§5.3.1). Cross-process serialization of the read-modify-write is Gate 4.
+    fn replace_anchor(
+        &self,
+        current: &AnchorState,
+        next: &AnchorState,
+    ) -> Result<AnchorState, KeyProviderError> {
+        if next != current {
+            self.write_anchor(next)?;
+            if self.read_anchor()? != *next {
+                return Err(KeyProviderError::Unavailable);
+            }
+        }
+        Ok(next.clone())
     }
 
     fn write_anchor(&self, state: &AnchorState) -> Result<(), KeyProviderError> {
