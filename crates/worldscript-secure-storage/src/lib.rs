@@ -10,6 +10,7 @@ pub mod anchor;
 pub mod anchor_codec;
 pub mod envelope;
 pub mod error;
+pub mod identity;
 pub mod kdf;
 #[cfg(feature = "test-support")]
 pub mod memory_provider;
@@ -26,6 +27,7 @@ pub mod store_runtime;
 pub use aad::{canonical_aad, RecordContext};
 pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
 pub use error::{AadError, KdfError, KeyProviderError, OpenError, RecoveryError, SealError};
+pub use identity::{IdentityError, RecordIdentity};
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};
 pub use provider::{
     AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,

@@ -3446,6 +3446,16 @@ Later implementation may be admitted only in these bounded gates:
    latest committed one; rollback rejection is the committed-marker/journal validation of later gates.
 2. **Envelope and identity registry:** implement strict parsing, canonical AAD, record-class
    adapters, and substitution tests without changing current TS/Tauri authority.
+   - **Slice 1 (typed identity registry)** — `RecordIdentity` in `crates/worldscript-secure-storage`:
+     every version-1 class except `record-commit` is built only from its own §5.2 template
+     components; `record-commit:<record-class>:<logical-record-id>` is built only from another
+     identity and inherits its scope. The AAD `project_id` is set exactly by the §5.2.1 project
+     component and is absent for every other class. `InstallationScopeId` components must be
+     canonical (§5.2.2, `settings:<scope>` excluded); snapshot, migration-page and record-catalog
+     indexes must be §5.4 canonical `uint32` decimals; key epochs must be canonical and assigned.
+     Empty components, the `:` separator and control characters are refused, never normalized.
+     Substitution tests prove that no identity opens another identity's ciphertext. Record-class
+     adapters that route real records through these identities remain later Gate 2 slices.
 3. **Durable adapter:** implement file sync, atomic replacement, directory sync, generation
    reconciliation, and fault-injection tests for one record class.
 4. **Journal/admission:** implement enable/rotate/recovery state machines, exclusive migration
