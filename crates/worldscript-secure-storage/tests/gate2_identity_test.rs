@@ -10,6 +10,7 @@ use worldscript_secure_storage::{
 
 const SCOPE: &str = "0123456789abcdef0123456789abcdef";
 const OTHER_SCOPE: &str = "fedcba9876543210fedcba9876543210";
+const RECOVERY_ID: &str = "00112233445566778899aabbccddeeff";
 
 const META: RecordMeta = RecordMeta {
     key_epoch: 1,
@@ -21,168 +22,75 @@ fn key() -> Key {
     Key::from_bytes(&mut [7u8; 32])
 }
 
+/// `$S` in a row stands for [`SCOPE`], `$R` for [`RECOVERY_ID`].
+type Row = (
+    RecordClass,
+    &'static [&'static str],
+    &'static str,
+    Option<&'static str>,
+);
+
 /// Valid components, the expected canonical `logical_record_id`, and the expected AAD project scope
 /// for every version-1 class except `record-commit`, which is built from another identity.
+#[rustfmt::skip]
+const REGISTRY: &[Row] = &[
+    (RecordClass::Project, &["p1"], "project:p1", Some("p1")),
+    (RecordClass::ProjectMetadata, &["p1"], "project:p1:metadata", Some("p1")),
+    (RecordClass::Snapshot, &["1727704800000"], "snapshot:1727704800000", None),
+    (RecordClass::Backup, &["b1"], "backup:b1", None),
+    (RecordClass::Recovery, &["p1", "$R"], "recovery:p1:$R", Some("p1")),
+    (RecordClass::Settings, &[], "settings:global", None),
+    (RecordClass::Credential, &["openai"], "credential:openai", None),
+    (RecordClass::Image, &["i1"], "image:i1", None),
+    (RecordClass::Asset, &["p1", "a1"], "asset:p1:a1", Some("p1")),
+    (RecordClass::AssetMetadata, &["p1", "a1"], "asset-metadata:p1:a1", Some("p1")),
+    (RecordClass::AssetPair, &["p1", "a1"], "asset-pair:p1:a1", Some("p1")),
+    (RecordClass::Codex, &["p1"], "codex:p1", Some("p1")),
+    (RecordClass::RagIndex, &["p1", "v2"], "rag-index:p1:v2", Some("p1")),
+    (RecordClass::ActiveProject, &["$S"], "active-project:$S", None),
+    (RecordClass::AuthorityRoot, &["$S"], "authority-root:$S", None),
+    (RecordClass::KeyEpoch, &["$S", "3"], "key-epoch:$S:3", None),
+    (RecordClass::Migration, &["op1"], "migration:op1", None),
+    (RecordClass::MigrationPage, &["op1", "0"], "migration-page:op1:0", None),
+    (RecordClass::Diagnostic, &["$S", "2026-09-30", "c1"], "diagnostic:$S:2026-09-30:c1", None),
+    (RecordClass::RecordCatalog, &["$S", "4294967295"], "record-catalog:$S:4294967295", None),
+    (RecordClass::LocalFirstDoc, &["p1"], "local-first-doc:p1", Some("p1")),
+    (RecordClass::AnalyticsDb, &["$S"], "analytics-db:$S", None),
+    (RecordClass::CrossProjectIndex, &["p1"], "cross-project-index:p1", Some("p1")),
+    (RecordClass::SceneComments, &["$S"], "scene-comments:$S", None),
+    (RecordClass::SceneRevision, &["rev1"], "scene-revision:rev1", None),
+    (RecordClass::PlotUi, &["$S"], "plot-ui:$S", None),
+    (RecordClass::MindMapUi, &["$S"], "mind-map-ui:$S", None),
+    (RecordClass::Progress, &["$S"], "progress:$S", None),
+    (RecordClass::ProforgeMemory, &["p1", "e1"], "proforge-memory:p1:e1", Some("p1")),
+    (RecordClass::ProforgeHistory, &["p1"], "proforge-history:p1", Some("p1")),
+    (RecordClass::InferenceCache, &["$S", "k1"], "inference-cache:$S:k1", None),
+    (RecordClass::Lora, &["ad1"], "lora:ad1", None),
+    (RecordClass::LoraDataset, &["p1", "d1"], "lora-dataset:p1:d1", Some("p1")),
+    (RecordClass::LoraRun, &["p1", "run1"], "lora-run:p1:run1", Some("p1")),
+    (RecordClass::LoraMirror, &["$S"], "lora-mirror:$S", None),
+    (RecordClass::Telemetry, &["$S", "c1"], "telemetry:$S:c1", None),
+    (RecordClass::AiBenchmark, &["$S"], "ai-benchmark:$S", None),
+    (RecordClass::WorkerDlq, &["$S", "t1"], "worker-dlq:$S:t1", None),
+    (RecordClass::IdbKdfSalt, &["$S"], "idb-kdf-salt:$S", None),
+    (RecordClass::IdbPassphraseSentinel, &["$S"], "idb-passphrase-sentinel:$S", None),
+];
+
+/// [`REGISTRY`] with `$S` and `$R` resolved.
 fn registry() -> Vec<(RecordClass, Vec<&'static str>, String, Option<&'static str>)> {
-    use RecordClass as C;
-    let s = SCOPE;
-    vec![
-        (C::Project, vec!["p1"], "project:p1".into(), Some("p1")),
-        (
-            C::ProjectMetadata,
-            vec!["p1"],
-            "project:p1:metadata".into(),
-            Some("p1"),
-        ),
-        (C::Snapshot, vec!["42"], "snapshot:42".into(), None),
-        (C::Backup, vec!["b1"], "backup:b1".into(), None),
-        (
-            C::Recovery,
-            vec!["p1", "r1"],
-            "recovery:p1:r1".into(),
-            Some("p1"),
-        ),
-        (C::Settings, vec!["global"], "settings:global".into(), None),
-        (
-            C::Credential,
-            vec!["openai"],
-            "credential:openai".into(),
-            None,
-        ),
-        (C::Image, vec!["i1"], "image:i1".into(), None),
-        (C::Asset, vec!["p1", "a1"], "asset:p1:a1".into(), Some("p1")),
-        (
-            C::AssetMetadata,
-            vec!["p1", "a1"],
-            "asset-metadata:p1:a1".into(),
-            Some("p1"),
-        ),
-        (
-            C::AssetPair,
-            vec!["p1", "a1"],
-            "asset-pair:p1:a1".into(),
-            Some("p1"),
-        ),
-        (C::Codex, vec!["p1"], "codex:p1".into(), Some("p1")),
-        (
-            C::RagIndex,
-            vec!["p1", "v2"],
-            "rag-index:p1:v2".into(),
-            Some("p1"),
-        ),
-        (
-            C::ActiveProject,
-            vec![s],
-            format!("active-project:{s}"),
-            None,
-        ),
-        (
-            C::AuthorityRoot,
-            vec![s],
-            format!("authority-root:{s}"),
-            None,
-        ),
-        (C::KeyEpoch, vec![s, "3"], format!("key-epoch:{s}:3"), None),
-        (C::Migration, vec!["op1"], "migration:op1".into(), None),
-        (
-            C::MigrationPage,
-            vec!["op1", "0"],
-            "migration-page:op1:0".into(),
-            None,
-        ),
-        (
-            C::Diagnostic,
-            vec![s, "2026-09-30", "c1"],
-            format!("diagnostic:{s}:2026-09-30:c1"),
-            None,
-        ),
-        (
-            C::RecordCatalog,
-            vec![s, "4294967295"],
-            format!("record-catalog:{s}:4294967295"),
-            None,
-        ),
-        (
-            C::LocalFirstDoc,
-            vec!["p1"],
-            "local-first-doc:p1".into(),
-            Some("p1"),
-        ),
-        (C::AnalyticsDb, vec![s], format!("analytics-db:{s}"), None),
-        (
-            C::CrossProjectIndex,
-            vec!["p1"],
-            "cross-project-index:p1".into(),
-            Some("p1"),
-        ),
-        (
-            C::SceneComments,
-            vec![s],
-            format!("scene-comments:{s}"),
-            None,
-        ),
-        (
-            C::SceneRevision,
-            vec!["rev1"],
-            "scene-revision:rev1".into(),
-            None,
-        ),
-        (C::PlotUi, vec![s], format!("plot-ui:{s}"), None),
-        (C::MindMapUi, vec![s], format!("mind-map-ui:{s}"), None),
-        (C::Progress, vec![s], format!("progress:{s}"), None),
-        (
-            C::ProforgeMemory,
-            vec!["p1", "e1"],
-            "proforge-memory:p1:e1".into(),
-            Some("p1"),
-        ),
-        (
-            C::ProforgeHistory,
-            vec!["p1"],
-            "proforge-history:p1".into(),
-            Some("p1"),
-        ),
-        (
-            C::InferenceCache,
-            vec![s, "k1"],
-            format!("inference-cache:{s}:k1"),
-            None,
-        ),
-        (C::Lora, vec!["ad1"], "lora:ad1".into(), None),
-        (
-            C::LoraDataset,
-            vec!["p1", "d1"],
-            "lora-dataset:p1:d1".into(),
-            Some("p1"),
-        ),
-        (
-            C::LoraRun,
-            vec!["p1", "run1"],
-            "lora-run:p1:run1".into(),
-            Some("p1"),
-        ),
-        (C::LoraMirror, vec![s], format!("lora-mirror:{s}"), None),
-        (
-            C::Telemetry,
-            vec![s, "c1"],
-            format!("telemetry:{s}:c1"),
-            None,
-        ),
-        (C::AiBenchmark, vec![s], format!("ai-benchmark:{s}"), None),
-        (
-            C::WorkerDlq,
-            vec![s, "t1"],
-            format!("worker-dlq:{s}:t1"),
-            None,
-        ),
-        (C::IdbKdfSalt, vec![s], format!("idb-kdf-salt:{s}"), None),
-        (
-            C::IdbPassphraseSentinel,
-            vec![s],
-            format!("idb-passphrase-sentinel:{s}"),
-            None,
-        ),
-    ]
+    let resolve = |part: &'static str| match part {
+        "$S" => SCOPE,
+        "$R" => RECOVERY_ID,
+        _ => part,
+    };
+    REGISTRY
+        .iter()
+        .map(|(class, parts, id, project)| {
+            let parts = parts.iter().copied().map(resolve).collect();
+            let id = id.replace("$S", SCOPE).replace("$R", RECOVERY_ID);
+            (*class, parts, id, *project)
+        })
+        .collect()
 }
 
 fn identity(class: RecordClass, components: &[&str]) -> RecordIdentity {
@@ -230,13 +138,15 @@ fn every_version_one_class_has_exactly_its_registered_template_and_scope() {
 #[test]
 fn every_template_refuses_a_missing_or_extra_component() {
     for (class, components, _, _) in registry() {
-        let mut short = components.clone();
-        short.pop();
-        assert_eq!(
-            RecordIdentity::new(class, &short),
-            Err(IdentityError::WrongArity),
-            "{class:?}"
-        );
+        if !components.is_empty() {
+            let mut short = components.clone();
+            short.pop();
+            assert_eq!(
+                RecordIdentity::new(class, &short),
+                Err(IdentityError::WrongArity),
+                "{class:?}"
+            );
+        }
         let mut long = components.clone();
         long.push("extra");
         assert_eq!(
@@ -297,17 +207,89 @@ fn installation_scope_components_must_be_canonical_installation_scope_ids() {
             Err(IdentityError::MalformedInstallationScope)
         );
     }
-    // settings:<scope> is a profile scope, not an InstallationScopeId (§5.2.2 exclusion).
-    assert!(RecordIdentity::new(RecordClass::Settings, &["global"]).is_ok());
+}
+
+#[test]
+fn settings_have_exactly_the_version_one_global_profile_scope() {
+    // settings:<scope> is a profile scope, not an InstallationScopeId (§5.2.2 exclusion), and
+    // version 1 has exactly one: a second settings authority is never addressable.
+    let settings = identity(RecordClass::Settings, &[]);
+    assert_eq!(settings.logical_record_id(), "settings:global");
+    for other in ["global", "other", SCOPE] {
+        assert_eq!(
+            RecordIdentity::new(RecordClass::Settings, &[other]),
+            Err(IdentityError::WrongArity)
+        );
+    }
+}
+
+#[test]
+fn recovery_ids_must_be_core_assigned_not_path_derived() {
+    let upper = RECOVERY_ID.to_uppercase();
+    for bad in [
+        "r1",
+        "My Project-corrupt-1727704800000",
+        upper.as_str(),
+        &RECOVERY_ID[..31],
+    ] {
+        assert_eq!(
+            RecordIdentity::new(RecordClass::Recovery, &["p1", bad]),
+            Err(IdentityError::MalformedRecoveryId),
+            "{bad:?}"
+        );
+    }
+}
+
+#[test]
+fn migration_operation_ids_follow_the_journal_bound() {
+    let max = "o".repeat(128);
+    let over = "o".repeat(129);
+    assert!(RecordIdentity::new(RecordClass::Migration, &[&max]).is_ok());
+    assert!(RecordIdentity::new(RecordClass::MigrationPage, &[&max, "0"]).is_ok());
+    assert_eq!(
+        RecordIdentity::new(RecordClass::Migration, &[&over]),
+        Err(IdentityError::OperationIdTooLong)
+    );
+    assert_eq!(
+        RecordIdentity::new(RecordClass::MigrationPage, &[&over, "0"]),
+        Err(IdentityError::OperationIdTooLong)
+    );
+}
+
+#[test]
+fn snapshot_ids_preserve_the_timestamp_sized_u64_namespace() {
+    // Current desktop snapshot IDs are `Date.now()`-sized millisecond timestamps (§5.4).
+    for good in [
+        "0",
+        "1",
+        "4294967296",
+        "1727704800000",
+        "18446744073709551615",
+    ] {
+        assert!(
+            RecordIdentity::new(RecordClass::Snapshot, &[good]).is_ok(),
+            "{good}"
+        );
+    }
+    for bad in [
+        "00",
+        "01727704800000",
+        "+1",
+        " 1",
+        "18446744073709551616",
+        "1.7e12",
+    ] {
+        assert_eq!(
+            RecordIdentity::new(RecordClass::Snapshot, &[bad]),
+            Err(IdentityError::NonCanonicalDecimal),
+            "{bad:?}"
+        );
+    }
 }
 
 #[test]
 fn decimal_components_accept_only_the_canonical_uint32_spelling() {
     for good in ["0", "1", "42", "4294967295"] {
-        assert!(
-            RecordIdentity::new(RecordClass::Snapshot, &[good]).is_ok(),
-            "{good}"
-        );
         assert!(RecordIdentity::new(RecordClass::MigrationPage, &["op", good]).is_ok());
         assert!(RecordIdentity::new(RecordClass::RecordCatalog, &[SCOPE, good]).is_ok());
     }
@@ -323,11 +305,6 @@ fn decimal_components_accept_only_the_canonical_uint32_spelling() {
         "１",
         "1.0",
     ] {
-        assert_eq!(
-            RecordIdentity::new(RecordClass::Snapshot, &[bad]),
-            Err(IdentityError::NonCanonicalDecimal),
-            "{bad:?}"
-        );
         assert_eq!(
             RecordIdentity::new(RecordClass::MigrationPage, &["op", bad]),
             Err(IdentityError::NonCanonicalDecimal),
@@ -365,31 +342,56 @@ fn key_epoch_components_must_be_canonical_and_assigned() {
 
 #[test]
 fn commit_markers_embed_the_class_qualified_identity_and_inherit_its_scope() {
-    let project = identity(RecordClass::Asset, &["p1", "a1"]);
+    let project = identity(RecordClass::ProforgeMemory, &["p1", "e1"]);
     let marker = RecordIdentity::commit_marker(&project).unwrap();
     assert_eq!(marker.class(), RecordClass::RecordCommit);
     assert_eq!(
         marker.logical_record_id(),
-        "record-commit:asset:asset:p1:a1"
+        "record-commit:proforge-memory:proforge-memory:p1:e1"
     );
     assert_eq!(marker.project_id(), Some("p1"));
 
-    let control = identity(RecordClass::KeyEpoch, &[SCOPE, "2"]);
-    let marker = RecordIdentity::commit_marker(&control).unwrap();
+    let installation = identity(RecordClass::Progress, &[SCOPE]);
+    let marker = RecordIdentity::commit_marker(&installation).unwrap();
     assert_eq!(
         marker.logical_record_id(),
-        format!("record-commit:key-epoch:key-epoch:{SCOPE}:2")
+        format!("record-commit:progress:progress:{SCOPE}")
     );
     assert_eq!(marker.project_id(), None);
 
     assert_eq!(
-        RecordIdentity::commit_marker(&marker),
+        RecordIdentity::new(RecordClass::RecordCommit, &["progress", "progress"]),
         Err(IdentityError::NotBuildableDirectly)
     );
-    assert_eq!(
-        RecordIdentity::new(RecordClass::RecordCommit, &["asset", "asset:p1:a1"]),
-        Err(IdentityError::NotBuildableDirectly)
-    );
+}
+
+#[test]
+fn markers_asset_pair_members_and_control_records_have_no_ordinary_marker() {
+    let refused = [
+        RecordIdentity::commit_marker(&identity(RecordClass::Codex, &["p1"])).unwrap(),
+        identity(RecordClass::AssetPair, &["p1", "a1"]),
+        identity(RecordClass::Asset, &["p1", "a1"]),
+        identity(RecordClass::AssetMetadata, &["p1", "a1"]),
+        identity(RecordClass::AuthorityRoot, &[SCOPE]),
+        identity(RecordClass::KeyEpoch, &[SCOPE, "2"]),
+        identity(RecordClass::RecordCatalog, &[SCOPE, "0"]),
+        identity(RecordClass::Migration, &["op1"]),
+        identity(RecordClass::MigrationPage, &["op1", "0"]),
+    ];
+    for record in &refused {
+        assert_eq!(
+            RecordIdentity::commit_marker(record),
+            Err(IdentityError::NoOrdinaryMarker),
+            "{record:?}"
+        );
+    }
+    // Every other registered class has exactly one marker.
+    let ordinary = registry()
+        .into_iter()
+        .map(|(class, components, _, _)| identity(class, &components))
+        .filter(|record| RecordIdentity::commit_marker(record).is_ok())
+        .count();
+    assert_eq!(ordinary, 40 - 8);
 }
 
 #[test]
@@ -418,7 +420,7 @@ fn ciphertext_sealed_under_one_identity_never_opens_under_another() {
         .collect();
     let markers: Vec<RecordIdentity> = identities
         .iter()
-        .map(|record| RecordIdentity::commit_marker(record).unwrap())
+        .filter_map(|record| RecordIdentity::commit_marker(record).ok())
         .collect();
     identities.extend(markers);
     for sealed_under in &identities {

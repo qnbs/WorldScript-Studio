@@ -793,11 +793,13 @@ discriminator field to
 this tuple and bump `inventory_version`, never rely on source-generation ordering to disambiguate
 silently.
 
-**Canonical decimal identity components (version 1).** Three record classes use a `uint32` index in
-two representations — canonical decimal text for the logical identity, raw `u32be` only inside a
-digest's own membership-key bytes, never a reformatting of a filename or free text. Two are
-Core-assigned; `snapshot`'s numeric ID is legacy-originated (its current global namespace, §3) but
-migration re-derives it to this same canonical spelling before use — the same round-trip rule
+**Canonical decimal identity components (version 1).** Three record classes use a numeric index in
+two representations — canonical decimal text for the logical identity, raw big-endian bytes only
+inside a digest's own membership-key bytes, never a reformatting of a filename or free text. The two
+Core-assigned indexes are `uint32`. `snapshot`'s numeric ID is legacy-originated (its current global
+namespace, §3) and is a `u64`: the current desktop store assigns `max(Date.now(), last + 1)`
+millisecond timestamps, which exceed `uint32`, and that namespace is preserved, never remapped.
+Migration re-derives it to this same canonical spelling before use — the same round-trip rule
 applies uniformly regardless of assignment origin:
 
 ```text
@@ -807,16 +809,16 @@ record-catalog   <shard-decimal> in record-catalog:<InstallationScopeId>:     ca
 migration-page   <page-index> in migration-page:<operation-id>:<page-index>  journal_page_set_digest
                                                                               (§10.1.1): u32be(page_index)
 snapshot         <snapshot-decimal> in snapshot:<snapshot-decimal>           inventory_digest (§5.4):
-                                                                              u32be(snapshot-id), when
+                                                                              u64be(snapshot-id), when
                                                                               inventoried
 ```
 
-`<shard-decimal>`/`<page-index>`: ASCII base-10, no leading zero except the literal `"0"`, no `+`/`-`,
+`<shard-decimal>`/`<page-index>`/`<snapshot-decimal>`: ASCII base-10, no leading zero except the literal `"0"`, no `+`/`-`,
 no whitespace, no hexadecimal, no locale digits/grouping. Valid: `"0"`, `"1"`, `"42"`,
 `"4294967295"`. Invalid: `"00"`, `"01"`, `"+1"`, `"0x01"`, `" 1"`. Round-trip invariant: parsing to
-`uint32` and re-encoding as canonical decimal MUST reproduce the exact original text; no
-non-canonical spelling is an alternate for the same index. The `u32be` form exists only inside its
-own digest's byte input, sorted numerically ascending — never a locale, string, or
+the index's type (`uint32`, or `u64` for `snapshot`) and re-encoding as canonical decimal MUST
+reproduce the exact original text; no non-canonical spelling is an alternate for the same index. The
+`u32be`/`u64be` form exists only inside its own digest's byte input, sorted numerically ascending — never a locale, string, or
 filesystem-enumeration order — and never injected into a string identity elsewhere.
 
 **Root-slot codes (version 1).** `pointer_digest`'s "canonical slot name" (§5.4 table) is exactly:
@@ -3449,10 +3451,14 @@ Later implementation may be admitted only in these bounded gates:
    - **Slice 1 (typed identity registry)** — `RecordIdentity` in `crates/worldscript-secure-storage`:
      every version-1 class except `record-commit` is built only from its own §5.2 template
      components; `record-commit:<record-class>:<logical-record-id>` is built only from another
-     identity and inherits its scope. The AAD `project_id` is set exactly by the §5.2.1 project
-     component and is absent for every other class. `InstallationScopeId` components must be
-     canonical (§5.2.2, `settings:<scope>` excluded); snapshot, migration-page and record-catalog
-     indexes must be §5.4 canonical `uint32` decimals; key epochs must be canonical and assigned.
+     identity, inherits its scope, and exists only for ordinary records — never for a marker
+     (`record-commit`, `asset-pair`), an `asset-pair` member, or a control record (`authority-root`,
+     `key-epoch`, `record-catalog`, `migration`, `migration-page`; §5.3, §10.1). The AAD `project_id`
+     is set exactly by the §5.2.1 project component and is absent for every other class.
+     `InstallationScopeId` components and Core-assigned recovery IDs (§3) must be canonical; version
+     1 settings are exactly `settings:global` (§5.2.2); migration `operation_id`s keep the §6.1.2
+     bound; migration-page and record-catalog indexes must be §5.4 canonical `uint32` decimals and
+     snapshot IDs canonical `u64` decimals; key epochs must be canonical and assigned.
      Empty components, the `:` separator and control characters are refused, never normalized.
      Substitution tests prove that no identity opens another identity's ciphertext. Record-class
      adapters that route real records through these identities remain later Gate 2 slices.

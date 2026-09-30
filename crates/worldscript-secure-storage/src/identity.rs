@@ -7,6 +7,7 @@
 //! is refused, never normalized, and no owner is ever guessed.
 
 use crate::aad::RecordContext;
+use crate::anchor::MAX_OPERATION_ID_LEN;
 use crate::provider::InstallationScopeId;
 use crate::record_class::RecordClass;
 
@@ -27,8 +28,17 @@ pub enum IdentityError {
     UnassignedEpoch,
     /// An installation-scope component is not a canonical `InstallationScopeId` (§5.2.2).
     MalformedInstallationScope,
-    /// `record-commit` identities are built only from another identity, never nested.
+    /// A recovery ID is not the canonical Core-assigned form (§3: the `InstallationScopeId`
+    /// construction), e.g. one derived from a quarantine directory name.
+    MalformedRecoveryId,
+    /// A migration `operation_id` exceeds the §6.1.2 bound the journal parsers enforce.
+    OperationIdTooLong,
+    /// `record-commit` identities are built only from another identity, never directly.
     NotBuildableDirectly,
+    /// The record is not governed by an ordinary `record-commit` marker: it is a marker itself
+    /// (`record-commit`, `asset-pair`), a member committed by its `asset-pair` marker (§8.4), or a
+    /// control record anchored by the authority root (§5.3, §10.1).
+    NoOrdinaryMarker,
 }
 
 /// One component of a class's identity template.
@@ -42,13 +52,20 @@ enum Part {
     Scope,
     /// A canonical `uint32` decimal (§5.4).
     Decimal32,
+    /// A canonical `u64` decimal: the preserved snapshot namespace, whose current IDs are
+    /// millisecond timestamps (§5.4).
+    Decimal64,
+    /// A Core-assigned recovery ID (§3).
+    RecoveryId,
+    /// A migration `operation_id` (§6.1.2).
+    OperationId,
     /// A canonical, assigned `u64` key epoch.
     Epoch,
     /// Any other registered ID component.
     Opaque,
 }
 
-use Part::{Decimal32, Epoch, Literal, Opaque, Project, Scope};
+use Part::{Decimal32, Decimal64, Epoch, Literal, Opaque, OperationId, Project, RecoveryId, Scope};
 
 /// The §5.2 template of `class`: its leading segment and the components after it. `record-commit`
 /// has none, because its identity embeds another record's identity ([`RecordIdentity::commit_marker`]).
@@ -56,10 +73,11 @@ fn template(class: RecordClass) -> Option<(&'static str, &'static [Part])> {
     Some(match class {
         RecordClass::Project => ("project", &[Project]),
         RecordClass::ProjectMetadata => ("project", &[Project, Literal("metadata")]),
-        RecordClass::Snapshot => ("snapshot", &[Decimal32]),
+        RecordClass::Snapshot => ("snapshot", &[Decimal64]),
         RecordClass::Backup => ("backup", &[Opaque]),
-        RecordClass::Recovery => ("recovery", &[Project, Opaque]),
-        RecordClass::Settings => ("settings", &[Opaque]),
+        RecordClass::Recovery => ("recovery", &[Project, RecoveryId]),
+        // Version 1 has exactly one settings profile scope (§5.2.2).
+        RecordClass::Settings => ("settings", &[Literal("global")]),
         RecordClass::Credential => ("credential", &[Opaque]),
         RecordClass::Image => ("image", &[Opaque]),
         RecordClass::Asset => ("asset", &[Project, Opaque]),
@@ -71,8 +89,8 @@ fn template(class: RecordClass) -> Option<(&'static str, &'static [Part])> {
         RecordClass::AuthorityRoot => ("authority-root", &[Scope]),
         RecordClass::KeyEpoch => ("key-epoch", &[Scope, Epoch]),
         RecordClass::RecordCommit => return None,
-        RecordClass::Migration => ("migration", &[Opaque]),
-        RecordClass::MigrationPage => ("migration-page", &[Opaque, Decimal32]),
+        RecordClass::Migration => ("migration", &[OperationId]),
+        RecordClass::MigrationPage => ("migration-page", &[OperationId, Decimal32]),
         RecordClass::Diagnostic => ("diagnostic", &[Scope, Opaque, Opaque]),
         RecordClass::RecordCatalog => ("record-catalog", &[Scope, Decimal32]),
         RecordClass::LocalFirstDoc => ("local-first-doc", &[Project]),
@@ -152,10 +170,11 @@ impl RecordIdentity {
     }
 
     /// The `record-commit:<record-class>:<logical-record-id>` marker for `record`, in the same
-    /// scope as the record it tracks (§5.2.1). Markers are never nested.
+    /// scope as the record it tracks (§5.2.1). Only ordinary records have one: markers, asset-pair
+    /// members and control records are refused, so the authority root stays a finite base case.
     pub fn commit_marker(record: &RecordIdentity) -> Result<Self, IdentityError> {
-        if record.class == RecordClass::RecordCommit {
-            return Err(IdentityError::NotBuildableDirectly);
+        if !has_ordinary_marker(record.class) {
+            return Err(IdentityError::NoOrdinaryMarker);
         }
         Ok(RecordIdentity {
             class: RecordClass::RecordCommit,
@@ -190,6 +209,22 @@ impl RecordIdentity {
     }
 }
 
+/// Whether `class` is committed through its own `record-commit` marker.
+fn has_ordinary_marker(class: RecordClass) -> bool {
+    !matches!(
+        class,
+        RecordClass::RecordCommit
+            | RecordClass::AssetPair
+            | RecordClass::Asset
+            | RecordClass::AssetMetadata
+            | RecordClass::AuthorityRoot
+            | RecordClass::KeyEpoch
+            | RecordClass::RecordCatalog
+            | RecordClass::Migration
+            | RecordClass::MigrationPage
+    )
+}
+
 fn check_component(part: Part, value: &str) -> Result<(), IdentityError> {
     if value.is_empty() {
         return Err(IdentityError::EmptyComponent);
@@ -204,6 +239,13 @@ fn check_component(part: Part, value: &str) -> Result<(), IdentityError> {
         Scope => InstallationScopeId::parse(value)
             .map(|_| ())
             .map_err(|_| IdentityError::MalformedInstallationScope),
+        RecoveryId => InstallationScopeId::parse(value)
+            .map(|_| ())
+            .map_err(|_| IdentityError::MalformedRecoveryId),
+        OperationId if value.len() > MAX_OPERATION_ID_LEN => Err(IdentityError::OperationIdTooLong),
+        Decimal64 => canonical_decimal(value)
+            .map(|_| ())
+            .ok_or(IdentityError::NonCanonicalDecimal),
         Decimal32 => canonical_decimal(value)
             .filter(|number| *number <= u64::from(u32::MAX))
             .map(|_| ())
@@ -213,7 +255,7 @@ fn check_component(part: Part, value: &str) -> Result<(), IdentityError> {
             Some(_) => Ok(()),
             None => Err(IdentityError::NonCanonicalDecimal),
         },
-        Literal(_) | Project | Opaque => Ok(()),
+        Literal(_) | Project | Opaque | OperationId => Ok(()),
     }
 }
 
