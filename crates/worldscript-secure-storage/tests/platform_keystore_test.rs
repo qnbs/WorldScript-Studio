@@ -4,39 +4,109 @@
 //! name and removes every item it created.
 #![cfg(feature = "platform-keystore")]
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use worldscript_secure_storage::secure_store::{PlatformSecretStore, SecretStore};
-use worldscript_secure_storage::store_layout::{key_account, ANCHOR_ACCOUNT, EPOCH_INDEX_ACCOUNT};
+
+use worldscript_secure_storage::store_layout::{
+    key_account, route_from_bits, ANCHOR_ACCOUNT, EPOCH_INDEX_ACCOUNT,
+};
 use worldscript_secure_storage::{
     open, parse_envelope, seal, InstallationScopeId, KeyProvider, KeyProviderError, KeyState,
-    OsRandom, PrepareRootAnchor, RandomSource, RecordClass, RecordContext, RecordMeta,
-    RootKeyRefV1, RootSlot, SealTarget, SecureStoreAuthority, SecureStoreRuntime,
+    OsRandom, PrepareRootAnchor, RandomSource, RandomnessUnavailable, RecordClass, RecordContext,
+    RecordMeta, RootKeyRefV1, RootSlot, SealTarget, SecureStoreAuthority, SecureStoreRuntime,
 };
 
-type PlatformProvider = SecureStoreRuntime<PlatformSecretStore>;
+type PlatformProvider = SecureStoreRuntime<PlatformSecretStore, RecordingRandom>;
 
-fn evidence_service() -> String {
-    let mut bits = [0u8; 8];
-    OsRandom.fill(&mut bits).unwrap();
-    let suffix: String = bits.iter().map(|b| format!("{b:02x}")).collect();
-    format!("worldscript-r15-evidence-{suffix}")
+/// The OS CSPRNG, recording every 16-byte draw: a route is drawn as 16 random bytes, so the draws
+/// name every key item a provisioning call may have written, even one whose index write failed.
+#[derive(Clone, Default)]
+struct RecordingRandom(Rc<RefCell<Vec<[u8; 16]>>>);
+
+impl RandomSource for RecordingRandom {
+    fn fill(&mut self, bytes: &mut [u8]) -> Result<(), RandomnessUnavailable> {
+        OsRandom.fill(bytes)?;
+        if let Ok(route_bits) = <[u8; 16]>::try_from(&*bytes) {
+            self.0.borrow_mut().push(route_bits);
+        }
+        Ok(())
+    }
 }
 
-fn store(service: &str) -> PlatformSecretStore {
-    PlatformSecretStore::with_service(service).unwrap()
+/// One evidence run: a random, never-production service and the record of every route drawn in it.
+struct Evidence {
+    service: String,
+    draws: RecordingRandom,
 }
 
-fn provider(service: &str) -> PlatformProvider {
-    SecureStoreRuntime::new(SecureStoreAuthority::new(store(service)))
-}
+impl Evidence {
+    fn new() -> Self {
+        let mut bits = [0u8; 8];
+        OsRandom.fill(&mut bits).unwrap();
+        let suffix: String = bits.iter().map(|b| format!("{b:02x}")).collect();
+        Evidence {
+            service: format!("worldscript-r15-evidence-{suffix}"),
+            draws: RecordingRandom::default(),
+        }
+    }
 
-fn remove_all(service: &str, key_accounts: &[String]) {
-    let store = store(service);
-    for account in [ANCHOR_ACCOUNT, EPOCH_INDEX_ACCOUNT]
-        .iter()
-        .map(|account| account.to_string())
-        .chain(key_accounts.iter().cloned())
-    {
-        store.delete(&account).unwrap();
+    fn store(&self) -> PlatformSecretStore {
+        PlatformSecretStore::with_service(&self.service).unwrap()
+    }
+
+    fn provider(&self) -> PlatformProvider {
+        SecureStoreRuntime::new(SecureStoreAuthority::with_random(
+            self.store(),
+            self.draws.clone(),
+        ))
+    }
+
+    /// Every item this run may have created: the anchor, the index, and a key item per drawn route.
+    fn candidate_accounts(&self) -> Vec<String> {
+        let mut accounts = vec![ANCHOR_ACCOUNT.to_owned(), EPOCH_INDEX_ACCOUNT.to_owned()];
+        for bits in self.draws.0.borrow().iter() {
+            if let Ok(route) = route_from_bits(*bits) {
+                accounts.push(key_account(&route));
+            }
+        }
+        accounts
+    }
+
+    /// Attempts every deletion even if one fails, then verifies nothing is left.
+    fn clean_up(&self) -> Result<(), String> {
+        let store = self.store();
+        let accounts = self.candidate_accounts();
+        let failures: Vec<String> = accounts
+            .iter()
+            .filter_map(|account| {
+                store
+                    .delete(account)
+                    .err()
+                    .map(|error| format!("{account}: {error:?}"))
+            })
+            .collect();
+        let left: Vec<&String> = accounts
+            .iter()
+            .filter(|account| !matches!(store.get(account), Ok(None)))
+            .collect();
+        if failures.is_empty() && left.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "cleanup failed: {failures:?}; left behind: {left:?}"
+            ))
+        }
+    }
+
+    /// Runs `body` so that cleanup always follows, before any mutating store call.
+    fn run(&self, body: impl FnOnce(&Evidence)) {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| body(self)));
+        let cleaned = self.clean_up();
+        if let Err(panic) = outcome {
+            std::panic::resume_unwind(panic);
+        }
+        cleaned.unwrap();
     }
 }
 
@@ -80,8 +150,8 @@ fn bootstrap_and_seal(provider: &mut PlatformProvider, route: &RootKeyRefV1) -> 
 }
 
 /// A fresh provider on the same service must read everything back from the OS store.
-fn verify_after_restart(service: &str, scope: &InstallationScopeId, envelope: &[u8]) {
-    let mut restarted = provider(service);
+fn verify_after_restart(evidence: &Evidence, scope: &InstallationScopeId, envelope: &[u8]) {
+    let mut restarted = evidence.provider();
     assert_eq!(restarted.state(), Ok(KeyState::Locked));
     assert_eq!(
         &restarted.read_or_provision_installation_scope().unwrap(),
@@ -102,23 +172,12 @@ fn verify_after_restart(service: &str, scope: &InstallationScopeId, envelope: &[
 }
 
 /// The sealed boundary refuses an oversized item before the OS store is touched.
-fn verify_item_bound(service: &str) {
-    let store = store(service);
+fn verify_item_bound(store: &PlatformSecretStore) {
     assert!(matches!(
-        store.set("r15-oversized", &[0u8; 2561]),
+        store.set(ANCHOR_ACCOUNT, &[0u8; 2561]),
         Err(KeyProviderError::AnchorConflict(_))
     ));
-    assert!(store.get("r15-oversized").unwrap().is_none());
-}
-
-fn assert_cleaned(service: &str, key_account: &str) {
-    let store = store(service);
-    for account in [ANCHOR_ACCOUNT, EPOCH_INDEX_ACCOUNT, key_account] {
-        assert!(
-            store.get(account).unwrap().is_none(),
-            "cleanup left {account} behind"
-        );
-    }
+    assert!(store.get(ANCHOR_ACCOUNT).unwrap().is_some());
 }
 
 #[test]
@@ -130,22 +189,15 @@ fn the_production_service_is_never_an_evidence_service() {
 #[test]
 #[ignore = "touches the real OS secure store; run by the platform evidence job with --ignored"]
 fn full_lifecycle_against_the_real_os_secure_store() {
-    let service = evidence_service();
-    let mut first = provider(&service);
-    assert_eq!(first.state(), Ok(KeyState::Unconfigured));
-    let scope = first.read_or_provision_installation_scope().unwrap();
-    let route = first.provision_epoch_key(1).unwrap();
-    let account = key_account(&route);
-    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    Evidence::new().run(|evidence| {
+        let mut first = evidence.provider();
+        assert_eq!(first.state(), Ok(KeyState::Unconfigured));
+        let scope = first.read_or_provision_installation_scope().unwrap();
+        let route = first.provision_epoch_key(1).unwrap();
         let envelope = bootstrap_and_seal(&mut first, &route);
-        verify_after_restart(&service, &scope, &envelope);
-        verify_item_bound(&service);
-    }));
-    remove_all(&service, std::slice::from_ref(&account));
-    assert_cleaned(&service, &account);
-    if let Err(panic) = outcome {
-        std::panic::resume_unwind(panic);
-    }
+        verify_after_restart(evidence, &scope, &envelope);
+        verify_item_bound(&evidence.store());
+    });
 }
 
 /// Run only where the job has deliberately provided NO secure store (a session bus without a
@@ -157,7 +209,7 @@ fn a_missing_secure_store_is_secure_anchor_unavailable() {
         eprintln!("skipped: WSS_EXPECT_NO_SECURE_STORE=1 not set");
         return;
     }
-    let mut provider = provider(&evidence_service());
+    let mut provider = Evidence::new().provider();
     let unavailable = KeyProviderError::SecureAnchorUnavailable;
     assert_eq!(provider.state().map(|_| ()), Err(unavailable));
     assert_eq!(
