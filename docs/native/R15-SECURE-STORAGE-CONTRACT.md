@@ -1781,8 +1781,10 @@ over the validated durable authority and only reads the secure store:
   `unlock` stays `LOCKED` until the next `unlock`. Every resolution first requires the committed
   root key to be present, loaded and unchanged, so no other epoch key stays resolvable after the
   root is lost or replaced; `resolve` cannot clear handles, `lock` does. An unlock is bound to the
-  committed root it saw: an anchor that later has no committed root is a rollback and is
-  `RECOVERY_REQUIRED`, never a return to the bootstrap exception. A non-root key that vanishes
+  exact committed root it saw: an anchor that later has no committed root is a rollback and is
+  `RECOVERY_REQUIRED`, never a return to the bootstrap exception; any other change of the committed
+  root (another route, or a first commit after an unconfigured unlock) is `LOCKED` until a new
+  `unlock` validates it. A non-root key that vanishes
   while `unlock` reads the keys is skipped and reported through the route-set check as retryable,
   not as key loss.
 - `lock()` drops every handle; the material is zeroized.

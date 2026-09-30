@@ -344,3 +344,30 @@ fn an_anchor_that_loses_its_committed_root_after_unlock_is_recovery() {
     assert_refused(&runtime, 2, &routes[1], KeyProviderError::RecoveryRequired);
     assert_eq!(runtime.state(), Ok(KeyState::RecoveryRequired));
 }
+
+#[test]
+fn a_committed_root_that_changes_after_unlock_needs_a_new_unlock() {
+    let (store, routes, mut runtime) = unlocked(&[1, 2], true);
+
+    // Epoch 2 is indexed, loaded and unchanged, but the unlock was bound to epoch 1's root.
+    commit_root(&store, &routes[1]);
+    assert_refused(&runtime, 1, &routes[0], KeyProviderError::Locked);
+    assert_eq!(runtime.state(), Ok(KeyState::Locked));
+
+    assert_eq!(runtime.unlock(), Ok(KeyState::Unlocked { epoch: 2 }));
+    assert!(is_durable_key(
+        &runtime.resolve(1).unwrap(),
+        &store,
+        &routes[0]
+    ));
+}
+
+#[test]
+fn a_first_commit_after_an_unconfigured_unlock_needs_a_new_unlock() {
+    let (store, routes, mut runtime) = unlocked(&[1], false);
+
+    commit_root(&store, &routes[0]);
+    assert_refused(&runtime, 1, &routes[0], KeyProviderError::Locked);
+
+    assert_eq!(runtime.unlock(), Ok(KeyState::Unlocked { epoch: 1 }));
+}
