@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 1b-platform, slice D — OS secure-store adapter (#445):** behind the opt-in
+  `platform-keystore` feature, the protected-storage core can now keep its anchor, key index and
+  keys in the real operating-system store: the macOS Keychain, the Windows Credential Manager, and
+  on Linux the Secret Service only (never the non-persistent kernel keyring, and never a silent
+  in-memory fallback). A missing, locked or unreachable store refuses protected mode instead of
+  using a weaker store. A new CI job runs the full key lifecycle against the real store on Linux,
+  macOS and Windows, proves the refusal on Linux without a Secret Service, and builds at the minimum
+  Rust version; its Linux helper keeps the throwaway keyring in a private temporary home. Nothing in
+  the app uses this yet, and the production authority switch stays off. PR #916.
 - **R-15 Gate 1b-platform, slice C2 — durable anchor transitions and the full key provider
   (#445):** the secure-store authority now applies the two-phase root-anchor transitions
   (prepare, commit, abort) as one validated read, the exact pure transition, one replacement and an
