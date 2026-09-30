@@ -282,12 +282,17 @@ describe('CI workflow policy', () => {
       'changes',
       'rust-tauri',
       'core-rust',
+      'secure-store-platform',
       'build',
       'e2e',
       'browser-quality',
     ]);
     expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.signatures\.result\s*\}\}/);
     expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.browser-quality\.result\s*\}\}/);
+    // R-15 platform evidence gates like core-rust: success required, skipped only when crates/ is untouched.
+    expect(ciSuccessBlock).toMatch(
+      /needs\.secure-store-platform\.result \}\}" != "success" \] && \[ "\$\{\{ needs\.secure-store-platform\.result \}\}" != "skipped" \]/,
+    );
 
     for (const jobName of ['e2e-deep', 'storybook']) {
       const jobBlock = extractJobBlock(workflowSource, jobName);

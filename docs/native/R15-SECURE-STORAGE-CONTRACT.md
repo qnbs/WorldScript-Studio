@@ -1827,6 +1827,31 @@ Serializing the read-modify-write across processes is Gate 4 (§11); this slice 
 concurrent change only through the exact read-back. The filesystem side of the root transition
 (steps D, E1, E2) is not part of this slice.
 
+### 8.2.5 Platform secure-store adapter (Gate 1b-platform, slice D)
+
+`PlatformSecretStore` implements the sealed secret-store boundary (§8.2.2) over the real OS store,
+behind the opt-in `platform-keystore` feature (the default Core build links no platform library):
+
+- **macOS:** the Keychain; **Windows:** the Credential Manager; **Linux:** the Secret Service
+  only. Each credential is constructed explicitly for its OS. `keyring`'s default credential
+  builder is never used, because it can silently fall back to an in-memory mock or, on Linux, to
+  the kernel keyring (`keyutils`), which does not survive a reboot. Any other target is a compile
+  error.
+- All items live under the service `worldscript-r15`. Evidence runs use a random per-run service
+  name, can never select the production name, and remove every item they created.
+- A store that is missing, locked, unreachable, or refusing access is `SECURE_ANCHOR_UNAVAILABLE`:
+  protected native mode is not admitted, and there is no plaintext, file, or `keyutils` fallback. A
+  missing item is absent; any other failure is `UNAVAILABLE`. The 2,560-byte item bound is enforced
+  by the sealed boundary before the OS store is touched.
+- Evidence maturity: Linux `CI_ONLY` and `LOCAL_ONLY` (isolated D-Bus session with a throwaway
+  keyring that never touches a real login keyring), macOS and Windows `CI_ONLY`. There is no
+  packaged evidence, because no application wiring exists yet.
+
+The dependency is `keyring` 3.6.x, the newest line within this crate's Rust 1.77.2 minimum, with the
+Linux `sync-secret-service` + `crypto-rust`, macOS `apple-native`, and Windows `windows-native`
+backends only. Gate 1b-platform is terminal when this slice lands; Gate 4 cross-process
+serialization and Gates 2–7 remain separate.
+
 ### 8.3 Epoch rules
 
 1. Epoch `N` is immutable once a record is committed under it.

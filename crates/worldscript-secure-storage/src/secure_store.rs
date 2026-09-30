@@ -73,6 +73,11 @@ pub trait SecretStore: backend::Backend {
 
 impl<T: backend::Backend> SecretStore for T {}
 
+#[cfg(feature = "platform-keystore")]
+mod platform;
+#[cfg(feature = "platform-keystore")]
+pub use platform::{PlatformSecretStore, PRODUCTION_SERVICE};
+
 #[cfg(feature = "test-support")]
 pub use memory::MemorySecretStore;
 
