@@ -26,7 +26,7 @@ pub struct SecureStoreRuntime<S, R = OsRandom> {
     authority: SecureStoreAuthority<S, R>,
     runtime: Vec<RuntimeKey>,
     unlocked: bool,
-    /// The committed root this unlock was bound to; it never disappears while unlocked.
+    /// The committed root this unlock was bound to; resolution requires it to stay exactly this.
     unlocked_root: Option<RootKeyRefV1>,
 }
 
@@ -178,16 +178,19 @@ where
         Ok(Some(root.root_key_ref))
     }
 
-    /// [`Self::committed_root`], plus the binding of the current unlock: once an unlock saw a
-    /// committed root, an anchor without one is a rollback (the floor never moves back, §5.3.1) and
-    /// is `RecoveryRequired` rather than a return to the bootstrap exception.
+    /// [`Self::committed_root`], held to the exact binding of the current unlock. An anchor that no
+    /// longer has the committed root the unlock saw is a rollback (the floor never moves back,
+    /// §5.3.1) and is `RecoveryRequired`; any other change of the committed root, including a first
+    /// commit after an unconfigured unlock, is `Locked` until a new unlock validates the new binding.
     fn bound_root(&self) -> Result<Option<RootKeyRefV1>, KeyProviderError> {
-        // `unlocked_root` is only set by a successful unlock and cleared by `lock`.
         let current = self.committed_root()?;
-        if matches!((&self.unlocked_root, &current), (Some(_), None)) {
-            return Err(KeyProviderError::RecoveryRequired);
+        if !self.unlocked || current == self.unlocked_root {
+            return Ok(current);
         }
-        Ok(current)
+        match (&self.unlocked_root, &current) {
+            (Some(_), None) => Err(KeyProviderError::RecoveryRequired),
+            _ => Err(KeyProviderError::Locked),
+        }
     }
 
     /// Every resolution is refused while the committed root is lost, replaced, or not loaded, so no

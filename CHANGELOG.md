@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   issues (never a search), and check the stored item on every call, so a replaced key is
   `RecoveryRequired` and a deleted one `KeyLost`, even if it was already missing at `unlock`. Every
   resolution is refused once the committed root key is lost or replaced, while a lost key of a
-  merely prepared root transition is not reported as root loss; an anchor that loses its committed
-  root after `unlock` is treated as a rollback (`RecoveryRequired`). `lock` drops and zeroizes every
+  merely prepared root transition is not reported as root loss; an unlock is bound to the exact
+  committed root it saw, so an anchor that loses that root is a rollback (`RecoveryRequired`) and
+  one that names another root needs a new `unlock` (`Locked`). `lock` drops and zeroizes every
   handle. It only reads the secure store: no anchor transitions, platform adapter, app wiring, or
   production authority switch. PR #914.
 - **Post-release v1.29.1 truth sync:** removed the release-candidate markers from README.md and
