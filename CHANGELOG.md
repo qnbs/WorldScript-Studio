@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Security: axios and DOMPurify override floors raised (#918):** fresh OSV findings on the
+  locked versions are fixed. The development-only axios (pulled in by `wait-on`) now resolves to
+  1.20.0 for 12 advisories on 1.19.0, and the shipped HTML sanitizer DOMPurify moves to 3.4.16
+  for GHSA-p98j-92pf-mc4p. Both fixed releases are older than the 7-day release-age window, so no
+  exception was added, and no other dependency changes. PR #919.
 - **R-15 Gate 1b-platform, slice D — OS secure-store adapter (#445):** behind the opt-in
   `platform-keystore` feature, the protected-storage core can now keep its anchor, key index and
   keys in the real operating-system store: the macOS Keychain, the Windows Credential Manager, and
