@@ -152,6 +152,13 @@ where
         Ok(key_ref)
     }
 
+    /// The structurally validated anchor for the Slice C1 runtime layer: the scope, index and
+    /// root-route relationships are checked, but key presence is left to the caller, so the loss of
+    /// a prepared (recovery-only, §5.3.1) target key is not mistaken for loss of the committed root.
+    pub(crate) fn validated_anchor(&self) -> Result<AnchorState, KeyProviderError> {
+        Ok(self.read_authority()?.0)
+    }
+
     /// The durable bytes of one route for the Slice C1 runtime layer: `KeyLost` when the item is
     /// missing, `RecoveryRequired` when it is not exactly one key.
     pub(crate) fn key_material(

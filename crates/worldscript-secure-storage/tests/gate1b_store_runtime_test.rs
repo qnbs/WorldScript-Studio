@@ -1,13 +1,13 @@
 //! Gate 1b-platform Slice C1: runtime key handles over the validated durable authority.
 
-use worldscript_secure_storage::anchor_codec;
 use worldscript_secure_storage::secure_store::{MemorySecretStore, SecretStore};
 use worldscript_secure_storage::store_layout::{
     encode_index, key_account, IndexEntry, ANCHOR_ACCOUNT, EPOCH_INDEX_ACCOUNT,
 };
+use worldscript_secure_storage::{anchor, anchor_codec};
 use worldscript_secure_storage::{
-    open, parse_envelope, seal, CommittedRoot, Key, KeyProviderError, KeyState, RandomSource,
-    RecordClass, RecordContext, RecordMeta, RootKeyRefV1, RootSlot, SealTarget,
+    open, parse_envelope, seal, CommittedRoot, Key, KeyProviderError, KeyState, PrepareRootAnchor,
+    RandomSource, RecordClass, RecordContext, RecordMeta, RootKeyRefV1, RootSlot, SealTarget,
     SecureStoreAuthority, SecureStoreRuntime,
 };
 
@@ -303,4 +303,53 @@ fn a_key_already_missing_at_unlock_is_key_lost_not_locked() {
         &store,
         &routes[0]
     ));
+}
+
+#[test]
+fn losing_the_committed_root_after_unlock_refuses_every_other_key() {
+    let (store, routes) = provisioned(&[1, 2]);
+    commit_root(&store, &routes[0]);
+    let mut runtime = runtime(store.clone());
+    runtime.unlock().unwrap();
+
+    store.delete(&key_account(&routes[0])).unwrap();
+    assert_eq!(runtime.resolve(2).err(), Some(KeyProviderError::KeyLost));
+    assert_eq!(
+        runtime.resolve_ref(&routes[1]).err(),
+        Some(KeyProviderError::KeyLost)
+    );
+    assert_eq!(runtime.state(), Ok(KeyState::KeyLost));
+}
+
+#[test]
+fn a_lost_prepared_target_key_is_not_loss_of_the_committed_root() {
+    let (store, routes) = provisioned(&[1, 2]);
+    commit_root(&store, &routes[0]);
+    let committed = anchor_codec::decode(&store.get(ANCHOR_ACCOUNT).unwrap().unwrap()).unwrap();
+    let prepared = anchor::prepare(
+        &committed,
+        &PrepareRootAnchor {
+            operation_id: "rotate-2".to_owned(),
+            expected_floor: 1,
+            target_root_generation: 2,
+            target_final_root_digest: [7; 32],
+            target_slot: RootSlot::B,
+            target_root_key_ref: routes[1].clone(),
+        },
+    )
+    .unwrap();
+    store
+        .set(ANCHOR_ACCOUNT, &anchor_codec::encode(&prepared).unwrap())
+        .unwrap();
+    store.delete(&key_account(&routes[1])).unwrap();
+    let mut runtime = runtime(store.clone());
+
+    assert_eq!(runtime.unlock(), Ok(KeyState::Unlocked { epoch: 1 }));
+    assert_eq!(runtime.state(), Ok(KeyState::Unlocked { epoch: 1 }));
+    assert!(is_durable_key(
+        &runtime.resolve(1).unwrap(),
+        &store,
+        &routes[0]
+    ));
+    assert_eq!(runtime.resolve(2).err(), Some(KeyProviderError::KeyLost));
 }

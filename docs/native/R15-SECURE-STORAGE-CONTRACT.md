@@ -1766,7 +1766,10 @@ over the validated durable authority and only reads the secure store:
 
 - `state()` is computed from the validated anchor: `UNCONFIGURED` without a committed root,
   `RECOVERY_REQUIRED` for inconsistent authority, `KEY_LOST` when the committed root key is gone,
-  otherwise `LOCKED` or `UNLOCKED`. An unreachable store or an unsupported format stays an error.
+  otherwise `LOCKED` or `UNLOCKED`. Only the committed root decides key loss: a lost key of a
+  `prepared_root_commit` target is left to anchor-transition recovery (§5.3.1), because the prepared
+  target is recovery authorization, never ordinary read authority. An unreachable store or an
+  unsupported format stays an error.
 - `unlock()` loads the handles of the available indexed keys only after a complete authority read.
   It grants nothing if that read fails, if the committed root key is lost, if the indexed route
   set changes while the keys are read, or if the final state check reports anything other than
@@ -1775,7 +1778,9 @@ over the validated durable authority and only reads the secure store:
   resolve only a route the current index issues, and never search. On every call the durable item
   is read first: a missing one is `KEY_LOST` (also for a key that was already missing at
   `unlock`), a different one is `RECOVERY_REQUIRED`, and a present key that was issued after
-  `unlock` stays `LOCKED` until the next `unlock`.
+  `unlock` stays `LOCKED` until the next `unlock`. Every resolution first requires the committed
+  root key to be present, loaded and unchanged, so no other epoch key stays resolvable after the
+  root is lost or replaced; `resolve` cannot clear handles, `lock` does.
 - `lock()` drops every handle; the material is zeroized.
 
 The anchor transitions (`prepare_root_anchor`, `commit_root_anchor`,
