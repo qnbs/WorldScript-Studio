@@ -26,6 +26,8 @@ pub struct SecureStoreRuntime<S, R = OsRandom> {
     authority: SecureStoreAuthority<S, R>,
     runtime: Vec<RuntimeKey>,
     unlocked: bool,
+    /// The committed root this unlock was bound to; it never disappears while unlocked.
+    unlocked_root: Option<RootKeyRefV1>,
 }
 
 impl<S, R> SecureStoreRuntime<S, R>
@@ -39,6 +41,7 @@ where
             authority,
             runtime: Vec::new(),
             unlocked: false,
+            unlocked_root: None,
         }
     }
 
@@ -57,7 +60,7 @@ where
     /// scope or bootstrap keys exist. Only the committed root decides key loss; a prepared target is
     /// recovery authorization only (§5.3.1). Store and format failures are errors, never states.
     pub fn state(&self) -> Result<KeyState, KeyProviderError> {
-        let root = match self.committed_root() {
+        let root = match self.bound_root() {
             Ok(Some(root)) => root,
             Ok(None) => return Ok(KeyState::Unconfigured),
             Err(error) => return state_for(error),
@@ -79,20 +82,27 @@ where
     /// passphrase). A lost committed root key is `KeyLost`, and any failure grants nothing.
     pub fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
         self.lock();
-        self.committed_root()?;
+        let root = self.committed_root()?;
         let epochs = self.authority.list_epochs()?;
         let mut loaded = Vec::with_capacity(epochs.len());
         for entry in epochs.iter().filter(|entry| entry.available) {
-            loaded.push(RuntimeKey {
-                key_ref: entry.key_ref.clone(),
-                material: self.authority.key_material(&entry.key_ref)?,
-            });
+            // A key that vanished since the scan is skipped like one missing before it; the route
+            // set comparison below then reports the change as retryable, not as key loss.
+            match self.authority.key_material(&entry.key_ref) {
+                Ok(material) => loaded.push(RuntimeKey {
+                    key_ref: entry.key_ref.clone(),
+                    material,
+                }),
+                Err(KeyProviderError::KeyLost) => {}
+                Err(other) => return Err(other),
+            }
         }
         // The keys were read in several store calls; a changed route set in between grants nothing.
         if epochs != self.authority.list_epochs()? {
             return Err(KeyProviderError::Unavailable);
         }
         self.runtime = loaded;
+        self.unlocked_root = root;
         self.unlocked = true;
         let outcome = self.state();
         self.settle_unlock(outcome)
@@ -120,6 +130,7 @@ where
     pub fn lock(&mut self) {
         self.runtime.clear();
         self.unlocked = false;
+        self.unlocked_root = None;
     }
 
     /// The key of a data epoch, taken from the validated index only.
@@ -167,11 +178,22 @@ where
         Ok(Some(root.root_key_ref))
     }
 
+    /// [`Self::committed_root`], plus the binding of the current unlock: once an unlock saw a
+    /// committed root, an anchor without one is a rollback (the floor never moves back, §5.3.1) and
+    /// is `RecoveryRequired` rather than a return to the bootstrap exception.
+    fn bound_root(&self) -> Result<Option<RootKeyRefV1>, KeyProviderError> {
+        let current = self.committed_root()?;
+        if self.unlocked && self.unlocked_root.is_some() && current.is_none() {
+            return Err(KeyProviderError::RecoveryRequired);
+        }
+        Ok(current)
+    }
+
     /// Every resolution is refused while the committed root is lost, replaced, or not loaded, so no
     /// other epoch key outlives the authority it belongs to. `resolve` cannot clear the handles
     /// (`&self`); `lock` does.
     fn ensure_root_usable(&self) -> Result<(), KeyProviderError> {
-        match self.committed_root()? {
+        match self.bound_root()? {
             Some(root) => self.checked_material(&root).map(|_| ()),
             None => Ok(()),
         }

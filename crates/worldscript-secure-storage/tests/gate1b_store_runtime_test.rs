@@ -331,3 +331,16 @@ fn a_lost_prepared_target_key_is_not_loss_of_the_committed_root() {
     ));
     assert_eq!(runtime.resolve(2).err(), Some(KeyProviderError::KeyLost));
 }
+
+#[test]
+fn an_anchor_that_loses_its_committed_root_after_unlock_is_recovery() {
+    let (store, routes, runtime) = unlocked(&[1, 2], true);
+
+    let mut rolled_back = read_anchor(&store);
+    rolled_back.committed_floor = 0;
+    rolled_back.committed_root = None;
+    rolled_back.last_committed_operation_id = None;
+    write_anchor(&store, &rolled_back);
+    assert_refused(&runtime, 2, &routes[1], KeyProviderError::RecoveryRequired);
+    assert_eq!(runtime.state(), Ok(KeyState::RecoveryRequired));
+}
