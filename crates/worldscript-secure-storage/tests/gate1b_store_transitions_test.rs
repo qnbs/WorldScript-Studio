@@ -429,3 +429,39 @@ fn an_epoch_key_another_writer_provisioned_is_not_adopted_without_unlock() {
     session.unlock().unwrap();
     assert!(session.resolve(2).is_ok());
 }
+
+#[test]
+fn replaying_another_writers_commit_does_not_rebind_a_stale_session() {
+    let (store, routes) = provisioned(&[1, 2]);
+    let mut writer = provider(&store);
+    publish(
+        &mut writer,
+        &request(&store, "boot", RootSlot::A, &routes[0]),
+    );
+    let mut session = provider(&store);
+    assert_eq!(session.unlock(), Ok(KeyState::Unlocked { epoch: 1 }));
+    publish(
+        &mut writer,
+        &request(&store, "rotate", RootSlot::B, &routes[1]),
+    );
+
+    // The exact replay succeeds durably, but the session never prepared "rotate".
+    assert_eq!(session.commit_root_anchor("rotate", 2), Ok(()));
+    assert_eq!(session.state(), Ok(KeyState::Locked));
+    assert_eq!(session.resolve(1).err(), Some(KeyProviderError::Locked));
+}
+
+#[test]
+fn retrying_the_sessions_own_ambiguous_commit_rebinds_it() {
+    let (store, routes) = provisioned(&[1]);
+    let mut session = provider(&store);
+    session.unlock().unwrap();
+    let prepared = request(&store, "boot", RootSlot::A, &routes[0]);
+    session.prepare_root_anchor(&prepared).unwrap();
+
+    // The commit landed through another handle before the session saw its outcome.
+    let mut other = provider(&store);
+    other.commit_root_anchor("boot", 1).unwrap();
+    assert_eq!(session.commit_root_anchor("boot", 1), Ok(()));
+    assert_eq!(session.state(), Ok(KeyState::Unlocked { epoch: 1 }));
+}
