@@ -1,7 +1,8 @@
 //! Durable Gate 1b-platform authority and bootstrap primitives.
 //!
 //! This module owns only the secure-store relationships between the validated anchor, epoch index,
-//! and per-route key items. Runtime key handles and anchor transitions remain in later slices.
+//! and per-route key items. Runtime key handles live in `store_runtime` (Slice C1); anchor
+//! transitions remain in a later slice.
 
 use zeroize::Zeroizing;
 
@@ -149,6 +150,15 @@ where
         self.store.set(&key_account(&key_ref), material.as_ref())?;
         self.store.set(EPOCH_INDEX_ACCOUNT, &encoded)?;
         Ok(key_ref)
+    }
+
+    /// The durable bytes of one route for the Slice C1 runtime layer: `KeyLost` when the item is
+    /// missing, `RecoveryRequired` when it is not exactly one key.
+    pub(crate) fn key_material(
+        &self,
+        key_ref: &RootKeyRefV1,
+    ) -> Result<Zeroizing<[u8; KEY_LEN]>, KeyProviderError> {
+        self.read_key(key_ref)
     }
 
     fn read_anchor(&self) -> Result<AnchorState, KeyProviderError> {

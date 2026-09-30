@@ -1759,6 +1759,27 @@ immediately after it is read, before any version-1 field, so a changed future la
 misread as corruption. Any other malformation is `RECOVERY_REQUIRED`; every decoded anchor then
 passes the §5.4 anchor-validity check, and an anchor that fails it is never encoded.
 
+### 8.2.3 Runtime key handles (Gate 1b-platform, slice C1)
+
+The runtime half of the §8.2 `KeyProvider` (`state`, `unlock`, `lock`, `resolve`, `resolve_ref`) sits
+over the validated durable authority and only reads the secure store:
+
+- `state()` is computed from the validated anchor: `UNCONFIGURED` without a committed root,
+  `RECOVERY_REQUIRED` for inconsistent authority, `KEY_LOST` when the committed root key is gone,
+  otherwise `LOCKED` or `UNLOCKED`. An unreachable store or an unsupported format stays an error.
+- `unlock()` loads the handles of the available indexed keys only after a complete authority read.
+  It grants nothing if that read fails, if the committed root key is lost, or if the indexed route
+  set changes while the keys are read; a failed `unlock` also drops earlier handles.
+- `resolve(epoch)` and `resolve_ref(route)` answer `LOCKED` before touching the store when locked,
+  resolve only a route the current index issues, and never search. On every call the cached handle
+  is compared with its durable item: a different item is `RECOVERY_REQUIRED`, a missing one is
+  `KEY_LOST`, and a route that was issued after `unlock` stays `LOCKED` until the next `unlock`.
+- `lock()` drops every handle; the material is zeroized.
+
+The anchor transitions (`prepare_root_anchor`, `commit_root_anchor`,
+`abort_or_recover_root_anchor`) and the full `KeyProvider` implementation are slice C2; the OS
+secure-store adapter is slice D.
+
 ### 8.3 Epoch rules
 
 1. Epoch `N` is immutable once a record is committed under it.
