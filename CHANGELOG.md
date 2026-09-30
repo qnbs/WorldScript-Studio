@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Included in the 1.29.1 section below:** the development-dependency security updates found by
+  the fresh pre-tag OSV scan, merged after the release-prep cut and before the release tag. PR #912.
+
 ## [1.29.1] — 2026-09-29
 
 <!-- release-candidate: v1.29.1 -->
@@ -24,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Visual Maturity remediation (editorial foundation, core primitives, overlays, product
     identity, loading and trust surfaces).
   - A qualified dependency update train (#872) and hardened CI and merge governance (#675, #447).
+- **Development dependencies `brace-expansion`, `fast-uri` and `ip-address` updated:** the
+  fresh security scan before the v1.29.1 tag found six advisories published after the release-prep
+  cut: `brace-expansion` 5.0.9 (GHSA-6j4f-fj2g-mc7p, GHSA-qhr7-859c-m2p7, GHSA-q2hr-2g5m-vwhr),
+  `fast-uri` 3.1.7 (GHSA-hrr3-gc8f-f4qj) and `ip-address` 10.5.1 (GHSA-h3mg-xc3c-68pw,
+  GHSA-j6r3-76f7-8jcv). They are used only by development tooling; the shipped desktop builds do
+  not contain them. They now resolve to 5.0.12, 3.1.8 and 10.7.2. PR #912.
 - **Development dependency `joi` updated to 18.2.9 (GHSA-6h2x-m376-mqjq):** `joi` 18.2.5, which
   the `wait-on` CI tool pulled in, failed the enforced OSV scan on the `v1.29.0` tag. The shipped
   desktop and web builds do not contain `joi` (their SBOMs list no `joi` or `wait-on`
