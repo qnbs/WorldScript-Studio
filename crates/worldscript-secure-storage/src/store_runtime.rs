@@ -103,7 +103,25 @@ where
         }
         self.runtime = loaded;
         self.unlocked = true;
-        self.state()
+        let outcome = self.state();
+        self.settle_unlock(outcome)
+    }
+
+    /// Only a usable final state keeps the loaded handles. `KeyLost`, `RecoveryRequired`, any
+    /// other state, or an error in the final validation drops every handle and fails the unlock.
+    fn settle_unlock(
+        &mut self,
+        outcome: Result<KeyState, KeyProviderError>,
+    ) -> Result<KeyState, KeyProviderError> {
+        let failure = match outcome {
+            Ok(state @ (KeyState::Unconfigured | KeyState::Unlocked { .. })) => return Ok(state),
+            Ok(KeyState::KeyLost) => KeyProviderError::KeyLost,
+            Ok(KeyState::RecoveryRequired) => KeyProviderError::RecoveryRequired,
+            Ok(_) => KeyProviderError::Unavailable,
+            Err(error) => error,
+        };
+        self.lock();
+        Err(failure)
     }
 
     /// Clears every runtime handle; the material is zeroized on drop. Afterwards every resolve is
@@ -153,18 +171,20 @@ where
         Ok(Key::from_bytes(&mut bytes))
     }
 
-    /// The cached handle, only while its durable item still holds the same bytes. A handle that
-    /// was never loaded is `Locked`; a durable item that differs from it is `RecoveryRequired`.
+    /// The cached handle, only while its durable item still holds the same bytes. The durable item
+    /// is read first, so a missing key is `KeyLost` whether or not it was loaded; a present key
+    /// that was never loaded is `Locked`, and one that differs from its handle is
+    /// `RecoveryRequired`.
     fn checked_material(
         &self,
         key_ref: &RootKeyRefV1,
     ) -> Result<&Zeroizing<[u8; KEY_LEN]>, KeyProviderError> {
+        let durable = self.authority.key_material(key_ref)?;
         let cached = self
             .runtime
             .iter()
             .find(|key| &key.key_ref == key_ref)
             .ok_or(KeyProviderError::Locked)?;
-        let durable = self.authority.key_material(key_ref)?;
         if !same_material(&cached.material, &durable) {
             return Err(KeyProviderError::RecoveryRequired);
         }
@@ -178,4 +198,47 @@ fn same_material(left: &[u8; KEY_LEN], right: &[u8; KEY_LEN]) -> bool {
         .zip(right.iter())
         .fold(0u8, |diff, (a, b)| diff | (a ^ b))
         == 0
+}
+
+#[cfg(all(test, feature = "test-support"))]
+mod tests {
+    use super::*;
+    use crate::secure_store::MemorySecretStore;
+
+    fn unlocked_runtime() -> SecureStoreRuntime<MemorySecretStore> {
+        let mut authority = SecureStoreAuthority::new(MemorySecretStore::new());
+        authority.read_or_provision_installation_scope().unwrap();
+        authority.provision_epoch_key(1).unwrap();
+        let mut runtime = SecureStoreRuntime::new(authority);
+        runtime.unlock().unwrap();
+        runtime
+    }
+
+    // The final validation can observe a concurrent change after the handles were installed; every
+    // outcome other than a usable state must leave nothing resolvable.
+    #[test]
+    fn a_failed_final_validation_drops_every_handle() {
+        for outcome in [
+            Ok(KeyState::KeyLost),
+            Ok(KeyState::RecoveryRequired),
+            Ok(KeyState::Locked),
+            Err(KeyProviderError::SecureAnchorUnavailable),
+        ] {
+            let mut runtime = unlocked_runtime();
+            assert!(runtime.settle_unlock(outcome).is_err());
+            assert!(!runtime.unlocked);
+            assert!(runtime.runtime.is_empty());
+            assert_eq!(runtime.resolve(1).err(), Some(KeyProviderError::Locked));
+        }
+    }
+
+    #[test]
+    fn a_usable_final_state_keeps_the_handles() {
+        let mut runtime = unlocked_runtime();
+        assert_eq!(
+            runtime.settle_unlock(Ok(KeyState::Unconfigured)),
+            Ok(KeyState::Unconfigured)
+        );
+        assert!(runtime.resolve(1).is_ok());
+    }
 }

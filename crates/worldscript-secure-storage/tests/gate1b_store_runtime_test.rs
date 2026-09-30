@@ -285,3 +285,22 @@ fn a_failed_unlock_also_drops_the_handles_of_an_earlier_unlock() {
         Some(KeyProviderError::Locked)
     );
 }
+
+#[test]
+fn a_key_already_missing_at_unlock_is_key_lost_not_locked() {
+    let (store, routes) = provisioned(&[1, 2]);
+    store.delete(&key_account(&routes[1])).unwrap();
+    let mut runtime = runtime(store.clone());
+
+    assert_eq!(runtime.unlock(), Ok(KeyState::Unconfigured));
+    assert_eq!(runtime.resolve(2).err(), Some(KeyProviderError::KeyLost));
+    assert_eq!(
+        runtime.resolve_ref(&routes[1]).err(),
+        Some(KeyProviderError::KeyLost)
+    );
+    assert!(is_durable_key(
+        &runtime.resolve(1).unwrap(),
+        &store,
+        &routes[0]
+    ));
+}

@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **R-15 Gate 1b-platform, slice C1 — runtime key handles (#445):** `SecureStoreRuntime` adds the
   runtime half of the key-provider contract over the durable authority from slice B. `unlock` loads
-  key handles only after a complete authority read and grants nothing if that read fails or the key
-  index changes meanwhile; `resolve`/`resolve_ref` answer `Locked` while locked, resolve only a
-  route the current index issues (never a search), and compare every cached key with its stored item
-  on each call, so a replaced key is `RecoveryRequired` and a deleted one `KeyLost`; `lock` drops
+  key handles only after a complete authority read and grants nothing if that read fails, the key
+  index changes meanwhile, or the final state check reports a lost or inconsistent root; `resolve`/`resolve_ref` answer `Locked` while locked, resolve only a
+  route the current index issues (never a search), and check the stored item on every call, so a
+  replaced key is `RecoveryRequired` and a deleted one `KeyLost`, even if it was already missing at
+  `unlock`; `lock` drops
   and zeroizes every handle. It only reads the secure store: no anchor transitions, platform
   adapter, app wiring, or production authority switch. PR #914.
 - **Post-release v1.29.1 truth sync:** removed the release-candidate markers from README.md and
