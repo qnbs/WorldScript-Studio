@@ -1,14 +1,19 @@
-//! Gate 1b-platform Slice C1: runtime key handles over the validated durable authority (§8.2).
+//! Gate 1b-platform Slices C1/C2: runtime key handles over the validated durable authority and
+//! the full [`KeyProvider`] over the secure store (§8.2).
 //!
-//! This layer only reads the secure store. `unlock` loads key handles after a complete authority
-//! read, `resolve`/`resolve_ref` resolve exactly one issued route and re-check the cached material
-//! against its durable item on every call, and `lock` drops every handle. Anchor transitions and
-//! the [`crate::KeyProvider`] implementation belong to Slice C2.
+//! `unlock` loads key handles after a complete authority read, `resolve`/`resolve_ref` resolve
+//! exactly one issued route and re-check the cached material against its durable item on every
+//! call, and `lock` drops every handle. The anchor transitions are the durable ones of
+//! [`SecureStoreAuthority`]; a session adopts a new committed root only through its own step F or a
+//! new `unlock`.
 
 use zeroize::Zeroizing;
 
 use crate::error::KeyProviderError;
-use crate::provider::{EpochInfo, KeyState, RootKeyRefV1};
+use crate::provider::{
+    AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,
+    PrepareRootAnchor, RootKeyRefV1,
+};
 use crate::random::{OsRandom, RandomSource};
 use crate::seal::Key;
 use crate::secure_store::SecretStore;
@@ -26,8 +31,12 @@ pub struct SecureStoreRuntime<S, R = OsRandom> {
     authority: SecureStoreAuthority<S, R>,
     runtime: Vec<RuntimeKey>,
     unlocked: bool,
-    /// The committed root this unlock was bound to; resolution requires it to stay exactly this.
-    unlocked_root: Option<RootKeyRefV1>,
+    /// The complete committed root (generation, digest, slot and key route) this unlock was bound
+    /// to; resolution requires it to stay exactly this.
+    unlocked_root: Option<CommittedRoot>,
+    /// The preparation this session made itself (`operation_id`, target generation): only a commit
+    /// of exactly that operation — including the retry of an ambiguous one — may rebind the session.
+    own_preparation: Option<(String, u64)>,
 }
 
 impl<S, R> SecureStoreRuntime<S, R>
@@ -42,6 +51,7 @@ where
             runtime: Vec::new(),
             unlocked: false,
             unlocked_root: None,
+            own_preparation: None,
         }
     }
 
@@ -61,7 +71,7 @@ where
     /// recovery authorization only (§5.3.1). Store and format failures are errors, never states.
     pub fn state(&self) -> Result<KeyState, KeyProviderError> {
         let root = match self.bound_root() {
-            Ok(Some(root)) => root,
+            Ok(Some(root)) => root.root_key_ref,
             Ok(None) => return Ok(KeyState::Unconfigured),
             Err(error) => return state_for(error),
         };
@@ -82,7 +92,7 @@ where
     /// passphrase). A lost committed root key is `KeyLost`, and any failure grants nothing.
     pub fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
         self.lock();
-        let root = self.committed_root()?;
+        let root = self.bound_root()?;
         let epochs = self.authority.list_epochs()?;
         let mut loaded = Vec::with_capacity(epochs.len());
         for entry in epochs.iter().filter(|entry| entry.available) {
@@ -167,30 +177,27 @@ where
         self.key_for(&key_ref)
     }
 
-    /// The committed root's route after its durable key was found intact, or `None` before the first
-    /// root is committed. Only the committed root is ordinary authority; the loss of a prepared
-    /// target key is left to the anchor-transition recovery (§5.3.1).
-    fn committed_root(&self) -> Result<Option<RootKeyRefV1>, KeyProviderError> {
-        let Some(root) = self.authority.validated_anchor()?.committed_root else {
-            return Ok(None);
-        };
-        self.authority.key_material(&root.root_key_ref)?;
-        Ok(Some(root.root_key_ref))
-    }
-
-    /// [`Self::committed_root`], held to the exact binding of the current unlock. An anchor that no
-    /// longer has the committed root the unlock saw is a rollback (the floor never moves back,
-    /// §5.3.1) and is `RecoveryRequired`; any other change of the committed root, including a first
-    /// commit after an unconfigured unlock, is `Locked` until a new unlock validates the new binding.
-    fn bound_root(&self) -> Result<Option<RootKeyRefV1>, KeyProviderError> {
-        let current = self.committed_root()?;
-        if !self.unlocked || current == self.unlocked_root {
-            return Ok(current);
+    /// The committed root, or `None` before the first root is committed, held to the exact binding
+    /// of the current unlock — the whole root (generation, digest, slot and key route), so another
+    /// writer's checkpoint that keeps the key route is still a change. The binding is compared
+    /// **before** the root's key item is read:
+    /// an anchor that no longer has the committed root the unlock saw is a rollback (the floor never
+    /// moves back, §5.3.1) and is `RecoveryRequired`, and any other change of the committed root,
+    /// including a first commit after an unconfigured unlock, is `Locked` until a new unlock (or this
+    /// session's own step F) establishes the new binding. Only then is a missing key `KeyLost`. A
+    /// prepared target is recovery authorization only, so its key loss is not decided here.
+    fn bound_root(&self) -> Result<Option<CommittedRoot>, KeyProviderError> {
+        let current = self.authority.validated_anchor()?.committed_root;
+        if self.unlocked && current != self.unlocked_root {
+            return match (&self.unlocked_root, &current) {
+                (Some(_), None) => Err(KeyProviderError::RecoveryRequired),
+                _ => Err(KeyProviderError::Locked),
+            };
         }
-        match (&self.unlocked_root, &current) {
-            (Some(_), None) => Err(KeyProviderError::RecoveryRequired),
-            _ => Err(KeyProviderError::Locked),
+        if let Some(root) = &current {
+            self.authority.key_material(&root.root_key_ref)?;
         }
+        Ok(current)
     }
 
     /// Every resolution is refused while the committed root is lost, replaced, or not loaded, so no
@@ -198,9 +205,95 @@ where
     /// (`&self`); `lock` does.
     fn ensure_root_usable(&self) -> Result<(), KeyProviderError> {
         match self.bound_root()? {
-            Some(root) => self.checked_material(&root).map(|_| ()),
+            Some(root) => self.checked_material(&root.root_key_ref).map(|_| ()),
             None => Ok(()),
         }
+    }
+
+    /// Provisions (or exactly resumes) the key of `epoch` through the durable authority. An unlocked
+    /// session takes a key only if this call created it, and only after reading it back from the
+    /// store; an entry another writer created stays `Locked` until the next `unlock`.
+    pub fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
+        let (route, created) = self.authority.provision_epoch_key_created(epoch)?;
+        if created && self.unlocked && !self.is_loaded(&route) {
+            let material = self.authority.key_material(&route)?;
+            self.runtime.push(RuntimeKey {
+                key_ref: route.clone(),
+                material,
+            });
+        }
+        Ok(route)
+    }
+
+    /// Step C through the durable authority; the session records the preparation as its own.
+    pub fn prepare_root_anchor(
+        &mut self,
+        request: &PrepareRootAnchor,
+    ) -> Result<(), KeyProviderError> {
+        self.authority.prepare_root_anchor(request)?;
+        self.own_preparation = Some((request.operation_id.clone(), request.target_root_generation));
+        Ok(())
+    }
+
+    /// Step F through the durable authority. After a durably confirmed commit of the session's own
+    /// preparation, an unlocked session rebinds to exactly the committed root it confirmed; the
+    /// durable commit stands even if that rebinding fails, in which case the session locks itself.
+    /// A commit (or exact replay) of an operation this session did not prepare never rebinds it.
+    pub fn commit_root_anchor(
+        &mut self,
+        operation_id: &str,
+        target_root_generation: u64,
+    ) -> Result<(), KeyProviderError> {
+        let committed = self
+            .authority
+            .commit_root_anchor(operation_id, target_root_generation)?;
+        let owned = self.own_preparation.as_ref()
+            == Some(&(operation_id.to_owned(), target_root_generation));
+        if owned {
+            self.own_preparation = None;
+            if self.unlocked && self.rebind(&committed).is_err() {
+                self.lock();
+            }
+        }
+        Ok(())
+    }
+
+    /// Clears a discardable preparation through the durable authority, and with it the session's
+    /// ownership of that operation.
+    pub fn abort_or_recover_root_anchor(
+        &mut self,
+        operation_id: &str,
+    ) -> Result<(), KeyProviderError> {
+        self.authority.abort_or_recover_root_anchor(operation_id)?;
+        if matches!(&self.own_preparation, Some((own, _)) if own == operation_id) {
+            self.own_preparation = None;
+        }
+        Ok(())
+    }
+
+    fn rebind(&mut self, committed: &AnchorState) -> Result<(), KeyProviderError> {
+        let root = committed
+            .committed_root
+            .clone()
+            .ok_or(KeyProviderError::RecoveryRequired)?;
+        let route = root.root_key_ref.clone();
+        let material = self.authority.key_material(&route)?;
+        match self.runtime.iter().find(|key| key.key_ref == route) {
+            Some(cached) if !same_material(&cached.material, &material) => {
+                return Err(KeyProviderError::RecoveryRequired);
+            }
+            Some(_) => {}
+            None => self.runtime.push(RuntimeKey {
+                key_ref: route.clone(),
+                material,
+            }),
+        }
+        self.unlocked_root = Some(root);
+        Ok(())
+    }
+
+    fn is_loaded(&self, key_ref: &RootKeyRefV1) -> bool {
+        self.runtime.iter().any(|key| &key.key_ref == key_ref)
     }
 
     fn key_for(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
@@ -228,6 +321,68 @@ where
             return Err(KeyProviderError::RecoveryRequired);
         }
         Ok(&cached.material)
+    }
+}
+
+impl<S, R> KeyProvider for SecureStoreRuntime<S, R>
+where
+    S: SecretStore,
+    R: RandomSource,
+{
+    fn state(&self) -> Result<KeyState, KeyProviderError> {
+        SecureStoreRuntime::state(self)
+    }
+
+    fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError> {
+        SecureStoreRuntime::resolve(self, epoch)
+    }
+
+    fn resolve_ref(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
+        SecureStoreRuntime::resolve_ref(self, key_ref)
+    }
+
+    fn lock(&mut self) {
+        SecureStoreRuntime::lock(self);
+    }
+
+    fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
+        SecureStoreRuntime::unlock(self)
+    }
+
+    fn list_epochs(&self) -> Result<Vec<EpochInfo>, KeyProviderError> {
+        self.authority.list_epochs()
+    }
+
+    fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
+        SecureStoreRuntime::provision_epoch_key(self, epoch)
+    }
+
+    /// The structurally validated anchor: a lost prepared-target key does not hide the committed
+    /// authority, whose key is checked when it is resolved.
+    fn read_root_anchor_state(&self) -> Result<AnchorState, KeyProviderError> {
+        self.authority.validated_anchor()
+    }
+
+    fn read_or_provision_installation_scope(
+        &mut self,
+    ) -> Result<InstallationScopeId, KeyProviderError> {
+        self.authority.read_or_provision_installation_scope()
+    }
+
+    fn prepare_root_anchor(&mut self, request: &PrepareRootAnchor) -> Result<(), KeyProviderError> {
+        SecureStoreRuntime::prepare_root_anchor(self, request)
+    }
+
+    fn commit_root_anchor(
+        &mut self,
+        operation_id: &str,
+        target_root_generation: u64,
+    ) -> Result<(), KeyProviderError> {
+        SecureStoreRuntime::commit_root_anchor(self, operation_id, target_root_generation)
+    }
+
+    fn abort_or_recover_root_anchor(&mut self, operation_id: &str) -> Result<(), KeyProviderError> {
+        SecureStoreRuntime::abort_or_recover_root_anchor(self, operation_id)
     }
 }
 
