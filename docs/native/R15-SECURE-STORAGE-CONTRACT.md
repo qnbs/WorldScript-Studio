@@ -1778,20 +1778,50 @@ over the validated durable authority and only reads the secure store:
   resolve only a route the current index issues, and never search. On every call the durable item
   is read first: a missing one is `KEY_LOST` (also for a key that was already missing at
   `unlock`), a different one is `RECOVERY_REQUIRED`, and a present key that was issued after
-  `unlock` stays `LOCKED` until the next `unlock`. Every resolution first requires the committed
+  `unlock` by another writer stays `LOCKED` until the next `unlock` (a key this session provisions
+  itself is taken after it is read back from the store). Every resolution first requires the committed
   root key to be present, loaded and unchanged, so no other epoch key stays resolvable after the
   root is lost or replaced; `resolve` cannot clear handles, `lock` does. An unlock is bound to the
   exact committed root it saw: an anchor that later has no committed root is a rollback and is
   `RECOVERY_REQUIRED`, never a return to the bootstrap exception; any other change of the committed
   root (another route, or a first commit after an unconfigured unlock) is `LOCKED` until a new
-  `unlock` validates it. A non-root key that vanishes
+  `unlock` or this session's own step F (§8.2.4) establishes it. The binding is compared before the
+  new root's key item is read, so a changed root whose key is missing is `LOCKED` for a stale
+  session, not `KEY_LOST`. A non-root key that vanishes
   while `unlock` reads the keys is skipped and reported through the route-set check as retryable,
   not as key loss.
 - `lock()` drops every handle; the material is zeroized.
 
-The anchor transitions (`prepare_root_anchor`, `commit_root_anchor`,
-`abort_or_recover_root_anchor`) and the full `KeyProvider` implementation are slice C2; the OS
+The anchor transitions and the full `KeyProvider` implementation are slice C2 (§8.2.4); the OS
 secure-store adapter is slice D.
+
+### 8.2.4 Durable anchor transitions (Gate 1b-platform, slice C2)
+
+The §5.3.1 transitions are applied to the secure store by one read-modify-write each: a validated
+authority read, exactly the pure transition (`prepare`, `commit`, `abort_or_recover`), one
+replacement of the `r15-anchor-v1` item, and an exact read-back.
+
+- `prepare_root_anchor` first proves the target route is issued (in the `WSE1` index) and
+  resolvable (its key item is present and exactly one key); otherwise it is `UNKNOWN_KEY_REF`,
+  `KEY_LOST`, or `RECOVERY_REQUIRED`, and nothing is written.
+- `commit_root_anchor` publishes exactly the matching preparation. An exact replay of the last
+  committed operation is an idempotent success that writes nothing; a root whose key item was lost
+  after preparation is never published.
+- `abort_or_recover_root_anchor` clears only its own preparation and writes nothing when nothing
+  is prepared. It never raises the floor or changes the committed root.
+- A rejected transition (conflict, unsupported format, inconsistent authority) writes nothing. A
+  refused write leaves the prior anchor. A read-back that differs from the computed state is
+  `UNAVAILABLE` (ambiguous or concurrent outcome); the caller re-reads and replays exactly.
+- After a durably confirmed step F, an unlocked session rebinds to exactly the committed root it
+  confirmed and loads that root's key from the store; if that fails the session locks itself,
+  and the durable commit stands. A root committed by another session is never adopted without a
+  new `unlock`.
+- `read_root_anchor_state` through the provider is the structurally validated anchor; a lost
+  prepared-target key does not hide the committed authority.
+
+Serializing the read-modify-write across processes is Gate 4 (§11); this slice detects a
+concurrent change only through the exact read-back. The filesystem side of the root transition
+(steps D, E1, E2) is not part of this slice.
 
 ### 8.3 Epoch rules
 

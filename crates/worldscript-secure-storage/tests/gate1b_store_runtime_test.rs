@@ -371,3 +371,25 @@ fn a_first_commit_after_an_unconfigured_unlock_needs_a_new_unlock() {
 
     assert_eq!(runtime.unlock(), Ok(KeyState::Unlocked { epoch: 1 }));
 }
+
+// #914 carry-over: the binding is compared before the new root's key material is read, so a
+// stale session sees `Locked` (unlock again) rather than terminal key loss of a root it never had.
+#[test]
+fn a_changed_root_whose_key_is_missing_is_locked_for_a_stale_session() {
+    let (store, routes, runtime) = unlocked(&[1, 2], true);
+
+    commit_root(&store, &routes[1]);
+    store.delete(&key_account(&routes[1])).unwrap();
+    assert_refused(&runtime, 1, &routes[0], KeyProviderError::Locked);
+    assert_eq!(runtime.state(), Ok(KeyState::Locked));
+}
+
+#[test]
+fn a_first_root_whose_key_is_missing_is_locked_after_an_unconfigured_unlock() {
+    let (store, routes, runtime) = unlocked(&[1, 2], false);
+
+    commit_root(&store, &routes[1]);
+    store.delete(&key_account(&routes[1])).unwrap();
+    assert_refused(&runtime, 1, &routes[0], KeyProviderError::Locked);
+    assert_eq!(runtime.state(), Ok(KeyState::Locked));
+}
