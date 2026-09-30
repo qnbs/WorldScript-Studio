@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   release evidence in AUDIT.md, TODO.md and `docs/RELEASE-V1.29.1-EVIDENCE.md` (see `## [1.29.1]`
   below and #872).
 
-## [1.29.1] — 2026-09-29
+## [1.29.1] — 2026-09-30
 
 - **v1.29.1 succeeds the unpublished `v1.29.0` tag.** It ships everything listed under
   `[1.29.0]` below. The `v1.29.0` tag stays as it is, but its desktop release was never published
