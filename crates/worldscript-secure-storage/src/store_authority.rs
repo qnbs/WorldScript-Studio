@@ -117,6 +117,16 @@ where
     /// missing key. If the later index write fails, the unreferenced key is preserved and no
     /// authority is granted; journaled orphan reconciliation belongs to a later bootstrap gate.
     pub fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
+        self.provision_epoch_key_created(epoch)
+            .map(|(route, _)| route)
+    }
+
+    /// [`Self::provision_epoch_key`], also reporting whether this call created the key (`true`)
+    /// or resumed an entry that already existed (`false`), decided within the same validated read.
+    pub(crate) fn provision_epoch_key_created(
+        &mut self,
+        epoch: u64,
+    ) -> Result<(RootKeyRefV1, bool), KeyProviderError> {
         let (anchor_state, mut index) = self.read_authority()?;
         self.validate_indexed_key_material(&index)?;
         self.validate_root_routes(&anchor_state, &index, true)?;
@@ -131,7 +141,7 @@ where
 
         if let Some(existing) = index.iter().find(|entry| entry.epoch == epoch) {
             self.read_key(&existing.key_ref)?;
-            return Ok(existing.key_ref.clone());
+            return Ok((existing.key_ref.clone(), false));
         }
         if index.len() >= MAX_INDEXED_EPOCHS {
             return Err(KeyProviderError::AnchorConflict("the epoch index is full"));
@@ -151,7 +161,7 @@ where
         // Key-first leaves only unreferenced debris if index persistence fails; it never grants it authority.
         self.store.set(&key_account(&key_ref), material.as_ref())?;
         self.store.set(EPOCH_INDEX_ACCOUNT, &encoded)?;
-        Ok(key_ref)
+        Ok((key_ref, true))
     }
 
     /// Step C (§5.3.1): records the preparation, after proving that the target route is issued (in

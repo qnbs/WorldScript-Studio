@@ -71,18 +71,11 @@ fn request(
     }
 }
 
-/// Prepares and commits `route` as the next root through `provider`.
-fn publish(
-    provider: &mut Provider,
-    store: &MemorySecretStore,
-    operation_id: &str,
-    slot: RootSlot,
-    route: &RootKeyRefV1,
-) {
-    let prepared = request(store, operation_id, slot, route);
-    provider.prepare_root_anchor(&prepared).unwrap();
+/// Prepares and commits `prepared` as the next root through `provider`.
+fn publish(provider: &mut Provider, prepared: &PrepareRootAnchor) {
+    provider.prepare_root_anchor(prepared).unwrap();
     provider
-        .commit_root_anchor(operation_id, prepared.target_root_generation)
+        .commit_root_anchor(&prepared.operation_id, prepared.target_root_generation)
         .unwrap();
 }
 
@@ -130,7 +123,10 @@ fn prepare_requires_an_issued_and_resolvable_route() {
 fn commit_publishes_exactly_the_prepared_root_durably() {
     let (store, routes) = provisioned(&[1]);
     let mut provider = provider(&store);
-    publish(&mut provider, &store, "boot", RootSlot::A, &routes[0]);
+    publish(
+        &mut provider,
+        &request(&store, "boot", RootSlot::A, &routes[0]),
+    );
 
     let durable = durable_anchor(&store);
     assert_eq!(durable.committed_floor, 1);
@@ -158,7 +154,10 @@ fn provider_restarted(store: &MemorySecretStore) -> Provider {
 fn an_exact_commit_replay_succeeds_without_writing() {
     let (store, routes) = provisioned(&[1]);
     let mut provider = provider(&store);
-    publish(&mut provider, &store, "boot", RootSlot::A, &routes[0]);
+    publish(
+        &mut provider,
+        &request(&store, "boot", RootSlot::A, &routes[0]),
+    );
     let before = anchor_bytes(&store);
 
     store.set_read_only(true);
@@ -170,7 +169,10 @@ fn an_exact_commit_replay_succeeds_without_writing() {
 fn conflicting_transitions_leave_the_durable_anchor_unchanged() {
     let (store, routes) = provisioned(&[1, 2]);
     let mut provider = provider(&store);
-    publish(&mut provider, &store, "boot", RootSlot::A, &routes[0]);
+    publish(
+        &mut provider,
+        &request(&store, "boot", RootSlot::A, &routes[0]),
+    );
     provider
         .prepare_root_anchor(&request(&store, "rotate", RootSlot::B, &routes[1]))
         .unwrap();
@@ -201,7 +203,10 @@ fn conflicting_transitions_leave_the_durable_anchor_unchanged() {
 fn abort_clears_only_its_own_preparation_and_never_moves_the_root() {
     let (store, routes) = provisioned(&[1, 2]);
     let mut provider = provider(&store);
-    publish(&mut provider, &store, "boot", RootSlot::A, &routes[0]);
+    publish(
+        &mut provider,
+        &request(&store, "boot", RootSlot::A, &routes[0]),
+    );
     let committed = durable_anchor(&store);
     provider
         .prepare_root_anchor(&request(&store, "rotate", RootSlot::B, &routes[1]))
@@ -302,11 +307,17 @@ fn an_unlocked_session_rebinds_to_the_root_it_commits_itself() {
     let mut provider = provider(&store);
     assert_eq!(provider.unlock(), Ok(KeyState::Unconfigured));
 
-    publish(&mut provider, &store, "boot", RootSlot::A, &routes[0]);
+    publish(
+        &mut provider,
+        &request(&store, "boot", RootSlot::A, &routes[0]),
+    );
     assert_eq!(provider.state(), Ok(KeyState::Unlocked { epoch: 1 }));
     assert!(provider.resolve(1).is_ok());
 
-    publish(&mut provider, &store, "rotate", RootSlot::B, &routes[1]);
+    publish(
+        &mut provider,
+        &request(&store, "rotate", RootSlot::B, &routes[1]),
+    );
     assert_eq!(provider.state(), Ok(KeyState::Unlocked { epoch: 2 }));
     assert!(provider.resolve(1).is_ok());
     assert!(provider.resolve_ref(&routes[1]).is_ok());
@@ -316,11 +327,17 @@ fn an_unlocked_session_rebinds_to_the_root_it_commits_itself() {
 fn a_root_committed_by_another_session_is_not_adopted_without_unlock() {
     let (store, routes) = provisioned(&[1, 2]);
     let mut first = provider(&store);
-    publish(&mut first, &store, "boot", RootSlot::A, &routes[0]);
+    publish(
+        &mut first,
+        &request(&store, "boot", RootSlot::A, &routes[0]),
+    );
     let mut session = provider(&store);
     assert_eq!(session.unlock(), Ok(KeyState::Unlocked { epoch: 1 }));
 
-    publish(&mut first, &store, "rotate", RootSlot::B, &routes[1]);
+    publish(
+        &mut first,
+        &request(&store, "rotate", RootSlot::B, &routes[1]),
+    );
     assert_eq!(session.state(), Ok(KeyState::Locked));
     assert_eq!(session.resolve(1).err(), Some(KeyProviderError::Locked));
     assert_eq!(session.unlock(), Ok(KeyState::Unlocked { epoch: 2 }));
@@ -341,7 +358,10 @@ fn a_key_provisioned_through_an_unlocked_provider_resolves_after_read_back() {
 fn a_lost_prepared_key_does_not_block_reading_the_anchor() {
     let (store, routes) = provisioned(&[1, 2]);
     let mut provider = provider(&store);
-    publish(&mut provider, &store, "boot", RootSlot::A, &routes[0]);
+    publish(
+        &mut provider,
+        &request(&store, "boot", RootSlot::A, &routes[0]),
+    );
     provider
         .prepare_root_anchor(&request(&store, "rotate", RootSlot::B, &routes[1]))
         .unwrap();
@@ -368,4 +388,44 @@ fn the_store_runtime_is_usable_as_a_key_provider_trait_object() {
     assert_eq!(dynamic.list_epochs().unwrap().len(), 1);
     dynamic.lock();
     assert_eq!(dynamic.state(), Ok(KeyState::Locked));
+}
+
+#[test]
+fn another_writers_checkpoint_on_the_same_key_route_needs_a_new_unlock() {
+    let (store, routes) = provisioned(&[1]);
+    let mut writer = provider(&store);
+    publish(
+        &mut writer,
+        &request(&store, "boot", RootSlot::A, &routes[0]),
+    );
+    let mut session = provider(&store);
+    assert_eq!(session.unlock(), Ok(KeyState::Unlocked { epoch: 1 }));
+
+    // A new root generation in the other slot that keeps the active key route.
+    publish(
+        &mut writer,
+        &request(&store, "checkpoint", RootSlot::B, &routes[0]),
+    );
+    assert_eq!(session.state(), Ok(KeyState::Locked));
+    assert_eq!(session.resolve(1).err(), Some(KeyProviderError::Locked));
+    assert_eq!(session.unlock(), Ok(KeyState::Unlocked { epoch: 1 }));
+    assert!(session.resolve(1).is_ok());
+}
+
+#[test]
+fn an_epoch_key_another_writer_provisioned_is_not_adopted_without_unlock() {
+    let (store, _) = provisioned(&[1]);
+    let mut session = provider(&store);
+    session.unlock().unwrap();
+    let mut writer = provider(&store);
+    let route = writer.provision_epoch_key(2).unwrap();
+
+    assert_eq!(session.provision_epoch_key(2), Ok(route.clone()));
+    assert_eq!(session.resolve(2).err(), Some(KeyProviderError::Locked));
+    assert_eq!(
+        session.resolve_ref(&route).err(),
+        Some(KeyProviderError::Locked)
+    );
+    session.unlock().unwrap();
+    assert!(session.resolve(2).is_ok());
 }
