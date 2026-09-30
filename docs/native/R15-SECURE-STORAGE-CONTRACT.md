@@ -1814,10 +1814,12 @@ replacement of the `r15-anchor-v1` item, and an exact read-back.
 - A rejected transition (conflict, unsupported format, inconsistent authority) writes nothing. A
   refused write leaves the prior anchor. A read-back that differs from the computed state is
   `UNAVAILABLE` (ambiguous or concurrent outcome); the caller re-reads and replays exactly.
-- After a durably confirmed step F, an unlocked session rebinds to exactly the committed root it
-  confirmed and loads that root's key from the store; if that fails the session locks itself,
-  and the durable commit stands. A root committed by another session is never adopted without a
-  new `unlock`.
+- After a durably confirmed step F of a preparation this session made itself, an unlocked
+  session rebinds to exactly the committed root it confirmed and loads that root's key from the
+  store; if that fails the session locks itself, and the durable commit stands. Retrying the
+  session's own ambiguously completed commit rebinds it; a commit or exact replay of an operation
+  the session did not prepare never does, and a root committed by another session is never adopted
+  without a new `unlock`.
 - `read_root_anchor_state` through the provider is the structurally validated anchor; a lost
   prepared-target key does not hide the committed authority.
 

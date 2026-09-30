@@ -13,8 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exact read-back. Prepare only accepts a root key the store issued and can resolve; an exact
   commit replay and an abort with nothing prepared write nothing; conflicts and refused writes leave
   the stored anchor unchanged. `SecureStoreRuntime` implements the complete `KeyProvider`: after its
-  own confirmed commit an unlocked session rebinds to the new root, while a root committed
-  elsewhere (even one that keeps the same key) still needs a new `unlock`, a changed root whose key
+  own confirmed commit of a root it prepared itself an unlocked session rebinds to it, while a root
+  committed elsewhere (even one that keeps the same key, or one the session merely replays) still
+  needs a new `unlock`, a changed root whose key
   is missing is `Locked` for a stale session rather than `KeyLost`, and an epoch key another writer
   provisioned is not adopted without `unlock`. No platform adapter, app wiring, or production authority
   switch is included. PR #915.
