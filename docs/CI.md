@@ -38,8 +38,10 @@ CI runs for the affected test path before removing a temporary quarantine.
 ### Gate authority
 
 `✅ CI Success` is the required branch-protection status and aggregates `workflow-policy`, `pr-size`,
-`security`, `signatures`, `quality`, `changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, and
-`browser-quality` (`pr-size` only runs on `pull_request` events — legitimately skipped otherwise).
+`security`, `signatures`, `quality`, `changes`, `rust-tauri`, `core-rust`,
+`secure-store-platform`, `build`, `e2e`, and `browser-quality` (`pr-size` only runs on
+`pull_request` events — legitimately skipped otherwise; the Rust jobs only when their paths are
+untouched).
 `e2e-deep` and `storybook` are explicitly advisory at job level while their stability criteria are
 measured. The `deploy` job depends only on that aggregate and remains main-push-only.
 
@@ -117,6 +119,7 @@ quality ─────────┼──► ci-success (required-status aggr
 changes ─────────┤
 rust ────────────┤
 core-rust ───────┤
+secure-store-platform (ubuntu/macos/windows) ─┤
 build ───────────┤
 e2e ─────────────┤
 lighthouse ──────┤
@@ -146,7 +149,8 @@ registry gzip-decoding failure mode, while OSV failures remain blocking.
 | `browser-quality` | `build` | **Consolidated (Wave 2 CI-performance)**: VRT then Lighthouse, sharing one checkout/setup/build-artifact download. VRT: visual regression against production `dist`, `toHaveScreenshot()` with committed PNG baselines (4 views × Chromium). Lighthouse (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn — blocking. Lighthouse (desktop): accessibility/CLS are error-level LHCI assertions same as mobile and can fail the step itself, but the pre-existing `continue-on-error: true` (unchanged by this consolidation) keeps that failure from failing the job; promotion to blocking is gated on the 5-run exit criterion below. Each phase runs on `if: ${{ !cancelled() }}` relative to the others — a VRT or mobile-Lighthouse failure never skips a later phase's own evidence; only desktop Lighthouse's own failure is swallowed (job-level result). Artifacts uploaded always. Timeout 35 min. |
 | `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v6.1.0`; `--maxWorkers=2 --junit` (non-blocking, `continue-on-error: true` — see [exit criteria](#non-blocking-gates--exit-criteria-f-13)); artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
 | `signatures` | `security` | Read-only GitHub API verification of every commit in the complete introduced range; pull-request commit pagination; and annotated release-tag plus target-commit verification. |
-| `ci-success` | `workflow-policy`, `pr-size`, `security`, `signatures`, `quality`, `changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `browser-quality` | Required-status **aggregator** — `if: always()`, fails if any required release-safety job does not resolve to `success`; signature verification is authoritative; Storybook and deep-E2E are explicitly advisory. Rust jobs are legitimately skipped when their paths are untouched; `pr-size` is legitimately skipped only on non-`pull_request` events. |
+| `secure-store-platform` | `security`, `changes` | R-15 Gate 1b-platform evidence (matrix **Ubuntu**, **macOS**, **Windows**; only when `crates/` or its helper changed; deliberately uncached): clippy and guard tests with `--features platform-keystore`, the real OS secure-store lifecycle (Linux in an isolated D-Bus session with a throwaway gnome-keyring via `scripts/secret-service-session.sh`), and on Linux the fail-closed run without any Secret Service plus the Rust 1.77.2 MSRV build with the feature. |
+| `ci-success` | `workflow-policy`, `pr-size`, `security`, `signatures`, `quality`, `changes`, `rust-tauri`, `core-rust`, `secure-store-platform`, `build`, `e2e`, `browser-quality` | Required-status **aggregator** — `if: always()`, fails if any required release-safety job does not resolve to `success`; signature verification is authoritative; Storybook and deep-E2E are explicitly advisory. Rust jobs are legitimately skipped when their paths are untouched; `pr-size` is legitimately skipped only on non-`pull_request` events. |
 | `deploy` | `ci-success` | **Only** `main` push (not PR), and only after the aggregate gate succeeds; the Pages artifact is resolved from the same workflow run. |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
