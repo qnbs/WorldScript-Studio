@@ -196,7 +196,7 @@ jobs:
           else
             echo "tauri=false" >> "$GITHUB_OUTPUT"
           fi
-          if grep -qE '^(crates/|tests/fixtures/project-golden-masters/|\.github/workflows/ci\.yml$)' <<< "$CHANGED"; then
+          if grep -qE '^(crates/|tests/fixtures/project-golden-masters/|scripts/secret-service-session\.sh$|\.github/workflows/ci\.yml$)' <<< "$CHANGED"; then
             echo "crates=true" >> "$GITHUB_OUTPUT"
           else
             echo "crates=false" >> "$GITHUB_OUTPUT"
@@ -546,6 +546,71 @@ jobs:
         run: cargo test --locked
 
   # ----------------------------------------------------------
+  # 1d. SECURE-STORE: R-15 Gate 1b-platform slice D evidence against each real OS secure store
+  # ----------------------------------------------------------
+  # QNBS-v3: real OS secure-store lifecycle per OS (random per-run service, items removed); Linux also proves the 1.77.2 MSRV and fail-closed with no Secret Service.
+  secure-store-platform:
+    name: 🔐 Secure Store Platform Evidence (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    needs: [security, changes]
+    if: needs.changes.outputs.crates == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+        working-directory: crates
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+          components: clippy
+      # QNBS-v3: deliberately uncached — security evidence must not restore artifacts another run wrote (zizmor cache-poisoning).
+      - name: Install Secret Service build/runtime dependencies (Linux)
+        if: runner.os == 'Linux'
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev gnome-keyring dbus
+      - name: Clippy with the platform secure store
+        run: cargo clippy --locked -p worldscript-secure-storage --features platform-keystore --all-targets -- -D warnings
+      - name: Guard tests with the platform secure store
+        run: cargo test --locked -p worldscript-secure-storage --features platform-keystore --test platform_keystore_test
+      - name: Real secure-store lifecycle (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: cargo test --locked -p worldscript-secure-storage --features platform-keystore --test platform_keystore_test -- --ignored full_lifecycle
+      - name: Real secure-store lifecycle (Linux Secret Service, isolated session)
+        if: runner.os == 'Linux'
+        run: |
+          dbus-run-session -- ../scripts/secret-service-session.sh \
+            cargo test --locked -p worldscript-secure-storage --features platform-keystore --test platform_keystore_test -- --ignored full_lifecycle
+      - name: Fail-closed without a Secret Service (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          conf="$RUNNER_TEMP/no-services-bus.conf"
+          grep -v -E 'standard_session_servicedirs|<servicedir>' /usr/share/dbus-1/session.conf > "$conf"
+          bus="$(dbus-daemon --config-file="$conf" --fork --print-address=1 --print-pid=1)"
+          address="$(printf '%s\n' "$bus" | sed -n 1p)"
+          pid="$(printf '%s\n' "$bus" | sed -n 2p)"
+          trap 'kill "$pid"' EXIT
+          DBUS_SESSION_BUS_ADDRESS="$address" WSS_EXPECT_NO_SECURE_STORE=1 \
+            cargo test --locked -p worldscript-secure-storage --features platform-keystore --test platform_keystore_test -- --ignored a_missing
+      # QNBS-v3: real 1.77.2 build so a lockfile bump cannot silently break the crate's MSRV with the platform store enabled.
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        if: runner.os == 'Linux'
+        with:
+          toolchain: 1.77.2
+      - name: MSRV (Rust 1.77.2) build with the platform secure store (Linux)
+        if: runner.os == 'Linux'
+        run: cargo +1.77.2 check --locked -p worldscript-secure-storage --features platform-keystore --all-targets
+
+  # ----------------------------------------------------------
   # 2. BUILD: Production build + Pages artifact upload
   # QNBS-v3: Stryker mutation removed from the PR/CI pipeline (2026-06-02) — it added noise as a
   #          flaky, non-gating check. Mutation now runs ONLY via the manual `.github/workflows/
@@ -652,7 +717,7 @@ jobs:
 
   # ----------------------------------------------------------
   # 3. CI SUCCESS: single required-status aggregator
-  #    (security + signatures + quality + changes + rust-tauri + core-rust + build + e2e + vrt)
+  #    (security + signatures + quality + changes + rust-tauri + core-rust + secure-store-platform + build + e2e + vrt)
   # ----------------------------------------------------------
   ci-success:
     name: ✅ CI Success
@@ -669,6 +734,7 @@ jobs:
         changes,
         rust-tauri,
         core-rust,
+        secure-store-platform,
         build,
         e2e,
         browser-quality,
@@ -695,6 +761,9 @@ jobs:
           if [ "${{ needs.core-rust.result }}" != "success" ] && [ "${{ needs.core-rust.result }}" != "skipped" ]; then
             FAIL=1
           fi
+          if [ "${{ needs.secure-store-platform.result }}" != "success" ] && [ "${{ needs.secure-store-platform.result }}" != "skipped" ]; then
+            FAIL=1
+          fi
           [ "${{ needs.build.result }}" = "success" ] || FAIL=1
           [ "${{ needs.e2e.result }}" = "success" ] || FAIL=1
           [ "${{ needs.browser-quality.result }}" = "success" ] || FAIL=1
@@ -708,6 +777,7 @@ jobs:
             echo "  changes:  ${{ needs.changes.result }}"
             echo "  rust-tauri: ${{ needs.rust-tauri.result }} (skipped = OK, src-tauri untouched)"
             echo "  core-rust: ${{ needs.core-rust.result }} (skipped = OK, crates/ untouched)"
+            echo "  secure-store-platform: ${{ needs.secure-store-platform.result }} (skipped = OK, crates/ untouched)"
             echo "  build:    ${{ needs.build.result }}"
             echo "  e2e:      ${{ needs.e2e.result }}"
             echo "  browser-quality: ${{ needs.browser-quality.result }}"

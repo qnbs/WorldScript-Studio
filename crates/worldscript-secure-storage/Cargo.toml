@@ -27,12 +27,32 @@ zeroize = { version = "~1.8", features = ["derive"] }
 # Direct pin for the same reason: zeroize_derive 1.5 also requires Rust 1.85.
 zeroize_derive = "~1.4"
 
+# Gate 1b-platform slice D (§8.2.5): the real OS secure store, only behind the `platform-keystore`
+# feature so the default Core build needs no platform libraries. keyring 3.6.x is the newest line
+# within Rust 1.77.2 (4.x needs 1.88); its default credential builder is never used (see
+# secure_store/platform.rs).
+[target.'cfg(target_os = "linux")'.dependencies]
+# Secret Service only: never `linux-native` / keyutils (not persistent, never a fallback).
+keyring = { version = "=3.6.3", optional = true, default-features = false, features = ["sync-secret-service", "crypto-rust"] }
+# 4.1+ needs Rust 1.78; hold 4.0.x (MSRV 1.70).
+dbus-secret-service = { version = "~4.0.3", optional = true, default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "=3.6.3", optional = true, default-features = false, features = ["apple-native"] }
+# 3.7 needs Rust 1.85; hold 3.6.x (MSRV 1.72).
+security-framework = { version = "~3.6", optional = true, default-features = false }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "=3.6.3", optional = true, default-features = false, features = ["windows-native"] }
+
 [features]
 # Test-only: exposes `seal_with_random` and `RandomSource` so the fixed vectors can inject a known
 # nonce (§16). Production callers never enable it; the public `seal` always uses the OS CSPRNG.
 test-randomness = []
 # Test-only: exposes the in-memory, fault-injecting `memory_provider::MemoryKeyProvider` (§16).
 test-support = ["test-randomness"]
+# Real OS secure store (macOS Keychain, Windows Credential Manager, Linux Secret Service).
+platform-keystore = ["dep:keyring", "dep:dbus-secret-service", "dep:security-framework"]
 
 [dev-dependencies]
 worldscript-secure-storage = { path = ".", features = ["test-support"] }
