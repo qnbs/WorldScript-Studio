@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Included in the 1.29.1 section below:** the development-dependency security updates found by
-  the fresh pre-tag OSV scan, merged after the release-prep cut and before the release tag. PR #912.
+- **Post-release v1.29.1 truth sync:** removed the release-candidate markers from README.md and
+  CHANGELOG.md now that the `v1.29.1` tag and GitHub Release are published, and recorded the real
+  release evidence in AUDIT.md, TODO.md and `docs/RELEASE-V1.29.1-EVIDENCE.md` (see `## [1.29.1]`
+  below and #872).
 
 ## [1.29.1] — 2026-09-29
-
-<!-- release-candidate: v1.29.1 -->
 
 - **v1.29.1 succeeds the unpublished `v1.29.0` tag.** It ships everything listed under
   `[1.29.0]` below. The `v1.29.0` tag stays as it is, but its desktop release was never published

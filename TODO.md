@@ -8,29 +8,27 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Current Sprint — v1.29.1 release (successor of the unpublished v1.29.0 tag, 2026-09-29)
+## Current Sprint — v1.29.1 release (successor of the unpublished v1.29.0 tag, 2026-09-30)
 
-> **Status: 🔄 in progress — release candidate, not published.** The signed `v1.29.0` tag
-> (`cf72dc6d`) passed full pre-tag qualification, but its tag-triggered CI/CD failed the enforced
-> OSV scan on the development-only `joi` 18.2.5 (GHSA-6h2x-m376-mqjq). The desktop release run
-> was cancelled before its GitHub Release job, so v1.29.0 has no GitHub Release or desktop
-> assets; its GHCR image `1.29.0` exists and contains only the static web build. The tag stays
-> immutable; v1.29.1 ships the same content plus the fix. Record: #872,
+> **Status: ✅ released.** `v1.29.1` is published (signed tag on `f255d767`, GitHub Release
+> 2026-09-30, Latest). The signed `v1.29.0` tag (`cf72dc6d`) passed full pre-tag qualification,
+> but its tag-time OSV scan failed on a development-only `joi` advisory; its desktop release was
+> cancelled before publication, and its GHCR image `1.29.0` exists. Record: #872,
 > `docs/RELEASE-V1.29.0-EVIDENCE.md`, `docs/RELEASE-V1.29.1-EVIDENCE.md`.
 
-- ✅ v1.29.0 pre-tag qualification on `cf72dc6d` (3-OS build, notices/SBOM, release-job dry
-  runs, #743 invariant, real-artifact packaged states A–D, v1.28.8 upgrade, fresh-install save).
-  The packaged gate found and closed P0 #907 (#908) before the tag.
+- ✅ v1.29.0 pre-tag qualification on `cf72dc6d`; the packaged gate found and closed P0 #907
+  (#908) before the tag.
 - ✅ `joi` fix (#909): lockfile resolves 18.2.9; override floor raised to 18.2.6.
-- 🔄 Release-prep PR (version 1.29.1 in all five sync authorities, CHANGELOG, README/AUDIT/TODO
-  truth, `docs/RELEASE-V1.29.1-EVIDENCE.md`).
-- ⬜ Pre-tag re-qualification on the new exact candidate SHA (the full gate set in
-  `docs/RELEASE-V1.29.1-EVIDENCE.md`), then the signed `v1.29.1` tag only if
-  every gate is green, including a newly executed Security Audit on the exact candidate. At tag
-  time, the tag's Security Audit is watched and the desktop release run is cancelled if it is red
+- ✅ Release-prep PR #910 (version 1.29.1, CHANGELOG, README/AUDIT/TODO truth, evidence records,
+  packaged protocol E, Security Audit freshness gate).
+- ✅ The fresh pre-tag Security Audit stopped candidate `99a664c5` (six new development-only
+  advisories); fixed by #912, and the new candidate `f255d767` was fully re-qualified.
+- ✅ `v1.29.1` released (2026-09-30): installers, updater `.sig` files and `latest.json`
+  (`darwin-aarch64`, `linux-x86_64`, `windows-x86_64`), three SBOM/notices pairs, GHCR
+  `1.29.1`/`1.29`/`latest`. The tag-time Security Audit was green before the release job
   (a procedural guard; mechanical enforcement is #911).
-- ⬜ Post-release: published-asset verification, `latest.json`, GHCR `1.29`/`latest` moved to the
-  v1.29.1 image, truth sync.
+- ⬜ Follow-ups after the release: #911 (tag-time audit as a publish dependency), #877 (docs
+  hygiene, including AUDIT.md version-line checking).
 
 <details>
 <summary>v1.29.0 release cut (superseded by v1.29.1; kept for the record)</summary>
