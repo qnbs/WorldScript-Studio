@@ -21,6 +21,7 @@ pub mod seal;
 pub mod secure_store;
 pub mod store_authority;
 pub mod store_layout;
+pub mod store_runtime;
 
 pub use aad::{canonical_aad, RecordContext};
 pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
@@ -37,3 +38,4 @@ pub use recovery::{unwrap_recovery, wrap_recovery, RecoveryMaterial, UnwrappedRe
 pub use seal::seal_with_random;
 pub use seal::{open, seal, Key, RecordMeta, SealTarget};
 pub use store_authority::SecureStoreAuthority;
+pub use store_runtime::SecureStoreRuntime;

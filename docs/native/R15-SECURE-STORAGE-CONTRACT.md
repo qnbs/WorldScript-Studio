@@ -1759,6 +1759,40 @@ immediately after it is read, before any version-1 field, so a changed future la
 misread as corruption. Any other malformation is `RECOVERY_REQUIRED`; every decoded anchor then
 passes the §5.4 anchor-validity check, and an anchor that fails it is never encoded.
 
+### 8.2.3 Runtime key handles (Gate 1b-platform, slice C1)
+
+The runtime half of the §8.2 `KeyProvider` (`state`, `unlock`, `lock`, `resolve`, `resolve_ref`) sits
+over the validated durable authority and only reads the secure store:
+
+- `state()` is computed from the validated anchor: `UNCONFIGURED` without a committed root,
+  `RECOVERY_REQUIRED` for inconsistent authority, `KEY_LOST` when the committed root key is gone,
+  otherwise `LOCKED` or `UNLOCKED`. Only the committed root decides key loss: a lost key of a
+  `prepared_root_commit` target is left to anchor-transition recovery (§5.3.1), because the prepared
+  target is recovery authorization, never ordinary read authority. An unreachable store or an
+  unsupported format stays an error.
+- `unlock()` loads the handles of the available indexed keys only after a complete authority read.
+  It grants nothing if that read fails, if the committed root key is lost, if the indexed route
+  set changes while the keys are read, or if the final state check reports anything other than
+  `UNCONFIGURED`/`UNLOCKED`; a failed `unlock` also drops earlier handles.
+- `resolve(epoch)` and `resolve_ref(route)` answer `LOCKED` before touching the store when locked,
+  resolve only a route the current index issues, and never search. On every call the durable item
+  is read first: a missing one is `KEY_LOST` (also for a key that was already missing at
+  `unlock`), a different one is `RECOVERY_REQUIRED`, and a present key that was issued after
+  `unlock` stays `LOCKED` until the next `unlock`. Every resolution first requires the committed
+  root key to be present, loaded and unchanged, so no other epoch key stays resolvable after the
+  root is lost or replaced; `resolve` cannot clear handles, `lock` does. An unlock is bound to the
+  exact committed root it saw: an anchor that later has no committed root is a rollback and is
+  `RECOVERY_REQUIRED`, never a return to the bootstrap exception; any other change of the committed
+  root (another route, or a first commit after an unconfigured unlock) is `LOCKED` until a new
+  `unlock` validates it. A non-root key that vanishes
+  while `unlock` reads the keys is skipped and reported through the route-set check as retryable,
+  not as key loss.
+- `lock()` drops every handle; the material is zeroized.
+
+The anchor transitions (`prepare_root_anchor`, `commit_root_anchor`,
+`abort_or_recover_root_anchor`) and the full `KeyProvider` implementation are slice C2; the OS
+secure-store adapter is slice D.
+
 ### 8.3 Epoch rules
 
 1. Epoch `N` is immutable once a record is committed under it.
