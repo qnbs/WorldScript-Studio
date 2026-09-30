@@ -58,13 +58,9 @@ where
     /// recovery authorization only (§5.3.1). Store and format failures are errors, never states.
     pub fn state(&self) -> Result<KeyState, KeyProviderError> {
         let root = match self.committed_root() {
-            Ok(root) => root,
-            Err(KeyProviderError::RecoveryRequired) => return Ok(KeyState::RecoveryRequired),
-            Err(KeyProviderError::KeyLost) => return Ok(KeyState::KeyLost),
-            Err(other) => return Err(other),
-        };
-        let Some(root) = root else {
-            return Ok(KeyState::Unconfigured);
+            Ok(Some(root)) => root,
+            Ok(None) => return Ok(KeyState::Unconfigured),
+            Err(error) => return state_for(error),
         };
         if !self.unlocked {
             return Ok(KeyState::Locked);
@@ -75,10 +71,7 @@ where
         };
         match self.checked_material(&root) {
             Ok(_) => Ok(KeyState::Unlocked { epoch: entry.epoch }),
-            Err(KeyProviderError::Locked) => Ok(KeyState::Locked),
-            Err(KeyProviderError::RecoveryRequired) => Ok(KeyState::RecoveryRequired),
-            Err(KeyProviderError::KeyLost) => Ok(KeyState::KeyLost),
-            Err(other) => Err(other),
+            Err(error) => state_for(error),
         }
     }
 
@@ -131,33 +124,36 @@ where
 
     /// The key of a data epoch, taken from the validated index only.
     pub fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError> {
+        self.resolve_issued(|entry| entry.epoch == epoch, KeyProviderError::UnknownEpoch)
+    }
+
+    /// Resolves exactly this route, which must be issued (indexed); never a search (§5.3.1).
+    pub fn resolve_ref(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
+        self.resolve_issued(
+            |entry| &entry.key_ref == key_ref,
+            KeyProviderError::UnknownKeyRef,
+        )
+    }
+
+    /// The one resolution path: `Locked` before any store access, then the committed-root gate,
+    /// then exactly the indexed entry `matches` selects, or `unknown`.
+    fn resolve_issued(
+        &self,
+        matches: impl Fn(&EpochInfo) -> bool,
+        unknown: KeyProviderError,
+    ) -> Result<Key, KeyProviderError> {
         if !self.unlocked {
             return Err(KeyProviderError::Locked);
         }
         self.ensure_root_usable()?;
         let key_ref = self
-            .issued_routes()?
+            .authority
+            .list_epochs()?
             .into_iter()
-            .find(|entry| entry.epoch == epoch)
+            .find(|entry| matches(entry))
             .map(|entry| entry.key_ref)
-            .ok_or(KeyProviderError::UnknownEpoch)?;
+            .ok_or(unknown)?;
         self.key_for(&key_ref)
-    }
-
-    /// Resolves exactly this route, which must be issued (indexed); never a search (§5.3.1).
-    pub fn resolve_ref(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
-        if !self.unlocked {
-            return Err(KeyProviderError::Locked);
-        }
-        self.ensure_root_usable()?;
-        if !self
-            .issued_routes()?
-            .iter()
-            .any(|entry| &entry.key_ref == key_ref)
-        {
-            return Err(KeyProviderError::UnknownKeyRef);
-        }
-        self.key_for(key_ref)
     }
 
     /// The committed root's route after its durable key was found intact, or `None` before the first
@@ -179,10 +175,6 @@ where
             Some(root) => self.checked_material(&root).map(|_| ()),
             None => Ok(()),
         }
-    }
-
-    fn issued_routes(&self) -> Result<Vec<EpochInfo>, KeyProviderError> {
-        self.authority.list_epochs()
     }
 
     fn key_for(&self, key_ref: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
@@ -210,6 +202,16 @@ where
             return Err(KeyProviderError::RecoveryRequired);
         }
         Ok(&cached.material)
+    }
+}
+
+/// The §8.1 state an authority error stands for; store and format failures stay errors.
+fn state_for(error: KeyProviderError) -> Result<KeyState, KeyProviderError> {
+    match error {
+        KeyProviderError::RecoveryRequired => Ok(KeyState::RecoveryRequired),
+        KeyProviderError::KeyLost => Ok(KeyState::KeyLost),
+        KeyProviderError::Locked => Ok(KeyState::Locked),
+        other => Err(other),
     }
 }
 

@@ -6,9 +6,9 @@ use worldscript_secure_storage::store_layout::{
 };
 use worldscript_secure_storage::{anchor, anchor_codec};
 use worldscript_secure_storage::{
-    open, parse_envelope, seal, CommittedRoot, Key, KeyProviderError, KeyState, PrepareRootAnchor,
-    RandomSource, RecordClass, RecordContext, RecordMeta, RootKeyRefV1, RootSlot, SealTarget,
-    SecureStoreAuthority, SecureStoreRuntime,
+    open, parse_envelope, seal, AnchorState, CommittedRoot, Key, KeyProviderError, KeyState,
+    PrepareRootAnchor, RandomSource, RecordClass, RecordContext, RecordMeta, RootKeyRefV1,
+    RootSlot, SealTarget, SecureStoreAuthority, SecureStoreRuntime,
 };
 
 #[derive(Clone)]
@@ -51,10 +51,19 @@ fn provisioned(epochs: &[u64]) -> (MemorySecretStore, Vec<RootKeyRefV1>) {
     (store, routes)
 }
 
+fn read_anchor(store: &MemorySecretStore) -> AnchorState {
+    anchor_codec::decode(&store.get(ANCHOR_ACCOUNT).unwrap().unwrap()).unwrap()
+}
+
+fn write_anchor(store: &MemorySecretStore, anchor_state: &AnchorState) {
+    store
+        .set(ANCHOR_ACCOUNT, &anchor_codec::encode(anchor_state).unwrap())
+        .unwrap();
+}
+
 /// Publishes `route` as the committed root, as a completed step F would.
 fn commit_root(store: &MemorySecretStore, route: &RootKeyRefV1) {
-    let mut anchor_state =
-        anchor_codec::decode(&store.get(ANCHOR_ACCOUNT).unwrap().unwrap()).unwrap();
+    let mut anchor_state = read_anchor(store);
     anchor_state.committed_floor = 1;
     anchor_state.committed_root = Some(CommittedRoot {
         root_generation: 1,
@@ -63,12 +72,24 @@ fn commit_root(store: &MemorySecretStore, route: &RootKeyRefV1) {
         root_key_ref: route.clone(),
     });
     anchor_state.last_committed_operation_id = Some("bootstrap".to_owned());
-    store
-        .set(
-            ANCHOR_ACCOUNT,
-            &anchor_codec::encode(&anchor_state).unwrap(),
-        )
-        .unwrap();
+    write_anchor(store, &anchor_state);
+}
+
+/// A provisioned store and an unlocked runtime over it; `root` also commits epoch 1's key first.
+fn unlocked(epochs: &[u64], root: bool) -> (MemorySecretStore, Vec<RootKeyRefV1>, Runtime) {
+    let (store, routes) = provisioned(epochs);
+    if root {
+        commit_root(&store, &routes[0]);
+    }
+    let mut runtime = runtime(store.clone());
+    runtime.unlock().unwrap();
+    (store, routes, runtime)
+}
+
+/// Both resolution paths for one issued key give the same refusal.
+fn assert_refused(runtime: &Runtime, epoch: u64, route: &RootKeyRefV1, error: KeyProviderError) {
+    assert_eq!(runtime.resolve(epoch).err(), Some(error));
+    assert_eq!(runtime.resolve_ref(route).err(), Some(error));
 }
 
 /// True when `resolved` is exactly the durable key of `route`: a record sealed with it opens with
@@ -106,11 +127,7 @@ fn a_locked_runtime_refuses_before_reading_the_store() {
     let locked = runtime(store.clone());
     store.set_unavailable(true);
 
-    assert_eq!(locked.resolve(1).err(), Some(KeyProviderError::Locked));
-    assert_eq!(
-        locked.resolve_ref(&routes[0]).err(),
-        Some(KeyProviderError::Locked)
-    );
+    assert_refused(&locked, 1, &routes[0], KeyProviderError::Locked);
 }
 
 #[test]
@@ -144,23 +161,15 @@ fn a_committed_root_is_locked_until_unlock_and_locked_again_after_lock() {
     assert_eq!(runtime.state(), Ok(KeyState::Locked));
 
     assert_eq!(runtime.unlock(), Ok(KeyState::Unlocked { epoch: 1 }));
-    assert!(is_durable_key(
-        &runtime.resolve_ref(&routes[0]).unwrap(),
-        &store,
-        &routes[0]
-    ));
-
     runtime.lock();
     assert_eq!(runtime.state(), Ok(KeyState::Locked));
-    assert_eq!(runtime.resolve(1).err(), Some(KeyProviderError::Locked));
+    assert_refused(&runtime, 1, &routes[0], KeyProviderError::Locked);
 }
 
 #[test]
 fn an_unissued_route_is_never_resolved_by_search() {
-    let (store, _) = provisioned(&[1]);
+    let (_, _, runtime) = unlocked(&[1], false);
     let (_, foreign) = provisioned(&[1, 2]);
-    let mut runtime = runtime(store);
-    runtime.unlock().unwrap();
 
     // `foreign[1]` is a well-formed route, but this store never issued it.
     assert_eq!(
@@ -171,38 +180,29 @@ fn an_unissued_route_is_never_resolved_by_search() {
 
 #[test]
 fn a_durable_key_that_changed_after_unlock_is_recovery_not_the_cached_key() {
-    let (store, routes) = provisioned(&[1]);
-    commit_root(&store, &routes[0]);
-    let mut runtime = runtime(store.clone());
-    runtime.unlock().unwrap();
+    let (store, routes, runtime) = unlocked(&[1], true);
 
     store.put_raw(&key_account(&routes[0]), &[0xAB; 32]);
-    assert_eq!(
-        runtime.resolve(1).err(),
-        Some(KeyProviderError::RecoveryRequired)
-    );
+    assert_refused(&runtime, 1, &routes[0], KeyProviderError::RecoveryRequired);
     assert_eq!(runtime.state(), Ok(KeyState::RecoveryRequired));
 }
 
 #[test]
 fn a_durable_key_deleted_after_unlock_is_key_lost() {
-    let (store, routes) = provisioned(&[1, 2]);
-    commit_root(&store, &routes[0]);
-    let mut runtime = runtime(store.clone());
-    runtime.unlock().unwrap();
+    let (store, routes, runtime) = unlocked(&[1, 2], true);
 
     store.delete(&key_account(&routes[1])).unwrap();
-    assert_eq!(runtime.resolve(2).err(), Some(KeyProviderError::KeyLost));
-
-    store.delete(&key_account(&routes[0])).unwrap();
-    assert_eq!(runtime.state(), Ok(KeyState::KeyLost));
+    assert_refused(&runtime, 2, &routes[1], KeyProviderError::KeyLost);
+    assert!(is_durable_key(
+        &runtime.resolve(1).unwrap(),
+        &store,
+        &routes[0]
+    ));
 }
 
 #[test]
 fn a_route_removed_from_the_index_after_unlock_is_not_resolved_from_the_cache() {
-    let (store, routes) = provisioned(&[1, 2]);
-    let mut runtime = runtime(store.clone());
-    runtime.unlock().unwrap();
+    let (store, routes, runtime) = unlocked(&[1, 2], false);
 
     let remaining = [IndexEntry {
         epoch: 1,
@@ -223,12 +223,10 @@ fn a_route_removed_from_the_index_after_unlock_is_not_resolved_from_the_cache() 
 
 #[test]
 fn a_key_provisioned_after_unlock_needs_a_new_unlock() {
-    let (store, _) = provisioned(&[1]);
-    let mut runtime = runtime(store.clone());
-    runtime.unlock().unwrap();
+    let (store, _, mut runtime) = unlocked(&[1], false);
 
     let later = runtime.authority_mut().provision_epoch_key(2).unwrap();
-    assert_eq!(runtime.resolve(2).err(), Some(KeyProviderError::Locked));
+    assert_refused(&runtime, 2, &later, KeyProviderError::Locked);
 
     runtime.unlock().unwrap();
     assert!(is_durable_key(&runtime.resolve(2).unwrap(), &store, &later));
@@ -236,19 +234,18 @@ fn a_key_provisioned_after_unlock_needs_a_new_unlock() {
 
 #[test]
 fn an_unavailable_store_is_an_error_never_a_key_state() {
-    let (store, routes) = provisioned(&[1]);
-    commit_root(&store, &routes[0]);
-    let mut runtime = runtime(store.clone());
-    runtime.unlock().unwrap();
+    let (store, routes, runtime) = unlocked(&[1], true);
 
     store.set_unavailable(true);
     assert_eq!(
         runtime.state(),
         Err(KeyProviderError::SecureAnchorUnavailable)
     );
-    assert_eq!(
-        runtime.resolve(1).err(),
-        Some(KeyProviderError::SecureAnchorUnavailable)
+    assert_refused(
+        &runtime,
+        1,
+        &routes[0],
+        KeyProviderError::SecureAnchorUnavailable,
     );
 }
 
@@ -260,7 +257,7 @@ fn a_failed_unlock_grants_nothing() {
     let mut runtime = runtime(store.clone());
 
     assert_eq!(runtime.unlock(), Err(KeyProviderError::KeyLost));
-    assert_eq!(runtime.resolve(1).err(), Some(KeyProviderError::Locked));
+    assert_refused(&runtime, 1, &routes[0], KeyProviderError::Locked);
 
     store.set_unavailable(true);
     assert_eq!(
@@ -268,22 +265,17 @@ fn a_failed_unlock_grants_nothing() {
         Err(KeyProviderError::SecureAnchorUnavailable)
     );
     store.set_unavailable(false);
-    assert_eq!(runtime.resolve(1).err(), Some(KeyProviderError::Locked));
+    assert_refused(&runtime, 1, &routes[0], KeyProviderError::Locked);
 }
 
 #[test]
 fn a_failed_unlock_also_drops_the_handles_of_an_earlier_unlock() {
-    let (store, routes) = provisioned(&[1]);
-    let mut runtime = runtime(store.clone());
-    runtime.unlock().unwrap();
+    let (store, routes, mut runtime) = unlocked(&[1], false);
 
     store.put_raw(ANCHOR_ACCOUNT, b"not an anchor");
     assert!(runtime.unlock().is_err());
     store.delete(ANCHOR_ACCOUNT).unwrap();
-    assert_eq!(
-        runtime.resolve_ref(&routes[0]).err(),
-        Some(KeyProviderError::Locked)
-    );
+    assert_refused(&runtime, 1, &routes[0], KeyProviderError::Locked);
 }
 
 #[test]
@@ -293,11 +285,7 @@ fn a_key_already_missing_at_unlock_is_key_lost_not_locked() {
     let mut runtime = runtime(store.clone());
 
     assert_eq!(runtime.unlock(), Ok(KeyState::Unconfigured));
-    assert_eq!(runtime.resolve(2).err(), Some(KeyProviderError::KeyLost));
-    assert_eq!(
-        runtime.resolve_ref(&routes[1]).err(),
-        Some(KeyProviderError::KeyLost)
-    );
+    assert_refused(&runtime, 2, &routes[1], KeyProviderError::KeyLost);
     assert!(is_durable_key(
         &runtime.resolve(1).unwrap(),
         &store,
@@ -307,17 +295,10 @@ fn a_key_already_missing_at_unlock_is_key_lost_not_locked() {
 
 #[test]
 fn losing_the_committed_root_after_unlock_refuses_every_other_key() {
-    let (store, routes) = provisioned(&[1, 2]);
-    commit_root(&store, &routes[0]);
-    let mut runtime = runtime(store.clone());
-    runtime.unlock().unwrap();
+    let (store, routes, runtime) = unlocked(&[1, 2], true);
 
     store.delete(&key_account(&routes[0])).unwrap();
-    assert_eq!(runtime.resolve(2).err(), Some(KeyProviderError::KeyLost));
-    assert_eq!(
-        runtime.resolve_ref(&routes[1]).err(),
-        Some(KeyProviderError::KeyLost)
-    );
+    assert_refused(&runtime, 2, &routes[1], KeyProviderError::KeyLost);
     assert_eq!(runtime.state(), Ok(KeyState::KeyLost));
 }
 
@@ -325,9 +306,8 @@ fn losing_the_committed_root_after_unlock_refuses_every_other_key() {
 fn a_lost_prepared_target_key_is_not_loss_of_the_committed_root() {
     let (store, routes) = provisioned(&[1, 2]);
     commit_root(&store, &routes[0]);
-    let committed = anchor_codec::decode(&store.get(ANCHOR_ACCOUNT).unwrap().unwrap()).unwrap();
     let prepared = anchor::prepare(
-        &committed,
+        &read_anchor(&store),
         &PrepareRootAnchor {
             operation_id: "rotate-2".to_owned(),
             expected_floor: 1,
@@ -338,9 +318,7 @@ fn a_lost_prepared_target_key_is_not_loss_of_the_committed_root() {
         },
     )
     .unwrap();
-    store
-        .set(ANCHOR_ACCOUNT, &anchor_codec::encode(&prepared).unwrap())
-        .unwrap();
+    write_anchor(&store, &prepared);
     store.delete(&key_account(&routes[1])).unwrap();
     let mut runtime = runtime(store.clone());
 
