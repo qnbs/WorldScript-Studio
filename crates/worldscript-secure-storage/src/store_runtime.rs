@@ -54,28 +54,26 @@ where
     }
 
     /// §8.1 state over the validated anchor: `Unconfigured` until a root is committed, whatever
-    /// scope or bootstrap keys exist. Store and format failures are errors, never states.
+    /// scope or bootstrap keys exist. Only the committed root decides key loss; a prepared target is
+    /// recovery authorization only (§5.3.1). Store and format failures are errors, never states.
     pub fn state(&self) -> Result<KeyState, KeyProviderError> {
-        let anchor = match self.authority.read_root_anchor_state() {
-            Ok(anchor) => anchor,
+        let root = match self.committed_root() {
+            Ok(root) => root,
             Err(KeyProviderError::RecoveryRequired) => return Ok(KeyState::RecoveryRequired),
             Err(KeyProviderError::KeyLost) => return Ok(KeyState::KeyLost),
             Err(other) => return Err(other),
         };
-        let Some(root) = anchor.committed_root else {
+        let Some(root) = root else {
             return Ok(KeyState::Unconfigured);
         };
         if !self.unlocked {
             return Ok(KeyState::Locked);
         }
         let epochs = self.authority.list_epochs()?;
-        let Some(entry) = epochs
-            .iter()
-            .find(|entry| entry.key_ref == root.root_key_ref)
-        else {
+        let Some(entry) = epochs.iter().find(|entry| entry.key_ref == root) else {
             return Ok(KeyState::RecoveryRequired);
         };
-        match self.checked_material(&root.root_key_ref) {
+        match self.checked_material(&root) {
             Ok(_) => Ok(KeyState::Unlocked { epoch: entry.epoch }),
             Err(KeyProviderError::Locked) => Ok(KeyState::Locked),
             Err(KeyProviderError::RecoveryRequired) => Ok(KeyState::RecoveryRequired),
@@ -88,7 +86,7 @@ where
     /// passphrase). A lost committed root key is `KeyLost`, and any failure grants nothing.
     pub fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
         self.lock();
-        self.authority.read_root_anchor_state()?;
+        self.committed_root()?;
         let epochs = self.authority.list_epochs()?;
         let mut loaded = Vec::with_capacity(epochs.len());
         for entry in epochs.iter().filter(|entry| entry.available) {
@@ -136,6 +134,7 @@ where
         if !self.unlocked {
             return Err(KeyProviderError::Locked);
         }
+        self.ensure_root_usable()?;
         let key_ref = self
             .issued_routes()?
             .into_iter()
@@ -150,6 +149,7 @@ where
         if !self.unlocked {
             return Err(KeyProviderError::Locked);
         }
+        self.ensure_root_usable()?;
         if !self
             .issued_routes()?
             .iter()
@@ -158,6 +158,27 @@ where
             return Err(KeyProviderError::UnknownKeyRef);
         }
         self.key_for(key_ref)
+    }
+
+    /// The committed root's route after its durable key was found intact, or `None` before the first
+    /// root is committed. Only the committed root is ordinary authority; the loss of a prepared
+    /// target key is left to the anchor-transition recovery (§5.3.1).
+    fn committed_root(&self) -> Result<Option<RootKeyRefV1>, KeyProviderError> {
+        let Some(root) = self.authority.validated_anchor()?.committed_root else {
+            return Ok(None);
+        };
+        self.authority.key_material(&root.root_key_ref)?;
+        Ok(Some(root.root_key_ref))
+    }
+
+    /// Every resolution is refused while the committed root is lost, replaced, or not loaded, so no
+    /// other epoch key outlives the authority it belongs to. `resolve` cannot clear the handles
+    /// (`&self`); `lock` does.
+    fn ensure_root_usable(&self) -> Result<(), KeyProviderError> {
+        match self.committed_root()? {
+            Some(root) => self.checked_material(&root).map(|_| ()),
+            None => Ok(()),
+        }
     }
 
     fn issued_routes(&self) -> Result<Vec<EpochInfo>, KeyProviderError> {
