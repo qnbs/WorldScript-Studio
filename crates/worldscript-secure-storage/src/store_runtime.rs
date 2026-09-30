@@ -182,8 +182,9 @@ where
     /// committed root, an anchor without one is a rollback (the floor never moves back, §5.3.1) and
     /// is `RecoveryRequired` rather than a return to the bootstrap exception.
     fn bound_root(&self) -> Result<Option<RootKeyRefV1>, KeyProviderError> {
+        // `unlocked_root` is only set by a successful unlock and cleared by `lock`.
         let current = self.committed_root()?;
-        if self.unlocked && self.unlocked_root.is_some() && current.is_none() {
+        if matches!((&self.unlocked_root, &current), (Some(_), None)) {
             return Err(KeyProviderError::RecoveryRequired);
         }
         Ok(current)
