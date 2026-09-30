@@ -14,8 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commit replay and an abort with nothing prepared write nothing; conflicts and refused writes leave
   the stored anchor unchanged. `SecureStoreRuntime` implements the complete `KeyProvider`: after its
   own confirmed commit an unlocked session rebinds to the new root, while a root committed
-  elsewhere still needs a new `unlock`, and a changed root whose key is missing is `Locked` for a
-  stale session rather than `KeyLost`. No platform adapter, app wiring, or production authority
+  elsewhere (even one that keeps the same key) still needs a new `unlock`, a changed root whose key
+  is missing is `Locked` for a stale session rather than `KeyLost`, and an epoch key another writer
+  provisioned is not adopted without `unlock`. No platform adapter, app wiring, or production authority
   switch is included. PR #915.
 - **R-15 Gate 1b-platform, slice C1 — runtime key handles (#445):** `SecureStoreRuntime` adds the
   runtime half of the key-provider contract over the durable authority from slice B. `unlock` loads

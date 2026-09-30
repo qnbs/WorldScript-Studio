@@ -11,8 +11,8 @@ use zeroize::Zeroizing;
 
 use crate::error::KeyProviderError;
 use crate::provider::{
-    AnchorState, EpochInfo, InstallationScopeId, KeyProvider, KeyState, PrepareRootAnchor,
-    RootKeyRefV1,
+    AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,
+    PrepareRootAnchor, RootKeyRefV1,
 };
 use crate::random::{OsRandom, RandomSource};
 use crate::seal::Key;
@@ -31,8 +31,9 @@ pub struct SecureStoreRuntime<S, R = OsRandom> {
     authority: SecureStoreAuthority<S, R>,
     runtime: Vec<RuntimeKey>,
     unlocked: bool,
-    /// The committed root this unlock was bound to; resolution requires it to stay exactly this.
-    unlocked_root: Option<RootKeyRefV1>,
+    /// The complete committed root (generation, digest, slot and key route) this unlock was bound
+    /// to; resolution requires it to stay exactly this.
+    unlocked_root: Option<CommittedRoot>,
 }
 
 impl<S, R> SecureStoreRuntime<S, R>
@@ -66,7 +67,7 @@ where
     /// recovery authorization only (§5.3.1). Store and format failures are errors, never states.
     pub fn state(&self) -> Result<KeyState, KeyProviderError> {
         let root = match self.bound_root() {
-            Ok(Some(root)) => root,
+            Ok(Some(root)) => root.root_key_ref,
             Ok(None) => return Ok(KeyState::Unconfigured),
             Err(error) => return state_for(error),
         };
@@ -172,27 +173,25 @@ where
         self.key_for(&key_ref)
     }
 
-    /// The committed root's route, or `None` before the first root is committed, held to the exact
-    /// binding of the current unlock. The binding is compared **before** the root's key item is read:
+    /// The committed root, or `None` before the first root is committed, held to the exact binding
+    /// of the current unlock — the whole root (generation, digest, slot and key route), so another
+    /// writer's checkpoint that keeps the key route is still a change. The binding is compared
+    /// **before** the root's key item is read:
     /// an anchor that no longer has the committed root the unlock saw is a rollback (the floor never
     /// moves back, §5.3.1) and is `RecoveryRequired`, and any other change of the committed root,
     /// including a first commit after an unconfigured unlock, is `Locked` until a new unlock (or this
     /// session's own step F) establishes the new binding. Only then is a missing key `KeyLost`. A
     /// prepared target is recovery authorization only, so its key loss is not decided here.
-    fn bound_root(&self) -> Result<Option<RootKeyRefV1>, KeyProviderError> {
-        let current = self
-            .authority
-            .validated_anchor()?
-            .committed_root
-            .map(|root| root.root_key_ref);
+    fn bound_root(&self) -> Result<Option<CommittedRoot>, KeyProviderError> {
+        let current = self.authority.validated_anchor()?.committed_root;
         if self.unlocked && current != self.unlocked_root {
             return match (&self.unlocked_root, &current) {
                 (Some(_), None) => Err(KeyProviderError::RecoveryRequired),
                 _ => Err(KeyProviderError::Locked),
             };
         }
-        if let Some(route) = &current {
-            self.authority.key_material(route)?;
+        if let Some(root) = &current {
+            self.authority.key_material(&root.root_key_ref)?;
         }
         Ok(current)
     }
@@ -202,16 +201,17 @@ where
     /// (`&self`); `lock` does.
     fn ensure_root_usable(&self) -> Result<(), KeyProviderError> {
         match self.bound_root()? {
-            Some(root) => self.checked_material(&root).map(|_| ()),
+            Some(root) => self.checked_material(&root.root_key_ref).map(|_| ()),
             None => Ok(()),
         }
     }
 
     /// Provisions (or exactly resumes) the key of `epoch` through the durable authority. An unlocked
-    /// session takes that key only after reading it back from the store.
+    /// session takes a key only if this call created it, and only after reading it back from the
+    /// store; an entry another writer created stays `Locked` until the next `unlock`.
     pub fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
-        let route = self.authority.provision_epoch_key(epoch)?;
-        if self.unlocked && !self.is_loaded(&route) {
+        let (route, created) = self.authority.provision_epoch_key_created(epoch)?;
+        if created && self.unlocked && !self.is_loaded(&route) {
             let material = self.authority.key_material(&route)?;
             self.runtime.push(RuntimeKey {
                 key_ref: route.clone(),
@@ -239,11 +239,11 @@ where
     }
 
     fn rebind(&mut self, committed: &AnchorState) -> Result<(), KeyProviderError> {
-        let route = committed
+        let root = committed
             .committed_root
-            .as_ref()
-            .map(|root| root.root_key_ref.clone())
+            .clone()
             .ok_or(KeyProviderError::RecoveryRequired)?;
+        let route = root.root_key_ref.clone();
         let material = self.authority.key_material(&route)?;
         match self.runtime.iter().find(|key| key.key_ref == route) {
             Some(cached) if !same_material(&cached.material, &material) => {
@@ -255,7 +255,7 @@ where
                 material,
             }),
         }
-        self.unlocked_root = Some(route);
+        self.unlocked_root = Some(root);
         Ok(())
     }
 

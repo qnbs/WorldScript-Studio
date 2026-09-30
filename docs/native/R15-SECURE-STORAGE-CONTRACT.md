@@ -1778,11 +1778,13 @@ over the validated durable authority and only reads the secure store:
   resolve only a route the current index issues, and never search. On every call the durable item
   is read first: a missing one is `KEY_LOST` (also for a key that was already missing at
   `unlock`), a different one is `RECOVERY_REQUIRED`, and a present key that was issued after
-  `unlock` by another writer stays `LOCKED` until the next `unlock` (a key this session provisions
-  itself is taken after it is read back from the store). Every resolution first requires the committed
+  `unlock` by another writer stays `LOCKED` until the next `unlock`. A key this session's own
+  provisioning call created is taken after it is read back from the store; an existing entry that
+  call only resumed is not. Every resolution first requires the committed
   root key to be present, loaded and unchanged, so no other epoch key stays resolvable after the
   root is lost or replaced; `resolve` cannot clear handles, `lock` does. An unlock is bound to the
-  exact committed root it saw: an anchor that later has no committed root is a rollback and is
+  exact committed root it saw — generation, digest, slot and key route, so another writer's
+  checkpoint that keeps the key route is still a change: an anchor that later has no committed root is a rollback and is
   `RECOVERY_REQUIRED`, never a return to the bootstrap exception; any other change of the committed
   root (another route, or a first commit after an unconfigured unlock) is `LOCKED` until a new
   `unlock` or this session's own step F (§8.2.4) establishes it. The binding is compared before the
