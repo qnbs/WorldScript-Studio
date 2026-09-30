@@ -76,7 +76,7 @@ reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; 
 # Reviewed 2026-06-16 / 2026-07-26 / 2026-08-12 / 2026-09-08. Most
 # currently-flagged npm advisories are remediated via pnpm-workspace.yaml
 # overrides (tmp, ws, form-data, protobufjs, @babel/core, dompurify→3.4.16,
-# js-yaml→4.3.2, body-parser→1.20.6, joi→18.2.5, sharp→0.35.4, …). (The former
+# js-yaml→4.3.2, body-parser→1.20.6, joi→18.2.6, sharp→0.35.4, …). (The former
 # dompurify GHSA-x4vx-rjvf-j5p4 and js-yaml-3.x GHSA-h67p-54hq-rp68 ignores
 # were dropped: both advisories no longer match the lockfile after the
 # overrides.) The two extract-zip ignores formerly here (GHSA-jmr9-qjv8-65gv,
