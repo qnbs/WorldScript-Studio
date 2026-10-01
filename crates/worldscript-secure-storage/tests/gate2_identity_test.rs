@@ -46,7 +46,7 @@ const REGISTRY: &[Row] = &[
     (RecordClass::AssetMetadata, &["p1", "a1"], "asset-metadata:p1:a1", Some("p1")),
     (RecordClass::AssetPair, &["p1", "a1"], "asset-pair:p1:a1", Some("p1")),
     (RecordClass::Codex, &["p1"], "codex:p1", Some("p1")),
-    (RecordClass::RagIndex, &["p1", "v2"], "rag-index:p1:v2", Some("p1")),
+    (RecordClass::RagIndex, &["p1", "1"], "rag-index:p1:1", Some("p1")),
     (RecordClass::ActiveProject, &["$S"], "active-project:$S", None),
     (RecordClass::AuthorityRoot, &["$S"], "authority-root:$S", None),
     (RecordClass::KeyEpoch, &["$S", "3"], "key-epoch:$S:3", None),
@@ -158,12 +158,11 @@ fn every_template_refuses_a_missing_or_extra_component() {
 }
 
 #[test]
-fn every_component_refuses_empty_separator_and_control_characters() {
+fn every_component_refuses_empty_and_control_characters() {
     for (class, components, _, _) in registry() {
         for index in 0..components.len() {
             for (bad, error) in [
                 ("", IdentityError::EmptyComponent),
-                ("a:b", IdentityError::SeparatorInComponent),
                 ("a\nb", IdentityError::ControlCharacter),
                 ("a\u{0}", IdentityError::ControlCharacter),
             ] {
@@ -176,6 +175,165 @@ fn every_component_refuses_empty_separator_and_control_characters() {
                 );
             }
         }
+    }
+}
+
+#[test]
+fn a_delimiter_is_kept_exactly_or_refused_never_normalized() {
+    for (class, components, logical_record_id, project_id) in registry() {
+        for index in 0..components.len() {
+            let mut mutated = components.clone();
+            mutated[index] = "a:b";
+            let Ok(built) = RecordIdentity::new(class, &mutated) else {
+                continue;
+            };
+            // Accepted only verbatim: the joined ID is the template with that one component replaced.
+            let expected = logical_record_id.replacen(components[index], "a:b", 1);
+            assert_eq!(
+                built.logical_record_id(),
+                expected,
+                "{class:?} component {index}"
+            );
+            let expected_project =
+                project_id.map(|p| if p == components[index] { "a:b" } else { p });
+            assert_eq!(
+                built.project_id(),
+                expected_project,
+                "{class:?} component {index}"
+            );
+        }
+    }
+}
+
+#[test]
+fn existing_ids_with_the_join_delimiter_stay_protectable_and_exact() {
+    // Imported project and record IDs are unrestricted strings (§15.1).
+    let project = identity(RecordClass::Project, &["tenant:book"]);
+    assert_eq!(project.logical_record_id(), "project:tenant:book");
+    assert_eq!(project.project_id(), Some("tenant:book"));
+    for (class, components, logical_record_id, project_id) in [
+        (
+            RecordClass::ProjectMetadata,
+            vec!["tenant:book"],
+            "project:tenant:book:metadata",
+            Some("tenant:book"),
+        ),
+        (
+            RecordClass::Codex,
+            vec!["tenant:book"],
+            "codex:tenant:book",
+            Some("tenant:book"),
+        ),
+        (
+            RecordClass::Recovery,
+            vec!["tenant:book", RECOVERY_ID],
+            "recovery:tenant:book:00112233445566778899aabbccddeeff",
+            Some("tenant:book"),
+        ),
+        (
+            RecordClass::Asset,
+            vec!["tenant:book", "img:1"],
+            "asset:tenant:book:img:1",
+            Some("tenant:book"),
+        ),
+        (
+            RecordClass::RagIndex,
+            vec!["tenant:book", "1"],
+            "rag-index:tenant:book:1",
+            Some("tenant:book"),
+        ),
+        (
+            RecordClass::Image,
+            vec!["legacy:image"],
+            "image:legacy:image",
+            None,
+        ),
+        (RecordClass::Migration, vec!["op:1"], "migration:op:1", None),
+        (
+            RecordClass::MigrationPage,
+            vec!["op:1", "7"],
+            "migration-page:op:1:7",
+            None,
+        ),
+        (
+            RecordClass::WorkerDlq,
+            vec![SCOPE, "task:9"],
+            "worker-dlq:0123456789abcdef0123456789abcdef:task:9",
+            None,
+        ),
+    ] {
+        let built = identity(class, &components);
+        assert_eq!(built.logical_record_id(), logical_record_id, "{class:?}");
+        assert_eq!(built.project_id(), project_id, "{class:?}");
+        let envelope = seal_under(&built);
+        assert_eq!(
+            open_under(&built, &envelope).unwrap(),
+            b"payload",
+            "{class:?}"
+        );
+    }
+    let codex = identity(RecordClass::Codex, &["tenant:book"]);
+    let marker = RecordIdentity::commit_marker(&codex).unwrap();
+    assert_eq!(
+        marker.logical_record_id(),
+        "record-commit:codex:codex:tenant:book"
+    );
+    assert_eq!(marker.project_id(), Some("tenant:book"));
+}
+
+#[test]
+fn equal_joined_strings_in_different_projects_are_distinct_identities() {
+    // `asset:tenant:book:x` names two different records; the separately bound project_id keeps them
+    // apart, so neither's ciphertext opens under the other (§6.2, §15.1).
+    let pairs = [
+        (
+            identity(RecordClass::Asset, &["tenant", "book:x"]),
+            identity(RecordClass::Asset, &["tenant:book", "x"]),
+        ),
+        (
+            identity(RecordClass::ProforgeMemory, &["a", "b:c"]),
+            identity(RecordClass::ProforgeMemory, &["a:b", "c"]),
+        ),
+        (
+            RecordIdentity::commit_marker(&identity(RecordClass::LoraRun, &["a", "b:c"])).unwrap(),
+            RecordIdentity::commit_marker(&identity(RecordClass::LoraRun, &["a:b", "c"])).unwrap(),
+        ),
+    ];
+    for (left, right) in &pairs {
+        assert_eq!(left.logical_record_id(), right.logical_record_id());
+        assert_ne!(left, right);
+        for (sealed_under, opened_under) in [(left, right), (right, left)] {
+            let envelope = seal_under(sealed_under);
+            assert_eq!(
+                open_under(opened_under, &envelope),
+                Err(OpenError::Tampered)
+            );
+        }
+    }
+}
+
+#[test]
+fn diagnostic_tokens_refuse_the_delimiter_because_two_would_be_ambiguous() {
+    for components in [[SCOPE, "2026-09-30:c", "1"], [SCOPE, "2026-09-30", "c:1"]] {
+        assert_eq!(
+            RecordIdentity::new(RecordClass::Diagnostic, &components),
+            Err(IdentityError::SeparatorInComponent)
+        );
+    }
+}
+
+#[test]
+fn rag_index_identities_admit_only_the_current_index_version() {
+    assert_eq!(
+        identity(RecordClass::RagIndex, &["p1", "1"]).logical_record_id(),
+        "rag-index:p1:1"
+    );
+    for version in ["v2", "2", "0", "01", "1.0", " 1", "v1"] {
+        assert_eq!(
+            RecordIdentity::new(RecordClass::RagIndex, &["p1", version]),
+            Err(IdentityError::UnsupportedIndexVersion),
+            "{version:?}"
+        );
     }
 }
 

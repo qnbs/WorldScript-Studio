@@ -10,8 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **R-15 Gate 2, slice 1 — typed record-identity registry (#445):** every protected record class
   can now only be addressed through a typed identity built from that class's registered template,
   so the record's logical ID and its project binding in the authenticated data always follow the
-  contract. Malformed parts (an empty part, a `:` separator, control characters, a non-canonical
-  number, or a malformed installation ID) are refused, never repaired. Tests prove that data sealed
+  contract. Existing project and record IDs keep their exact spelling even when they contain `:`,
+  and an index version must be one the current format supports. Malformed parts (an empty part,
+  control characters, a non-canonical number, or a malformed installation ID) are refused, never
+  repaired. Tests prove that data sealed
   under one identity never opens under another. Nothing in the app uses this yet, and the production
   authority switch stays off. PR #917.
 - **R-15 Gate 1b-platform, slice D — OS secure-store adapter (#445):** behind the opt-in

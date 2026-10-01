@@ -5,6 +5,14 @@
 //! `project_id` always follow the class's registered grammar and scope rule. There is no path,
 //! title, renderer or locale input anywhere: those are never identity (§5.1). A malformed component
 //! is refused, never normalized, and no owner is ever guessed.
+//!
+//! Existing IDs are unrestricted strings that may contain the `:` join delimiter (§15.1), so a
+//! project ID or a preserved record ID keeps its exact spelling, delimiter included. The identity
+//! stays unambiguous because it is the whole (`record_class`, `logical_record_id`, `project_id`)
+//! triple that the AAD binds (§6.2), never the joined string alone: the project component is carried
+//! as its own `project_id` field and never split out of `logical_record_id`, and every template has
+//! at most one other delimiter-bearing component; all remaining components have a delimiter-free
+//! grammar.
 
 use crate::aad::RecordContext;
 use crate::anchor::MAX_OPERATION_ID_LEN;
@@ -18,7 +26,8 @@ pub enum IdentityError {
     WrongArity,
     /// A component is empty.
     EmptyComponent,
-    /// A component contains the `:` separator, which would make the identity ambiguous.
+    /// A Core-assigned token contains the `:` separator. Only templates with two such tokens use
+    /// this grammar, where a delimiter would make the joined identity ambiguous.
     SeparatorInComponent,
     /// A component contains a control character.
     ControlCharacter,
@@ -33,6 +42,9 @@ pub enum IdentityError {
     MalformedRecoveryId,
     /// A migration `operation_id` exceeds the §6.1.2 bound the journal parsers enforce.
     OperationIdTooLong,
+    /// A RAG `index-version` is not one the current persisted format admits (§5.2: every existing
+    /// index is the fixed constant `1`).
+    UnsupportedIndexVersion,
     /// `record-commit` identities are built only from another identity, never directly.
     NotBuildableDirectly,
     /// The record is not governed by an ordinary `record-commit` marker: it is a marker itself
@@ -46,7 +58,8 @@ pub enum IdentityError {
 enum Part {
     /// A fixed literal segment.
     Literal(&'static str),
-    /// The owning project's ID; it is also the record's AAD `project_id` (§5.2.1).
+    /// The owning project's exact existing ID, delimiter included; it is also the record's AAD
+    /// `project_id` (§5.2.1).
     Project,
     /// The `InstallationScopeId` (§5.2.2).
     Scope,
@@ -61,11 +74,22 @@ enum Part {
     OperationId,
     /// A canonical, assigned `u64` key epoch.
     Epoch,
-    /// Any other registered ID component.
+    /// A RAG `index-version` from [`ADMITTED_RAG_INDEX_VERSIONS`].
+    RagIndexVersion,
+    /// A Core-assigned token that never contains `:`; used where a template has two free components.
+    Token,
+    /// Any other registered ID component: an existing ID, preserved exactly, delimiter included.
     Opaque,
 }
 
-use Part::{Decimal32, Decimal64, Epoch, Literal, Opaque, OperationId, Project, RecoveryId, Scope};
+use Part::{
+    Decimal32, Decimal64, Epoch, Literal, Opaque, OperationId, Project, RagIndexVersion,
+    RecoveryId, Scope, Token,
+};
+
+/// The RAG index versions the current persisted format admits (§5.2). A new version is added here
+/// only together with the format and migration path that read it.
+const ADMITTED_RAG_INDEX_VERSIONS: &[&str] = &["1"];
 
 /// The §5.2 template of `class`: its leading segment and the components after it. `record-commit`
 /// has none, because its identity embeds another record's identity ([`RecordIdentity::commit_marker`]).
@@ -84,14 +108,14 @@ fn template(class: RecordClass) -> Option<(&'static str, &'static [Part])> {
         RecordClass::AssetMetadata => ("asset-metadata", &[Project, Opaque]),
         RecordClass::AssetPair => ("asset-pair", &[Project, Opaque]),
         RecordClass::Codex => ("codex", &[Project]),
-        RecordClass::RagIndex => ("rag-index", &[Project, Opaque]),
+        RecordClass::RagIndex => ("rag-index", &[Project, RagIndexVersion]),
         RecordClass::ActiveProject => ("active-project", &[Scope]),
         RecordClass::AuthorityRoot => ("authority-root", &[Scope]),
         RecordClass::KeyEpoch => ("key-epoch", &[Scope, Epoch]),
         RecordClass::RecordCommit => return None,
         RecordClass::Migration => ("migration", &[OperationId]),
         RecordClass::MigrationPage => ("migration-page", &[OperationId, Decimal32]),
-        RecordClass::Diagnostic => ("diagnostic", &[Scope, Opaque, Opaque]),
+        RecordClass::Diagnostic => ("diagnostic", &[Scope, Token, Token]),
         RecordClass::RecordCatalog => ("record-catalog", &[Scope, Decimal32]),
         RecordClass::LocalFirstDoc => ("local-first-doc", &[Project]),
         RecordClass::AnalyticsDb => ("analytics-db", &[Scope]),
@@ -229,13 +253,11 @@ fn check_component(part: Part, value: &str) -> Result<(), IdentityError> {
     if value.is_empty() {
         return Err(IdentityError::EmptyComponent);
     }
-    if value.contains(':') {
-        return Err(IdentityError::SeparatorInComponent);
-    }
     if value.chars().any(char::is_control) {
         return Err(IdentityError::ControlCharacter);
     }
     match part {
+        Token if value.contains(':') => Err(IdentityError::SeparatorInComponent),
         Scope => InstallationScopeId::parse(value)
             .map(|_| ())
             .map_err(|_| IdentityError::MalformedInstallationScope),
@@ -255,7 +277,10 @@ fn check_component(part: Part, value: &str) -> Result<(), IdentityError> {
             Some(_) => Ok(()),
             None => Err(IdentityError::NonCanonicalDecimal),
         },
-        Literal(_) | Project | Opaque | OperationId => Ok(()),
+        RagIndexVersion if !ADMITTED_RAG_INDEX_VERSIONS.contains(&value) => {
+            Err(IdentityError::UnsupportedIndexVersion)
+        }
+        Literal(_) | Project | Opaque | OperationId | RagIndexVersion | Token => Ok(()),
     }
 }
 
@@ -268,4 +293,25 @@ fn canonical_decimal(value: &str) -> Option<u64> {
         return None;
     }
     value.parse::<u64>().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The injectivity argument in the module docs: besides the project component, which the AAD
+    /// binds as its own field, no template has more than one component whose grammar admits `:`.
+    #[test]
+    fn every_template_has_at_most_one_delimiter_bearing_component_besides_the_project() {
+        for class in RecordClass::ALL {
+            let Some((_, parts)) = template(*class) else {
+                continue;
+            };
+            let delimiter_bearing = parts
+                .iter()
+                .filter(|part| matches!(part, Opaque | OperationId))
+                .count();
+            assert!(delimiter_bearing <= 1, "{class:?}");
+        }
+    }
 }

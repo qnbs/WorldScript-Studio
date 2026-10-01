@@ -3458,9 +3458,15 @@ Later implementation may be admitted only in these bounded gates:
      `InstallationScopeId` components and Core-assigned recovery IDs (§3) must be canonical; version
      1 settings are exactly `settings:global` (§5.2.2); migration `operation_id`s keep the §6.1.2
      bound; migration-page and record-catalog indexes must be §5.4 canonical `uint32` decimals and
-     snapshot IDs canonical `u64` decimals; key epochs must be canonical and assigned.
-     Empty components, the `:` separator and control characters are refused, never normalized.
-     Substitution tests prove that no identity opens another identity's ciphertext. Record-class
+     snapshot IDs canonical `u64` decimals; key epochs must be canonical and assigned; a
+     `rag-index` version must be one the current format admits (only `1`, §5.2 inventory row).
+     Existing project and record IDs keep their exact spelling, including the `:` join delimiter
+     (§15.1): identity is the AAD-bound (`record_class`, `logical_record_id`, `project_id`) triple
+     (§6.2), the project is never split out of the joined string, and every template has at most
+     one other component whose grammar admits `:`, so equal joined strings in different projects
+     remain distinct identities. Only the two Core-assigned `diagnostic` tokens refuse `:`. Empty
+     components and control characters are refused, never normalized. Substitution tests prove
+     that no identity opens another identity's ciphertext. Record-class
      adapters that route real records through these identities remain later Gate 2 slices.
 3. **Durable adapter:** implement file sync, atomic replacement, directory sync, generation
    reconciliation, and fault-injection tests for one record class.
