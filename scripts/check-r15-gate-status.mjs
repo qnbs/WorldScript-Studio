@@ -42,6 +42,8 @@ const GATE_REF =
 const LIST_ITEM = /([1-7])([a-z])?(?:\s+slice\s+[1-7]([a-z]))?/gi;
 const CLAUSE_BREAK = /;|(?<=[.!?])\s+(?=[A-Z`*(])|,\s+(?:while|whereas|but)\s+/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+// CommonMark: a closing fence carries nothing but optional trailing whitespace.
+const CLOSING_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
 const HEADING = /^(#{1,6})\s/;
 const HISTORICAL_HEADING = /\bHISTORICAL\b|\bSUPERSEDED\b/i;
 
@@ -145,10 +147,9 @@ export function stripHtmlComments(text) {
 
 /** Tracks fenced code: returns the new fence marker (or null) after `line`. */
 function nextFence(line, fence) {
-  const marker = FENCE.exec(line)?.[1];
-  if (!marker) return fence;
-  if (fence === null) return marker;
-  return marker[0] === fence[0] && marker.length >= fence.length ? null : fence;
+  if (fence === null) return FENCE.exec(line)?.[1] ?? null;
+  const marker = CLOSING_FENCE.exec(line)?.[1];
+  return marker && marker[0] === fence[0] && marker.length >= fence.length ? null : fence;
 }
 
 /** Tracks historical sections: returns the heading level that opened one (or null) after `line`. */

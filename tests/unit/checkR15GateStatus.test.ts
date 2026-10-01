@@ -283,6 +283,12 @@ describe('scanR15GateStatusTruth — current prose', () => {
     expect(scan(contract(afterCloser))).toEqual([finding('Gates 3–7', '3')]);
   });
 
+  it('closes a fence only at a marker without trailing content (#935)', () => {
+    const prose =
+      '```md\nGates 2–7 not admitted\n``` <!-- sample -->\n```\n\nGates 3–7 not admitted.';
+    expect(scan(contract(prose))).toEqual([finding('Gates 3–7', '3')]);
+  });
+
   it('keeps the text around a multi-line comment adjacent (#935)', () => {
     expect(scan(contract('Gate 3 is not <!-- why\n-->admitted.'))).toEqual([
       finding('Gate 3', '3'),
