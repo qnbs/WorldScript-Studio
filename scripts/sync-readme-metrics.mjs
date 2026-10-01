@@ -127,6 +127,11 @@ if (testCount != null) {
     new RegExp(`(Vitest unit tests \\()${NUM}\\+ tests;`),
     `$1${testCount}+ tests;`,
   );
+  // Project-tree comment: "Vitest unit tests (the 8 504+ total also includes …)" — checked by docs:check.
+  readme = readme.replace(
+    new RegExp(`(Vitest unit tests \\(the )${NUM}\\+ total`),
+    `$1${testCount}+ total`,
+  );
   // Line ~650: "**5 475+ unit tests** across **449 test files**"
   readme = readme.replace(
     new RegExp(`\\*\\*${NUM}\\+ unit tests\\*\\* across \\*\\*${NUM}test files\\*\\*`),
