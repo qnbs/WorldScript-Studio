@@ -8,10 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **R-15 Gate 3, slice 3B part 2 — commit protocol and startup recovery (#445):** the
-  protected-storage core can now commit a new version of a record through its commit markers and,
-  after an interrupted write, recover at startup to exactly one authenticated version: it finishes
-  the write when the new version is intact, or keeps the previous version and sets the damaged bytes
-  aside without deleting them. Nothing reads or writes user data through it yet, and the final
+  protected-storage core can now commit a new version of a record through its commit markers and
+  recover deterministically at startup after an interrupted write: it finishes the write when the
+  new version is intact and provably belongs to it; otherwise it keeps the previous version (or, for
+  a record's very first write, leaves no version) and sets the rejected bytes aside without deleting
+  them. Nothing reads or writes user data through it yet, and the final
   authority-root commit follows in slice 3C. PR #940.
 - **R-15 Gate 3, slice 3B part 1 — commit-marker codec (#445):** the protected-storage core can
   now encode, strictly decode and seal the commit marker that records which version of a record is

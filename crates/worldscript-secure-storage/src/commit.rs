@@ -95,6 +95,10 @@ pub enum RecoveryReason {
     IllegalTransition { marker_generation: u64 },
     /// A `RECOVERY_REQUIRED` marker was recorded for this record.
     MarkerRecoveryRequired,
+    /// The marker directory holds a `generation-…` name that is neither a canonical marker file,
+    /// staging file nor rejected relocation (for example a renamed marker): never ignored, since
+    /// ignoring it could make an older marker look newest.
+    UnexpectedMarkerEntry,
     /// The committed generation's file is missing.
     CommittedGenerationMissing,
     /// The committed generation's file is not the envelope the marker committed.
@@ -106,6 +110,7 @@ pub enum RecoveryReason {
 pub enum CommitStep {
     SyncMarkers,
     ListMarkers,
+    ListRecord,
     ReadMarker,
     ReadCandidate,
     PromoteCandidate,
@@ -190,6 +195,10 @@ pub struct Reconciled {
     pub authority: Authority,
     pub resolution: Resolution,
     pub debris: Vec<Debris>,
+    /// Durability of the marker this reconciliation wrote, if it wrote one (`NotConfirmed` where
+    /// the platform cannot confirm a directory sync, so the caller can report
+    /// `COMMITTED_NOT_CONFIRMED_DURABLE`).
+    pub marker_durability: Option<DirectoryDurability>,
 }
 
 /// Reads and verifies the complete marker chain of the record.
@@ -210,7 +219,7 @@ pub fn reconcile<F: DurableFs>(
 ) -> Result<Reconciled, CommitError> {
     let chain = load_chain(fs, store)?;
     let ctx = Context { store, key_epoch };
-    let (authority, resolution) = match chain.authority {
+    let resolved = match chain.authority {
         Authority::Pending { pending, serving } => {
             let open = OpenWrite {
                 next_marker: chain.next_marker,
@@ -219,13 +228,18 @@ pub fn reconcile<F: DurableFs>(
             };
             resolve_pending(fs, &ctx, open)?
         }
-        settled => (settled, Resolution::Unchanged),
+        settled => Resolved {
+            authority: settled,
+            resolution: Resolution::Unchanged,
+            marker_durability: None,
+        },
     };
-    let debris = classify_debris(fs, store.location, &authority)?;
+    let debris = classify_debris(fs, store.location, &resolved.authority)?;
     Ok(Reconciled {
-        authority,
-        resolution,
+        authority: resolved.authority,
+        resolution: resolved.resolution,
         debris,
+        marker_durability: resolved.marker_durability,
     })
 }
 
@@ -358,6 +372,13 @@ struct Chain {
     next_marker: u64,
 }
 
+/// What startup resolution decided and the durability of the marker it wrote, if any.
+struct Resolved {
+    authority: Authority,
+    resolution: Resolution,
+    marker_durability: Option<DirectoryDurability>,
+}
+
 /// A pending write to resolve and the marker generation its resolution would take.
 struct OpenWrite {
     next_marker: u64,
@@ -374,6 +395,9 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
     let names = fs
         .list_dir(dir)
         .map_err(|error| io_error(CommitStep::ListMarkers, &error))?;
+    if names.iter().any(is_unexpected_marker_entry) {
+        return Err(recovery(RecoveryReason::UnexpectedMarkerEntry));
+    }
     let mut generations: Vec<u64> = names.iter().filter_map(parse_generation_name).collect();
     generations.sort_unstable();
     if let Some(missing) = first_gap(&generations) {
@@ -485,7 +509,7 @@ fn resolve_pending<F: DurableFs>(
     fs: &mut F,
     ctx: &Context<'_>,
     open: OpenWrite,
-) -> Result<(Authority, Resolution), CommitError> {
+) -> Result<Resolved, CommitError> {
     let OpenWrite {
         next_marker,
         pending,
@@ -497,29 +521,36 @@ fn resolve_pending<F: DurableFs>(
             epoch: pending.target_epoch,
             content_digest,
         };
-        write_marker(fs, ctx, next_marker, active_body(committed))?;
+        let durability = write_marker(fs, ctx, next_marker, active_body(committed))?;
         drop_staging(fs, ctx, &pending);
-        let resolution = Resolution::Completed {
-            generation: committed.generation,
-        };
-        return Ok((Authority::Active(committed), resolution));
+        return Ok(Resolved {
+            authority: Authority::Active(committed),
+            resolution: Resolution::Completed {
+                generation: committed.generation,
+            },
+            marker_durability: Some(durability),
+        });
     }
-    match serving {
-        Some(committed) => {
-            write_marker(fs, ctx, next_marker, active_body(committed))?;
-            let resolution = Resolution::RolledBack {
-                restored: Some(committed.generation),
-            };
-            Ok((Authority::Active(committed), resolution))
-        }
-        None => Ok((
-            Authority::Pending {
+    let Some(committed) = serving else {
+        return Ok(Resolved {
+            authority: Authority::Pending {
                 pending,
                 serving: None,
             },
-            Resolution::RolledBack { restored: None },
-        )),
-    }
+            resolution: Resolution::RolledBack { restored: None },
+            marker_durability: None,
+        });
+    };
+    // Re-record ACTIVE(old) only if the old generation is still exactly what it committed.
+    verify_committed(fs, ctx.store, committed)?;
+    let durability = write_marker(fs, ctx, next_marker, active_body(committed))?;
+    Ok(Resolved {
+        authority: Authority::Active(committed),
+        resolution: Resolution::RolledBack {
+            restored: Some(committed.generation),
+        },
+        marker_durability: Some(durability),
+    })
 }
 
 /// Drops a committed candidate's staging name; reconciliation removes it later if this fails.
@@ -723,10 +754,12 @@ fn classify_debris<F: DurableFs>(
         _ => None,
     };
     let mut debris = Vec::new();
-    for (dir, candidate) in [(location.record_dir, pending), (location.marker_dir, None)] {
-        let names = fs
-            .list_dir(dir)
-            .map_err(|error| io_error(CommitStep::ListMarkers, &error))?;
+    let dirs = [
+        (location.record_dir, pending, CommitStep::ListRecord),
+        (location.marker_dir, None, CommitStep::ListMarkers),
+    ];
+    for (dir, candidate, step) in dirs {
+        let names = fs.list_dir(dir).map_err(|error| io_error(step, &error))?;
         for name in names {
             if let Some(entry) = classify_entry(fs, dir, &name, candidate) {
                 debris.push(entry);
@@ -780,6 +813,17 @@ fn staging_disposition<F: DurableFs>(
     } else {
         DebrisKind::OrphanStaging
     }
+}
+
+/// A `generation-…` name that this protocol never writes into a marker directory.
+fn is_unexpected_marker_entry(name: &OsString) -> bool {
+    let Some(text) = name.to_str() else {
+        return false;
+    };
+    text.starts_with("generation-")
+        && parse_generation_name(name).is_none()
+        && parse_staging_name(text).is_none()
+        && !is_rejected_name(name)
 }
 
 fn is_rejected_name(name: &OsString) -> bool {

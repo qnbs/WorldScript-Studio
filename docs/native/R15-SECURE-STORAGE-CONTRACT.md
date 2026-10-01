@@ -1165,7 +1165,8 @@ Every control-plane occurrence of a logical identity or project ID — `marker_s
 the canonical marker bodies hashed into `marker_entry_digest` (including the `asset-pair` body
 above), catalog descriptors (§5.5), and `inventory_digest`
 descriptors — uses the exact same tagged direct-or-hashed binding §6.2 defines for envelope AAD:
-`u8(1) + u32be(byte_length) + exact UTF-8 bytes` within the 16,384-byte direct bound, or
+`u8(1) + u32be(byte_length) + exact UTF-8 bytes` within §6.2's 256-byte per-field direct-form cap
+(the tagged-binding reuse rule; the 16,384-byte bound is only rule A's absolute field limit), or
 `u8(2) + SHA-256(the matching §6.2 domain-prefixed hash input)` for a longer exact identity. An
 identity that exceeds the direct bound is never truncated, renamed, or dropped to raw untagged
 bytes merely because it appears in a marker, catalog page, or inventory entry instead of an
@@ -3526,7 +3527,8 @@ Later implementation may be admitted only in these bounded gates:
      re-resolves the staging path; the commit marker's `content_digest` binds it from 3B on), and
      the directory is synced. No existing file is opened for writing, overwritten or removed except
      the operation's own staging name: it is removed after a successful promotion (the generation
-     keeps the bytes) and after a write or sync failure (never validated); a staging file that fails
+     keeps the bytes; a slice 3B commit keeps it as the candidate's provenance until `ACTIVE` is
+     recorded, `retain_staging`) and after a write or sync failure (never validated); a staging file that fails
      validation, a validated one whose promotion fails (including an existing generation name), and
      one already present under the operation's name are preserved and reported. Operation IDs come
      only from the OS CSPRNG.
@@ -3572,7 +3574,8 @@ Later implementation may be admitted only in these bounded gates:
      pending epoch, `PENDING -> ACTIVE(old)` restoring the old authority, or a new first-write
      `PENDING(none -> 1)` after a rolled-back one); a gap, an unreadable, misplaced or
      reserved/future-state marker, an illegal transition or a `RECOVERY_REQUIRED` marker is
-     `RECOVERY_REQUIRED`, never a fallback to an older marker. A committed read — and every write,
+     `RECOVERY_REQUIRED`, never a fallback to an older marker; so is any other `generation-…` name
+     in the marker directory (a renamed marker is never ignored). A committed read — and every write,
      before it changes anything — requires the committed generation file's `content_digest` to
      equal the marker's and the envelope to open with the marker's generation and epoch; while a
      write is pending, the old generation is served (§8.4). A write allocates every counter first,
@@ -3585,7 +3588,8 @@ Later implementation may be admitted only in these bounded gates:
      generation is adopted only if it holds those same bytes, other bytes under the generation name
      are relocated and the staging file promoted, and the record directory is synced before
      `ACTIVE(target)` is recorded. Without that staging file nothing is adopted, whatever the
-     generation name holds: the write rolls back — `ACTIVE(old)` is re-recorded for a replacement,
+     generation name holds: the write rolls back — `ACTIVE(old)` is re-recorded for a replacement, only after the old
+     generation verifies against its committed digest (otherwise `RECOVERY_REQUIRED`),
      and a first write stays a resolved `PENDING(none -> 1)` with no payload authority because
      version 1 has no `ABSENT` marker body (slice 3C's root restores `ABSENT`). Rejected bytes are
      relocated to `<name>.rejected-<tag>`, where `tag` is a digest of the operation ID (marker text

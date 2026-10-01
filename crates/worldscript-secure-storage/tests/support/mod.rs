@@ -46,6 +46,8 @@ impl Dirs {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
+        // A root left by an aborted earlier run (same PID, same counter) is cleared first.
+        let _ = fs::remove_dir_all(&root);
         let (record, marker) = (root.join("record"), root.join("marker"));
         fs::create_dir_all(&record).unwrap();
         fs::create_dir_all(&marker).unwrap();

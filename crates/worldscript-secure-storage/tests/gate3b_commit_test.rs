@@ -479,3 +479,63 @@ fn reconciliation_removes_only_provably_redundant_staging() {
         (false, b"not an envelope".to_vec(), b"keep me".to_vec())
     );
 }
+
+#[test]
+fn a_renamed_marker_never_lets_an_older_one_look_newest() {
+    for renamed in [
+        "generation-04.wsr1",
+        "generation-4.wsr1.bak",
+        "generation-x.wsr1",
+    ] {
+        let dirs = Dirs::new();
+        write(&mut StdFs, &dirs, FIRST).unwrap();
+        write(&mut StdFs, &dirs, SECOND).unwrap();
+        fs::rename(generation_path(&dirs.marker, 4), dirs.marker.join(renamed)).unwrap();
+        assert_eq!(
+            authority(&dirs),
+            recovery_required(RecoveryReason::UnexpectedMarkerEntry),
+            "{renamed}"
+        );
+    }
+}
+
+#[test]
+fn a_rollback_never_restores_an_old_generation_that_no_longer_verifies() {
+    let dirs = Dirs::new();
+    interrupted_replacement(&dirs, FaultFs::new(Op::Create, &dirs.record, 0));
+    let markers = names(&dirs.marker);
+    fs::remove_file(generation_path(&dirs.record, 1)).unwrap();
+    assert_eq!(
+        reconcile(&mut StdFs, dirs.store(), 1).map(|_| ()),
+        Err(CommitError::RecoveryRequired(
+            RecoveryReason::CommittedGenerationMissing
+        ))
+    );
+    assert_eq!(
+        names(&dirs.marker),
+        markers,
+        "ACTIVE(old) was not re-recorded"
+    );
+}
+
+#[test]
+fn a_startup_resolution_reports_the_durability_of_the_marker_it_wrote() {
+    let dirs = Dirs::new();
+    interrupted_replacement(&dirs, FaultFs::new(Op::Link, &dirs.record, 0));
+    let reconciled = reconcile(&mut StdFs, dirs.store(), 1).unwrap();
+    let expected = if cfg!(unix) {
+        DirectoryDurability::Confirmed
+    } else {
+        DirectoryDurability::NotConfirmed
+    };
+    let outcome = (reconciled.resolution, reconciled.marker_durability);
+    assert_eq!(
+        outcome,
+        (Resolution::Completed { generation: 2 }, Some(expected))
+    );
+    let settled = reconcile(&mut StdFs, dirs.store(), 1).unwrap();
+    assert_eq!(
+        settled.marker_durability, None,
+        "nothing written when settled"
+    );
+}
