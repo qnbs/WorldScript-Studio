@@ -156,7 +156,7 @@ fn entry_digest_is_the_domain_separated_body_hash() {
 
 #[test]
 fn pending_markers_match_the_contract_vectors() {
-    for (old, digest) in [(None, None), (Some(1), None), (Some(1), Some([0x11; 32]))] {
+    for (old, digest) in [(None, None), (Some(1), None)] {
         let body = pending(old, digest);
         assert_eq!(marker(3, body).encode(), pending_vector(old, digest));
     }
@@ -210,7 +210,7 @@ fn every_admitted_body_round_trips() {
     let bodies = [
         active_body(),
         pending(None, None),
-        pending(Some(1), Some([0x22; 32])),
+        pending(Some(1), None),
         MarkerBody::RecoveryRequired {
             reason_code: 0,
             prior: Some(operation(0)),
@@ -225,7 +225,7 @@ fn every_admitted_body_round_trips() {
 
 #[test]
 fn decoding_rejects_every_truncation_and_trailing_bytes() {
-    let bytes = pending_vector(Some(1), Some([0x11; 32]));
+    let bytes = pending_vector(Some(1), None);
     for len in 0..bytes.len() {
         assert!(
             CommitMarker::decode(&settings(), &bytes[..len]).is_err(),
@@ -373,6 +373,65 @@ fn an_ordinary_pending_marker_carries_no_fence() {
         prior: Some(operation(7)),
     };
     assert!(CommitMarker::new(&settings(), 1, recovery).is_ok());
+}
+
+#[test]
+fn an_ordinary_pending_marker_carries_no_content_digest() {
+    assert_eq!(
+        CommitMarker::new(&settings(), 3, pending(Some(1), Some([0x11; 32]))),
+        Err(MarkerError::PendingDigestNotAdmitted)
+    );
+    assert_eq!(
+        CommitMarker::decode(&settings(), &pending_vector(Some(1), Some([0x11; 32]))),
+        Err(MarkerError::PendingDigestNotAdmitted)
+    );
+}
+
+/// A `record-commit` header with the given logical and project binding bytes.
+fn header_with(logical: &[u8], project: &[u8]) -> Vec<u8> {
+    let mut out = u32be(13).to_vec();
+    out.extend_from_slice(b"record-commit");
+    out.extend_from_slice(logical);
+    out.extend_from_slice(project);
+    out.extend_from_slice(&u64be(1));
+    out.extend_from_slice(&u32be(ACTIVE));
+    out
+}
+
+fn direct(value: &[u8]) -> Vec<u8> {
+    let mut out = vec![1];
+    out.extend_from_slice(&u32be(value.len() as u32));
+    out.extend_from_slice(value);
+    out
+}
+
+#[test]
+fn non_canonical_identity_bindings_are_corrupt_not_identity_mismatches() {
+    let corrupt = Err(MarkerError::Corrupt("not a record-commit marker body"));
+    let hashed = [vec![2], vec![0x5a; 32]].concat();
+    let cases: [(Vec<u8>, Vec<u8>); 6] = [
+        (direct(b""), vec![0]),
+        (direct(&[0xff, 0xfe]), vec![0]),
+        (direct(&[b'x'; 257]), vec![0]),
+        (direct(b"record-commit:x"), hashed.clone()),
+        (hashed.clone(), direct(b"p1")),
+        (vec![0], vec![0]),
+    ];
+    for (logical, project) in cases {
+        let bytes = header_with(&logical, &project);
+        assert_eq!(CommitMarker::decode(&settings(), &bytes), corrupt);
+    }
+    // Canonical bindings naming another identity remain an identity mismatch.
+    for (logical, project) in [
+        (direct(b"record-commit:x"), direct(b"p1")),
+        (hashed.clone(), hashed),
+    ] {
+        let bytes = header_with(&logical, &project);
+        assert_eq!(
+            CommitMarker::decode(&settings(), &bytes),
+            Err(MarkerError::IdentityMismatch)
+        );
+    }
 }
 
 #[test]

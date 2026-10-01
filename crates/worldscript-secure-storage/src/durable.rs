@@ -13,12 +13,14 @@
 //! staging debris is slice 3B. The record directory is a physical locator only; it is never part of
 //! the record's identity or AAD (§6.1.1).
 
+use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
+use crate::marker::content_digest;
 use crate::random::{OsRandom, RandomSource};
 use crate::record::{open_record, seal_record};
 use crate::seal::{Key, RecordMeta};
@@ -49,6 +51,8 @@ pub trait DurableFs {
     fn remove_file(&mut self, path: &Path) -> io::Result<()>;
     /// Persists the directory's entries where the platform can confirm it.
     fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability>;
+    /// The names of the entries directly inside `dir`, in no particular order.
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>>;
 }
 
 /// The real filesystem. On Apple platforms `File::sync_all` issues `F_FULLFSYNC`; on Windows it is
@@ -90,6 +94,12 @@ impl DurableFs for StdFs {
     #[cfg(not(unix))]
     fn sync_dir(&mut self, _dir: &Path) -> io::Result<DirectoryDurability> {
         Ok(DirectoryDurability::NotConfirmed)
+    }
+
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> {
+        fs::read_dir(dir)?
+            .map(|entry| entry.map(|entry| entry.file_name()))
+            .collect()
     }
 }
 
@@ -159,6 +169,10 @@ pub struct StageRequest<'a> {
     /// `record_generation` is the generation being written.
     pub meta: RecordMeta,
     pub operation: &'a WriteOperationId,
+    /// Keep the staging name linked after a successful promotion. A commit (slice 3B) keeps it as
+    /// the candidate's provenance — the only name tied to its operation (§9.2) — until `ACTIVE` is
+    /// recorded; a standalone promotion drops it.
+    pub retain_staging: bool,
 }
 
 /// The durability step at which an attempt stopped (§9.2's fault points).
@@ -216,6 +230,8 @@ pub struct StageFailure {
 pub struct PromotedGeneration {
     pub generation: u64,
     pub path: PathBuf,
+    /// `content_digest` (§5.4) of the promoted envelope, which the commit marker binds.
+    pub content_digest: [u8; 32],
     pub directory: DirectoryDurability,
     pub staging: StagingResidue,
 }
@@ -250,7 +266,11 @@ pub fn stage_and_promote<F: DurableFs>(
     attempt.promote(fs)?;
     // The new generation now exists under its own name. Dropping the staging link leaves only that
     // name; a failure here leaves suffixed ciphertext debris for startup reconciliation.
-    let staging = residue_after_remove(fs, &attempt.staging);
+    let staging = if request.retain_staging {
+        StagingResidue::Present
+    } else {
+        residue_after_remove(fs, &attempt.staging)
+    };
     attempt.verify_promoted(fs, staging)?;
     let directory = fs.sync_dir(request.dir).map_err(|error| StageFailure {
         step: StageStep::SyncDirectory,
@@ -260,6 +280,7 @@ pub fn stage_and_promote<F: DurableFs>(
     })?;
     Ok(PromotedGeneration {
         generation,
+        content_digest: content_digest(&attempt.envelope),
         path: attempt.target,
         directory,
         staging,
