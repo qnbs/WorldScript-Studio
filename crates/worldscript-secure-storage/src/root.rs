@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 
 use crate::aad::tagged_identity_binding_parts;
 use crate::anchor::MAX_OPERATION_ID_LEN;
+use crate::catalog::CATALOG_SHARD_COUNT;
 use crate::error::AadError;
 use crate::marker::CommitMarker;
 use crate::provider::RootSlot;
@@ -36,6 +37,8 @@ pub enum RootError {
     InvalidCounter,
     /// An empty or over-long (over 128 bytes) `operation_id`.
     InvalidOperationId,
+    /// A catalog shard outside `0..CATALOG_SHARD_COUNT` (§5.5.1): no valid page can exist for it.
+    InvalidShard,
     InvalidIdentity(AadError),
 }
 
@@ -161,6 +164,9 @@ pub fn marker_set_digest(entries: &[MarkerSetEntry]) -> Result<[u8; 32], RootErr
 /// `catalog_set_digest` (§5.4) over every catalog shard, sorted by `shard_id`.
 pub fn catalog_set_digest(shards: &[CatalogShard]) -> Result<[u8; 32], RootError> {
     keyed_set_digest(CATALOG_SET_DOMAIN, shards, |shard| {
+        if shard.shard_id >= CATALOG_SHARD_COUNT {
+            return Err(RootError::InvalidShard);
+        }
         check_counter(shard.catalog_generation)?;
         Ok(SetRow {
             key: u64::from(shard.shard_id),
