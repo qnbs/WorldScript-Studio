@@ -7,12 +7,14 @@
 //! ([`record`]), the §10.4.1 record-class disposition ([`mod@disposition`]), the Gate 3
 //! slice 3A durable staging and promotion of one generation ([`durable`]), and slice 3B's
 //! `record-commit` marker codec ([`marker`]) and marker commit protocol with startup reconciliation
-//! ([`commit`]), and slice 3C's authority-root digests ([`root`]). It changes no current
+//! ([`commit`]), and slice 3C's authority-root digests ([`root`]) and record catalog ([`catalog`]).
+//! It changes no current
 //! TypeScript/Tauri storage authority and holds no journal or authority-root commit yet.
 
 pub mod aad;
 pub mod anchor;
 pub mod anchor_codec;
+pub mod catalog;
 pub mod commit;
 pub mod disposition;
 pub mod durable;
@@ -36,6 +38,10 @@ pub mod store_layout;
 pub mod store_runtime;
 
 pub use aad::{canonical_aad, RecordContext};
+pub use catalog::{
+    catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, CATALOG_SHARD_COUNT,
+    MAX_CATALOG_PAGE_DESCRIPTORS,
+};
 pub use commit::{
     commit_write, load_authority, read_committed, reconcile, Authority, CommitError, CommitStep,
     CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled, RecordLocation,
