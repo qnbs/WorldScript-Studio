@@ -4,13 +4,15 @@
 //! Headless only: the `WSR1` envelope header (§6.1), the record-class registry (§6.1.1), canonical
 //! AAD (§6.2), and AES-256-GCM seal/open with an OS-backed nonce source (§6.3), plus the Gate 2
 //! slice 1 typed record-identity registry ([`identity`], §5.2), the identity-bound record codec
-//! ([`record`]) and the §10.4.1 record-class disposition ([`mod@disposition`]). It changes no
-//! current TypeScript/Tauri storage authority and holds no key provider, journal, or durable I/O.
+//! ([`record`]), the §10.4.1 record-class disposition ([`mod@disposition`]), and the Gate 3
+//! slice 3A durable staging and promotion of one generation ([`durable`]). It changes no current
+//! TypeScript/Tauri storage authority and holds no journal or commit protocol.
 
 pub mod aad;
 pub mod anchor;
 pub mod anchor_codec;
 pub mod disposition;
+pub mod durable;
 pub mod envelope;
 pub mod error;
 pub mod identity;
@@ -30,6 +32,11 @@ pub mod store_runtime;
 
 pub use aad::{canonical_aad, RecordContext};
 pub use disposition::{disposition, is_r15_record_class, Disposition};
+pub use durable::{
+    generation_path, stage_and_promote, staging_path, DirectoryDurability, DurableFs,
+    PromotedGeneration, StageFailure, StageFailureKind, StageRequest, StageStep, StagingResidue,
+    StdFs, WriteOperationId,
+};
 pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
 pub use error::{AadError, KdfError, KeyProviderError, OpenError, RecoveryError, SealError};
 pub use identity::{IdentityError, RecordIdentity};
