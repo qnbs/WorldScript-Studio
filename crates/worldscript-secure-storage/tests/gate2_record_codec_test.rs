@@ -100,15 +100,24 @@ fn any_changed_authenticated_byte_fails_closed() {
     let record = identity(RecordClass::Project, &["p1"]);
     let envelope = sealed(&record);
     let ciphertext_byte = HEADER_LEN + (envelope.len() - HEADER_LEN - TAG_LEN) / 2;
-    // Header routing fields (key epoch, generation, schema, nonce), a ciphertext byte and the tag.
-    for index in [12, 20, 28, 40, ciphertext_byte, envelope.len() - 1] {
+    // Authenticated header fields (key epoch, generation, nonce), a ciphertext byte and the tag.
+    for index in [12, 20, 40, ciphertext_byte, envelope.len() - 1] {
         let mut changed = envelope.clone();
         changed[index] ^= 0x01;
-        assert!(
-            open_record(&key(), &record, &changed).is_err(),
+        assert_eq!(
+            open_record(&key(), &record, &changed),
+            Err(OpenError::Tampered),
             "byte {index}"
         );
     }
+    // The record schema (offset 28) is checked against the compatibility registry before
+    // authentication, so changing it is refused as unsupported, never released (§7).
+    let mut changed = envelope.clone();
+    changed[28] ^= 0x01;
+    assert_eq!(
+        open_record(&key(), &record, &changed),
+        Err(OpenError::UnsupportedVersion("record schema"))
+    );
 }
 
 #[test]

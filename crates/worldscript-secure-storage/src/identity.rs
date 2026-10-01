@@ -154,9 +154,9 @@ pub struct RecordIdentity {
     class: RecordClass,
     logical_record_id: String,
     project_id: Option<String>,
-    /// The exact template components it was built from (literals excluded), so related identities
-    /// are derived structurally (§8.4) and never by parsing `logical_record_id`. Empty for
-    /// `record-commit`, which is built from another identity.
+    /// The exact template components it was built from (literals excluded), so asset-pair
+    /// relations are derived structurally (§8.4) and never by parsing `logical_record_id`. Kept only
+    /// for the asset-pair classes, the only ones that derive related identities; empty otherwise.
     components: Vec<String>,
 }
 
@@ -179,8 +179,9 @@ impl RecordIdentity {
         let mut values = components.iter();
         let mut logical_record_id = prefix.to_owned();
         let mut project_id = None;
-        // Sized by the template, never by the caller's slice: excess components are refused below.
-        let mut kept = Vec::with_capacity(parts.len());
+        // Borrowed and sized by the template, never by the caller's slice: nothing is copied until the
+        // identity is complete, and excess components are refused below.
+        let mut kept: Vec<&str> = Vec::with_capacity(parts.len());
         for part in parts {
             let segment = if let Literal(literal) = part {
                 *literal
@@ -190,7 +191,7 @@ impl RecordIdentity {
                 if matches!(part, Project) {
                     project_id = Some((*value).to_owned());
                 }
-                kept.push((*value).to_owned());
+                kept.push(value);
                 *value
             };
             logical_record_id.push(':');
@@ -203,7 +204,11 @@ impl RecordIdentity {
             class,
             logical_record_id,
             project_id,
-            components: kept,
+            components: if has_pair_relation(class) {
+                kept.into_iter().map(str::to_owned).collect()
+            } else {
+                Vec::new()
+            },
         })
     }
 
@@ -275,6 +280,14 @@ impl RecordIdentity {
             project_id: self.project_id.as_deref(),
         }
     }
+}
+
+/// Whether `class` takes part in an `asset-pair` relation (§8.4).
+fn has_pair_relation(class: RecordClass) -> bool {
+    matches!(
+        class,
+        RecordClass::AssetPair | RecordClass::Asset | RecordClass::AssetMetadata
+    )
 }
 
 /// Whether `class` is committed through its own `record-commit` marker.
