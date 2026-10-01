@@ -7,7 +7,8 @@
 //! ([`record`]), the §10.4.1 record-class disposition ([`mod@disposition`]), the Gate 3
 //! slice 3A durable staging and promotion of one generation ([`durable`]), and slice 3B's
 //! `record-commit` marker codec ([`marker`]) and marker commit protocol with startup reconciliation
-//! ([`commit`]), and slice 3C's authority-root digests ([`root`]) and record catalog ([`catalog`]).
+//! ([`commit`]), and slice 3C's authority-root digests ([`root`]), record catalog ([`catalog`])
+//! and persisted root records ([`root_record`]).
 //! It changes no current
 //! TypeScript/Tauri storage authority and holds no journal or authority-root commit yet.
 
@@ -31,6 +32,7 @@ pub mod record;
 pub mod record_class;
 pub mod recovery;
 pub mod root;
+pub mod root_record;
 pub mod seal;
 pub mod secure_store;
 pub mod store_authority;
@@ -69,9 +71,12 @@ pub use record::{open_record, seal_record, OpenedRecord, ADMITTED_RECORD_SCHEMAS
 pub use record_class::RecordClass;
 pub use recovery::{unwrap_recovery, wrap_recovery, RecoveryMaterial, UnwrappedRecovery};
 pub use root::{
-    catalog_set_digest, key_epoch_set_digest, marker_set_digest, pointer_digest, root_digest,
-    CatalogShard, KeyEpochEntry, LiveMigration, MarkerSetEntry, RootBody, RootCommitEvidence,
-    RootCommitState, RootError,
+    catalog_set_digest, decode_root_body, encode_root_body, key_epoch_set_digest,
+    marker_set_digest, pointer_digest, root_digest, CatalogShard, KeyEpochEntry, LiveMigration,
+    MarkerSetEntry, RootBody, RootCommitEvidence, RootCommitState, RootError,
+};
+pub use root_record::{
+    open_root_slot, seal_root_slot, KeyEpochRecord, KeyEpochStatus, RootPointer, RootRecordError,
 };
 #[cfg(feature = "test-randomness")]
 pub use seal::seal_with_random;

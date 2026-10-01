@@ -39,6 +39,8 @@ pub enum RootError {
     InvalidOperationId,
     /// A catalog shard outside `0..CATALOG_SHARD_COUNT` (§5.5.1): no valid page can exist for it.
     InvalidShard,
+    /// Truncated or malformed root bytes, including a non-canonical flag or state code.
+    Corrupt(&'static str),
     InvalidIdentity(AadError),
 }
 
@@ -109,7 +111,7 @@ pub enum RootCommitState {
 }
 
 impl RootCommitState {
-    fn code(self) -> u32 {
+    pub fn code(self) -> u32 {
         match self {
             RootCommitState::NotCommitted => 0,
             RootCommitState::Committed => 1,
@@ -218,12 +220,12 @@ fn keyed_set_digest<T>(
     Ok(hasher.finalize().into())
 }
 
-/// `root_digest` (§5.4): the domain, then every root body field in the specified order.
-pub fn root_digest(root: &RootBody) -> Result<[u8; 32], RootError> {
+/// `canonical_root_body_bytes` (§5.3.4): every root body field in the §5.4 order. This is the
+/// root slot's protected payload body and, after the domain prefix, exactly `root_digest`'s input.
+pub fn encode_root_body(root: &RootBody) -> Result<Vec<u8>, RootError> {
     check_counter(root.root_generation)?;
     check_counter(root.active_key_epoch)?;
     let mut out = Vec::with_capacity(512);
-    out.extend_from_slice(ROOT_DOMAIN);
     out.extend_from_slice(&root.root_generation.to_be_bytes());
     out.extend_from_slice(&root.active_key_epoch.to_be_bytes());
     out.extend_from_slice(&root.root_key_ref_digest);
@@ -235,7 +237,110 @@ pub fn root_digest(root: &RootBody) -> Result<[u8; 32], RootError> {
     out.extend_from_slice(&evidence.fencing_generation.to_be_bytes());
     out.extend_from_slice(&evidence.state.code().to_be_bytes());
     push_live_migration(&mut out, root.live_migration.as_ref())?;
-    Ok(Sha256::digest(&out).into())
+    Ok(out)
+}
+
+/// Strictly decodes `canonical_root_body_bytes`: every field is checked as on encoding, flags and
+/// state codes must be canonical, no byte may follow, and the result re-encodes to the same bytes.
+pub fn decode_root_body(bytes: &[u8]) -> Result<RootBody, RootError> {
+    let mut reader = Reader(bytes);
+    let root_generation = reader.u64()?;
+    let active_key_epoch = reader.u64()?;
+    let root_key_ref_digest = reader.digest()?;
+    let marker_set_digest = reader.digest()?;
+    let catalog_set_digest = reader.digest()?;
+    let key_epoch_set_digest = reader.digest()?;
+    let operation_id = reader.operation_id()?;
+    let fencing_generation = reader.u64()?;
+    let state = match reader.u32()? {
+        0 => RootCommitState::NotCommitted,
+        1 => RootCommitState::Committed,
+        _ => return Err(RootError::Corrupt("unknown root_commit_state_code")),
+    };
+    let live_migration = match reader.u8()? {
+        0 => None,
+        1 => Some(LiveMigration {
+            operation_id: reader.operation_id()?,
+            fencing_generation: reader.u64()?,
+            journal_revision: reader.u64()?,
+            manifest_digest: reader.digest()?,
+        }),
+        _ => return Err(RootError::Corrupt("has_live_migration is neither 0 nor 1")),
+    };
+    if !reader.0.is_empty() {
+        return Err(RootError::Corrupt("trailing bytes after the root body"));
+    }
+    let root = RootBody {
+        root_generation,
+        active_key_epoch,
+        root_key_ref_digest,
+        marker_set_digest,
+        catalog_set_digest,
+        key_epoch_set_digest,
+        commit_evidence: RootCommitEvidence {
+            operation_id,
+            fencing_generation,
+            state,
+        },
+        live_migration,
+    };
+    // Re-encoding applies every encoder check (counters, operation IDs, live-migration fence).
+    encode_root_body(&root)?;
+    Ok(root)
+}
+
+/// A strict big-endian cursor: every read fails on truncation instead of padding.
+struct Reader<'a>(&'a [u8]);
+
+impl<'a> Reader<'a> {
+    fn take(&mut self, len: usize) -> Result<&'a [u8], RootError> {
+        if self.0.len() < len {
+            return Err(RootError::Corrupt("truncated root body"));
+        }
+        let (head, tail) = self.0.split_at(len);
+        self.0 = tail;
+        Ok(head)
+    }
+
+    fn u8(&mut self) -> Result<u8, RootError> {
+        Ok(self.take(1)?[0])
+    }
+
+    fn u32(&mut self) -> Result<u32, RootError> {
+        Ok(u32::from_be_bytes(
+            self.take(4)?.try_into().expect("4 bytes"),
+        ))
+    }
+
+    fn u64(&mut self) -> Result<u64, RootError> {
+        Ok(u64::from_be_bytes(
+            self.take(8)?.try_into().expect("8 bytes"),
+        ))
+    }
+
+    fn digest(&mut self) -> Result<[u8; 32], RootError> {
+        Ok(self.take(32)?.try_into().expect("32 bytes"))
+    }
+
+    fn operation_id(&mut self) -> Result<String, RootError> {
+        let len = self.u32()? as usize;
+        if len == 0 || len > MAX_OPERATION_ID_LEN {
+            return Err(RootError::InvalidOperationId);
+        }
+        std::str::from_utf8(self.take(len)?)
+            .map(str::to_owned)
+            .map_err(|_| RootError::Corrupt("operation_id is not UTF-8"))
+    }
+}
+
+/// `root_digest` (§5.4): the domain, then the canonical root body.
+pub fn root_digest(root: &RootBody) -> Result<[u8; 32], RootError> {
+    let body = encode_root_body(root)?;
+    Ok(Sha256::new()
+        .chain_update(ROOT_DOMAIN)
+        .chain_update(&body)
+        .finalize()
+        .into())
 }
 
 /// `pointer_digest` (§5.4): binds an active-slot pointer to one committed root slot.
