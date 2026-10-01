@@ -763,14 +763,20 @@ CONTROL_RECORD_SCHEMA            = 1   record_schema of every root slot and key-
 ```
 
 **Root slot.** A root generation is the protected record `authority-root:<InstallationScopeId>`
-whose `record_generation` is the `root_generation`, sealed under the root key route (§5.3.1). Its
+whose `record_generation` is the `root_generation` and whose envelope `key_epoch` is the body's own
+`active_key_epoch`, sealed under the root key route (§5.3.1); opening refuses a slot whose header
+generation or epoch differs from its body. Its
 payload is `u32be(ROOT_SLOT_FORMAT_VERSION)` followed by `canonical_root_body_bytes`: exactly the
 `root_digest` input of §5.4 after its domain prefix — `u64be(root_generation)`,
 `u64be(active_key_epoch)`, `root_key_ref_digest`, `marker_set_digest`, `catalog_set_digest`,
 `key_epoch_set_digest`, `root_commit_evidence`, then the live-migration binding — so
 `root_digest = SHA-256("worldscript-r15/root/v1" || canonical_root_body_bytes)`. Decoding is strict:
 every field is validated as on encoding, the state code is `0` or `1`, `has_live_migration` is `0`
-or `1`, no byte follows, and the envelope generation must equal the body's `root_generation`.
+or `1`, and no byte follows. §5.3's commit evidence "binds its operation ID, fencing generation,
+journal revision, and `COMMITTED` state" through two fields of this one body: `root_commit_evidence`
+binds the operation, fence and state, and the journal revision is the live-migration binding's
+`live_migration_journal_revision` — present exactly when a migration/rekey journal is live. An
+ordinary root commit has no journal and therefore binds no revision; §5.4's encoding is normative.
 
 **Active-slot pointer.** The pointer is an 81-byte unencrypted file holding no project content or key
 material: `"WSRP"`, `u32be(POINTER_FORMAT_VERSION)`, `u8(slot code)` (§5.4 root-slot codes),
@@ -785,6 +791,9 @@ secure anchor's `committed_root` always wins a disagreement (§5.3.1, §5.3.3).
 `KEY_EPOCH_PREPARED = 1`, `KEY_EPOCH_ACTIVE = 2`, `KEY_EPOCH_RETIRED_RECOVERY_ONLY = 3`,
 `KEY_EPOCH_REVOKED = 4`; any other code is refused), then the opaque, non-secret `RootKeyRefV1` key
 route as `u32be(byte_length)` + bytes (1–256 bytes, §6.1.2). It carries no key material. The
+verifier metadata, retirement detail, KDF profile reference and non-secret recovery metadata that §5.4
+permits a key-epoch payload to hold are reserved for a later format version; version 1 carries none
+of them. The
 record's `key_epoch_set_digest` entry is its `(epoch, registry_generation, content_digest)`, the
 digest taken over the complete sealed envelope (§5.4). A record whose payload names another epoch
 than its identity is refused.
@@ -3759,8 +3768,9 @@ Later implementation may be admitted only in these bounded gates:
      non-canonical state and live-migration codes and invalid counters and re-encodes identically;
      the 81-byte pointer is bound by `pointer_digest` and refused on any malformed field; a
      key-epoch record carries epoch, §8.3 status and the opaque key route and yields its
-     `key_epoch_set_digest` entry from the sealed envelope. Opening any of them refuses another
-     scope, identity or generation. Nothing is persisted or committed yet: the two-phase root commit
+     `key_epoch_set_digest` entry from the sealed envelope. Opening a root slot or key-epoch record
+     refuses another scope, identity, generation or (for the root) envelope epoch; the pointer,
+     which carries no scope or identity, is recoverable state checked against the secure anchor. Nothing is persisted or committed yet: the two-phase root commit
      (§5.3.1 A–G with its crash table and cold start), wired into the write protocol with
      `list_records` and retention, is the rest of slice 3C.
 4. **Journal/admission:** implement enable/rotate/recovery state machines, exclusive migration

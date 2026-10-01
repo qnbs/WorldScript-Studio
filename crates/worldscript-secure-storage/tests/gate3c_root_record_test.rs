@@ -4,8 +4,9 @@
 //! independently pinned 3C part 1 vectors.
 
 use worldscript_secure_storage::{
-    decode_root_body, encode_root_body, open_root_slot, seal_root_slot, InstallationScopeId, Key,
-    KeyEpochRecord, KeyEpochStatus, LiveMigration, OpenError, RootBody, RootCommitEvidence,
+    decode_root_body, encode_root_body, open_root_slot, seal_record, seal_root_slot,
+    InstallationScopeId, Key, KeyEpochAddress, KeyEpochRecord, KeyEpochStatus, LiveMigration,
+    OpenError, RecordClass, RecordIdentity, RecordMeta, RootBody, RootCommitEvidence,
     RootCommitState, RootError, RootKeyRefV1, RootPointer, RootRecordError, RootSlot,
 };
 
@@ -44,14 +45,14 @@ const POINTER_DIGEST: &str = "58196ba16c117c0f4d4178c183b33135c65aaad3d36cbc661a
 
 #[test]
 fn a_root_slot_round_trips_and_yields_the_pinned_root_digest() {
-    let sealed = seal_root_slot(&key(), &scope(), &root(), 2).unwrap();
+    let sealed = seal_root_slot(&key(), &scope(), &root()).unwrap();
     let (opened, digest) = open_root_slot(&key(), &scope(), 5, &sealed).unwrap();
     assert_eq!((opened, hex(&digest)), (root(), ROOT_DIGEST.to_owned()));
 }
 
 #[test]
 fn a_root_slot_opens_only_as_its_own_scope_and_generation() {
-    let sealed = seal_root_slot(&key(), &scope(), &root(), 2).unwrap();
+    let sealed = seal_root_slot(&key(), &scope(), &root()).unwrap();
     let other = InstallationScopeId::from_random_bits([1u8; 16]);
     let refusals = (
         open_root_slot(&key(), &scope(), 6, &sealed).unwrap_err(),
@@ -211,10 +212,25 @@ fn a_key_epoch_record_refuses_unknown_statuses_and_bad_routes() {
     );
 }
 
+fn address(
+    scope: &InstallationScopeId,
+    epoch: u64,
+    registry_generation: u64,
+) -> KeyEpochAddress<'_> {
+    KeyEpochAddress {
+        scope,
+        epoch,
+        registry_generation,
+    }
+}
+
 #[test]
 fn a_sealed_key_epoch_record_yields_its_set_entry() {
-    let sealed = epoch_record().seal(&key(), &scope(), 3, 1).unwrap();
-    let (record, entry) = KeyEpochRecord::open(&key(), &scope(), 1, 3, &sealed).unwrap();
+    let scope = scope();
+    let sealed = epoch_record()
+        .seal(&key(), &address(&scope, 1, 3), 1)
+        .unwrap();
+    let (record, entry) = KeyEpochRecord::open(&key(), &address(&scope, 1, 3), &sealed).unwrap();
     let digest = worldscript_secure_storage::content_digest(&sealed);
     assert_eq!(
         (
@@ -225,16 +241,50 @@ fn a_sealed_key_epoch_record_yields_its_set_entry() {
         ),
         (epoch_record(), 1, 3, digest)
     );
-    // Another epoch's identity, or another generation, never opens it.
-    let refusals = (
-        KeyEpochRecord::open(&key(), &scope(), 2, 3, &sealed).unwrap_err(),
-        KeyEpochRecord::open(&key(), &scope(), 1, 4, &sealed).unwrap_err(),
-    );
+    // Another epoch's identity, another generation, or an unassigned generation never opens it.
+    let refusals = [
+        KeyEpochRecord::open(&key(), &address(&scope, 2, 3), &sealed).unwrap_err(),
+        KeyEpochRecord::open(&key(), &address(&scope, 1, 4), &sealed).unwrap_err(),
+        KeyEpochRecord::open(&key(), &address(&scope, 1, 0), &sealed).unwrap_err(),
+    ];
     assert_eq!(
         refusals,
-        (
+        [
             RootRecordError::Open(OpenError::Tampered),
-            RootRecordError::GenerationMismatch
-        )
+            RootRecordError::GenerationMismatch,
+            RootRecordError::Root(RootError::InvalidCounter),
+        ]
+    );
+    for bad in [0, u64::MAX] {
+        assert_eq!(
+            epoch_record()
+                .seal(&key(), &address(&scope, 1, bad), 1)
+                .unwrap_err(),
+            RootRecordError::Root(RootError::InvalidCounter)
+        );
+    }
+    assert_eq!(
+        epoch_record()
+            .seal(&key(), &address(&scope, 2, 3), 1)
+            .unwrap_err(),
+        RootRecordError::Corrupt("key-epoch record names another epoch")
+    );
+}
+
+#[test]
+fn a_root_slot_sealed_under_another_epoch_than_its_body_is_refused() {
+    // A valid body (active_key_epoch 2) sealed by hand under envelope epoch 7.
+    let mut payload = 1u32.to_be_bytes().to_vec();
+    payload.extend_from_slice(&encode_root_body(&root()).unwrap());
+    let identity = RecordIdentity::new(RecordClass::AuthorityRoot, &[scope().as_str()]).unwrap();
+    let meta = RecordMeta {
+        key_epoch: 7,
+        record_generation: 5,
+        record_schema: 1,
+    };
+    let sealed = seal_record(&key(), &identity, meta, &payload).unwrap();
+    assert_eq!(
+        open_root_slot(&key(), &scope(), 5, &sealed).unwrap_err(),
+        RootRecordError::Corrupt("root slot sealed under another epoch")
     );
 }

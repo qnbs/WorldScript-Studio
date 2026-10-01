@@ -16,7 +16,7 @@
 use crate::error::{OpenError, SealError};
 use crate::identity::RecordIdentity;
 use crate::marker::content_digest;
-use crate::provider::{InstallationScopeId, RootKeyRefV1, RootSlot};
+use crate::provider::{InstallationScopeId, RootKeyRefV1, RootSlot, MAX_ROOT_KEY_REF_LEN};
 use crate::record::{open_record, seal_record};
 use crate::record_class::RecordClass;
 use crate::root::{
@@ -32,8 +32,6 @@ pub const KEY_EPOCH_RECORD_FORMAT_VERSION: u32 = 1;
 /// The `record_schema` root slots and key-epoch records are sealed with.
 pub const CONTROL_RECORD_SCHEMA: u32 = 1;
 const POINTER_MAGIC: &[u8; 4] = b"WSRP";
-/// §6.1.2: a non-secret key/epoch reference is at most 256 bytes.
-const MAX_KEY_REF_LEN: usize = 256;
 
 /// Why a root record was refused. A refused record is never authority.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,18 +56,18 @@ impl From<RootError> for RootRecordError {
     }
 }
 
-/// Seals `root` as its root slot: generation `root_generation` of `authority-root:<scope>`. The
-/// payload is `u32be(ROOT_SLOT_FORMAT_VERSION)` followed by `canonical_root_body_bytes`.
+/// Seals `root` as its root slot: generation `root_generation` of `authority-root:<scope>`, under
+/// the root's own `active_key_epoch`. The payload is `u32be(ROOT_SLOT_FORMAT_VERSION)` followed by
+/// `canonical_root_body_bytes`.
 pub fn seal_root_slot(
     key: &Key,
     scope: &InstallationScopeId,
     root: &RootBody,
-    key_epoch: u64,
 ) -> Result<Vec<u8>, RootRecordError> {
     let mut payload = ROOT_SLOT_FORMAT_VERSION.to_be_bytes().to_vec();
     payload.extend_from_slice(&encode_root_body(root)?);
     let meta = RecordMeta {
-        key_epoch,
+        key_epoch: root.active_key_epoch,
         record_generation: root.root_generation,
         record_schema: CONTROL_RECORD_SCHEMA,
     };
@@ -93,8 +91,14 @@ pub fn open_root_slot(
     )?;
     let body = versioned(&opened.payload, ROOT_SLOT_FORMAT_VERSION)?;
     let root = decode_root_body(body)?;
+    // The authenticated header must agree with the body it carries: same generation, same epoch.
     if root.root_generation != root_generation {
         return Err(RootRecordError::GenerationMismatch);
+    }
+    if opened.header.key_epoch != root.active_key_epoch {
+        return Err(RootRecordError::Corrupt(
+            "root slot sealed under another epoch",
+        ));
     }
     let digest = root_digest(&root)?;
     Ok((root, digest))
@@ -199,10 +203,8 @@ impl KeyEpochRecord {
     /// route as `u32be(byte_length)` + bytes.
     pub fn encode(&self) -> Result<Vec<u8>, RootRecordError> {
         check_epoch(self.epoch)?;
+        // `RootKeyRefV1` already guarantees 1..=MAX_ROOT_KEY_REF_LEN bytes.
         let route = self.root_key_ref.as_bytes();
-        if route.is_empty() || route.len() > MAX_KEY_REF_LEN {
-            return Err(RootRecordError::Corrupt("key route length out of bounds"));
-        }
         let mut out = KEY_EPOCH_RECORD_FORMAT_VERSION.to_be_bytes().to_vec();
         out.extend_from_slice(&self.epoch.to_be_bytes());
         out.extend_from_slice(&self.status.code().to_be_bytes());
@@ -213,93 +215,100 @@ impl KeyEpochRecord {
 
     pub fn decode(bytes: &[u8]) -> Result<Self, RootRecordError> {
         let body = versioned(bytes, KEY_EPOCH_RECORD_FORMAT_VERSION)?;
-        if body.len() < 8 + 4 + 4 {
+        let Some((fixed, route)) = body.split_first_chunk::<16>() else {
             return Err(RootRecordError::Corrupt("truncated key-epoch record"));
-        }
-        let epoch = u64::from_be_bytes(body[..8].try_into().expect("8 bytes"));
-        let status = KeyEpochStatus::from_code(u32::from_be_bytes(
-            body[8..12].try_into().expect("4 bytes"),
-        ))?;
-        let len = u32::from_be_bytes(body[12..16].try_into().expect("4 bytes")) as usize;
-        if len == 0 || len > MAX_KEY_REF_LEN || body.len() != 16 + len {
-            return Err(RootRecordError::Corrupt("key route length out of bounds"));
-        }
-        let root_key_ref = RootKeyRefV1::new(body[16..].to_vec())
-            .map_err(|_| RootRecordError::Corrupt("invalid key route"))?;
+        };
+        let epoch = u64::from_be_bytes(fixed[..8].try_into().expect("8 bytes"));
+        let status_code = u32::from_be_bytes(fixed[8..12].try_into().expect("4 bytes"));
+        let route_len = u32::from_be_bytes(fixed[12..].try_into().expect("4 bytes")) as usize;
         let record = KeyEpochRecord {
             epoch,
-            status,
-            root_key_ref,
+            status: KeyEpochStatus::from_code(status_code)?,
+            root_key_ref: key_route(route, route_len)?,
         };
         record.encode()?;
         Ok(record)
     }
 
-    /// Seals this generation as `key-epoch:<scope>:<epoch>`, generation `registry_generation`.
+    /// Seals this generation at `address` (its epoch must be this record's) under `key_epoch`.
     pub fn seal(
         &self,
         key: &Key,
-        scope: &InstallationScopeId,
-        registry_generation: u64,
+        address: &KeyEpochAddress<'_>,
         key_epoch: u64,
     ) -> Result<Vec<u8>, RootRecordError> {
+        if address.epoch != self.epoch {
+            return Err(RootRecordError::Corrupt(
+                "key-epoch record names another epoch",
+            ));
+        }
         let meta = RecordMeta {
             key_epoch,
-            record_generation: registry_generation,
+            record_generation: address.registry_generation,
             record_schema: CONTROL_RECORD_SCHEMA,
         };
-        seal_record(
-            key,
-            &key_epoch_identity(scope, self.epoch)?,
-            meta,
-            &self.encode()?,
-        )
-        .map_err(RootRecordError::Seal)
+        seal_record(key, &address.identity()?, meta, &self.encode()?).map_err(RootRecordError::Seal)
     }
 
-    /// Opens the record of `epoch` read as `registry_generation` and returns it with the
-    /// `key_epoch_set_digest` entry its envelope supplies.
+    /// Opens the record at `address` and returns it with the `key_epoch_set_digest` entry its
+    /// envelope supplies.
     pub fn open(
         key: &Key,
-        scope: &InstallationScopeId,
-        epoch: u64,
-        registry_generation: u64,
+        address: &KeyEpochAddress<'_>,
         envelope: &[u8],
     ) -> Result<(Self, KeyEpochEntry), RootRecordError> {
-        let identity = key_epoch_identity(scope, epoch)?;
-        let opened = open_record(key, &identity, envelope).map_err(RootRecordError::Open)?;
+        let opened =
+            open_record(key, &address.identity()?, envelope).map_err(RootRecordError::Open)?;
         check_header(
             opened.header.record_generation,
             opened.header.record_schema,
-            registry_generation,
+            address.registry_generation,
         )?;
         let record = KeyEpochRecord::decode(&opened.payload)?;
-        if record.epoch != epoch {
+        if record.epoch != address.epoch {
             return Err(RootRecordError::Corrupt(
                 "key-epoch record names another epoch",
             ));
         }
         let entry = KeyEpochEntry {
-            epoch,
-            registry_generation,
+            epoch: address.epoch,
+            registry_generation: address.registry_generation,
             content_digest: content_digest(envelope),
         };
         Ok((record, entry))
     }
 }
 
-fn root_identity(scope: &InstallationScopeId) -> Result<RecordIdentity, RootRecordError> {
-    RecordIdentity::new(RecordClass::AuthorityRoot, &[scope.as_str()])
-        .map_err(|_| RootRecordError::InvalidIdentity)
+/// Where one key-epoch record generation lives: `key-epoch:<scope>:<epoch>` at
+/// `registry_generation`. Both counters are checked before anything uses them.
+#[derive(Debug, Clone, Copy)]
+pub struct KeyEpochAddress<'a> {
+    pub scope: &'a InstallationScopeId,
+    pub epoch: u64,
+    pub registry_generation: u64,
 }
 
-fn key_epoch_identity(
-    scope: &InstallationScopeId,
-    epoch: u64,
-) -> Result<RecordIdentity, RootRecordError> {
-    check_epoch(epoch)?;
-    let epoch = epoch.to_string();
-    RecordIdentity::new(RecordClass::KeyEpoch, &[scope.as_str(), &epoch])
+impl KeyEpochAddress<'_> {
+    fn identity(&self) -> Result<RecordIdentity, RootRecordError> {
+        check_epoch(self.epoch)?;
+        check_epoch(self.registry_generation)?;
+        let epoch = self.epoch.to_string();
+        RecordIdentity::new(RecordClass::KeyEpoch, &[self.scope.as_str(), &epoch])
+            .map_err(|_| RootRecordError::InvalidIdentity)
+    }
+}
+
+/// The key route of `route_len` bytes that must be exactly the rest of the record.
+fn key_route(route: &[u8], route_len: usize) -> Result<RootKeyRefV1, RootRecordError> {
+    let in_bounds = (1..=MAX_ROOT_KEY_REF_LEN).contains(&route_len) && route.len() == route_len;
+    if !in_bounds {
+        return Err(RootRecordError::Corrupt("key route length out of bounds"));
+    }
+    RootKeyRefV1::new(route.to_vec()).map_err(|_| RootRecordError::Corrupt("invalid key route"))
+}
+
+fn root_identity(scope: &InstallationScopeId) -> Result<RecordIdentity, RootRecordError> {
+    RecordIdentity::new(RecordClass::AuthorityRoot, &[scope.as_str()])
         .map_err(|_| RootRecordError::InvalidIdentity)
 }
 
