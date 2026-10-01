@@ -13,9 +13,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::{
     generation_path, open_record, stage_and_promote, staging_path, DirectoryDurability, DurableFs,
-    Key, OsRandom, PromotedGeneration, RecordClass, RecordIdentity, RecordMeta, SealError,
-    StageFailure, StageFailureKind, StageRequest, StageStep, StagingResidue, StdFs,
-    WriteOperationId,
+    Key, PromotedGeneration, RecordClass, RecordIdentity, RecordMeta, SealError, StageFailure,
+    StageFailureKind, StageRequest, StageStep, StagingResidue, StdFs, WriteOperationId,
 };
 
 const OLD_SETTINGS: &[u8] = b"{\"theme\":\"dark\",\"locale\":\"de\"}";
@@ -60,7 +59,7 @@ impl Drop for TempDir {
 }
 
 fn operation() -> WriteOperationId {
-    WriteOperationId::generate(&mut OsRandom).unwrap()
+    WriteOperationId::generate().unwrap()
 }
 
 /// Stages `plaintext` as `generation` of the settings record under a fresh operation.
@@ -289,8 +288,8 @@ fn a_new_generation_is_promoted_beside_the_untouched_old_one() {
 fn every_failure_before_promotion_leaves_the_old_generation_untouched() {
     let io = StageFailureKind::Io(io::ErrorKind::Other);
     let mismatch = StageFailureKind::StagedEnvelopeMismatch;
-    // Write/sync/link failures remove the operation's own incomplete staging file; a file that
-    // fails validation is preserved for reconciliation and diagnosis (§9.2).
+    // Write/sync failures remove the operation's own unvalidated staging file; a file that fails
+    // validation, or a validated one whose promotion fails, is preserved for reconciliation (§9.2).
     for (fault, step, kind, staging) in [
         (
             Fault::Create,
@@ -322,7 +321,7 @@ fn every_failure_before_promotion_leaves_the_old_generation_untouched() {
             mismatch,
             StagingResidue::Present,
         ),
-        (Fault::Link, StageStep::Promote, io, StagingResidue::None),
+        (Fault::Link, StageStep::Promote, io, StagingResidue::Present),
     ] {
         let (dir, old) = with_generation_one();
         let failure = stage(&mut FaultFs { fault }, &dir.0, 2, NEW_SETTINGS).unwrap_err();
@@ -434,11 +433,15 @@ fn staging_debris_is_reported_and_is_ciphertext_only() {
 fn an_existing_generation_is_never_overwritten() {
     let (dir, old) = with_generation_one();
     let failure = stage(&mut StdFs, &dir.0, 1, NEW_SETTINGS).unwrap_err();
+    // The existing generation is untouched and the validated candidate is kept for reconciliation.
     let exists = StageFailureKind::GenerationExists;
-    let expected = failed(StageStep::Promote, exists, false, StagingResidue::None);
+    let expected = failed(StageStep::Promote, exists, false, StagingResidue::Present);
     assert_eq!(failure, expected);
     assert_eq!(fs::read(generation_path(&dir.0, 1)).unwrap(), old);
-    assert_eq!(file_names(&dir.0), ["generation-1.wsr1"]);
+    let names = file_names(&dir.0);
+    assert_eq!(names.len(), 2);
+    assert!(names[1].starts_with("generation-1.wsr1.tmp-"));
+    assert_no_plaintext(&dir.0);
 }
 
 #[test]

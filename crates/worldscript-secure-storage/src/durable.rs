@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
-use crate::random::RandomSource;
+use crate::random::{OsRandom, RandomSource};
 use crate::record::{open_record, seal_record};
 use crate::seal::{Key, RecordMeta};
 
@@ -101,7 +101,20 @@ pub struct WriteOperationId(String);
 const WRITE_OPERATION_ID_LEN: usize = 32;
 
 impl WriteOperationId {
-    pub fn generate(random: &mut impl RandomSource) -> Result<Self, SealError> {
+    /// A fresh identity from the OS CSPRNG. Callers cannot supply their own source, so a weak or
+    /// deterministic one can never make two operations share a staging name.
+    pub fn generate() -> Result<Self, SealError> {
+        Self::from_random(&mut OsRandom)
+    }
+
+    /// Test hook: [`generate`](Self::generate) with an injected source. Only compiled with the
+    /// `test-randomness` feature, which production builds never enable.
+    #[cfg(feature = "test-randomness")]
+    pub fn generate_with_random(random: &mut impl RandomSource) -> Result<Self, SealError> {
+        Self::from_random(random)
+    }
+
+    fn from_random(random: &mut impl RandomSource) -> Result<Self, SealError> {
         let mut bits = [0u8; 16];
         random
             .fill(&mut bits)
@@ -313,6 +326,9 @@ impl Attempt<'_> {
     }
 
     /// Links the validated staging file to the generation name, never replacing an existing file.
+    /// If that fails, the staging file is an authenticated candidate tied to this operation, so it
+    /// is preserved and reported, never deleted: whatever already holds the generation name may be
+    /// unrelated or damaged, and reconciliation (slice 3B) decides between them.
     fn promote<F: DurableFs>(&self, fs: &mut F) -> Result<(), StageFailure> {
         fs.link_no_replace(&self.staging, &self.target)
             .map_err(|error| {
@@ -321,7 +337,7 @@ impl Attempt<'_> {
                 } else {
                     io_kind(&error)
                 };
-                self.abandon(fs, StageStep::Promote, kind)
+                failure(StageStep::Promote, kind, StagingResidue::Present)
             })
     }
 
@@ -347,8 +363,8 @@ impl Attempt<'_> {
         })
     }
 
-    /// Removes this operation's own staging file after a write, sync or promotion failure and
-    /// reports what is left; nothing else is ever touched.
+    /// Removes this operation's own staging file after a write or sync failure (it was never
+    /// validated) and reports what is left; nothing else is ever touched.
     fn abandon<F: DurableFs>(
         &self,
         fs: &mut F,

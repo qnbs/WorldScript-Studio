@@ -3507,8 +3507,10 @@ Later implementation may be admitted only in these bounded gates:
      re-resolves the staging path; the commit marker's `content_digest` binds it from 3B on), and
      the directory is synced. No existing file is opened for writing, overwritten or removed except
      the operation's own staging name: it is removed after a successful promotion (the generation
-     keeps the bytes) and after a write, sync or promotion failure; a staging file that
-     fails validation, or one already present under the operation's name, is preserved and reported.
+     keeps the bytes) and after a write or sync failure (never validated); a staging file that fails
+     validation, a validated one whose promotion fails (including an existing generation name), and
+     one already present under the operation's name are preserved and reported. Operation IDs come
+     only from the OS CSPRNG.
      The previous generation is untouched on every failure; a failure after promotion reports the
      new generation as preserved but not authoritative (§9.2). Platform semantics: Linux and macOS sync file contents (`fsync`; Apple
      `F_FULLFSYNC`) and the containing directory; Windows syncs file contents
