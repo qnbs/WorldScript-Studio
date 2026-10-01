@@ -8,9 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **R-15 Gate 2, slice 1 — typed record-identity registry (#445):** every protected record class
-  can now only be addressed through a typed identity built from that class's registered template,
-  so the record's logical ID and its project binding in the authenticated data always follow the
-  contract. Existing project and record IDs keep their exact spelling even when they contain `:`,
+  now has a typed identity built only from that class's registered template, so a record addressed
+  through it always carries the contract's logical ID and project binding in the authenticated
+  data. Existing project and record IDs keep their exact spelling even when they contain `:`,
   and an index version must be one the current format supports. Malformed parts (an empty part,
   control characters, a non-canonical number, or a malformed installation ID) are refused, never
   repaired. Tests prove that data sealed under one identity never opens under another. Nothing in

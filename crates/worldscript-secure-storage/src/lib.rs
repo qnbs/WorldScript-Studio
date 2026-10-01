@@ -2,7 +2,8 @@
 //! `docs/native/R15-SECURE-STORAGE-CONTRACT.md` §20.
 //!
 //! Headless only: the `WSR1` envelope header (§6.1), the record-class registry (§6.1.1), canonical
-//! AAD (§6.2), and AES-256-GCM seal/open with an OS-backed nonce source (§6.3). It changes no
+//! AAD (§6.2), and AES-256-GCM seal/open with an OS-backed nonce source (§6.3), plus the Gate 2
+//! slice 1 typed record-identity registry ([`identity`], §5.2). It changes no
 //! current TypeScript/Tauri storage authority and holds no key provider, journal, or durable I/O.
 
 pub mod aad;
