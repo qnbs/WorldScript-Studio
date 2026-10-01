@@ -3574,8 +3574,10 @@ Later implementation may be admitted only in these bounded gates:
      pending epoch, `PENDING -> ACTIVE(old)` restoring the old authority, or a new first-write
      `PENDING(none -> 1)` after a rolled-back one); a gap, an unreadable, misplaced or
      reserved/future-state marker, an illegal transition or a `RECOVERY_REQUIRED` marker is
-     `RECOVERY_REQUIRED`, never a fallback to an older marker; so is any other `generation-…` name
-     in the marker directory (a renamed marker is never ignored). A committed read — and every write,
+     `RECOVERY_REQUIRED`, never a fallback to an older marker; so is any `generation-…` name in the
+     marker directory that is neither a canonical marker file, a canonical staging file nor a
+     rejected relocation (a renamed marker is never ignored, while staging and rejected leftovers
+     are classified as below). A committed read — and every write,
      before it changes anything — requires the committed generation file's `content_digest` to
      equal the marker's and the envelope to open with the marker's generation and epoch; while a
      write is pending, the old generation is served (§8.4). A write allocates every counter first,
