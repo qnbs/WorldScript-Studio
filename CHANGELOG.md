@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 2, slice A — identity-bound record codec (#445):** a protected record can now be
+  sealed and opened through its typed identity, so its authenticated data always comes from the
+  contract identity rather than hand-assembled fields. Moving encrypted data to another record,
+  project, installation or record class, changing any authenticated byte, or using a wrong key is
+  refused, and malformed or legacy bytes are rejected before decryption. Asset pairs derive their
+  members from the same ID parts, keeping IDs that contain `:` exact. Nothing in the app uses this
+  yet, and the production authority switch stays off. PR #928.
 - **R-15 Gate 2, slice 1 — typed record-identity registry (#445):** every protected record class
   now has a typed identity built only from that class's registered template, so a record addressed
   through it always carries the contract's logical ID and project binding in the authenticated
