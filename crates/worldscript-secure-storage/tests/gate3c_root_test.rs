@@ -234,3 +234,16 @@ fn pointer_digest_matches_the_contract_vector_and_binds_the_slot() {
         Err(RootError::InvalidCounter)
     );
 }
+
+#[test]
+fn no_marker_set_entry_exists_for_an_asset_pair_until_its_marker_body_does() {
+    // §8.4.1's asset-pair body is not implemented, so no asset-pair marker can be built or
+    // committed — and therefore none can be missing from a marker set.
+    let pair = RecordIdentity::new(RecordClass::AssetPair, &["p1", "a1"]).unwrap();
+    let body = MarkerBody::Active {
+        committed_generation: 1,
+        committed_epoch: 1,
+        content_digest: [0; 32],
+    };
+    assert!(CommitMarker::new(&pair, 1, body).is_err());
+}

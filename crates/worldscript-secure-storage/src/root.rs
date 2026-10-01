@@ -30,7 +30,9 @@ pub enum RootError {
     DuplicateEntry,
     /// More entries than `u32be(entry_count)` can state.
     TooManyEntries,
-    /// A generation, epoch or revision that is unassigned (`0`) or terminal (`u64::MAX`).
+    /// A generation or epoch that is unassigned (`0`) or terminal (`u64::MAX`), a live-migration
+    /// journal revision that is terminal (its `0` is the §10.2 bootstrap sentinel and is valid), or a
+    /// live migration without a positive fence.
     InvalidCounter,
     /// An empty or over-long (over 128 bytes) `operation_id`.
     InvalidOperationId,
@@ -39,6 +41,8 @@ pub enum RootError {
 
 /// One `marker_set_digest` entry: the current marker generation of one ordinary record, built only
 /// from an authenticated [`CommitMarker`] so its identity bindings and digest are canonical.
+/// `asset-pair` markers (§8.4.1) join the set through their own constructor once their marker body
+/// exists; until then no asset pair can be committed, so no set can omit one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MarkerSetEntry {
     class: &'static str,

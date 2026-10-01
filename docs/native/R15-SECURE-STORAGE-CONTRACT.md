@@ -3624,7 +3624,9 @@ Later implementation may be admitted only in these bounded gates:
      manifest digest); `pointer_digest` binds the slot code
      (`ROOT_SLOT_A = 0`, `ROOT_SLOT_B = 1`), root generation and root digest. Counters follow §5.4's
      lifecycle and operation IDs are 1–128 bytes. Every digest is pinned from an independent
-     implementation over bytes assembled from this section. No root, catalog page or anchor is
+     implementation over bytes assembled from this section. `asset-pair` marker entries (§8.4.1)
+     join `marker_set_digest` once the asset-pair marker body is implemented; until then no asset
+     pair can be committed, so no marker set omits one. No root, catalog page or anchor is
      persisted or committed yet: catalog descriptors/pages and the two-phase root commit wired into
      the write protocol, with `list_records`, are the rest of slice 3C.
 4. **Journal/admission:** implement enable/rotate/recovery state machines, exclusive migration
