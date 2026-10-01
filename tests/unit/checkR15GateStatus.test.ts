@@ -89,6 +89,27 @@ describe('scanR15GateStatusTruth — canonical block and ledger row 10', () => {
     expect(scan(suffixed)).toContain(`${where} — unsupported status R15_GATE4=NOT_ADMITTED-BAD`);
   });
 
+  it('rejects non-entry lines and trailing text in the block (#935)', () => {
+    const where = `${R15_CONTRACT_DOC} R15_GATE_STATUS`;
+    const trailing = `# R-15\n\n${block(STATUS).replace('R15_GATE2=IMPLEMENTED_HEADLESS', 'R15_GATE2=IMPLEMENTED_HEADLESS BROKEN')}`;
+    expect(scan(trailing)).toEqual([
+      `${where} — malformed line "R15_GATE2=IMPLEMENTED_HEADLESS BROKEN"`,
+    ]);
+    expect(scan(`# R-15\n\n${block(STATUS, 'garbage')}`)).toEqual([
+      `${where} — malformed line "garbage"`,
+    ]);
+  });
+
+  it('reports a duplicate entry with an unsupported status as both (#935)', () => {
+    const where = `${R15_CONTRACT_DOC} R15_GATE_STATUS`;
+    expect(scan(`# R-15\n\n${block(STATUS, 'R15_GATE2=BOGUS')}`)).toEqual(
+      expect.arrayContaining([
+        `${where} — duplicate entry for R15_GATE2`,
+        `${where} — unsupported status R15_GATE2=BOGUS`,
+      ]),
+    );
+  });
+
   it('binds a slice status to its own gate', () => {
     const where = `${R15_CONTRACT_DOC} R15_GATE_STATUS`;
     const foreign = contract('', { ...STATUS, '3': 'SLICE_2A_DURABLE_STAGING' });
@@ -173,6 +194,17 @@ describe('scanR15GateStatusTruth — current prose', () => {
     ]);
   });
 
+  it('checks every gate of a coordinated list (#935)', () => {
+    expect(scan(contract('Gates 4 and 3 are not admitted.'))).toEqual([
+      finding('Gates 4 and 3', '3'),
+    ]);
+    expect(scan(contract('Gates 5, 2 or 3A are not admitted.'))).toEqual([
+      finding('Gates 5, 2 or 3A', '2'),
+      finding('Gates 5, 2 or 3A', '3'),
+    ]);
+    expect(scan(contract('Gates 4–7 and 3B are not admitted.'))).toEqual([]);
+  });
+
   it('does not read a longer number as a gate reference', () => {
     expect(scan(contract('Gate 10 is not admitted.'))).toEqual([]);
     expect(scan(contract('Gates 12 and 20 are not admitted.'))).toEqual([]);
@@ -211,6 +243,16 @@ describe('scanR15GateStatusTruth — current prose', () => {
       'A plaintext fallback is not admitted.',
     ];
     for (const prose of ignored) expect(scan(contract(prose)), prose).toEqual([]);
+  });
+
+  it('does not let a literal comment opener inside a fence hide later prose (#935)', () => {
+    for (const fence of ['```', '~~~']) {
+      const prose = `${fence}html\n<!-- example\n${fence}\n\nGates 3–7 not admitted.`;
+      expect(scan(contract(prose)), fence).toEqual([finding('Gates 3–7', '3')]);
+    }
+    // A fence marker inside a comment does not open a fence.
+    const commented = '<!--\n```\n-->\n\nGates 3–7 not admitted.';
+    expect(scan(contract(commented))).toEqual([finding('Gates 3–7', '3')]);
   });
 
   it('resumes checking after a historical section, a fence and a comment end', () => {

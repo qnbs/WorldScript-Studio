@@ -25,15 +25,19 @@ export const R15_FIXED_STATUSES = Object.freeze([
 const SLICE_STATUS = /^SLICE_([2-7])([A-Z])(?:_[A-Z0-9]+)+$/;
 // The whole value up to a delimiter is captured, so a malformed suffix is refused, not truncated.
 const ENTRY = /\bR15_GATE([0-9A-Za-z]+)=([^\s/|;,`*]+)/g;
+// A canonical block line is exactly one entry; anything else in the block is malformed data.
+const BLOCK_LINE = /^R15_GATE[0-9A-Za-z]+=[^\s/|;,`*]+$/;
 const STATUS_BLOCK = /```text\nR15_GATE_STATUS\n([\s\S]*?)```/g;
 const LEDGER_ROW = /^\| 10 \|.*$/gm;
 const NEGATIVE = /^(?:not admitted|unadmitted)$/i;
 // Status predicates; the negative alternatives come first so "not admitted" is not read as "admitted".
 const PREDICATE =
   /\bnot admitted\b|\bunadmitted\b|\b(?:implemented|admitted|delivered|landed|terminal)\b/gi;
-// "Gate 3", "Gate 1b", "Gate 3B", "Gate 3 slice 3B", "Gates 4–7", optionally after "the rest of".
+// "Gate 3", "Gate 1b", "Gate 3B", "Gate 3 slice 3B", "Gates 4–7", "Gates 4 and 3", "Gates 2, 3 or 5",
+// optionally after "the rest of". The last group is the coordinated tail after the first item.
 const GATE_REF =
-  /(the (?:rest|remainder) of )?\bGates? ([1-7])([a-z])?(?:\s+slice\s+[1-7]([a-z]))?(?:\s*[–-]\s*([1-7]))?(?![0-9a-z])/gi;
+  /(the (?:rest|remainder) of )?\bGates? ([1-7])([a-z])?(?:\s+slice\s+[1-7]([a-z]))?(?:\s*[–-]\s*([1-7]))?(?![0-9a-z])((?:(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+)[1-7][a-z]?(?![0-9a-z]))*)/gi;
+const LIST_ITEM = /([1-7])([a-z])?/gi;
 const CLAUSE_BREAK = /;|(?<=[.!?])\s+(?=[A-Z`*(])|,\s+(?:while|whereas|but)\s+/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 const HEADING = /^(#{1,6})\s/;
@@ -50,11 +54,13 @@ export function isValidR15Status(gate, status) {
   return SLICE_STATUS.exec(status)?.[1] === gate;
 }
 
-function entryProblem({ gate, status }, seen) {
-  if (!R15_GATE_IDS.includes(gate)) return `unknown gate R15_GATE${gate}`;
-  if (seen.has(gate)) return `duplicate entry for R15_GATE${gate}`;
-  if (!isValidR15Status(gate, status)) return `unsupported status R15_GATE${gate}=${status}`;
-  return null;
+/** Every problem with one entry; a duplicate is also checked for an unsupported status. */
+function entryProblems({ gate, status }, seen) {
+  if (!R15_GATE_IDS.includes(gate)) return [`unknown gate R15_GATE${gate}`];
+  return [
+    seen.has(gate) && `duplicate entry for R15_GATE${gate}`,
+    !isValidR15Status(gate, status) && `unsupported status R15_GATE${gate}=${status}`,
+  ].filter(Boolean);
 }
 
 /** Findings for malformed entries: unknown ids, duplicates and unsupported statuses. */
@@ -62,8 +68,7 @@ function entryFindings(entries, where) {
   const seen = new Set();
   const findings = [];
   for (const entry of entries) {
-    const problem = entryProblem(entry, seen);
-    if (problem) findings.push(`${where} — ${problem}`);
+    findings.push(...entryProblems(entry, seen).map((problem) => `${where} — ${problem}`));
     seen.add(entry.gate);
   }
   return findings;
@@ -109,19 +114,31 @@ function ledgerFindings(ledger, canonical) {
   ];
 }
 
-/** Removes HTML comments, scanning to each closing marker; an unterminated comment runs to the end. */
-export function stripHtmlComments(text) {
+/**
+ * Removes HTML comments from `text`, scanning to each closing marker. `inComment` says whether
+ * `text` starts inside a comment; `open` says whether it ends inside one (unterminated).
+ */
+function stripComments(text, inComment) {
   let result = '';
   let index = 0;
-  while (index < text.length) {
-    const open = text.indexOf('<!--', index);
-    if (open === -1) return result + text.slice(index);
-    result += text.slice(index, open);
-    const close = text.indexOf('-->', open + 4);
-    if (close === -1) return result;
-    index = close + 3;
+  let open = inComment;
+  for (;;) {
+    if (open) {
+      const close = text.indexOf('-->', index);
+      if (close === -1) return { text: result, open: true };
+      index = close + 3;
+    }
+    const start = text.indexOf('<!--', index);
+    if (start === -1) return { text: result + text.slice(index), open: false };
+    result += text.slice(index, start);
+    index = start + 4;
+    open = true;
   }
-  return result;
+}
+
+/** Removes HTML comments; an unterminated comment runs to the end. */
+export function stripHtmlComments(text) {
+  return stripComments(text, false).text;
 }
 
 /** Tracks fenced code: returns the new fence marker (or null) after `line`. */
@@ -140,18 +157,30 @@ function nextHistorical(line, historicalLevel) {
   return HISTORICAL_HEADING.test(line) ? level : null;
 }
 
+/**
+ * The current prose of one line, or null. Fences are recognised only outside comments and comments
+ * only outside fences, so a literal `<!--` in a code example cannot hide the prose after it.
+ */
+function proseOf(line, state) {
+  if (!state.comment) {
+    const wasFenced = state.fence !== null;
+    state.fence = nextFence(line, state.fence);
+    if (wasFenced || state.fence !== null) return null;
+  }
+  const { text, open } = stripComments(line, state.comment);
+  state.comment = open;
+  state.historical = nextHistorical(text, state.historical);
+  return state.historical === null ? text : null;
+}
+
 /** Current prose only: comments, code fences and historical sections removed, soft wraps joined. */
 export function currentProse(markdown) {
-  const kept = [];
-  let fence = null;
-  let historicalLevel = null;
-  for (const line of stripHtmlComments(markdown.replace(/\r\n?/g, '\n')).split('\n')) {
-    const wasFenced = fence !== null;
-    fence = nextFence(line, fence);
-    if (wasFenced || fence !== null) continue;
-    historicalLevel = nextHistorical(line, historicalLevel);
-    if (historicalLevel === null) kept.push(line);
-  }
+  const state = { fence: null, comment: false, historical: null };
+  const kept = markdown
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => proseOf(line, state))
+    .filter((line) => line !== null);
   // A blank line, heading, list item or table row starts a new unit; anything else continues one.
   return kept.join('\n').replace(/\n(?!\n|#|\s*[-*|]|\s*\d+\.)/g, ' ');
 }
@@ -159,18 +188,28 @@ export function currentProse(markdown) {
 /** Gate ids for a bare gate number; Gate 1 is the pair 1a/1b. */
 const gateIds = (n) => (n === 1 ? ['1A', '1B'] : [String(n)]);
 
-/** The gate ids (and slice letter, if any) a reference names. */
-function referencedGates([, , from, suffix, slice, to]) {
-  if (to !== undefined) {
-    const numbers = Array.from(
-      { length: Math.max(0, Number(to) - Number(from) + 1) },
-      (_, i) => Number(from) + i,
-    );
-    return numbers.flatMap(gateIds).map((gate) => ({ gate }));
-  }
-  if (from === '1' && suffix) return [{ gate: `1${suffix.toUpperCase()}` }];
-  if (from === '1') return gateIds(1).map((gate) => ({ gate }));
-  return [{ gate: from, slice: (slice ?? suffix)?.toUpperCase() }];
+/** The gates of a range such as "Gates 4–7". */
+function rangeGates(from, to) {
+  const numbers = Array.from(
+    { length: Math.max(0, Number(to) - Number(from) + 1) },
+    (_, i) => Number(from) + i,
+  );
+  return numbers.flatMap(gateIds).map((gate) => ({ gate }));
+}
+
+/** The gate (and slice letter, if any) of one item such as "3", "3B" or "1b". */
+function itemGates(number, letter) {
+  if (number === '1' && letter) return [{ gate: `1${letter.toUpperCase()}` }];
+  if (number === '1') return gateIds(1).map((gate) => ({ gate }));
+  return [{ gate: number, slice: letter?.toUpperCase() }];
+}
+
+/** The gate ids (and slice letters) a reference names, coordinated list items included. */
+function referencedGates([, , from, suffix, slice, to, tail = '']) {
+  const head = to === undefined ? itemGates(from, slice ?? suffix) : rangeGates(from, to);
+  return head.concat(
+    [...tail.matchAll(LIST_ITEM)].flatMap(([, number, letter]) => itemGates(number, letter)),
+  );
 }
 
 /** Whether calling `target` "not admitted" contradicts `status`. */
@@ -212,6 +251,14 @@ function proseFindings(content, relPath, canonical) {
   );
 }
 
+/** Block lines that are not exactly one `R15_GATE<id>=<STATUS>` entry. */
+function malformedBlockLines(block) {
+  return block
+    .split('\n')
+    .filter((line) => line.trim() !== '' && !BLOCK_LINE.test(line))
+    .map((line) => `${R15_CONTRACT_DOC} R15_GATE_STATUS — malformed line "${line}"`);
+}
+
 /** The canonical block's validity findings and gate → status map. */
 function canonicalStatus(contract) {
   const block = exactlyOne(
@@ -222,7 +269,8 @@ function canonicalStatus(contract) {
   if (block.error) return { findings: [block.error] };
   const entries = parseR15GateEntries(block.value);
   const canonical = new Map(entries.map(({ gate, status }) => [gate, status]));
-  const findings = entryFindings(entries, `${R15_CONTRACT_DOC} R15_GATE_STATUS`).concat(
+  const findings = malformedBlockLines(block.value).concat(
+    entryFindings(entries, `${R15_CONTRACT_DOC} R15_GATE_STATUS`),
     R15_GATE_IDS.filter((gate) => !canonical.has(gate)).map(
       (gate) => `${R15_CONTRACT_DOC} — R15_GATE_STATUS has no entry for Gate ${gate}`,
     ),
