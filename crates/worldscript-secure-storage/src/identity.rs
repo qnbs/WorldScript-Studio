@@ -16,6 +16,7 @@
 
 use crate::aad::RecordContext;
 use crate::anchor::MAX_OPERATION_ID_LEN;
+use crate::disposition::{disposition, Disposition};
 use crate::provider::InstallationScopeId;
 use crate::record_class::RecordClass;
 
@@ -48,8 +49,9 @@ pub enum IdentityError {
     /// `record-commit` identities are built only from another identity, never directly.
     NotBuildableDirectly,
     /// The record is not governed by an ordinary `record-commit` marker: it is a marker itself
-    /// (`record-commit`, `asset-pair`), a member committed by its `asset-pair` marker (§8.4), or a
-    /// control record anchored by the authority root (§5.3, §10.1).
+    /// (`record-commit`, `asset-pair`), a member committed by its `asset-pair` marker (§8.4), a
+    /// control record anchored by the authority root (§5.3, §10.1), or a class that keeps a
+    /// separate approved authority and never becomes an R-15 record (§10.4.1).
     NoOrdinaryMarker,
 }
 
@@ -295,18 +297,11 @@ fn has_pair_relation(class: RecordClass) -> bool {
 
 /// Whether `class` is committed through its own `record-commit` marker.
 fn has_ordinary_marker(class: RecordClass) -> bool {
-    !matches!(
-        class,
-        RecordClass::RecordCommit
-            | RecordClass::AssetPair
-            | RecordClass::Asset
-            | RecordClass::AssetMetadata
-            | RecordClass::AuthorityRoot
-            | RecordClass::KeyEpoch
-            | RecordClass::RecordCatalog
-            | RecordClass::Migration
-            | RecordClass::MigrationPage
-    )
+    // Only `MIGRATE_TO_R15` records (§10.4.1) are ordinary records, and an asset-pair member is
+    // committed by its pair marker instead (§8.4). Control-plane records are anchored by the
+    // authority root, and retained-authority classes have no R-15 record to commit at all.
+    disposition(class) == Some(Disposition::MigrateToR15)
+        && !matches!(class, RecordClass::Asset | RecordClass::AssetMetadata)
 }
 
 fn check_component(part: Part, value: &str) -> Result<(), IdentityError> {

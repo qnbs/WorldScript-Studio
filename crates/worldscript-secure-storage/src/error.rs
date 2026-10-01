@@ -23,6 +23,9 @@ pub enum SealError {
     /// §6.4/§7: the record schema is not in the version-1 compatibility registry, so no current
     /// reader could decode the record.
     UnsupportedSchema,
+    /// §10.4.1: the record's class never becomes an R-15 envelope (it keeps a separate approved
+    /// protected authority, or has no admitted disposition).
+    NotAnR15RecordClass,
 }
 
 /// Semantic open/parse failures, mapped from §7. Key-resolution outcomes (locked, wrong key) belong
@@ -36,6 +39,9 @@ pub enum OpenError {
     /// AEAD authentication failed with the supplied key and context (§7 `PROTECTED_TAMPERED`).
     Tampered,
     InvalidContext(AadError),
+    /// §10.4.1: the requested class never has R-15 ciphertext (it keeps a separate approved
+    /// protected authority, or has no admitted disposition), so nothing is parsed or decrypted.
+    NotAnR15RecordClass,
 }
 
 /// Why the native recovery KDF refused to derive (§8.2.1).
