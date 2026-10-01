@@ -553,39 +553,62 @@ fn adopt_candidate<F: DurableFs>(
     let dir = ctx.store.location.record_dir;
     let target = generation_path(dir, pending.target_generation);
     let suffix = &pending.operation.operation_id;
-    let staged = match WriteOperationId::parse(suffix) {
-        // A non-canonical operation ID names no staging file this protocol could have written.
-        None => None,
-        Some(operation) => {
-            let staging = staging_path(dir, pending.target_generation, &operation);
-            read_if_present(fs, &staging)?.map(|bytes| (staging, bytes))
-        }
-    };
+    let staged = read_staging(fs, dir, pending)?;
     let promoted = read_if_present(fs, &target)?;
-    let candidate = match staged {
-        Some((staging, bytes)) if candidate_matches(ctx, pending, &bytes) => (staging, bytes),
-        other => {
-            if let Some((staging, _)) = other {
-                relocate(fs, dir, &staging, suffix)?;
-            }
-            if promoted.is_some() {
-                relocate(fs, dir, &target, suffix)?;
-            }
-            return Ok(None);
-        }
+    let Some((staging, bytes)) = staged.filter(|(_, bytes)| candidate_matches(ctx, pending, bytes))
+    else {
+        reject_unproven(fs, dir, pending, promoted.is_some())?;
+        return Ok(None);
     };
-    let (staging, bytes) = candidate;
-    match promoted {
-        Some(existing) if existing == bytes => {}
-        Some(_) => {
+    if promoted.as_deref() != Some(bytes.as_slice()) {
+        if promoted.is_some() {
             relocate(fs, dir, &target, suffix)?;
-            promote_staged(fs, &staging, &target, &bytes)?;
         }
-        None => promote_staged(fs, &staging, &target, &bytes)?,
+        promote_staged(fs, &staging, &target, &bytes)?;
     }
     fs.sync_dir(dir)
         .map_err(|error| io_error(CommitStep::SyncRecord, &error))?;
     Ok(Some(content_digest(&bytes)))
+}
+
+/// The staging file under the marker's own operation/target suffix, if any. A non-canonical
+/// operation ID names no staging file this protocol could have written.
+fn read_staging<F: DurableFs>(
+    fs: &mut F,
+    dir: &Path,
+    pending: &PendingBody,
+) -> Result<Option<(PathBuf, Vec<u8>)>, CommitError> {
+    let Some(operation) = WriteOperationId::parse(&pending.operation.operation_id) else {
+        return Ok(None);
+    };
+    let staging = staging_path(dir, pending.target_generation, &operation);
+    Ok(read_if_present(fs, &staging)?.map(|bytes| (staging, bytes)))
+}
+
+/// Without a valid staging file nothing is adopted: an invalid staging file and whatever holds the
+/// target generation's name are relocated, never deleted.
+fn reject_unproven<F: DurableFs>(
+    fs: &mut F,
+    dir: &Path,
+    pending: &PendingBody,
+    target_present: bool,
+) -> Result<(), CommitError> {
+    let suffix = &pending.operation.operation_id;
+    if let Some(operation) = WriteOperationId::parse(suffix) {
+        let staging = staging_path(dir, pending.target_generation, &operation);
+        if read_if_present(fs, &staging)?.is_some() {
+            relocate(fs, dir, &staging, suffix)?;
+        }
+    }
+    if target_present {
+        relocate(
+            fs,
+            dir,
+            &generation_path(dir, pending.target_generation),
+            suffix,
+        )?;
+    }
+    Ok(())
 }
 
 /// Whether `bytes` authenticate as exactly the pending target: this record, the target generation,
