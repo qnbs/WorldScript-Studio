@@ -13,6 +13,7 @@
 //! This module performs no I/O; the commit sequence, its crash recovery and cold start are 3C part
 //! 3b.
 
+use crate::envelope::EnvelopeHeader;
 use crate::error::{OpenError, SealError};
 use crate::identity::RecordIdentity;
 use crate::marker::content_digest;
@@ -74,25 +75,39 @@ pub fn seal_root_slot(
     seal_record(key, &root_identity(scope)?, meta, &payload).map_err(RootRecordError::Seal)
 }
 
-/// Opens a root slot read as `root_generation` and returns the authenticated body with its
-/// `root_digest`. The envelope must authenticate as `authority-root:<scope>` at that generation.
+/// A root slot to open: the sealed bytes of generation `root_generation` of
+/// `authority-root:<scope>`.
+#[derive(Debug, Clone, Copy)]
+pub struct RootSlotRead<'a> {
+    pub scope: &'a InstallationScopeId,
+    pub root_generation: u64,
+    pub envelope: &'a [u8],
+}
+
+impl RootSlotRead<'_> {
+    /// The authenticated header must name this generation and the control-record schema.
+    fn check(&self, header: &EnvelopeHeader) -> Result<(), RootRecordError> {
+        check_schema(header)?;
+        if header.record_generation == self.root_generation {
+            Ok(())
+        } else {
+            Err(RootRecordError::GenerationMismatch)
+        }
+    }
+}
+
+/// Opens a root slot and returns the authenticated body with its `root_digest`. The envelope must
+/// authenticate as `authority-root:<scope>` at the requested generation, and its header must agree
+/// with the body it carries (same generation, same epoch).
 pub fn open_root_slot(
     key: &Key,
-    scope: &InstallationScopeId,
-    root_generation: u64,
-    envelope: &[u8],
+    read: &RootSlotRead<'_>,
 ) -> Result<(RootBody, [u8; 32]), RootRecordError> {
-    let opened =
-        open_record(key, &root_identity(scope)?, envelope).map_err(RootRecordError::Open)?;
-    check_header(
-        opened.header.record_generation,
-        opened.header.record_schema,
-        root_generation,
-    )?;
-    let body = versioned(&opened.payload, ROOT_SLOT_FORMAT_VERSION)?;
-    let root = decode_root_body(body)?;
-    // The authenticated header must agree with the body it carries: same generation, same epoch.
-    if root.root_generation != root_generation {
+    let opened = open_record(key, &root_identity(read.scope)?, read.envelope)
+        .map_err(RootRecordError::Open)?;
+    read.check(&opened.header)?;
+    let root = decode_root_body(versioned::<ROOT_SLOT_FORMAT_VERSION>(&opened.payload)?)?;
+    if root.root_generation != read.root_generation {
         return Err(RootRecordError::GenerationMismatch);
     }
     if opened.header.key_epoch != root.active_key_epoch {
@@ -202,7 +217,9 @@ impl KeyEpochRecord {
     /// `u32be(KEY_EPOCH_RECORD_FORMAT_VERSION)`, `u64be(epoch)`, `u32be(status)`, then the key
     /// route as `u32be(byte_length)` + bytes.
     pub fn encode(&self) -> Result<Vec<u8>, RootRecordError> {
-        check_epoch(self.epoch)?;
+        if self.epoch == 0 || self.epoch == u64::MAX {
+            return Err(RootRecordError::Root(RootError::InvalidCounter));
+        }
         // `RootKeyRefV1` already guarantees 1..=MAX_ROOT_KEY_REF_LEN bytes.
         let route = self.root_key_ref.as_bytes();
         let mut out = KEY_EPOCH_RECORD_FORMAT_VERSION.to_be_bytes().to_vec();
@@ -214,56 +231,48 @@ impl KeyEpochRecord {
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self, RootRecordError> {
-        let body = versioned(bytes, KEY_EPOCH_RECORD_FORMAT_VERSION)?;
-        let Some((fixed, route)) = body.split_first_chunk::<16>() else {
+        let body = versioned::<KEY_EPOCH_RECORD_FORMAT_VERSION>(bytes)?;
+        let Some((fixed, _)) = body.split_first_chunk::<12>() else {
             return Err(RootRecordError::Corrupt("truncated key-epoch record"));
         };
         let epoch = u64::from_be_bytes(fixed[..8].try_into().expect("8 bytes"));
-        let status_code = u32::from_be_bytes(fixed[8..12].try_into().expect("4 bytes"));
-        let route_len = u32::from_be_bytes(fixed[12..].try_into().expect("4 bytes")) as usize;
+        let status_code = u32::from_be_bytes(fixed[8..].try_into().expect("4 bytes"));
         let record = KeyEpochRecord {
             epoch,
             status: KeyEpochStatus::from_code(status_code)?,
-            root_key_ref: key_route(route, route_len)?,
+            root_key_ref: key_route(&body[12..])?,
         };
         record.encode()?;
         Ok(record)
     }
 
-    /// Seals this generation at `address` (its epoch must be this record's) under `key_epoch`.
-    pub fn seal(
-        &self,
-        key: &Key,
-        address: &KeyEpochAddress<'_>,
-        key_epoch: u64,
-    ) -> Result<Vec<u8>, RootRecordError> {
+    /// Seals this generation at `write.address` (its epoch must be this record's) under
+    /// `write.key_epoch`.
+    pub fn seal(&self, key: &Key, write: &KeyEpochWrite<'_>) -> Result<Vec<u8>, RootRecordError> {
+        let address = write.address;
         if address.epoch != self.epoch {
             return Err(RootRecordError::Corrupt(
                 "key-epoch record names another epoch",
             ));
         }
         let meta = RecordMeta {
-            key_epoch,
+            key_epoch: write.key_epoch,
             record_generation: address.registry_generation,
             record_schema: CONTROL_RECORD_SCHEMA,
         };
         seal_record(key, &address.identity()?, meta, &self.encode()?).map_err(RootRecordError::Seal)
     }
 
-    /// Opens the record at `address` and returns it with the `key_epoch_set_digest` entry its
-    /// envelope supplies.
+    /// Opens `read.envelope` at `read.address` and returns the record with the
+    /// `key_epoch_set_digest` entry its envelope supplies.
     pub fn open(
         key: &Key,
-        address: &KeyEpochAddress<'_>,
-        envelope: &[u8],
+        read: &KeyEpochRead<'_>,
     ) -> Result<(Self, KeyEpochEntry), RootRecordError> {
+        let address = read.address;
         let opened =
-            open_record(key, &address.identity()?, envelope).map_err(RootRecordError::Open)?;
-        check_header(
-            opened.header.record_generation,
-            opened.header.record_schema,
-            address.registry_generation,
-        )?;
+            open_record(key, &address.identity()?, read.envelope).map_err(RootRecordError::Open)?;
+        address.check(&opened.header)?;
         let record = KeyEpochRecord::decode(&opened.payload)?;
         if record.epoch != address.epoch {
             return Err(RootRecordError::Corrupt(
@@ -273,10 +282,24 @@ impl KeyEpochRecord {
         let entry = KeyEpochEntry {
             epoch: address.epoch,
             registry_generation: address.registry_generation,
-            content_digest: content_digest(envelope),
+            content_digest: content_digest(read.envelope),
         };
         Ok((record, entry))
     }
+}
+
+/// A key-epoch record generation to seal: where, and under which data epoch's key.
+#[derive(Debug, Clone, Copy)]
+pub struct KeyEpochWrite<'a> {
+    pub address: KeyEpochAddress<'a>,
+    pub key_epoch: u64,
+}
+
+/// A sealed key-epoch record generation to open.
+#[derive(Debug, Clone, Copy)]
+pub struct KeyEpochRead<'a> {
+    pub address: KeyEpochAddress<'a>,
+    pub envelope: &'a [u8],
 }
 
 /// Where one key-epoch record generation lives: `key-epoch:<scope>:<epoch>` at
@@ -290,17 +313,33 @@ pub struct KeyEpochAddress<'a> {
 
 impl KeyEpochAddress<'_> {
     fn identity(&self) -> Result<RecordIdentity, RootRecordError> {
-        check_epoch(self.epoch)?;
-        check_epoch(self.registry_generation)?;
+        let assigned = |value: u64| value != 0 && value != u64::MAX;
+        if !(assigned(self.epoch) && assigned(self.registry_generation)) {
+            return Err(RootRecordError::Root(RootError::InvalidCounter));
+        }
         let epoch = self.epoch.to_string();
         RecordIdentity::new(RecordClass::KeyEpoch, &[self.scope.as_str(), &epoch])
             .map_err(|_| RootRecordError::InvalidIdentity)
     }
+
+    /// The authenticated header must name this generation and the control-record schema.
+    fn check(&self, header: &EnvelopeHeader) -> Result<(), RootRecordError> {
+        check_schema(header)?;
+        if header.record_generation == self.registry_generation {
+            Ok(())
+        } else {
+            Err(RootRecordError::GenerationMismatch)
+        }
+    }
 }
 
-/// The key route of `route_len` bytes that must be exactly the rest of the record.
-fn key_route(route: &[u8], route_len: usize) -> Result<RootKeyRefV1, RootRecordError> {
-    let in_bounds = (1..=MAX_ROOT_KEY_REF_LEN).contains(&route_len) && route.len() == route_len;
+/// The key route that must be exactly the rest of the record: `u32be(byte_length)` + bytes.
+fn key_route(rest: &[u8]) -> Result<RootKeyRefV1, RootRecordError> {
+    let Some((len, route)) = rest.split_first_chunk::<4>() else {
+        return Err(RootRecordError::Corrupt("truncated key-epoch record"));
+    };
+    let len = u32::from_be_bytes(*len) as usize;
+    let in_bounds = (1..=MAX_ROOT_KEY_REF_LEN).contains(&len) && route.len() == len;
     if !in_bounds {
         return Err(RootRecordError::Corrupt("key route length out of bounds"));
     }
@@ -312,32 +351,21 @@ fn root_identity(scope: &InstallationScopeId) -> Result<RecordIdentity, RootReco
         .map_err(|_| RootRecordError::InvalidIdentity)
 }
 
-fn check_epoch(epoch: u64) -> Result<(), RootRecordError> {
-    if epoch == 0 || epoch == u64::MAX {
-        Err(RootRecordError::Root(RootError::InvalidCounter))
-    } else {
+fn check_schema(header: &EnvelopeHeader) -> Result<(), RootRecordError> {
+    if header.record_schema == CONTROL_RECORD_SCHEMA {
         Ok(())
+    } else {
+        Err(RootRecordError::UnsupportedFormat(header.record_schema))
     }
 }
 
-fn check_header(generation: u64, schema: u32, expected: u64) -> Result<(), RootRecordError> {
-    if schema != CONTROL_RECORD_SCHEMA {
-        return Err(RootRecordError::UnsupportedFormat(schema));
-    }
-    if generation == expected {
-        Ok(())
-    } else {
-        Err(RootRecordError::GenerationMismatch)
-    }
-}
-
-/// The payload after its leading `u32be(format_version)`, which must be `version`.
-fn versioned(payload: &[u8], version: u32) -> Result<&[u8], RootRecordError> {
+/// The payload after its leading `u32be(format_version)`, which must be `VERSION`.
+fn versioned<const VERSION: u32>(payload: &[u8]) -> Result<&[u8], RootRecordError> {
     let Some((head, body)) = payload.split_first_chunk::<4>() else {
         return Err(RootRecordError::Corrupt("truncated record payload"));
     };
     let found = u32::from_be_bytes(*head);
-    if found == version {
+    if found == VERSION {
         Ok(body)
     } else {
         Err(RootRecordError::UnsupportedFormat(found))

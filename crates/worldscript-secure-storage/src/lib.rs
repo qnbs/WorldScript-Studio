@@ -76,8 +76,8 @@ pub use root::{
     MarkerSetEntry, RootBody, RootCommitEvidence, RootCommitState, RootError,
 };
 pub use root_record::{
-    open_root_slot, seal_root_slot, KeyEpochAddress, KeyEpochRecord, KeyEpochStatus, RootPointer,
-    RootRecordError,
+    open_root_slot, seal_root_slot, KeyEpochAddress, KeyEpochRead, KeyEpochRecord, KeyEpochStatus,
+    KeyEpochWrite, RootPointer, RootRecordError, RootSlotRead,
 };
 #[cfg(feature = "test-randomness")]
 pub use seal::seal_with_random;

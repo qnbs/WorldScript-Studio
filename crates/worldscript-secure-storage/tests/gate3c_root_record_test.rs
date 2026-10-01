@@ -9,6 +9,7 @@ use worldscript_secure_storage::{
     OpenError, RecordClass, RecordIdentity, RecordMeta, RootBody, RootCommitEvidence,
     RootCommitState, RootError, RootKeyRefV1, RootPointer, RootRecordError, RootSlot,
 };
+use worldscript_secure_storage::{KeyEpochRead, KeyEpochWrite, RootSlotRead};
 
 fn key() -> Key {
     Key::from_bytes(&mut [4u8; 32])
@@ -40,13 +41,25 @@ fn root() -> RootBody {
     }
 }
 
+fn slot_read<'a>(
+    scope: &'a InstallationScopeId,
+    root_generation: u64,
+    envelope: &'a [u8],
+) -> RootSlotRead<'a> {
+    RootSlotRead {
+        scope,
+        root_generation,
+        envelope,
+    }
+}
+
 const ROOT_DIGEST: &str = "199c2a845547d946e9d769f6aea9cc724c12c1aa3a7a7cbd5d7d5958e07aefc1";
 const POINTER_DIGEST: &str = "58196ba16c117c0f4d4178c183b33135c65aaad3d36cbc661aab93532e40fe7c";
 
 #[test]
 fn a_root_slot_round_trips_and_yields_the_pinned_root_digest() {
     let sealed = seal_root_slot(&key(), &scope(), &root()).unwrap();
-    let (opened, digest) = open_root_slot(&key(), &scope(), 5, &sealed).unwrap();
+    let (opened, digest) = open_root_slot(&key(), &slot_read(&scope(), 5, &sealed)).unwrap();
     assert_eq!((opened, hex(&digest)), (root(), ROOT_DIGEST.to_owned()));
 }
 
@@ -55,8 +68,8 @@ fn a_root_slot_opens_only_as_its_own_scope_and_generation() {
     let sealed = seal_root_slot(&key(), &scope(), &root()).unwrap();
     let other = InstallationScopeId::from_random_bits([1u8; 16]);
     let refusals = (
-        open_root_slot(&key(), &scope(), 6, &sealed).unwrap_err(),
-        open_root_slot(&key(), &other, 5, &sealed).unwrap_err(),
+        open_root_slot(&key(), &slot_read(&scope(), 6, &sealed)).unwrap_err(),
+        open_root_slot(&key(), &slot_read(&other, 5, &sealed)).unwrap_err(),
     );
     assert_eq!(
         refusals,
@@ -228,9 +241,22 @@ fn address(
 fn a_sealed_key_epoch_record_yields_its_set_entry() {
     let scope = scope();
     let sealed = epoch_record()
-        .seal(&key(), &address(&scope, 1, 3), 1)
+        .seal(
+            &key(),
+            &KeyEpochWrite {
+                address: address(&scope, 1, 3),
+                key_epoch: 1,
+            },
+        )
         .unwrap();
-    let (record, entry) = KeyEpochRecord::open(&key(), &address(&scope, 1, 3), &sealed).unwrap();
+    let (record, entry) = KeyEpochRecord::open(
+        &key(),
+        &KeyEpochRead {
+            address: address(&scope, 1, 3),
+            envelope: &sealed,
+        },
+    )
+    .unwrap();
     let digest = worldscript_secure_storage::content_digest(&sealed);
     assert_eq!(
         (
@@ -243,9 +269,30 @@ fn a_sealed_key_epoch_record_yields_its_set_entry() {
     );
     // Another epoch's identity, another generation, or an unassigned generation never opens it.
     let refusals = [
-        KeyEpochRecord::open(&key(), &address(&scope, 2, 3), &sealed).unwrap_err(),
-        KeyEpochRecord::open(&key(), &address(&scope, 1, 4), &sealed).unwrap_err(),
-        KeyEpochRecord::open(&key(), &address(&scope, 1, 0), &sealed).unwrap_err(),
+        KeyEpochRecord::open(
+            &key(),
+            &KeyEpochRead {
+                address: address(&scope, 2, 3),
+                envelope: &sealed,
+            },
+        )
+        .unwrap_err(),
+        KeyEpochRecord::open(
+            &key(),
+            &KeyEpochRead {
+                address: address(&scope, 1, 4),
+                envelope: &sealed,
+            },
+        )
+        .unwrap_err(),
+        KeyEpochRecord::open(
+            &key(),
+            &KeyEpochRead {
+                address: address(&scope, 1, 0),
+                envelope: &sealed,
+            },
+        )
+        .unwrap_err(),
     ];
     assert_eq!(
         refusals,
@@ -258,14 +305,26 @@ fn a_sealed_key_epoch_record_yields_its_set_entry() {
     for bad in [0, u64::MAX] {
         assert_eq!(
             epoch_record()
-                .seal(&key(), &address(&scope, 1, bad), 1)
+                .seal(
+                    &key(),
+                    &KeyEpochWrite {
+                        address: address(&scope, 1, bad),
+                        key_epoch: 1
+                    }
+                )
                 .unwrap_err(),
             RootRecordError::Root(RootError::InvalidCounter)
         );
     }
     assert_eq!(
         epoch_record()
-            .seal(&key(), &address(&scope, 2, 3), 1)
+            .seal(
+                &key(),
+                &KeyEpochWrite {
+                    address: address(&scope, 2, 3),
+                    key_epoch: 1
+                }
+            )
             .unwrap_err(),
         RootRecordError::Corrupt("key-epoch record names another epoch")
     );
@@ -284,7 +343,7 @@ fn a_root_slot_sealed_under_another_epoch_than_its_body_is_refused() {
     };
     let sealed = seal_record(&key(), &identity, meta, &payload).unwrap();
     assert_eq!(
-        open_root_slot(&key(), &scope(), 5, &sealed).unwrap_err(),
+        open_root_slot(&key(), &slot_read(&scope(), 5, &sealed)).unwrap_err(),
         RootRecordError::Corrupt("root slot sealed under another epoch")
     );
 }
