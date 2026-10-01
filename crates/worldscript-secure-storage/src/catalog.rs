@@ -29,6 +29,12 @@ pub const MAX_CATALOG_PAGE_DESCRIPTORS: usize = 4096;
 pub const CATALOG_PAGE_FORMAT_VERSION: u32 = 1;
 /// The `record_schema` a catalog page is sealed with.
 pub const CATALOG_PAGE_RECORD_SCHEMA: u32 = 1;
+/// The encoded page body never exceeds this, so it always fits one protected envelope (§5.5.1,
+/// the §6.1.2 journal-encoding bound).
+pub const MAX_CATALOG_PAGE_BYTES: usize = 16 * 1024 * 1024;
+/// A catalogued identity's template components together never exceed this (§5.5.1, the §6.1.2
+/// direct `logical_record_id` bound).
+pub const MAX_IDENTITY_EXTENSION_BYTES: usize = 16_384;
 
 const SHARD_DOMAIN: &[u8] = b"worldscript-r15/catalog-shard/v1";
 /// More components than any version-1 template has; a larger count is refused before allocating.
@@ -55,6 +61,9 @@ pub enum CatalogError {
     NotStrictlyAscending,
     /// No descriptors (an empty shard has no page), or more than the page bound.
     InvalidDescriptorCount,
+    /// The encoded page would exceed `MAX_CATALOG_PAGE_BYTES`, or an identity's components exceed
+    /// `MAX_IDENTITY_EXTENSION_BYTES`; the write is refused like a full shard.
+    TooLarge,
     /// A generation or epoch that is unassigned (`0`) or terminal (`u64::MAX`).
     InvalidCounter,
     InvalidIdentity(AadError),
@@ -108,6 +117,7 @@ impl CatalogDescriptor {
         if !agrees_with_marker(marker.body(), readable)? {
             return Err(CatalogError::InconsistentDescriptor);
         }
+        check_extension(record)?;
         let (identity, project_scope) = bindings(record)?;
         Ok(CatalogDescriptor {
             record: record.clone(),
@@ -166,6 +176,21 @@ impl CatalogDescriptor {
             &self.identity,
             &self.project_scope,
         )
+    }
+
+    fn encoded_len(&self) -> usize {
+        let readable = self.readable.map_or(0, |_| 8 + 8 + 32);
+        let components: usize = self.record.components().iter().map(|c| 4 + c.len()).sum();
+        4 + self.record.class().token().len()
+            + self.identity.len()
+            + self.project_scope.len()
+            + 8
+            + 32
+            + 4
+            + 3
+            + readable
+            + 4
+            + components
     }
 
     fn encode(&self, out: &mut Vec<u8>) {
@@ -380,6 +405,14 @@ impl CatalogPage {
         }
     }
 
+    fn encoded_len(&self) -> usize {
+        12 + self
+            .descriptors
+            .iter()
+            .map(CatalogDescriptor::encoded_len)
+            .sum::<usize>()
+    }
+
     fn validate(&self) -> Result<(), CatalogError> {
         if self.shard_id >= CATALOG_SHARD_COUNT {
             return Err(CatalogError::InvalidShard);
@@ -394,6 +427,9 @@ impl CatalogPage {
             .all(|pair| pair[0].sort_key() < pair[1].sort_key());
         if !ascending {
             return Err(CatalogError::NotStrictlyAscending);
+        }
+        if self.encoded_len() > MAX_CATALOG_PAGE_BYTES {
+            return Err(CatalogError::TooLarge);
         }
         self.descriptors.iter().try_for_each(|descriptor| {
             check_descriptor(descriptor)?;
@@ -421,6 +457,16 @@ fn check_descriptor(descriptor: &CatalogDescriptor) -> Result<(), CatalogError> 
             check_counter(c.epoch)
         }),
         (other, _) => Err(CatalogError::UnsupportedState(other)),
+    }
+}
+
+/// A catalogued identity's template components stay within `MAX_IDENTITY_EXTENSION_BYTES`.
+fn check_extension(record: &RecordIdentity) -> Result<(), CatalogError> {
+    let total: usize = record.components().iter().map(String::len).sum();
+    if total > MAX_IDENTITY_EXTENSION_BYTES {
+        Err(CatalogError::TooLarge)
+    } else {
+        Ok(())
     }
 }
 
@@ -549,8 +595,14 @@ impl<'a> Reader<'a> {
             return Err(CatalogError::Corrupt("too many identity components"));
         }
         let mut components = Vec::with_capacity(count);
+        let mut total = 0usize;
         for _ in 0..count {
-            components.push(self.string(u32::MAX as usize)?);
+            let component = self.string(MAX_IDENTITY_EXTENSION_BYTES)?;
+            total += component.len();
+            if total > MAX_IDENTITY_EXTENSION_BYTES {
+                return Err(CatalogError::TooLarge);
+            }
+            components.push(component);
         }
         RecordIdentity::new(class, &components)
             .map_err(|_| CatalogError::Corrupt("descriptor identity violates its class template"))

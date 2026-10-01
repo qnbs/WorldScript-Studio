@@ -329,7 +329,11 @@ pub fn read_committed<F: DurableFs>(
 
 /// The record's catalog descriptor (§5.5), derived only from its verified marker chain — the newest
 /// marker and the generation a read serves — so a descriptor never states an authority the chain
-/// does not. `None` when the record has no marker yet.
+/// does not. `None` when the record has no marker yet. It describes the chain as it stands: a first
+/// write that reconciliation rolled back (`Resolution::RolledBack { restored: None }`) still reads
+/// as `PENDING(none -> 1)` here, because version 1 has no `ABSENT` marker body; the root commit
+/// (slice 3C part 3) consumes the reconciliation outcome and drops such a record, so a catalog is
+/// never built from this helper alone.
 pub fn describe_record<F: DurableFs>(
     fs: &mut F,
     store: RecordStore<'_>,

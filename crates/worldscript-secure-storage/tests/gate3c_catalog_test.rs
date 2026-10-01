@@ -295,8 +295,10 @@ fn decoding_refuses_bad_flags_counters_and_counts() {
 
 #[test]
 fn debug_output_never_shows_an_identity() {
-    let page = CatalogPage::new(228, vec![active(&codex("secret-project"))]);
-    let shown = format!("{:?} {:?}", page, active(&codex("secret-project")));
+    let record = codex("secret-project");
+    let shard = catalog_shard_of(&record).unwrap();
+    let page = CatalogPage::new(shard, vec![active(&record)]).unwrap();
+    let shown = format!("{page:?} {:?}", active(&record));
     assert!(!shown.contains("secret-project"), "{shown}");
 }
 
@@ -315,4 +317,22 @@ fn a_decoded_descriptor_reproduces_its_exact_identity() {
         descriptor.readable(),
     );
     assert_eq!(facts, (true, 2, Some(committed(1))));
+}
+
+#[test]
+fn identities_and_pages_are_size_bounded() {
+    // An identity whose components exceed the 16,384-byte extension bound is never catalogued.
+    let huge = codex(&"p".repeat(16_385));
+    let marker = active_marker(&huge, 2);
+    assert_eq!(
+        CatalogDescriptor::new_unverified(&huge, &marker, Some(committed(1))),
+        Err(CatalogError::TooLarge)
+    );
+    let largest = codex(&"p".repeat(16_384));
+    let fits = CatalogDescriptor::new_unverified(
+        &largest,
+        &active_marker(&largest, 2),
+        Some(committed(1)),
+    );
+    assert!(fits.is_ok());
 }

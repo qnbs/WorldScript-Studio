@@ -1319,6 +1319,9 @@ CATALOG_SHARD_COUNT            = 256
 MAX_CATALOG_PAGE_DESCRIPTORS   = 4096
 CATALOG_PAGE_FORMAT_VERSION    = 1
 CATALOG_PAGE_RECORD_SCHEMA     = 1     the record_schema every catalog page is sealed with
+MAX_CATALOG_PAGE_BYTES         = 16 MiB  encoded page body (§6.1.2's journal-encoding bound)
+MAX_IDENTITY_EXTENSION_BYTES   = 16,384  one descriptor's template components together (§6.1.2's
+                                         direct logical_record_id bound)
 ```
 
 **Shard assignment.** An ordinary record's shard is fixed by its identity alone, never by a path,
@@ -1336,7 +1339,9 @@ tagged-binding reuse). Each non-empty shard is exactly one catalog page, the gen
 protected record `record-catalog:<InstallationScopeId>:<shard-decimal>` whose `record_generation`
 is the shard's `catalog_generation`; an empty shard has no page and is absent from
 `catalog_set_digest`. A write that would raise a shard above `MAX_CATALOG_PAGE_DESCRIPTORS` is
-refused before any authority changes (`CATALOG_SHARD_FULL`); 256 shards of 4,096 descriptors bound
+refused before any authority changes (`CATALOG_SHARD_FULL`), and so is a write that would raise a
+page's encoded body above `MAX_CATALOG_PAGE_BYTES` or catalogue an identity whose components exceed
+`MAX_IDENTITY_EXTENSION_BYTES` — so every page fits one protected envelope; 256 shards of 4,096 descriptors bound
 the catalog at 1,048,576 ordinary records, above §6.1.2's 1,000,000-entry inventory bound.
 
 **Page body.** The page's protected payload is exactly:
@@ -3695,7 +3700,9 @@ Later implementation may be admitted only in these bounded gates:
      committed generation, a replacement `PENDING` its old one, a first-write `PENDING` none), only
      ordinary records are catalogued, and each descriptor carries the identity's template components
      so a decoded page reproduces the exact identity; descriptors and pages print no identity in
-     `Debug`; the shard is `SHA-256` of the domain and the record's class and
+     `Debug`; `describe_record` describes the chain as it stands — a first write that reconciliation
+     rolled back still reads as `PENDING(none -> 1)` because version 1 has no `ABSENT` body, so the
+     root commit (part 3) consumes the reconciliation outcome and drops it; the shard is `SHA-256` of the domain and the record's class and
      tagged bindings, modulo 256; a page holds 1–4,096 descriptors of one shard in strictly
      ascending order and is sealed as generation-addressed `record-catalog:<scope>:<shard>`.
      Decoding is strict (format version, counts, ordering, shard membership, presence flags all or

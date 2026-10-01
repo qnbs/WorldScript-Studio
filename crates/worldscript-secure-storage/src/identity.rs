@@ -158,7 +158,8 @@ pub struct RecordIdentity {
     project_id: Option<String>,
     /// The exact template components it was built from (literals excluded), so related identities
     /// (asset pairs, §8.4) and catalog descriptors (§5.5.1) are rebuilt structurally and never by
-    /// parsing `logical_record_id`. Empty only for a `record-commit` marker, which has no template.
+    /// parsing `logical_record_id`. Empty for a literal-only template (`settings:global`) and for a
+    /// `record-commit` marker, which has no template — never evidence of a marker on its own.
     components: Vec<String>,
 }
 
