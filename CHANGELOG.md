@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current, exactly as the storage contract specifies, with byte-level test vectors. Nothing reads
   or writes user data through it yet; the commit write protocol and startup recovery follow in the
   next slice. PR #937.
+- **Security: basic-ftp override floor raised (#938):** a fresh OSV finding (GHSA-c475-qrg2-pj4r,
+  fixed in basic-ftp 6.2.1) in the Lighthouse CI tooling is resolved by raising the dependency
+  floor. It affects development tooling only, not the shipped app. PR #939.
 - **Docs truth: stricter R-15 gate status check (#935):** each line in the status block must now be
   a single gate entry, and the block ends only at a closing fence on its own line. Code examples
   containing a literal comment marker no longer hide the text after them, comments spanning lines no
