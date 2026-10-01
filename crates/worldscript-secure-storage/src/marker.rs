@@ -25,8 +25,9 @@ use crate::seal::{Key, RecordMeta};
 
 const CONTENT_DIGEST_DOMAIN: &[u8] = b"worldscript-r15/content/v1";
 const MARKER_ENTRY_DOMAIN: &[u8] = b"worldscript-r15/marker-entry/v1";
-/// §5.4: an `operation_id` is at most 128 bytes of UTF-8.
-pub const MAX_OPERATION_ID_LEN: usize = 128;
+/// §6.1.2: an `operation_id` is at most 128 bytes of UTF-8 — the same bound every other
+/// operation identity uses, so the marker reuses it rather than keeping a second copy.
+pub use crate::anchor::MAX_OPERATION_ID_LEN;
 /// The marker body's own payload schema when sealed as a `record-commit` record.
 pub const MARKER_RECORD_SCHEMA: u32 = 1;
 
@@ -67,7 +68,8 @@ impl std::fmt::Debug for MarkerOperation {
 }
 
 /// `PENDING(old -> target)` (§8.4, §9 step 2). The old generation stays authoritative while it is
-/// the latest marker; `content_digest` is absent until a staged candidate exists.
+/// the latest marker; `content_digest` is absent until a staged candidate exists. The target is
+/// always the next generation: `1` for a first write, otherwise `old + 1`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingBody {
     pub operation: MarkerOperation,
@@ -123,8 +125,9 @@ pub enum MarkerError {
     UnsupportedSchema,
     /// A generation or epoch that is unassigned (`0`) or terminal (`u64::MAX`), §5.4's lifecycle.
     InvalidCounter,
-    /// A pending write whose target does not advance past its old generation.
-    TargetNotAfterOld,
+    /// A pending target that is not exactly the next generation: `1` for a first write
+    /// (`PENDING(none -> 1)`, §8.4), otherwise `checked_increment(old)` (§5.4's lifecycle rule).
+    TargetNotNextGeneration,
     /// An empty or over-long (over 128 bytes) `operation_id`.
     InvalidOperationId,
     InvalidIdentity(AadError),
@@ -315,11 +318,15 @@ fn check_pending(pending: &PendingBody) -> Result<(), MarkerError> {
     check_operation(&pending.operation)?;
     check_counter(pending.target_generation)?;
     check_counter(pending.target_epoch)?;
-    if let Some(old) = pending.old_generation {
-        check_counter(old)?;
-        if old >= pending.target_generation {
-            return Err(MarkerError::TargetNotAfterOld);
+    let next = match pending.old_generation {
+        None => 1,
+        Some(old) => {
+            check_counter(old)?;
+            old + 1
         }
+    };
+    if pending.target_generation != next {
+        return Err(MarkerError::TargetNotNextGeneration);
     }
     if ADMITTED_RECORD_SCHEMAS.contains(&pending.record_schema) {
         Ok(())
