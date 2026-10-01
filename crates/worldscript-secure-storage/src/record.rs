@@ -6,6 +6,7 @@
 //! `PROTECTED_TAMPERED` (§7) instead of opening under the wrong identity. No I/O happens here: where
 //! the bytes live, and whether they are the newest committed generation, belongs to later gates.
 
+use crate::disposition::is_r15_record_class;
 use crate::envelope::{parse_envelope, EnvelopeHeader};
 use crate::error::{OpenError, SealError};
 use crate::identity::RecordIdentity;
@@ -41,13 +42,18 @@ impl std::fmt::Debug for OpenedRecord {
 
 /// Seals `plaintext` as one version of the record `identity` names: a complete `WSR1` envelope whose
 /// AAD is that identity's canonical context (§6.2). A record schema outside the compatibility
-/// registry is refused, so no record is written that current readers cannot decode.
+/// registry is refused, so no record is written that current readers cannot decode, and so is a
+/// class whose §10.4.1 disposition never yields R-15 ciphertext (credentials, the IDB KDF salt and
+/// passphrase sentinel).
 pub fn seal_record(
     key: &Key,
     identity: &RecordIdentity,
     meta: RecordMeta,
     plaintext: &[u8],
 ) -> Result<Vec<u8>, SealError> {
+    if !is_r15_record_class(identity.class()) {
+        return Err(SealError::NotAnR15RecordClass);
+    }
     if !admitted_schema(meta.record_schema) {
         return Err(SealError::UnsupportedSchema);
     }
@@ -62,12 +68,15 @@ pub fn seal_record(
 /// `identity` names. Malformed or future-format bytes, including a record schema outside the
 /// compatibility registry (§7 `PROTECTED_UNSUPPORTED_VERSION`), are refused before any decryption,
 /// so no payload reaches a decoder that cannot read it; ciphertext sealed under any other identity is
-/// `Tampered`.
+/// `Tampered`. A class that never has R-15 ciphertext (§10.4.1) is refused before any parsing.
 pub fn open_record(
     key: &Key,
     identity: &RecordIdentity,
     bytes: &[u8],
 ) -> Result<OpenedRecord, OpenError> {
+    if !is_r15_record_class(identity.class()) {
+        return Err(OpenError::NotAnR15RecordClass);
+    }
     let envelope = parse_envelope(bytes)?;
     if !admitted_schema(envelope.header().record_schema) {
         return Err(OpenError::UnsupportedVersion("record schema"));

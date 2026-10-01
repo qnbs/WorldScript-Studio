@@ -4,8 +4,8 @@
 //! authenticated bytes, fail closed while the valid record and its exact IDs stay intact.
 
 use worldscript_secure_storage::{
-    open_record, seal, seal_record, Key, OpenError, RecordClass, RecordIdentity, RecordMeta,
-    SealError, SealTarget, ADMITTED_RECORD_SCHEMAS,
+    disposition, is_r15_record_class, open_record, seal, seal_record, Disposition, Key, OpenError,
+    RecordClass, RecordIdentity, RecordMeta, SealError, SealTarget, ADMITTED_RECORD_SCHEMAS,
 };
 
 /// Header length, and the offset of the ciphertext that follows it (§6.1).
@@ -215,7 +215,64 @@ fn only_asset_pairs_and_their_members_have_pair_relations() {
 
 #[test]
 fn opened_record_debug_never_contains_the_payload() {
-    let record = identity(RecordClass::Credential, &["openai"]);
+    let record = identity(RecordClass::Settings, &[]);
     let opened = open_record(&key(), &record, &sealed(&record)).unwrap();
     assert!(!format!("{opened:?}").contains("chapter"));
+}
+
+#[test]
+fn separately_protected_classes_never_become_r15_envelopes() {
+    // §10.4.1: credentials and the B-1 IDB salt/sentinel keep their own approved authority, so no
+    // R-15 ciphertext is ever created for them, and nothing presented as one is parsed or decrypted.
+    let retained = [
+        identity(RecordClass::Credential, &["openai"]),
+        identity(RecordClass::IdbKdfSalt, &[SCOPE]),
+        identity(RecordClass::IdbPassphraseSentinel, &[SCOPE]),
+    ];
+    let forged = sealed(&identity(RecordClass::Settings, &[]));
+    for record in &retained {
+        assert_eq!(
+            disposition(record.class()),
+            Some(Disposition::RetainSeparateAuthority)
+        );
+        assert_eq!(
+            seal_record(&key(), record, META, b"secret"),
+            Err(SealError::NotAnR15RecordClass),
+            "{record:?}"
+        );
+        assert_eq!(
+            open_record(&key(), record, &forged),
+            Err(OpenError::NotAnR15RecordClass),
+            "{record:?}"
+        );
+    }
+}
+
+#[test]
+fn every_other_class_is_an_r15_record_class() {
+    let retained = [
+        RecordClass::Credential,
+        RecordClass::IdbKdfSalt,
+        RecordClass::IdbPassphraseSentinel,
+    ];
+    for class in RecordClass::ALL {
+        assert_eq!(
+            is_r15_record_class(*class),
+            !retained.contains(class),
+            "{class:?}"
+        );
+    }
+    // Native control-plane records are R-15 envelopes too (§5.3, §5.4).
+    let codex = identity(RecordClass::Codex, &["p1"]);
+    for record in [
+        identity(RecordClass::AuthorityRoot, &[SCOPE]),
+        identity(RecordClass::AssetPair, &["p1", "a1"]),
+        RecordIdentity::commit_marker(&codex).unwrap(),
+    ] {
+        assert_eq!(
+            disposition(record.class()),
+            Some(Disposition::NativeControlPlane)
+        );
+        assert!(open_record(&key(), &record, &sealed(&record)).is_ok());
+    }
 }
