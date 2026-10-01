@@ -156,33 +156,54 @@ pub fn marker_set_digest(entries: &[MarkerSetEntry]) -> Result<[u8; 32], RootErr
 
 /// `catalog_set_digest` (§5.4) over every catalog shard, sorted by `shard_id`.
 pub fn catalog_set_digest(shards: &[CatalogShard]) -> Result<[u8; 32], RootError> {
-    let mut sorted = shards.to_vec();
-    sorted.sort_by_key(|shard| shard.shard_id);
-    refuse_duplicates(&sorted, |shard| shard.shard_id)?;
-    let mut hasher = Sha256::new().chain_update(CATALOG_SET_DOMAIN);
-    hasher.update(entry_count(sorted.len())?);
-    for shard in sorted {
+    keyed_set_digest(CATALOG_SET_DOMAIN, shards, |shard| {
         check_counter(shard.catalog_generation)?;
-        hasher.update(shard.shard_id.to_be_bytes());
-        hasher.update(shard.catalog_generation.to_be_bytes());
-        hasher.update(shard.content_digest);
-    }
-    Ok(hasher.finalize().into())
+        Ok(SetRow {
+            key: u64::from(shard.shard_id),
+            key_bytes: shard.shard_id.to_be_bytes().to_vec(),
+            generation: shard.catalog_generation,
+            content_digest: shard.content_digest,
+        })
+    })
 }
 
 /// `key_epoch_set_digest` (§5.4) over every key-epoch control record, sorted by `epoch`.
 pub fn key_epoch_set_digest(entries: &[KeyEpochEntry]) -> Result<[u8; 32], RootError> {
-    let mut sorted = entries.to_vec();
-    sorted.sort_by_key(|entry| entry.epoch);
-    refuse_duplicates(&sorted, |entry| entry.epoch)?;
-    let mut hasher = Sha256::new().chain_update(KEY_EPOCH_SET_DOMAIN);
-    hasher.update(entry_count(sorted.len())?);
-    for entry in sorted {
+    keyed_set_digest(KEY_EPOCH_SET_DOMAIN, entries, |entry| {
         check_counter(entry.epoch)?;
         check_counter(entry.registry_generation)?;
-        hasher.update(entry.epoch.to_be_bytes());
-        hasher.update(entry.registry_generation.to_be_bytes());
-        hasher.update(entry.content_digest);
+        Ok(SetRow {
+            key: entry.epoch,
+            key_bytes: entry.epoch.to_be_bytes().to_vec(),
+            generation: entry.registry_generation,
+            content_digest: entry.content_digest,
+        })
+    })
+}
+
+/// One row of a numerically keyed set: its sort key, the key's encoded bytes, a generation and a
+/// content digest — the shape `catalog_set_digest` and `key_epoch_set_digest` share.
+struct SetRow {
+    key: u64,
+    key_bytes: Vec<u8>,
+    generation: u64,
+    content_digest: [u8; 32],
+}
+
+fn keyed_set_digest<T>(
+    domain: &[u8],
+    items: &[T],
+    row: impl Fn(&T) -> Result<SetRow, RootError>,
+) -> Result<[u8; 32], RootError> {
+    let mut rows = items.iter().map(row).collect::<Result<Vec<_>, _>>()?;
+    rows.sort_by_key(|row| row.key);
+    refuse_duplicates(&rows, |row| row.key)?;
+    let mut hasher = Sha256::new().chain_update(domain);
+    hasher.update(entry_count(rows.len())?);
+    for row in rows {
+        hasher.update(&row.key_bytes);
+        hasher.update(row.generation.to_be_bytes());
+        hasher.update(row.content_digest);
     }
     Ok(hasher.finalize().into())
 }
@@ -228,7 +249,11 @@ fn push_live_migration(out: &mut Vec<u8>, live: Option<&LiveMigration>) -> Resul
         out.push(0);
         return Ok(());
     };
-    check_counter(live.journal_revision)?;
+    // §10.2: the bootstrap binding's `journal_revision = 0` is the deterministic initial-revision
+    // sentinel, so only the terminal value is refused here.
+    if live.journal_revision == u64::MAX {
+        return Err(RootError::InvalidCounter);
+    }
     if live.fencing_generation == 0 {
         // A live migration always owns a positive fence (§9 step 2, §10.1).
         return Err(RootError::InvalidCounter);

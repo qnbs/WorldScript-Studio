@@ -122,11 +122,26 @@ fn validate_identities(context: &RecordContext<'_>) -> Result<(), AadError> {
 }
 
 fn push_bindings(out: &mut Vec<u8>, form: IdentityForm, context: &RecordContext<'_>) {
-    form.push(out, LOGICAL_ID_HASH_DOMAIN, context.logical_record_id);
+    let (logical, project) = binding_parts(form, context);
+    out.extend_from_slice(&logical);
+    out.extend_from_slice(&project);
+}
+
+/// The single implementation of both §6.2 tagged bindings: canonical AAD and every control-plane
+/// encoding that binds an identity derive their bytes from here, so they cannot drift apart.
+fn binding_parts(form: IdentityForm, context: &RecordContext<'_>) -> (Vec<u8>, Vec<u8>) {
+    let mut logical = Vec::with_capacity(form.encoded_len(context.logical_record_id));
+    form.push(
+        &mut logical,
+        LOGICAL_ID_HASH_DOMAIN,
+        context.logical_record_id,
+    );
+    let mut project = Vec::with_capacity(context.project_id.map_or(1, |id| form.encoded_len(id)));
     match context.project_id {
-        None => out.push(TAG_ABSENT),
-        Some(id) => form.push(out, PROJECT_ID_HASH_DOMAIN, id),
+        None => project.push(TAG_ABSENT),
+        Some(id) => form.push(&mut project, PROJECT_ID_HASH_DOMAIN, id),
     }
+    (logical, project)
 }
 
 /// The §6.2-tagged `logical_record_id` and `project_id` bindings of `context`, exactly as canonical
@@ -144,19 +159,7 @@ pub(crate) fn tagged_identity_binding_parts(
     context: &RecordContext<'_>,
 ) -> Result<(Vec<u8>, Vec<u8>), AadError> {
     validate_identities(context)?;
-    let form = identity_form(context);
-    let mut logical = Vec::with_capacity(form.encoded_len(context.logical_record_id));
-    form.push(
-        &mut logical,
-        LOGICAL_ID_HASH_DOMAIN,
-        context.logical_record_id,
-    );
-    let mut project = Vec::new();
-    match context.project_id {
-        None => project.push(TAG_ABSENT),
-        Some(id) => form.push(&mut project, PROJECT_ID_HASH_DOMAIN, id),
-    }
-    Ok((logical, project))
+    Ok(binding_parts(identity_form(context), context))
 }
 
 /// Canonical AAD (§6.2) for `context` over the exact 52-byte routing header.

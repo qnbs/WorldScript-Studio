@@ -160,7 +160,7 @@ fn root_digest_matches_the_contract_vectors() {
 #[test]
 fn every_root_field_changes_the_digest() {
     let base = root_digest(&root()).unwrap();
-    let variants: [fn(&mut RootBody); 9] = [
+    let variants: [fn(&mut RootBody); 10] = [
         |r| r.root_generation = 6,
         |r| r.active_key_epoch = 3,
         |r| r.root_key_ref_digest[0] ^= 1,
@@ -170,6 +170,14 @@ fn every_root_field_changes_the_digest() {
         |r| r.commit_evidence.fencing_generation = 1,
         |r| r.commit_evidence.state = RootCommitState::NotCommitted,
         |r| r.commit_evidence.operation_id.push('0'),
+        |r| {
+            r.live_migration = Some(LiveMigration {
+                operation_id: "other".to_owned(),
+                fencing_generation: 1,
+                journal_revision: 1,
+                manifest_digest: [0; 32],
+            })
+        },
     ];
     for (index, change) in variants.iter().enumerate() {
         let mut changed = root();
@@ -195,18 +203,22 @@ fn root_fields_are_validated_before_hashing() {
         |r| r.commit_evidence.operation_id = "a".repeat(129),
         RootError::InvalidOperationId,
     );
-    // A live migration always owns a positive fence and an assigned journal revision.
+    // A live migration always owns a positive fence; its journal revision is never terminal.
     let live = |fencing_generation, journal_revision| LiveMigration {
         operation_id: "migration-op-1".to_owned(),
         fencing_generation,
         journal_revision,
         manifest_digest: [0xa5; 32],
     };
-    for (fence, revision) in [(0, 9), (3, 0)] {
+    for (fence, revision) in [(0, 9), (3, u64::MAX)] {
         let mut body = root();
         body.live_migration = Some(live(fence, revision));
         assert_eq!(root_digest(&body), Err(RootError::InvalidCounter));
     }
+    // §10.2: the bootstrap binding uses the initial-revision sentinel 0.
+    let mut bootstrap = root();
+    bootstrap.live_migration = Some(live(1, 0));
+    assert!(root_digest(&bootstrap).is_ok());
 }
 
 #[test]
