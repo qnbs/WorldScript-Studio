@@ -4,9 +4,10 @@
 //! Headless only: the `WSR1` envelope header (§6.1), the record-class registry (§6.1.1), canonical
 //! AAD (§6.2), and AES-256-GCM seal/open with an OS-backed nonce source (§6.3), plus the Gate 2
 //! slice 1 typed record-identity registry ([`identity`], §5.2), the identity-bound record codec
-//! ([`record`]), the §10.4.1 record-class disposition ([`mod@disposition`]), and the Gate 3
-//! slice 3A durable staging and promotion of one generation ([`durable`]). It changes no current
-//! TypeScript/Tauri storage authority and holds no journal or commit protocol.
+//! ([`record`]), the §10.4.1 record-class disposition ([`mod@disposition`]), the Gate 3
+//! slice 3A durable staging and promotion of one generation ([`durable`]), and the slice 3B1
+//! `record-commit` marker codec ([`marker`]). It changes no current TypeScript/Tauri storage
+//! authority and holds no journal or commit protocol.
 
 pub mod aad;
 pub mod anchor;
@@ -17,6 +18,7 @@ pub mod envelope;
 pub mod error;
 pub mod identity;
 pub mod kdf;
+pub mod marker;
 #[cfg(feature = "test-support")]
 pub mod memory_provider;
 pub mod provider;
@@ -41,6 +43,9 @@ pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
 pub use error::{AadError, KdfError, KeyProviderError, OpenError, RecoveryError, SealError};
 pub use identity::{IdentityError, RecordIdentity};
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};
+pub use marker::{
+    content_digest, CommitMarker, MarkerBody, MarkerError, MarkerOperation, PendingBody,
+};
 pub use provider::{
     AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,
     PrepareRootAnchor, PreparedRootCommit, RootKeyRefV1, RootSlot,
