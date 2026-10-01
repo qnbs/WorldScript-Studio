@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 3, slice 3C part 1 — authority-root digests (#445):** the protected-storage core
+  can now compute the digests that tie the whole committed storage state together — every record's
+  current commit marker, the record catalog, the key epochs and who committed the state — exactly as
+  the storage contract specifies, with independently checked test vectors. Nothing is persisted or
+  committed through it yet; the catalog and the root commit follow. PR #941.
 - **R-15 Gate 3, slice 3B part 2 — commit protocol and startup recovery (#445):** the
   protected-storage core can now commit a new version of a record through its commit markers and
   recover deterministically at startup after an interrupted write: it finishes the write when the

@@ -7,8 +7,8 @@
 //! ([`record`]), the §10.4.1 record-class disposition ([`mod@disposition`]), the Gate 3
 //! slice 3A durable staging and promotion of one generation ([`durable`]), and slice 3B's
 //! `record-commit` marker codec ([`marker`]) and marker commit protocol with startup reconciliation
-//! ([`commit`]). It changes no current TypeScript/Tauri storage authority and holds no journal or
-//! authority-root commit yet.
+//! ([`commit`]), and slice 3C's authority-root digests ([`root`]). It changes no current
+//! TypeScript/Tauri storage authority and holds no journal or authority-root commit yet.
 
 pub mod aad;
 pub mod anchor;
@@ -28,6 +28,7 @@ pub mod random;
 pub mod record;
 pub mod record_class;
 pub mod recovery;
+pub mod root;
 pub mod seal;
 pub mod secure_store;
 pub mod store_authority;
@@ -61,6 +62,11 @@ pub use random::{OsRandom, RandomSource, RandomnessUnavailable};
 pub use record::{open_record, seal_record, OpenedRecord, ADMITTED_RECORD_SCHEMAS};
 pub use record_class::RecordClass;
 pub use recovery::{unwrap_recovery, wrap_recovery, RecoveryMaterial, UnwrappedRecovery};
+pub use root::{
+    catalog_set_digest, key_epoch_set_digest, marker_set_digest, pointer_digest, root_digest,
+    CatalogShard, KeyEpochEntry, LiveMigration, MarkerSetEntry, RootBody, RootCommitEvidence,
+    RootCommitState, RootError,
+};
 #[cfg(feature = "test-randomness")]
 pub use seal::seal_with_random;
 pub use seal::{open, seal, Key, RecordMeta, SealTarget};
