@@ -121,6 +121,26 @@ fn validate_identities(context: &RecordContext<'_>) -> Result<(), AadError> {
     Ok(())
 }
 
+fn push_bindings(out: &mut Vec<u8>, form: IdentityForm, context: &RecordContext<'_>) {
+    form.push(out, LOGICAL_ID_HASH_DOMAIN, context.logical_record_id);
+    match context.project_id {
+        None => out.push(TAG_ABSENT),
+        Some(id) => form.push(out, PROJECT_ID_HASH_DOMAIN, id),
+    }
+}
+
+/// The §6.2-tagged `logical_record_id` and `project_id` bindings of `context`, exactly as canonical
+/// AAD encodes them (same direct-vs-hashed rule D). Other canonical encodings that bind an identity
+/// — the §5.4 marker body header — reuse these bytes rather than defining a second form.
+pub(crate) fn tagged_identity_bindings(context: &RecordContext<'_>) -> Result<Vec<u8>, AadError> {
+    validate_identities(context)?;
+    let form = identity_form(context);
+    let project_len = context.project_id.map_or(1, |id| form.encoded_len(id));
+    let mut out = Vec::with_capacity(form.encoded_len(context.logical_record_id) + project_len);
+    push_bindings(&mut out, form, context);
+    Ok(out)
+}
+
 /// Canonical AAD (§6.2) for `context` over the exact 52-byte routing header.
 ///
 /// Direct-vs-hashed selection is the contract's single deterministic rule: every present identity
@@ -150,11 +170,7 @@ pub fn canonical_aad(
     let mut out = Vec::with_capacity(total);
     push_length_prefixed(&mut out, DOMAIN.as_bytes());
     push_length_prefixed(&mut out, class.as_bytes());
-    form.push(&mut out, LOGICAL_ID_HASH_DOMAIN, context.logical_record_id);
-    match context.project_id {
-        None => out.push(TAG_ABSENT),
-        Some(id) => form.push(&mut out, PROJECT_ID_HASH_DOMAIN, id),
-    }
+    push_bindings(&mut out, form, context);
     out.extend_from_slice(header);
     debug_assert_eq!(out.len(), total);
     Ok(out)
