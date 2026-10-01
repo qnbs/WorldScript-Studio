@@ -130,6 +130,9 @@ pub enum MarkerError {
     TargetNotNextGeneration,
     /// An empty or over-long (over 128 bytes) `operation_id`.
     InvalidOperationId,
+    /// A positive `fencing_generation` on `PENDING`: reserved for journal-owned migration/rekey
+    /// writes (§9 step 2, §10.1), not admitted until their gate.
+    FenceNotAdmitted,
     InvalidIdentity(AadError),
     /// The sealed marker's envelope generation differs from the `marker_generation` in its body.
     GenerationMismatch,
@@ -271,9 +274,17 @@ fn placeholder_body() -> MarkerBody {
 
 /// Bytes that start with a `record-commit` class token are a marker of some other identity;
 /// anything else is not a marker body at all.
+/// Only a well-formed `record-commit` header naming another identity is an identity mismatch
+/// (§7 `PROTECTED_IDENTITY_MISMATCH`); truncated or malformed bindings are corruption.
 fn identity_or_corrupt(bytes: &[u8], expected_prefix: &[u8]) -> MarkerError {
     let class_len = 4 + RecordClass::RecordCommit.token().len();
-    if bytes.len() >= class_len && bytes[..class_len] == expected_prefix[..class_len] {
+    let mut reader = Reader(bytes);
+    let well_formed = bytes.len() >= class_len
+        && bytes[..class_len] == expected_prefix[..class_len]
+        && reader.take(class_len).is_ok()
+        && reader.binding(false).is_ok()
+        && reader.binding(true).is_ok();
+    if well_formed {
         MarkerError::IdentityMismatch
     } else {
         MarkerError::Corrupt("not a record-commit marker body")
@@ -316,6 +327,11 @@ fn check_body(body: &MarkerBody) -> Result<(), MarkerError> {
 
 fn check_pending(pending: &PendingBody) -> Result<(), MarkerError> {
     check_operation(&pending.operation)?;
+    // §9 step 2: an ordinary write's fence is always 0; positive fences belong to journal-owned
+    // migration/rekey writes, which this slice does not admit.
+    if pending.operation.fencing_generation != 0 {
+        return Err(MarkerError::FenceNotAdmitted);
+    }
     check_counter(pending.target_generation)?;
     check_counter(pending.target_epoch)?;
     let next = match pending.old_generation {
@@ -475,6 +491,20 @@ impl<'a> Reader<'a> {
             0 => Ok(false),
             1 => Ok(true),
             _ => Err(MarkerError::Corrupt("flag byte is neither 0 nor 1")),
+        }
+    }
+
+    /// One §6.2 tagged identity binding: direct (`1`, length-prefixed), hashed (`2`, 32 bytes), or,
+    /// only where `absent_allowed`, absent (`0`).
+    fn binding(&mut self, absent_allowed: bool) -> Result<(), MarkerError> {
+        match self.take(1)?[0] {
+            0 if absent_allowed => Ok(()),
+            1 => {
+                let len = self.u32()? as usize;
+                self.take(len).map(|_| ())
+            }
+            2 => self.take(32).map(|_| ()),
+            _ => Err(MarkerError::Corrupt("invalid identity binding tag")),
         }
     }
 

@@ -324,13 +324,71 @@ fn counters_follow_the_lifecycle_rule() {
             Err(MarkerError::InvalidCounter)
         );
         body.target_epoch = 1;
-        body.old_generation = Some(bad);
-        body.target_generation = bad.wrapping_add(1);
+        body.target_generation = bad;
         assert_eq!(
             CommitMarker::new(&settings(), 1, MarkerBody::Pending(body)),
             Err(MarkerError::InvalidCounter)
         );
     }
+    // An unassigned old generation is refused on its own: its target (1) is itself valid.
+    let unassigned_old = PendingBody {
+        operation: operation(0),
+        old_generation: Some(0),
+        target_generation: 1,
+        target_epoch: 1,
+        content_digest: None,
+        record_schema: 1,
+    };
+    assert_eq!(
+        CommitMarker::new(&settings(), 1, MarkerBody::Pending(unassigned_old)),
+        Err(MarkerError::InvalidCounter)
+    );
+}
+
+#[test]
+fn an_ordinary_pending_marker_carries_no_fence() {
+    let MarkerBody::Pending(mut body) = pending(Some(1), None) else {
+        unreachable!()
+    };
+    body.operation.fencing_generation = 1;
+    assert_eq!(
+        CommitMarker::new(&settings(), 1, MarkerBody::Pending(body)),
+        Err(MarkerError::FenceNotAdmitted)
+    );
+    let mut fenced = settings_header(3, PENDING);
+    push_operation(&mut fenced, 1);
+    fenced.push(0);
+    fenced.extend_from_slice(&u64be(1));
+    fenced.extend_from_slice(&u64be(1));
+    fenced.push(0);
+    fenced.extend_from_slice(&u32be(1));
+    fenced.push(0);
+    assert_eq!(
+        CommitMarker::decode(&settings(), &fenced),
+        Err(MarkerError::FenceNotAdmitted)
+    );
+    // A recovery marker may still name a fenced prior operation.
+    let recovery = MarkerBody::RecoveryRequired {
+        reason_code: 0,
+        prior: Some(operation(7)),
+    };
+    assert!(CommitMarker::new(&settings(), 1, recovery).is_ok());
+}
+
+#[test]
+fn malformed_marker_headers_are_corrupt_not_identity_mismatches() {
+    let corrupt = Err(MarkerError::Corrupt("not a record-commit marker body"));
+    let mut class_only = u32be(13).to_vec();
+    class_only.extend_from_slice(b"record-commit");
+    assert_eq!(CommitMarker::decode(&settings(), &class_only), corrupt);
+    let mut bad_tag = class_only.clone();
+    bad_tag.push(9);
+    assert_eq!(CommitMarker::decode(&settings(), &bad_tag), corrupt);
+    let mut short_binding = class_only.clone();
+    short_binding.push(1);
+    short_binding.extend_from_slice(&u32be(100));
+    short_binding.extend_from_slice(b"record-commit:x");
+    assert_eq!(CommitMarker::decode(&settings(), &short_binding), corrupt);
 }
 
 #[test]

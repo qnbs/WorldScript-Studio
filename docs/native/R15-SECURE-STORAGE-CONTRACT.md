@@ -3548,7 +3548,8 @@ Later implementation may be admitted only in these bounded gates:
      but are refused until their gates admit them, and so is `is_chunked = 1` (the chunked envelope is
      not implemented). Decoding is strict — the identity must equal the requested record's marker,
      every flag is `0` or `1`, no byte may follow the body, counters follow §5.4's lifecycle rule
-     (never `0` or `u64::MAX`), a pending target must be exactly the next generation (`1` for a first write, otherwise `old + 1`), an
+     (never `0` or `u64::MAX`), a pending target must be exactly the next generation (`1` for a first write, otherwise `old + 1`), a `PENDING`
+     fence is the ordinary-write `0` (positive fences are journal-owned and not admitted), an
      `operation_id` is 1–128 bytes, and the record schema must be admitted — and a decoded marker
      re-encodes to the same bytes. A marker generation is sealed as its own protected
      `record-commit` record whose envelope `record_generation` is the `marker_generation`; opening
