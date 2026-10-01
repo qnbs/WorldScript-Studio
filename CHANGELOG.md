@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 2, slice 1 — typed record-identity registry (#445):** every protected record class
+  now has a typed identity built only from that class's registered template, so a record addressed
+  through it always carries the contract's logical ID and project binding in the authenticated
+  data. Existing project and record IDs keep their exact spelling even when they contain `:`,
+  and an index version must be one the current format supports. Malformed parts (an empty part,
+  control characters, a non-canonical number, or a malformed installation ID) are refused, never
+  repaired. Tests prove that data sealed under one identity never opens under another. Nothing in
+  the app uses this yet, and the production authority switch stays off. PR #917.
 - **Security: axios and DOMPurify override floors raised (#918):** fresh OSV findings on the
   locked versions are fixed. The development-only axios (pulled in by `wait-on`) now resolves to
   1.20.0 for 12 advisories on 1.19.0, and the shipped HTML sanitizer DOMPurify moves to 3.4.16
