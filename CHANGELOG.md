@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 3, slice 3A — durable staging and promotion (#445):** the protected-storage core can
+  now write a new encrypted version of a record next to the previous one: it seals the record in
+  memory, writes only the encrypted bytes to a temporary staging file, flushes it to disk, checks
+  it, then links it into place under a new version name without ever replacing an existing
+  version, checks it again, and flushes the folder on Linux and macOS (on Windows the folder flush
+  is reported as unconfirmed rather than assumed). The previous version is never touched and no
+  plaintext is written; every failed step is reported with the files it left, and a staging file
+  that fails its check is kept for later recovery. Tests inject failures at each file-system step
+  on Linux, macOS and Windows; real power-loss evidence and deciding which version counts come
+  later. Nothing in the app uses this yet, and the production authority switch stays off. PR #930.
 - **R-15 Gate 2 closure — record-class disposition (#445):** every protected record class now has
   exactly one recorded disposition from the storage contract, and the record codec only seals and
   opens classes that are meant to become protected records. API credentials and the browser
