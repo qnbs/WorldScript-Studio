@@ -156,9 +156,10 @@ pub struct RecordIdentity {
     class: RecordClass,
     logical_record_id: String,
     project_id: Option<String>,
-    /// The exact template components it was built from (literals excluded), so asset-pair
-    /// relations are derived structurally (§8.4) and never by parsing `logical_record_id`. Kept only
-    /// for the asset-pair classes, the only ones that derive related identities; empty otherwise.
+    /// The exact template components it was built from (literals excluded), so related identities
+    /// (asset pairs, §8.4) and catalog descriptors (§5.5.1) are rebuilt structurally and never by
+    /// parsing `logical_record_id`. Empty for a literal-only template (`settings:global`) and for a
+    /// `record-commit` marker, which has no template — never evidence of a marker on its own.
     components: Vec<String>,
 }
 
@@ -209,11 +210,7 @@ impl RecordIdentity {
             class,
             logical_record_id,
             project_id: project.map(str::to_owned),
-            components: if has_pair_relation(class) {
-                kept.into_iter().map(str::to_owned).collect()
-            } else {
-                Vec::new()
-            },
+            components: kept.into_iter().map(str::to_owned).collect(),
         })
     }
 
@@ -265,6 +262,11 @@ impl RecordIdentity {
         RecordIdentity::new(class, &components).ok()
     }
 
+    /// The template components this identity was built from, in order (literals excluded).
+    pub(crate) fn components(&self) -> &[String] {
+        &self.components
+    }
+
     pub fn class(&self) -> RecordClass {
         self.class
     }
@@ -287,16 +289,8 @@ impl RecordIdentity {
     }
 }
 
-/// Whether `class` takes part in an `asset-pair` relation (§8.4).
-fn has_pair_relation(class: RecordClass) -> bool {
-    matches!(
-        class,
-        RecordClass::AssetPair | RecordClass::Asset | RecordClass::AssetMetadata
-    )
-}
-
-/// Whether `class` is committed through its own `record-commit` marker.
-fn has_ordinary_marker(class: RecordClass) -> bool {
+/// Whether `class` is committed through its own `record-commit` marker (an ordinary record).
+pub(crate) fn has_ordinary_marker(class: RecordClass) -> bool {
     // Only `MIGRATE_TO_R15` records (§10.4.1) are ordinary records, and an asset-pair member is
     // committed by its pair marker instead (§8.4). Control-plane records are anchored by the
     // authority root, and retained-authority classes have no R-15 record to commit at all.

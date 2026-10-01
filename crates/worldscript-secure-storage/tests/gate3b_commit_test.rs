@@ -539,3 +539,22 @@ fn a_startup_resolution_reports_the_durability_of_the_marker_it_wrote() {
         "nothing written when settled"
     );
 }
+
+#[test]
+fn a_catalog_descriptor_is_derived_only_from_the_verified_chain() {
+    use worldscript_secure_storage::describe_record;
+    let dirs = Dirs::new();
+    assert_eq!(describe_record(&mut StdFs, dirs.store()), Ok(None));
+    interrupted_replacement(&dirs, FaultFs::new(Op::Create, &dirs.record, 0));
+    // A replacement in flight: PENDING, still serving generation 1.
+    let pending = describe_record(&mut StdFs, dirs.store()).unwrap().unwrap();
+    let served = pending.readable().map(|committed| committed.generation);
+    assert_eq!((pending.marker_state(), served), (2, Some(1)));
+    // A tampered chain yields no descriptor at all.
+    let latest = generation_path(&dirs.marker, 3);
+    let mut bytes = fs::read(&latest).unwrap();
+    let last = bytes.len() - 1;
+    bytes[last] ^= 1;
+    fs::write(&latest, bytes).unwrap();
+    assert!(describe_record(&mut StdFs, dirs.store()).is_err());
+}
