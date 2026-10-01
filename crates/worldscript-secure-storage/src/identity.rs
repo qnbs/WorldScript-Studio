@@ -91,53 +91,60 @@ use Part::{
 /// only together with the format and migration path that read it.
 const ADMITTED_RAG_INDEX_VERSIONS: &[&str] = &["1"];
 
-/// The §5.2 template of `class`: its leading segment and the components after it. `record-commit`
-/// has none, because its identity embeds another record's identity ([`RecordIdentity::commit_marker`]).
+/// The §5.2 template of every version-1 class except `record-commit`, which has none because its
+/// identity embeds another record's identity ([`RecordIdentity::commit_marker`]): the class, its
+/// leading segment and the components after it. Each class appears exactly once (unit-tested).
+#[rustfmt::skip]
+const TEMPLATES: &[(RecordClass, &str, &[Part])] = &[
+    (RecordClass::Project, "project", &[Project]),
+    (RecordClass::ProjectMetadata, "project", &[Project, Literal("metadata")]),
+    (RecordClass::Snapshot, "snapshot", &[Decimal64]),
+    (RecordClass::Backup, "backup", &[Opaque]),
+    (RecordClass::Recovery, "recovery", &[Project, RecoveryId]),
+    // Version 1 has exactly one settings profile scope (§5.2.2).
+    (RecordClass::Settings, "settings", &[Literal("global")]),
+    (RecordClass::Credential, "credential", &[Opaque]),
+    (RecordClass::Image, "image", &[Opaque]),
+    (RecordClass::Asset, "asset", &[Project, Opaque]),
+    (RecordClass::AssetMetadata, "asset-metadata", &[Project, Opaque]),
+    (RecordClass::AssetPair, "asset-pair", &[Project, Opaque]),
+    (RecordClass::Codex, "codex", &[Project]),
+    (RecordClass::RagIndex, "rag-index", &[Project, RagIndexVersion]),
+    (RecordClass::ActiveProject, "active-project", &[Scope]),
+    (RecordClass::AuthorityRoot, "authority-root", &[Scope]),
+    (RecordClass::KeyEpoch, "key-epoch", &[Scope, Epoch]),
+    (RecordClass::Migration, "migration", &[OperationId]),
+    (RecordClass::MigrationPage, "migration-page", &[OperationId, Decimal32]),
+    (RecordClass::Diagnostic, "diagnostic", &[Scope, Token, Token]),
+    (RecordClass::RecordCatalog, "record-catalog", &[Scope, Decimal32]),
+    (RecordClass::LocalFirstDoc, "local-first-doc", &[Project]),
+    (RecordClass::AnalyticsDb, "analytics-db", &[Scope]),
+    (RecordClass::CrossProjectIndex, "cross-project-index", &[Project]),
+    (RecordClass::SceneComments, "scene-comments", &[Scope]),
+    (RecordClass::SceneRevision, "scene-revision", &[Opaque]),
+    (RecordClass::PlotUi, "plot-ui", &[Scope]),
+    (RecordClass::MindMapUi, "mind-map-ui", &[Scope]),
+    (RecordClass::Progress, "progress", &[Scope]),
+    (RecordClass::ProforgeMemory, "proforge-memory", &[Project, Opaque]),
+    (RecordClass::ProforgeHistory, "proforge-history", &[Project]),
+    (RecordClass::InferenceCache, "inference-cache", &[Scope, Opaque]),
+    (RecordClass::Lora, "lora", &[Opaque]),
+    (RecordClass::LoraDataset, "lora-dataset", &[Project, Opaque]),
+    (RecordClass::LoraRun, "lora-run", &[Project, Opaque]),
+    (RecordClass::LoraMirror, "lora-mirror", &[Scope]),
+    (RecordClass::Telemetry, "telemetry", &[Scope, Opaque]),
+    (RecordClass::AiBenchmark, "ai-benchmark", &[Scope]),
+    (RecordClass::WorkerDlq, "worker-dlq", &[Scope, Opaque]),
+    (RecordClass::IdbKdfSalt, "idb-kdf-salt", &[Scope]),
+    (RecordClass::IdbPassphraseSentinel, "idb-passphrase-sentinel", &[Scope]),
+];
+
+/// The §5.2 template of `class`, or `None` for `record-commit`.
 fn template(class: RecordClass) -> Option<(&'static str, &'static [Part])> {
-    Some(match class {
-        RecordClass::Project => ("project", &[Project]),
-        RecordClass::ProjectMetadata => ("project", &[Project, Literal("metadata")]),
-        RecordClass::Snapshot => ("snapshot", &[Decimal64]),
-        RecordClass::Backup => ("backup", &[Opaque]),
-        RecordClass::Recovery => ("recovery", &[Project, RecoveryId]),
-        // Version 1 has exactly one settings profile scope (§5.2.2).
-        RecordClass::Settings => ("settings", &[Literal("global")]),
-        RecordClass::Credential => ("credential", &[Opaque]),
-        RecordClass::Image => ("image", &[Opaque]),
-        RecordClass::Asset => ("asset", &[Project, Opaque]),
-        RecordClass::AssetMetadata => ("asset-metadata", &[Project, Opaque]),
-        RecordClass::AssetPair => ("asset-pair", &[Project, Opaque]),
-        RecordClass::Codex => ("codex", &[Project]),
-        RecordClass::RagIndex => ("rag-index", &[Project, RagIndexVersion]),
-        RecordClass::ActiveProject => ("active-project", &[Scope]),
-        RecordClass::AuthorityRoot => ("authority-root", &[Scope]),
-        RecordClass::KeyEpoch => ("key-epoch", &[Scope, Epoch]),
-        RecordClass::RecordCommit => return None,
-        RecordClass::Migration => ("migration", &[OperationId]),
-        RecordClass::MigrationPage => ("migration-page", &[OperationId, Decimal32]),
-        RecordClass::Diagnostic => ("diagnostic", &[Scope, Token, Token]),
-        RecordClass::RecordCatalog => ("record-catalog", &[Scope, Decimal32]),
-        RecordClass::LocalFirstDoc => ("local-first-doc", &[Project]),
-        RecordClass::AnalyticsDb => ("analytics-db", &[Scope]),
-        RecordClass::CrossProjectIndex => ("cross-project-index", &[Project]),
-        RecordClass::SceneComments => ("scene-comments", &[Scope]),
-        RecordClass::SceneRevision => ("scene-revision", &[Opaque]),
-        RecordClass::PlotUi => ("plot-ui", &[Scope]),
-        RecordClass::MindMapUi => ("mind-map-ui", &[Scope]),
-        RecordClass::Progress => ("progress", &[Scope]),
-        RecordClass::ProforgeMemory => ("proforge-memory", &[Project, Opaque]),
-        RecordClass::ProforgeHistory => ("proforge-history", &[Project]),
-        RecordClass::InferenceCache => ("inference-cache", &[Scope, Opaque]),
-        RecordClass::Lora => ("lora", &[Opaque]),
-        RecordClass::LoraDataset => ("lora-dataset", &[Project, Opaque]),
-        RecordClass::LoraRun => ("lora-run", &[Project, Opaque]),
-        RecordClass::LoraMirror => ("lora-mirror", &[Scope]),
-        RecordClass::Telemetry => ("telemetry", &[Scope, Opaque]),
-        RecordClass::AiBenchmark => ("ai-benchmark", &[Scope]),
-        RecordClass::WorkerDlq => ("worker-dlq", &[Scope, Opaque]),
-        RecordClass::IdbKdfSalt => ("idb-kdf-salt", &[Scope]),
-        RecordClass::IdbPassphraseSentinel => ("idb-passphrase-sentinel", &[Scope]),
-    })
+    TEMPLATES
+        .iter()
+        .find(|(registered, _, _)| *registered == class)
+        .map(|(_, prefix, parts)| (*prefix, *parts))
 }
 
 /// A registered logical identity: record class, canonical `logical_record_id` and the AAD project
@@ -169,19 +176,18 @@ impl RecordIdentity {
         let mut logical_record_id = prefix.to_owned();
         let mut project_id = None;
         for part in parts {
-            let segment = match part {
-                Literal(literal) => (*literal).to_owned(),
-                _ => {
-                    let value = values.next().ok_or(IdentityError::WrongArity)?;
-                    check_component(*part, value)?;
-                    if matches!(part, Project) {
-                        project_id = Some((*value).to_owned());
-                    }
-                    (*value).to_owned()
+            let segment = if let Literal(literal) = part {
+                *literal
+            } else {
+                let value = values.next().ok_or(IdentityError::WrongArity)?;
+                check_component(*part, value)?;
+                if matches!(part, Project) {
+                    project_id = Some((*value).to_owned());
                 }
+                *value
             };
             logical_record_id.push(':');
-            logical_record_id.push_str(&segment);
+            logical_record_id.push_str(segment);
         }
         if values.next().is_some() {
             return Err(IdentityError::WrongArity);
@@ -301,6 +307,19 @@ mod tests {
 
     /// The injectivity argument in the module docs: besides the project component, which the AAD
     /// binds as its own field, no template has more than one component whose grammar admits `:`.
+    #[test]
+    fn every_class_except_record_commit_has_exactly_one_template() {
+        for class in RecordClass::ALL {
+            let count = TEMPLATES
+                .iter()
+                .filter(|(registered, _, _)| registered == class)
+                .count();
+            let expected = usize::from(*class != RecordClass::RecordCommit);
+            assert_eq!(count, expected, "{class:?}");
+        }
+        assert_eq!(TEMPLATES.len(), RecordClass::ALL.len() - 1);
+    }
+
     #[test]
     fn every_template_has_at_most_one_delimiter_bearing_component_besides_the_project() {
         for class in RecordClass::ALL {
