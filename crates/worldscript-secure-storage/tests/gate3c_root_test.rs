@@ -247,3 +247,16 @@ fn no_marker_set_entry_exists_for_an_asset_pair_until_its_marker_body_does() {
     };
     assert!(CommitMarker::new(&pair, 1, body).is_err());
 }
+
+#[test]
+fn a_catalog_set_refuses_a_shard_outside_the_version_1_universe() {
+    let out_of_range = CatalogShard {
+        shard_id: 256,
+        catalog_generation: 1,
+        content_digest: [0; 32],
+    };
+    assert_eq!(
+        catalog_set_digest(&[out_of_range]),
+        Err(RootError::InvalidShard)
+    );
+}

@@ -2,42 +2,51 @@
 //!
 //! The catalog is the authenticated index of ordinary records that `list_records` will read
 //! instead of trusting directory listings. Each record has one descriptor stating its current
-//! marker generation and, where one exists, its readable generation; descriptors are grouped into
-//! one page per non-empty shard, the shard being fixed by the record's identity. A page is sealed as
-//! its own generation-addressed `record-catalog` record, and its `content_digest` is what the
-//! authority root's `catalog_set_digest` binds. This module performs no I/O; writing pages and
-//! committing them through the root is slice 3C part 3.
+//! marker generation and, where one exists, its readable generation, plus the identity's template
+//! components so the exact identity — even one whose bindings are hashed — is reproduced, never
+//! guessed. Descriptors are grouped into one page per non-empty shard, the shard being fixed by the
+//! record's identity. A page is sealed as its own generation-addressed `record-catalog` record, and
+//! its `content_digest` is what the authority root's `catalog_set_digest` binds. Descriptors are
+//! derived only from a verified marker chain ([`describe_record`](crate::commit::describe_record)).
+//! This module performs no I/O; writing pages and committing them through the root is slice 3C
+//! part 3.
 
 use sha2::{Digest, Sha256};
 
-use crate::aad::tagged_identity_binding_parts;
+use crate::aad::{tagged_identity_binding_parts, MAX_DIRECT_IDENTITY_LEN};
 use crate::commit::CommittedGeneration;
 use crate::error::{AadError, OpenError, SealError};
-use crate::identity::RecordIdentity;
+use crate::identity::{has_ordinary_marker, RecordIdentity};
 use crate::marker::{state_code, CommitMarker, MarkerBody};
 use crate::provider::InstallationScopeId;
 use crate::record::{open_record, seal_record};
+use crate::record_class::RecordClass;
 use crate::seal::{Key, RecordMeta};
 
 /// §5.5.1 version-1 constants.
 pub const CATALOG_SHARD_COUNT: u32 = 256;
 pub const MAX_CATALOG_PAGE_DESCRIPTORS: usize = 4096;
 pub const CATALOG_PAGE_FORMAT_VERSION: u32 = 1;
-/// The page body's own payload schema when sealed as a `record-catalog` record.
+/// The `record_schema` a catalog page is sealed with.
 pub const CATALOG_PAGE_RECORD_SCHEMA: u32 = 1;
 
 const SHARD_DOMAIN: &[u8] = b"worldscript-r15/catalog-shard/v1";
+/// More components than any version-1 template has; a larger count is refused before allocating.
+const MAX_IDENTITY_COMPONENTS: usize = 8;
 
 /// Why a descriptor or page was refused. A refused page is never partially used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogError {
     Corrupt(&'static str),
-    /// A version-1 page must use format version 1.
+    /// A version-1 page must use format version 1 and record schema 1.
     UnsupportedFormat(u32),
-    /// A marker state version 1 does not catalog (only `ACTIVE` and `PENDING`).
+    /// A marker state this implementation does not catalog yet.
     UnsupportedState(u32),
     /// The readable-generation fields contradict the marker (§5.5 presence rules).
     InconsistentDescriptor,
+    /// A record that is not an ordinary record (control-plane, retained-authority or asset-pair
+    /// member classes are never catalogued, §5.5).
+    NotAnOrdinaryRecord,
     /// A descriptor whose identity belongs to another shard.
     WrongShard,
     /// A shard id outside `0..CATALOG_SHARD_COUNT`.
@@ -55,11 +64,12 @@ pub enum CatalogError {
     GenerationMismatch,
 }
 
-/// One descriptor (§5.5): an ordinary record's identity bindings, its current marker generation and
-/// state, and its readable generation if it has one.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// One descriptor (§5.5): an ordinary record's identity, its current marker generation and state,
+/// and its readable generation if it has one. `Debug` shows only the class, marker generation and
+/// state, never the identity (§14).
+#[derive(Clone, PartialEq, Eq)]
 pub struct CatalogDescriptor {
-    record_class: String,
+    record: RecordIdentity,
     identity: Vec<u8>,
     project_scope: Vec<u8>,
     marker_generation: u64,
@@ -68,46 +78,39 @@ pub struct CatalogDescriptor {
     readable: Option<CommittedGeneration>,
 }
 
+impl std::fmt::Debug for CatalogDescriptor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CatalogDescriptor")
+            .field("record_class", &self.record.class())
+            .field("marker_generation", &self.marker_generation)
+            .field("marker_state", &self.marker_state)
+            .field("readable", &self.readable.map(|c| c.generation))
+            .finish()
+    }
+}
+
 impl CatalogDescriptor {
-    /// The descriptor for `record` whose current marker is `marker`. `readable` is the generation a
-    /// read serves: the committed one for `ACTIVE`, the old one for a replacement `PENDING`, none
-    /// for a first-write `PENDING`; it must agree with the marker.
-    pub fn new(
+    /// The descriptor for `record` whose current marker is `marker`, with `readable` the
+    /// generation a read serves. Crate-internal: only a verified marker chain supplies these
+    /// ([`describe_record`](crate::commit::describe_record)), so a descriptor never states an
+    /// authority the chain does not.
+    pub(crate) fn new(
         record: &RecordIdentity,
         marker: &CommitMarker,
         readable: Option<CommittedGeneration>,
     ) -> Result<Self, CatalogError> {
+        if !has_ordinary_marker(record.class()) {
+            return Err(CatalogError::NotAnOrdinaryRecord);
+        }
         if RecordIdentity::commit_marker(record).as_ref() != Ok(marker.identity()) {
             return Err(CatalogError::InconsistentDescriptor);
         }
-        let consistent = match marker.body() {
-            MarkerBody::Active {
-                committed_generation,
-                committed_epoch,
-                content_digest,
-            } => {
-                readable
-                    == Some(CommittedGeneration {
-                        generation: *committed_generation,
-                        epoch: *committed_epoch,
-                        content_digest: *content_digest,
-                    })
-            }
-            MarkerBody::Pending(pending) => {
-                readable.map(|committed| committed.generation) == pending.old_generation
-            }
-            MarkerBody::RecoveryRequired { .. } => {
-                return Err(CatalogError::UnsupportedState(
-                    state_code::RECOVERY_REQUIRED,
-                ))
-            }
-        };
-        if !consistent {
+        if !agrees_with_marker(marker.body(), readable)? {
             return Err(CatalogError::InconsistentDescriptor);
         }
         let (identity, project_scope) = bindings(record)?;
         Ok(CatalogDescriptor {
-            record_class: record.class().token().to_owned(),
+            record: record.clone(),
             identity,
             project_scope,
             marker_generation: marker.marker_generation(),
@@ -115,6 +118,22 @@ impl CatalogDescriptor {
             marker_state: marker.body().state_code(),
             readable,
         })
+    }
+
+    /// Test hook for the codec vectors: [`new`](Self::new) without a marker chain. Only compiled
+    /// with the `test-support` feature, which production builds never enable.
+    #[cfg(feature = "test-support")]
+    pub fn new_unverified(
+        record: &RecordIdentity,
+        marker: &CommitMarker,
+        readable: Option<CommittedGeneration>,
+    ) -> Result<Self, CatalogError> {
+        Self::new(record, marker, readable)
+    }
+
+    /// The exact record this descriptor describes.
+    pub fn record(&self) -> &RecordIdentity {
+        &self.record
     }
 
     pub fn marker_generation(&self) -> u64 {
@@ -133,30 +152,24 @@ impl CatalogDescriptor {
         self.readable
     }
 
-    /// Whether this descriptor describes `record`.
-    pub fn describes(&self, record: &RecordIdentity) -> bool {
-        bindings(record).is_ok_and(|(identity, scope)| {
-            self.record_class == record.class().token()
-                && self.identity == identity
-                && self.project_scope == scope
-        })
-    }
-
     fn sort_key(&self) -> (&[u8], &[u8], &[u8]) {
         (
-            self.record_class.as_bytes(),
+            self.record.class().token().as_bytes(),
             &self.identity,
             &self.project_scope,
         )
     }
 
     fn shard_id(&self) -> u32 {
-        shard_from_bindings(&self.record_class, &self.identity, &self.project_scope)
+        shard_from_bindings(
+            self.record.class().token(),
+            &self.identity,
+            &self.project_scope,
+        )
     }
 
     fn encode(&self, out: &mut Vec<u8>) {
-        out.extend_from_slice(&(self.record_class.len() as u32).to_be_bytes());
-        out.extend_from_slice(self.record_class.as_bytes());
+        push_string(out, self.record.class().token());
         out.extend_from_slice(&self.identity);
         out.extend_from_slice(&self.project_scope);
         out.extend_from_slice(&self.marker_generation.to_be_bytes());
@@ -176,6 +189,38 @@ impl CatalogDescriptor {
         if let Some(committed) = readable {
             out.extend_from_slice(&committed.content_digest);
         }
+        let components = self.record.components();
+        out.extend_from_slice(&(components.len() as u32).to_be_bytes());
+        for component in components {
+            push_string(out, component);
+        }
+    }
+}
+
+/// Whether `readable` is what a read of a record with this marker body serves (§5.5): `ACTIVE`
+/// names exactly its committed generation, a replacement `PENDING` its old one (the chain's own
+/// `ACTIVE`), a first-write `PENDING` none.
+fn agrees_with_marker(
+    body: &MarkerBody,
+    readable: Option<CommittedGeneration>,
+) -> Result<bool, CatalogError> {
+    match body {
+        MarkerBody::Active {
+            committed_generation,
+            committed_epoch,
+            content_digest,
+        } => Ok(readable
+            == Some(CommittedGeneration {
+                generation: *committed_generation,
+                epoch: *committed_epoch,
+                content_digest: *content_digest,
+            })),
+        MarkerBody::Pending(pending) => {
+            Ok(readable.map(|committed| committed.generation) == pending.old_generation)
+        }
+        MarkerBody::RecoveryRequired { .. } => Err(CatalogError::UnsupportedState(
+            state_code::RECOVERY_REQUIRED,
+        )),
     }
 }
 
@@ -189,11 +234,42 @@ pub fn catalog_shard_of(record: &RecordIdentity) -> Result<u32, CatalogError> {
     ))
 }
 
-/// One catalog page: every descriptor of one non-empty shard.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Where a catalog page lives: its installation scope, shard and catalog generation. The shard is
+/// checked before anything else uses it.
+#[derive(Debug, Clone, Copy)]
+pub struct PageAddress<'a> {
+    pub scope: &'a InstallationScopeId,
+    pub shard_id: u32,
+    pub catalog_generation: u64,
+}
+
+impl PageAddress<'_> {
+    fn identity(&self) -> Result<RecordIdentity, CatalogError> {
+        if self.shard_id >= CATALOG_SHARD_COUNT {
+            return Err(CatalogError::InvalidShard);
+        }
+        check_counter(self.catalog_generation)?;
+        let shard = self.shard_id.to_string();
+        RecordIdentity::new(RecordClass::RecordCatalog, &[self.scope.as_str(), &shard])
+            .map_err(|_| CatalogError::InvalidShard)
+    }
+}
+
+/// One catalog page: every descriptor of one non-empty shard. `Debug` shows only the shard and the
+/// descriptor count.
+#[derive(Clone, PartialEq, Eq)]
 pub struct CatalogPage {
     shard_id: u32,
     descriptors: Vec<CatalogDescriptor>,
+}
+
+impl std::fmt::Debug for CatalogPage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CatalogPage")
+            .field("shard_id", &self.shard_id)
+            .field("descriptor_count", &self.descriptors.len())
+            .finish()
+    }
 }
 
 impl CatalogPage {
@@ -222,7 +298,7 @@ impl CatalogPage {
 
     /// The canonical page body (§5.5.1).
     pub fn encode(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(12 + self.descriptors.len() * 192);
+        let mut out = Vec::with_capacity(12 + self.descriptors.len() * 256);
         out.extend_from_slice(&CATALOG_PAGE_FORMAT_VERSION.to_be_bytes());
         out.extend_from_slice(&self.shard_id.to_be_bytes());
         out.extend_from_slice(&(self.descriptors.len() as u32).to_be_bytes());
@@ -262,49 +338,42 @@ impl CatalogPage {
         Ok(page)
     }
 
-    /// Seals the page as generation `catalog_generation` of `record-catalog:<scope>:<shard>`.
+    /// Seals the page as `address`'s generation of `record-catalog:<scope>:<shard>`.
     pub fn seal(
         &self,
         key: &Key,
-        scope: &InstallationScopeId,
+        address: &PageAddress<'_>,
         key_epoch: u64,
-        catalog_generation: u64,
     ) -> Result<Vec<u8>, CatalogError> {
+        if address.shard_id != self.shard_id {
+            return Err(CatalogError::WrongShard);
+        }
         let meta = RecordMeta {
             key_epoch,
-            record_generation: catalog_generation,
+            record_generation: address.catalog_generation,
             record_schema: CATALOG_PAGE_RECORD_SCHEMA,
         };
-        seal_record(
-            key,
-            &page_identity(scope, self.shard_id)?,
-            meta,
-            &self.encode(),
-        )
-        .map_err(CatalogError::Seal)
+        seal_record(key, &address.identity()?, meta, &self.encode()).map_err(CatalogError::Seal)
     }
 
-    /// Opens a sealed page of `shard_id` read as `catalog_generation`: the envelope must
-    /// authenticate as that page's identity and generation, and its body must be a valid page of
-    /// the same shard.
+    /// Opens the sealed page at `address`: the envelope must authenticate as that page's identity
+    /// and generation, and its body must be a valid page of the same shard.
     pub fn open(
         key: &Key,
-        scope: &InstallationScopeId,
-        shard_id: u32,
-        catalog_generation: u64,
+        address: &PageAddress<'_>,
         envelope: &[u8],
     ) -> Result<Self, CatalogError> {
-        let opened = open_record(key, &page_identity(scope, shard_id)?, envelope)
-            .map_err(CatalogError::Open)?;
+        let opened =
+            open_record(key, &address.identity()?, envelope).map_err(CatalogError::Open)?;
         let header = opened.header;
-        if header.record_generation != catalog_generation {
+        if header.record_generation != address.catalog_generation {
             return Err(CatalogError::GenerationMismatch);
         }
         if header.record_schema != CATALOG_PAGE_RECORD_SCHEMA {
             return Err(CatalogError::UnsupportedFormat(header.record_schema));
         }
         let page = CatalogPage::decode(&opened.payload)?;
-        if page.shard_id == shard_id {
+        if page.shard_id == address.shard_id {
             Ok(page)
         } else {
             Err(CatalogError::WrongShard)
@@ -337,24 +406,17 @@ impl CatalogPage {
     }
 }
 
-fn page_identity(
-    scope: &InstallationScopeId,
-    shard_id: u32,
-) -> Result<RecordIdentity, CatalogError> {
-    let shard = shard_id.to_string();
-    RecordIdentity::new(
-        crate::record_class::RecordClass::RecordCatalog,
-        &[scope.as_str(), &shard],
-    )
-    .map_err(|_| CatalogError::InvalidShard)
-}
-
-/// State, counter and presence rules a descriptor must meet (§5.5, §5.5.1).
+/// State, counter and presence rules a descriptor must meet (§5.5, §5.5.1). The format admits
+/// every version-1 state; this implementation decodes `ACTIVE`, `PENDING` and
+/// `READ_AUTHORITY_PENDING`, and refuses the deletion states until §8.5 is admitted.
 fn check_descriptor(descriptor: &CatalogDescriptor) -> Result<(), CatalogError> {
     check_counter(descriptor.marker_generation)?;
     match (descriptor.marker_state, descriptor.readable) {
         (state_code::ACTIVE, None) => Err(CatalogError::InconsistentDescriptor),
-        (state_code::ACTIVE | state_code::PENDING, readable) => readable.map_or(Ok(()), |c| {
+        (
+            state_code::ACTIVE | state_code::PENDING | state_code::READ_AUTHORITY_PENDING,
+            readable,
+        ) => readable.map_or(Ok(()), |c| {
             check_counter(c.generation)?;
             check_counter(c.epoch)
         }),
@@ -375,6 +437,11 @@ fn shard_from_bindings(class: &str, identity: &[u8], scope: &[u8]) -> u32 {
         .chain_update(scope)
         .finalize();
     u32::from_be_bytes(digest[..4].try_into().expect("4 bytes")) % CATALOG_SHARD_COUNT
+}
+
+fn push_string(out: &mut Vec<u8>, value: &str) {
+    out.extend_from_slice(&(value.len() as u32).to_be_bytes());
+    out.extend_from_slice(value.as_bytes());
 }
 
 fn check_counter(value: u64) -> Result<(), CatalogError> {
@@ -422,46 +489,50 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// One §6.2 tagged binding, copied verbatim: direct (`1`, non-empty UTF-8 within the 256-byte
-    /// cap), hashed (`2`, 32 bytes), or, only for the project scope, absent (`0`).
-    fn binding(&mut self, absent_allowed: bool) -> Result<Vec<u8>, CatalogError> {
+    fn string(&mut self, max_len: usize) -> Result<&'a str, CatalogError> {
+        let len = self.u32()? as usize;
+        if len > max_len {
+            return Err(CatalogError::Corrupt("over-long string field"));
+        }
+        std::str::from_utf8(self.take(len)?)
+            .map_err(|_| CatalogError::Corrupt("string field is not UTF-8"))
+    }
+
+    /// One §6.2 tagged binding, copied verbatim; its canonicality is proven later by rebuilding the
+    /// identity and comparing.
+    fn binding(&mut self) -> Result<Vec<u8>, CatalogError> {
         let start = self.0;
-        let tag = self.take(1)?[0];
-        let body = match tag {
-            0 if absent_allowed => 0,
-            1 => {
-                let len = self.u32()? as usize;
-                let value = std::str::from_utf8(self.take(len)?)
-                    .map_err(|_| CatalogError::Corrupt("identity binding is not UTF-8"))?;
-                if value.is_empty() || len > crate::aad::MAX_DIRECT_IDENTITY_LEN {
-                    return Err(CatalogError::Corrupt(
-                        "non-canonical direct identity binding",
-                    ));
-                }
-                4 + len
-            }
+        let body_len = match self.take(1)?[0] {
+            0 => 0,
+            1 => 4 + self.string(MAX_DIRECT_IDENTITY_LEN)?.len(),
             2 => self.take(32).map(|_| 32)?,
             _ => return Err(CatalogError::Corrupt("invalid identity binding tag")),
         };
-        Ok(start[..1 + body].to_vec())
+        Ok(start[..=body_len].to_vec())
     }
 
     fn descriptor(&mut self) -> Result<CatalogDescriptor, CatalogError> {
-        let class_len = self.u32()? as usize;
-        let record_class = std::str::from_utf8(self.take(class_len)?)
-            .ok()
-            .filter(|token| crate::record_class::RecordClass::from_token(token).is_some())
-            .ok_or(CatalogError::Corrupt("unknown record class"))?
-            .to_owned();
-        let identity = self.binding(false)?;
-        let project_scope = self.binding(true)?;
-        same_form(&identity, &project_scope)?;
+        let class = RecordClass::from_token(self.string(64)?)
+            .ok_or(CatalogError::Corrupt("unknown record class"))?;
+        if !has_ordinary_marker(class) {
+            return Err(CatalogError::NotAnOrdinaryRecord);
+        }
+        let identity = self.binding()?;
+        let project_scope = self.binding()?;
         let marker_generation = self.u64()?;
         let marker_entry_digest = self.digest()?;
         let marker_state = self.u32()?;
         let readable = self.readable()?;
+        let record = self.record(class)?;
+        // The stored bindings must be exactly the canonical bindings of the rebuilt identity, so a
+        // descriptor can neither name a non-template identity nor pair bindings with another one.
+        if bindings(&record)? != (identity.clone(), project_scope.clone()) {
+            return Err(CatalogError::Corrupt(
+                "descriptor bindings do not match its identity",
+            ));
+        }
         Ok(CatalogDescriptor {
-            record_class,
+            record,
             identity,
             project_scope,
             marker_generation,
@@ -469,6 +540,20 @@ impl<'a> Reader<'a> {
             marker_state,
             readable,
         })
+    }
+
+    /// The identity rebuilt from its template components through the class template (§5.2).
+    fn record(&mut self, class: RecordClass) -> Result<RecordIdentity, CatalogError> {
+        let count = self.u32()? as usize;
+        if count > MAX_IDENTITY_COMPONENTS {
+            return Err(CatalogError::Corrupt("too many identity components"));
+        }
+        let mut components = Vec::with_capacity(count);
+        for _ in 0..count {
+            components.push(self.string(u32::MAX as usize)?);
+        }
+        RecordIdentity::new(class, &components)
+            .map_err(|_| CatalogError::Corrupt("descriptor identity violates its class template"))
     }
 
     /// The three presence-flagged fields, which version 1 requires all present or all absent.
@@ -487,16 +572,5 @@ impl<'a> Reader<'a> {
             (None, None, None) => Ok(None),
             _ => Err(CatalogError::InconsistentDescriptor),
         }
-    }
-}
-
-/// Rule D: a present project binding uses the identity binding's form.
-fn same_form(identity: &[u8], scope: &[u8]) -> Result<(), CatalogError> {
-    if scope[0] == 0 || scope[0] == identity[0] {
-        Ok(())
-    } else {
-        Err(CatalogError::Corrupt(
-            "mixed direct and hashed identity bindings",
-        ))
     }
 }

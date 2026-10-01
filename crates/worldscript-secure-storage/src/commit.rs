@@ -30,6 +30,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
+use crate::catalog::{CatalogDescriptor, CatalogError};
 use crate::durable::{
     generation_path, stage_and_promote, staging_path, DirectoryDurability, DurableFs, StageFailure,
     StageRequest, WriteOperationId,
@@ -138,6 +139,8 @@ pub enum CommitError {
     /// Staging or promoting the new generation failed after `PENDING` was recorded. The old
     /// generation stays authoritative; startup reconciliation completes or rolls back the write.
     RecordWrite(StageFailure),
+    /// The verified chain could not be described as a catalog descriptor (§5.5).
+    Catalog(CatalogError),
 }
 
 /// The non-secret fields a write commits to.
@@ -324,6 +327,22 @@ pub fn read_committed<F: DurableFs>(
     }
 }
 
+/// The record's catalog descriptor (§5.5), derived only from its verified marker chain — the newest
+/// marker and the generation a read serves — so a descriptor never states an authority the chain
+/// does not. `None` when the record has no marker yet.
+pub fn describe_record<F: DurableFs>(
+    fs: &mut F,
+    store: RecordStore<'_>,
+) -> Result<Option<CatalogDescriptor>, CommitError> {
+    let chain = load_chain(fs, store)?;
+    let Some(latest) = chain.latest else {
+        return Ok(None);
+    };
+    CatalogDescriptor::new(store.record, &latest, serving(&chain.authority))
+        .map(Some)
+        .map_err(CommitError::Catalog)
+}
+
 /// The generation the authority serves: the active one, or the old one while a write is pending.
 fn serving(authority: &Authority) -> Option<CommittedGeneration> {
     match authority {
@@ -366,9 +385,11 @@ struct Context<'a> {
     key_epoch: u64,
 }
 
-/// The verified marker chain: the authority it states and the next marker generation.
+/// The verified marker chain: the authority it states, its newest marker and the next marker
+/// generation.
 struct Chain {
     authority: Authority,
+    latest: Option<CommitMarker>,
     next_marker: u64,
 }
 
@@ -404,6 +425,7 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
         return Err(recovery(RecoveryReason::MarkerChainGap { missing }));
     }
     let mut authority = Authority::Absent;
+    let mut latest = None;
     for &marker_generation in &generations {
         let marker = open_marker(fs, store, marker_generation)?;
         if matches!(marker.body(), MarkerBody::RecoveryRequired { .. }) {
@@ -412,6 +434,7 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
         authority = transition(authority, marker.body().clone()).ok_or(recovery(
             RecoveryReason::IllegalTransition { marker_generation },
         ))?;
+        latest = Some(marker);
     }
     let next_marker = match generations.last() {
         None => 1,
@@ -419,6 +442,7 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
     };
     Ok(Chain {
         authority,
+        latest,
         next_marker,
     })
 }

@@ -39,13 +39,13 @@ pub mod store_runtime;
 
 pub use aad::{canonical_aad, RecordContext};
 pub use catalog::{
-    catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, CATALOG_SHARD_COUNT,
-    MAX_CATALOG_PAGE_DESCRIPTORS,
+    catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, PageAddress,
+    CATALOG_SHARD_COUNT, MAX_CATALOG_PAGE_DESCRIPTORS,
 };
 pub use commit::{
-    commit_write, load_authority, read_committed, reconcile, Authority, CommitError, CommitStep,
-    CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled, RecordLocation,
-    RecordStore, RecoveryReason, Resolution, WriteRequest,
+    commit_write, describe_record, load_authority, read_committed, reconcile, Authority,
+    CommitError, CommitStep, CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled,
+    RecordLocation, RecordStore, RecoveryReason, Resolution, WriteRequest,
 };
 pub use disposition::{disposition, is_r15_record_class, Disposition};
 pub use durable::{

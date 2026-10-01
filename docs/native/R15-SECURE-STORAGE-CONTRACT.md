@@ -1318,6 +1318,7 @@ catalog format version with an explicit compatibility rule.
 CATALOG_SHARD_COUNT            = 256
 MAX_CATALOG_PAGE_DESCRIPTORS   = 4096
 CATALOG_PAGE_FORMAT_VERSION    = 1
+CATALOG_PAGE_RECORD_SCHEMA     = 1     the record_schema every catalog page is sealed with
 ```
 
 **Shard assignment.** An ordinary record's shard is fixed by its identity alone, never by a path,
@@ -1351,12 +1352,21 @@ descriptor[descriptor_count]         strictly ascending by (record_class bytes, 
 Each descriptor encodes §5.5's fields in order: `record_class` as `u32be(byte_length)` + UTF-8, the
 tagged identity binding, the tagged project-scope binding, `u64be(marker_generation)`, the 32-byte
 `marker_entry_digest`, `u32be(marker_state)`, then each presence flag (`u8`, exactly `0` or `1`)
-followed by its value only when `1`. Version 1 admits descriptors in `ACTIVE` and `PENDING` only,
-matching the admitted marker states (§20, slice 3B); the three presence flags are all `1` or all
-`0` — `ACTIVE` always names its committed generation, a replacement `PENDING` names the old one, and
-only a first-write `PENDING(none -> 1)` names none (§5.5). Every descriptor's own `shard_id` must equal
-the page's. A page that violates any rule, or carries bytes after its last descriptor, is
-`RECOVERY_REQUIRED`, never partially used.
+followed by its value only when `1`; then the **identity extension**: `u32be(component_count)` and
+each of the record's §5.2 template components (literal segments excluded) as `u32be(byte_length)` +
+UTF-8. The extension makes a page reproduce the exact identity — including one whose bindings are
+hashed because an ID exceeds §6.2's 256-byte direct cap — which `list_records` must return; the page
+is a protected record, so carrying the IDs adds no exposure. Decoding rebuilds the identity through
+its class template and requires its tagged bindings to equal the stored ones; a class without an
+ordinary `record-commit` marker (control-plane, retained-authority and asset-pair member classes,
+§10.4.1, §8.4) is refused. The format admits every version-1 `marker_state`; the presence flags are
+all `1` or all `0`, and `ACTIVE` always names its committed generation, a replacement
+`PENDING`/`READ_AUTHORITY_PENDING` names the old one, and only a first write names none (§5.5). An
+implementation decodes the states whose authority it implements — currently `ACTIVE`, `PENDING`
+and `READ_AUTHORITY_PENDING` — and treats a page carrying `DELETE_PENDING`, `TOMBSTONED` or
+`RECOVERY_REQUIRED` as `RECOVERY_REQUIRED` until deletion (§8.5) is admitted. Every descriptor's own
+`shard_id` must equal the page's. A page that violates any rule, or carries bytes after its last
+descriptor, is `RECOVERY_REQUIRED`, never partially used.
 
 ## 6. Protected-record envelope
 
@@ -3680,13 +3690,17 @@ Later implementation may be admitted only in these bounded gates:
      persisted or committed yet.
    - **Slice 3C, part 2 (record-catalog descriptors and pages)** — `catalog` in
      `crates/worldscript-secure-storage` implements §5.5's descriptor and §5.5.1's page encoding: a
-     descriptor is built only from a record and its authenticated current marker and must agree with
-     it (`ACTIVE` names exactly its committed generation, a replacement `PENDING` its old one, a
-     first-write `PENDING` none); the shard is `SHA-256` of the domain and the record's class and
+     descriptor is derived only from a record's verified marker chain (`describe_record`: the newest
+     marker and the generation a read serves) and must agree with it (`ACTIVE` names exactly its
+     committed generation, a replacement `PENDING` its old one, a first-write `PENDING` none), only
+     ordinary records are catalogued, and each descriptor carries the identity's template components
+     so a decoded page reproduces the exact identity; descriptors and pages print no identity in
+     `Debug`; the shard is `SHA-256` of the domain and the record's class and
      tagged bindings, modulo 256; a page holds 1–4,096 descriptors of one shard in strictly
      ascending order and is sealed as generation-addressed `record-catalog:<scope>:<shard>`.
      Decoding is strict (format version, counts, ordering, shard membership, presence flags all or
-     none, only `ACTIVE`/`PENDING`, canonical bindings, no trailing bytes) and a decoded page
+     none, admitted states only, ordinary classes only, identity rebuilt through its template with
+     bindings equal to the stored ones, no trailing bytes) and a decoded page
      re-encodes to the same bytes; opening refuses another shard, scope or generation. The shard and
      page vectors are pinned from an independent implementation. Writing pages and the two-phase
      root commit wired into the write protocol, with `list_records` and retention, are the rest of
