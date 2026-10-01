@@ -20,6 +20,9 @@ pub enum SealError {
     InvalidContext(AadError),
     /// §5.4: `key_epoch` or `record_generation` is `0` (unassigned) or `u64::MAX` (terminal).
     UnassignedCounter,
+    /// §6.4/§7: the record schema is not in the version-1 compatibility registry, so no current
+    /// reader could decode the record.
+    UnsupportedSchema,
 }
 
 /// Semantic open/parse failures, mapped from §7. Key-resolution outcomes (locked, wrong key) belong

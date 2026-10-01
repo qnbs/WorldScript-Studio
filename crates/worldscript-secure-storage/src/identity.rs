@@ -154,6 +154,10 @@ pub struct RecordIdentity {
     class: RecordClass,
     logical_record_id: String,
     project_id: Option<String>,
+    /// The exact template components it was built from (literals excluded), so asset-pair
+    /// relations are derived structurally (§8.4) and never by parsing `logical_record_id`. Kept only
+    /// for the asset-pair classes, the only ones that derive related identities; empty otherwise.
+    components: Vec<String>,
 }
 
 impl std::fmt::Debug for RecordIdentity {
@@ -172,30 +176,42 @@ impl RecordIdentity {
     /// `project_id`; every other class carries none.
     pub fn new(class: RecordClass, components: &[&str]) -> Result<Self, IdentityError> {
         let (prefix, parts) = template(class).ok_or(IdentityError::NotBuildableDirectly)?;
+        // Validate the whole template against borrowed input first; owned strings are built only once
+        // every component and the arity have been checked, sized by the template, never by the slice.
         let mut values = components.iter();
-        let mut logical_record_id = prefix.to_owned();
-        let mut project_id = None;
+        let mut segments: Vec<&str> = Vec::with_capacity(parts.len());
+        let mut kept: Vec<&str> = Vec::with_capacity(parts.len());
+        let mut project: Option<&str> = None;
         for part in parts {
-            let segment = if let Literal(literal) = part {
-                *literal
-            } else {
-                let value = values.next().ok_or(IdentityError::WrongArity)?;
-                check_component(*part, value)?;
-                if matches!(part, Project) {
-                    project_id = Some((*value).to_owned());
-                }
-                *value
-            };
-            logical_record_id.push(':');
-            logical_record_id.push_str(segment);
+            if let Literal(literal) = part {
+                segments.push(literal);
+                continue;
+            }
+            let value: &str = values.next().ok_or(IdentityError::WrongArity)?;
+            check_component(*part, value)?;
+            if matches!(part, Project) {
+                project = Some(value);
+            }
+            kept.push(value);
+            segments.push(value);
         }
         if values.next().is_some() {
             return Err(IdentityError::WrongArity);
         }
+        let mut logical_record_id = prefix.to_owned();
+        for segment in segments {
+            logical_record_id.push(':');
+            logical_record_id.push_str(segment);
+        }
         Ok(RecordIdentity {
             class,
             logical_record_id,
-            project_id,
+            project_id: project.map(str::to_owned),
+            components: if has_pair_relation(class) {
+                kept.into_iter().map(str::to_owned).collect()
+            } else {
+                Vec::new()
+            },
         })
     }
 
@@ -214,7 +230,37 @@ impl RecordIdentity {
                 record.logical_record_id
             ),
             project_id: record.project_id.clone(),
+            components: Vec::new(),
         })
+    }
+
+    /// The two fixed members (`asset`, `asset-metadata`) of this `asset-pair` marker (§8.4): the same
+    /// project and asset components with only the record class substituted, built through the same
+    /// templates as any other identity. `None` for every other class.
+    pub fn asset_pair_members(&self) -> Option<(RecordIdentity, RecordIdentity)> {
+        if self.class != RecordClass::AssetPair {
+            return None;
+        }
+        Some((
+            self.with_class(RecordClass::Asset)?,
+            self.with_class(RecordClass::AssetMetadata)?,
+        ))
+    }
+
+    /// The `asset-pair` marker that commits this `asset` or `asset-metadata` member (§8.4); `None`
+    /// for every other class.
+    pub fn asset_pair_marker(&self) -> Option<RecordIdentity> {
+        if matches!(self.class, RecordClass::Asset | RecordClass::AssetMetadata) {
+            self.with_class(RecordClass::AssetPair)
+        } else {
+            None
+        }
+    }
+
+    /// This identity's components under another class with the same template shape, re-validated.
+    fn with_class(&self, class: RecordClass) -> Option<RecordIdentity> {
+        let components: Vec<&str> = self.components.iter().map(String::as_str).collect();
+        RecordIdentity::new(class, &components).ok()
     }
 
     pub fn class(&self) -> RecordClass {
@@ -237,6 +283,14 @@ impl RecordIdentity {
             project_id: self.project_id.as_deref(),
         }
     }
+}
+
+/// Whether `class` takes part in an `asset-pair` relation (§8.4).
+fn has_pair_relation(class: RecordClass) -> bool {
+    matches!(
+        class,
+        RecordClass::AssetPair | RecordClass::Asset | RecordClass::AssetMetadata
+    )
 }
 
 /// Whether `class` is committed through its own `record-commit` marker.
