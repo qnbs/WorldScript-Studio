@@ -3503,15 +3503,18 @@ Later implementation may be admitted only in these bounded gates:
      `<target>.tmp-<operation-id>-<generation>` (§3), the file is synced, read back and
      authenticated against its exact identity and header, then promoted to the immutable
      `generation-<N>.wsr1` by a no-replace hard link (never a replacing rename, which on Windows
-     overwrites), and the directory is synced. No existing file is opened for writing, overwritten
-     or removed except the operation's own staging file, so the previous generation is untouched
-     on every failure; a failure after promotion reports the new generation as preserved but not
-     authoritative (§9.2). Platform semantics: Linux and macOS sync file contents (`fsync`; Apple
+     overwrites), the promoted name is read back as exactly the validated envelope (promotion
+     re-resolves the staging path; the commit marker's `content_digest` binds it from 3B on), and
+     the directory is synced. No existing file is opened for writing, overwritten or removed except
+     the operation's own staging file after a write, sync or promotion failure; a staging file that
+     fails validation, or one already present under the operation's name, is preserved and reported.
+     The previous generation is untouched on every failure; a failure after promotion reports the
+     new generation as preserved but not authoritative (§9.2). Platform semantics: Linux and macOS sync file contents (`fsync`; Apple
      `F_FULLFSYNC`) and the containing directory; Windows syncs file contents
      (`FlushFileBuffers`) but this adapter cannot sync a directory, so the directory entry's
      durability is reported as not confirmed and a later commit must report
-     `COMMITTED_NOT_CONFIRMED_DURABLE`. Headless tests inject I/O failures at every step; they are
-     not power-loss evidence, which remains with Gate 6. Promotion is not a commit: commit markers
+     `COMMITTED_NOT_CONFIRMED_DURABLE`. The fault-injection tests run on Linux, macOS and Windows CI
+     runners (`CI_ONLY`); they are not power-loss evidence, which remains with Gate 6. Promotion is not a commit: commit markers
      and startup reconciliation (3B) and the authority-root/catalog commit (3C) remain.
 4. **Journal/admission:** implement enable/rotate/recovery state machines, exclusive migration
    admission, bounded inventory/checkpoints, and shutdown/cancellation behavior.

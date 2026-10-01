@@ -157,6 +157,8 @@ pub enum StageStep {
     SyncStaging,
     ValidateStaging,
     Promote,
+    /// Reading the promoted generation back, which must be exactly the validated envelope.
+    VerifyPromoted,
     SyncDirectory,
 }
 
@@ -167,7 +169,8 @@ pub enum StageFailureKind {
     Io(io::ErrorKind),
     /// The target generation already exists; it is never overwritten.
     GenerationExists,
-    /// The staged bytes did not read back as exactly the authenticated envelope that was written.
+    /// The staged (or promoted) bytes did not read back as exactly the authenticated envelope that
+    /// was written.
     StagedEnvelopeMismatch,
 }
 
@@ -176,7 +179,8 @@ pub enum StageFailureKind {
 pub enum StagingResidue {
     /// Never created, or removed by this operation.
     None,
-    /// Still present (removal failed or was cut short); it is ciphertext only, carries this
+    /// Still present: removal failed, the file already existed under this operation's name, or it
+    /// failed validation and is preserved as evidence. It never holds plaintext, carries this
     /// operation's suffix, and is reconciled at startup (slice 3B).
     Present,
 }
@@ -212,7 +216,6 @@ pub fn stage_and_promote<F: DurableFs>(
     request: &StageRequest<'_>,
     plaintext: &[u8],
 ) -> Result<PromotedGeneration, StageFailure> {
-    let generation = request.meta.record_generation;
     let envelope =
         seal_record(key, request.identity, request.meta, plaintext).map_err(|error| {
             failure(
@@ -221,99 +224,139 @@ pub fn stage_and_promote<F: DurableFs>(
                 StagingResidue::None,
             )
         })?;
-    let target = generation_path(request.dir, generation);
-    let staging = staging_path(request.dir, generation, request.operation);
-
-    let mut file = fs.create_new(&staging).map_err(|error| {
-        failure(
-            StageStep::CreateStaging,
-            io_kind(&error),
-            StagingResidue::None,
-        )
-    })?;
-    if let Err(error) = file.write_all(&envelope) {
-        drop(file);
-        return Err(abandon(
-            fs,
-            &staging,
-            StageStep::WriteStaging,
-            io_kind(&error),
-        ));
-    }
-    if let Err(error) = fs.sync_file(&mut file) {
-        drop(file);
-        return Err(abandon(
-            fs,
-            &staging,
-            StageStep::SyncStaging,
-            io_kind(&error),
-        ));
-    }
-    drop(file);
-    if let Err(kind) = validate_staged(fs, key, request, &staging, &envelope) {
-        return Err(abandon(fs, &staging, StageStep::ValidateStaging, kind));
-    }
-    if let Err(error) = fs.link_no_replace(&staging, &target) {
-        let kind = if error.kind() == io::ErrorKind::AlreadyExists {
-            StageFailureKind::GenerationExists
-        } else {
-            io_kind(&error)
-        };
-        return Err(abandon(fs, &staging, StageStep::Promote, kind));
-    }
+    let generation = request.meta.record_generation;
+    let attempt = Attempt {
+        key,
+        request,
+        envelope,
+        staging: staging_path(request.dir, generation, request.operation),
+        target: generation_path(request.dir, generation),
+    };
+    attempt.write_staging(fs)?;
+    attempt.validate_staging(fs)?;
+    attempt.promote(fs)?;
     // The new generation now exists under its own name. Dropping the staging link leaves only that
     // name; a failure here leaves suffixed ciphertext debris for startup reconciliation.
-    let staging_residue = residue_after_remove(fs, &staging);
+    let staging = residue_after_remove(fs, &attempt.staging);
+    attempt.verify_promoted(fs, staging)?;
     let directory = fs.sync_dir(request.dir).map_err(|error| StageFailure {
         step: StageStep::SyncDirectory,
         kind: io_kind(&error),
         promoted: true,
-        staging: staging_residue,
+        staging,
     })?;
     Ok(PromotedGeneration {
         generation,
-        path: target,
+        path: attempt.target,
         directory,
-        staging: staging_residue,
+        staging,
     })
 }
 
-/// Reads the staged file back and proves it is exactly the envelope just sealed and that it
-/// authenticates as this generation of this identity (§9 step 6).
-fn validate_staged<F: DurableFs>(
-    fs: &mut F,
-    key: &Key,
-    request: &StageRequest<'_>,
-    staging: &Path,
-    envelope: &[u8],
-) -> Result<(), StageFailureKind> {
-    let staged = fs.read(staging).map_err(|error| io_kind(&error))?;
-    if staged != envelope {
-        return Err(StageFailureKind::StagedEnvelopeMismatch);
-    }
-    let opened = open_record(key, request.identity, &staged)
-        .map_err(|_| StageFailureKind::StagedEnvelopeMismatch)?;
-    let header = opened.header;
-    let meta = request.meta;
-    let matches = header.key_epoch == meta.key_epoch
-        && header.record_generation == meta.record_generation
-        && header.record_schema == meta.record_schema;
-    if matches {
-        Ok(())
-    } else {
-        Err(StageFailureKind::StagedEnvelopeMismatch)
-    }
+/// One staging-and-promotion attempt: the sealed envelope and the two names it lives under.
+struct Attempt<'a> {
+    key: &'a Key,
+    request: &'a StageRequest<'a>,
+    envelope: Vec<u8>,
+    staging: PathBuf,
+    target: PathBuf,
 }
 
-/// Removes this operation's own staging file after a failure before promotion and reports what is
-/// left; nothing else is ever touched.
-fn abandon<F: DurableFs>(
-    fs: &mut F,
-    staging: &Path,
-    step: StageStep,
-    kind: StageFailureKind,
-) -> StageFailure {
-    failure(step, kind, residue_after_remove(fs, staging))
+impl Attempt<'_> {
+    /// Creates the staging file, writes the envelope and syncs it; the handle is closed on return,
+    /// before anything reads, links or removes the file (required on Windows).
+    fn write_staging<F: DurableFs>(&self, fs: &mut F) -> Result<(), StageFailure> {
+        // The handle lives only inside this block, so it is closed before a failed attempt removes
+        // the file (Windows refuses to delete an open file).
+        let written = {
+            let mut file = fs.create_new(&self.staging).map_err(|error| {
+                // An existing file under this operation's staging name is never ours to remove.
+                let staging = if error.kind() == io::ErrorKind::AlreadyExists {
+                    StagingResidue::Present
+                } else {
+                    StagingResidue::None
+                };
+                failure(StageStep::CreateStaging, io_kind(&error), staging)
+            })?;
+            file.write_all(&self.envelope)
+                .map_err(|error| (StageStep::WriteStaging, io_kind(&error)))
+                .and_then(|()| {
+                    fs.sync_file(&mut file)
+                        .map_err(|error| (StageStep::SyncStaging, io_kind(&error)))
+                })
+        };
+        written.map_err(|(step, kind)| self.abandon(fs, step, kind))
+    }
+
+    /// Reads the staged file back and proves it is exactly the envelope just sealed and that it
+    /// authenticates as this generation of this identity (§9 step 6). A file that fails is
+    /// preserved for reconciliation and diagnosis, never deleted.
+    fn validate_staging<F: DurableFs>(&self, fs: &mut F) -> Result<(), StageFailure> {
+        let fail = |kind| failure(StageStep::ValidateStaging, kind, StagingResidue::Present);
+        let staged = fs
+            .read(&self.staging)
+            .map_err(|error| fail(io_kind(&error)))?;
+        if staged != self.envelope {
+            return Err(fail(StageFailureKind::StagedEnvelopeMismatch));
+        }
+        let opened = open_record(self.key, self.request.identity, &staged)
+            .map_err(|_| fail(StageFailureKind::StagedEnvelopeMismatch))?;
+        let (header, meta) = (opened.header, self.request.meta);
+        let matches = header.key_epoch == meta.key_epoch
+            && header.record_generation == meta.record_generation
+            && header.record_schema == meta.record_schema;
+        if matches {
+            Ok(())
+        } else {
+            Err(fail(StageFailureKind::StagedEnvelopeMismatch))
+        }
+    }
+
+    /// Links the validated staging file to the generation name, never replacing an existing file.
+    fn promote<F: DurableFs>(&self, fs: &mut F) -> Result<(), StageFailure> {
+        fs.link_no_replace(&self.staging, &self.target)
+            .map_err(|error| {
+                let kind = if error.kind() == io::ErrorKind::AlreadyExists {
+                    StageFailureKind::GenerationExists
+                } else {
+                    io_kind(&error)
+                };
+                self.abandon(fs, StageStep::Promote, kind)
+            })
+    }
+
+    /// Reads the promoted generation back by its own name: promotion re-resolves the staging path,
+    /// so this proves the generation holds exactly the validated envelope. A mismatch is preserved
+    /// and reported; it never becomes authoritative, because the commit marker binds the envelope's
+    /// digest (slice 3B).
+    fn verify_promoted<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        staging: StagingResidue,
+    ) -> Result<(), StageFailure> {
+        let kind = match fs.read(&self.target) {
+            Ok(promoted) if promoted == self.envelope => return Ok(()),
+            Ok(_) => StageFailureKind::StagedEnvelopeMismatch,
+            Err(error) => io_kind(&error),
+        };
+        Err(StageFailure {
+            step: StageStep::VerifyPromoted,
+            kind,
+            promoted: true,
+            staging,
+        })
+    }
+
+    /// Removes this operation's own staging file after a write, sync or promotion failure and
+    /// reports what is left; nothing else is ever touched.
+    fn abandon<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        step: StageStep,
+        kind: StageFailureKind,
+    ) -> StageFailure {
+        failure(step, kind, residue_after_remove(fs, &self.staging))
+    }
 }
 
 fn residue_after_remove<F: DurableFs>(fs: &mut F, staging: &Path) -> StagingResidue {
