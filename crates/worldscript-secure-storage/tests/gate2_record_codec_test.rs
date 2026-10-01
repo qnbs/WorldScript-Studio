@@ -4,8 +4,14 @@
 //! authenticated bytes, fail closed while the valid record and its exact IDs stay intact.
 
 use worldscript_secure_storage::{
-    open_record, seal_record, Key, OpenError, RecordClass, RecordIdentity, RecordMeta,
+    open_record, seal, seal_record, Key, OpenError, RecordClass, RecordIdentity, RecordMeta,
+    SealError, SealTarget, ADMITTED_RECORD_SCHEMAS,
 };
+
+/// Header length, and the offset of the ciphertext that follows it (§6.1).
+const HEADER_LEN: usize = 52;
+/// AES-GCM tag length at the end of the ciphertext.
+const TAG_LEN: usize = 16;
 
 const SCOPE: &str = "0123456789abcdef0123456789abcdef";
 const OTHER_SCOPE: &str = "fedcba9876543210fedcba9876543210";
@@ -93,8 +99,9 @@ fn relocated_envelopes_fail_closed() {
 fn any_changed_authenticated_byte_fails_closed() {
     let record = identity(RecordClass::Project, &["p1"]);
     let envelope = sealed(&record);
-    // The header bytes (routing fields), the ciphertext and the tag are all authenticated.
-    for index in [12, 20, 28, 40, envelope.len() / 2, envelope.len() - 1] {
+    let ciphertext_byte = HEADER_LEN + (envelope.len() - HEADER_LEN - TAG_LEN) / 2;
+    // Header routing fields (key epoch, generation, schema, nonce), a ciphertext byte and the tag.
+    for index in [12, 20, 28, 40, ciphertext_byte, envelope.len() - 1] {
         let mut changed = envelope.clone();
         changed[index] ^= 0x01;
         assert!(
@@ -122,6 +129,30 @@ fn malformed_bytes_are_refused_before_authentication() {
         open_record(&key(), &record, b"{\"legacy\":\"plaintext\"}"),
         Err(OpenError::Corrupt(_) | OpenError::UnsupportedVersion(_))
     ));
+}
+
+#[test]
+fn record_schemas_outside_the_compatibility_registry_are_refused() {
+    assert_eq!(ADMITTED_RECORD_SCHEMAS, &[1]);
+    let record = identity(RecordClass::Project, &["p1"]);
+    let future = RecordMeta {
+        record_schema: 2,
+        ..META
+    };
+    assert_eq!(
+        seal_record(&key(), &record, future, b"x"),
+        Err(SealError::UnsupportedSchema)
+    );
+    // An authentic envelope with a future schema is refused before its payload is released (§7).
+    let target = SealTarget {
+        context: record.context(),
+        meta: future,
+    };
+    let envelope = seal(&key(), &target, b"x").unwrap();
+    assert_eq!(
+        open_record(&key(), &record, &envelope),
+        Err(OpenError::UnsupportedVersion("record schema"))
+    );
 }
 
 #[test]

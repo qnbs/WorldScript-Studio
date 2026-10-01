@@ -179,7 +179,8 @@ impl RecordIdentity {
         let mut values = components.iter();
         let mut logical_record_id = prefix.to_owned();
         let mut project_id = None;
-        let mut kept = Vec::with_capacity(components.len());
+        // Sized by the template, never by the caller's slice: excess components are refused below.
+        let mut kept = Vec::with_capacity(parts.len());
         for part in parts {
             let segment = if let Literal(literal) = part {
                 *literal

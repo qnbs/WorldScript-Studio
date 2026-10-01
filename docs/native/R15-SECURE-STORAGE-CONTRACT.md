@@ -3474,7 +3474,9 @@ Later implementation may be admitted only in these bounded gates:
      canonical AAD context (§6.2) after strict `WSR1` parsing, so routed records never hand-build a
      `RecordContext`; relocation to another record, project, installation scope or class, a changed
      authenticated byte, and a wrong key are all `Tampered`, and malformed or future-format bytes
-     are refused before authentication. `asset-pair` members and their marker are derived
+     are refused before authentication. A `record_schema` outside the version-1 compatibility
+     registry (only `1`; §6.4, §7) is refused on seal and, as `PROTECTED_UNSUPPORTED_VERSION`, before
+     any payload is released on open. `asset-pair` members and their marker are derived
      structurally from the same template components (§8.4). Legacy source-locator adapters and the
      Gate 2 closure (#361) remain later Gate 2 slices (#920).
 3. **Durable adapter:** implement file sync, atomic replacement, directory sync, generation

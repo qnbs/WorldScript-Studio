@@ -37,7 +37,7 @@ pub use provider::{
     PrepareRootAnchor, PreparedRootCommit, RootKeyRefV1, RootSlot,
 };
 pub use random::{OsRandom, RandomSource, RandomnessUnavailable};
-pub use record::{open_record, seal_record, OpenedRecord};
+pub use record::{open_record, seal_record, OpenedRecord, ADMITTED_RECORD_SCHEMAS};
 pub use record_class::RecordClass;
 pub use recovery::{unwrap_recovery, wrap_recovery, RecoveryMaterial, UnwrappedRecovery};
 #[cfg(feature = "test-randomness")]

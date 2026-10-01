@@ -11,6 +11,15 @@ use crate::error::{OpenError, SealError};
 use crate::identity::RecordIdentity;
 use crate::seal::{open, seal, Key, RecordMeta, SealTarget};
 
+/// The record schemas the version-1 compatibility registry admits (§6.1 "record schema", §6.4, §7).
+/// No class has a second payload schema yet, so every class admits exactly `1`; a schema is added
+/// here only together with the decoder that reads it.
+pub const ADMITTED_RECORD_SCHEMAS: &[u32] = &[1];
+
+fn admitted_schema(record_schema: u32) -> bool {
+    ADMITTED_RECORD_SCHEMAS.contains(&record_schema)
+}
+
 /// An authenticated record payload and the header it was sealed with. The header's
 /// `record_generation` is authentic for this identity but not necessarily the latest committed one;
 /// rollback rejection compares it with the committed marker (§5.4, §9). `Debug` shows only the
@@ -31,13 +40,17 @@ impl std::fmt::Debug for OpenedRecord {
 }
 
 /// Seals `plaintext` as one version of the record `identity` names: a complete `WSR1` envelope whose
-/// AAD is that identity's canonical context (§6.2).
+/// AAD is that identity's canonical context (§6.2). A record schema outside the compatibility
+/// registry is refused, so no record is written that current readers cannot decode.
 pub fn seal_record(
     key: &Key,
     identity: &RecordIdentity,
     meta: RecordMeta,
     plaintext: &[u8],
 ) -> Result<Vec<u8>, SealError> {
+    if !admitted_schema(meta.record_schema) {
+        return Err(SealError::UnsupportedSchema);
+    }
     let target = SealTarget {
         context: identity.context(),
         meta,
@@ -46,14 +59,19 @@ pub fn seal_record(
 }
 
 /// Strictly parses `bytes` as a `WSR1` envelope and authenticates it as a version of the record
-/// `identity` names. Malformed or future-format bytes are refused before any decryption, and
-/// ciphertext sealed under any other identity is `Tampered`.
+/// `identity` names. Malformed or future-format bytes, including a record schema outside the
+/// compatibility registry (§7 `PROTECTED_UNSUPPORTED_VERSION`), are refused before any decryption,
+/// so no payload reaches a decoder that cannot read it; ciphertext sealed under any other identity is
+/// `Tampered`.
 pub fn open_record(
     key: &Key,
     identity: &RecordIdentity,
     bytes: &[u8],
 ) -> Result<OpenedRecord, OpenError> {
     let envelope = parse_envelope(bytes)?;
+    if !admitted_schema(envelope.header().record_schema) {
+        return Err(OpenError::UnsupportedVersion("record schema"));
+    }
     let payload = open(key, &identity.context(), &envelope)?;
     Ok(OpenedRecord {
         header: *envelope.header(),
