@@ -38,7 +38,7 @@ pub use aad::{canonical_aad, RecordContext};
 pub use commit::{
     commit_write, load_authority, read_committed, reconcile, Authority, CommitError, CommitStep,
     CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled, RecordLocation,
-    RecoveryReason, Resolution, WriteRequest,
+    RecordStore, RecoveryReason, Resolution, WriteRequest,
 };
 pub use disposition::{disposition, is_r15_record_class, Disposition};
 pub use durable::{

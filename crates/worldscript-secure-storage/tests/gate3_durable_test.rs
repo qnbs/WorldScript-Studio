@@ -91,6 +91,7 @@ fn request<'a>(
         identity,
         meta: meta(generation),
         operation: op,
+        retain_staging: false,
     }
 }
 

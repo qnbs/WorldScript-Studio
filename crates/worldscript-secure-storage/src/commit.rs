@@ -4,13 +4,18 @@
 //! Every marker generation is a sealed `record-commit` record promoted into the record's marker
 //! directory by slice 3A's [`stage_and_promote`], so markers are immutable and
 //! generation-addressed (§5.4). The marker chain `1..=n` must be complete, every generation must
-//! open, and each one must be a legal transition from the one before it; anything else fails closed
-//! as `RECOVERY_REQUIRED` instead of falling back to an older marker. A write records
-//! `PENDING(old -> new)`, stages and promotes the new generation, then records `ACTIVE(new)` bound
-//! to its `content_digest`. Startup resolves a `PENDING` marker only from authenticated evidence:
-//! the exact candidate it names is adopted, a validated staging file under the marker's own
-//! operation suffix is promoted first, and anything else rolls the write back with the rejected
-//! bytes relocated (never deleted) so the generation name is free for the retry.
+//! open as exactly the generation its file name says, and each one must be a legal transition from
+//! the one before it; anything else fails closed as `RECOVERY_REQUIRED` instead of falling back to
+//! an older marker. Before the chain is trusted, its directory is synced, so a marker left visible
+//! by a failed directory sync is either made durable or not used at all.
+//!
+//! A write verifies the committed generation it replaces, records `PENDING(old -> new)`, stages and
+//! promotes the new generation while keeping its staging name — the only name tied to the
+//! operation (§9 step 3) — then records `ACTIVE(new)` bound to its `content_digest` and only then
+//! drops the staging name. Startup resolves a `PENDING` marker only from that provenance: the
+//! staging file under the marker's own operation suffix must authenticate as exactly the pending
+//! target; it is then adopted (or promoted first), and any other bytes under the generation name
+//! are relocated, never deleted. Without it, the write rolls back.
 //!
 //! Not yet a durable commit: without slice 3C's authority root, which checkpoints the marker set
 //! and advances the rollback floor (§5.3.1, §9 steps 9–10), deleting the newest marker files is not
@@ -22,6 +27,8 @@
 use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
+
+use sha2::{Digest, Sha256};
 
 use crate::durable::{
     generation_path, stage_and_promote, staging_path, DirectoryDurability, DurableFs, StageFailure,
@@ -42,6 +49,15 @@ use crate::seal::{Key, RecordMeta};
 pub struct RecordLocation<'a> {
     pub record_dir: &'a Path,
     pub marker_dir: &'a Path,
+}
+
+/// One record under one key: the record identity, its locations and the key its envelopes and
+/// markers are sealed with.
+#[derive(Clone, Copy)]
+pub struct RecordStore<'a> {
+    pub key: &'a Key,
+    pub record: &'a RecordIdentity,
+    pub location: RecordLocation<'a>,
 }
 
 /// A committed generation as its marker states it.
@@ -70,7 +86,7 @@ pub enum Authority {
 pub enum RecoveryReason {
     /// Marker generation `missing` is absent although a later one exists.
     MarkerChainGap { missing: u64 },
-    /// A marker generation exists but does not open as this record's marker.
+    /// A marker file does not open as this record's marker of the generation its name states.
     MarkerUnreadable {
         marker_generation: u64,
         error: MarkerError,
@@ -88,18 +104,20 @@ pub enum RecoveryReason {
 /// The durability step at which a commit stopped.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommitStep {
+    SyncMarkers,
     ListMarkers,
     ReadMarker,
     ReadCandidate,
     PromoteCandidate,
+    SyncRecord,
     RelocateRejected,
     ReadCommitted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommitError {
-    /// A read or filesystem step failed for a reason other than absence. Nothing was decided, so
-    /// a pending write is neither completed nor rolled back; retry later.
+    /// A read, sync or filesystem step failed for a reason other than absence. Nothing was
+    /// decided, so a pending write is neither completed nor rolled back; retry later.
     Io {
         step: CommitStep,
         kind: io::ErrorKind,
@@ -107,7 +125,7 @@ pub enum CommitError {
     RecoveryRequired(RecoveryReason),
     /// No fresh operation identity was available (§6.3: never a weaker source).
     OperationId(SealError),
-    /// The next generation would be `u64::MAX` (§5.4: `RECOVERY_REQUIRED`, never a wrap).
+    /// The next generation or marker generation would be `u64::MAX` (§5.4: never a wrap).
     GenerationExhausted,
     Marker(MarkerError),
     /// Writing a marker generation failed; see `failure.promoted` for whether it exists.
@@ -174,40 +192,36 @@ pub struct Reconciled {
     pub debris: Vec<Debris>,
 }
 
-/// Reads and verifies the complete marker chain of `record`.
+/// Reads and verifies the complete marker chain of the record.
 pub fn load_authority<F: DurableFs>(
     fs: &mut F,
-    key: &Key,
-    record: &RecordIdentity,
-    location: RecordLocation<'_>,
+    store: RecordStore<'_>,
 ) -> Result<Authority, CommitError> {
-    load_chain(fs, key, record, location).map(|chain| chain.authority)
+    load_chain(fs, store).map(|chain| chain.authority)
 }
 
 /// Startup reconciliation (§9 step 11, §9.2): resolves a pending write from authenticated evidence
 /// only, then classifies leftover files, removing only staging bytes that a generation provably
-/// keeps.
+/// keeps. Markers written here are sealed under `key_epoch`.
 pub fn reconcile<F: DurableFs>(
     fs: &mut F,
-    key: &Key,
-    record: &RecordIdentity,
-    location: RecordLocation<'_>,
+    store: RecordStore<'_>,
     key_epoch: u64,
 ) -> Result<Reconciled, CommitError> {
-    let chain = load_chain(fs, key, record, location)?;
-    let ctx = Context {
-        key,
-        record,
-        location,
-        key_epoch,
-    };
+    let chain = load_chain(fs, store)?;
+    let ctx = Context { store, key_epoch };
     let (authority, resolution) = match chain.authority {
         Authority::Pending { pending, serving } => {
-            resolve_pending(fs, &ctx, chain.next_marker, pending, serving)?
+            let open = OpenWrite {
+                next_marker: chain.next_marker,
+                pending,
+                serving,
+            };
+            resolve_pending(fs, &ctx, open)?
         }
         settled => (settled, Resolution::Unchanged),
     };
-    let debris = classify_debris(fs, location, &authority)?;
+    let debris = classify_debris(fs, store.location, &authority)?;
     Ok(Reconciled {
         authority,
         resolution,
@@ -215,33 +229,32 @@ pub fn reconcile<F: DurableFs>(
     })
 }
 
-/// Writes `plaintext` as the next generation of `record` (§9 steps 2–8 plus the `ACTIVE` marker):
-/// a pending write left by a crash is reconciled first, so a write always starts from a settled
-/// authority.
+/// Writes `plaintext` as the next generation of the record (§9 steps 2–8 plus the `ACTIVE`
+/// marker). A pending write left by a crash is reconciled first, and the committed generation being
+/// replaced must still be exactly what its marker committed, so a write never builds on an
+/// authority a read would refuse.
 pub fn commit_write<F: DurableFs>(
     fs: &mut F,
-    key: &Key,
-    record: &RecordIdentity,
-    location: RecordLocation<'_>,
+    store: RecordStore<'_>,
     request: WriteRequest,
     plaintext: &[u8],
 ) -> Result<MarkerCommitted, CommitError> {
-    reconcile(fs, key, record, location, request.key_epoch)?;
-    let chain = load_chain(fs, key, record, location)?;
-    let old = match chain.authority {
-        Authority::Absent => None,
-        Authority::Active(committed) => Some(committed.generation),
-        Authority::Pending { serving, .. } => serving.map(|committed| committed.generation),
-    };
+    reconcile(fs, store, request.key_epoch)?;
+    let chain = load_chain(fs, store)?;
+    let old = serving(&chain.authority);
+    if let Some(committed) = old {
+        verify_committed(fs, store, committed)?;
+    }
     let target = match old {
         None => 1,
-        Some(generation) => next_counter(generation)?,
+        Some(committed) => next_counter(committed.generation)?,
     };
+    // Every counter is allocated before anything is written.
+    let pending_marker = chain.next_marker;
+    let active_marker = next_counter(pending_marker)?;
     let operation = WriteOperationId::generate().map_err(CommitError::OperationId)?;
     let ctx = Context {
-        key,
-        record,
-        location,
+        store,
         key_epoch: request.key_epoch,
     };
     let pending = PendingBody {
@@ -249,34 +262,35 @@ pub fn commit_write<F: DurableFs>(
             operation_id: operation.as_str().to_owned(),
             fencing_generation: 0,
         },
-        old_generation: old,
+        old_generation: old.map(|committed| committed.generation),
         target_generation: target,
         target_epoch: request.key_epoch,
         content_digest: None,
         record_schema: request.record_schema,
     };
-    let pending_marker = chain.next_marker;
     let first = write_marker(fs, &ctx, pending_marker, MarkerBody::Pending(pending))?;
-    let meta = RecordMeta {
-        key_epoch: request.key_epoch,
-        record_generation: target,
-        record_schema: request.record_schema,
-    };
     let stage = StageRequest {
-        dir: location.record_dir,
-        identity: record,
-        meta,
+        dir: store.location.record_dir,
+        identity: store.record,
+        meta: RecordMeta {
+            key_epoch: request.key_epoch,
+            record_generation: target,
+            record_schema: request.record_schema,
+        },
         operation: &operation,
+        retain_staging: true,
     };
     let promoted =
-        stage_and_promote(fs, key, &stage, plaintext).map_err(CommitError::RecordWrite)?;
-    let active_marker = next_counter(pending_marker)?;
-    let active = MarkerBody::Active {
-        committed_generation: target,
-        committed_epoch: request.key_epoch,
+        stage_and_promote(fs, store.key, &stage, plaintext).map_err(CommitError::RecordWrite)?;
+    let committed = CommittedGeneration {
+        generation: target,
+        epoch: request.key_epoch,
         content_digest: promoted.content_digest,
     };
-    let last = write_marker(fs, &ctx, active_marker, active)?;
+    let last = write_marker(fs, &ctx, active_marker, active_body(committed))?;
+    // The candidate is committed; its staging name is now redundant (reconciliation removes it
+    // if this fails).
+    let _ = fs.remove_file(&staging_path(store.location.record_dir, target, &operation));
     Ok(MarkerCommitted {
         generation: target,
         marker_generation: active_marker,
@@ -285,23 +299,33 @@ pub fn commit_write<F: DurableFs>(
 }
 
 /// Reads the committed generation: the `ACTIVE` one, or the old one while a write is pending. The
-/// file must be exactly the envelope the marker committed and must open under `record`.
+/// file must be exactly the envelope the marker committed and must open under the record.
 pub fn read_committed<F: DurableFs>(
     fs: &mut F,
-    key: &Key,
-    record: &RecordIdentity,
-    location: RecordLocation<'_>,
+    store: RecordStore<'_>,
 ) -> Result<Option<OpenedRecord>, CommitError> {
-    let committed = match load_authority(fs, key, record, location)? {
-        Authority::Absent => return Ok(None),
-        Authority::Active(committed) => committed,
-        Authority::Pending { serving: None, .. } => return Ok(None),
-        Authority::Pending {
-            serving: Some(committed),
-            ..
-        } => committed,
-    };
-    let path = generation_path(location.record_dir, committed.generation);
+    match serving(&load_authority(fs, store)?) {
+        None => Ok(None),
+        Some(committed) => verify_committed(fs, store, committed).map(Some),
+    }
+}
+
+/// The generation the authority serves: the active one, or the old one while a write is pending.
+fn serving(authority: &Authority) -> Option<CommittedGeneration> {
+    match authority {
+        Authority::Absent => None,
+        Authority::Active(committed) => Some(*committed),
+        Authority::Pending { serving, .. } => *serving,
+    }
+}
+
+/// The committed generation's file, proven to be exactly the envelope its marker committed.
+fn verify_committed<F: DurableFs>(
+    fs: &mut F,
+    store: RecordStore<'_>,
+    committed: CommittedGeneration,
+) -> Result<OpenedRecord, CommitError> {
+    let path = generation_path(store.location.record_dir, committed.generation);
     let bytes = match fs.read(&path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -309,24 +333,22 @@ pub fn read_committed<F: DurableFs>(
         }
         Err(error) => return Err(io_error(CommitStep::ReadCommitted, &error)),
     };
+    let mismatch = || recovery(RecoveryReason::CommittedGenerationMismatch);
     if content_digest(&bytes) != committed.content_digest {
-        return Err(recovery(RecoveryReason::CommittedGenerationMismatch));
+        return Err(mismatch());
     }
-    let opened = open_record(key, record, &bytes)
-        .map_err(|_| recovery(RecoveryReason::CommittedGenerationMismatch))?;
+    let opened = open_record(store.key, store.record, &bytes).map_err(|_| mismatch())?;
     let header = opened.header;
     if header.record_generation == committed.generation && header.key_epoch == committed.epoch {
-        Ok(Some(opened))
+        Ok(opened)
     } else {
-        Err(recovery(RecoveryReason::CommittedGenerationMismatch))
+        Err(mismatch())
     }
 }
 
 /// The fields every marker write and candidate check needs.
 struct Context<'a> {
-    key: &'a Key,
-    record: &'a RecordIdentity,
-    location: RecordLocation<'a>,
+    store: RecordStore<'a>,
     key_epoch: u64,
 }
 
@@ -336,14 +358,21 @@ struct Chain {
     next_marker: u64,
 }
 
-fn load_chain<F: DurableFs>(
-    fs: &mut F,
-    key: &Key,
-    record: &RecordIdentity,
-    location: RecordLocation<'_>,
-) -> Result<Chain, CommitError> {
+/// A pending write to resolve and the marker generation its resolution would take.
+struct OpenWrite {
+    next_marker: u64,
+    pending: PendingBody,
+    serving: Option<CommittedGeneration>,
+}
+
+fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain, CommitError> {
+    let dir = store.location.marker_dir;
+    // A marker promoted before a failed directory sync is visible but not yet durable: make it
+    // durable now, or decide nothing.
+    fs.sync_dir(dir)
+        .map_err(|error| io_error(CommitStep::SyncMarkers, &error))?;
     let names = fs
-        .list_dir(location.marker_dir)
+        .list_dir(dir)
         .map_err(|error| io_error(CommitStep::ListMarkers, &error))?;
     let mut generations: Vec<u64> = names.iter().filter_map(parse_generation_name).collect();
     generations.sort_unstable();
@@ -352,8 +381,8 @@ fn load_chain<F: DurableFs>(
     }
     let mut authority = Authority::Absent;
     for &marker_generation in &generations {
-        let marker = open_marker(fs, key, record, location, marker_generation)?;
-        if let MarkerBody::RecoveryRequired { .. } = marker.body() {
+        let marker = open_marker(fs, store, marker_generation)?;
+        if matches!(marker.body(), MarkerBody::RecoveryRequired { .. }) {
             return Err(recovery(RecoveryReason::MarkerRecoveryRequired));
         }
         authority = transition(authority, marker.body().clone()).ok_or(recovery(
@@ -379,22 +408,31 @@ fn first_gap(generations: &[u64]) -> Option<u64> {
         .map(|(_, expected)| expected)
 }
 
+/// Opens the marker file of `marker_generation`; its content must be that very generation, so a
+/// valid marker copied into another chain slot is refused.
 fn open_marker<F: DurableFs>(
     fs: &mut F,
-    key: &Key,
-    record: &RecordIdentity,
-    location: RecordLocation<'_>,
+    store: RecordStore<'_>,
     marker_generation: u64,
 ) -> Result<CommitMarker, CommitError> {
-    let bytes = fs
-        .read(&generation_path(location.marker_dir, marker_generation))
-        .map_err(|error| io_error(CommitStep::ReadMarker, &error))?;
-    CommitMarker::open(key, record, &bytes).map_err(|error| {
+    let unreadable = |error| {
         recovery(RecoveryReason::MarkerUnreadable {
             marker_generation,
             error,
         })
-    })
+    };
+    let bytes = fs
+        .read(&generation_path(
+            store.location.marker_dir,
+            marker_generation,
+        ))
+        .map_err(|error| io_error(CommitStep::ReadMarker, &error))?;
+    let marker = CommitMarker::open(store.key, store.record, &bytes).map_err(unreadable)?;
+    if marker.marker_generation() == marker_generation {
+        Ok(marker)
+    } else {
+        Err(unreadable(MarkerError::GenerationMismatch))
+    }
 }
 
 /// The authority after `body`, or `None` if `body` cannot follow `authority` (§8.4's machine:
@@ -437,10 +475,7 @@ fn after_active(authority: Authority, committed: CommittedGeneration) -> Option<
         return None;
     };
     let completes = committed.generation == pending.target_generation
-        && committed.epoch == pending.target_epoch
-        && pending
-            .content_digest
-            .map_or(true, |digest| digest == committed.content_digest);
+        && committed.epoch == pending.target_epoch;
     let restores = serving == Some(committed);
     (completes || restores).then_some(Authority::Active(committed))
 }
@@ -449,10 +484,13 @@ fn after_active(authority: Authority, committed: CommittedGeneration) -> Option<
 fn resolve_pending<F: DurableFs>(
     fs: &mut F,
     ctx: &Context<'_>,
-    next_marker: u64,
-    pending: PendingBody,
-    serving: Option<CommittedGeneration>,
+    open: OpenWrite,
 ) -> Result<(Authority, Resolution), CommitError> {
+    let OpenWrite {
+        next_marker,
+        pending,
+        serving,
+    } = open;
     if let Some(content_digest) = adopt_candidate(fs, ctx, &pending)? {
         let committed = CommittedGeneration {
             generation: pending.target_generation,
@@ -460,6 +498,7 @@ fn resolve_pending<F: DurableFs>(
             content_digest,
         };
         write_marker(fs, ctx, next_marker, active_body(committed))?;
+        drop_staging(fs, ctx, &pending);
         let resolution = Resolution::Completed {
             generation: committed.generation,
         };
@@ -483,6 +522,14 @@ fn resolve_pending<F: DurableFs>(
     }
 }
 
+/// Drops a committed candidate's staging name; reconciliation removes it later if this fails.
+fn drop_staging<F: DurableFs>(fs: &mut F, ctx: &Context<'_>, pending: &PendingBody) {
+    if let Some(operation) = WriteOperationId::parse(&pending.operation.operation_id) {
+        let dir = ctx.store.location.record_dir;
+        let _ = fs.remove_file(&staging_path(dir, pending.target_generation, &operation));
+    }
+}
+
 fn active_body(committed: CommittedGeneration) -> MarkerBody {
     MarkerBody::Active {
         committed_generation: committed.generation,
@@ -491,80 +538,89 @@ fn active_body(committed: CommittedGeneration) -> MarkerBody {
     }
 }
 
-/// The pending write's candidate, if it authenticates: the promoted target generation, or else
-/// the staging file under the marker's own operation suffix, which is then promoted (also after
-/// non-matching bytes under the generation name were relocated). Rejected
-/// bytes are relocated so the generation name is free for a retry; a read that fails for any
+/// The pending write's candidate, if its provenance holds: the staging file under the marker's own
+/// operation suffix (§9 step 3) must authenticate as exactly the pending target. The promoted
+/// generation is adopted only if it holds those same bytes; other bytes under the generation name
+/// are relocated and the staging file is promoted. Without a valid staging file nothing is adopted,
+/// whatever the generation name holds. The record directory is synced before the candidate is
+/// reported, so `ACTIVE` never precedes a durable generation entry. A read that fails for any
 /// reason other than absence decides nothing.
 fn adopt_candidate<F: DurableFs>(
     fs: &mut F,
     ctx: &Context<'_>,
     pending: &PendingBody,
 ) -> Result<Option<[u8; 32]>, CommitError> {
-    let dir = ctx.location.record_dir;
+    let dir = ctx.store.location.record_dir;
     let target = generation_path(dir, pending.target_generation);
     let suffix = &pending.operation.operation_id;
-    if let Some(bytes) = read_if_present(fs, &target)? {
-        if candidate_matches(ctx, pending, &bytes) {
-            return Ok(Some(content_digest(&bytes)));
+    let staged = match WriteOperationId::parse(suffix) {
+        // A non-canonical operation ID names no staging file this protocol could have written.
+        None => None,
+        Some(operation) => {
+            let staging = staging_path(dir, pending.target_generation, &operation);
+            read_if_present(fs, &staging)?.map(|bytes| (staging, bytes))
         }
-        // Bytes under the generation name that are not this write's candidate (a collision or a
-        // damaged copy) are relocated; the operation's own staging file may still be valid.
-        relocate(fs, dir, &target, suffix)?;
-    }
-    // A non-canonical operation ID names no staging file this protocol could have written.
-    let Some(operation) = WriteOperationId::parse(suffix) else {
-        return Ok(None);
     };
-    let staging = staging_path(dir, pending.target_generation, &operation);
-    let Some(bytes) = read_if_present(fs, &staging)? else {
-        return Ok(None);
+    let promoted = read_if_present(fs, &target)?;
+    let candidate = match staged {
+        Some((staging, bytes)) if candidate_matches(ctx, pending, &bytes) => (staging, bytes),
+        other => {
+            if let Some((staging, _)) = other {
+                relocate(fs, dir, &staging, suffix)?;
+            }
+            if promoted.is_some() {
+                relocate(fs, dir, &target, suffix)?;
+            }
+            return Ok(None);
+        }
     };
-    if !candidate_matches(ctx, pending, &bytes) {
-        relocate(fs, dir, &staging, suffix)?;
-        return Ok(None);
+    let (staging, bytes) = candidate;
+    match promoted {
+        Some(existing) if existing == bytes => {}
+        Some(_) => {
+            relocate(fs, dir, &target, suffix)?;
+            promote_staged(fs, &staging, &target, &bytes)?;
+        }
+        None => promote_staged(fs, &staging, &target, &bytes)?,
     }
-    promote_staged(fs, dir, &staging, &target, &bytes)?;
+    fs.sync_dir(dir)
+        .map_err(|error| io_error(CommitStep::SyncRecord, &error))?;
     Ok(Some(content_digest(&bytes)))
 }
 
 /// Whether `bytes` authenticate as exactly the pending target: this record, the target generation,
-/// epoch and schema, and the pending `content_digest` when one was recorded.
+/// epoch and schema.
 fn candidate_matches(ctx: &Context<'_>, pending: &PendingBody, bytes: &[u8]) -> bool {
-    let Ok(opened) = open_record(ctx.key, ctx.record, bytes) else {
+    let Ok(opened) = open_record(ctx.store.key, ctx.store.record, bytes) else {
         return false;
     };
     let header = opened.header;
     header.record_generation == pending.target_generation
         && header.key_epoch == pending.target_epoch
         && header.record_schema == pending.record_schema
-        && pending
-            .content_digest
-            .map_or(true, |digest| digest == content_digest(bytes))
 }
 
-/// Promotes a validated staging file left by a crash (§9.2 "after file sync, before promotion"),
-/// proves the generation holds exactly those bytes, then drops the staging name.
+/// Promotes a validated staging file left by a crash (§9.2 "after file sync, before promotion")
+/// and proves the generation holds exactly its bytes. The staging name stays until `ACTIVE` is
+/// recorded.
 fn promote_staged<F: DurableFs>(
     fs: &mut F,
-    dir: &Path,
     staging: &Path,
     target: &Path,
     bytes: &[u8],
 ) -> Result<(), CommitError> {
     let promote = |error: io::Error| io_error(CommitStep::PromoteCandidate, &error);
     fs.link_no_replace(staging, target).map_err(promote)?;
-    if fs.read(target).map_err(promote)? != bytes {
-        return Err(recovery(RecoveryReason::CommittedGenerationMismatch));
+    if fs.read(target).map_err(promote)? == bytes {
+        Ok(())
+    } else {
+        Err(recovery(RecoveryReason::CommittedGenerationMismatch))
     }
-    // The generation keeps every byte; a staging name that cannot be removed is reported later.
-    let _ = fs.remove_file(staging);
-    fs.sync_dir(dir).map_err(promote)?;
-    Ok(())
 }
 
-/// Moves rejected bytes to `<name>.rejected-<operation>` without ever deleting them: the new name
-/// is linked first, and the old one removed only once the copy is proven identical.
+/// Moves rejected bytes to `<name>.rejected-<tag>` without ever losing them: the new name is linked
+/// and made durable before the old one is removed. `tag` is a digest of the marker's operation ID,
+/// so marker text never shapes a path.
 fn relocate<F: DurableFs>(
     fs: &mut F,
     dir: &Path,
@@ -574,10 +630,11 @@ fn relocate<F: DurableFs>(
     let fail = |error: io::Error| io_error(CommitStep::RelocateRejected, &error);
     let name = path
         .file_name()
-        .map(|name| name.to_string_lossy().into_owned());
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let rejected = dir.join(format!(
-        "{}{REJECTED_INFIX}{operation}",
-        name.unwrap_or_default()
+        "{name}{REJECTED_INFIX}{}",
+        relocation_tag(operation)
     ));
     match fs.link_no_replace(path, &rejected) {
         Ok(()) => {}
@@ -589,12 +646,21 @@ fn relocate<F: DurableFs>(
         }
         Err(error) => return Err(fail(error)),
     }
+    fs.sync_dir(dir).map_err(fail)?;
     fs.remove_file(path).map_err(fail)?;
     fs.sync_dir(dir).map_err(fail)?;
     Ok(())
 }
 
 const REJECTED_INFIX: &str = ".rejected-";
+
+/// 32 lowercase hex characters of SHA-256 over the operation ID: filename-safe for any marker text.
+fn relocation_tag(operation: &str) -> String {
+    Sha256::digest(operation.as_bytes())[..16]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
 
 /// Seals `body` as marker generation `marker_generation` and promotes it (slice 3A).
 fn write_marker<F: DurableFs>(
@@ -603,11 +669,11 @@ fn write_marker<F: DurableFs>(
     marker_generation: u64,
     body: MarkerBody,
 ) -> Result<DirectoryDurability, CommitError> {
-    let marker =
-        CommitMarker::new(ctx.record, marker_generation, body).map_err(CommitError::Marker)?;
+    let marker = CommitMarker::new(ctx.store.record, marker_generation, body)
+        .map_err(CommitError::Marker)?;
     let operation = WriteOperationId::generate().map_err(CommitError::OperationId)?;
     let request = StageRequest {
-        dir: ctx.location.marker_dir,
+        dir: ctx.store.location.marker_dir,
         identity: marker.identity(),
         meta: RecordMeta {
             key_epoch: ctx.key_epoch,
@@ -615,8 +681,9 @@ fn write_marker<F: DurableFs>(
             record_schema: MARKER_RECORD_SCHEMA,
         },
         operation: &operation,
+        retain_staging: false,
     };
-    stage_and_promote(fs, ctx.key, &request, &marker.encode())
+    stage_and_promote(fs, ctx.store.key, &request, &marker.encode())
         .map(|promoted| promoted.directory)
         .map_err(CommitError::MarkerWrite)
 }

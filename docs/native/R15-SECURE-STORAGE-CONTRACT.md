@@ -3537,7 +3537,7 @@ Later implementation may be admitted only in these bounded gates:
      durability is reported as not confirmed and a later commit must report
      `COMMITTED_NOT_CONFIRMED_DURABLE`. The fault-injection tests run on Linux, macOS and Windows CI
      runners (`CI_ONLY`); they are not power-loss evidence, which remains with Gate 6. Promotion is not a commit: commit markers
-     and startup reconciliation (3B) and the authority-root/catalog commit (3C) remain.
+     and startup reconciliation follow in slice 3B, and the authority-root/catalog commit in 3C.
    - **Slice 3B, part 1 (`record-commit` marker codec)** — `marker` in
      `crates/worldscript-secure-storage` defines the single-record marker exactly as §5.4 specifies:
      `content_digest` over the complete envelope, `canonical_marker_body_bytes` (class token, the
@@ -3563,36 +3563,48 @@ Later implementation may be admitted only in these bounded gates:
    - **Slice 3B, part 2 (marker commit protocol and startup reconciliation)** — `commit` in
      `crates/worldscript-secure-storage`, proven on `settings:global`. Each marker generation is a
      sealed `record-commit` record promoted by slice 3A into the record's marker directory, so
-     markers are immutable and generation-addressed. A write reconciles first, records
-     `PENDING(old -> old + 1)` (fence `0`, no digest), stages and promotes the generation, then
-     records `ACTIVE(new)` bound to the promoted envelope's `content_digest`. Loading requires the
-     marker chain `1..=n` without gaps, every generation to open, and each one to be a legal §8.4
-     transition from the one before it (`ABSENT -> PENDING(none -> 1)`, `ACTIVE(g) -> PENDING(g -> g+1)`,
-     `PENDING -> ACTIVE(target)` with the pending epoch, `PENDING -> ACTIVE(old)` restoring the old
-     authority, or a new first-write `PENDING(none -> 1)` after a rolled-back one); a gap, an
-     unreadable or reserved/future-state marker, an illegal transition or a `RECOVERY_REQUIRED`
-     marker is `RECOVERY_REQUIRED`, never a fallback to an older marker. A committed read requires
-     the generation file's `content_digest` to equal the marker's and the envelope to open with the
-     marker's generation and epoch; while a write is pending, the old generation is served (§8.4).
-     Startup resolves `PENDING(old -> target)` only from authenticated evidence: the promoted target
-     generation is adopted if it authenticates as exactly this record, generation, epoch and schema;
-     otherwise bytes under that name are relocated to `<name>.rejected-<operation>` (linked first,
-     removed only once the copy is proven identical — never deleted) and the staging file under the
-     marker's own `operation_id`/`target_generation` suffix (§9 step 3) is promoted if it
-     authenticates; if neither does, the write rolls back — `ACTIVE(old)` is re-recorded for a
-     replacement, and a first write stays a resolved `PENDING(none -> 1)` with no payload authority
-     because version 1 has no `ABSENT` marker body (slice 3C's root restores `ABSENT`). A read that
-     fails for any reason other than absence decides nothing. Leftover files are classified: a
-     staging file byte-identical to its promoted generation is removed (the generation keeps every
-     byte); any other staging file, every rejected relocation and every unrecognized name are
-     preserved and reported. Fault-injection tests cover every write boundary (staging create,
-     promotion, record and marker directory sync, both marker writes), the wrong-generation,
-     wrong-epoch and colliding candidate, tampered and missing markers and generations, and illegal
-     transitions; they run on Linux, macOS and Windows CI runners (`CI_ONLY`) and are not
-     power-loss evidence (Gate 6). This is a marker commit, not `DURABLE_COMMIT_SUCCESS`: until the
-     authority root checkpoints the marker set and advances the rollback floor (3C, §5.3.1, §9
-     steps 9–10), deleting the newest marker files is not detectable. Exclusive write admission
-     (Gate 4) is assumed, not enforced.
+     markers are immutable and generation-addressed. Before the chain is trusted its directory is
+     synced (a marker left visible by a failed directory sync becomes durable or nothing is
+     decided); the chain `1..=n` must have no gap, each file must open as exactly the marker
+     generation its name states (a valid marker copied into another slot is refused), and each
+     generation must be a legal §8.4 transition from the one before it (`ABSENT ->
+     PENDING(none -> 1)`, `ACTIVE(g) -> PENDING(g -> g+1)`, `PENDING -> ACTIVE(target)` with the
+     pending epoch, `PENDING -> ACTIVE(old)` restoring the old authority, or a new first-write
+     `PENDING(none -> 1)` after a rolled-back one); a gap, an unreadable, misplaced or
+     reserved/future-state marker, an illegal transition or a `RECOVERY_REQUIRED` marker is
+     `RECOVERY_REQUIRED`, never a fallback to an older marker. A committed read — and every write,
+     before it changes anything — requires the committed generation file's `content_digest` to
+     equal the marker's and the envelope to open with the marker's generation and epoch; while a
+     write is pending, the old generation is served (§8.4). A write allocates every counter first,
+     records `PENDING(old -> old + 1)` (fence `0`, no digest), stages and promotes the generation
+     while keeping its staging name — the only name tied to the operation (§9 step 3, §9.2) — then
+     records `ACTIVE(new)` bound to the promoted envelope's `content_digest` and only then drops
+     the staging name. Startup resolves `PENDING(old -> target)` only from that provenance: the
+     staging file under the marker's own `operation_id`/`target_generation` suffix must
+     authenticate as exactly this record, target generation, epoch and schema; the promoted
+     generation is adopted only if it holds those same bytes, other bytes under the generation name
+     are relocated and the staging file promoted, and the record directory is synced before
+     `ACTIVE(target)` is recorded. Without that staging file nothing is adopted, whatever the
+     generation name holds: the write rolls back — `ACTIVE(old)` is re-recorded for a replacement,
+     and a first write stays a resolved `PENDING(none -> 1)` with no payload authority because
+     version 1 has no `ABSENT` marker body (slice 3C's root restores `ABSENT`). Rejected bytes are
+     relocated to `<name>.rejected-<tag>`, where `tag` is a digest of the operation ID (marker text
+     never shapes a path); the new name is linked and the directory synced before the old name is
+     removed, so the bytes are never lost. A read that fails for any reason other than absence,
+     or a directory sync that fails, decides nothing. Leftover files are classified: a staging file
+     byte-identical to its promoted generation is removed (the generation keeps every byte); any
+     other staging file, every rejected relocation and every unrecognized name are preserved and
+     reported. Fault-injection tests cover the `PENDING` and `ACTIVE` marker creates, the record
+     staging create and promotion link, the record-directory sync after promotion, the `ACTIVE`
+     marker's directory sync and an unsyncable marker directory at load; candidate tests cover a
+     damaged promoted copy, a promoted generation without its staging provenance, wrong-generation
+     and wrong-epoch staging, a generation-name collision, an unreadable candidate and a
+     path-like operation ID; chain tests cover gaps, tampered and replayed markers, illegal
+     transitions, `RECOVERY_REQUIRED` and a reserved state. They run on Linux, macOS and Windows CI
+     runners (`CI_ONLY`) and are not power-loss evidence (Gate 6). This is a marker commit, not
+     `DURABLE_COMMIT_SUCCESS`: until the authority root checkpoints the marker set and advances the
+     rollback floor (3C, §5.3.1, §9 steps 9–10), deleting the newest marker files is not
+     detectable. Exclusive write admission (Gate 4) is assumed, not enforced.
 4. **Journal/admission:** implement enable/rotate/recovery state machines, exclusive migration
    admission, bounded inventory/checkpoints, and shutdown/cancellation behavior.
 5. **Migration admission readiness and inventory-complete migration** (admission-readiness, not full

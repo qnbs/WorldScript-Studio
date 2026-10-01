@@ -169,6 +169,10 @@ pub struct StageRequest<'a> {
     /// `record_generation` is the generation being written.
     pub meta: RecordMeta,
     pub operation: &'a WriteOperationId,
+    /// Keep the staging name linked after a successful promotion. A commit (slice 3B) keeps it as
+    /// the candidate's provenance — the only name tied to its operation (§9.2) — until `ACTIVE` is
+    /// recorded; a standalone promotion drops it.
+    pub retain_staging: bool,
 }
 
 /// The durability step at which an attempt stopped (§9.2's fault points).
@@ -262,7 +266,11 @@ pub fn stage_and_promote<F: DurableFs>(
     attempt.promote(fs)?;
     // The new generation now exists under its own name. Dropping the staging link leaves only that
     // name; a failure here leaves suffixed ciphertext debris for startup reconciliation.
-    let staging = residue_after_remove(fs, &attempt.staging);
+    let staging = if request.retain_staging {
+        StagingResidue::Present
+    } else {
+        residue_after_remove(fs, &attempt.staging)
+    };
     attempt.verify_promoted(fs, staging)?;
     let directory = fs.sync_dir(request.dir).map_err(|error| StageFailure {
         step: StageStep::SyncDirectory,
