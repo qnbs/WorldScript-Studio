@@ -14,9 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   version, checks it again, and flushes the folder on Linux and macOS (on Windows the folder flush
   is reported as unconfirmed rather than assumed). The previous version is never touched and no
   plaintext is written; every failed step is reported with the files it left, and a staging file
-  that fails its check is kept for later recovery. Tests inject failures at each step on Linux,
-  macOS and Windows; real power-loss evidence and deciding which version counts come later. Nothing
-  in the app uses this yet, and the production authority switch stays off. PR #930.
+  that fails its check is kept for later recovery. Tests inject failures at each file-system step
+  on Linux, macOS and Windows; real power-loss evidence and deciding which version counts come
+  later. Nothing in the app uses this yet, and the production authority switch stays off. PR #930.
 - **R-15 Gate 2 closure — record-class disposition (#445):** every protected record class now has
   exactly one recorded disposition from the storage contract, and the record codec only seals and
   opens classes that are meant to become protected records. API credentials and the browser

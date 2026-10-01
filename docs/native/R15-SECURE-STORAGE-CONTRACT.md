@@ -3506,7 +3506,8 @@ Later implementation may be admitted only in these bounded gates:
      overwrites), the promoted name is read back as exactly the validated envelope (promotion
      re-resolves the staging path; the commit marker's `content_digest` binds it from 3B on), and
      the directory is synced. No existing file is opened for writing, overwritten or removed except
-     the operation's own staging file after a write, sync or promotion failure; a staging file that
+     the operation's own staging name: it is removed after a successful promotion (the generation
+     keeps the bytes) and after a write, sync or promotion failure; a staging file that
      fails validation, or one already present under the operation's name, is preserved and reported.
      The previous generation is untouched on every failure; a failure after promotion reports the
      new generation as preserved but not authoritative (§9.2). Platform semantics: Linux and macOS sync file contents (`fsync`; Apple

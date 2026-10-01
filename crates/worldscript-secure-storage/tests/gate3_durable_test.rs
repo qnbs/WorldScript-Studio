@@ -143,6 +143,8 @@ enum Fault {
     CorruptRead,
     /// Reads back only the promoted generation with one byte flipped.
     CorruptPromotedRead,
+    /// Fails reading only the promoted generation.
+    PromotedReadError,
     Link,
     Remove,
     SyncDir,
@@ -169,6 +171,32 @@ impl Write for FaultFile {
 
     fn flush(&mut self) -> io::Result<()> {
         self.inner.flush()
+    }
+}
+
+/// Whether `path` names a promoted generation (not a staging file), judged by its file name only.
+fn is_generation_file(path: &Path) -> bool {
+    let name = path.file_name().unwrap().to_string_lossy();
+    name.starts_with("generation-") && name.ends_with(".wsr1")
+}
+
+/// The old generation is byte-identical and no file in `dir` holds plaintext.
+fn assert_old_intact(dir: &Path, old: &[u8]) {
+    assert_eq!(fs::read(generation_path(dir, 1)).unwrap(), old);
+    assert_no_plaintext(dir);
+}
+
+fn failed(
+    step: StageStep,
+    kind: StageFailureKind,
+    promoted: bool,
+    staging: StagingResidue,
+) -> StageFailure {
+    StageFailure {
+        step,
+        kind,
+        promoted,
+        staging,
     }
 }
 
@@ -206,9 +234,8 @@ impl DurableFs for FaultFs {
         match self.fault {
             Fault::Read => Err(injected("read")),
             Fault::CorruptRead => flipped(StdFs.read(path)?),
-            Fault::CorruptPromotedRead if !path.to_string_lossy().contains(".tmp-") => {
-                flipped(StdFs.read(path)?)
-            }
+            Fault::CorruptPromotedRead if is_generation_file(path) => flipped(StdFs.read(path)?),
+            Fault::PromotedReadError if is_generation_file(path) => Err(injected("promoted read")),
             _ => StdFs.read(path),
         }
     }
@@ -239,23 +266,23 @@ impl DurableFs for FaultFs {
 fn a_new_generation_is_promoted_beside_the_untouched_old_one() {
     let (dir, old) = with_generation_one();
     let promoted = stage(&mut StdFs, &dir.0, 2, NEW_SETTINGS).unwrap();
-    assert_eq!(promoted.generation, 2);
-    assert_eq!(promoted.path, generation_path(&dir.0, 2));
-    assert_eq!(promoted.staging, StagingResidue::None);
-    let expected_directory = if cfg!(unix) {
+    let directory = if cfg!(unix) {
         DirectoryDurability::Confirmed
     } else {
         DirectoryDurability::NotConfirmed
     };
-    assert_eq!(promoted.directory, expected_directory);
-    assert_eq!(fs::read(generation_path(&dir.0, 1)).unwrap(), old);
+    let expected = PromotedGeneration {
+        generation: 2,
+        path: generation_path(&dir.0, 2),
+        directory,
+        staging: StagingResidue::None,
+    };
+    assert_eq!(promoted, expected);
     assert_generation_opens(&dir.0, 1, OLD_SETTINGS);
     assert_generation_opens(&dir.0, 2, NEW_SETTINGS);
-    assert_eq!(
-        file_names(&dir.0),
-        ["generation-1.wsr1", "generation-2.wsr1"]
-    );
-    assert_no_plaintext(&dir.0);
+    let names = file_names(&dir.0);
+    assert_eq!(names, ["generation-1.wsr1", "generation-2.wsr1"]);
+    assert_old_intact(&dir.0, &old);
 }
 
 #[test]
@@ -299,25 +326,12 @@ fn every_failure_before_promotion_leaves_the_old_generation_untouched() {
     ] {
         let (dir, old) = with_generation_one();
         let failure = stage(&mut FaultFs { fault }, &dir.0, 2, NEW_SETTINGS).unwrap_err();
-        assert_eq!((failure.step, failure.kind), (step, kind), "{fault:?}");
-        assert!(!failure.promoted, "{fault:?}");
-        assert_eq!(failure.staging, staging, "{fault:?}");
-        // Old generation byte-identical, no new generation, staging only as reported, no plaintext.
-        assert_eq!(
-            fs::read(generation_path(&dir.0, 1)).unwrap(),
-            old,
-            "{fault:?}"
-        );
-        let names = file_names(&dir.0);
-        assert_eq!(names[0], "generation-1.wsr1", "{fault:?}");
-        let expected_files = if staging == StagingResidue::Present {
-            2
-        } else {
-            1
-        };
-        assert_eq!(names.len(), expected_files, "{fault:?}");
+        assert_eq!(failure, failed(step, kind, false, staging), "{fault:?}");
+        // Old generation intact, no new generation, staging only as reported, no plaintext.
+        assert_old_intact(&dir.0, &old);
+        let staged = file_names(&dir.0).iter().any(|name| name.contains(".tmp-"));
+        assert_eq!(staged, staging == StagingResidue::Present, "{fault:?}");
         assert!(!generation_path(&dir.0, 2).exists(), "{fault:?}");
-        assert_no_plaintext(&dir.0);
     }
 }
 
@@ -337,37 +351,39 @@ fn an_existing_staging_file_is_reported_and_never_touched() {
         NEW_SETTINGS,
     )
     .unwrap_err();
-    assert_eq!(failure.step, StageStep::CreateStaging);
-    assert_eq!(
-        failure.kind,
-        StageFailureKind::Io(io::ErrorKind::AlreadyExists)
+    let exists = StageFailureKind::Io(io::ErrorKind::AlreadyExists);
+    let expected = failed(
+        StageStep::CreateStaging,
+        exists,
+        false,
+        StagingResidue::Present,
     );
-    assert_eq!(failure.staging, StagingResidue::Present);
+    assert_eq!(failure, expected);
     assert_eq!(fs::read(&staging).unwrap(), b"earlier attempt");
     assert_eq!(fs::read(generation_path(&dir.0, 1)).unwrap(), old);
-    assert!(!generation_path(&dir.0, 2).exists());
 }
 
 #[test]
 fn a_promoted_generation_that_does_not_read_back_exactly_is_reported() {
-    // The promoted name is read back by itself; bytes other than the validated envelope are
-    // preserved and reported, never returned as a promoted generation.
-    let (dir, old) = with_generation_one();
-    let failure = stage(
-        &mut FaultFs {
-            fault: Fault::CorruptPromotedRead,
-        },
-        &dir.0,
-        2,
-        NEW_SETTINGS,
-    )
-    .unwrap_err();
-    assert_eq!(failure.step, StageStep::VerifyPromoted);
-    assert_eq!(failure.kind, StageFailureKind::StagedEnvelopeMismatch);
-    assert!(failure.promoted);
-    assert_eq!(fs::read(generation_path(&dir.0, 1)).unwrap(), old);
-    assert!(generation_path(&dir.0, 2).exists());
-    assert_no_plaintext(&dir.0);
+    // The promoted name is read back by itself; bytes other than the validated envelope, or a read
+    // that fails, are preserved and reported, never returned as a promoted generation.
+    for (fault, kind) in [
+        (
+            Fault::CorruptPromotedRead,
+            StageFailureKind::StagedEnvelopeMismatch,
+        ),
+        (
+            Fault::PromotedReadError,
+            StageFailureKind::Io(io::ErrorKind::Other),
+        ),
+    ] {
+        let (dir, old) = with_generation_one();
+        let failure = stage(&mut FaultFs { fault }, &dir.0, 2, NEW_SETTINGS).unwrap_err();
+        let expected = failed(StageStep::VerifyPromoted, kind, true, StagingResidue::None);
+        assert_eq!(failure, expected, "{fault:?}");
+        assert!(generation_path(&dir.0, 2).exists(), "{fault:?}");
+        assert_old_intact(&dir.0, &old);
+    }
 }
 
 #[test]
@@ -382,16 +398,14 @@ fn a_failure_after_promotion_preserves_the_new_generation_without_claiming_succe
         NEW_SETTINGS,
     )
     .unwrap_err();
-    assert_eq!(failure.step, StageStep::SyncDirectory);
-    assert_eq!(failure.kind, StageFailureKind::Io(io::ErrorKind::Other));
-    assert!(failure.promoted);
     // The staging link was already removed before the directory sync.
-    assert_eq!(failure.staging, StagingResidue::None);
+    let io = StageFailureKind::Io(io::ErrorKind::Other);
+    let expected = failed(StageStep::SyncDirectory, io, true, StagingResidue::None);
+    assert_eq!(failure, expected);
     // §9.2 "after promotion, before directory sync": the new generation is preserved and not yet
     // authoritative; the old one is untouched.
-    assert_eq!(fs::read(generation_path(&dir.0, 1)).unwrap(), old);
     assert_generation_opens(&dir.0, 2, NEW_SETTINGS);
-    assert_no_plaintext(&dir.0);
+    assert_old_intact(&dir.0, &old);
 }
 
 #[test]
@@ -412,18 +426,17 @@ fn staging_debris_is_reported_and_is_ciphertext_only() {
     .unwrap();
     assert_eq!(promoted.staging, StagingResidue::Present);
     assert!(staging_path(&dir.0, 2, &op).exists());
-    assert_eq!(fs::read(generation_path(&dir.0, 1)).unwrap(), old);
     assert_generation_opens(&dir.0, 2, NEW_SETTINGS);
-    assert_no_plaintext(&dir.0);
+    assert_old_intact(&dir.0, &old);
 }
 
 #[test]
 fn an_existing_generation_is_never_overwritten() {
     let (dir, old) = with_generation_one();
     let failure = stage(&mut StdFs, &dir.0, 1, NEW_SETTINGS).unwrap_err();
-    assert_eq!(failure.step, StageStep::Promote);
-    assert_eq!(failure.kind, StageFailureKind::GenerationExists);
-    assert_eq!(failure.staging, StagingResidue::None);
+    let exists = StageFailureKind::GenerationExists;
+    let expected = failed(StageStep::Promote, exists, false, StagingResidue::None);
+    assert_eq!(failure, expected);
     assert_eq!(fs::read(generation_path(&dir.0, 1)).unwrap(), old);
     assert_eq!(file_names(&dir.0), ["generation-1.wsr1"]);
 }
