@@ -5,13 +5,15 @@
 //! AAD (§6.2), and AES-256-GCM seal/open with an OS-backed nonce source (§6.3), plus the Gate 2
 //! slice 1 typed record-identity registry ([`identity`], §5.2), the identity-bound record codec
 //! ([`record`]), the §10.4.1 record-class disposition ([`mod@disposition`]), the Gate 3
-//! slice 3A durable staging and promotion of one generation ([`durable`]), and the slice 3B1
-//! `record-commit` marker codec ([`marker`]). It changes no current TypeScript/Tauri storage
-//! authority and holds no journal or commit protocol.
+//! slice 3A durable staging and promotion of one generation ([`durable`]), and slice 3B's
+//! `record-commit` marker codec ([`marker`]) and marker commit protocol with startup reconciliation
+//! ([`commit`]). It changes no current TypeScript/Tauri storage authority and holds no journal or
+//! authority-root commit yet.
 
 pub mod aad;
 pub mod anchor;
 pub mod anchor_codec;
+pub mod commit;
 pub mod disposition;
 pub mod durable;
 pub mod envelope;
@@ -33,6 +35,11 @@ pub mod store_layout;
 pub mod store_runtime;
 
 pub use aad::{canonical_aad, RecordContext};
+pub use commit::{
+    commit_write, load_authority, read_committed, reconcile, Authority, CommitError, CommitStep,
+    CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled, RecordLocation,
+    RecordStore, RecoveryReason, Resolution, WriteRequest,
+};
 pub use disposition::{disposition, is_r15_record_class, Disposition};
 pub use durable::{
     generation_path, stage_and_promote, staging_path, DirectoryDurability, DurableFs,
