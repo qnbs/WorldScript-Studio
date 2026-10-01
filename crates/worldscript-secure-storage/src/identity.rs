@@ -154,6 +154,10 @@ pub struct RecordIdentity {
     class: RecordClass,
     logical_record_id: String,
     project_id: Option<String>,
+    /// The exact template components it was built from (literals excluded), so related identities
+    /// are derived structurally (§8.4) and never by parsing `logical_record_id`. Empty for
+    /// `record-commit`, which is built from another identity.
+    components: Vec<String>,
 }
 
 impl std::fmt::Debug for RecordIdentity {
@@ -175,6 +179,7 @@ impl RecordIdentity {
         let mut values = components.iter();
         let mut logical_record_id = prefix.to_owned();
         let mut project_id = None;
+        let mut kept = Vec::with_capacity(components.len());
         for part in parts {
             let segment = if let Literal(literal) = part {
                 *literal
@@ -184,6 +189,7 @@ impl RecordIdentity {
                 if matches!(part, Project) {
                     project_id = Some((*value).to_owned());
                 }
+                kept.push((*value).to_owned());
                 *value
             };
             logical_record_id.push(':');
@@ -196,6 +202,7 @@ impl RecordIdentity {
             class,
             logical_record_id,
             project_id,
+            components: kept,
         })
     }
 
@@ -214,7 +221,37 @@ impl RecordIdentity {
                 record.logical_record_id
             ),
             project_id: record.project_id.clone(),
+            components: Vec::new(),
         })
+    }
+
+    /// The two fixed members (`asset`, `asset-metadata`) of this `asset-pair` marker (§8.4): the same
+    /// project and asset components with only the record class substituted, built through the same
+    /// templates as any other identity. `None` for every other class.
+    pub fn asset_pair_members(&self) -> Option<(RecordIdentity, RecordIdentity)> {
+        if self.class != RecordClass::AssetPair {
+            return None;
+        }
+        Some((
+            self.with_class(RecordClass::Asset)?,
+            self.with_class(RecordClass::AssetMetadata)?,
+        ))
+    }
+
+    /// The `asset-pair` marker that commits this `asset` or `asset-metadata` member (§8.4); `None`
+    /// for every other class.
+    pub fn asset_pair_marker(&self) -> Option<RecordIdentity> {
+        if matches!(self.class, RecordClass::Asset | RecordClass::AssetMetadata) {
+            self.with_class(RecordClass::AssetPair)
+        } else {
+            None
+        }
+    }
+
+    /// This identity's components under another class with the same template shape, re-validated.
+    fn with_class(&self, class: RecordClass) -> Option<RecordIdentity> {
+        let components: Vec<&str> = self.components.iter().map(String::as_str).collect();
+        RecordIdentity::new(class, &components).ok()
     }
 
     pub fn class(&self) -> RecordClass {
