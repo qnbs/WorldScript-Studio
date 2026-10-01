@@ -4,8 +4,8 @@
 //! identity never opens under another.
 
 use worldscript_secure_storage::{
-    canonical_aad, open, parse_envelope, seal, EnvelopeHeader, IdentityError, Key, OpenError,
-    RecordClass, RecordIdentity, RecordMeta, SealTarget,
+    canonical_aad, is_r15_record_class, open, parse_envelope, seal, EnvelopeHeader, IdentityError,
+    Key, OpenError, RecordClass, RecordIdentity, RecordMeta, SealTarget,
 };
 
 const SCOPE: &str = "0123456789abcdef0123456789abcdef";
