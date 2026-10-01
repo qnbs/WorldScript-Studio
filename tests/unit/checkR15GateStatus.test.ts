@@ -100,6 +100,26 @@ describe('scanR15GateStatusTruth — canonical block and ledger row 10', () => {
     ]);
   });
 
+  it('ends the block only at a standalone closing fence (#935)', () => {
+    const where = `${R15_CONTRACT_DOC} R15_GATE_STATUS`;
+    const backticks = `# R-15\n\n${block(STATUS).replace('R15_GATE7=NOT_ADMITTED', 'R15_GATE7=NOT_ADMITTED``` BROKEN')}`;
+    expect(scan(backticks)).toContain(
+      `${where} — malformed line "R15_GATE7=NOT_ADMITTED\`\`\` BROKEN"`,
+    );
+    const unclosed = `# R-15\n\n${block(STATUS).replace(/```\n$/, '')}`;
+    expect(scan(unclosed)).toEqual([
+      `${R15_CONTRACT_DOC} — missing the machine-readable R15_GATE_STATUS block`,
+    ]);
+  });
+
+  it('reports every problem of an unknown gate (#935)', () => {
+    const where = `${R15_CONTRACT_DOC} R15_GATE_STATUS`;
+    expect(scan(`# R-15\n\n${block(STATUS, 'R15_GATE8=BOGUS')}`)).toEqual([
+      `${where} — unknown gate R15_GATE8`,
+      `${where} — unsupported status R15_GATE8=BOGUS`,
+    ]);
+  });
+
   it('reports a duplicate entry with an unsupported status as both (#935)', () => {
     const where = `${R15_CONTRACT_DOC} R15_GATE_STATUS`;
     expect(scan(`# R-15\n\n${block(STATUS, 'R15_GATE2=BOGUS')}`)).toEqual(
@@ -203,6 +223,10 @@ describe('scanR15GateStatusTruth — current prose', () => {
       finding('Gates 5, 2 or 3A', '3'),
     ]);
     expect(scan(contract('Gates 4–7 and 3B are not admitted.'))).toEqual([]);
+    expect(scan(contract('Gates 4 and 3 slice 3B are not admitted.'))).toEqual([]);
+    expect(scan(contract('Gates 4 and 3 slice 3A are not admitted.'))).toEqual([
+      finding('Gates 4 and 3 slice 3A', '3'),
+    ]);
   });
 
   it('does not read a longer number as a gate reference', () => {
@@ -253,6 +277,16 @@ describe('scanR15GateStatusTruth — current prose', () => {
     // A fence marker inside a comment does not open a fence.
     const commented = '<!--\n```\n-->\n\nGates 3–7 not admitted.';
     expect(scan(contract(commented))).toEqual([finding('Gates 3–7', '3')]);
+    // CommonMark: an HTML block opened by `<!--` ends with the line holding `-->`, rest included,
+    // so a marker after the closer opens no fence and the next line is current prose.
+    const afterCloser = '<!--\n--> ```\nGates 3–7 not admitted.';
+    expect(scan(contract(afterCloser))).toEqual([finding('Gates 3–7', '3')]);
+  });
+
+  it('keeps the text around a multi-line comment adjacent (#935)', () => {
+    expect(scan(contract('Gate 3 is not <!-- why\n-->admitted.'))).toEqual([
+      finding('Gate 3', '3'),
+    ]);
   });
 
   it('resumes checking after a historical section, a fence and a comment end', () => {

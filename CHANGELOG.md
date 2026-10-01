@@ -8,9 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - **Docs truth: stricter R-15 gate status check (#935):** each line in the status block must now be
-  a single gate entry. Code examples containing a literal comment marker no longer hide the text
-  after them, lists such as "Gates 4 and 3" are checked gate by gate, and a duplicated entry with an
-  invalid status is reported as both. PR #936.
+  a single gate entry, and the block ends only at a closing fence on its own line. Code examples
+  containing a literal comment marker no longer hide the text after them, comments spanning lines no
+  longer split a phrase, lists such as "Gates 4 and 3 slice 3B" are checked item by item, and an entry
+  with several problems reports each of them. PR #936.
 - **Docs truth: R-15 gate status is now checked automatically (#933):** the storage contract carries
   one machine-readable status line per encryption gate, and the documentation check fails when the
   migration ledger disagrees with it or when current text calls an already-implemented gate "not
