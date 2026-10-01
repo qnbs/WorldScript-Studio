@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 3, slice 3C part 2 — record catalog pages (#445):** the storage contract now fixes
+  how the authenticated record catalog is split into pages, and the protected-storage core can build,
+  strictly check and seal those pages. Listing stored records will rely on this catalog instead of
+  trusting folder contents. Nothing reads or writes user data through it yet. PR #942.
 - **R-15 Gate 3, slice 3C part 1 — authority-root digests (#445):** the protected-storage core
   can now compute the digests that tie the whole committed storage state together — every record's
   current commit marker, the record catalog, the key epochs and who committed the state — exactly as
