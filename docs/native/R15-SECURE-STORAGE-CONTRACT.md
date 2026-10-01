@@ -3546,10 +3546,13 @@ Later implementation may be admitted only in these bounded gates:
      `marker_entry_digest`. Version 1 admits `ACTIVE`, `PENDING` and `RECOVERY_REQUIRED`;
      `DELETE_PENDING`/`TOMBSTONED` (§8.5) and `READ_AUTHORITY_PENDING` (migration) keep their codes
      but are refused until their gates admit them, and so is `is_chunked = 1` (the chunked envelope is
-     not implemented). Decoding is strict — the identity must equal the requested record's marker,
+     not implemented). Decoding is strict — the identity must equal the requested record's marker (a header whose bindings are not canonical
+     §6.2 bindings — empty, non-UTF-8, over the 256-byte direct cap, or mixed direct/hashed — is
+     corrupt, not a mismatch),
      every flag is `0` or `1`, no byte may follow the body, counters follow §5.4's lifecycle rule
      (never `0` or `u64::MAX`), a pending target must be exactly the next generation (`1` for a first write, otherwise `old + 1`), a `PENDING`
-     fence is the ordinary-write `0` (positive fences are journal-owned and not admitted), an
+     fence is the ordinary-write `0` (positive fences are journal-owned and not admitted) and carries no
+     `content_digest` (the intent precedes the ciphertext, §9 step 2), an
      `operation_id` is 1–128 bytes, and the record schema must be admitted — and a decoded marker
      re-encodes to the same bytes. A marker generation is sealed as its own protected
      `record-commit` record whose envelope `record_generation` is the `marker_generation`; opening

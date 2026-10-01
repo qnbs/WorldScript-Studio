@@ -16,7 +16,7 @@
 
 use sha2::{Digest, Sha256};
 
-use crate::aad::tagged_identity_bindings;
+use crate::aad::{tagged_identity_bindings, MAX_DIRECT_IDENTITY_LEN};
 use crate::error::{AadError, OpenError, SealError};
 use crate::identity::{IdentityError, RecordIdentity};
 use crate::record::{open_record, seal_record, ADMITTED_RECORD_SCHEMAS};
@@ -133,6 +133,8 @@ pub enum MarkerError {
     /// A positive `fencing_generation` on `PENDING`: reserved for journal-owned migration/rekey
     /// writes (§9 step 2, §10.1), not admitted until their gate.
     FenceNotAdmitted,
+    /// A `content_digest` on an ordinary `PENDING`: the intent precedes the ciphertext (§9 step 2).
+    PendingDigestNotAdmitted,
     InvalidIdentity(AadError),
     /// The sealed marker's envelope generation differs from the `marker_generation` in its body.
     GenerationMismatch,
@@ -279,11 +281,10 @@ fn placeholder_body() -> MarkerBody {
 fn identity_or_corrupt(bytes: &[u8], expected_prefix: &[u8]) -> MarkerError {
     let class_len = 4 + RecordClass::RecordCommit.token().len();
     let mut reader = Reader(bytes);
-    let well_formed = bytes.len() >= class_len
-        && bytes[..class_len] == expected_prefix[..class_len]
-        && reader.take(class_len).is_ok()
-        && reader.binding(false).is_ok()
-        && reader.binding(true).is_ok();
+    let class_matches =
+        bytes.len() >= class_len && bytes[..class_len] == expected_prefix[..class_len];
+    let well_formed =
+        class_matches && reader.take(class_len).is_ok() && reader.canonical_bindings();
     if well_formed {
         MarkerError::IdentityMismatch
     } else {
@@ -331,6 +332,11 @@ fn check_pending(pending: &PendingBody) -> Result<(), MarkerError> {
     // migration/rekey writes, which this slice does not admit.
     if pending.operation.fencing_generation != 0 {
         return Err(MarkerError::FenceNotAdmitted);
+    }
+    // §9 step 2: the ordinary intent is recorded before ciphertext exists, so it carries no
+    // `content_digest`; the verified envelope supplies it only with `ACTIVE(new)`.
+    if pending.content_digest.is_some() {
+        return Err(MarkerError::PendingDigestNotAdmitted);
     }
     check_counter(pending.target_generation)?;
     check_counter(pending.target_epoch)?;
@@ -463,6 +469,13 @@ fn decode_pending(reader: &mut Reader<'_>) -> Result<PendingBody, MarkerError> {
     })
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BindingForm {
+    Absent,
+    Direct,
+    Hashed,
+}
+
 /// A strict big-endian cursor: every read fails on truncation instead of padding.
 struct Reader<'a>(&'a [u8]);
 
@@ -494,17 +507,28 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// One §6.2 tagged identity binding: direct (`1`, length-prefixed), hashed (`2`, 32 bytes), or,
-    /// only where `absent_allowed`, absent (`0`).
-    fn binding(&mut self, absent_allowed: bool) -> Result<(), MarkerError> {
-        match self.take(1)?[0] {
-            0 if absent_allowed => Ok(()),
+    /// One §6.2 tagged identity binding: direct (`1`: a non-empty UTF-8 value within the 256-byte
+    /// direct cap), hashed (`2`: 32 bytes), or absent (`0`). Anything else is `None`.
+    fn binding(&mut self) -> Option<BindingForm> {
+        match self.take(1).ok()?[0] {
+            0 => Some(BindingForm::Absent),
             1 => {
-                let len = self.u32()? as usize;
-                self.take(len).map(|_| ())
+                let len = self.u32().ok()? as usize;
+                let value = std::str::from_utf8(self.take(len).ok()?).ok()?;
+                let canonical = !value.is_empty() && len <= MAX_DIRECT_IDENTITY_LEN;
+                canonical.then_some(BindingForm::Direct)
             }
-            2 => self.take(32).map(|_| ()),
-            _ => Err(MarkerError::Corrupt("invalid identity binding tag")),
+            2 => self.take(32).ok().map(|_| BindingForm::Hashed),
+            _ => None,
+        }
+    }
+
+    /// Whether the logical and project bindings could name some marker identity under §6.2: the
+    /// logical binding is present, and a present project binding uses the same form (rule D).
+    fn canonical_bindings(&mut self) -> bool {
+        match (self.binding(), self.binding()) {
+            (Some(BindingForm::Absent) | None, _) | (_, None) => false,
+            (Some(logical), Some(project)) => project == BindingForm::Absent || project == logical,
         }
     }
 
