@@ -12,6 +12,7 @@
 pub mod aad;
 pub mod anchor;
 pub mod anchor_codec;
+pub mod commit;
 pub mod disposition;
 pub mod durable;
 pub mod envelope;
@@ -33,6 +34,11 @@ pub mod store_layout;
 pub mod store_runtime;
 
 pub use aad::{canonical_aad, RecordContext};
+pub use commit::{
+    commit_write, load_authority, read_committed, reconcile, Authority, CommitError, CommitStep,
+    CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled, RecordLocation,
+    RecoveryReason, Resolution, WriteRequest,
+};
 pub use disposition::{disposition, is_r15_record_class, Disposition};
 pub use durable::{
     generation_path, stage_and_promote, staging_path, DirectoryDurability, DurableFs,

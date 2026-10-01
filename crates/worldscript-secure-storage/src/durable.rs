@@ -13,12 +13,14 @@
 //! staging debris is slice 3B. The record directory is a physical locator only; it is never part of
 //! the record's identity or AAD (§6.1.1).
 
+use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
+use crate::marker::content_digest;
 use crate::random::{OsRandom, RandomSource};
 use crate::record::{open_record, seal_record};
 use crate::seal::{Key, RecordMeta};
@@ -49,6 +51,8 @@ pub trait DurableFs {
     fn remove_file(&mut self, path: &Path) -> io::Result<()>;
     /// Persists the directory's entries where the platform can confirm it.
     fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability>;
+    /// The names of the entries directly inside `dir`, in no particular order.
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>>;
 }
 
 /// The real filesystem. On Apple platforms `File::sync_all` issues `F_FULLFSYNC`; on Windows it is
@@ -90,6 +94,12 @@ impl DurableFs for StdFs {
     #[cfg(not(unix))]
     fn sync_dir(&mut self, _dir: &Path) -> io::Result<DirectoryDurability> {
         Ok(DirectoryDurability::NotConfirmed)
+    }
+
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> {
+        fs::read_dir(dir)?
+            .map(|entry| entry.map(|entry| entry.file_name()))
+            .collect()
     }
 }
 
@@ -216,6 +226,8 @@ pub struct StageFailure {
 pub struct PromotedGeneration {
     pub generation: u64,
     pub path: PathBuf,
+    /// `content_digest` (§5.4) of the promoted envelope, which the commit marker binds.
+    pub content_digest: [u8; 32],
     pub directory: DirectoryDurability,
     pub staging: StagingResidue,
 }
@@ -260,6 +272,7 @@ pub fn stage_and_promote<F: DurableFs>(
     })?;
     Ok(PromotedGeneration {
         generation,
+        content_digest: content_digest(&attempt.envelope),
         path: attempt.target,
         directory,
         staging,

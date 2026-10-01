@@ -12,9 +12,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::{
-    generation_path, open_record, stage_and_promote, staging_path, DirectoryDurability, DurableFs,
-    Key, PromotedGeneration, RecordClass, RecordIdentity, RecordMeta, SealError, StageFailure,
-    StageFailureKind, StageRequest, StageStep, StagingResidue, StdFs, WriteOperationId,
+    content_digest, generation_path, open_record, stage_and_promote, staging_path,
+    DirectoryDurability, DurableFs, Key, PromotedGeneration, RecordClass, RecordIdentity,
+    RecordMeta, SealError, StageFailure, StageFailureKind, StageRequest, StageStep, StagingResidue,
+    StdFs, WriteOperationId,
 };
 
 const OLD_SETTINGS: &[u8] = b"{\"theme\":\"dark\",\"locale\":\"de\"}";
@@ -259,6 +260,10 @@ impl DurableFs for FaultFs {
         }
         StdFs.sync_dir(dir)
     }
+
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<std::ffi::OsString>> {
+        StdFs.list_dir(dir)
+    }
 }
 
 #[test]
@@ -270,9 +275,11 @@ fn a_new_generation_is_promoted_beside_the_untouched_old_one() {
     } else {
         DirectoryDurability::NotConfirmed
     };
+    let promoted_bytes = fs::read(generation_path(&dir.0, 2)).unwrap();
     let expected = PromotedGeneration {
         generation: 2,
         path: generation_path(&dir.0, 2),
+        content_digest: content_digest(&promoted_bytes),
         directory,
         staging: StagingResidue::None,
     };
