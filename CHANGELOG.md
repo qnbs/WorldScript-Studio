@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Docs truth: R-15 gate status is now checked automatically (#933):** the storage contract carries
+  one machine-readable status line per encryption gate, and the documentation check fails when the
+  migration ledger disagrees with it or when current text calls an already-implemented gate "not
+  admitted", a contradiction reviewers had to catch by hand in four consecutive pull requests. The
+  README test-metrics synchronizer also covers one more line it previously missed. PR #934.
 - **R-15 Gate 3, slice 3A — durable staging and promotion (#445):** the protected-storage core can
   now write a new encrypted version of a record next to the previous one: it seals the record in
   memory, writes only the encrypted bytes to a temporary staging file, flushes it to disk, checks
