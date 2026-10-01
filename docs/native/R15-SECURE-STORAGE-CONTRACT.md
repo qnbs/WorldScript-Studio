@@ -3426,6 +3426,25 @@ contract. It does not mean any child issue is implemented or closed.
 
 ## 20. Staged implementation admission plan
 
+**Current gate status (machine-checked).** This block is the single source of R-15 gate status.
+`docs:check` (#933) requires the Core Migration Ledger's `R15_GATE*` tokens to equal it, the ledger
+to carry every gate that is not `NOT_ADMITTED`, and no current prose in this contract or the ledger
+to call a gate "not admitted" that this block marks as implemented, or as partial (`SLICE_*`)
+without saying "the rest of" that gate. Every PR that changes a gate's status updates this block in
+the same change.
+
+```text
+R15_GATE_STATUS
+R15_GATE1A=IMPLEMENTED_HEADLESS
+R15_GATE1B=IMPLEMENTED_HEADLESS_AND_PLATFORM_ADAPTER
+R15_GATE2=IMPLEMENTED_HEADLESS
+R15_GATE3=SLICE_3A_DURABLE_STAGING
+R15_GATE4=NOT_ADMITTED
+R15_GATE5=NOT_ADMITTED
+R15_GATE6=NOT_ADMITTED
+R15_GATE7=NOT_ADMITTED
+```
+
 Later implementation may be admitted only in these bounded gates:
 
 1. **Core primitive and vectors:** implement the selected AEAD/KDF/randomness profile behind a

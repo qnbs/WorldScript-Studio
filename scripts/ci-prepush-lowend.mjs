@@ -101,6 +101,7 @@ async function main() {
 
   await runCheck('Toolchain', () => runNodeScript('scripts/check-pnpm-toolchain.mjs', ['--hook']));
   await runCheck('Docs/release truth', () => runNodeScript('scripts/check-doc-metrics.mjs'));
+  await runCheck('R-15 gate status', () => runNodeScript('scripts/check-r15-gate-status.mjs'));
   await runCheck('CSP policy', () => runNodeScript('scripts/check-csp-policy.mjs'));
   await runCheck('Desktop import boundary', () =>
     runNodeScript('scripts/check-tauri-import-boundary.mjs'),
