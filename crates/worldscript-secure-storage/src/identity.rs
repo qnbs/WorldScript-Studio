@@ -176,34 +176,37 @@ impl RecordIdentity {
     /// `project_id`; every other class carries none.
     pub fn new(class: RecordClass, components: &[&str]) -> Result<Self, IdentityError> {
         let (prefix, parts) = template(class).ok_or(IdentityError::NotBuildableDirectly)?;
+        // Validate the whole template against borrowed input first; owned strings are built only once
+        // every component and the arity have been checked, sized by the template, never by the slice.
         let mut values = components.iter();
-        let mut logical_record_id = prefix.to_owned();
-        let mut project_id = None;
-        // Borrowed and sized by the template, never by the caller's slice: nothing is copied until the
-        // identity is complete, and excess components are refused below.
+        let mut segments: Vec<&str> = Vec::with_capacity(parts.len());
         let mut kept: Vec<&str> = Vec::with_capacity(parts.len());
+        let mut project: Option<&str> = None;
         for part in parts {
-            let segment = if let Literal(literal) = part {
-                *literal
-            } else {
-                let value = values.next().ok_or(IdentityError::WrongArity)?;
-                check_component(*part, value)?;
-                if matches!(part, Project) {
-                    project_id = Some((*value).to_owned());
-                }
-                kept.push(value);
-                *value
-            };
-            logical_record_id.push(':');
-            logical_record_id.push_str(segment);
+            if let Literal(literal) = part {
+                segments.push(literal);
+                continue;
+            }
+            let value: &str = values.next().ok_or(IdentityError::WrongArity)?;
+            check_component(*part, value)?;
+            if matches!(part, Project) {
+                project = Some(value);
+            }
+            kept.push(value);
+            segments.push(value);
         }
         if values.next().is_some() {
             return Err(IdentityError::WrongArity);
         }
+        let mut logical_record_id = prefix.to_owned();
+        for segment in segments {
+            logical_record_id.push(':');
+            logical_record_id.push_str(segment);
+        }
         Ok(RecordIdentity {
             class,
             logical_record_id,
-            project_id,
+            project_id: project.map(str::to_owned),
             components: if has_pair_relation(class) {
                 kept.into_iter().map(str::to_owned).collect()
             } else {
