@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 2 closure — record-class disposition (#445):** every protected record class now has
+  exactly one recorded disposition from the storage contract, and the record codec only seals and
+  opens classes that are meant to become protected records. API credentials and the browser
+  storage key-derivation salt and passphrase check keep their own separate protection and are
+  refused, so they never end up in an ordinary protected record; a class without a recorded
+  disposition is refused too. Nothing in the app uses this yet, and the production authority
+  switch stays off. PR #929.
 - **R-15 Gate 2, slice A — identity-bound record codec (#445):** a protected record can now be
   sealed and opened through its typed identity, so its authenticated data always comes from the
   contract identity rather than hand-assembled fields. Moving encrypted data to another record,
