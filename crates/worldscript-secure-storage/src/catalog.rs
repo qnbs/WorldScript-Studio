@@ -336,6 +336,10 @@ impl CatalogPage {
     /// Strictly decodes a page body; every §5.5.1 rule is checked, and a decoded page re-encodes
     /// to the same bytes.
     pub fn decode(bytes: &[u8]) -> Result<Self, CatalogError> {
+        // An over-long body is refused before any descriptor is materialized (§6.1.2).
+        if bytes.len() > MAX_CATALOG_PAGE_BYTES {
+            return Err(CatalogError::TooLarge);
+        }
         let mut reader = Reader(bytes);
         let format = reader.u32()?;
         if format != CATALOG_PAGE_FORMAT_VERSION {

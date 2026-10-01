@@ -336,3 +336,9 @@ fn identities_and_pages_are_size_bounded() {
     );
     assert!(fits.is_ok());
 }
+
+#[test]
+fn an_oversized_page_body_is_refused_before_decoding() {
+    let oversized = vec![0u8; worldscript_secure_storage::catalog::MAX_CATALOG_PAGE_BYTES + 1];
+    assert_eq!(CatalogPage::decode(&oversized), Err(CatalogError::TooLarge));
+}
