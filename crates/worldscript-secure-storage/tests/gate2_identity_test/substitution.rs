@@ -121,9 +121,11 @@ fn identical_identities_produce_identical_aad() {
 
 #[test]
 fn ciphertext_sealed_under_one_identity_never_opens_under_another() {
-    // All registered identities, plus the commit marker of each, are pairwise distinct AAD contexts.
+    // All registered R-15 identities, plus the commit marker of each, are pairwise distinct AAD
+    // contexts. Retained-authority classes have no R-15 ciphertext at all (§10.4.1).
     let mut identities: Vec<RecordIdentity> = registry()
         .into_iter()
+        .filter(|(class, _, _, _)| is_r15_record_class(*class))
         .map(|(class, components, _, _)| identity(class, &components))
         .collect();
     let markers: Vec<RecordIdentity> = identities

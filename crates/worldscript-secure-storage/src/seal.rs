@@ -3,6 +3,7 @@ use aes_gcm::{Aes256Gcm, Nonce};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::aad::{canonical_aad, RecordContext};
+use crate::disposition::is_r15_record_class;
 use crate::envelope::{EnvelopeHeader, ParsedEnvelope, MAX_CIPHERTEXT_LEN, NONCE_LEN, TAG_LEN};
 use crate::error::{OpenError, SealError};
 use crate::random::{OsRandom, RandomSource};
@@ -78,6 +79,11 @@ fn seal_inner(
     plaintext: &[u8],
 ) -> Result<Vec<u8>, SealError> {
     let SealTarget { context, meta } = *target;
+    // §10.4.1: a class that keeps a separate approved authority (or has no admitted disposition)
+    // never yields R-15 ciphertext, whichever entry point is used.
+    if !is_r15_record_class(context.record_class) {
+        return Err(SealError::NotAnR15RecordClass);
+    }
     check_counters(&meta)?;
     let ciphertext_len = (plaintext.len() as u64)
         .checked_add(TAG_LEN as u64)
@@ -126,6 +132,9 @@ pub fn open(
     context: &RecordContext<'_>,
     envelope: &ParsedEnvelope<'_>,
 ) -> Result<Vec<u8>, OpenError> {
+    if !is_r15_record_class(context.record_class) {
+        return Err(OpenError::NotAnR15RecordClass);
+    }
     let aad = canonical_aad(context, envelope.header_bytes()).map_err(OpenError::InvalidContext)?;
     cipher(key)
         .decrypt(

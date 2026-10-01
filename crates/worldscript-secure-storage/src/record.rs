@@ -44,16 +44,13 @@ impl std::fmt::Debug for OpenedRecord {
 /// AAD is that identity's canonical context (§6.2). A record schema outside the compatibility
 /// registry is refused, so no record is written that current readers cannot decode, and so is a
 /// class whose §10.4.1 disposition never yields R-15 ciphertext (credentials, the IDB KDF salt and
-/// passphrase sentinel).
+/// passphrase sentinel); the raw [`seal`] enforces the same disposition rule.
 pub fn seal_record(
     key: &Key,
     identity: &RecordIdentity,
     meta: RecordMeta,
     plaintext: &[u8],
 ) -> Result<Vec<u8>, SealError> {
-    if !is_r15_record_class(identity.class()) {
-        return Err(SealError::NotAnR15RecordClass);
-    }
     if !admitted_schema(meta.record_schema) {
         return Err(SealError::UnsupportedSchema);
     }

@@ -25,8 +25,8 @@ use Disposition::{MigrateToR15, NativeControlPlane, RetainSeparateAuthority};
 /// §10.4.1's registry, one row per version-1 class token.
 #[rustfmt::skip]
 const DISPOSITIONS: &[(RecordClass, Disposition)] = &[
-    // MIGRATE_TO_R15 (§10.4.1's 28 class rows; the plot/mind-map, scene-comment and LoRA rows
-    // each cover more than one token).
+    // MIGRATE_TO_R15: §10.4.1's 28 class rows as 31 tokens. The plot-board/mind-map row covers two
+    // tokens and the "LoRA adapters, datasets and run metadata" row three; every other row is one.
     (RecordClass::Project, MigrateToR15),
     (RecordClass::ProjectMetadata, MigrateToR15),
     (RecordClass::Snapshot, MigrateToR15),
@@ -58,8 +58,9 @@ const DISPOSITIONS: &[(RecordClass, Disposition)] = &[
     (RecordClass::LoraMirror, MigrateToR15),
     (RecordClass::Telemetry, MigrateToR15),
     (RecordClass::AiBenchmark, MigrateToR15),
-    // Native control plane: authority manifest and catalog, key-epoch registry, generation and
-    // commit markers (including the asset-pair marker), migration journals.
+    // Native control plane: §10.4.1's 5 class rows as 7 tokens. The manifest-and-catalog,
+    // commit-marker (`record-commit` plus the `asset-pair` marker) and migration-journal rows cover
+    // two tokens each, key epochs one, and migration staging none (it is never a record identity).
     (RecordClass::AuthorityRoot, NativeControlPlane),
     (RecordClass::RecordCatalog, NativeControlPlane),
     (RecordClass::KeyEpoch, NativeControlPlane),

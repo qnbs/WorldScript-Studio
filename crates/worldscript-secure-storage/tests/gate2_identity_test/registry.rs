@@ -87,7 +87,7 @@ fn commit_markers_embed_the_class_qualified_identity_and_inherit_its_scope() {
 }
 
 #[test]
-fn markers_asset_pair_members_and_control_records_have_no_ordinary_marker() {
+fn markers_pair_members_control_and_retained_records_have_no_ordinary_marker() {
     let refused = [
         RecordIdentity::commit_marker(&identity(RecordClass::Codex, &["p1"])).unwrap(),
         identity(RecordClass::AssetPair, &["p1", "a1"]),
@@ -98,6 +98,10 @@ fn markers_asset_pair_members_and_control_records_have_no_ordinary_marker() {
         identity(RecordClass::RecordCatalog, &[SCOPE, "0"]),
         identity(RecordClass::Migration, &["op1"]),
         identity(RecordClass::MigrationPage, &["op1", "0"]),
+        // Retained separate authorities never become R-15 records (§10.4.1).
+        identity(RecordClass::Credential, &["openai"]),
+        identity(RecordClass::IdbKdfSalt, &[SCOPE]),
+        identity(RecordClass::IdbPassphraseSentinel, &[SCOPE]),
     ];
     for record in &refused {
         assert_eq!(
@@ -106,13 +110,13 @@ fn markers_asset_pair_members_and_control_records_have_no_ordinary_marker() {
             "{record:?}"
         );
     }
-    // Every other registered class has exactly one marker.
+    // Every other registered class (`MIGRATE_TO_R15` except the two pair members) has one marker.
     let ordinary = registry()
         .into_iter()
         .map(|(class, components, _, _)| identity(class, &components))
         .filter(|record| RecordIdentity::commit_marker(record).is_ok())
         .count();
-    assert_eq!(ordinary, 40 - 8);
+    assert_eq!(ordinary, 40 - 8 - 3);
 }
 
 #[test]

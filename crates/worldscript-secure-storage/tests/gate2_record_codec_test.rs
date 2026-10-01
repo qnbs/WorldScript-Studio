@@ -4,8 +4,9 @@
 //! authenticated bytes, fail closed while the valid record and its exact IDs stay intact.
 
 use worldscript_secure_storage::{
-    disposition, is_r15_record_class, open_record, seal, seal_record, Disposition, Key, OpenError,
-    RecordClass, RecordIdentity, RecordMeta, SealError, SealTarget, ADMITTED_RECORD_SCHEMAS,
+    disposition, is_r15_record_class, open, open_record, parse_envelope, seal, seal_record,
+    Disposition, IdentityError, Key, OpenError, RecordClass, RecordIdentity, RecordMeta, SealError,
+    SealTarget, ADMITTED_RECORD_SCHEMAS,
 };
 
 /// Header length, and the offset of the ciphertext that follows it (§6.1).
@@ -240,10 +241,31 @@ fn separately_protected_classes_never_become_r15_envelopes() {
             Err(SealError::NotAnR15RecordClass),
             "{record:?}"
         );
+        // Refused before parsing: truncated bytes give the class refusal, not `Corrupt`.
+        for bytes in [&forged[..], &forged[..20]] {
+            assert_eq!(
+                open_record(&key(), record, bytes),
+                Err(OpenError::NotAnR15RecordClass),
+                "{record:?}"
+            );
+        }
+        // The raw primitives enforce the same rule, so no entry point bypasses it.
+        let target = SealTarget {
+            context: record.context(),
+            meta: META,
+        };
         assert_eq!(
-            open_record(&key(), record, &forged),
-            Err(OpenError::NotAnR15RecordClass),
-            "{record:?}"
+            seal(&key(), &target, b"secret"),
+            Err(SealError::NotAnR15RecordClass)
+        );
+        assert_eq!(
+            open(&key(), &record.context(), &parse_envelope(&forged).unwrap()),
+            Err(OpenError::NotAnR15RecordClass)
+        );
+        // No R-15 record exists to commit, so no ordinary marker is derived either.
+        assert_eq!(
+            RecordIdentity::commit_marker(record),
+            Err(IdentityError::NoOrdinaryMarker)
         );
     }
 }
