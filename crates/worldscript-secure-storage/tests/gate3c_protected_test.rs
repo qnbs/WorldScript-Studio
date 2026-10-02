@@ -462,6 +462,11 @@ fn an_asset_pair_member_is_refused_before_anything_is_written() {
         Err(ProtectedError::NotAnOrdinaryRecord)
     );
     assert_eq!(fixture.read(), Err(ProtectedError::NotAnOrdinaryRecord));
+    assert_eq!(
+        fixture.try_reconcile(),
+        Err(ProtectedError::NotAnOrdinaryRecord)
+    );
     assert_eq!(fs::read_dir(fixture.marker_dir()).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(fixture.record_dir()).unwrap().count(), 0);
     assert!(!fixture.root_dir().join("catalog").exists());
 }

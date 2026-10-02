@@ -3898,8 +3898,14 @@ Later implementation may be admitted only in these bounded gates:
        root crash recovery and trusted cold start (`gate3c_root_commit_test`), catalog leftovers
        (`gate3c_authority_test`) and per-record protected startup resolution
        (`gate3c_protected_test`);
-     - *fault injection* — filesystem and secure-anchor faults at every step of each of those
-       tests.
+     - *fault injection* — at selected boundaries, each named by its test: file creation, partial
+       write, file sync, read-back error or corruption, promotion link, removal and directory sync
+       (`gate3_durable_test`); marker and record operations including directory sync
+       (`gate3b_commit_test`); file creation in a slot directory and the pointer rename
+       (`gate3c_root_commit_test`); file creation in the record directory
+       (`gate3c_protected_test`); and secure-anchor faults at the prepare and commit windows of
+       §5.3.1's crash table (`gate3c_root_commit_test`, `gate3c_authority_test`,
+       `gate3c_protected_test`) — the durable and marker-chain suites inject no anchor faults.
      Only ordinary records take the protected path; any other class is refused before anything is
      written. Residuals, each with an owner: the `asset-pair` marker body and member commit
      (§8.4.1) — Gate 5, before any asset pair migrates; the key-epoch record crash window,

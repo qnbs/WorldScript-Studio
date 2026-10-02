@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **R-15 Gate 3 complete — crash-durable protected storage core (#445):** the protected-storage
   core now covers everything Gate 3 requires — synced files, never-overwritten generations, synced
-  directories, startup recovery and fault-injection tests on Linux, macOS and Windows — for ordinary
+  directories where the platform supports it (Windows reports them as not confirmed), startup
+  recovery and fault-injection tests on Linux, macOS and Windows — for ordinary
   records, and refuses any other record type before writing. What remains is assigned to later gates
   (asset pairs, power-loss qualification, record deletion, and switching the app over). Nothing
   reads or writes user data through it yet. PR #949.
