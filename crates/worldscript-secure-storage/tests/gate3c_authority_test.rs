@@ -446,3 +446,30 @@ fn a_file_where_a_shard_directory_belongs_is_recovery_required() {
         Err(recovery(CatalogRecoveryReason::CatalogSetMismatch))
     );
 }
+
+#[test]
+fn a_change_cannot_rotate_the_key_epoch() {
+    let mut fixture = Fixture::new();
+    fixture.change(&[active(&settings(), 1)], &[]).unwrap();
+    let root_dir = fixture.root_dir.clone();
+    let key_ref = fixture.key_ref.clone();
+    let upsert = [active(&codex("p1"), 1)];
+    let commit = CatalogCommit {
+        change: CatalogChange {
+            upsert: &upsert,
+            remove: &[],
+        },
+        root_key_ref: &key_ref,
+        active_key_epoch: 2,
+        operation_id: "catalog-op-rotate",
+    };
+    let layout = RootLayout {
+        root_dir: &root_dir,
+    };
+    assert_eq!(
+        commit_catalog_change(&mut StdFs, &mut fixture.provider, layout, commit),
+        Err(AuthorityError::KeyRotationNotAdmitted)
+    );
+    assert!(!fixture.shard_dir(228).exists());
+    assert_eq!(fixture.list(), vec![active(&settings(), 1)]);
+}

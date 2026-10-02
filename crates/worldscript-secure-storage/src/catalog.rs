@@ -304,6 +304,10 @@ impl CatalogPage {
         shard_id: u32,
         mut descriptors: Vec<CatalogDescriptor>,
     ) -> Result<Self, CatalogError> {
+        // Refused before sorting, so an oversized input costs no work beyond its length.
+        if descriptors.len() > MAX_CATALOG_PAGE_DESCRIPTORS {
+            return Err(CatalogError::InvalidDescriptorCount);
+        }
         descriptors.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
         let page = CatalogPage {
             shard_id,

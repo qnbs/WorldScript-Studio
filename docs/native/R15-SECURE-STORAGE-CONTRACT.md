@@ -3839,10 +3839,14 @@ Later implementation may be admitted only in these bounded gates:
      pages of an uncommitted change, writes one page per affected shard at the next root generation
      (an emptied shard keeps a zero-descriptor page) in a durably created directory, and commits the
      root naming the new catalog, marker and key-epoch sets through `commit_root`; until step F the
-     prior root and catalog stay authority. Tests cover the first commit, a change that leaves other
+     prior root and catalog stay authority. A change must keep the committed root's key route and
+     `active_key_epoch` (otherwise untouched pages would stay sealed under the old epoch); changing
+     them is a key rotation, Gate 5, which rewrites every page. The preflight guarantee assumes one
+     writer: exclusive admission and `root_commit_mutex` are Gate 4, and until then a concurrent root
+     commit is outside this slice's contract. Tests cover the first commit, a change that leaves other
      shards' pages in place, a replacement descriptor, an emptied shard, refused changes writing
      nothing, an interrupted change's pages being ignored and then relocated, a commit refused before
-     any page is written, a tampered page, a page under another epoch, a replayed older page, a
+     any page is written, a change that would rotate the key epoch, a tampered page, a page under another epoch, a replayed older page, a
      removed shard, unexpected catalog entries (including a file named as a shard) and a root whose
      marker set disagrees with the catalog. Wiring the record commit protocol through it (catalog and root per
      marker transition, dropping a rolled-back first write) and retention are the rest of slice 3C. A

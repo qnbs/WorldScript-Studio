@@ -17,7 +17,9 @@
 //! verified descriptors. [`commit_catalog_change`] applies descriptor upserts and removals,
 //! checks everything [`commit_root`] would refuse, writes one new page generation per affected
 //! shard (an emptied shard keeps a zero-descriptor page), and commits the root that names them;
-//! until that root commits, the prior catalog stays authority. Wiring the record commit protocol
+//! until that root commits, the prior catalog stays authority. A change keeps the committed key
+//! route and epoch; changing them is a key rotation (Gate 5). This module assumes one writer —
+//! exclusive admission and `root_commit_mutex` are Gate 4. Wiring the record commit protocol
 //! through it is slice 3C part 3c-2b.
 
 use std::collections::BTreeMap;
@@ -83,6 +85,10 @@ pub enum AuthorityError {
     NoInstallationScope,
     /// The commit's `operation_id` is empty or longer than §6.1.2's bound.
     InvalidOperationId,
+    /// The commit names another key route or `active_key_epoch` than the committed root. Pages the
+    /// change does not touch stay sealed under the committed epoch, so only a key rotation (Gate 5),
+    /// which rewrites every page, may change them.
+    KeyRotationNotAdmitted,
     /// A removal names a record the committed catalog does not hold.
     NotCatalogued,
     /// A change names the same record twice.
@@ -204,6 +210,9 @@ pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
     check_operation_id(commit.operation_id).map_err(|_| AuthorityError::InvalidOperationId)?;
     let current = load_catalog(fs, provider, layout)?;
     let scope = match &current {
+        Some(catalog) if !keeps_key_route(&catalog.root, commit) => {
+            return Err(AuthorityError::KeyRotationNotAdmitted)
+        }
         Some(catalog) => catalog.scope.clone(),
         None => provider
             .read_root_anchor_state()
@@ -234,6 +243,12 @@ pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
         root_key_ref: commit.root_key_ref,
     };
     Ok(commit_root(fs, provider, layout, request)?)
+}
+
+/// Whether `commit` keeps the committed root's key route and active epoch.
+fn keeps_key_route(root: &RootBody, commit: CatalogCommit<'_>) -> bool {
+    root.active_key_epoch == commit.active_key_epoch
+        && root.root_key_ref_digest == commit.root_key_ref.digest()
 }
 
 /// The key-epoch set the new root names: its digest, after checking that `active_key_epoch` is
