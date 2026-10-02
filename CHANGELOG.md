@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4B foundation — shared operations and exclusive transitions (#445):** the headless
+  core now has kernel-backed admission across processes, automatic crash release and typed guards
+  that bind the installation and authority-root directories. Root events stay beneath the same
+  admission. Protected-operation and lock/unlock integration follow in the next 4B slice; #360
+  remains open. No production authority switch is enabled.
 - **R-15 Gate 4, slice 4A — one root writer at a time, across processes (#445):** every change to
   the protected-storage root of trust now runs under an operating-system lock, so two app windows
   or processes can never commit from the same starting point, and a process that crashes while

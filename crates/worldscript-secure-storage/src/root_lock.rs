@@ -94,7 +94,7 @@ impl RootCommitGuard {
 }
 
 #[cfg(unix)]
-mod sys {
+pub(crate) mod sys {
     use std::fs::File;
     use std::io;
     use std::os::unix::fs::MetadataExt;
@@ -112,19 +112,40 @@ mod sys {
         File::open(path)
     }
 
+    pub(crate) fn open_admission_target(path: &Path) -> io::Result<File> {
+        open_directory(path)
+    }
+
     /// An exclusive `flock` on the open file description; `WouldBlock` when `wait` is false and
     /// another description holds it.
     pub(super) fn lock(file: &File, wait: bool) -> io::Result<()> {
-        let operation = if wait {
-            FlockOperation::LockExclusive
-        } else {
-            FlockOperation::NonBlockingLockExclusive
+        lock_mode(file, wait, false)
+    }
+
+    pub(crate) fn lock_mode(file: &File, wait: bool, shared: bool) -> io::Result<()> {
+        let operation = match (wait, shared) {
+            (true, false) => FlockOperation::LockExclusive,
+            (false, false) => FlockOperation::NonBlockingLockExclusive,
+            (true, true) => FlockOperation::LockShared,
+            (false, true) => FlockOperation::NonBlockingLockShared,
         };
         flock(file, operation).map_err(io::Error::from)
     }
 
+    pub(crate) fn admission_target(installation_dir: &Path) -> PathBuf {
+        installation_dir.to_path_buf()
+    }
+
+    pub(crate) fn open_directory(path: &Path) -> io::Result<File> {
+        let file = File::open(path)?;
+        if !file.metadata()?.is_dir() {
+            return Err(io::Error::from(io::ErrorKind::InvalidInput));
+        }
+        Ok(file)
+    }
+
     /// Whether `path` still names the open `file` (same device and inode).
-    pub(super) fn still_named(file: &File, path: &Path) -> io::Result<bool> {
+    pub(crate) fn still_named(file: &File, path: &Path) -> io::Result<bool> {
         let held = file.metadata()?;
         match std::fs::metadata(path) {
             Ok(named) => Ok(held.dev() == named.dev() && held.ino() == named.ino()),
@@ -135,25 +156,31 @@ mod sys {
 }
 
 #[cfg(windows)]
-mod sys {
+pub(crate) mod sys {
     use std::fs::{File, OpenOptions};
     use std::io;
+    use std::os::windows::fs::MetadataExt;
     use std::os::windows::fs::OpenOptionsExt;
     use std::os::windows::io::AsRawHandle;
     use std::path::{Path, PathBuf};
 
     use windows_sys::Win32::Foundation::{ERROR_LOCK_VIOLATION, HANDLE};
     use windows_sys::Win32::Storage::FileSystem::{
-        LockFileEx, FILE_SHARE_READ, FILE_SHARE_WRITE, LOCKFILE_EXCLUSIVE_LOCK,
+        LockFileEx, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ, FILE_SHARE_WRITE, LOCKFILE_EXCLUSIVE_LOCK,
         LOCKFILE_FAIL_IMMEDIATELY,
     };
     use windows_sys::Win32::System::IO::OVERLAPPED;
 
     /// An exclusive `LockFileEx` over the whole file; `WouldBlock` when `wait` is false and another
     /// handle holds it.
-    #[allow(unsafe_code)]
     pub(super) fn lock(file: &File, wait: bool) -> io::Result<()> {
-        let mut flags = LOCKFILE_EXCLUSIVE_LOCK;
+        lock_mode(file, wait, false)
+    }
+
+    #[allow(unsafe_code)]
+    pub(crate) fn lock_mode(file: &File, wait: bool, shared: bool) -> io::Result<()> {
+        let mut flags = if shared { 0 } else { LOCKFILE_EXCLUSIVE_LOCK };
         if !wait {
             flags |= LOCKFILE_FAIL_IMMEDIATELY;
         }
@@ -180,6 +207,24 @@ mod sys {
         root_dir.join(super::ROOT_COMMIT_LOCK_FILE)
     }
 
+    pub(crate) fn admission_target(installation_dir: &Path) -> PathBuf {
+        installation_dir.join(crate::admission::OPERATION_ADMISSION_LOCK_FILE)
+    }
+
+    /// Pins the directory name itself without delete sharing.
+    pub(crate) fn open_directory(path: &Path) -> io::Result<File> {
+        let file = OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+            .open(path)?;
+        let metadata = file.metadata()?;
+        if !metadata.is_dir() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(io::Error::from(io::ErrorKind::InvalidInput));
+        }
+        Ok(file)
+    }
+
     /// Opened without delete sharing, the lock file cannot be deleted or renamed while any holder
     /// has it open, so the path names the locked file for the guard's whole lifetime.
     pub(super) fn open_target(path: &Path) -> io::Result<File> {
@@ -192,9 +237,25 @@ mod sys {
             .open(path)
     }
 
-    /// The path cannot name another file while `_file` is open (see [`open_target`]); it is
-    /// still checked to exist.
-    pub(super) fn still_named(_file: &File, path: &Path) -> io::Result<bool> {
+    /// Refuse reparse points rather than locking a redirectable target behind the coordination name.
+    pub(crate) fn open_admission_target(path: &Path) -> io::Result<File> {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+            .open(path)?;
+        let metadata = file.metadata()?;
+        if !metadata.is_file() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(io::Error::from(io::ErrorKind::InvalidInput));
+        }
+        Ok(file)
+    }
+
+    /// No-delete-share handles pin non-redirected names; still fail closed if the path disappears.
+    pub(crate) fn still_named(_file: &File, path: &Path) -> io::Result<bool> {
         match std::fs::metadata(path) {
             Ok(_) => Ok(true),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
