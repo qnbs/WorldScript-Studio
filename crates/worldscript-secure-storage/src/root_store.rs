@@ -489,7 +489,7 @@ fn epoch_generations<F: DurableFs>(fs: &mut F, dir: &Path) -> Result<Vec<u64>, R
     for name in &names {
         if let Some(generation) = parse_generation_name(name) {
             generations.push(generation);
-        } else if !is_epoch_debris(name) {
+        } else if !is_generation_debris(name) {
             return Err(recovery(RootRecoveryReason::KeyEpochSetMismatch));
         }
     }
@@ -500,8 +500,8 @@ fn epoch_generations<F: DurableFs>(fs: &mut F, dir: &Path) -> Result<Vec<u64>, R
     Ok(generations)
 }
 
-/// A staging leftover or relocated bytes in an epoch directory.
-fn is_epoch_debris(name: &std::ffi::OsString) -> bool {
+/// A staging leftover or relocated bytes in a generation-addressed directory.
+pub(crate) fn is_generation_debris(name: &std::ffi::OsString) -> bool {
     name.to_str().is_some_and(|name| {
         parse_staging_name(name).is_some()
             || (name.starts_with("generation-") && name.contains(".rejected-"))

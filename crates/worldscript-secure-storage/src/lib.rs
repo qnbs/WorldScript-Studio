@@ -8,13 +8,15 @@
 //! slice 3A durable staging and promotion of one generation ([`durable`]), and slice 3B's
 //! `record-commit` marker codec ([`marker`]) and marker commit protocol with startup reconciliation
 //! ([`commit`]), and slice 3C's authority-root digests ([`root`]), record catalog ([`catalog`]),
-//! persisted root records ([`root_record`]) and the two-phase root commit ([`root_store`]).
+//! persisted root records ([`root_record`]), the two-phase root commit ([`root_store`]) and the
+//! persisted, root-verified record catalog ([`authority`]).
 //! It changes no current
 //! TypeScript/Tauri storage authority and holds no journal or authority-root commit yet.
 
 pub mod aad;
 pub mod anchor;
 pub mod anchor_codec;
+pub mod authority;
 pub mod catalog;
 pub mod commit;
 pub mod disposition;
@@ -41,6 +43,10 @@ pub mod store_layout;
 pub mod store_runtime;
 
 pub use aad::{canonical_aad, RecordContext};
+pub use authority::{
+    commit_catalog_change, list_records, load_catalog, AuthorityError, CatalogChange,
+    CatalogCommit, CatalogRecoveryReason, CatalogStep, CommittedShard, LoadedCatalog,
+};
 pub use catalog::{
     catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, PageAddress,
     CATALOG_SHARD_COUNT, MAX_CATALOG_PAGE_DESCRIPTORS,

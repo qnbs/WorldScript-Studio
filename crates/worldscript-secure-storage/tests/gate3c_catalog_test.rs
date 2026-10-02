@@ -138,7 +138,9 @@ fn pages_are_sorted_bounded_and_single_shard() {
         CatalogError::NotStrictlyAscending
     );
     assert_eq!(refused(39, vec![p1.clone()]), CatalogError::WrongShard);
-    assert_eq!(refused(228, vec![]), CatalogError::InvalidDescriptorCount);
+    // A shard emptied by a deletion keeps a zero-descriptor page (§5.5.1).
+    let emptied = CatalogPage::new(228, vec![]).unwrap();
+    assert_eq!(CatalogPage::decode(&emptied.encode()).unwrap(), emptied);
     assert_eq!(
         refused(CATALOG_SHARD_COUNT, vec![p1]),
         CatalogError::InvalidShard
