@@ -19,8 +19,8 @@
 //! shard (an emptied shard keeps a zero-descriptor page), and commits the root that names them;
 //! until that root commits, the prior catalog stays authority. A change keeps the committed key
 //! route and epoch; changing them is a key rotation (Gate 5). This module assumes one writer —
-//! exclusive admission and `root_commit_mutex` are Gate 4. Wiring the record commit protocol
-//! through it is slice 3C part 3c-2b.
+//! exclusive admission and `root_commit_mutex` are Gate 4. [`protected`](crate::protected) commits
+//! the record write protocol through it.
 
 use std::collections::BTreeMap;
 use std::io;
@@ -33,7 +33,8 @@ use crate::catalog::{
 };
 use crate::commit::{parse_counter, parse_generation_name, relocate, CommitError};
 use crate::durable::{
-    generation_path, stage_and_promote, DurableFs, StageFailure, StageRequest, WriteOperationId,
+    generation_path, stage_and_promote, DirectoryDurability, DurableFs, StageFailure, StageRequest,
+    WriteOperationId,
 };
 use crate::envelope::parse_envelope;
 use crate::error::SealError;
@@ -235,14 +236,17 @@ pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
         key_epoch: commit.active_key_epoch,
         catalog_generation: plan.target_generation,
     };
-    let catalog_shards = plan.write_pages(fs, &write)?;
+    let (catalog_shards, pages_durability) = plan.write_pages(fs, &write)?;
     let root = plan.root_body(commit, &catalog_shards, key_epoch_set_digest)?;
     let request = RootCommitRequest {
         scope: &scope,
         root: &root,
         root_key_ref: commit.root_key_ref,
     };
-    Ok(commit_root(fs, provider, layout, request)?)
+    let mut committed = commit_root(fs, provider, layout, request)?;
+    // `Confirmed` only if every page directory sync was too, not just the slot and pointer ones.
+    committed.directories = all_confirmed([committed.directories, pages_durability]);
+    Ok(committed)
 }
 
 /// Whether `commit` keeps the committed root's key route and active epoch.
@@ -352,18 +356,21 @@ impl ChangePlan {
         })
     }
 
-    /// Writes every page and returns the resulting `catalog_set_digest` entries.
+    /// Writes every page and returns the resulting `catalog_set_digest` entries and whether every
+    /// directory sync of the pages was confirmed.
     fn write_pages<F: DurableFs>(
         &self,
         fs: &mut F,
         write: &PageWrite<'_>,
-    ) -> Result<Vec<CatalogShard>, AuthorityError> {
+    ) -> Result<(Vec<CatalogShard>, DirectoryDurability), AuthorityError> {
         let mut set = self.committed.clone();
+        let mut durability = DirectoryDurability::Confirmed;
         for page in &self.pages {
-            let shard = write.page(fs, page)?;
+            let (shard, page_durability) = write.page(fs, page)?;
+            durability = all_confirmed([durability, page_durability]);
             set.insert(shard.shard_id, shard);
         }
-        Ok(set.into_values().collect())
+        Ok((set.into_values().collect(), durability))
     }
 
     /// The `COMMITTED` root naming the new catalog, marker and key-epoch sets.
@@ -449,12 +456,13 @@ struct PageWrite<'a> {
 
 impl PageWrite<'_> {
     /// Seals and promotes `page` as this change's generation of its shard, in a directory made
-    /// durable first, and returns its `catalog_set_digest` entry.
+    /// durable first, and returns its `catalog_set_digest` entry and whether every directory sync
+    /// of the write was confirmed.
     fn page<F: DurableFs>(
         &self,
         fs: &mut F,
         page: &CatalogPage,
-    ) -> Result<CatalogShard, AuthorityError> {
+    ) -> Result<(CatalogShard, DirectoryDurability), AuthorityError> {
         let address = PageAddress {
             scope: self.scope,
             shard_id: page.shard_id(),
@@ -465,8 +473,9 @@ impl PageWrite<'_> {
         let dir = shard_dir(self.layout, page.shard_id());
         let fail = |error: io::Error| io_error(CatalogStep::CreateShardDir, &error);
         fs.create_dir_all(&dir).map_err(fail)?;
+        let mut durability = DirectoryDurability::Confirmed;
         for path in [dir.as_path(), catalog_dir.as_path(), self.layout.root_dir] {
-            fs.sync_dir(path).map_err(fail)?;
+            durability = all_confirmed([durability, fs.sync_dir(path).map_err(fail)?]);
         }
         let operation = WriteOperationId::generate().map_err(AuthorityError::OperationId)?;
         let stage = StageRequest {
@@ -482,11 +491,12 @@ impl PageWrite<'_> {
         };
         let promoted = stage_and_promote(fs, self.key, &stage, &page.encode())
             .map_err(AuthorityError::PageWrite)?;
-        Ok(CatalogShard {
+        let shard = CatalogShard {
             shard_id: page.shard_id(),
             catalog_generation: self.catalog_generation,
             content_digest: promoted.content_digest,
-        })
+        };
+        Ok((shard, all_confirmed([durability, promoted.directory])))
     }
 }
 
@@ -656,6 +666,15 @@ fn list_shard<F: DurableFs>(
     match list(fs, dir) {
         Err(AuthorityError::Io { .. }) if fs.read(dir).is_ok() => Err(catalog_recovery()),
         other => other,
+    }
+}
+
+/// `Confirmed` only if every entry is.
+fn all_confirmed(durabilities: [DirectoryDurability; 2]) -> DirectoryDurability {
+    if durabilities.contains(&DirectoryDurability::NotConfirmed) {
+        DirectoryDurability::NotConfirmed
+    } else {
+        DirectoryDurability::Confirmed
     }
 }
 

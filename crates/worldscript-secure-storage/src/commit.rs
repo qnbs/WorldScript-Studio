@@ -17,11 +17,12 @@
 //! target; it is then adopted (or promoted first), and any other bytes under the generation name
 //! are relocated, never deleted. Without it, the write rolls back.
 //!
-//! Not yet a durable commit: without slice 3C's authority root, which checkpoints the marker set
-//! and advances the rollback floor (§5.3.1, §9 steps 9–10), deleting the newest marker files is not
-//! detectable, so no outcome here is `DURABLE_COMMIT_SUCCESS`. A rolled-back first write
-//! (`PENDING(none -> 1)`) leaves its pending marker as the newest generation, because version 1 has
-//! no marker body for `ABSENT`; it resolves to no authority, and the root restores `ABSENT` in 3C.
+//! Not a durable commit on its own: deleting the newest marker files is detectable only against the
+//! authority root that checkpoints the marker set and advances the rollback floor (§5.3.1, §9 steps
+//! 9–10), so no outcome here is `DURABLE_COMMIT_SUCCESS`; [`protected`](crate::protected) commits
+//! every marker transition through the root. A rolled-back first write (`PENDING(none -> 1)`)
+//! leaves its pending marker as the newest generation, because version 1 has no marker body for
+//! `ABSENT`; it resolves to no authority, and the protected path drops it from its catalog shard.
 //! Exclusive write admission (one writer per record, Gate 4) is assumed, not enforced, here.
 
 use std::ffi::OsString;
@@ -256,6 +257,26 @@ pub fn commit_write<F: DurableFs>(
     request: WriteRequest,
     plaintext: &[u8],
 ) -> Result<MarkerCommitted, CommitError> {
+    let begun = begin_write(fs, store, request)?;
+    finish_write(fs, store, begun, plaintext)
+}
+
+/// A write whose `PENDING` marker is recorded (§9 step 2) and whose candidate is not yet staged.
+pub(crate) struct BegunWrite {
+    operation: WriteOperationId,
+    request: WriteRequest,
+    target: u64,
+    active_marker: u64,
+    pending_durability: DirectoryDurability,
+}
+
+/// §9 steps 1–2: reconciles, verifies the generation being replaced, allocates every counter and
+/// records `PENDING(old -> target)`.
+pub(crate) fn begin_write<F: DurableFs>(
+    fs: &mut F,
+    store: RecordStore<'_>,
+    request: WriteRequest,
+) -> Result<BegunWrite, CommitError> {
     reconcile(fs, store, request.key_epoch)?;
     let chain = load_chain(fs, store)?;
     let old = serving(&chain.authority);
@@ -285,7 +306,32 @@ pub fn commit_write<F: DurableFs>(
         content_digest: None,
         record_schema: request.record_schema,
     };
-    let first = write_marker(fs, &ctx, pending_marker, MarkerBody::Pending(pending))?;
+    let pending_durability = write_marker(fs, &ctx, pending_marker, MarkerBody::Pending(pending))?;
+    Ok(BegunWrite {
+        operation,
+        request,
+        target,
+        active_marker,
+        pending_durability,
+    })
+}
+
+/// §9 steps 3–8 and the `ACTIVE` marker: stages and promotes the candidate under the pending
+/// operation's staging name, records `ACTIVE(target)` bound to its `content_digest`, then drops the
+/// staging name.
+pub(crate) fn finish_write<F: DurableFs>(
+    fs: &mut F,
+    store: RecordStore<'_>,
+    begun: BegunWrite,
+    plaintext: &[u8],
+) -> Result<MarkerCommitted, CommitError> {
+    let BegunWrite {
+        operation,
+        request,
+        target,
+        active_marker,
+        pending_durability,
+    } = begun;
     let stage = StageRequest {
         dir: store.location.record_dir,
         identity: store.record,
@@ -304,6 +350,10 @@ pub fn commit_write<F: DurableFs>(
         epoch: request.key_epoch,
         content_digest: promoted.content_digest,
     };
+    let ctx = Context {
+        store,
+        key_epoch: request.key_epoch,
+    };
     let last = write_marker(fs, &ctx, active_marker, active_body(committed))?;
     // The candidate is committed; its staging name is now redundant (reconciliation removes it
     // if this fails).
@@ -311,7 +361,7 @@ pub fn commit_write<F: DurableFs>(
     Ok(MarkerCommitted {
         generation: target,
         marker_generation: active_marker,
-        directories: combined([first, promoted.directory, last]),
+        directories: combined([pending_durability, promoted.directory, last]),
     })
 }
 
@@ -331,9 +381,9 @@ pub fn read_committed<F: DurableFs>(
 /// marker and the generation a read serves — so a descriptor never states an authority the chain
 /// does not. `None` when the record has no marker yet. It describes the chain as it stands: a first
 /// write that reconciliation rolled back (`Resolution::RolledBack { restored: None }`) still reads
-/// as `PENDING(none -> 1)` here, because version 1 has no `ABSENT` marker body; the root commit
-/// (slice 3C part 3) consumes the reconciliation outcome and drops such a record, so a catalog is
-/// never built from this helper alone.
+/// as `PENDING(none -> 1)` here, because version 1 has no `ABSENT` marker body;
+/// [`reconcile_protected`](crate::protected::reconcile_protected) consumes the reconciliation
+/// outcome and drops such a record, so a catalog is never built from this helper alone.
 pub fn describe_record<F: DurableFs>(
     fs: &mut F,
     store: RecordStore<'_>,
@@ -357,7 +407,7 @@ fn serving(authority: &Authority) -> Option<CommittedGeneration> {
 }
 
 /// The committed generation's file, proven to be exactly the envelope its marker committed.
-fn verify_committed<F: DurableFs>(
+pub(crate) fn verify_committed<F: DurableFs>(
     fs: &mut F,
     store: RecordStore<'_>,
     committed: CommittedGeneration,
@@ -395,6 +445,8 @@ struct Chain {
     authority: Authority,
     latest: Option<CommitMarker>,
     next_marker: u64,
+    /// `entry_digest()` of marker generations `1..=n`, in order.
+    entry_digests: Vec<[u8; 32]>,
 }
 
 /// What startup resolution decided and the durability of the marker it wrote, if any.
@@ -430,6 +482,7 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
     }
     let mut authority = Authority::Absent;
     let mut latest = None;
+    let mut entry_digests = Vec::with_capacity(generations.len());
     for &marker_generation in &generations {
         let marker = open_marker(fs, store, marker_generation)?;
         if matches!(marker.body(), MarkerBody::RecoveryRequired { .. }) {
@@ -438,6 +491,7 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
         authority = transition(authority, marker.body().clone()).ok_or(recovery(
             RecoveryReason::IllegalTransition { marker_generation },
         ))?;
+        entry_digests.push(marker.entry_digest());
         latest = Some(marker);
     }
     let next_marker = match generations.last() {
@@ -448,7 +502,21 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
         authority,
         latest,
         next_marker,
+        entry_digests,
     })
+}
+
+/// The `entry_digest()` of marker generation `marker_generation` in the record's complete, verified
+/// chain (gap-free, every generation opening as itself, every transition legal); `None` if the chain
+/// is shorter.
+pub(crate) fn chain_entry_digest<F: DurableFs>(
+    fs: &mut F,
+    store: RecordStore<'_>,
+    marker_generation: u64,
+) -> Result<Option<[u8; 32]>, CommitError> {
+    let chain = load_chain(fs, store)?;
+    let index = usize::try_from(marker_generation.wrapping_sub(1)).unwrap_or(usize::MAX);
+    Ok(chain.entry_digests.get(index).copied())
 }
 
 /// The first generation missing from the sorted, distinct `generations`, which must be `1..=n`.

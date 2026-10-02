@@ -9,9 +9,10 @@
 //! `record-commit` marker codec ([`marker`]) and marker commit protocol with startup reconciliation
 //! ([`commit`]), and slice 3C's authority-root digests ([`root`]), record catalog ([`catalog`]),
 //! persisted root records ([`root_record`]), the two-phase root commit ([`root_store`]) and the
-//! persisted, root-verified record catalog ([`authority`]).
+//! persisted, root-verified record catalog ([`authority`]), and the protected write and read paths
+//! that commit every marker transition through the root ([`protected`]).
 //! It changes no current
-//! TypeScript/Tauri storage authority and holds no journal or authority-root commit yet.
+//! TypeScript/Tauri storage authority and holds no journal yet.
 
 pub mod aad;
 pub mod anchor;
@@ -28,6 +29,7 @@ pub mod kdf;
 pub mod marker;
 #[cfg(feature = "test-support")]
 pub mod memory_provider;
+pub mod protected;
 pub mod provider;
 pub mod random;
 pub mod record;
@@ -68,6 +70,10 @@ pub use identity::{IdentityError, RecordIdentity};
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};
 pub use marker::{
     content_digest, CommitMarker, MarkerBody, MarkerError, MarkerOperation, PendingBody,
+};
+pub use protected::{
+    protected_write, read_protected, reconcile_protected, ProtectedCommitted, ProtectedError,
+    ProtectedRead, ProtectedReconciled, ProtectedTarget, ProtectedWrite, WriteDurability,
 };
 pub use provider::{
     AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,
