@@ -703,7 +703,7 @@ fn promote_staged<F: DurableFs>(
 /// Moves rejected bytes to `<name>.rejected-<tag>` without ever losing them: the new name is linked
 /// and made durable before the old one is removed. `tag` is a digest of the marker's operation ID,
 /// so marker text never shapes a path.
-fn relocate<F: DurableFs>(
+pub(crate) fn relocate<F: DurableFs>(
     fs: &mut F,
     dir: &Path,
     path: &Path,
