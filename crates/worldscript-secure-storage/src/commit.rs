@@ -869,7 +869,7 @@ pub(crate) fn parse_generation_name(name: &OsString) -> Option<u64> {
 }
 
 /// `generation-<n>.wsr1.tmp-<operation>-<n>` with a canonical operation ID and matching `n`.
-fn parse_staging_name(name: &str) -> Option<(u64, WriteOperationId)> {
+pub(crate) fn parse_staging_name(name: &str) -> Option<(u64, WriteOperationId)> {
     let rest = name.strip_prefix("generation-")?;
     let (digits, rest) = rest.split_once(".wsr1.tmp-")?;
     let generation = parse_counter(digits)?;

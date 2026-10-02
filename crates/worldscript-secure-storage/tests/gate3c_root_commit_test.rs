@@ -638,3 +638,49 @@ fn an_active_epoch_bound_to_another_route_is_refused() {
         key_epoch_refusal(RootRecoveryReason::ActiveEpochNotBound)
     );
 }
+
+#[test]
+fn a_second_active_epoch_is_refused() {
+    // §8.3: exactly one KEY_EPOCH_ACTIVE record may exist, whatever its epoch.
+    let mut fixture = Fixture::new();
+    let second = fixture.write_epoch(2, KeyEpochStatus::Active, 1).unwrap();
+    let entries = worldscript_secure_storage::load_key_epoch_set(
+        &mut StdFs,
+        &fixture.provider,
+        fixture.layout(),
+        &fixture.scope,
+        &fixture.key_ref,
+    )
+    .unwrap();
+    let set: Vec<KeyEpochEntry> = entries.iter().map(|(_, entry)| *entry).collect();
+    assert!(set.contains(&second));
+    fixture.key_epoch_set_digest = key_epoch_set_digest(&set).unwrap();
+    assert_eq!(
+        fixture.commit(&mut StdFs, 1),
+        key_epoch_refusal(RootRecoveryReason::ActiveEpochNotBound)
+    );
+}
+
+#[test]
+fn crash_leftovers_in_key_epoch_directories_never_poison_the_set() {
+    let mut fixture = Fixture::new();
+    fixture.commit(&mut StdFs, 1).unwrap();
+    let epochs = fixture.root_dir.join("key-epoch");
+    // A staging leftover beside the record, and an empty epoch directory from a crash after mkdir.
+    let leftover = format!("generation-2.wsr1.tmp-{}-2", "ab".repeat(16));
+    fs::write(epochs.join("1").join(leftover), b"partial").unwrap();
+    fs::create_dir_all(epochs.join("7")).unwrap();
+    assert_eq!(fixture.loaded_generation(), Ok(Some(1)));
+}
+
+#[test]
+fn a_refused_key_epoch_write_leaves_no_directory() {
+    let mut fixture = Fixture::new();
+    assert_eq!(
+        fixture
+            .write_epoch(5, KeyEpochStatus::Active, 2)
+            .map(|_| ()),
+        Err(RootStoreError::GenerationNotNext)
+    );
+    assert!(!fixture.root_dir.join("key-epoch").join("5").exists());
+}

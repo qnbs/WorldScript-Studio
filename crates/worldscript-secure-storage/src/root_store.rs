@@ -28,7 +28,7 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use crate::commit::{first_gap, parse_counter, parse_generation_name};
+use crate::commit::{first_gap, parse_counter, parse_generation_name, parse_staging_name};
 use crate::commit::{relocate, CommitError};
 use crate::durable::{
     generation_path, stage_and_promote, DirectoryDurability, DurableFs, StageFailure, StageRequest,
@@ -372,8 +372,7 @@ pub fn write_key_epoch<F: DurableFs, P: KeyProvider>(
     commit: KeyEpochCommit<'_>,
 ) -> Result<KeyEpochEntry, RootStoreError> {
     let dir = layout.key_epoch_dir(commit.record.epoch);
-    fs.create_dir_all(&dir)
-        .map_err(|error| io_error(RootStep::WriteKeyEpoch, &error))?;
+    // Everything is validated before any directory is created, so a refused write leaves nothing.
     let existing = epoch_generations(fs, &dir)?;
     if commit.registry_generation != existing.len() as u64 + 1 {
         return Err(RootStoreError::GenerationNotNext);
@@ -391,6 +390,11 @@ pub fn write_key_epoch<F: DurableFs, P: KeyProvider>(
     let key = provider
         .resolve_ref(commit.root_key_ref)
         .map_err(RootStoreError::Anchor)?;
+    ensure_durable_dir(
+        fs,
+        &dir,
+        &[layout.key_epochs_dir().as_path(), layout.root_dir],
+    )?;
     let operation = WriteOperationId::generate().map_err(RootStoreError::OperationId)?;
     let stage = StageRequest {
         dir: &dir,
@@ -433,10 +437,11 @@ pub fn load_key_epoch_set<F: DurableFs, P: KeyProvider>(
             .and_then(parse_counter)
             .ok_or(recovery(RootRecoveryReason::KeyEpochSetMismatch))?;
         let dir = layout.key_epoch_dir(epoch);
-        let generation = epoch_generations(fs, &dir)?
-            .last()
-            .copied()
-            .ok_or(recovery(RootRecoveryReason::KeyEpochSetMismatch))?;
+        // An empty epoch directory (a crash after creating it) holds no record; skipping it cannot
+        // hide one, because the root's set digest binds every record the set must contain.
+        let Some(&generation) = epoch_generations(fs, &dir)?.last() else {
+            continue;
+        };
         let envelope = fs
             .read(&generation_path(&dir, generation))
             .map_err(|error| io_error(RootStep::ReadKeyEpoch, &error))?;
@@ -456,25 +461,51 @@ pub fn load_key_epoch_set<F: DurableFs, P: KeyProvider>(
     Ok(set)
 }
 
-/// The sorted, gap-free generations in one epoch directory; anything else there is
-/// `RECOVERY_REQUIRED`.
+/// Creates `dir` and syncs it and every listed parent (innermost first), so a record promoted
+/// into it can never be lost with its directory entry after a crash.
+fn ensure_durable_dir<F: DurableFs>(
+    fs: &mut F,
+    dir: &Path,
+    parents: &[&Path],
+) -> Result<(), RootStoreError> {
+    let fail = |error: io::Error| io_error(RootStep::WriteKeyEpoch, &error);
+    fs.create_dir_all(dir).map_err(fail)?;
+    for path in std::iter::once(dir).chain(parents.iter().copied()) {
+        fs.sync_dir(path).map_err(fail)?;
+    }
+    Ok(())
+}
+
+/// The sorted, gap-free generations in one epoch directory. Staging leftovers of a crashed write
+/// (`generation-<n>.wsr1.tmp-…`) and relocated bytes are ignored — the root's set digest binds
+/// what counts — and any other name is `RECOVERY_REQUIRED`.
 fn epoch_generations<F: DurableFs>(fs: &mut F, dir: &Path) -> Result<Vec<u64>, RootStoreError> {
     let names = match fs.list_dir(dir) {
         Ok(names) => names,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => return Err(io_error(RootStep::ReadKeyEpoch, &error)),
     };
-    let mut generations = names
-        .iter()
-        .map(|name| {
-            parse_generation_name(name).ok_or(recovery(RootRecoveryReason::KeyEpochSetMismatch))
-        })
-        .collect::<Result<Vec<u64>, _>>()?;
+    let mut generations = Vec::with_capacity(names.len());
+    for name in &names {
+        if let Some(generation) = parse_generation_name(name) {
+            generations.push(generation);
+        } else if !is_epoch_debris(name) {
+            return Err(recovery(RootRecoveryReason::KeyEpochSetMismatch));
+        }
+    }
     generations.sort_unstable();
     if first_gap(&generations).is_some() {
         return Err(recovery(RootRecoveryReason::KeyEpochSetMismatch));
     }
     Ok(generations)
+}
+
+/// A staging leftover or relocated bytes in an epoch directory.
+fn is_epoch_debris(name: &std::ffi::OsString) -> bool {
+    name.to_str().is_some_and(|name| {
+        parse_staging_name(name).is_some()
+            || (name.starts_with("generation-") && name.contains(".rejected-"))
+    })
 }
 
 /// Cold-start step 5 (§5.3.1, §8.3): the set must hash to the root's `key_epoch_set_digest`, and
@@ -489,12 +520,13 @@ fn verify_key_epochs(
     if digest != root.key_epoch_set_digest {
         return Err(recovery(RootRecoveryReason::KeyEpochSetMismatch));
     }
+    // §8.3: exactly one KEY_EPOCH_ACTIVE record exists, at active_key_epoch, binding the route.
     let mut active = set
         .iter()
-        .filter(|(record, _)| record.epoch == root.active_key_epoch);
+        .filter(|(record, _)| record.status == KeyEpochStatus::Active);
     let bound = match (active.next(), active.next()) {
         (Some((record, _)), None) => {
-            record.status == KeyEpochStatus::Active
+            record.epoch == root.active_key_epoch
                 && record.root_key_ref.digest() == root.root_key_ref_digest
         }
         _ => false,
