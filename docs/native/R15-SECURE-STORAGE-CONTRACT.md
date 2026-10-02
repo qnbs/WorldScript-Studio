@@ -3142,7 +3142,11 @@ directory, with the authority-root directory as its immediate child. Unix uses s
 on `<installation_dir>/operation-admission.lock`, opened without delete sharing, and also holds
 no-delete-share directory handles for the installation and root. These resources are distinct from
 4A's root mutex: shared admission can span multiple finite root events without any lock upgrade.
-The guards bind both still-open directory identities and reject a different/replaced scope.
+The guards bind both still-open directory identities and reject a different/replaced scope. On
+Windows, `GetFileInformationByHandleEx(FileIdInfo)` compares volume identity plus 128-bit file ID
+from the held handle and a newly opened, non-reparse path object; path existence is insufficient.
+Unsupported identity queries fail closed. This is one narrowly scoped, safety-documented FFI call
+through the existing windows-sys dependency, not a new ownership/timeout mechanism.
 Their locators never establish `InstallationScopeId` or key authority; anchor verification and key
 selection must happen after admission. No lock-file body is authority or a durable lease.
 
@@ -3964,8 +3968,8 @@ Later implementation may be admitted only in these bounded gates:
    - **Slice 4A (the cross-process `root_commit_mutex`)** — `RootCommitGuard` in
      `crates/worldscript-secure-storage` is §11.1's mutex: an exclusive advisory lock taken through
      the operating system — rustix's `flock` on the canonical root directory on Unix, one `LockFileEx`
-     call on a no-delete-share `<root_dir>/root-commit.lock` on Windows (the crate's only `unsafe`
-     blocks, under a crate-wide `deny(unsafe_code)`) — whose guard is not `Sync`, so one lock never
+     call on a no-delete-share `<root_dir>/root-commit.lock` on Windows (a scoped, documented FFI
+     exception under crate-wide `deny(unsafe_code)`) — whose guard is not `Sync`, so one lock never
      authorizes concurrent writers. `commit_root`, `recover_root` and `write_key_epoch` require the held guard
      of their root directory and refuse any other (`MutexNotHeld`); `commit_catalog_change` acquires
      it before re-reading the root, so every catalog and protected-write root commit is one critical
@@ -3980,7 +3984,8 @@ Later implementation may be admitted only in these bounded gates:
      event borrows the admission mutably and acquires the separate 4A mutex below it. Tests cover
      same-process and child-process mode matrices, normal exit and abort release, unwind, `Send` /
      non-`Sync` / non-`Clone` and admission/root-event lifetime, independent installations,
-     canonical aliases, and fail-closed directory replacement. Platform CI runs the suite on
+     canonical aliases, fail-closed directory replacement and Windows handle/path file-ID comparison
+     for distinct existing objects and ancestor replacement. Platform CI runs the suite on
      Linux/macOS/Windows; packaged and power-loss qualification remain Gate 6. The deferred #950
      `moved` pre-clean is included. #360 remains open: the next 4B slice integrates admission into
      protected read/write/reconciliation, authority/key selection and lock/unlock/shutdown.

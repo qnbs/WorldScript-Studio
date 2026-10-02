@@ -166,9 +166,9 @@ pub(crate) mod sys {
 
     use windows_sys::Win32::Foundation::{ERROR_LOCK_VIOLATION, HANDLE};
     use windows_sys::Win32::Storage::FileSystem::{
-        LockFileEx, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS,
-        FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ, FILE_SHARE_WRITE, LOCKFILE_EXCLUSIVE_LOCK,
-        LOCKFILE_FAIL_IMMEDIATELY,
+        FileIdInfo, GetFileInformationByHandleEx, LockFileEx, FILE_ATTRIBUTE_REPARSE_POINT,
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_128, FILE_ID_INFO,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
     };
     use windows_sys::Win32::System::IO::OVERLAPPED;
 
@@ -225,8 +225,8 @@ pub(crate) mod sys {
         Ok(file)
     }
 
-    /// Opened without delete sharing, the lock file cannot be deleted or renamed while any holder
-    /// has it open, so the path names the locked file for the guard's whole lifetime.
+    /// No delete sharing pins the direct lock-file entry; `still_named` also validates the full
+    /// path against the held object's kernel identity rather than assuming ancestors are pinned.
     pub(super) fn open_target(path: &Path) -> io::Result<File> {
         OpenOptions::new()
             .read(true)
@@ -254,12 +254,79 @@ pub(crate) mod sys {
         Ok(file)
     }
 
-    /// No-delete-share handles pin non-redirected names; still fail closed if the path disappears.
-    pub(crate) fn still_named(_file: &File, path: &Path) -> io::Result<bool> {
-        match std::fs::metadata(path) {
-            Ok(_) => Ok(true),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
-            Err(error) => Err(error),
+    /// Compare kernel object identities, not path existence: ancestor redirection must fail closed.
+    pub(crate) fn still_named(file: &File, path: &Path) -> io::Result<bool> {
+        let named = match OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+            .open(path)
+        {
+            Ok(named) => named,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error),
+        };
+        if named.metadata()?.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(io::Error::from(io::ErrorKind::InvalidInput));
         }
+        Ok(file_identity(file)? == file_identity(&named)?)
+    }
+
+    /// Stable 128-bit IDs support NTFS/ReFS; unsupported identity queries are errors, not authority.
+    #[allow(unsafe_code)]
+    fn file_identity(file: &File) -> io::Result<(u64, [u8; 16])> {
+        let mut info = FILE_ID_INFO {
+            VolumeSerialNumber: 0,
+            FileId: FILE_ID_128 {
+                Identifier: [0; 16],
+            },
+        };
+        // SAFETY: `file` keeps the handle open; the correctly aligned FILE_ID_INFO buffer has the
+        // exact size required by FileIdInfo and outlives this synchronous call. No key/body is read.
+        let success = unsafe {
+            GetFileInformationByHandleEx(
+                file.as_raw_handle() as HANDLE,
+                FileIdInfo,
+                (&mut info as *mut FILE_ID_INFO).cast(),
+                std::mem::size_of::<FILE_ID_INFO>() as u32,
+            )
+        };
+        if success == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok((info.VolumeSerialNumber, info.FileId.Identifier))
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn existing_paths_are_not_a_substitute_for_handle_identity() {
+        let fixture =
+            std::env::temp_dir().join(format!("wss-gate4b-file-id-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&fixture);
+        std::fs::create_dir_all(&fixture).unwrap();
+        for directories in [false, true] {
+            let first = fixture.join(if directories {
+                "first-dir"
+            } else {
+                "first-file"
+            });
+            let second = fixture.join(if directories {
+                "second-dir"
+            } else {
+                "second-file"
+            });
+            let held = if directories {
+                std::fs::create_dir_all(&first).unwrap();
+                std::fs::create_dir_all(&second).unwrap();
+                open_directory(&first).unwrap()
+            } else {
+                std::fs::write(&second, b"").unwrap();
+                open_admission_target(&first).unwrap()
+            };
+            assert!(still_named(&held, &first).unwrap());
+            assert!(!still_named(&held, &second).unwrap());
+            assert!(!still_named(&held, &fixture.join("absent")).unwrap());
+        }
+        std::fs::remove_dir_all(&fixture).unwrap();
     }
 }

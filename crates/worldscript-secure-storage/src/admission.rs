@@ -4,6 +4,8 @@
 //! Unix locks the installation directory itself with shared/exclusive `flock`, while 4A locks
 //! the distinct root directory. Windows locks `operation-admission.lock` without delete sharing
 //! and pins both directories with no-delete-share handles. No lock body is read or written.
+//! Windows also compares volume + 128-bit file IDs from held/reopened handles; an existing path
+//! alone never proves identity, and an unsupported identity query fails closed.
 //! The installation locator is not an authenticated `InstallationScopeId`; the integration layer
 //! must validate the anchor and select keys only AFTER obtaining admission.
 //!

@@ -352,6 +352,30 @@ fn installation_replacement_cannot_reuse_the_old_token() {
 
 #[cfg(windows)]
 #[test]
+fn windows_ancestor_replacement_is_prevented_or_invalidates_the_guard() {
+    let fixture = Installation::new();
+    let parent = fixture.0.join("parent");
+    let installation = parent.join("installation");
+    let root = installation.join("authority");
+    fs::create_dir_all(&root).unwrap();
+    let scope = scope(&installation, &root);
+    let mut guard = SharedAdmissionGuard::try_acquire(scope).unwrap().unwrap();
+    // Sharing semantics may refuse the ancestor rename. If allowed, existence at the original
+    // spelling must not authorize the replacement objects while the old handle remains alive.
+    if fs::rename(&parent, fixture.0.join("old-parent")).is_ok() {
+        fs::create_dir_all(&root).unwrap();
+        assert!(!guard.guards(scope));
+        assert!(matches!(
+            guard.try_root_commit(),
+            Err(AdmissionError::IdentityChanged)
+        ));
+    } else {
+        assert!(guard.guards(scope));
+    }
+}
+
+#[cfg(windows)]
+#[test]
 fn windows_refuses_a_redirected_admission_file_without_touching_its_target() {
     let installation = Installation::new();
     let root = installation.root();
