@@ -233,6 +233,10 @@ impl DurableFs for FaultFs {
     fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
         StdFs.rename_replace(from, to)
     }
+
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        StdFs.create_dir_all(dir)
+    }
 }
 
 /// Marker-directory syncs in one write: the chain loads of the initial reconciliation and of the

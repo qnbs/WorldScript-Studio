@@ -313,6 +313,27 @@ pub struct KeyEpochRead<'a> {
     pub envelope: &'a [u8],
 }
 
+/// The identity, envelope metadata and plaintext of `record` at `write`, for callers that seal
+/// through the durable staging path (slice 3A) instead of [`KeyEpochRecord::seal`].
+pub(crate) fn key_epoch_plaintext(
+    record: &KeyEpochRecord,
+    write: &KeyEpochWrite<'_>,
+) -> Result<(RecordIdentity, RecordMeta, Vec<u8>), RootRecordError> {
+    let address = write.address;
+    let identity = address.identity()?;
+    if address.epoch != record.epoch {
+        return Err(RootRecordError::Corrupt(
+            "key-epoch record names another epoch",
+        ));
+    }
+    let meta = RecordMeta {
+        key_epoch: write.key_epoch,
+        record_generation: address.registry_generation,
+        record_schema: CONTROL_RECORD_SCHEMA,
+    };
+    Ok((identity, meta, record.encode()?))
+}
+
 /// Where one key-epoch record generation lives: `key-epoch:<scope>:<epoch>` at
 /// `registry_generation`. Both counters are checked before anything uses them.
 #[derive(Debug, Clone, Copy)]

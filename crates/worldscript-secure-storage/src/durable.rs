@@ -57,6 +57,8 @@ pub trait DurableFs {
     /// atomic-rename-and-fsync mechanism). Used only for the recoverable root pointer, never for a
     /// generation file.
     fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()>;
+    /// Creates `dir` and its missing parents; an existing directory is not an error.
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()>;
 }
 
 /// The real filesystem. On Apple platforms `File::sync_all` issues `F_FULLFSYNC`; on Windows it is
@@ -110,6 +112,10 @@ impl DurableFs for StdFs {
     /// Windows, both of which replace an existing destination.
     fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
         fs::rename(from, to)
+    }
+
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        fs::create_dir_all(dir)
     }
 }
 
