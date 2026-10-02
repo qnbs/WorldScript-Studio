@@ -112,7 +112,7 @@ fn a_held_mutex_excludes_a_second_holder_until_released() {
     let guard = RootCommitGuard::acquire(&root).unwrap();
     assert!(RootCommitGuard::try_acquire(&root).unwrap().is_none());
     drop(guard);
-    assert!(becomes_free(&root));
+    assert!(becomes_free(&root), "root mutex never became free");
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -123,7 +123,7 @@ fn another_process_holding_the_mutex_excludes_this_one() {
     assert!(wait_for(|| root.join("held").exists()), "child never held");
     assert!(RootCommitGuard::try_acquire(&root).unwrap().is_none());
     assert!(holder.release());
-    assert!(becomes_free(&root));
+    assert!(becomes_free(&root), "root mutex never became free");
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -133,7 +133,7 @@ fn a_crashed_holder_never_leaves_the_mutex_held() {
     let mut holder = Holder::spawn(&root, "crash");
     assert!(!holder.release());
     assert!(root.join("held").exists(), "child crashed while holding");
-    assert!(becomes_free(&root));
+    assert!(becomes_free(&root), "root mutex never became free");
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -182,18 +182,19 @@ fn a_guard_for_another_root_is_refused() {
 
 #[cfg(unix)]
 #[test]
-fn a_replaced_lock_file_voids_the_guard_that_locked_the_old_one() {
+fn a_replaced_root_directory_voids_the_guard_that_locked_the_old_one() {
     let root = temp_root();
     let guard = RootCommitGuard::acquire(&root).unwrap();
     assert!(guard.guards(&root));
-    // Replacing the lock file lets a new holder lock the replacement, so the old guard must stop
-    // authorizing root writes.
-    let lock = root.join(worldscript_secure_storage::ROOT_COMMIT_LOCK_FILE);
-    fs::remove_file(&lock).unwrap();
-    fs::write(&lock, b"").unwrap();
+    // Unix locks the root directory itself: a directory put in its place is a different mutex, so
+    // the old guard must stop authorizing root writes and the new directory is free.
+    let moved = root.with_extension("moved");
+    fs::rename(&root, &moved).unwrap();
+    fs::create_dir_all(&root).unwrap();
     assert!(!guard.guards(&root));
-    assert!(becomes_free(&root));
+    assert!(becomes_free(&root), "replacement root never became free");
     let replacement = RootCommitGuard::acquire(&root).unwrap();
     assert!(replacement.guards(&root));
     let _ = fs::remove_dir_all(&root);
+    let _ = fs::remove_dir_all(&moved);
 }

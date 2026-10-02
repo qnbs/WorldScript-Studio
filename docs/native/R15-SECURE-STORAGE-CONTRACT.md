@@ -3207,18 +3207,20 @@ while waiting on admission; since exclusive admission already excludes concurren
 admission, no separate upgrade path is ever needed there either. §5.3.1 step A and §5.3's
 pointer-advance rule both refer to acquiring `root_commit_mutex`, never upgrading admission.
 
-**Mechanism (Gate 4 slice 4A).** `root_commit_mutex` is an exclusive advisory operating-system lock on
-`<root_dir>/root-commit.lock` (`flock` on Unix, `LockFileEx` on Windows), so it serializes root
-writers across threads and processes, and the operating system releases it when a holder exits or
-crashes — a dead holder never leaves a stale lock, and the lock file's bytes and existence decide
-nothing. Every operation that publishes or recovers root state (§5.3.1 C–F, recovery, key-epoch
+**Mechanism (Gate 4 slice 4A).** `root_commit_mutex` is an exclusive advisory operating-system lock —
+on Unix a `flock` on the canonical root directory itself (no separate lock file exists that could be
+replaced mid-commit), on Windows a `LockFileEx` on `<root_dir>/root-commit.lock` opened without
+delete sharing (it cannot be deleted or renamed while held) — so it serializes root writers across
+threads and processes, and the operating system releases it when a holder exits or crashes; a dead
+holder never leaves a stale lock. The guard is not `Sync`, so one held lock can never authorize two
+concurrent writers on different threads. Every operation that publishes or recovers root state (§5.3.1 C–F, recovery, key-epoch
 control records) requires the held guard of that exact root directory; a catalog commit acquires it
 before re-reading the root, so the re-read, the recomputed sets and the commit form one critical
 section, and the anchor's `expected_floor` check remains the compare-and-swap that refuses any commit
 from a stale root. Readers never take the mutex, so cold start never rewrites the pointer: it reports
 a stale or missing pointer, and only a holder of the mutex repairs it after re-reading the anchor —
 a repair can never move the pointer back behind a concurrent commit. A guard matches its root
-directory by canonical path.
+directory by canonical path and authorizes nothing once that path no longer names what it locked.
 
 ### 11.2 Locked legacy plaintext
 
@@ -3941,10 +3943,11 @@ Later implementation may be admitted only in these bounded gates:
    also resolves the key-epoch record crash window Gate 3 left (§10.3, §10.4, #359); **4E** first
    enable (§10.2), the explicit disable refusal, and Gate 4 closure.
    - **Slice 4A (the cross-process `root_commit_mutex`)** — `RootCommitGuard` in
-     `crates/worldscript-secure-storage` is §11.1's mutex: an exclusive advisory lock on
-     `<root_dir>/root-commit.lock` taken through the operating system (rustix's `flock` on Unix, one
-     `LockFileEx` call on Windows — the crate's only `unsafe` blocks, under a crate-wide
-     `deny(unsafe_code)`). `commit_root`, `recover_root` and `write_key_epoch` require the held guard
+     `crates/worldscript-secure-storage` is §11.1's mutex: an exclusive advisory lock taken through
+     the operating system — rustix's `flock` on the canonical root directory on Unix, one `LockFileEx`
+     call on a no-delete-share `<root_dir>/root-commit.lock` on Windows (the crate's only `unsafe`
+     blocks, under a crate-wide `deny(unsafe_code)`) — whose guard is not `Sync`, so one lock never
+     authorizes concurrent writers. `commit_root`, `recover_root` and `write_key_epoch` require the held guard
      of their root directory and refuse any other (`MutexNotHeld`); `commit_catalog_change` acquires
      it before re-reading the root, so every catalog and protected-write root commit is one critical
      section. Tests prove exclusion between threads (no lost update in a guarded read-modify-write)

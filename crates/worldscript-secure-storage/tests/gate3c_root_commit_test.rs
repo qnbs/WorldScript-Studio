@@ -491,6 +491,12 @@ fn cold_start_reports_a_stale_or_missing_pointer_and_repair_needs_the_mutex() {
         repair_root_pointer(&mut StdFs, &fixture.provider, layout, &guard),
         Ok(true)
     );
+    assert_eq!(
+        fixture.pointer().map(|pointer| pointer.root_generation),
+        Some(2)
+    );
+    let view = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
+    assert_eq!(view.map(|view| view.pointer_stale), Some(false));
 }
 
 #[test]
