@@ -250,6 +250,8 @@ impl KeyEpochRecord {
     /// `write.key_epoch`.
     pub fn seal(&self, key: &Key, write: &KeyEpochWrite<'_>) -> Result<Vec<u8>, RootRecordError> {
         let address = write.address;
+        // The address's own counters are validated before it is compared with the record.
+        let identity = address.identity()?;
         if address.epoch != self.epoch {
             return Err(RootRecordError::Corrupt(
                 "key-epoch record names another epoch",
@@ -260,7 +262,7 @@ impl KeyEpochRecord {
             record_generation: address.registry_generation,
             record_schema: CONTROL_RECORD_SCHEMA,
         };
-        seal_record(key, &address.identity()?, meta, &self.encode()?).map_err(RootRecordError::Seal)
+        seal_record(key, &identity, meta, &self.encode()?).map_err(RootRecordError::Seal)
     }
 
     /// Opens `read.envelope` at `read.address` and returns the record with the
