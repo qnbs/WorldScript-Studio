@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 3, slice 3C part 3c-2b — protected writes through the root of trust (#445):** a
+  protected write now commits each step — the intent to write and the finished write — through a
+  new root of trust, and is reported as durably committed only after the second one. Reads serve
+  only the version the root names, an interrupted write is finished or undone on startup from
+  authenticated evidence, and an interrupted first write disappears from the record list. Nothing
+  reads or writes user data through it yet. PR #947.
 - **R-15 Gate 3, slice 3C part 3c-2a — the stored record catalog (#445):** the protected-storage
   core now stores the record catalog pages next to the root of trust, commits catalog changes
   together with a new root, and lists stored records only from pages that match what that root
