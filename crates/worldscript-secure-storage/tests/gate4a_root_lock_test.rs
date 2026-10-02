@@ -32,6 +32,14 @@ fn temp_root() -> PathBuf {
     root
 }
 
+/// Whether the mutex of `root` becomes free within the polling window. Release is checked by
+/// polling, not once: a sibling test spawning a child process (fork, then exec) briefly duplicates
+/// every open descriptor, including a just-dropped guard's, until the child execs — the lock is
+/// then held a moment longer, never shared.
+fn becomes_free(root: &Path) -> bool {
+    wait_for(|| matches!(RootCommitGuard::try_acquire(root), Ok(Some(_))))
+}
+
 /// Polls `condition` for up to 30 s.
 fn wait_for(condition: impl Fn() -> bool) -> bool {
     let deadline = Instant::now() + Duration::from_secs(30);
@@ -104,7 +112,7 @@ fn a_held_mutex_excludes_a_second_holder_until_released() {
     let guard = RootCommitGuard::acquire(&root).unwrap();
     assert!(RootCommitGuard::try_acquire(&root).unwrap().is_none());
     drop(guard);
-    assert!(RootCommitGuard::try_acquire(&root).unwrap().is_some());
+    assert!(becomes_free(&root));
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -115,7 +123,7 @@ fn another_process_holding_the_mutex_excludes_this_one() {
     assert!(wait_for(|| root.join("held").exists()), "child never held");
     assert!(RootCommitGuard::try_acquire(&root).unwrap().is_none());
     assert!(holder.release());
-    assert!(RootCommitGuard::try_acquire(&root).unwrap().is_some());
+    assert!(becomes_free(&root));
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -125,7 +133,7 @@ fn a_crashed_holder_never_leaves_the_mutex_held() {
     let mut holder = Holder::spawn(&root, "crash");
     assert!(!holder.release());
     assert!(root.join("held").exists(), "child crashed while holding");
-    assert!(RootCommitGuard::try_acquire(&root).unwrap().is_some());
+    assert!(becomes_free(&root));
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -170,4 +178,22 @@ fn a_guard_for_another_root_is_refused() {
     );
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&other);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_replaced_lock_file_voids_the_guard_that_locked_the_old_one() {
+    let root = temp_root();
+    let guard = RootCommitGuard::acquire(&root).unwrap();
+    assert!(guard.guards(&root));
+    // Replacing the lock file lets a new holder lock the replacement, so the old guard must stop
+    // authorizing root writes.
+    let lock = root.join(worldscript_secure_storage::ROOT_COMMIT_LOCK_FILE);
+    fs::remove_file(&lock).unwrap();
+    fs::write(&lock, b"").unwrap();
+    assert!(!guard.guards(&root));
+    assert!(becomes_free(&root));
+    let replacement = RootCommitGuard::acquire(&root).unwrap();
+    assert!(replacement.guards(&root));
+    let _ = fs::remove_dir_all(&root);
 }
