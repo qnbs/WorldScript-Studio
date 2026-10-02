@@ -33,6 +33,7 @@ use crate::commit::{
     CommitError, RecordStore, Resolution, WriteRequest,
 };
 use crate::durable::{DirectoryDurability, DurableFs, WriteOperationId};
+use crate::identity::has_ordinary_marker;
 use crate::provider::{KeyProvider, RootKeyRefV1};
 use crate::record::OpenedRecord;
 use crate::root_store::{RootCommitted, RootLayout};
@@ -68,6 +69,10 @@ pub enum ProtectedError {
     /// authority. In the protected path an uncatalogued record's chain can only be a rolled-back
     /// first write, so a chain no committed root ever named is never published.
     UnrootedChain,
+    /// Not an ordinary record: control-plane and retained-authority classes have no record-commit
+    /// marker, and an asset-pair member (`asset`, `asset-metadata`) is committed only through its
+    /// `asset-pair` marker (§8.4.1), which is Gate 5 — refused before anything is written.
+    NotAnOrdinaryRecord,
 }
 
 impl From<CommitError> for ProtectedError {
@@ -118,6 +123,7 @@ pub fn protected_write<F: DurableFs, P: KeyProvider>(
     target: ProtectedTarget<'_>,
     write: ProtectedWrite<'_>,
 ) -> Result<ProtectedCommitted, ProtectedError> {
+    ensure_ordinary(target.store)?;
     let mut durability = reconcile_protected(fs, provider, target)?.durability;
     let request = WriteRequest {
         key_epoch: target.key_epoch,
@@ -161,6 +167,7 @@ pub fn reconcile_protected<F: DurableFs, P: KeyProvider>(
     provider: &mut P,
     target: ProtectedTarget<'_>,
 ) -> Result<ProtectedReconciled, ProtectedError> {
+    ensure_ordinary(target.store)?;
     let catalog = load_catalog(fs, provider, target.layout)?;
     let named = named_descriptor(catalog.as_ref(), target.store);
     if let Some(named) = named {
@@ -196,6 +203,7 @@ pub fn read_protected<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     store: RecordStore<'_>,
 ) -> Result<ProtectedRead, ProtectedError> {
+    ensure_ordinary(store)?;
     let catalog = load_catalog(fs, provider, layout)?;
     let Some(named) = named_descriptor(catalog.as_ref(), store) else {
         return Ok(ProtectedRead::NotCatalogued);
@@ -259,6 +267,15 @@ fn commit_chain_state<F: DurableFs, P: KeyProvider>(
         target.layout,
         commit,
     )?))
+}
+
+/// Only an ordinary record (§10.4.1 `MIGRATE_TO_R15`, not an asset-pair member) takes this path.
+fn ensure_ordinary(store: RecordStore<'_>) -> Result<(), ProtectedError> {
+    if has_ordinary_marker(store.record.class()) {
+        Ok(())
+    } else {
+        Err(ProtectedError::NotAnOrdinaryRecord)
+    }
 }
 
 /// An uncatalogued record that is not a rolled-back first write must have no authority at all: a

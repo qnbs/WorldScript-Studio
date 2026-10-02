@@ -452,3 +452,21 @@ fn an_ahead_generation_that_does_not_verify_is_not_published() {
     assert_eq!(fixture.listed_marker_states(), vec![(2, ACTIVE)]);
     assert_eq!(fixture.payload().as_deref(), Some(&b"first"[..]));
 }
+
+#[test]
+fn an_asset_pair_member_is_refused_before_anything_is_written() {
+    let mut fixture = Fixture::new();
+    fixture.record = RecordIdentity::new(RecordClass::Asset, &["p1", "a1"]).unwrap();
+    assert_eq!(
+        fixture.write_with(&mut StdFs, b"bytes"),
+        Err(ProtectedError::NotAnOrdinaryRecord)
+    );
+    assert_eq!(fixture.read(), Err(ProtectedError::NotAnOrdinaryRecord));
+    assert_eq!(
+        fixture.try_reconcile(),
+        Err(ProtectedError::NotAnOrdinaryRecord)
+    );
+    assert_eq!(fs::read_dir(fixture.marker_dir()).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(fixture.record_dir()).unwrap().count(), 0);
+    assert!(!fixture.root_dir().join("catalog").exists());
+}

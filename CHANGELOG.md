@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 3 complete — crash-durable protected storage core (#445):** the protected-storage
+  core now covers everything Gate 3 requires — synced files, never-overwritten generations, synced
+  directories where the platform supports it (Windows reports them as not confirmed), startup
+  recovery and fault-injection tests on Linux, macOS and Windows — for ordinary
+  records, and refuses any other record type before writing. What remains is assigned to later gates
+  (asset pairs, power-loss qualification, record deletion, and switching the app over). Nothing
+  reads or writes user data through it yet. PR #949.
 - **R-15 Gate 3, slice 3C part 3c-2b — protected writes through the root of trust (#445):** a
   protected write now commits each step — the intent to write and the finished write — through a
   new root of trust, and is reported as durably committed only after the second one. Reads serve
