@@ -169,8 +169,8 @@ pub fn reconcile_protected<F: DurableFs, P: KeyProvider>(
     let catalogued = named.is_some();
     let reconciled = reconcile(fs, target.store, target.key_epoch)?;
     let rolled_back_first = reconciled.resolution == Resolution::RolledBack { restored: None };
-    if !catalogued && !rolled_back_first && describe_record(fs, target.store)?.is_some() {
-        return Err(ProtectedError::UnrootedChain);
+    if !(catalogued || rolled_back_first) {
+        refuse_unrooted_chain(fs, target.store)?;
     }
     let root = commit_chain_state(fs, provider, target, rolled_back_first)?;
     let catalog = load_catalog(fs, provider, target.layout)?;
@@ -259,6 +259,18 @@ fn commit_chain_state<F: DurableFs, P: KeyProvider>(
         target.layout,
         commit,
     )?))
+}
+
+/// An uncatalogued record that is not a rolled-back first write must have no authority at all: a
+/// chain no committed root ever named is never published.
+fn refuse_unrooted_chain<F: DurableFs>(
+    fs: &mut F,
+    store: RecordStore<'_>,
+) -> Result<(), ProtectedError> {
+    match describe_record(fs, store)? {
+        None => Ok(()),
+        Some(_) => Err(ProtectedError::UnrootedChain),
+    }
 }
 
 /// The committed descriptor of `store`'s record, if catalogued.
