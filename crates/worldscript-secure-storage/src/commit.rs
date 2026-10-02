@@ -445,6 +445,8 @@ struct Chain {
     authority: Authority,
     latest: Option<CommitMarker>,
     next_marker: u64,
+    /// `entry_digest()` of marker generations `1..=n`, in order.
+    entry_digests: Vec<[u8; 32]>,
 }
 
 /// What startup resolution decided and the durability of the marker it wrote, if any.
@@ -480,6 +482,7 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
     }
     let mut authority = Authority::Absent;
     let mut latest = None;
+    let mut entry_digests = Vec::with_capacity(generations.len());
     for &marker_generation in &generations {
         let marker = open_marker(fs, store, marker_generation)?;
         if matches!(marker.body(), MarkerBody::RecoveryRequired { .. }) {
@@ -488,6 +491,7 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
         authority = transition(authority, marker.body().clone()).ok_or(recovery(
             RecoveryReason::IllegalTransition { marker_generation },
         ))?;
+        entry_digests.push(marker.entry_digest());
         latest = Some(marker);
     }
     let next_marker = match generations.last() {
@@ -498,7 +502,21 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
         authority,
         latest,
         next_marker,
+        entry_digests,
     })
+}
+
+/// The `entry_digest()` of marker generation `marker_generation` in the record's complete, verified
+/// chain (gap-free, every generation opening as itself, every transition legal); `None` if the chain
+/// is shorter.
+pub(crate) fn chain_entry_digest<F: DurableFs>(
+    fs: &mut F,
+    store: RecordStore<'_>,
+    marker_generation: u64,
+) -> Result<Option<[u8; 32]>, CommitError> {
+    let chain = load_chain(fs, store)?;
+    let index = usize::try_from(marker_generation.wrapping_sub(1)).unwrap_or(usize::MAX);
+    Ok(chain.entry_digests.get(index).copied())
 }
 
 /// The first generation missing from the sorted, distinct `generations`, which must be `1..=n`.
@@ -512,7 +530,7 @@ pub(crate) fn first_gap(generations: &[u64]) -> Option<u64> {
 
 /// Opens the marker file of `marker_generation`; its content must be that very generation, so a
 /// valid marker copied into another chain slot is refused.
-pub(crate) fn open_marker<F: DurableFs>(
+fn open_marker<F: DurableFs>(
     fs: &mut F,
     store: RecordStore<'_>,
     marker_generation: u64,

@@ -12,7 +12,7 @@
 //! persisted, root-verified record catalog ([`authority`]), and the protected write and read paths
 //! that commit every marker transition through the root ([`protected`]).
 //! It changes no current
-//! TypeScript/Tauri storage authority and holds no journal or authority-root commit yet.
+//! TypeScript/Tauri storage authority and holds no journal yet.
 
 pub mod aad;
 pub mod anchor;

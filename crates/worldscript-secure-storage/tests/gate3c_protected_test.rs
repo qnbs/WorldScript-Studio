@@ -13,9 +13,9 @@ use worldscript_secure_storage::{
     commit_write, list_records, protected_write, read_protected, reconcile_protected,
     write_key_epoch, AuthorityError, CatalogRecoveryReason, DirectoryDurability, DurableFs,
     InstallationScopeId, Key, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider,
-    ProtectedError, ProtectedRead, ProtectedTarget, ProtectedWrite, RecordClass, RecordIdentity,
-    RecordLocation, RecordStore, Resolution, RootKeyRefV1, RootLayout, StdFs, WriteDurability,
-    WriteRequest,
+    ProtectedError, ProtectedRead, ProtectedReconciled, ProtectedTarget, ProtectedWrite,
+    RecordClass, RecordIdentity, RecordLocation, RecordStore, Resolution, RootKeyRefV1, RootLayout,
+    StdFs, WriteDurability, WriteRequest,
 };
 
 /// The real filesystem, failing every file creation directly inside one directory.
@@ -185,6 +185,14 @@ impl Fixture {
     }
 
     fn reconcile(&mut self) -> (Resolution, Option<u64>) {
+        let reconciled = self.try_reconcile().unwrap();
+        (
+            reconciled.resolution,
+            reconciled.descriptor.map(|d| d.marker_generation()),
+        )
+    }
+
+    fn try_reconcile(&mut self) -> Result<ProtectedReconciled, ProtectedError> {
         let (root_dir, record_dir, marker_dir) =
             (self.root_dir(), self.record_dir(), self.marker_dir());
         let Fixture {
@@ -200,11 +208,7 @@ impl Fixture {
             marker_dir: &marker_dir,
         };
         let target = dirs.target(key, record, key_ref);
-        let reconciled = reconcile_protected(&mut StdFs, provider, target).unwrap();
-        (
-            reconciled.resolution,
-            reconciled.descriptor.map(|d| d.marker_generation()),
-        )
+        reconcile_protected(&mut StdFs, provider, target)
     }
 
     fn listed_marker_states(&self) -> Vec<(u64, u32)> {
@@ -314,8 +318,7 @@ fn an_interrupted_first_write_is_enumerable_not_readable_then_dropped() {
     assert_eq!(fixture.read(), Ok(ProtectedRead::NotCatalogued));
 
     // A later write starts over from the rolled-back chain.
-    let (generation, _, _) = fixture.write_with(&mut StdFs, b"again").unwrap();
-    assert_eq!(generation, 1);
+    assert_eq!(fixture.write_with(&mut StdFs, b"again").unwrap().0, 1);
     assert_eq!(fixture.payload().as_deref(), Some(&b"again"[..]));
 }
 
@@ -340,18 +343,7 @@ fn a_chain_ahead_of_the_root_is_not_read_until_reconciled() {
     let mut fixture = Fixture::new();
     fixture.write_with(&mut StdFs, b"first").unwrap();
     // A marker-only write (no root commit), as a crash before §9 step 9 would leave it.
-    let (record_dir, marker_dir) = (fixture.record_dir(), fixture.marker_dir());
-    let request = WriteRequest {
-        key_epoch: 1,
-        record_schema: 1,
-    };
-    commit_write(
-        &mut StdFs,
-        store(&record_dir, &marker_dir, &fixture.key, &fixture.record),
-        request,
-        b"ahead",
-    )
-    .unwrap();
+    unrooted_write(&fixture, b"ahead");
     assert_eq!(fixture.listed_marker_states(), vec![(2, ACTIVE)]);
     assert_eq!(fixture.payload().as_deref(), Some(&b"first"[..]));
 
@@ -406,7 +398,57 @@ fn a_pending_marker_whose_root_never_committed_is_rolled_back() {
         fixture.reconcile(),
         (Resolution::RolledBack { restored: None }, None)
     );
-    let (generation, _, _) = fixture.write_with(&mut StdFs, b"kept").unwrap();
-    assert_eq!(generation, 1);
+    assert_eq!(fixture.write_with(&mut StdFs, b"kept").unwrap().0, 1);
     assert_eq!(fixture.payload().as_deref(), Some(&b"kept"[..]));
+}
+
+/// A marker-only write (no root commit) of `plaintext` to the fixture's record.
+fn unrooted_write(fixture: &Fixture, plaintext: &[u8]) {
+    let (record_dir, marker_dir) = (fixture.record_dir(), fixture.marker_dir());
+    let request = WriteRequest {
+        key_epoch: 1,
+        record_schema: 1,
+    };
+    let store = store(&record_dir, &marker_dir, &fixture.key, &fixture.record);
+    commit_write(&mut StdFs, store, request, plaintext).unwrap();
+}
+
+#[test]
+fn a_chain_no_root_ever_named_is_never_published() {
+    let mut fixture = Fixture::new();
+    unrooted_write(&fixture, b"orphan");
+    assert_eq!(fixture.try_reconcile(), Err(ProtectedError::UnrootedChain));
+    assert_eq!(fixture.read(), Ok(ProtectedRead::NotCatalogued));
+    assert!(fixture.listed_marker_states().is_empty());
+}
+
+#[test]
+fn a_deleted_earlier_marker_is_recovery_required() {
+    let mut fixture = Fixture::new();
+    fixture.write_with(&mut StdFs, b"first").unwrap();
+    fs::remove_file(fixture.marker_dir().join("generation-1.wsr1")).unwrap();
+    assert_eq!(
+        fixture.read(),
+        Err(ProtectedError::Authority(AuthorityError::RecoveryRequired(
+            CatalogRecoveryReason::MarkerSetMismatch
+        )))
+    );
+}
+
+#[test]
+fn an_ahead_generation_that_does_not_verify_is_not_published() {
+    let mut fixture = Fixture::new();
+    fixture.write_with(&mut StdFs, b"first").unwrap();
+    unrooted_write(&fixture, b"ahead");
+    let path = fixture.record_dir().join("generation-2.wsr1");
+    let mut bytes = fs::read(&path).unwrap();
+    let last = bytes.len() - 1;
+    bytes[last] ^= 1;
+    fs::write(&path, bytes).unwrap();
+    assert!(matches!(
+        fixture.try_reconcile(),
+        Err(ProtectedError::Commit(_))
+    ));
+    assert_eq!(fixture.listed_marker_states(), vec![(2, ACTIVE)]);
+    assert_eq!(fixture.payload().as_deref(), Some(&b"first"[..]));
 }

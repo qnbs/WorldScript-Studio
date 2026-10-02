@@ -29,7 +29,7 @@ use crate::authority::{
 };
 use crate::catalog::CatalogDescriptor;
 use crate::commit::{
-    begin_write, describe_record, finish_write, open_marker, reconcile, verify_committed,
+    begin_write, chain_entry_digest, describe_record, finish_write, reconcile, verify_committed,
     CommitError, RecordStore, Resolution, WriteRequest,
 };
 use crate::durable::{DirectoryDurability, DurableFs, WriteOperationId};
@@ -64,6 +64,10 @@ pub enum ProtectedError {
     /// The `ACTIVE` marker was recorded but the catalog already stated it, so no root carried the
     /// transition; nothing can be reported as committed.
     RootNotAdvanced,
+    /// `RECOVERY_REQUIRED`: the record is not catalogued, yet its marker chain resolves to an
+    /// authority. In the protected path an uncatalogued record's chain can only be a rolled-back
+    /// first write, so a chain no committed root ever named is never published.
+    UnrootedChain,
 }
 
 impl From<CommitError> for ProtectedError {
@@ -158,11 +162,16 @@ pub fn reconcile_protected<F: DurableFs, P: KeyProvider>(
     target: ProtectedTarget<'_>,
 ) -> Result<ProtectedReconciled, ProtectedError> {
     let catalog = load_catalog(fs, provider, target.layout)?;
-    if let Some(named) = named_descriptor(catalog.as_ref(), target.store) {
+    let named = named_descriptor(catalog.as_ref(), target.store);
+    if let Some(named) = named {
         verify_named_marker(fs, target.store, named)?;
     }
+    let catalogued = named.is_some();
     let reconciled = reconcile(fs, target.store, target.key_epoch)?;
     let rolled_back_first = reconciled.resolution == Resolution::RolledBack { restored: None };
+    if !catalogued && !rolled_back_first && describe_record(fs, target.store)?.is_some() {
+        return Err(ProtectedError::UnrootedChain);
+    }
     let root = commit_chain_state(fs, provider, target, rolled_back_first)?;
     let catalog = load_catalog(fs, provider, target.layout)?;
     let durability = both(
@@ -219,6 +228,10 @@ fn commit_chain_state<F: DurableFs, P: KeyProvider>(
     if named == desired.as_ref() {
         return Ok(None);
     }
+    // A generation is made readable only once its file is proven to be the committed envelope.
+    if let Some(readable) = desired.as_ref().and_then(CatalogDescriptor::readable) {
+        verify_committed(fs, target.store, readable)?;
+    }
     let remove = [target.store.record.clone()];
     let upsert: Vec<CatalogDescriptor> = desired.into_iter().collect();
     let change = match (upsert.is_empty(), named.is_some()) {
@@ -258,31 +271,25 @@ fn named_descriptor<'c>(
         .find(|descriptor| descriptor.record() == store.record)
 }
 
-/// The marker generation the root names must be in the chain with exactly its entry digest; a
-/// missing or different marker is `RECOVERY_REQUIRED` — never an older or newer marker instead.
+/// The marker generation the root names must be in the record's complete, verified chain
+/// (gap-free from generation 1, every transition legal) with exactly its entry digest; a missing,
+/// replaced or unverifiable marker is `RECOVERY_REQUIRED` — never an older or newer marker instead.
 fn verify_named_marker<F: DurableFs>(
     fs: &mut F,
     store: RecordStore<'_>,
     named: &CatalogDescriptor,
 ) -> Result<(), ProtectedError> {
-    let mismatch = || {
-        ProtectedError::Authority(AuthorityError::RecoveryRequired(
-            CatalogRecoveryReason::MarkerSetMismatch,
-        ))
-    };
-    let marker = match open_marker(fs, store, named.marker_generation()) {
-        Ok(marker) => marker,
-        Err(CommitError::Io {
-            kind: std::io::ErrorKind::NotFound,
-            ..
-        }) => return Err(mismatch()),
-        Err(CommitError::RecoveryRequired(_)) => return Err(mismatch()),
+    let digest = match chain_entry_digest(fs, store, named.marker_generation()) {
+        Ok(digest) => digest,
+        Err(CommitError::RecoveryRequired(_)) => None,
         Err(error) => return Err(error.into()),
     };
-    if marker.entry_digest() == named.marker_entry_digest() {
+    if digest == Some(named.marker_entry_digest()) {
         Ok(())
     } else {
-        Err(mismatch())
+        Err(ProtectedError::Authority(AuthorityError::RecoveryRequired(
+            CatalogRecoveryReason::MarkerSetMismatch,
+        )))
     }
 }
 

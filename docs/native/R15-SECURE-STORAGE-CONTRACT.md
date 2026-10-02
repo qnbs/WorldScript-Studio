@@ -3863,20 +3863,26 @@ Later implementation may be admitted only in these bounded gates:
      the reconciled chain, records `PENDING(old -> new)` and commits it through the root (§9 step 2),
      stages and promotes the candidate and records `ACTIVE(new)` (steps 3–8), then commits that
      through the root (step 9, using §9's admitted variant); only that root transfers authority, and
-     the result is `DURABLE_COMMIT_SUCCESS` only when every directory sync was confirmed, otherwise
+     the result is `DURABLE_COMMIT_SUCCESS` only when every directory sync — markers, record,
+     catalog pages, root slot and pointer — was confirmed, otherwise
      `COMMITTED_NOT_CONFIRMED_DURABLE` (§9.1). `reconcile_protected` is the per-record startup
-     resolution: the root-named marker must still be in the chain with its exact entry digest, the
-     record's pending write is completed or rolled back from authenticated evidence, and the catalog
-     is committed to the result — a rolled-back first write is dropped from its shard, since version 1
-     has no `ABSENT` marker body. `read_protected` serves only the generation the root-named
+     resolution: the root-named marker must still be in the record's complete, verified chain
+     (gap-free from generation 1, every transition legal) with its exact entry digest, the record's
+     pending write is completed or rolled back from authenticated evidence, a generation is made
+     readable only after its file is proven to be the committed envelope, and the catalog is
+     committed to the result — a rolled-back first write is dropped from its shard, since version 1
+     has no `ABSENT` marker body. An uncatalogued record whose chain resolves to any authority is
+     `RECOVERY_REQUIRED` (a chain no committed root ever named is never published), because in this
+     path an uncatalogued record's chain can only be a rolled-back first write. `read_protected` serves only the generation the root-named
      descriptor makes readable (not catalogued, enumerable-but-not-readable, or the verified record);
      a newer marker on disk is a pending transition, never read. Retention (§5.5): nothing deletes a
      marker, catalog page, root slot or record generation; garbage collection needs reader pins
      (§5.3.3) and exclusive admission, Gate 4. Tests cover a first write and a replacement (one root
      per marker transition), an interrupted first write (enumerable, not readable, then dropped), an
      interrupted replacement (old generation served, then `ACTIVE(old)` re-committed), a `PENDING`
-     marker whose root never committed, a chain ahead of the root (not read until reconciled), and a
-     missing or replaced root-named marker. Gate 3 closure — #357's reconciliation and the asset-pair
+     marker whose root never committed, a chain ahead of the root (not read until reconciled), an
+     ahead generation whose file does not verify (not published), a chain no root ever named, and a
+     missing, replaced or earlier-deleted marker. Gate 3 closure — #357's reconciliation and the asset-pair
      marker boundary — is the rest of Gate 3.
 4. **Journal/admission:** implement enable/rotate/recovery state machines, exclusive migration
    admission, bounded inventory/checkpoints, and shutdown/cancellation behavior.
