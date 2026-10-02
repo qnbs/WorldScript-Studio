@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 3, slice 3C part 3a — root and key-epoch records (#445):** the storage contract now
+  fixes the exact byte formats for the stored root of trust, the small pointer to it, and the key
+  epoch records. The protected-storage core can seal, strictly check and open the root and key-epoch
+  records, and encode and strictly check the (unencrypted) pointer. Nothing is
+  committed through them yet; the commit sequence and its crash recovery follow. PR #943.
 - **R-15 Gate 3, slice 3C part 2 — record catalog pages (#445):** the storage contract now fixes
   how the authenticated record catalog is split into pages, and the protected-storage core can build,
   strictly check and seal those pages. Listing stored records will rely on this catalog instead of
