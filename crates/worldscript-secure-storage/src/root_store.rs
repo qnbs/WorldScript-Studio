@@ -19,13 +19,16 @@
 //!
 //! Physical layout (a locator, never identity or AAD): `<root_dir>/slot-a/generation-<n>.wsr1`,
 //! `<root_dir>/slot-b/generation-<n>.wsr1`, and `<root_dir>/pointer`; the platform adapter creates
-//! the directories. Exclusive write admission and
-//! `root_commit_mutex` (§11.1) are Gate 4; this module assumes one writer. Verifying the root's
-//! key-epoch set (cold-start step 5) needs persisted key-epoch records and is slice 3C part 3c.
+//! the slot directories; key-epoch records live in `<root_dir>/key-epoch/<epoch>/generation-<n>.wsr1`.
+//! Both a commit and the cold start verify the root's key-epoch set (§5.3.1 step 5): it must hash to
+//! `key_epoch_set_digest`, with `active_key_epoch` exactly one `KEY_EPOCH_ACTIVE` record that binds
+//! the root's key route. Exclusive write admission and `root_commit_mutex` (§11.1) are Gate 4; this
+//! module assumes one writer.
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use crate::commit::{first_gap, parse_counter, parse_generation_name, parse_staging_name};
 use crate::commit::{relocate, CommitError};
 use crate::durable::{
     generation_path, stage_and_promote, DirectoryDurability, DurableFs, StageFailure, StageRequest,
@@ -36,9 +39,13 @@ use crate::provider::{
     AnchorState, InstallationScopeId, KeyProvider, PrepareRootAnchor, PreparedRootCommit,
     RootKeyRefV1, RootSlot,
 };
-use crate::root::{root_digest, RootBody, RootCommitState, RootError};
+use crate::root::{
+    key_epoch_set_digest, root_digest, KeyEpochEntry, RootBody, RootCommitState, RootError,
+};
 use crate::root_record::{
-    open_root_slot, root_identity, root_slot_plaintext, RootPointer, RootRecordError, RootSlotRead,
+    key_epoch_plaintext, open_root_slot, root_identity, root_slot_plaintext, KeyEpochAddress,
+    KeyEpochRead, KeyEpochRecord, KeyEpochStatus, KeyEpochWrite, RootPointer, RootRecordError,
+    RootSlotRead,
 };
 
 /// Where the root slots and the pointer live.
@@ -62,6 +69,14 @@ impl RootLayout<'_> {
     fn pointer_file(&self) -> PathBuf {
         self.root_dir.join("pointer")
     }
+
+    fn key_epochs_dir(&self) -> PathBuf {
+        self.root_dir.join("key-epoch")
+    }
+
+    fn key_epoch_dir(&self, epoch: u64) -> PathBuf {
+        self.key_epochs_dir().join(epoch.to_string())
+    }
 }
 
 /// The durability step at which a root operation stopped.
@@ -69,6 +84,8 @@ impl RootLayout<'_> {
 pub enum RootStep {
     ReadSlot,
     SyncSlot,
+    ReadKeyEpoch,
+    WriteKeyEpoch,
     WritePointer,
     ReadPointer,
     RelocateSlot,
@@ -86,6 +103,12 @@ pub enum RootRecoveryReason {
     /// The pointer already names a prepared target that does not authenticate: the filesystem
     /// moved to a root the secure anchor cannot prove it authorized (§5.3.1, after E2 before F).
     PointerNamesUnprovenTarget,
+    /// The key-epoch records do not hash to the root's `key_epoch_set_digest`, a record chain has a
+    /// gap or does not open, or an unexpected entry is present (§5.4, cold-start step 5).
+    KeyEpochSetMismatch,
+    /// The root's `active_key_epoch` is not exactly one `KEY_EPOCH_ACTIVE` record binding the root's
+    /// key route (§5.3.1 step 5, §8.3).
+    ActiveEpochNotBound,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -173,6 +196,10 @@ pub fn commit_root<F: DurableFs, P: KeyProvider>(
         return Err(RootStoreError::ScopeMismatch);
     }
     let prepare = preparation(&anchor, request)?;
+    // The root may name only the key-epoch set that is durably on disk, with its active epoch bound
+    // to the route the root is committed under (§5.3.1 step 5, checked before any durable write).
+    let key_epochs = load_key_epoch_set(fs, provider, layout, request.scope, request.root_key_ref)?;
+    verify_key_epochs(request.root, &key_epochs)?;
     let operation = WriteOperationId::generate().map_err(RootStoreError::OperationId)?;
     provider
         .prepare_root_anchor(&prepare)
@@ -307,6 +334,8 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
     if root.root_key_ref_digest != committed.root_key_ref.digest() {
         return Err(recovery(RootRecoveryReason::KeyRouteMismatch));
     }
+    let key_epochs = load_key_epoch_set(fs, provider, layout, &scope, &committed.root_key_ref)?;
+    verify_key_epochs(&root, &key_epochs)?;
     let pointer = RootPointer {
         slot: committed.root_slot,
         root_generation: committed.root_generation,
@@ -319,6 +348,194 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
         root_slot: committed.root_slot,
         pointer_repaired,
     }))
+}
+
+/// A key-epoch record generation to persist: the record, its `registry_generation`, and the root
+/// key route it is sealed under (key-epoch records are control records of the root, §5.3).
+#[derive(Debug, Clone, Copy)]
+pub struct KeyEpochCommit<'a> {
+    pub scope: &'a InstallationScopeId,
+    pub record: &'a KeyEpochRecord,
+    pub registry_generation: u64,
+    pub root_key_ref: &'a RootKeyRefV1,
+    /// The data epoch whose key seals the record.
+    pub key_epoch: u64,
+}
+
+/// Persists a key-epoch record generation as `<root_dir>/key-epoch/<epoch>/generation-<n>.wsr1`
+/// (immutable, generation-addressed; `n` must be exactly the next generation of that epoch) and
+/// returns its `key_epoch_set_digest` entry. A root naming it is committed separately.
+pub fn write_key_epoch<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    commit: KeyEpochCommit<'_>,
+) -> Result<KeyEpochEntry, RootStoreError> {
+    let dir = layout.key_epoch_dir(commit.record.epoch);
+    // Everything is validated before any directory is created, so a refused write leaves nothing.
+    let existing = epoch_generations(fs, &dir)?;
+    if commit.registry_generation != existing.len() as u64 + 1 {
+        return Err(RootStoreError::GenerationNotNext);
+    }
+    let write = KeyEpochWrite {
+        address: KeyEpochAddress {
+            scope: commit.scope,
+            epoch: commit.record.epoch,
+            registry_generation: commit.registry_generation,
+        },
+        key_epoch: commit.key_epoch,
+    };
+    let (identity, meta, payload) =
+        key_epoch_plaintext(commit.record, &write).map_err(RootStoreError::Record)?;
+    let key = provider
+        .resolve_ref(commit.root_key_ref)
+        .map_err(RootStoreError::Anchor)?;
+    ensure_durable_dir(
+        fs,
+        &dir,
+        &[layout.key_epochs_dir().as_path(), layout.root_dir],
+    )?;
+    let operation = WriteOperationId::generate().map_err(RootStoreError::OperationId)?;
+    let stage = StageRequest {
+        dir: &dir,
+        identity: &identity,
+        meta,
+        operation: &operation,
+        retain_staging: false,
+    };
+    let promoted =
+        stage_and_promote(fs, &key, &stage, &payload).map_err(RootStoreError::SlotWrite)?;
+    Ok(KeyEpochEntry {
+        epoch: commit.record.epoch,
+        registry_generation: commit.registry_generation,
+        content_digest: promoted.content_digest,
+    })
+}
+
+/// The current key-epoch set: for every epoch directory, the newest generation of a gap-free
+/// chain, opened under the root key route. Any unexpected name, gap or unopenable record is
+/// `RECOVERY_REQUIRED` — never a silently shorter set.
+pub fn load_key_epoch_set<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    scope: &InstallationScopeId,
+    root_key_ref: &RootKeyRefV1,
+) -> Result<Vec<(KeyEpochRecord, KeyEpochEntry)>, RootStoreError> {
+    let names = match fs.list_dir(&layout.key_epochs_dir()) {
+        Ok(names) => names,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(io_error(RootStep::ReadKeyEpoch, &error)),
+    };
+    let key = provider
+        .resolve_ref(root_key_ref)
+        .map_err(RootStoreError::Anchor)?;
+    let mut set = Vec::with_capacity(names.len());
+    for name in names {
+        let epoch = name
+            .to_str()
+            .and_then(parse_counter)
+            .ok_or(recovery(RootRecoveryReason::KeyEpochSetMismatch))?;
+        let dir = layout.key_epoch_dir(epoch);
+        // An empty epoch directory (a crash after creating it) holds no record; skipping it cannot
+        // hide one, because the root's set digest binds every record the set must contain.
+        let Some(&generation) = epoch_generations(fs, &dir)?.last() else {
+            continue;
+        };
+        let envelope = fs
+            .read(&generation_path(&dir, generation))
+            .map_err(|error| io_error(RootStep::ReadKeyEpoch, &error))?;
+        let read = KeyEpochRead {
+            address: KeyEpochAddress {
+                scope,
+                epoch,
+                registry_generation: generation,
+            },
+            envelope: &envelope,
+        };
+        set.push(
+            KeyEpochRecord::open(&key, &read)
+                .map_err(|_| recovery(RootRecoveryReason::KeyEpochSetMismatch))?,
+        );
+    }
+    Ok(set)
+}
+
+/// Creates `dir` and syncs it and every listed parent (innermost first), so a record promoted
+/// into it can never be lost with its directory entry after a crash.
+fn ensure_durable_dir<F: DurableFs>(
+    fs: &mut F,
+    dir: &Path,
+    parents: &[&Path],
+) -> Result<(), RootStoreError> {
+    let fail = |error: io::Error| io_error(RootStep::WriteKeyEpoch, &error);
+    fs.create_dir_all(dir).map_err(fail)?;
+    for path in std::iter::once(dir).chain(parents.iter().copied()) {
+        fs.sync_dir(path).map_err(fail)?;
+    }
+    Ok(())
+}
+
+/// The sorted, gap-free generations in one epoch directory. Staging leftovers of a crashed write
+/// (`generation-<n>.wsr1.tmp-…`) and relocated bytes are ignored — the root's set digest binds
+/// what counts — and any other name is `RECOVERY_REQUIRED`.
+fn epoch_generations<F: DurableFs>(fs: &mut F, dir: &Path) -> Result<Vec<u64>, RootStoreError> {
+    let names = match fs.list_dir(dir) {
+        Ok(names) => names,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(io_error(RootStep::ReadKeyEpoch, &error)),
+    };
+    let mut generations = Vec::with_capacity(names.len());
+    for name in &names {
+        if let Some(generation) = parse_generation_name(name) {
+            generations.push(generation);
+        } else if !is_epoch_debris(name) {
+            return Err(recovery(RootRecoveryReason::KeyEpochSetMismatch));
+        }
+    }
+    generations.sort_unstable();
+    if first_gap(&generations).is_some() {
+        return Err(recovery(RootRecoveryReason::KeyEpochSetMismatch));
+    }
+    Ok(generations)
+}
+
+/// A staging leftover or relocated bytes in an epoch directory.
+fn is_epoch_debris(name: &std::ffi::OsString) -> bool {
+    name.to_str().is_some_and(|name| {
+        parse_staging_name(name).is_some()
+            || (name.starts_with("generation-") && name.contains(".rejected-"))
+    })
+}
+
+/// Cold-start step 5 (§5.3.1, §8.3): the set must hash to the root's `key_epoch_set_digest`, and
+/// `active_key_epoch` must be exactly one `KEY_EPOCH_ACTIVE` record binding the root's key route.
+fn verify_key_epochs(
+    root: &RootBody,
+    set: &[(KeyEpochRecord, KeyEpochEntry)],
+) -> Result<(), RootStoreError> {
+    let entries: Vec<KeyEpochEntry> = set.iter().map(|(_, entry)| *entry).collect();
+    let digest = key_epoch_set_digest(&entries)
+        .map_err(|_| recovery(RootRecoveryReason::KeyEpochSetMismatch))?;
+    if digest != root.key_epoch_set_digest {
+        return Err(recovery(RootRecoveryReason::KeyEpochSetMismatch));
+    }
+    // §8.3: exactly one KEY_EPOCH_ACTIVE record exists, at active_key_epoch, binding the route.
+    let mut active = set
+        .iter()
+        .filter(|(record, _)| record.status == KeyEpochStatus::Active);
+    let bound = match (active.next(), active.next()) {
+        (Some((record, _)), None) => {
+            record.epoch == root.active_key_epoch
+                && record.root_key_ref.digest() == root.root_key_ref_digest
+        }
+        _ => false,
+    };
+    if bound {
+        Ok(())
+    } else {
+        Err(recovery(RootRecoveryReason::ActiveEpochNotBound))
+    }
 }
 
 fn read_anchor<P: KeyProvider>(provider: &P) -> Result<AnchorState, RootStoreError> {

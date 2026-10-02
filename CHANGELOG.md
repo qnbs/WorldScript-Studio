@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 3, slice 3C part 3c-1 — key epochs checked against the root (#445):** the
+  protected-storage core now stores its key-epoch records and, both when committing a new root of
+  trust and when starting up, requires that the root names exactly those records and that its
+  active key epoch is the one bound to the key it is protected with. PR #945.
 - **R-15 Gate 3, slice 3C part 3b — committing the root of trust (#445):** the protected-storage
   core can now commit a new root of trust in the order the storage contract requires, finish or
   cleanly abandon a commit that was interrupted at any step, and on startup trust only the root the
