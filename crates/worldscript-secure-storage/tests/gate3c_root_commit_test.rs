@@ -17,6 +17,10 @@ use worldscript_secure_storage::{
     RootCommitRequest, RootCommitState, RootKeyRefV1, RootLayout, RootPointer, RootRecovery,
     RootRecoveryReason, RootSlot, RootStoreError, StdFs,
 };
+use worldscript_secure_storage::{
+    key_epoch_set_digest, write_key_epoch, KeyEpochCommit, KeyEpochEntry, KeyEpochRecord,
+    KeyEpochStatus,
+};
 
 /// The real filesystem with one injected failure: creating any file directly inside a directory,
 /// or the atomic pointer rename.
@@ -67,6 +71,10 @@ impl DurableFs for RootFault {
         }
         StdFs.rename_replace(from, to)
     }
+
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        StdFs.create_dir_all(dir)
+    }
 }
 
 /// A fresh temporary root directory, cleared first and removed by `Drop for Fixture`.
@@ -87,6 +95,7 @@ struct Fixture {
     provider: MemoryKeyProvider,
     scope: InstallationScopeId,
     key_ref: RootKeyRefV1,
+    key_epoch_set_digest: [u8; 32],
 }
 
 impl Fixture {
@@ -99,12 +108,46 @@ impl Fixture {
         let scope = provider.read_or_provision_installation_scope().unwrap();
         let key_ref = provider.provision_epoch_key(1).unwrap();
         provider.unlock().unwrap();
-        Fixture {
+        let mut fixture = Fixture {
             root_dir,
             provider,
             scope,
             key_ref,
-        }
+            key_epoch_set_digest: [0; 32],
+        };
+        let entry = fixture.write_epoch(1, KeyEpochStatus::Active, 1).unwrap();
+        fixture.key_epoch_set_digest = key_epoch_set_digest(&[entry]).unwrap();
+        fixture
+    }
+
+    /// Persists generation `registry_generation` of epoch 1's key-epoch record with `status`.
+    fn write_epoch(
+        &mut self,
+        epoch: u64,
+        status: KeyEpochStatus,
+        registry_generation: u64,
+    ) -> Result<KeyEpochEntry, RootStoreError> {
+        let record = KeyEpochRecord {
+            epoch,
+            status,
+            root_key_ref: self.key_ref.clone(),
+        };
+        let commit = KeyEpochCommit {
+            scope: &self.scope,
+            record: &record,
+            registry_generation,
+            root_key_ref: &self.key_ref,
+            key_epoch: 1,
+        };
+        let root_dir = self.root_dir.clone();
+        write_key_epoch(
+            &mut StdFs,
+            &self.provider,
+            RootLayout {
+                root_dir: &root_dir,
+            },
+            commit,
+        )
     }
 
     fn layout(&self) -> RootLayout<'_> {
@@ -121,7 +164,7 @@ impl Fixture {
             root_key_ref_digest: self.key_ref.digest(),
             marker_set_digest: [generation as u8; 32],
             catalog_set_digest: [0x11; 32],
-            key_epoch_set_digest: [0x22; 32],
+            key_epoch_set_digest: self.key_epoch_set_digest,
             commit_evidence: RootCommitEvidence {
                 operation_id: format!("root-op-{generation}"),
                 fencing_generation: 0,
@@ -496,5 +539,102 @@ fn a_discarded_preparation_repairs_the_pointer_to_the_committed_root() {
     assert_eq!(
         fixture.pointer().map(|pointer| pointer.root_generation),
         Some(1)
+    );
+}
+
+fn key_epoch_refusal(reason: RootRecoveryReason) -> Result<(), RootStoreError> {
+    Err(RootStoreError::RecoveryRequired(reason))
+}
+
+#[test]
+fn a_root_must_name_the_persisted_key_epoch_set() {
+    let mut fixture = Fixture::new();
+    fixture.key_epoch_set_digest = [0x22; 32];
+    assert_eq!(
+        fixture.commit(&mut StdFs, 1),
+        key_epoch_refusal(RootRecoveryReason::KeyEpochSetMismatch)
+    );
+    let anchor = fixture.provider.read_root_anchor_state().unwrap();
+    assert!(
+        anchor.prepared_root_commit.is_none(),
+        "refused before step C"
+    );
+}
+
+#[test]
+fn the_active_epoch_must_be_an_active_record_binding_the_root_route() {
+    // Generation 2 of epoch 1 moves it to PREPARED: no ACTIVE record backs active_key_epoch.
+    let mut fixture = Fixture::new();
+    let entry = fixture.write_epoch(1, KeyEpochStatus::Prepared, 2).unwrap();
+    fixture.key_epoch_set_digest = key_epoch_set_digest(&[entry]).unwrap();
+    assert_eq!(
+        fixture.commit(&mut StdFs, 1),
+        key_epoch_refusal(RootRecoveryReason::ActiveEpochNotBound)
+    );
+}
+
+#[test]
+fn cold_start_fails_closed_on_a_tampered_or_gapped_key_epoch_chain() {
+    let mut fixture = Fixture::new();
+    fixture.commit(&mut StdFs, 1).unwrap();
+    let record = fixture
+        .root_dir
+        .join("key-epoch")
+        .join("1")
+        .join("generation-1.wsr1");
+    let original = fs::read(&record).unwrap();
+    flip_last_byte(&record);
+    let tampered = fixture.loaded_generation();
+    fs::write(&record, &original).unwrap();
+    // A later generation without the first one is a gap, never a shorter chain.
+    fs::rename(&record, record.with_file_name("generation-2.wsr1")).unwrap();
+    let gapped = fixture.loaded_generation();
+    let mismatch = Err(RootStoreError::RecoveryRequired(
+        RootRecoveryReason::KeyEpochSetMismatch,
+    ));
+    assert_eq!((tampered, gapped), (mismatch.clone(), mismatch));
+}
+
+#[test]
+fn key_epoch_generations_are_written_strictly_in_order() {
+    let mut fixture = Fixture::new();
+    assert_eq!(
+        fixture
+            .write_epoch(1, KeyEpochStatus::Active, 3)
+            .map(|_| ()),
+        Err(RootStoreError::GenerationNotNext)
+    );
+}
+
+#[test]
+fn an_active_epoch_bound_to_another_route_is_refused() {
+    let mut fixture = Fixture::new();
+    let other_route = fixture.provider.provision_epoch_key(2).unwrap();
+    let record = KeyEpochRecord {
+        epoch: 1,
+        status: KeyEpochStatus::Active,
+        root_key_ref: other_route,
+    };
+    let commit = KeyEpochCommit {
+        scope: &fixture.scope,
+        record: &record,
+        registry_generation: 2,
+        root_key_ref: &fixture.key_ref,
+        key_epoch: 1,
+    };
+    let root_dir = fixture.root_dir.clone();
+    let entry = write_key_epoch(
+        &mut StdFs,
+        &fixture.provider,
+        RootLayout {
+            root_dir: &root_dir,
+        },
+        commit,
+    )
+    .unwrap();
+    fixture.key_epoch_set_digest = key_epoch_set_digest(&[entry]).unwrap();
+    assert_eq!(
+        fixture.commit(&mut StdFs, 1),
+        key_epoch_refusal(RootRecoveryReason::ActiveEpochNotBound)
     );
 }

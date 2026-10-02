@@ -452,7 +452,7 @@ fn load_chain<F: DurableFs>(fs: &mut F, store: RecordStore<'_>) -> Result<Chain,
 }
 
 /// The first generation missing from the sorted, distinct `generations`, which must be `1..=n`.
-fn first_gap(generations: &[u64]) -> Option<u64> {
+pub(crate) fn first_gap(generations: &[u64]) -> Option<u64> {
     generations
         .iter()
         .zip(1u64..)
@@ -860,7 +860,7 @@ fn is_rejected_name(name: &OsString) -> bool {
 }
 
 /// `generation-<n>.wsr1` with canonical decimal `n >= 1`.
-fn parse_generation_name(name: &OsString) -> Option<u64> {
+pub(crate) fn parse_generation_name(name: &OsString) -> Option<u64> {
     let digits = name
         .to_str()?
         .strip_prefix("generation-")?
@@ -878,7 +878,7 @@ fn parse_staging_name(name: &str) -> Option<(u64, WriteOperationId)> {
     (tail == digits).then_some((generation, operation))
 }
 
-fn parse_counter(digits: &str) -> Option<u64> {
+pub(crate) fn parse_counter(digits: &str) -> Option<u64> {
     let canonical = !digits.is_empty()
         && digits.bytes().all(|b| b.is_ascii_digit())
         && !digits.starts_with('0');
