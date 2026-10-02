@@ -33,29 +33,31 @@ impl RootCommitGuard {
     pub fn acquire(root_dir: &Path) -> io::Result<Self> {
         let file = open_lock_file(root_dir)?;
         sys::lock(&file, true)?;
-        Ok(Self::held(root_dir, file))
+        Self::held(root_dir, file)
     }
 
     /// Acquires the mutex only if no other holder has it; `None` when it is held elsewhere.
     pub fn try_acquire(root_dir: &Path) -> io::Result<Option<Self>> {
         let file = open_lock_file(root_dir)?;
         match sys::lock(&file, false) {
-            Ok(()) => Ok(Some(Self::held(root_dir, file))),
+            Ok(()) => Self::held(root_dir, file).map(Some),
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(None),
             Err(error) => Err(error),
         }
     }
 
-    /// Whether this guard is the mutex of `root_dir`.
+    /// Whether this guard is the mutex of `root_dir`: the same directory by its canonical path, so
+    /// another spelling of it (a symlink, `.`/`..`, case on Windows) still matches and a genuinely
+    /// different directory never does. A path that cannot be resolved never matches.
     pub fn guards(&self, root_dir: &Path) -> bool {
-        self.root_dir == root_dir
+        std::fs::canonicalize(root_dir).is_ok_and(|canonical| canonical == self.root_dir)
     }
 
-    fn held(root_dir: &Path, file: File) -> Self {
-        RootCommitGuard {
-            root_dir: root_dir.to_path_buf(),
+    fn held(root_dir: &Path, file: File) -> io::Result<Self> {
+        Ok(RootCommitGuard {
+            root_dir: std::fs::canonicalize(root_dir)?,
             _file: file,
-        }
+        })
     }
 }
 

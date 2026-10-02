@@ -22,8 +22,9 @@
 //! the slot directories; key-epoch records live in `<root_dir>/key-epoch/<epoch>/generation-<n>.wsr1`.
 //! Both a commit and the cold start verify the root's key-epoch set (§5.3.1 step 5): it must hash to
 //! `key_epoch_set_digest`, with `active_key_epoch` exactly one `KEY_EPOCH_ACTIVE` record that binds
-//! the root's key route. Exclusive write admission and `root_commit_mutex` (§11.1) are Gate 4; this
-//! module assumes one writer.
+//! the root's key route. Every function that writes root state takes the held
+//! [`RootCommitGuard`] (§11.1); cold start never writes, and
+//! [`repair_root_pointer`] repairs a stale pointer under the guard. Operation admission is slice 4B.
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -185,8 +186,10 @@ pub struct CommittedRootView {
     /// the same anchor read that selected the root, never re-read separately.
     pub scope: InstallationScopeId,
     pub root_key_ref: RootKeyRefV1,
-    /// Whether the pointer had to be repaired to name the committed root.
-    pub pointer_repaired: bool,
+    /// Whether the pointer is missing or names another root. Cold start never rewrites it — a
+    /// reader takes no `root_commit_mutex` (§11.1) and must not race a commit's pointer move;
+    /// [`repair_root_pointer`] repairs it under the mutex.
+    pub pointer_stale: bool,
 }
 
 /// Commits `request.root` as the next authority root (§5.3.1 A–G). Step F is the only
@@ -307,8 +310,8 @@ pub fn recover_root<F: DurableFs, P: KeyProvider>(
 /// The trusted cold start (§5.3.1 steps 0–4): the scope, slot, generation, digest and key route
 /// come only from the secure anchor; the slot must authenticate to exactly the committed digest,
 /// carry `COMMITTED` evidence and bind the committed route. A pointer that does not name the
-/// committed root is repaired to it — it is recoverable state, never authority. `None` before the
-/// first root commit.
+/// committed root is reported as stale and never followed — it is recoverable state, never
+/// authority — and is not rewritten here. `None` before the first root commit.
 pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,
@@ -354,15 +357,39 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
         root_generation: committed.root_generation,
         root_digest: digest,
     };
-    let pointer_repaired = ensure_pointer(fs, layout, &pointer)?;
+    let pointer_stale = read_pointer(fs, layout)?.as_ref() != Some(&pointer);
     Ok(Some(CommittedRootView {
         root,
         root_digest: digest,
         root_slot: committed.root_slot,
         scope,
         root_key_ref: committed.root_key_ref,
-        pointer_repaired,
+        pointer_stale,
     }))
+}
+
+/// Repairs a stale or missing pointer to the committed root, under the held `root_commit_mutex`:
+/// the anchor is re-read and the committed root re-authenticated while no root writer can run, so
+/// the repair can never move the pointer back behind a concurrent commit. Returns whether it wrote.
+pub fn repair_root_pointer<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    held: &RootCommitGuard,
+) -> Result<bool, RootStoreError> {
+    check_held(held, layout)?;
+    let Some(view) = load_committed_root(fs, provider, layout)? else {
+        return Ok(false);
+    };
+    if !view.pointer_stale {
+        return Ok(false);
+    }
+    let pointer = RootPointer {
+        slot: view.root_slot,
+        root_generation: view.root.root_generation,
+        root_digest: view.root_digest,
+    };
+    ensure_pointer(fs, layout, &pointer)
 }
 
 /// A key-epoch record generation to persist: the record, its `registry_generation`, and the root

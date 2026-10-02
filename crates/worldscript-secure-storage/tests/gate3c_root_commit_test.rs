@@ -11,7 +11,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
-use worldscript_secure_storage::RootCommitGuard;
 use worldscript_secure_storage::{
     commit_root, load_committed_root, recover_root, DirectoryDurability, DurableFs,
     InstallationScopeId, KeyProvider, KeyProviderError, RootBody, RootCommitEvidence,
@@ -22,6 +21,7 @@ use worldscript_secure_storage::{
     key_epoch_set_digest, write_key_epoch, KeyEpochCommit, KeyEpochEntry, KeyEpochRecord,
     KeyEpochStatus,
 };
+use worldscript_secure_storage::{repair_root_pointer, RootCommitGuard};
 
 /// The real filesystem with one injected failure: creating any file directly inside a directory,
 /// or the atomic pointer rename.
@@ -435,27 +435,50 @@ fn cold_start_fails_closed_on_a_missing_or_tampered_committed_slot() {
 }
 
 #[test]
-fn cold_start_repairs_a_stale_or_missing_pointer_to_the_anchor_root() {
+fn cold_start_reports_a_stale_or_missing_pointer_and_repair_needs_the_mutex() {
     let mut fixture = Fixture::new();
     fixture.commit(&mut StdFs, 1).unwrap();
     fixture.commit(&mut StdFs, 2).unwrap();
     let pointer_file = fixture.root_dir.join("pointer");
-    // A pointer naming the older root is recoverable state: the anchor wins and it is repaired.
+    // A pointer naming the older root is recoverable state: the anchor wins, and cold start
+    // reports it without rewriting it (a reader never races a commit's pointer move).
     let stale = RootPointer {
         slot: RootSlot::A,
         root_generation: 1,
         root_digest: [0; 32],
     };
     fs::write(&pointer_file, stale.encode().unwrap()).unwrap();
-    let repaired = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
-    fs::remove_file(&pointer_file).unwrap();
-    let recreated = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
-    let flags = (
-        repaired.map(|view| view.pointer_repaired),
-        recreated.map(|view| view.pointer_repaired),
-        fixture.pointer().map(|pointer| pointer.root_generation),
+    let view = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
+    assert_eq!(
+        view.map(|view| (view.root.root_generation, view.pointer_stale)),
+        Some((2, true))
     );
-    assert_eq!(flags, (Some(true), Some(true), Some(2)));
+    assert_eq!(
+        fixture.pointer().map(|pointer| pointer.root_generation),
+        Some(1)
+    );
+
+    let guard = RootCommitGuard::acquire(&fixture.root_dir).unwrap();
+    let layout = fixture.layout();
+    assert_eq!(
+        repair_root_pointer(&mut StdFs, &fixture.provider, layout, &guard),
+        Ok(true)
+    );
+    assert_eq!(
+        repair_root_pointer(&mut StdFs, &fixture.provider, layout, &guard),
+        Ok(false)
+    );
+    fs::remove_file(&pointer_file).unwrap();
+    assert_eq!(
+        repair_root_pointer(&mut StdFs, &fixture.provider, layout, &guard),
+        Ok(true)
+    );
+    assert_eq!(
+        fixture.pointer().map(|pointer| pointer.root_generation),
+        Some(2)
+    );
+    let view = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
+    assert_eq!(view.map(|view| view.pointer_stale), Some(false));
 }
 
 #[test]

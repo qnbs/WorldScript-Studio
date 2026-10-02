@@ -60,13 +60,42 @@ fn child_holder() {
     assert!(wait_for(|| root.join("release").exists()));
 }
 
-fn spawn_holder(root: &Path, mode: &str) -> Child {
-    Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "child_holder", "--nocapture", "--test-threads=1"])
-        .env(CHILD_DIR, root)
-        .env(CHILD_MODE, mode)
-        .spawn()
-        .unwrap()
+/// A child holder process that is released and reaped on every exit path, including a failed
+/// assertion, so it never outlives the test still holding the lock.
+struct Holder {
+    child: Child,
+    root: PathBuf,
+}
+
+impl Holder {
+    fn spawn(root: &Path, mode: &str) -> Self {
+        let child = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "child_holder", "--nocapture", "--test-threads=1"])
+            .env(CHILD_DIR, root)
+            .env(CHILD_MODE, mode)
+            .spawn()
+            .unwrap();
+        Holder {
+            child,
+            root: root.to_path_buf(),
+        }
+    }
+
+    /// Releases the child and returns whether it exited successfully.
+    fn release(&mut self) -> bool {
+        let _ = fs::write(self.root.join("release"), b"");
+        self.child.wait().is_ok_and(|status| status.success())
+    }
+}
+
+impl Drop for Holder {
+    fn drop(&mut self) {
+        let _ = fs::write(self.root.join("release"), b"");
+        if !matches!(self.child.try_wait(), Ok(Some(_))) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
 }
 
 #[test]
@@ -82,11 +111,10 @@ fn a_held_mutex_excludes_a_second_holder_until_released() {
 #[test]
 fn another_process_holding_the_mutex_excludes_this_one() {
     let root = temp_root();
-    let mut child = spawn_holder(&root, "hold");
+    let mut holder = Holder::spawn(&root, "hold");
     assert!(wait_for(|| root.join("held").exists()), "child never held");
     assert!(RootCommitGuard::try_acquire(&root).unwrap().is_none());
-    fs::write(root.join("release"), b"").unwrap();
-    assert!(child.wait().unwrap().success());
+    assert!(holder.release());
     assert!(RootCommitGuard::try_acquire(&root).unwrap().is_some());
     let _ = fs::remove_dir_all(&root);
 }
@@ -94,8 +122,8 @@ fn another_process_holding_the_mutex_excludes_this_one() {
 #[test]
 fn a_crashed_holder_never_leaves_the_mutex_held() {
     let root = temp_root();
-    let mut child = spawn_holder(&root, "crash");
-    assert!(!child.wait().unwrap().success());
+    let mut holder = Holder::spawn(&root, "crash");
+    assert!(!holder.release());
     assert!(root.join("held").exists(), "child crashed while holding");
     assert!(RootCommitGuard::try_acquire(&root).unwrap().is_some());
     let _ = fs::remove_dir_all(&root);

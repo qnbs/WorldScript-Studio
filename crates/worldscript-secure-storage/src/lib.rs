@@ -97,9 +97,9 @@ pub use root_record::{
     KeyEpochWrite, RootPointer, RootRecordError, RootSlotRead,
 };
 pub use root_store::{
-    commit_root, load_committed_root, load_key_epoch_set, recover_root, write_key_epoch,
-    CommittedRootView, KeyEpochCommit, RootCommitRequest, RootCommitted, RootLayout, RootRecovery,
-    RootRecoveryReason, RootStep, RootStoreError,
+    commit_root, load_committed_root, load_key_epoch_set, recover_root, repair_root_pointer,
+    write_key_epoch, CommittedRootView, KeyEpochCommit, RootCommitRequest, RootCommitted,
+    RootLayout, RootRecovery, RootRecoveryReason, RootStep, RootStoreError,
 };
 #[cfg(feature = "test-randomness")]
 pub use seal::seal_with_random;

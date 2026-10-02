@@ -3215,7 +3215,10 @@ nothing. Every operation that publishes or recovers root state (§5.3.1 C–F, r
 control records) requires the held guard of that exact root directory; a catalog commit acquires it
 before re-reading the root, so the re-read, the recomputed sets and the commit form one critical
 section, and the anchor's `expected_floor` check remains the compare-and-swap that refuses any commit
-from a stale root.
+from a stale root. Readers never take the mutex, so cold start never rewrites the pointer: it reports
+a stale or missing pointer, and only a holder of the mutex repairs it after re-reading the anchor —
+a repair can never move the pointer back behind a concurrent commit. A guard matches its root
+directory by canonical path.
 
 ### 11.2 Locked legacy plaintext
 
@@ -3825,8 +3828,9 @@ Later implementation may be admitted only in these bounded gates:
      whose request scope is not the anchor's installation scope is refused before any write. `load_committed_root` is the trusted cold start (steps 0–4): scope,
      slot, generation, digest and key route come only from the anchor, the slot must authenticate
      to exactly the committed digest and bind the committed route, a pending preparation must be
-     recovered first, and a stale or missing pointer is repaired to the committed root (the anchor
-     always wins). Tests drive every crash window with the fault-injecting in-memory provider and
+     recovered first, and a stale or missing pointer is never followed (the anchor always wins) —
+     since slice 4A cold start only reports it, and `repair_root_pointer` repairs it under
+     `root_commit_mutex`. Tests drive every crash window with the fault-injecting in-memory provider and
      filesystem faults, plus a tampered target slot, a tampered or missing committed slot and a
      stale or missing pointer; they run on Linux, macOS and Windows CI runners (`CI_ONLY`, not
      power-loss evidence).
@@ -3869,7 +3873,8 @@ Later implementation may be admitted only in these bounded gates:
      marker set disagrees with the catalog. A
      key-epoch record written by a root change that never commits is still read as the epoch's newest
      generation (fail-closed `RECOVERY_REQUIRED`); resolving that crash window belongs to the Gate 4
-     journal that admits key-epoch changes. `root_commit_mutex` and exclusive admission are Gate 4.
+     journal that admits key-epoch changes. `root_commit_mutex` landed in Gate 4 slice 4A; exclusive
+     admission is slice 4B.
    - **Slice 3C, part 3c-2b (protected writes and reads through the root)** — `protected_write`
      follows §9: it verifies the root-named marker, reconciles the record and commits the catalog to
      the reconciled chain, records `PENDING(old -> new)` and commits it through the root (§9 step 2),
@@ -3920,8 +3925,9 @@ Later implementation may be admitted only in these bounded gates:
        `gate3c_protected_test`) — the durable and marker-chain suites inject no anchor faults.
      Only ordinary records take the protected path; any other class is refused before anything is
      written. Residuals, each with an owner: the `asset-pair` marker body and member commit
-     (§8.4.1) — Gate 5, before any asset pair migrates; the key-epoch record crash window,
-     `root_commit_mutex`, exclusive admission, reader pins and generation reclamation — Gate 4;
+     (§8.4.1) — Gate 5, before any asset pair migrates; the key-epoch record crash window (4D),
+     exclusive admission, reader pins and generation reclamation (4B) — Gate 4, whose
+     `root_commit_mutex` landed in slice 4A;
      packaged physical power-loss qualification — Gate 6 (#924); record deletion transitions
      (`DELETE_PENDING`/`TOMBSTONED`, §8.5) — #948, before Gate 7; and #357's legacy residual — the
      current TypeScript/Tauri atomic-write path keeps its authority until Gate 7's switch replaces it
@@ -3937,7 +3943,7 @@ Later implementation may be admitted only in these bounded gates:
    - **Slice 4A (the cross-process `root_commit_mutex`)** — `RootCommitGuard` in
      `crates/worldscript-secure-storage` is §11.1's mutex: an exclusive advisory lock on
      `<root_dir>/root-commit.lock` taken through the operating system (rustix's `flock` on Unix, one
-     `LockFileEx` call on Windows — the crate's only `unsafe`, under a crate-wide
+     `LockFileEx` call on Windows — the crate's only `unsafe` blocks, under a crate-wide
      `deny(unsafe_code)`). `commit_root`, `recover_root` and `write_key_epoch` require the held guard
      of their root directory and refuse any other (`MutexNotHeld`); `commit_catalog_change` acquires
      it before re-reading the root, so every catalog and protected-write root commit is one critical
