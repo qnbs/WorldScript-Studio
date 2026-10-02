@@ -7,11 +7,15 @@
 //! pointer). [`commit_root`] runs §5.3.1's A–G sequence — prepare the anchor (C), write the target
 //! slot directly in its `COMMITTED` form (D collapsed into E1, which §5.3.1 admits because the final
 //! evidence is known in advance), move the pointer (E2), then commit the anchor (F) — and verifies
-//! every durable step before the next. [`recover_root`] resolves an interrupted commit from the
-//! crash table: it completes forward only when the target slot authenticates to exactly the
-//! prepared `target_final_root_digest`, and otherwise discards the preparation, relocating (never
-//! deleting) a non-matching target slot. [`load_committed_root`] is the trusted cold start: the
-//! scope and key route come only from the secure anchor, never from the root's own header.
+//! every durable step before the next; a request for any scope but the anchor's is refused.
+//! [`recover_root`] resolves an interrupted commit from the crash table with three outcomes: it
+//! completes forward only when the target slot authenticates to exactly the prepared
+//! `target_final_root_digest`; it fails closed (`RECOVERY_REQUIRED`, nothing touched) when the
+//! pointer already names a target that does not authenticate; and only while the pointer still
+//! names the prior root does it discard the preparation, relocating (never deleting) a
+//! non-matching target slot and repairing the pointer. [`load_committed_root`] is the trusted cold
+//! start: the scope and key route come only from the secure anchor, never from the root's own
+//! header.
 //!
 //! Physical layout (a locator, never identity or AAD): `<root_dir>/slot-a/generation-<n>.wsr1`,
 //! `<root_dir>/slot-b/generation-<n>.wsr1`, and `<root_dir>/pointer`; the platform adapter creates

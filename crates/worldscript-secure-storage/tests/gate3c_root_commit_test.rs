@@ -62,7 +62,7 @@ impl DurableFs for RootFault {
     }
 
     fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
-        if let RootFault::Rename = self {
+        if matches!(self, RootFault::Rename) {
             return Err(io::Error::other("injected rename fault"));
         }
         StdFs.rename_replace(from, to)
