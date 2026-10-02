@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 3, slice 3C part 3c-2a — the stored record catalog (#445):** the protected-storage
+  core now stores the record catalog pages next to the root of trust, commits catalog changes
+  together with a new root, and lists stored records only from pages that match what that root
+  names — a tampered, missing or replayed page stops instead of being trusted, and pages left by an
+  interrupted change are set aside. Nothing reads or writes user data through it yet. PR #946.
 - **R-15 Gate 3, slice 3C part 3c-1 — key epochs checked against the root (#445):** the
   protected-storage core now stores its key-epoch records and, both when committing a new root of
   trust and when starting up, requires that the root names exactly those records and that its

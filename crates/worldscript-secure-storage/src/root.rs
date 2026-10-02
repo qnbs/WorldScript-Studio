@@ -13,8 +13,9 @@ use sha2::{Digest, Sha256};
 
 use crate::aad::tagged_identity_binding_parts;
 use crate::anchor::MAX_OPERATION_ID_LEN;
-use crate::catalog::CATALOG_SHARD_COUNT;
+use crate::catalog::{CatalogDescriptor, CATALOG_SHARD_COUNT};
 use crate::error::AadError;
+use crate::identity::RecordIdentity;
 use crate::marker::CommitMarker;
 use crate::provider::RootSlot;
 
@@ -68,6 +69,23 @@ impl MarkerSetEntry {
             project,
             marker_generation: marker.marker_generation(),
             marker_entry_digest: marker.entry_digest(),
+        })
+    }
+
+    /// The entry for the marker a verified catalog descriptor names (§5.5: a descriptor carries its
+    /// record's current `marker_generation` and `marker_entry_digest`), so the marker set is
+    /// computed from the same catalog the root binds.
+    pub fn from_descriptor(descriptor: &CatalogDescriptor) -> Result<Self, RootError> {
+        let marker = RecordIdentity::commit_marker(descriptor.record())
+            .map_err(|_| RootError::Corrupt("descriptor names a record without a marker"))?;
+        let (logical, project) =
+            tagged_identity_binding_parts(&marker.context()).map_err(RootError::InvalidIdentity)?;
+        Ok(MarkerSetEntry {
+            class: marker.class().token(),
+            logical,
+            project,
+            marker_generation: descriptor.marker_generation(),
+            marker_entry_digest: descriptor.marker_entry_digest(),
         })
     }
 
