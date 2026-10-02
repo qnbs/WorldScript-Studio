@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
+use worldscript_secure_storage::RootCommitGuard;
 use worldscript_secure_storage::{
     commit_root, load_committed_root, recover_root, DirectoryDurability, DurableFs,
     InstallationScopeId, KeyProvider, KeyProviderError, RootBody, RootCommitEvidence,
@@ -132,12 +133,14 @@ impl Fixture {
             status,
             root_key_ref: self.key_ref.clone(),
         };
+        let guard = RootCommitGuard::acquire(&self.root_dir).unwrap();
         let commit = KeyEpochCommit {
             scope: &self.scope,
             record: &record,
             registry_generation,
             root_key_ref: &self.key_ref,
             key_epoch: 1,
+            held: &guard,
         };
         let root_dir = self.root_dir.clone();
         write_key_epoch(
@@ -181,10 +184,12 @@ impl Fixture {
     ) -> Result<(), RootStoreError> {
         let root = self.root(generation);
         let root_dir = self.root_dir.clone();
+        let guard = RootCommitGuard::acquire(&root_dir).unwrap();
         let request = RootCommitRequest {
             scope: &self.scope,
             root: &root,
             root_key_ref: &self.key_ref,
+            held: &guard,
         };
         commit_root(
             fs,
@@ -199,12 +204,14 @@ impl Fixture {
 
     fn recover(&mut self) -> RootRecovery {
         let root_dir = self.root_dir.clone();
+        let guard = RootCommitGuard::acquire(&root_dir).unwrap();
         recover_root(
             &mut StdFs,
             &mut self.provider,
             RootLayout {
                 root_dir: &root_dir,
             },
+            &guard,
         )
         .unwrap()
     }
@@ -288,10 +295,12 @@ fn invalid_roots_are_refused_before_any_durable_write() {
     not_committed.commit_evidence.state = RootCommitState::NotCommitted;
     let root_dir = fixture.root_dir.clone();
     let mut attempt = |root: &RootBody| {
+        let guard = RootCommitGuard::acquire(&root_dir).unwrap();
         let request = RootCommitRequest {
             scope: &fixture.scope,
             root,
             root_key_ref: &fixture.key_ref,
+            held: &guard,
         };
         commit_root(
             &mut StdFs,
@@ -461,12 +470,14 @@ fn a_moved_pointer_to_an_unproven_target_fails_closed_and_touches_nothing() {
     let target = fixture.slot_file("slot-b", 2);
     flip_last_byte(&target);
     let root_dir = fixture.root_dir.clone();
+    let guard = RootCommitGuard::acquire(&root_dir).unwrap();
     let result = recover_root(
         &mut StdFs,
         &mut fixture.provider,
         RootLayout {
             root_dir: &root_dir,
         },
+        &guard,
     );
     assert_eq!(
         result,
@@ -489,10 +500,12 @@ fn a_root_for_another_installation_scope_is_refused() {
     let other = InstallationScopeId::from_random_bits([3u8; 16]);
     let root = fixture.root(1);
     let root_dir = fixture.root_dir.clone();
+    let guard = RootCommitGuard::acquire(&root_dir).unwrap();
     let request = RootCommitRequest {
         scope: &other,
         root: &root,
         root_key_ref: &fixture.key_ref,
+        held: &guard,
     };
     let result = commit_root(
         &mut StdFs,
@@ -615,12 +628,14 @@ fn an_active_epoch_bound_to_another_route_is_refused() {
         status: KeyEpochStatus::Active,
         root_key_ref: other_route,
     };
+    let guard = RootCommitGuard::acquire(&fixture.root_dir).unwrap();
     let commit = KeyEpochCommit {
         scope: &fixture.scope,
         record: &record,
         registry_generation: 2,
         root_key_ref: &fixture.key_ref,
         key_epoch: 1,
+        held: &guard,
     };
     let root_dir = fixture.root_dir.clone();
     let entry = write_key_epoch(
@@ -632,6 +647,7 @@ fn an_active_epoch_bound_to_another_route_is_refused() {
         commit,
     )
     .unwrap();
+    drop(guard);
     fixture.key_epoch_set_digest = key_epoch_set_digest(&[entry]).unwrap();
     assert_eq!(
         fixture.commit(&mut StdFs, 1),

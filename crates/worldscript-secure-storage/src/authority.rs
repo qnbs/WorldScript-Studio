@@ -45,9 +45,10 @@ use crate::root::{
     catalog_set_digest, key_epoch_set_digest, marker_set_digest, CatalogShard, KeyEpochEntry,
     LiveMigration, MarkerSetEntry, RootBody, RootCommitEvidence, RootCommitState, RootError,
 };
+use crate::root_lock::RootCommitGuard;
 use crate::root_store::{
     active_epoch_bound, commit_root, is_generation_debris, load_committed_root, load_key_epoch_set,
-    RootCommitRequest, RootCommitted, RootLayout, RootRecoveryReason, RootStoreError,
+    RootCommitRequest, RootCommitted, RootLayout, RootRecoveryReason, RootStep, RootStoreError,
 };
 use crate::seal::{Key, RecordMeta};
 
@@ -209,6 +210,14 @@ pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
     commit: CatalogCommit<'_>,
 ) -> Result<RootCommitted, AuthorityError> {
     check_operation_id(commit.operation_id).map_err(|_| AuthorityError::InvalidOperationId)?;
+    // §11.1: the root is re-read, the change planned and the root committed under one
+    // `root_commit_mutex`, so a concurrent writer can never commit from the same prior root.
+    let held = RootCommitGuard::acquire(layout.root_dir).map_err(|error| {
+        AuthorityError::Root(RootStoreError::Io {
+            step: RootStep::LockRootCommit,
+            kind: error.kind(),
+        })
+    })?;
     let current = load_catalog(fs, provider, layout)?;
     let scope = match &current {
         Some(catalog) if !keeps_key_route(&catalog.root, commit) => {
@@ -242,6 +251,7 @@ pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
         scope: &scope,
         root: &root,
         root_key_ref: commit.root_key_ref,
+        held: &held,
     };
     let mut committed = commit_root(fs, provider, layout, request)?;
     // `Confirmed` only if every page directory sync was too, not just the slot and pointer ones.

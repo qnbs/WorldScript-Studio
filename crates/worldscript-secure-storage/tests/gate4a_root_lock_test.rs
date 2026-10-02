@@ -1,0 +1,145 @@
+//! Gate 4 slice 4A: the cross-process `root_commit_mutex` (§11.1) — mutual exclusion across
+//! threads and processes, release when a holder crashes, and refusal of a guard for another root.
+//!
+//! The cross-process cases re-run this test binary as a child holder (selected by an environment
+//! variable), so the lock is contended by a genuinely separate process.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
+
+use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
+use worldscript_secure_storage::{
+    recover_root, KeyProvider, RootCommitGuard, RootLayout, RootStoreError, StdFs,
+};
+
+const CHILD_DIR: &str = "WSS_GATE4A_CHILD_ROOT";
+const CHILD_MODE: &str = "WSS_GATE4A_CHILD_MODE";
+
+fn temp_root() -> PathBuf {
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let root = std::env::temp_dir().join(format!(
+        "wss-gate4a-lock-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+    root
+}
+
+/// Polls `condition` for up to 30 s.
+fn wait_for(condition: impl Fn() -> bool) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
+        if condition() {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    false
+}
+
+/// Not a test of its own: when started as a child holder it takes the lock, signals `held`, then
+/// either waits for `release` or crashes while holding it.
+#[test]
+fn child_holder() {
+    let Ok(root) = std::env::var(CHILD_DIR) else {
+        return;
+    };
+    let root = PathBuf::from(root);
+    let _guard = RootCommitGuard::acquire(&root).unwrap();
+    fs::write(root.join("held"), b"").unwrap();
+    if std::env::var(CHILD_MODE).as_deref() == Ok("crash") {
+        std::process::abort();
+    }
+    assert!(wait_for(|| root.join("release").exists()));
+}
+
+fn spawn_holder(root: &Path, mode: &str) -> Child {
+    Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "child_holder", "--nocapture", "--test-threads=1"])
+        .env(CHILD_DIR, root)
+        .env(CHILD_MODE, mode)
+        .spawn()
+        .unwrap()
+}
+
+#[test]
+fn a_held_mutex_excludes_a_second_holder_until_released() {
+    let root = temp_root();
+    let guard = RootCommitGuard::acquire(&root).unwrap();
+    assert!(RootCommitGuard::try_acquire(&root).unwrap().is_none());
+    drop(guard);
+    assert!(RootCommitGuard::try_acquire(&root).unwrap().is_some());
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn another_process_holding_the_mutex_excludes_this_one() {
+    let root = temp_root();
+    let mut child = spawn_holder(&root, "hold");
+    assert!(wait_for(|| root.join("held").exists()), "child never held");
+    assert!(RootCommitGuard::try_acquire(&root).unwrap().is_none());
+    fs::write(root.join("release"), b"").unwrap();
+    assert!(child.wait().unwrap().success());
+    assert!(RootCommitGuard::try_acquire(&root).unwrap().is_some());
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_crashed_holder_never_leaves_the_mutex_held() {
+    let root = temp_root();
+    let mut child = spawn_holder(&root, "crash");
+    assert!(!child.wait().unwrap().success());
+    assert!(root.join("held").exists(), "child crashed while holding");
+    assert!(RootCommitGuard::try_acquire(&root).unwrap().is_some());
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn holders_on_separate_threads_never_overlap() {
+    let root = Arc::new(temp_root());
+    let counter = root.join("counter");
+    fs::write(&counter, b"0").unwrap();
+    let workers: Vec<_> = (0..4)
+        .map(|_| {
+            let root = Arc::clone(&root);
+            thread::spawn(move || {
+                for _ in 0..25 {
+                    let _guard = RootCommitGuard::acquire(&root).unwrap();
+                    // A read-modify-write that loses updates unless the mutex excludes.
+                    let path = root.join("counter");
+                    let value: u32 = fs::read_to_string(&path).unwrap().parse().unwrap();
+                    thread::yield_now();
+                    fs::write(&path, (value + 1).to_string()).unwrap();
+                }
+            })
+        })
+        .collect();
+    for worker in workers {
+        worker.join().unwrap();
+    }
+    assert_eq!(fs::read_to_string(&counter).unwrap(), "100");
+    let _ = fs::remove_dir_all(&*root);
+}
+
+#[test]
+fn a_guard_for_another_root_is_refused() {
+    let root = temp_root();
+    let other = temp_root();
+    let mut provider = MemoryKeyProvider::new();
+    provider.read_or_provision_installation_scope().unwrap();
+    let guard = RootCommitGuard::acquire(&other).unwrap();
+    let layout = RootLayout { root_dir: &root };
+    assert_eq!(
+        recover_root(&mut StdFs, &mut provider, layout, &guard),
+        Err(RootStoreError::MutexNotHeld)
+    );
+    let _ = fs::remove_dir_all(&root);
+    let _ = fs::remove_dir_all(&other);
+}

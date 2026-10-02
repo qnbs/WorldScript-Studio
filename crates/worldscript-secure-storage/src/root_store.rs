@@ -42,6 +42,7 @@ use crate::provider::{
 use crate::root::{
     key_epoch_set_digest, root_digest, KeyEpochEntry, RootBody, RootCommitState, RootError,
 };
+use crate::root_lock::RootCommitGuard;
 use crate::root_record::{
     key_epoch_plaintext, open_root_slot, root_identity, root_slot_plaintext, KeyEpochAddress,
     KeyEpochRead, KeyEpochRecord, KeyEpochStatus, KeyEpochWrite, RootPointer, RootRecordError,
@@ -89,6 +90,7 @@ pub enum RootStep {
     WritePointer,
     ReadPointer,
     RelocateSlot,
+    LockRootCommit,
 }
 
 /// Why the committed root cannot be trusted. Ordinary reads and writes stop (§7).
@@ -136,6 +138,8 @@ pub enum RootStoreError {
     /// could never be opened by cold start.
     ScopeMismatch,
     OperationId(SealError),
+    /// The `root_commit_mutex` guard passed in is not the mutex of this root directory (§11.1).
+    MutexNotHeld,
 }
 
 /// A root to commit: its body (evidence `COMMITTED`, naming this commit's operation) and the key
@@ -145,6 +149,8 @@ pub struct RootCommitRequest<'a> {
     pub scope: &'a InstallationScopeId,
     pub root: &'a RootBody,
     pub root_key_ref: &'a RootKeyRefV1,
+    /// The held `root_commit_mutex` of this root directory (§11.1).
+    pub held: &'a RootCommitGuard,
 }
 
 /// A root that completed step F: published as `committed_root`.
@@ -192,6 +198,7 @@ pub fn commit_root<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     request: RootCommitRequest<'_>,
 ) -> Result<RootCommitted, RootStoreError> {
+    check_held(request.held, layout)?;
     let anchor = read_anchor(provider)?;
     if anchor.prepared_root_commit.is_some() {
         return Err(RootStoreError::PreparationPending);
@@ -240,7 +247,9 @@ pub fn recover_root<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     layout: RootLayout<'_>,
+    held: &RootCommitGuard,
 ) -> Result<RootRecovery, RootStoreError> {
+    check_held(held, layout)?;
     let anchor = read_anchor(provider)?;
     let Some(commit) = anchor.prepared_root_commit.clone() else {
         return Ok(RootRecovery::NothingPending);
@@ -366,6 +375,8 @@ pub struct KeyEpochCommit<'a> {
     pub root_key_ref: &'a RootKeyRefV1,
     /// The data epoch whose key seals the record.
     pub key_epoch: u64,
+    /// The held `root_commit_mutex` of this root directory (§11.1).
+    pub held: &'a RootCommitGuard,
 }
 
 /// Persists a key-epoch record generation as `<root_dir>/key-epoch/<epoch>/generation-<n>.wsr1`
@@ -377,6 +388,7 @@ pub fn write_key_epoch<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     commit: KeyEpochCommit<'_>,
 ) -> Result<KeyEpochEntry, RootStoreError> {
+    check_held(commit.held, layout)?;
     let dir = layout.key_epoch_dir(commit.record.epoch);
     // Everything is validated before any directory is created, so a refused write leaves nothing.
     let existing = epoch_generations(fs, &dir)?;
@@ -548,6 +560,15 @@ pub(crate) fn active_epoch_bound(
             record.epoch == active_key_epoch && record.root_key_ref.digest() == *root_key_ref_digest
         }
         _ => false,
+    }
+}
+
+/// Refuses a guard that is not the `root_commit_mutex` of `layout`'s root directory.
+fn check_held(held: &RootCommitGuard, layout: RootLayout<'_>) -> Result<(), RootStoreError> {
+    if held.guards(layout.root_dir) {
+        Ok(())
+    } else {
+        Err(RootStoreError::MutexNotHeld)
     }
 }
 
