@@ -237,26 +237,38 @@ fn address(
     }
 }
 
+/// Seals `epoch_record()` at `(epoch, registry_generation)` under data epoch 1.
+fn seal_epoch(
+    scope: &InstallationScopeId,
+    epoch: u64,
+    registry_generation: u64,
+) -> Result<Vec<u8>, RootRecordError> {
+    let write = KeyEpochWrite {
+        address: address(scope, epoch, registry_generation),
+        key_epoch: 1,
+    };
+    epoch_record().seal(&key(), &write)
+}
+
+/// Opens `sealed` as the record at `(epoch, registry_generation)`.
+fn open_epoch(
+    scope: &InstallationScopeId,
+    epoch: u64,
+    registry_generation: u64,
+    sealed: &[u8],
+) -> Result<(KeyEpochRecord, worldscript_secure_storage::KeyEpochEntry), RootRecordError> {
+    let read = KeyEpochRead {
+        address: address(scope, epoch, registry_generation),
+        envelope: sealed,
+    };
+    KeyEpochRecord::open(&key(), &read)
+}
+
 #[test]
 fn a_sealed_key_epoch_record_yields_its_set_entry() {
     let scope = scope();
-    let sealed = epoch_record()
-        .seal(
-            &key(),
-            &KeyEpochWrite {
-                address: address(&scope, 1, 3),
-                key_epoch: 1,
-            },
-        )
-        .unwrap();
-    let (record, entry) = KeyEpochRecord::open(
-        &key(),
-        &KeyEpochRead {
-            address: address(&scope, 1, 3),
-            envelope: &sealed,
-        },
-    )
-    .unwrap();
+    let sealed = seal_epoch(&scope, 1, 3).unwrap();
+    let (record, entry) = open_epoch(&scope, 1, 3, &sealed).unwrap();
     let digest = worldscript_secure_storage::content_digest(&sealed);
     assert_eq!(
         (
@@ -267,67 +279,46 @@ fn a_sealed_key_epoch_record_yields_its_set_entry() {
         ),
         (epoch_record(), 1, 3, digest)
     );
-    // Another epoch's identity, another generation, or an unassigned generation never opens it.
+}
+
+#[test]
+fn a_key_epoch_record_opens_only_at_its_own_epoch_and_generation() {
+    let scope = scope();
+    let sealed = seal_epoch(&scope, 1, 3).unwrap();
     let refusals = [
-        KeyEpochRecord::open(
-            &key(),
-            &KeyEpochRead {
-                address: address(&scope, 2, 3),
-                envelope: &sealed,
-            },
-        )
-        .unwrap_err(),
-        KeyEpochRecord::open(
-            &key(),
-            &KeyEpochRead {
-                address: address(&scope, 1, 4),
-                envelope: &sealed,
-            },
-        )
-        .unwrap_err(),
-        KeyEpochRecord::open(
-            &key(),
-            &KeyEpochRead {
-                address: address(&scope, 1, 0),
-                envelope: &sealed,
-            },
-        )
-        .unwrap_err(),
+        open_epoch(&scope, 2, 3, &sealed).unwrap_err(),
+        open_epoch(&scope, 1, 4, &sealed).unwrap_err(),
     ];
     assert_eq!(
         refusals,
         [
             RootRecordError::Open(OpenError::Tampered),
             RootRecordError::GenerationMismatch,
-            RootRecordError::Root(RootError::InvalidCounter),
         ]
     );
-    for bad in [0, u64::MAX] {
-        assert_eq!(
-            epoch_record()
-                .seal(
-                    &key(),
-                    &KeyEpochWrite {
-                        address: address(&scope, 1, bad),
-                        key_epoch: 1
-                    }
-                )
-                .unwrap_err(),
-            RootRecordError::Root(RootError::InvalidCounter)
-        );
-    }
     assert_eq!(
-        epoch_record()
-            .seal(
-                &key(),
-                &KeyEpochWrite {
-                    address: address(&scope, 2, 3),
-                    key_epoch: 1
-                }
-            )
-            .unwrap_err(),
+        seal_epoch(&scope, 2, 3).unwrap_err(),
         RootRecordError::Corrupt("key-epoch record names another epoch")
     );
+}
+
+#[test]
+fn key_epoch_addresses_follow_the_counter_lifecycle() {
+    let scope = scope();
+    let sealed = seal_epoch(&scope, 1, 3).unwrap();
+    let invalid = RootRecordError::Root(RootError::InvalidCounter);
+    // Both the epoch and the registry generation, on both seal and open.
+    for (epoch, generation) in [(0, 3), (u64::MAX, 3), (1, 0), (1, u64::MAX)] {
+        let refused = (
+            seal_epoch(&scope, epoch, generation).unwrap_err(),
+            open_epoch(&scope, epoch, generation, &sealed).unwrap_err(),
+        );
+        assert_eq!(
+            refused,
+            (invalid.clone(), invalid.clone()),
+            "({epoch}, {generation})"
+        );
+    }
 }
 
 #[test]
