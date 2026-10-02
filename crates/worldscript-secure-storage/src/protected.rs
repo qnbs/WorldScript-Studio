@@ -20,8 +20,9 @@
 //! descriptor makes readable.
 //!
 //! Retention (§5.5): nothing here deletes a marker, catalog page, root slot or record generation;
-//! garbage collection needs reader pins (§5.3.3) and exclusive admission, which are Gate 4. This
-//! module assumes one writer.
+//! garbage collection needs reader pins (§5.3.3) and exclusive admission (Gate 4 slice 4B). Each root
+//! commit here runs under the `root_commit_mutex` (§11.1); record-level write admission — one writer
+//! per record across its two root commits — is slice 4B.
 
 use crate::authority::{
     commit_catalog_change, load_catalog, AuthorityError, CatalogChange, CatalogCommit,

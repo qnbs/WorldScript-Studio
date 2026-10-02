@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
+use worldscript_secure_storage::RootCommitGuard;
 use worldscript_secure_storage::{
     commit_write, list_records, protected_write, read_protected, reconcile_protected,
     write_key_epoch, AuthorityError, CatalogRecoveryReason, DirectoryDurability, DurableFs,
@@ -100,12 +101,14 @@ impl Fixture {
             status: KeyEpochStatus::Active,
             root_key_ref: key_ref.clone(),
         };
+        let guard = RootCommitGuard::acquire(&base.join("authority")).unwrap();
         let commit = KeyEpochCommit {
             scope: &scope,
             record: &record,
             registry_generation: 1,
             root_key_ref: &key_ref,
             key_epoch: 1,
+            held: &guard,
         };
         let root_dir = base.join("authority");
         let layout = RootLayout {

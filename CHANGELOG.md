@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4, slice 4A — one root writer at a time, across processes (#445):** every change to
+  the protected-storage root of trust now runs under an operating-system lock, so two app windows
+  or processes can never commit from the same starting point, and a process that crashes while
+  holding it never leaves it stuck. Nothing reads or writes user data through it yet. PR #950.
 - **R-15 Gate 3 complete — crash-durable protected storage core (#445):** the protected-storage
   core now covers everything Gate 3 requires — synced files, never-overwritten generations, synced
   directories where the platform supports it (Windows reports them as not confirmed), startup
