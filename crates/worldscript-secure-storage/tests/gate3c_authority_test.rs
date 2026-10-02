@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::PageAddress;
+use worldscript_secure_storage::RootCommitGuard;
 use worldscript_secure_storage::{
     catalog_set_digest, commit_catalog_change, commit_root, list_records, load_catalog,
     write_key_epoch, AuthorityError, CatalogChange, CatalogCommit, CatalogDescriptor,
@@ -76,12 +77,14 @@ impl Fixture {
             status: KeyEpochStatus::Active,
             root_key_ref: key_ref.clone(),
         };
+        let guard = RootCommitGuard::acquire(&root_dir).unwrap();
         let commit = KeyEpochCommit {
             scope: &scope,
             record: &record,
             registry_generation: 1,
             root_key_ref: &key_ref,
             key_epoch: 1,
+            held: &guard,
         };
         let layout = RootLayout {
             root_dir: &root_dir,
@@ -363,10 +366,12 @@ fn a_root_whose_marker_set_disagrees_is_recovery_required() {
         ..catalog.root
     };
     let root_dir = fixture.root_dir.clone();
+    let guard = RootCommitGuard::acquire(&root_dir).unwrap();
     let request = RootCommitRequest {
         scope: &fixture.scope,
         root: &root,
         root_key_ref: &fixture.key_ref,
+        held: &guard,
     };
     commit_root(
         &mut StdFs,

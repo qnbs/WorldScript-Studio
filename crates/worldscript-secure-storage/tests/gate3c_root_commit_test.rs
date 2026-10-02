@@ -21,6 +21,7 @@ use worldscript_secure_storage::{
     key_epoch_set_digest, write_key_epoch, KeyEpochCommit, KeyEpochEntry, KeyEpochRecord,
     KeyEpochStatus,
 };
+use worldscript_secure_storage::{repair_root_pointer, RootCommitGuard};
 
 /// The real filesystem with one injected failure: creating any file directly inside a directory,
 /// or the atomic pointer rename.
@@ -132,12 +133,14 @@ impl Fixture {
             status,
             root_key_ref: self.key_ref.clone(),
         };
+        let guard = RootCommitGuard::acquire(&self.root_dir).unwrap();
         let commit = KeyEpochCommit {
             scope: &self.scope,
             record: &record,
             registry_generation,
             root_key_ref: &self.key_ref,
             key_epoch: 1,
+            held: &guard,
         };
         let root_dir = self.root_dir.clone();
         write_key_epoch(
@@ -181,10 +184,12 @@ impl Fixture {
     ) -> Result<(), RootStoreError> {
         let root = self.root(generation);
         let root_dir = self.root_dir.clone();
+        let guard = RootCommitGuard::acquire(&root_dir).unwrap();
         let request = RootCommitRequest {
             scope: &self.scope,
             root: &root,
             root_key_ref: &self.key_ref,
+            held: &guard,
         };
         commit_root(
             fs,
@@ -199,12 +204,14 @@ impl Fixture {
 
     fn recover(&mut self) -> RootRecovery {
         let root_dir = self.root_dir.clone();
+        let guard = RootCommitGuard::acquire(&root_dir).unwrap();
         recover_root(
             &mut StdFs,
             &mut self.provider,
             RootLayout {
                 root_dir: &root_dir,
             },
+            &guard,
         )
         .unwrap()
     }
@@ -288,10 +295,12 @@ fn invalid_roots_are_refused_before_any_durable_write() {
     not_committed.commit_evidence.state = RootCommitState::NotCommitted;
     let root_dir = fixture.root_dir.clone();
     let mut attempt = |root: &RootBody| {
+        let guard = RootCommitGuard::acquire(&root_dir).unwrap();
         let request = RootCommitRequest {
             scope: &fixture.scope,
             root,
             root_key_ref: &fixture.key_ref,
+            held: &guard,
         };
         commit_root(
             &mut StdFs,
@@ -426,27 +435,68 @@ fn cold_start_fails_closed_on_a_missing_or_tampered_committed_slot() {
 }
 
 #[test]
-fn cold_start_repairs_a_stale_or_missing_pointer_to_the_anchor_root() {
+fn cold_start_reports_a_stale_or_missing_pointer_and_repair_needs_the_mutex() {
     let mut fixture = Fixture::new();
     fixture.commit(&mut StdFs, 1).unwrap();
     fixture.commit(&mut StdFs, 2).unwrap();
     let pointer_file = fixture.root_dir.join("pointer");
-    // A pointer naming the older root is recoverable state: the anchor wins and it is repaired.
+    // A pointer naming the older root is recoverable state: the anchor wins, and cold start
+    // reports it without rewriting it (a reader never races a commit's pointer move).
     let stale = RootPointer {
         slot: RootSlot::A,
         root_generation: 1,
         root_digest: [0; 32],
     };
     fs::write(&pointer_file, stale.encode().unwrap()).unwrap();
-    let repaired = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
-    fs::remove_file(&pointer_file).unwrap();
-    let recreated = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
-    let flags = (
-        repaired.map(|view| view.pointer_repaired),
-        recreated.map(|view| view.pointer_repaired),
-        fixture.pointer().map(|pointer| pointer.root_generation),
+    let view = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
+    assert_eq!(
+        view.map(|view| (view.root.root_generation, view.pointer_stale)),
+        Some((2, true))
     );
-    assert_eq!(flags, (Some(true), Some(true), Some(2)));
+    assert_eq!(
+        fixture.pointer().map(|pointer| pointer.root_generation),
+        Some(1)
+    );
+
+    let guard = RootCommitGuard::acquire(&fixture.root_dir).unwrap();
+    let layout = fixture.layout();
+    assert_eq!(
+        repair_root_pointer(&mut StdFs, &fixture.provider, layout, &guard),
+        Ok(true)
+    );
+    assert_eq!(
+        repair_root_pointer(&mut StdFs, &fixture.provider, layout, &guard),
+        Ok(false)
+    );
+    fs::remove_file(&pointer_file).unwrap();
+    assert_eq!(
+        repair_root_pointer(&mut StdFs, &fixture.provider, layout, &guard),
+        Ok(true)
+    );
+    assert_eq!(
+        fixture.pointer().map(|pointer| pointer.root_generation),
+        Some(2)
+    );
+    let view = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
+    assert_eq!(view.map(|view| view.pointer_stale), Some(false));
+
+    // An undecodable pointer is stale too, never a reason to refuse the authenticated root.
+    fs::write(&pointer_file, b"not a pointer").unwrap();
+    let view = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
+    assert_eq!(
+        view.map(|view| (view.root.root_generation, view.pointer_stale)),
+        Some((2, true))
+    );
+    assert_eq!(
+        repair_root_pointer(&mut StdFs, &fixture.provider, layout, &guard),
+        Ok(true)
+    );
+    assert_eq!(
+        fixture.pointer().map(|pointer| pointer.root_generation),
+        Some(2)
+    );
+    let view = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
+    assert_eq!(view.map(|view| view.pointer_stale), Some(false));
 }
 
 #[test]
@@ -461,12 +511,14 @@ fn a_moved_pointer_to_an_unproven_target_fails_closed_and_touches_nothing() {
     let target = fixture.slot_file("slot-b", 2);
     flip_last_byte(&target);
     let root_dir = fixture.root_dir.clone();
+    let guard = RootCommitGuard::acquire(&root_dir).unwrap();
     let result = recover_root(
         &mut StdFs,
         &mut fixture.provider,
         RootLayout {
             root_dir: &root_dir,
         },
+        &guard,
     );
     assert_eq!(
         result,
@@ -489,10 +541,12 @@ fn a_root_for_another_installation_scope_is_refused() {
     let other = InstallationScopeId::from_random_bits([3u8; 16]);
     let root = fixture.root(1);
     let root_dir = fixture.root_dir.clone();
+    let guard = RootCommitGuard::acquire(&root_dir).unwrap();
     let request = RootCommitRequest {
         scope: &other,
         root: &root,
         root_key_ref: &fixture.key_ref,
+        held: &guard,
     };
     let result = commit_root(
         &mut StdFs,
@@ -615,12 +669,14 @@ fn an_active_epoch_bound_to_another_route_is_refused() {
         status: KeyEpochStatus::Active,
         root_key_ref: other_route,
     };
+    let guard = RootCommitGuard::acquire(&fixture.root_dir).unwrap();
     let commit = KeyEpochCommit {
         scope: &fixture.scope,
         record: &record,
         registry_generation: 2,
         root_key_ref: &fixture.key_ref,
         key_epoch: 1,
+        held: &guard,
     };
     let root_dir = fixture.root_dir.clone();
     let entry = write_key_epoch(
@@ -632,6 +688,7 @@ fn an_active_epoch_bound_to_another_route_is_refused() {
         commit,
     )
     .unwrap();
+    drop(guard);
     fixture.key_epoch_set_digest = key_epoch_set_digest(&[entry]).unwrap();
     assert_eq!(
         fixture.commit(&mut StdFs, 1),

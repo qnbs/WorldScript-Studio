@@ -14,6 +14,8 @@
 //! It changes no current
 //! TypeScript/Tauri storage authority and holds no journal yet.
 
+#![deny(unsafe_code)]
+
 pub mod aad;
 pub mod anchor;
 pub mod anchor_codec;
@@ -36,6 +38,7 @@ pub mod record;
 pub mod record_class;
 pub mod recovery;
 pub mod root;
+pub mod root_lock;
 pub mod root_record;
 pub mod root_store;
 pub mod seal;
@@ -88,14 +91,15 @@ pub use root::{
     marker_set_digest, pointer_digest, root_digest, CatalogShard, KeyEpochEntry, LiveMigration,
     MarkerSetEntry, RootBody, RootCommitEvidence, RootCommitState, RootError,
 };
+pub use root_lock::{RootCommitGuard, ROOT_COMMIT_LOCK_FILE};
 pub use root_record::{
     open_root_slot, seal_root_slot, KeyEpochAddress, KeyEpochRead, KeyEpochRecord, KeyEpochStatus,
     KeyEpochWrite, RootPointer, RootRecordError, RootSlotRead,
 };
 pub use root_store::{
-    commit_root, load_committed_root, load_key_epoch_set, recover_root, write_key_epoch,
-    CommittedRootView, KeyEpochCommit, RootCommitRequest, RootCommitted, RootLayout, RootRecovery,
-    RootRecoveryReason, RootStep, RootStoreError,
+    commit_root, load_committed_root, load_key_epoch_set, recover_root, repair_root_pointer,
+    write_key_epoch, CommittedRootView, KeyEpochCommit, RootCommitRequest, RootCommitted,
+    RootLayout, RootRecovery, RootRecoveryReason, RootStep, RootStoreError,
 };
 #[cfg(feature = "test-randomness")]
 pub use seal::seal_with_random;
