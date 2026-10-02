@@ -19,8 +19,8 @@
 //! shard (an emptied shard keeps a zero-descriptor page), and commits the root that names them;
 //! until that root commits, the prior catalog stays authority. A change keeps the committed key
 //! route and epoch; changing them is a key rotation (Gate 5). This module assumes one writer —
-//! exclusive admission and `root_commit_mutex` are Gate 4. Wiring the record commit protocol
-//! through it is slice 3C part 3c-2b.
+//! exclusive admission and `root_commit_mutex` are Gate 4. [`protected`](crate::protected) commits
+//! the record write protocol through it.
 
 use std::collections::BTreeMap;
 use std::io;
