@@ -479,6 +479,18 @@ fn cold_start_reports_a_stale_or_missing_pointer_and_repair_needs_the_mutex() {
     );
     let view = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
     assert_eq!(view.map(|view| view.pointer_stale), Some(false));
+
+    // An undecodable pointer is stale too, never a reason to refuse the authenticated root.
+    fs::write(&pointer_file, b"not a pointer").unwrap();
+    let view = load_committed_root(&mut StdFs, &fixture.provider, fixture.layout()).unwrap();
+    assert_eq!(
+        view.map(|view| (view.root.root_generation, view.pointer_stale)),
+        Some((2, true))
+    );
+    assert_eq!(
+        repair_root_pointer(&mut StdFs, &fixture.provider, layout, &guard),
+        Ok(true)
+    );
 }
 
 #[test]

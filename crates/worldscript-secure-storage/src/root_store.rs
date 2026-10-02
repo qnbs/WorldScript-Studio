@@ -357,7 +357,9 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
         root_generation: committed.root_generation,
         root_digest: digest,
     };
-    let pointer_stale = read_pointer(fs, layout)?.as_ref() != Some(&pointer);
+    // The pointer is recoverable state, never authority: an unreadable or undecodable pointer is
+    // reported as stale like a missing one, never a reason to refuse the authenticated root.
+    let pointer_stale = !matches!(read_pointer(fs, layout), Ok(Some(found)) if found == pointer);
     Ok(Some(CommittedRootView {
         root,
         root_digest: digest,
