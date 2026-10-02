@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   core now has kernel-backed admission across processes, automatic crash release and typed guards
   that bind the installation and authority-root directories. Root events stay beneath the same
   admission. Protected-operation and lock/unlock integration follow in the next 4B slice; #360
-  remains open. No production authority switch is enabled.
+  remains open. No production authority switch is enabled. PR #951.
 - **R-15 Gate 4, slice 4A — one root writer at a time, across processes (#445):** every change to
   the protected-storage root of trust now runs under an operating-system lock, so two app windows
   or processes can never commit from the same starting point, and a process that crashes while
