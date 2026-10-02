@@ -229,6 +229,10 @@ impl DurableFs for FaultFs {
     fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> {
         StdFs.list_dir(dir)
     }
+
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        StdFs.rename_replace(from, to)
+    }
 }
 
 /// Marker-directory syncs in one write: the chain loads of the initial reconciliation and of the

@@ -53,6 +53,10 @@ pub trait DurableFs {
     fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability>;
     /// The names of the entries directly inside `dir`, in no particular order.
     fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>>;
+    /// Atomically replaces `to` with `from` within one directory (the §5.3 pointer's
+    /// atomic-rename-and-fsync mechanism). Used only for the recoverable root pointer, never for a
+    /// generation file.
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()>;
 }
 
 /// The real filesystem. On Apple platforms `File::sync_all` issues `F_FULLFSYNC`; on Windows it is
@@ -100,6 +104,12 @@ impl DurableFs for StdFs {
         fs::read_dir(dir)?
             .map(|entry| entry.map(|entry| entry.file_name()))
             .collect()
+    }
+
+    /// `std::fs::rename`: `rename(2)` on Unix and `MoveFileExW(MOVEFILE_REPLACE_EXISTING)` on
+    /// Windows, both of which replace an existing destination.
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        fs::rename(from, to)
     }
 }
 
