@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 3, slice 3C part 3b — committing the root of trust (#445):** the protected-storage
+  core can now commit a new root of trust in the order the storage contract requires, finish or
+  cleanly abandon a commit that was interrupted at any step, and on startup trust only the root the
+  secure key store names — repairing a stale pointer instead of following it. Nothing reads or
+  writes user data through it yet. PR #944.
 - **R-15 Gate 3, slice 3C part 3a — root and key-epoch records (#445):** the storage contract now
   fixes the exact byte formats for the stored root of trust, the small pointer to it, and the key
   epoch records. The protected-storage core can seal, strictly check and open the root and key-epoch
