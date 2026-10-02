@@ -585,7 +585,7 @@ jobs:
       # QNBS-v3: R-15 Gate 3 slices 3A/3B/3C staging, promotion, commit markers, reconciliation and the root commit on macOS/Windows filesystems (Linux already runs them in core-rust) — CI_ONLY, not power-loss evidence.
       - name: Durable staging, promotion and commit reconciliation on this OS filesystem (macOS / Windows)
         if: runner.os != 'Linux'
-        run: cargo test --locked -p worldscript-secure-storage --test gate3_durable_test --test gate3b_marker_test --test gate3b_commit_test --test gate3c_root_commit_test --test gate3c_authority_test
+        run: cargo test --locked -p worldscript-secure-storage --test gate3_durable_test --test gate3b_marker_test --test gate3b_commit_test --test gate3c_root_commit_test --test gate3c_authority_test --test gate3c_catalog_test
       - name: Real secure-store lifecycle (macOS / Windows)
         if: runner.os != 'Linux'
         run: cargo test --locked -p worldscript-secure-storage --features platform-keystore --test platform_keystore_test -- --ignored full_lifecycle

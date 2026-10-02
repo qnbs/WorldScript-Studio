@@ -6,13 +6,14 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
+use worldscript_secure_storage::PageAddress;
 use worldscript_secure_storage::{
     catalog_set_digest, commit_catalog_change, commit_root, list_records, load_catalog,
     write_key_epoch, AuthorityError, CatalogChange, CatalogCommit, CatalogDescriptor,
     CatalogRecoveryReason, CatalogShard, CommitMarker, CommittedGeneration, InstallationScopeId,
     KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LoadedCatalog, MarkerBody,
     RecordClass, RecordIdentity, RootBody, RootCommitEvidence, RootCommitRequest, RootCommitState,
-    RootKeyRefV1, RootLayout, RootStoreError, StdFs,
+    RootKeyRefV1, RootLayout, RootRecoveryReason, RootStoreError, StdFs,
 };
 
 /// A fresh temporary root directory, cleared first and removed by `Drop for Fixture`.
@@ -110,6 +111,7 @@ impl Fixture {
         let operation_id = format!("catalog-op-{}", self.next_operation);
         let root_dir = self.root_dir.clone();
         let commit = CatalogCommit {
+            change: CatalogChange { upsert, remove },
             root_key_ref: &self.key_ref,
             active_key_epoch: 1,
             operation_id: &operation_id,
@@ -120,7 +122,6 @@ impl Fixture {
             RootLayout {
                 root_dir: &root_dir,
             },
-            CatalogChange { upsert, remove },
             commit,
         )
         .map(|committed| committed.root_generation)
@@ -379,5 +380,69 @@ fn a_root_whose_marker_set_disagrees_is_recovery_required() {
     assert_eq!(
         fixture.load(),
         Err(recovery(CatalogRecoveryReason::MarkerSetMismatch))
+    );
+}
+
+#[test]
+fn a_commit_that_commit_root_would_refuse_writes_no_page() {
+    let mut fixture = Fixture::new();
+    let root_dir = fixture.root_dir.clone();
+    let upsert = [active(&settings(), 1)];
+    let mut commit = CatalogCommit {
+        change: CatalogChange {
+            upsert: &upsert,
+            remove: &[],
+        },
+        root_key_ref: &fixture.key_ref.clone(),
+        // No KEY_EPOCH_ACTIVE record exists for epoch 2.
+        active_key_epoch: 2,
+        operation_id: "catalog-op-epoch",
+    };
+    let layout = RootLayout {
+        root_dir: &root_dir,
+    };
+    assert_eq!(
+        commit_catalog_change(&mut StdFs, &mut fixture.provider, layout, commit),
+        Err(AuthorityError::Root(RootStoreError::RecoveryRequired(
+            RootRecoveryReason::ActiveEpochNotBound
+        )))
+    );
+    commit.active_key_epoch = 1;
+    commit.operation_id = "";
+    assert_eq!(
+        commit_catalog_change(&mut StdFs, &mut fixture.provider, layout, commit),
+        Err(AuthorityError::InvalidOperationId)
+    );
+    assert!(!root_dir.join("catalog").exists());
+    assert_eq!(fixture.load(), Ok(None));
+}
+
+#[test]
+fn a_page_sealed_under_another_epoch_is_recovery_required() {
+    let mut fixture = Fixture::new();
+    fixture.change(&[active(&settings(), 1)], &[]).unwrap();
+    let catalog = fixture.loaded();
+    let key = fixture.provider.resolve_ref(&fixture.key_ref).unwrap();
+    let address = PageAddress {
+        scope: &fixture.scope,
+        shard_id: 85,
+        catalog_generation: 1,
+    };
+    let resealed = catalog.shards[0].page.seal(&key, &address, 2).unwrap();
+    fs::write(fixture.page_file(85, 1), resealed).unwrap();
+    assert_eq!(
+        fixture.load(),
+        Err(recovery(CatalogRecoveryReason::CatalogSetMismatch))
+    );
+}
+
+#[test]
+fn a_file_where_a_shard_directory_belongs_is_recovery_required() {
+    let mut fixture = Fixture::new();
+    fixture.change(&[active(&settings(), 1)], &[]).unwrap();
+    fs::write(fixture.root_dir.join("catalog").join("7"), b"x").unwrap();
+    assert_eq!(
+        fixture.load(),
+        Err(recovery(CatalogRecoveryReason::CatalogSetMismatch))
     );
 }

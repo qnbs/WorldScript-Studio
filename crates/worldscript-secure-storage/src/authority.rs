@@ -10,19 +10,21 @@
 //! [`commit_catalog_change`] relocates it (never deletes it) before any page is written.
 //!
 //! [`load_catalog`] trusts nothing the directory listing says: it starts from the trusted cold
-//! start ([`load_committed_root`]), opens each shard's newest committed page, and requires the
+//! start ([`load_committed_root`]), opens each shard's newest committed page under that same
+//! anchor's scope and route, requires it to carry the root's `active_key_epoch`, and requires the
 //! pages to hash to the root's `catalog_set_digest` and their descriptors' markers to hash to its
 //! `marker_set_digest`; any other result is `RECOVERY_REQUIRED`. [`list_records`] returns the
 //! verified descriptors. [`commit_catalog_change`] applies descriptor upserts and removals,
-//! writes one new page generation per affected shard (an emptied shard keeps a zero-descriptor
-//! page), and commits the root that names them through [`commit_root`]; until that root commits,
-//! the prior catalog stays authority. Wiring the record commit protocol through it is slice 3C
-//! part 3c-2b.
+//! checks everything [`commit_root`] would refuse, writes one new page generation per affected
+//! shard (an emptied shard keeps a zero-descriptor page), and commits the root that names them;
+//! until that root commits, the prior catalog stays authority. Wiring the record commit protocol
+//! through it is slice 3C part 3c-2b.
 
 use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::anchor::check_operation_id;
 use crate::catalog::{
     catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, PageAddress,
     CATALOG_PAGE_RECORD_SCHEMA, CATALOG_SHARD_COUNT,
@@ -31,17 +33,18 @@ use crate::commit::{parse_counter, parse_generation_name, relocate, CommitError}
 use crate::durable::{
     generation_path, stage_and_promote, DurableFs, StageFailure, StageRequest, WriteOperationId,
 };
-use crate::error::{KeyProviderError, SealError};
+use crate::envelope::parse_envelope;
+use crate::error::SealError;
 use crate::identity::RecordIdentity;
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
 use crate::root::{
     catalog_set_digest, key_epoch_set_digest, marker_set_digest, CatalogShard, KeyEpochEntry,
-    MarkerSetEntry, RootBody, RootCommitEvidence, RootCommitState, RootError,
+    LiveMigration, MarkerSetEntry, RootBody, RootCommitEvidence, RootCommitState, RootError,
 };
 use crate::root_store::{
-    commit_root, is_generation_debris, load_committed_root, load_key_epoch_set, RootCommitRequest,
-    RootCommitted, RootLayout, RootStoreError,
+    active_epoch_bound, commit_root, is_generation_debris, load_committed_root, load_key_epoch_set,
+    RootCommitRequest, RootCommitted, RootLayout, RootRecoveryReason, RootStoreError,
 };
 use crate::seal::{Key, RecordMeta};
 
@@ -57,8 +60,9 @@ pub enum CatalogStep {
 /// Why the persisted catalog cannot be trusted. Ordinary reads and writes stop (§7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogRecoveryReason {
-    /// The committed pages do not hash to the root's `catalog_set_digest`, a committed page does
-    /// not open, or an unexpected entry is present in the catalog directory.
+    /// The committed pages do not hash to the root's `catalog_set_digest`, a committed page is
+    /// missing, does not open or carries another key epoch than the root's `active_key_epoch`, or
+    /// an unexpected entry is present in the catalog directory.
     CatalogSetMismatch,
     /// The catalogued descriptors' markers do not hash to the root's `marker_set_digest`.
     MarkerSetMismatch,
@@ -77,6 +81,8 @@ pub enum AuthorityError {
     RecoveryRequired(CatalogRecoveryReason),
     /// No installation scope is provisioned, so no root can be committed (§5.3.2).
     NoInstallationScope,
+    /// The commit's `operation_id` is empty or longer than §6.1.2's bound.
+    InvalidOperationId,
     /// A removal names a record the committed catalog does not hold.
     NotCatalogued,
     /// A change names the same record twice.
@@ -107,6 +113,8 @@ pub struct CommittedShard {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadedCatalog {
     pub root: RootBody,
+    /// The installation scope the root and pages were opened in.
+    pub scope: InstallationScopeId,
     /// Every committed shard, ascending by `shard_id`.
     pub shards: Vec<CommittedShard>,
 }
@@ -129,9 +137,11 @@ pub struct CatalogChange<'a> {
     pub remove: &'a [RecordIdentity],
 }
 
-/// How the root that publishes a catalog change is sealed and who commits it.
+/// One catalog commit: the descriptor changes, the key route and epoch the new root and pages are
+/// sealed under, and the operation that commits the root.
 #[derive(Debug, Clone, Copy)]
 pub struct CatalogCommit<'a> {
+    pub change: CatalogChange<'a>,
     pub root_key_ref: &'a RootKeyRefV1,
     pub active_key_epoch: u64,
     /// The root's `root_commit_evidence` operation (§5.4).
@@ -149,28 +159,24 @@ pub fn load_catalog<F: DurableFs, P: KeyProvider>(
     let Some(view) = load_committed_root(fs, provider, layout)? else {
         return Ok(None);
     };
-    let anchor = provider
-        .read_root_anchor_state()
-        .map_err(|error| AuthorityError::Root(RootStoreError::Anchor(error)))?;
-    let (Some(committed), Some(scope)) = (anchor.committed_root, anchor.installation_scope_id)
-    else {
-        return Err(AuthorityError::Root(RootStoreError::Anchor(
-            KeyProviderError::RecoveryRequired,
-        )));
+    let key = resolve(provider, &view.root_key_ref)?;
+    let reader = PageRead {
+        key: &key,
+        scope: &view.scope,
+        key_epoch: view.root.active_key_epoch,
     };
-    let key = provider
-        .resolve_ref(&committed.root_key_ref)
-        .map_err(|error| AuthorityError::Root(RootStoreError::Anchor(error)))?;
-    let root = view.root;
     let mut shards = Vec::new();
     for listed in scan_catalog(fs, layout)? {
-        let Some(generation) = listed.committed(root.root_generation) else {
-            continue;
-        };
-        shards.push(open_page(fs, &key, &scope, &listed, generation)?);
+        if let Some(generation) = listed.committed(view.root.root_generation) {
+            shards.push(reader.open(fs, &listed, generation)?);
+        }
     }
-    verify_catalog(&root, &shards)?;
-    Ok(Some(LoadedCatalog { root, shards }))
+    verify_catalog(&view.root, &shards)?;
+    Ok(Some(LoadedCatalog {
+        root: view.root,
+        scope: view.scope,
+        shards,
+    }))
 }
 
 /// `list_records` (§5.5): every catalogued record's descriptor, verified against the committed
@@ -185,91 +191,43 @@ pub fn list_records<F: DurableFs, P: KeyProvider>(
         .unwrap_or_default())
 }
 
-/// Applies `change` to the committed catalog and commits the next root naming the new pages.
-/// Everything that can be refused is refused before any durable write; until the root commits
-/// (step F of [`commit_root`]) the prior root and catalog stay authority.
+/// Applies `commit.change` to the committed catalog and commits the next root naming the new
+/// pages. Everything [`commit_root`] would refuse — the operation ID, the generation, the
+/// key-epoch set and its active-epoch binding — is checked before any leftover is relocated or
+/// any page written; until the root commits (step F) the prior root and catalog stay authority.
 pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     layout: RootLayout<'_>,
-    change: CatalogChange<'_>,
     commit: CatalogCommit<'_>,
 ) -> Result<RootCommitted, AuthorityError> {
+    check_operation_id(commit.operation_id).map_err(|_| AuthorityError::InvalidOperationId)?;
     let current = load_catalog(fs, provider, layout)?;
-    let scope = provider
-        .read_root_anchor_state()
-        .map_err(|error| AuthorityError::Root(RootStoreError::Anchor(error)))?
-        .installation_scope_id
-        .ok_or(AuthorityError::NoInstallationScope)?;
-    let prior_generation = current.as_ref().map_or(0, |c| c.root.root_generation);
-    let target_generation = prior_generation
-        .checked_add(1)
-        .filter(|&next| next < u64::MAX)
-        .ok_or(AuthorityError::GenerationExhausted)?;
-    let mut shards = current_pages(current.as_ref());
-    let affected = apply_change(&mut shards, change)?;
-    let mut pages = Vec::with_capacity(affected.len());
-    for shard_id in affected {
-        let descriptors = shards.get(&shard_id).cloned().unwrap_or_default();
-        pages.push(CatalogPage::new(shard_id, descriptors).map_err(AuthorityError::Catalog)?);
-    }
-    let key_epochs = load_key_epoch_set(fs, provider, layout, &scope, commit.root_key_ref)?;
-    let key_epoch_entries: Vec<KeyEpochEntry> =
-        key_epochs.iter().map(|(_, entry)| *entry).collect();
-    let key = provider
-        .resolve_ref(commit.root_key_ref)
-        .map_err(|error| AuthorityError::Root(RootStoreError::Anchor(error)))?;
-
-    // Leftovers of an uncommitted change would otherwise collide with this change's pages or be
-    // mistaken for committed ones once the root reaches their generation.
-    for listed in scan_catalog(fs, layout)? {
-        for generation in listed.uncommitted(prior_generation) {
-            let path = generation_path(&listed.dir, generation);
-            relocate(fs, &listed.dir, &path, commit.operation_id)
-                .map_err(AuthorityError::Relocate)?;
-        }
-    }
-
-    let mut set: BTreeMap<u32, CatalogShard> = current
-        .iter()
-        .flat_map(|catalog| catalog.shards.iter())
-        .map(|committed| (committed.shard.shard_id, committed.shard))
-        .collect();
+    let scope = match &current {
+        Some(catalog) => catalog.scope.clone(),
+        None => provider
+            .read_root_anchor_state()
+            .map_err(|error| AuthorityError::Root(RootStoreError::Anchor(error)))?
+            .installation_scope_id
+            .ok_or(AuthorityError::NoInstallationScope)?,
+    };
+    let plan = ChangePlan::new(current, commit.change)?;
+    let target = RootTarget {
+        layout,
+        scope: &scope,
+    };
+    let key_epoch_set_digest = preflight_key_epochs(fs, provider, &target, commit)?;
+    let key = resolve(provider, commit.root_key_ref)?;
+    relocate_leftovers(fs, layout, plan.prior_generation, commit.operation_id)?;
     let write = PageWrite {
         layout,
         scope: &scope,
         key: &key,
         key_epoch: commit.active_key_epoch,
-        catalog_generation: target_generation,
+        catalog_generation: plan.target_generation,
     };
-    for page in &pages {
-        let shard = write.page(fs, page)?;
-        set.insert(shard.shard_id, shard);
-    }
-
-    let catalog_shards: Vec<CatalogShard> = set.into_values().collect();
-    let markers = shards
-        .values()
-        .flatten()
-        .map(MarkerSetEntry::from_descriptor)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(AuthorityError::Digest)?;
-    let root = RootBody {
-        root_generation: target_generation,
-        active_key_epoch: commit.active_key_epoch,
-        root_key_ref_digest: commit.root_key_ref.digest(),
-        marker_set_digest: marker_set_digest(&markers).map_err(AuthorityError::Digest)?,
-        catalog_set_digest: catalog_set_digest(&catalog_shards).map_err(AuthorityError::Digest)?,
-        key_epoch_set_digest: key_epoch_set_digest(&key_epoch_entries)
-            .map_err(AuthorityError::Digest)?,
-        commit_evidence: RootCommitEvidence {
-            operation_id: commit.operation_id.to_owned(),
-            fencing_generation: 0,
-            state: RootCommitState::Committed,
-        },
-        // An ordinary catalog change never ends a live migration's binding.
-        live_migration: current.and_then(|catalog| catalog.root.live_migration),
-    };
+    let catalog_shards = plan.write_pages(fs, &write)?;
+    let root = plan.root_body(commit, &catalog_shards, key_epoch_set_digest)?;
     let request = RootCommitRequest {
         scope: &scope,
         root: &root,
@@ -278,18 +236,151 @@ pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
     Ok(commit_root(fs, provider, layout, request)?)
 }
 
-/// The committed descriptors by shard; a committed empty shard is kept as an empty list.
-fn current_pages(current: Option<&LoadedCatalog>) -> BTreeMap<u32, Vec<CatalogDescriptor>> {
-    current
-        .into_iter()
-        .flat_map(|catalog| catalog.shards.iter())
-        .map(|committed| {
-            (
-                committed.shard.shard_id,
-                committed.page.descriptors().to_vec(),
-            )
+/// The key-epoch set the new root names: its digest, after checking that `active_key_epoch` is
+/// exactly one `KEY_EPOCH_ACTIVE` record binding the commit's route (§8.3) — the check
+/// [`commit_root`] repeats, made here so a refused commit writes no page.
+fn preflight_key_epochs<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    target: &RootTarget<'_>,
+    commit: CatalogCommit<'_>,
+) -> Result<[u8; 32], AuthorityError> {
+    let set = load_key_epoch_set(
+        fs,
+        provider,
+        target.layout,
+        target.scope,
+        commit.root_key_ref,
+    )?;
+    let route_digest = commit.root_key_ref.digest();
+    if !active_epoch_bound(&set, commit.active_key_epoch, &route_digest) {
+        return Err(AuthorityError::Root(RootStoreError::RecoveryRequired(
+            RootRecoveryReason::ActiveEpochNotBound,
+        )));
+    }
+    let entries: Vec<KeyEpochEntry> = set.iter().map(|(_, entry)| *entry).collect();
+    key_epoch_set_digest(&entries).map_err(AuthorityError::Digest)
+}
+
+/// The root directory and installation scope a catalog commit targets.
+struct RootTarget<'a> {
+    layout: RootLayout<'a>,
+    scope: &'a InstallationScopeId,
+}
+
+/// Relocates (never deletes) every page no root up to `prior_generation` published: it would
+/// otherwise collide with this change's pages, or be mistaken for a committed page once the root
+/// reaches its generation.
+fn relocate_leftovers<F: DurableFs>(
+    fs: &mut F,
+    layout: RootLayout<'_>,
+    prior_generation: u64,
+    operation_id: &str,
+) -> Result<(), AuthorityError> {
+    for listed in scan_catalog(fs, layout)? {
+        for generation in listed.uncommitted(prior_generation) {
+            let path = generation_path(&listed.dir, generation);
+            relocate(fs, &listed.dir, &path, operation_id).map_err(AuthorityError::Relocate)?;
+        }
+    }
+    Ok(())
+}
+
+/// A validated catalog change: the resulting descriptors per shard and the pages to write.
+struct ChangePlan {
+    prior_generation: u64,
+    target_generation: u64,
+    descriptors: BTreeMap<u32, Vec<CatalogDescriptor>>,
+    pages: Vec<CatalogPage>,
+    /// The committed `catalog_set_digest` entries the change starts from.
+    committed: BTreeMap<u32, CatalogShard>,
+    live_migration: Option<LiveMigration>,
+}
+
+impl ChangePlan {
+    fn new(
+        current: Option<LoadedCatalog>,
+        change: CatalogChange<'_>,
+    ) -> Result<Self, AuthorityError> {
+        let prior_generation = current.as_ref().map_or(0, |c| c.root.root_generation);
+        let target_generation = prior_generation
+            .checked_add(1)
+            .filter(|&next| next < u64::MAX)
+            .ok_or(AuthorityError::GenerationExhausted)?;
+        let mut descriptors = BTreeMap::new();
+        let mut committed = BTreeMap::new();
+        let mut live_migration = None;
+        if let Some(catalog) = current {
+            for shard in catalog.shards {
+                let shard_id = shard.shard.shard_id;
+                descriptors.insert(shard_id, shard.page.descriptors().to_vec());
+                committed.insert(shard_id, shard.shard);
+            }
+            // An ordinary catalog change never ends a live migration's binding.
+            live_migration = catalog.root.live_migration;
+        }
+        let affected = apply_change(&mut descriptors, change)?;
+        let pages = affected
+            .into_iter()
+            .map(|shard_id| {
+                let page = descriptors.get(&shard_id).cloned().unwrap_or_default();
+                CatalogPage::new(shard_id, page).map_err(AuthorityError::Catalog)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(ChangePlan {
+            prior_generation,
+            target_generation,
+            descriptors,
+            pages,
+            committed,
+            live_migration,
         })
-        .collect()
+    }
+
+    /// Writes every page and returns the resulting `catalog_set_digest` entries.
+    fn write_pages<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        write: &PageWrite<'_>,
+    ) -> Result<Vec<CatalogShard>, AuthorityError> {
+        let mut set = self.committed.clone();
+        for page in &self.pages {
+            let shard = write.page(fs, page)?;
+            set.insert(shard.shard_id, shard);
+        }
+        Ok(set.into_values().collect())
+    }
+
+    /// The `COMMITTED` root naming the new catalog, marker and key-epoch sets.
+    fn root_body(
+        &self,
+        commit: CatalogCommit<'_>,
+        catalog_shards: &[CatalogShard],
+        key_epoch_set_digest: [u8; 32],
+    ) -> Result<RootBody, AuthorityError> {
+        let markers = self
+            .descriptors
+            .values()
+            .flatten()
+            .map(MarkerSetEntry::from_descriptor)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(AuthorityError::Digest)?;
+        Ok(RootBody {
+            root_generation: self.target_generation,
+            active_key_epoch: commit.active_key_epoch,
+            root_key_ref_digest: commit.root_key_ref.digest(),
+            marker_set_digest: marker_set_digest(&markers).map_err(AuthorityError::Digest)?,
+            catalog_set_digest: catalog_set_digest(catalog_shards)
+                .map_err(AuthorityError::Digest)?,
+            key_epoch_set_digest,
+            commit_evidence: RootCommitEvidence {
+                operation_id: commit.operation_id.to_owned(),
+                fencing_generation: 0,
+                state: RootCommitState::Committed,
+            },
+            live_migration: self.live_migration.clone(),
+        })
+    }
 }
 
 /// Applies the removals then the upserts, returning the affected shards in ascending order.
@@ -384,6 +475,50 @@ impl PageWrite<'_> {
     }
 }
 
+/// How the committed root's pages are opened: under its route, in its scope, at its epoch.
+struct PageRead<'a> {
+    key: &'a Key,
+    scope: &'a InstallationScopeId,
+    key_epoch: u64,
+}
+
+impl PageRead<'_> {
+    /// Opens `listed`'s page of `generation`. A page that is missing, does not open or was sealed
+    /// under another key epoch is `RECOVERY_REQUIRED`.
+    fn open<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        listed: &ListedShard,
+        generation: u64,
+    ) -> Result<CommittedShard, AuthorityError> {
+        let envelope = match fs.read(&generation_path(&listed.dir, generation)) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Err(catalog_recovery()),
+            Err(error) => return Err(io_error(CatalogStep::ReadPage, &error)),
+        };
+        let address = PageAddress {
+            scope: self.scope,
+            shard_id: listed.shard_id,
+            catalog_generation: generation,
+        };
+        let page =
+            CatalogPage::open(self.key, &address, &envelope).map_err(|_| catalog_recovery())?;
+        // The header is authenticated as AAD, so after a successful open its epoch is trusted.
+        let epoch = parse_envelope(&envelope).map(|parsed| parsed.header().key_epoch);
+        if epoch != Ok(self.key_epoch) {
+            return Err(catalog_recovery());
+        }
+        Ok(CommittedShard {
+            shard: CatalogShard {
+                shard_id: listed.shard_id,
+                catalog_generation: generation,
+                content_digest: content_digest(&envelope),
+            },
+            page,
+        })
+    }
+}
+
 /// One shard directory and the page generations it holds, ascending.
 struct ListedShard {
     shard_id: u32,
@@ -410,14 +545,13 @@ impl ListedShard {
 }
 
 /// Lists every shard directory and its page generations. Staging leftovers and relocated bytes
-/// are ignored — the root's set digest binds what counts — and any other name is
-/// `RECOVERY_REQUIRED`.
+/// are ignored — the root's set digest binds what counts — and any other name, including a file
+/// where a shard directory belongs, is `RECOVERY_REQUIRED`.
 fn scan_catalog<F: DurableFs>(
     fs: &mut F,
     layout: RootLayout<'_>,
 ) -> Result<Vec<ListedShard>, AuthorityError> {
-    let mut names = list(fs, &catalog_dir(layout))?;
-    names.sort_unstable();
+    let names = list(fs, &catalog_dir(layout))?;
     let mut shards = Vec::with_capacity(names.len());
     for name in names {
         let shard_id = name
@@ -426,7 +560,7 @@ fn scan_catalog<F: DurableFs>(
             .ok_or(catalog_recovery())?;
         let dir = shard_dir(layout, shard_id);
         let mut generations = Vec::new();
-        for entry in list(fs, &dir)? {
+        for entry in list_shard(fs, &dir)? {
             if let Some(generation) = parse_generation_name(&entry) {
                 generations.push(generation);
             } else if !is_generation_debris(&entry) {
@@ -442,33 +576,6 @@ fn scan_catalog<F: DurableFs>(
     }
     shards.sort_unstable_by_key(|shard| shard.shard_id);
     Ok(shards)
-}
-
-/// Opens `listed`'s page of `generation`; a page that does not open is `RECOVERY_REQUIRED`.
-fn open_page<F: DurableFs>(
-    fs: &mut F,
-    key: &Key,
-    scope: &InstallationScopeId,
-    listed: &ListedShard,
-    generation: u64,
-) -> Result<CommittedShard, AuthorityError> {
-    let envelope = fs
-        .read(&generation_path(&listed.dir, generation))
-        .map_err(|error| io_error(CatalogStep::ReadPage, &error))?;
-    let address = PageAddress {
-        scope,
-        shard_id: listed.shard_id,
-        catalog_generation: generation,
-    };
-    let page = CatalogPage::open(key, &address, &envelope).map_err(|_| catalog_recovery())?;
-    Ok(CommittedShard {
-        shard: CatalogShard {
-            shard_id: listed.shard_id,
-            catalog_generation: generation,
-            content_digest: content_digest(&envelope),
-        },
-        page,
-    })
 }
 
 /// The committed pages must hash to the root's `catalog_set_digest`, and their descriptors'
@@ -492,6 +599,15 @@ fn verify_catalog(root: &RootBody, shards: &[CommittedShard]) -> Result<(), Auth
     Ok(())
 }
 
+fn resolve<P: KeyProvider>(
+    provider: &P,
+    root_key_ref: &RootKeyRefV1,
+) -> Result<Key, AuthorityError> {
+    provider
+        .resolve_ref(root_key_ref)
+        .map_err(|error| AuthorityError::Root(RootStoreError::Anchor(error)))
+}
+
 fn catalog_dir(layout: RootLayout<'_>) -> PathBuf {
     layout.root_dir.join("catalog")
 }
@@ -513,6 +629,18 @@ fn list<F: DurableFs>(fs: &mut F, dir: &Path) -> Result<Vec<std::ffi::OsString>,
         Ok(names) => Ok(names),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(error) => Err(io_error(CatalogStep::ListCatalog, &error)),
+    }
+}
+
+/// Lists a shard directory. If it cannot be listed but reads as a file, the entry is not a
+/// directory at all — unexpected catalog state, not a transient failure.
+fn list_shard<F: DurableFs>(
+    fs: &mut F,
+    dir: &Path,
+) -> Result<Vec<std::ffi::OsString>, AuthorityError> {
+    match list(fs, dir) {
+        Err(AuthorityError::Io { .. }) if fs.read(dir).is_ok() => Err(catalog_recovery()),
+        other => other,
     }
 }
 
