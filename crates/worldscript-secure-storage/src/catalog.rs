@@ -4,12 +4,12 @@
 //! instead of trusting directory listings. Each record has one descriptor stating its current
 //! marker generation and, where one exists, its readable generation, plus the identity's template
 //! components so the exact identity — even one whose bindings are hashed — is reproduced, never
-//! guessed. Descriptors are grouped into one page per non-empty shard, the shard being fixed by the
-//! record's identity. A page is sealed as its own generation-addressed `record-catalog` record, and
+//! guessed. Descriptors are grouped into one page per shard that has ever held one (an emptied shard
+//! keeps a zero-descriptor page), the shard being fixed by the record's identity. A page is sealed as its own generation-addressed `record-catalog` record, and
 //! its `content_digest` is what the authority root's `catalog_set_digest` binds. Descriptors are
 //! derived only from a verified marker chain ([`describe_record`](crate::commit::describe_record)).
-//! This module performs no I/O; writing pages and committing them through the root is slice 3C
-//! part 3.
+//! This module performs no I/O; [`authority`](crate::authority) writes pages and commits them
+//! through the root.
 
 use sha2::{Digest, Sha256};
 
@@ -59,7 +59,7 @@ pub enum CatalogError {
     InvalidShard,
     /// Descriptors out of order or duplicated.
     NotStrictlyAscending,
-    /// No descriptors (an empty shard has no page), or more than the page bound.
+    /// More descriptors than the page bound.
     InvalidDescriptorCount,
     /// The encoded page would exceed `MAX_CATALOG_PAGE_BYTES`, or an identity's components exceed
     /// `MAX_IDENTITY_EXTENSION_BYTES`; the write is refused like a full shard.
@@ -130,8 +130,8 @@ impl CatalogDescriptor {
         })
     }
 
-    /// Test hook for the codec vectors: [`new`](Self::new) without a marker chain. Only compiled
-    /// with the `test-support` feature, which production builds never enable.
+    /// Test hook for the codec vectors: the crate-internal constructor without a marker chain.
+    /// Only compiled with the `test-support` feature, which production builds never enable.
     #[cfg(feature = "test-support")]
     pub fn new_unverified(
         record: &RecordIdentity,
@@ -269,7 +269,7 @@ pub struct PageAddress<'a> {
 }
 
 impl PageAddress<'_> {
-    fn identity(&self) -> Result<RecordIdentity, CatalogError> {
+    pub(crate) fn identity(&self) -> Result<RecordIdentity, CatalogError> {
         if self.shard_id >= CATALOG_SHARD_COUNT {
             return Err(CatalogError::InvalidShard);
         }
@@ -280,7 +280,7 @@ impl PageAddress<'_> {
     }
 }
 
-/// One catalog page: every descriptor of one non-empty shard. `Debug` shows only the shard and the
+/// One catalog page: every descriptor of one shard (none for an emptied shard). `Debug` shows only the shard and the
 /// descriptor count.
 #[derive(Clone, PartialEq, Eq)]
 pub struct CatalogPage {
@@ -304,6 +304,10 @@ impl CatalogPage {
         shard_id: u32,
         mut descriptors: Vec<CatalogDescriptor>,
     ) -> Result<Self, CatalogError> {
+        // Refused before sorting, so an oversized input costs no work beyond its length.
+        if descriptors.len() > MAX_CATALOG_PAGE_DESCRIPTORS {
+            return Err(CatalogError::InvalidDescriptorCount);
+        }
         descriptors.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
         let page = CatalogPage {
             shard_id,
@@ -347,7 +351,7 @@ impl CatalogPage {
         }
         let shard_id = reader.u32()?;
         let count = reader.u32()? as usize;
-        if count == 0 || count > MAX_CATALOG_PAGE_DESCRIPTORS {
+        if count > MAX_CATALOG_PAGE_DESCRIPTORS {
             return Err(CatalogError::InvalidDescriptorCount);
         }
         let mut descriptors = Vec::with_capacity(count);
@@ -422,7 +426,7 @@ impl CatalogPage {
             return Err(CatalogError::InvalidShard);
         }
         let count = self.descriptors.len();
-        if count == 0 || count > MAX_CATALOG_PAGE_DESCRIPTORS {
+        if count > MAX_CATALOG_PAGE_DESCRIPTORS {
             return Err(CatalogError::InvalidDescriptorCount);
         }
         let ascending = self

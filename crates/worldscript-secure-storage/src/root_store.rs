@@ -175,6 +175,10 @@ pub struct CommittedRootView {
     pub root: RootBody,
     pub root_digest: [u8; 32],
     pub root_slot: RootSlot,
+    /// The anchor's installation scope and committed key route the root was opened under — from
+    /// the same anchor read that selected the root, never re-read separately.
+    pub scope: InstallationScopeId,
+    pub root_key_ref: RootKeyRefV1,
     /// Whether the pointer had to be repaired to name the committed root.
     pub pointer_repaired: bool,
 }
@@ -346,6 +350,8 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
         root,
         root_digest: digest,
         root_slot: committed.root_slot,
+        scope,
+        root_key_ref: committed.root_key_ref,
         pointer_repaired,
     }))
 }
@@ -489,7 +495,7 @@ fn epoch_generations<F: DurableFs>(fs: &mut F, dir: &Path) -> Result<Vec<u64>, R
     for name in &names {
         if let Some(generation) = parse_generation_name(name) {
             generations.push(generation);
-        } else if !is_epoch_debris(name) {
+        } else if !is_generation_debris(name) {
             return Err(recovery(RootRecoveryReason::KeyEpochSetMismatch));
         }
     }
@@ -500,8 +506,8 @@ fn epoch_generations<F: DurableFs>(fs: &mut F, dir: &Path) -> Result<Vec<u64>, R
     Ok(generations)
 }
 
-/// A staging leftover or relocated bytes in an epoch directory.
-fn is_epoch_debris(name: &std::ffi::OsString) -> bool {
+/// A staging leftover or relocated bytes in a generation-addressed directory.
+pub(crate) fn is_generation_debris(name: &std::ffi::OsString) -> bool {
     name.to_str().is_some_and(|name| {
         parse_staging_name(name).is_some()
             || (name.starts_with("generation-") && name.contains(".rejected-"))
@@ -520,21 +526,28 @@ fn verify_key_epochs(
     if digest != root.key_epoch_set_digest {
         return Err(recovery(RootRecoveryReason::KeyEpochSetMismatch));
     }
-    // §8.3: exactly one KEY_EPOCH_ACTIVE record exists, at active_key_epoch, binding the route.
-    let mut active = set
-        .iter()
-        .filter(|(record, _)| record.status == KeyEpochStatus::Active);
-    let bound = match (active.next(), active.next()) {
-        (Some((record, _)), None) => {
-            record.epoch == root.active_key_epoch
-                && record.root_key_ref.digest() == root.root_key_ref_digest
-        }
-        _ => false,
-    };
-    if bound {
+    if active_epoch_bound(set, root.active_key_epoch, &root.root_key_ref_digest) {
         Ok(())
     } else {
         Err(recovery(RootRecoveryReason::ActiveEpochNotBound))
+    }
+}
+
+/// §8.3: exactly one `KEY_EPOCH_ACTIVE` record exists, at `active_key_epoch`, binding the route
+/// whose digest is `root_key_ref_digest`.
+pub(crate) fn active_epoch_bound(
+    set: &[(KeyEpochRecord, KeyEpochEntry)],
+    active_key_epoch: u64,
+    root_key_ref_digest: &[u8; 32],
+) -> bool {
+    let mut active = set
+        .iter()
+        .filter(|(record, _)| record.status == KeyEpochStatus::Active);
+    match (active.next(), active.next()) {
+        (Some((record, _)), None) => {
+            record.epoch == active_key_epoch && record.root_key_ref.digest() == *root_key_ref_digest
+        }
+        _ => false,
     }
 }
 

@@ -14,7 +14,7 @@ use crate::provider::{
 /// §6.1.2: `operation_id` is at most 128 UTF-8 bytes; it is also never empty.
 pub const MAX_OPERATION_ID_LEN: usize = 128;
 
-fn check_operation_id(operation_id: &str) -> Result<(), KeyProviderError> {
+pub(crate) fn check_operation_id(operation_id: &str) -> Result<(), KeyProviderError> {
     if operation_id.is_empty() || operation_id.len() > MAX_OPERATION_ID_LEN {
         Err(KeyProviderError::MalformedOperationId)
     } else {

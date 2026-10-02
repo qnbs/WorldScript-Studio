@@ -4,7 +4,7 @@
 
 **Status:** S5-A — admitted R-15 secure-storage architecture baseline; production implementation not
 started. `S5_A_ADMITTED = YES`, `S5_IMPLEMENTATION_READY = NO`, `S5_TERMINAL = YES` (PR #584 merged as `c24aa645`; its post-merge main CI — CI Success and CodeQL — completed green, 19 success / 3 skipped),
-`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are admitted, and the final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) is complete: five findings were made and corrected in this same change — two mechanical citation-drift notes (a stale "blocked pending S5-B1" disposition-count note in §10.4.1, and S5-B3's §6 crash-recovery paragraph citing S5-B1's migration-time reconciliation mechanism for an ordinary write's own orphaned staging chunk, where §9.2/§9 step 11's own ordinary-write staging-reconciliation rule actually applies) and three substantive gaps (S5-B3's chunk physical locator, §2, carried no operation/generation identity, so recovery could not distinguish a superseded attempt's orphaned chunk from the current attempt's — closed by giving each chunk's staging form the same `operation_id`/`target_generation` temp suffix §9 step 3 already defines for a whole record, and by making §6's recovery text check that exact suffix rather than the bare promoted-form locator; and §10.4.1's atomic-write-temporary-files carve-out was declared exempt from "exactly one of the three groups," directly contradicting that same exhaustiveness invariant — closed by making it an explicit fourth `REFUSE_AUTHORITY_SWITCH` group; that fix in turn made Gate 7's flat class-level rule ("blocked while any class is `REFUSE_AUTHORITY_SWITCH`") permanently unsatisfiable for this one class, since its class-level registry entry never changes even once every instance resolves — closed by making Gate 7's rule instance-aware, so only an *unresolved* `REFUSE_AUTHORITY_SWITCH` instance blocks it). No further inconsistency was found after these corrections. `S5_TERMINAL` and `S5_TERMINAL_R15_DESIGN_ADMITTED_MERGED_POSTMERGE_GREEN` are now YES, recorded in a dedicated follow-up after PR #584 merged and its post-merge main CI (including CodeQL) was confirmed green. **Gate 1a (§20) was re-admitted by the QNB-100 readiness verdict on 2026-09-26** (recorded on [#445](https://github.com/qnbs/WorldScript-Studio/issues/445#issuecomment-5847938516); no earlier Gate 1 admission is recorded). Gate 1a is the headless `WSR1` header and strict parser, the record-class registry, canonical AAD (§6.2), AES-256-GCM seal/open with a fail-closed OS nonce source, and the fixed-key/boundary/adversarial vectors §6.1 requires, in `crates/worldscript-secure-storage`. Gate 1b (the key-provider/KDF profile, §8.2/§8.2.1) was decided on 2026-09-26 as Option C; 1b-core landed in #850 and 1b-platform landed as small sequential slices (#854, #855, #914, #915, #916), ending with the OS secure-store adapter (§8.2.5). Status split: S5 design terminal/admitted = YES; Gate 1a = re-admitted and implemented headless; `S5_IMPLEMENTATION_READY = NO` for the R-15 program as a whole; Gate 1b = decided and implemented headless with the platform secure-store adapter (1b-core #850; 1b-platform #854, #855, #914, #915, #916); Gate 2 (typed identity registry, identity-bound record codec and record-class disposition, §20) = admitted and implemented headless; Gate 3 slice 3A (durable staging and promotion) = admitted and implemented headless; Gate 3 slice 3B (the `record-commit` marker codec, §5.4, and the marker commit protocol with startup reconciliation, §9/§9.2) = admitted and implemented headless; Gate 3 slice 3C parts 1, 2, 3a, 3b and 3c-1 (the authority-root digests, §5.4, the record-catalog descriptors and pages, §5.5/§5.5.1, the root slot, pointer and key-epoch record encodings, §5.3.4, and the two-phase root commit with crash recovery and the trusted cold start including the key-epoch set check, §5.3.1) = admitted and implemented headless; the rest of Gate 3 and Gates 4–7 = not admitted; `PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. No current TypeScript/Tauri path reads or writes user data through this crate.
+`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are admitted, and the final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) is complete: five findings were made and corrected in this same change — two mechanical citation-drift notes (a stale "blocked pending S5-B1" disposition-count note in §10.4.1, and S5-B3's §6 crash-recovery paragraph citing S5-B1's migration-time reconciliation mechanism for an ordinary write's own orphaned staging chunk, where §9.2/§9 step 11's own ordinary-write staging-reconciliation rule actually applies) and three substantive gaps (S5-B3's chunk physical locator, §2, carried no operation/generation identity, so recovery could not distinguish a superseded attempt's orphaned chunk from the current attempt's — closed by giving each chunk's staging form the same `operation_id`/`target_generation` temp suffix §9 step 3 already defines for a whole record, and by making §6's recovery text check that exact suffix rather than the bare promoted-form locator; and §10.4.1's atomic-write-temporary-files carve-out was declared exempt from "exactly one of the three groups," directly contradicting that same exhaustiveness invariant — closed by making it an explicit fourth `REFUSE_AUTHORITY_SWITCH` group; that fix in turn made Gate 7's flat class-level rule ("blocked while any class is `REFUSE_AUTHORITY_SWITCH`") permanently unsatisfiable for this one class, since its class-level registry entry never changes even once every instance resolves — closed by making Gate 7's rule instance-aware, so only an *unresolved* `REFUSE_AUTHORITY_SWITCH` instance blocks it). No further inconsistency was found after these corrections. `S5_TERMINAL` and `S5_TERMINAL_R15_DESIGN_ADMITTED_MERGED_POSTMERGE_GREEN` are now YES, recorded in a dedicated follow-up after PR #584 merged and its post-merge main CI (including CodeQL) was confirmed green. **Gate 1a (§20) was re-admitted by the QNB-100 readiness verdict on 2026-09-26** (recorded on [#445](https://github.com/qnbs/WorldScript-Studio/issues/445#issuecomment-5847938516); no earlier Gate 1 admission is recorded). Gate 1a is the headless `WSR1` header and strict parser, the record-class registry, canonical AAD (§6.2), AES-256-GCM seal/open with a fail-closed OS nonce source, and the fixed-key/boundary/adversarial vectors §6.1 requires, in `crates/worldscript-secure-storage`. Gate 1b (the key-provider/KDF profile, §8.2/§8.2.1) was decided on 2026-09-26 as Option C; 1b-core landed in #850 and 1b-platform landed as small sequential slices (#854, #855, #914, #915, #916), ending with the OS secure-store adapter (§8.2.5). Status split: S5 design terminal/admitted = YES; Gate 1a = re-admitted and implemented headless; `S5_IMPLEMENTATION_READY = NO` for the R-15 program as a whole; Gate 1b = decided and implemented headless with the platform secure-store adapter (1b-core #850; 1b-platform #854, #855, #914, #915, #916); Gate 2 (typed identity registry, identity-bound record codec and record-class disposition, §20) = admitted and implemented headless; Gate 3 slice 3A (durable staging and promotion) = admitted and implemented headless; Gate 3 slice 3B (the `record-commit` marker codec, §5.4, and the marker commit protocol with startup reconciliation, §9/§9.2) = admitted and implemented headless; Gate 3 slice 3C parts 1, 2, 3a, 3b, 3c-1 and 3c-2a (the authority-root digests, §5.4, the record-catalog descriptors and pages, §5.5/§5.5.1, the root slot, pointer and key-epoch record encodings, §5.3.4, the two-phase root commit with crash recovery and the trusted cold start including the key-epoch set check, §5.3.1, and the persisted, root-verified record catalog with `list_records`, §5.5/§5.5.1) = admitted and implemented headless; the rest of Gate 3 and Gates 4–7 = not admitted; `PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. No current TypeScript/Tauri path reads or writes user data through this crate.
 
 **Baseline:** `main` at `7ce506ee771f6273e22c08ded049b48955cb40a5`
 
@@ -1384,10 +1384,27 @@ shard_id(record) = u32be(SHA-256("worldscript-r15/catalog-shard/v1"
 ```
 
 The bindings are the same tagged bindings canonical AAD and `marker_set_digest` use (§6.2
-tagged-binding reuse). Each non-empty shard is exactly one catalog page, the generation-addressed
-protected record `record-catalog:<InstallationScopeId>:<shard-decimal>` whose `record_generation`
-is the shard's `catalog_generation`; an empty shard has no page and is absent from
-`catalog_set_digest`. A write that would raise a shard above `MAX_CATALOG_PAGE_DESCRIPTORS` is
+tagged-binding reuse). Each shard that has ever held a descriptor is exactly one catalog page, the
+generation-addressed protected record `record-catalog:<InstallationScopeId>:<shard-decimal>` whose
+`record_generation` is the shard's `catalog_generation`, sealed under the root's key route with the
+root's `active_key_epoch` (a catalog page is a control record of the root, like a key-epoch record),
+and it stays in `catalog_set_digest` for
+good: a shard emptied by a deletion or a rolled-back first write writes a next page generation with
+zero descriptors rather than disappearing, because its older generations stay retained (§5.5) and
+an absent shard could not be told apart from a replayed older page. A shard that never held a
+descriptor has no page and is absent from `catalog_set_digest`. **Page generations.** A page's
+`catalog_generation` is the `root_generation` of the root that publishes it — the one stated
+exception to §5.4's consecutive-counter rule: a shard's generations rise strictly but skip the roots
+that did not change it. A page is therefore committed only if its generation is at most the
+committed `root_generation`; a reader takes each shard's newest such page and requires the set to
+hash to `catalog_set_digest`, and a page newer than the committed root is a leftover of a change
+whose root never committed — never authority, and relocated (never deleted) before the next change
+writes a page. The physical locator is `<root_dir>/catalog/<shard-decimal>/generation-<n>.wsr1`,
+never identity or AAD. A reader refuses (`RECOVERY_REQUIRED`) any shard name or `catalog_set_digest`
+entry whose `shard_id` is not below `CATALOG_SHARD_COUNT`, a committed page that is missing or does
+not open, and a page whose authenticated `key_epoch` is not the root's `active_key_epoch`; a key
+rotation (Gate 5) therefore rewrites every page under the new epoch in the root transition that
+activates it. A write that would raise a shard above `MAX_CATALOG_PAGE_DESCRIPTORS` is
 refused before any authority changes (`CATALOG_SHARD_FULL`), and so is a write that would raise a
 page's encoded body above `MAX_CATALOG_PAGE_BYTES` or catalogue an identity whose components exceed
 `MAX_IDENTITY_EXTENSION_BYTES` — so every page fits one protected envelope; 256 shards of 4,096 descriptors bound
@@ -1398,7 +1415,7 @@ the catalog at 1,048,576 ordinary records, above §6.1.2's 1,000,000-entry inven
 ```text
 u32be(CATALOG_PAGE_FORMAT_VERSION)
 u32be(shard_id)
-u32be(descriptor_count)              1..=MAX_CATALOG_PAGE_DESCRIPTORS
+u32be(descriptor_count)              0..=MAX_CATALOG_PAGE_DESCRIPTORS (0 only for an emptied shard)
 descriptor[descriptor_count]         strictly ascending by (record_class bytes, identity binding,
                                      project_scope binding); a duplicate is a verification failure
 ```
@@ -3553,7 +3570,7 @@ R15_GATE_STATUS
 R15_GATE1A=IMPLEMENTED_HEADLESS
 R15_GATE1B=IMPLEMENTED_HEADLESS_AND_PLATFORM_ADAPTER
 R15_GATE2=IMPLEMENTED_HEADLESS
-R15_GATE3=SLICE_3C_KEY_EPOCHS
+R15_GATE3=SLICE_3C_CATALOG_COMMIT
 R15_GATE4=NOT_ADMITTED
 R15_GATE5=NOT_ADMITTED
 R15_GATE6=NOT_ADMITTED
@@ -3752,15 +3769,15 @@ Later implementation may be admitted only in these bounded gates:
      `Debug`; `describe_record` describes the chain as it stands — a first write that reconciliation
      rolled back still reads as `PENDING(none -> 1)` because version 1 has no `ABSENT` body, so the
      root commit (part 3) consumes the reconciliation outcome and drops it; the shard is `SHA-256` of the domain and the record's class and
-     tagged bindings, modulo 256; a page holds 1–4,096 descriptors of one shard in strictly
+     tagged bindings, modulo 256; a page holds 0–4,096 descriptors (0 only for an emptied shard) of one shard in strictly
      ascending order and is sealed as generation-addressed `record-catalog:<scope>:<shard>`.
      Decoding is strict (format version, counts, ordering, shard membership, presence flags all or
      none, admitted states only, ordinary classes only, identity rebuilt through its template with
      bindings equal to the stored ones, no trailing bytes) and a decoded page
      re-encodes to the same bytes; opening refuses another shard, scope or generation. The shard and
-     page vectors are pinned from an independent implementation. Writing pages and the two-phase
-     root commit wired into the write protocol, with `list_records` and retention, are the rest of
-     slice 3C.
+     page vectors are pinned from an independent implementation. Writing pages and `list_records`
+     landed in part 3c-2a; the root commit wired into the write protocol and retention are the rest
+     of slice 3C.
    - **Slice 3C, part 3a (root slot, pointer and key-epoch record encodings)** — `root_record` in
      `crates/worldscript-secure-storage` implements §5.3.4: a root slot seals the root body as
      generation `root_generation` of `authority-root:<scope>` and opening returns the body with its
@@ -3806,8 +3823,36 @@ Later implementation may be admitted only in these bounded gates:
      is how `active_key_epoch` is bound to the route without ever using `list_epochs` as a trust
      input. Tests cover a root naming another set, an active epoch that is only `PREPARED`, an
      active epoch bound to another route, a tampered key-epoch record, a chain gap and out-of-order
-     generations. The write-protocol integration (catalog and root per marker transition, dropping
-     a rolled-back first write), `list_records` and retention are the rest of slice 3C. `root_commit_mutex` and exclusive admission are Gate 4.
+     generations.
+   - **Slice 3C, part 3c-2a (the persisted, root-verified record catalog)** — `load_catalog` starts
+     from the trusted cold start, takes each shard's newest page whose `catalog_generation` is at
+     most the committed `root_generation` (§5.5.1), opens it under the root route and scope taken from the same anchor read that selected the
+     root, requires its authenticated `key_epoch` to be the root's `active_key_epoch`, and requires
+     the pages to hash to `catalog_set_digest` and their descriptors' markers to hash to
+     `marker_set_digest`; an unopenable page, a missing or replayed older page, a page under another
+     epoch, a shard name that is non-canonical or not below `CATALOG_SHARD_COUNT`, a file where a
+     shard directory belongs or any other unexpected entry is `RECOVERY_REQUIRED`. `list_records` returns the verified
+     descriptors. `commit_catalog_change` applies descriptor upserts and removals (each record at
+     most once; removing an uncatalogued record is refused before any write), checks everything `commit_root`
+     would refuse — the operation ID, the generation and the active epoch's binding to the route —
+     before touching the filesystem, relocates leftover
+     pages of an uncommitted change, writes one page per affected shard at the next root generation
+     (an emptied shard keeps a zero-descriptor page) in a durably created directory, and commits the
+     root naming the new catalog, marker and key-epoch sets through `commit_root`; until step F the
+     prior root and catalog stay authority. A change must keep the committed root's key route and
+     `active_key_epoch` (otherwise untouched pages would stay sealed under the old epoch); changing
+     them is a key rotation, Gate 5, which rewrites every page. The preflight guarantee assumes one
+     writer: exclusive admission and `root_commit_mutex` are Gate 4, and until then a concurrent root
+     commit is outside this slice's contract. Tests cover the first commit, a change that leaves other
+     shards' pages in place, a replacement descriptor, an emptied shard, refused changes writing
+     nothing, an interrupted change's pages being ignored and then relocated, a commit refused before
+     any page is written, a change that would rotate the key epoch, a tampered page, a page under another epoch, a replayed older page, a
+     removed shard, unexpected catalog entries (including a file named as a shard) and a root whose
+     marker set disagrees with the catalog. Wiring the record commit protocol through it (catalog and root per
+     marker transition, dropping a rolled-back first write) and retention are the rest of slice 3C. A
+     key-epoch record written by a root change that never commits is still read as the epoch's newest
+     generation (fail-closed `RECOVERY_REQUIRED`); resolving that crash window belongs to the Gate 4
+     journal that admits key-epoch changes. `root_commit_mutex` and exclusive admission are Gate 4.
 4. **Journal/admission:** implement enable/rotate/recovery state machines, exclusive migration
    admission, bounded inventory/checkpoints, and shutdown/cancellation behavior.
 5. **Migration admission readiness and inventory-complete migration** (admission-readiness, not full
@@ -3843,4 +3888,4 @@ complete merely because a design document exists.
 
 ## 21. S5 admission decision
 
-This S5-A baseline, together with S5-B1/S5-B2/S5-B3, is admitted at the semantic level for everything each actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; canonical migration-source/payload evidence, race-free `AuthoritySnapshot` lifetime, and the chunked large-object envelope all admitted above; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready: no production implementation exists for any of the four documents. The final cross-contract consistency audit across all four documents is complete: every cross-reference, shared formula (`source_value_digest`, the marker-body `is_chunked`/`chunk_count` extension, the §6.3 nonce/AAD wording), and status flag was checked for mutual agreement; two mechanical citation-drift notes and three substantive gaps (S5-B3's chunk-locator operation-identity binding; §10.4.1's disposition-registry exhaustiveness; and Gate 7's resulting class-level-vs-instance-level contradiction that the exhaustiveness fix itself introduced) were corrected in this same change (see the header status line above), and no further inconsistency was found. This is **`S5_A_ADMITTED / S5_B1_ADMITTED / S5_B2_ADMITTED / S5_B3_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `IMPLEMENTATION_READY`; `S5_TERMINAL` was declared YES in a dedicated follow-up after PR #584 merged with green post-merge main CI. Gate 1a is re-admitted (QNB-100) and implemented headless (see the header status line); Gate 1b is decided (Option C, §8.2/§8.2.1) and implemented headless with the platform secure-store adapter; Gate 2 (the typed identity registry, the identity-bound record codec and the record-class disposition), Gate 3 slice 3A (durable staging and promotion), slice 3B (the `record-commit` marker codec and the marker commit protocol with startup reconciliation) and slice 3C parts 1, 2, 3a, 3b and 3c-1 (the authority-root digests, the record-catalog descriptors and pages, the root slot, pointer and key-epoch record encodings, and the two-phase root commit) are admitted and implemented headless, while the rest of Gate 3 and Gates 4–7 remain unadmitted, and no production authority switch is allowed. Current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by any of these documents.
+This S5-A baseline, together with S5-B1/S5-B2/S5-B3, is admitted at the semantic level for everything each actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; canonical migration-source/payload evidence, race-free `AuthoritySnapshot` lifetime, and the chunked large-object envelope all admitted above; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready: no production implementation exists for any of the four documents. The final cross-contract consistency audit across all four documents is complete: every cross-reference, shared formula (`source_value_digest`, the marker-body `is_chunked`/`chunk_count` extension, the §6.3 nonce/AAD wording), and status flag was checked for mutual agreement; two mechanical citation-drift notes and three substantive gaps (S5-B3's chunk-locator operation-identity binding; §10.4.1's disposition-registry exhaustiveness; and Gate 7's resulting class-level-vs-instance-level contradiction that the exhaustiveness fix itself introduced) were corrected in this same change (see the header status line above), and no further inconsistency was found. This is **`S5_A_ADMITTED / S5_B1_ADMITTED / S5_B2_ADMITTED / S5_B3_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `IMPLEMENTATION_READY`; `S5_TERMINAL` was declared YES in a dedicated follow-up after PR #584 merged with green post-merge main CI. Gate 1a is re-admitted (QNB-100) and implemented headless (see the header status line); Gate 1b is decided (Option C, §8.2/§8.2.1) and implemented headless with the platform secure-store adapter; Gate 2 (the typed identity registry, the identity-bound record codec and the record-class disposition), Gate 3 slice 3A (durable staging and promotion), slice 3B (the `record-commit` marker codec and the marker commit protocol with startup reconciliation) and slice 3C parts 1, 2, 3a, 3b, 3c-1 and 3c-2a (the authority-root digests, the record-catalog descriptors and pages, the root slot, pointer and key-epoch record encodings, the two-phase root commit with the key-epoch check, and the persisted, root-verified record catalog) are admitted and implemented headless, while the rest of Gate 3 and Gates 4–7 remain unadmitted, and no production authority switch is allowed. Current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by any of these documents.
