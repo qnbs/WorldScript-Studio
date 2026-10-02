@@ -65,6 +65,15 @@ pub fn seal_root_slot(
     scope: &InstallationScopeId,
     root: &RootBody,
 ) -> Result<Vec<u8>, RootRecordError> {
+    let (meta, payload) = root_slot_plaintext(root)?;
+    seal_record(key, &root_identity(scope)?, meta, &payload).map_err(RootRecordError::Seal)
+}
+
+/// The envelope metadata and plaintext payload of `root`'s slot, for callers that seal through the
+/// durable staging path (slice 3A) instead of [`seal_root_slot`].
+pub(crate) fn root_slot_plaintext(
+    root: &RootBody,
+) -> Result<(RecordMeta, Vec<u8>), RootRecordError> {
     let mut payload = ROOT_SLOT_FORMAT_VERSION.to_be_bytes().to_vec();
     payload.extend_from_slice(&encode_root_body(root)?);
     let meta = RecordMeta {
@@ -72,7 +81,7 @@ pub fn seal_root_slot(
         record_generation: root.root_generation,
         record_schema: CONTROL_RECORD_SCHEMA,
     };
-    seal_record(key, &root_identity(scope)?, meta, &payload).map_err(RootRecordError::Seal)
+    Ok((meta, payload))
 }
 
 /// A root slot to open: the sealed bytes of generation `root_generation` of
@@ -348,7 +357,9 @@ fn key_route(rest: &[u8]) -> Result<RootKeyRefV1, RootRecordError> {
     RootKeyRefV1::new(route.to_vec()).map_err(|_| RootRecordError::Corrupt("invalid key route"))
 }
 
-fn root_identity(scope: &InstallationScopeId) -> Result<RecordIdentity, RootRecordError> {
+pub(crate) fn root_identity(
+    scope: &InstallationScopeId,
+) -> Result<RecordIdentity, RootRecordError> {
     RecordIdentity::new(RecordClass::AuthorityRoot, &[scope.as_str()])
         .map_err(|_| RootRecordError::InvalidIdentity)
 }

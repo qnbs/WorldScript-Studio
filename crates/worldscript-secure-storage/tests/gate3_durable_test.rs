@@ -265,6 +265,10 @@ impl DurableFs for FaultFs {
     fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<std::ffi::OsString>> {
         StdFs.list_dir(dir)
     }
+
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        StdFs.rename_replace(from, to)
+    }
 }
 
 #[test]

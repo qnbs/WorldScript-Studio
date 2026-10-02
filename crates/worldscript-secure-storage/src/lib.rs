@@ -8,7 +8,7 @@
 //! slice 3A durable staging and promotion of one generation ([`durable`]), and slice 3B's
 //! `record-commit` marker codec ([`marker`]) and marker commit protocol with startup reconciliation
 //! ([`commit`]), and slice 3C's authority-root digests ([`root`]), record catalog ([`catalog`])
-//! and persisted root records ([`root_record`]).
+//! persisted root records ([`root_record`]) and the two-phase root commit ([`root_store`]).
 //! It changes no current
 //! TypeScript/Tauri storage authority and holds no journal or authority-root commit yet.
 
@@ -33,6 +33,7 @@ pub mod record_class;
 pub mod recovery;
 pub mod root;
 pub mod root_record;
+pub mod root_store;
 pub mod seal;
 pub mod secure_store;
 pub mod store_authority;
@@ -78,6 +79,10 @@ pub use root::{
 pub use root_record::{
     open_root_slot, seal_root_slot, KeyEpochAddress, KeyEpochRead, KeyEpochRecord, KeyEpochStatus,
     KeyEpochWrite, RootPointer, RootRecordError, RootSlotRead,
+};
+pub use root_store::{
+    commit_root, load_committed_root, recover_root, CommittedRootView, RootCommitRequest,
+    RootCommitted, RootLayout, RootRecovery, RootRecoveryReason, RootStep, RootStoreError,
 };
 #[cfg(feature = "test-randomness")]
 pub use seal::seal_with_random;
