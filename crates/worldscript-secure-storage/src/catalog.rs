@@ -130,8 +130,8 @@ impl CatalogDescriptor {
         })
     }
 
-    /// Test hook for the codec vectors: [`new`](Self::new) without a marker chain. Only compiled
-    /// with the `test-support` feature, which production builds never enable.
+    /// Test hook for the codec vectors: the crate-internal constructor without a marker chain.
+    /// Only compiled with the `test-support` feature, which production builds never enable.
     #[cfg(feature = "test-support")]
     pub fn new_unverified(
         record: &RecordIdentity,
