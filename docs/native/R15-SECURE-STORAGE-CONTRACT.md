@@ -3770,9 +3770,7 @@ Later implementation may be admitted only in these bounded gates:
      key-epoch record carries epoch, §8.3 status and the opaque key route and yields its
      `key_epoch_set_digest` entry from the sealed envelope. Opening a root slot or key-epoch record
      refuses another scope, identity, generation or (for the root) envelope epoch; the pointer,
-     which carries no scope or identity, is recoverable state checked against the secure anchor. Nothing is persisted or committed yet: the two-phase root commit
-     (§5.3.1 A–G with its crash table and cold start), wired into the write protocol with
-     `list_records` and retention, is the rest of slice 3C.
+     which carries no scope or identity, is recoverable state checked against the secure anchor.
    - **Slice 3C, part 3b (two-phase root commit, crash recovery, trusted cold start)** —
      `root_store` in `crates/worldscript-secure-storage` runs §5.3.1 against the `KeyProvider`'s
      secure anchor: `commit_root` checks the target before any durable write (generation exactly
@@ -3782,19 +3780,24 @@ Later implementation may be admitted only in these bounded gates:
      §5.3.1 admits) and re-authenticates it to exactly the prepared `target_final_root_digest`,
      replaces the pointer by write-sync-rename-sync and reads it back (E2), and only then commits the
      anchor (F). `recover_root` resolves an interrupted commit from the crash table: it completes
-     forward only when the target slot authenticates to exactly the prepared digest (writing the
-     pointer if E2 had not happened), and otherwise discards the preparation, relocating a
-     non-matching target slot (never deleting it) so the retry can use the generation name; a read
-     failure decides nothing. `load_committed_root` is the trusted cold start (steps 0–4): scope,
+     forward only when the target slot authenticates to exactly the prepared digest with `COMMITTED`
+     evidence (re-syncing the slot directory, and writing the pointer if E2 had not happened); if
+     the pointer already names a target that does not authenticate, the filesystem moved to a root
+     the anchor cannot prove it authorized and recovery returns `RECOVERY_REQUIRED` without touching
+     anything; only while the pointer still names the prior root is the preparation discarded, a
+     non-matching target slot relocated (never deleted) so the retry can use the generation name,
+     and the pointer repaired to the committed root. A read or sync failure decides nothing. A root
+     whose request scope is not the anchor's installation scope is refused before any write. `load_committed_root` is the trusted cold start (steps 0–4): scope,
      slot, generation, digest and key route come only from the anchor, the slot must authenticate
      to exactly the committed digest and bind the committed route, a pending preparation must be
      recovered first, and a stale or missing pointer is repaired to the committed root (the anchor
      always wins). Tests drive every crash window with the fault-injecting in-memory provider and
      filesystem faults, plus a tampered target slot, a tampered or missing committed slot and a
      stale or missing pointer; they run on Linux, macOS and Windows CI runners (`CI_ONLY`, not
-     power-loss evidence). Verifying the root's key-epoch set (cold-start step 5) needs persisted
-     key-epoch records and, with the write-protocol integration, `list_records` and retention, is
-     the rest of slice 3C. `root_commit_mutex` and exclusive admission are Gate 4.
+     power-loss evidence). Verifying the root's key-epoch set (cold-start step 5) — which is also
+     where `active_key_epoch` is bound to the root's key route, since §5.3.1 forbids using
+     `list_epochs` as a trust input — needs persisted key-epoch records and, with the write-protocol
+     integration, `list_records` and retention, is the rest of slice 3C. `root_commit_mutex` and exclusive admission are Gate 4.
 4. **Journal/admission:** implement enable/rotate/recovery state machines, exclusive migration
    admission, bounded inventory/checkpoints, and shutdown/cancellation behavior.
 5. **Migration admission readiness and inventory-complete migration** (admission-readiness, not full

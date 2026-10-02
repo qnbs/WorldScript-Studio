@@ -18,15 +18,21 @@ use worldscript_secure_storage::{
     RootRecoveryReason, RootSlot, RootStoreError, StdFs,
 };
 
-/// The real filesystem, refusing to create any file directly inside `dir`.
-struct NoCreateIn(PathBuf);
+/// The real filesystem with one injected failure: creating any file directly inside a directory,
+/// or the atomic pointer rename.
+enum RootFault {
+    CreateIn(PathBuf),
+    Rename,
+}
 
-impl DurableFs for NoCreateIn {
+impl DurableFs for RootFault {
     type File = fs::File;
 
     fn create_new(&mut self, path: &Path) -> io::Result<fs::File> {
-        if path.parent() == Some(self.0.as_path()) {
-            return Err(io::Error::other("injected create fault"));
+        if let RootFault::CreateIn(dir) = self {
+            if path.parent() == Some(dir.as_path()) {
+                return Err(io::Error::other("injected create fault"));
+            }
         }
         StdFs.create_new(path)
     }
@@ -56,6 +62,9 @@ impl DurableFs for NoCreateIn {
     }
 
     fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        if let RootFault::Rename = self {
+            return Err(io::Error::other("injected rename fault"));
+        }
         StdFs.rename_replace(from, to)
     }
 }
@@ -290,7 +299,7 @@ fn a_complete_slot_whose_pointer_never_moved_is_completed_forward() {
     let mut fixture = Fixture::new();
     fixture.commit(&mut StdFs, 1).unwrap();
     // E1 durable, E2 fails: the pointer temporary cannot be created in the root directory.
-    let mut fault = NoCreateIn(fixture.root_dir.clone());
+    let mut fault = RootFault::CreateIn(fixture.root_dir.clone());
     assert!(matches!(
         fixture.commit(&mut fault, 2),
         Err(RootStoreError::Io { .. })
@@ -337,7 +346,7 @@ fn an_ambiguous_anchor_commit_that_landed_needs_no_recovery() {
 #[test]
 fn a_tampered_target_slot_is_relocated_and_the_preparation_discarded() {
     let mut fixture = Fixture::new();
-    let mut fault = NoCreateIn(fixture.root_dir.clone());
+    let mut fault = RootFault::CreateIn(fixture.root_dir.clone());
     assert!(fixture.commit(&mut fault, 1).is_err());
     flip_last_byte(&fixture.slot_file("slot-a", 1));
     assert_eq!(fixture.recover(), RootRecovery::Discarded);
@@ -395,4 +404,97 @@ fn cold_start_repairs_a_stale_or_missing_pointer_to_the_anchor_root() {
         fixture.pointer().map(|pointer| pointer.root_generation),
     );
     assert_eq!(flags, (Some(true), Some(true), Some(2)));
+}
+
+#[test]
+fn a_moved_pointer_to_an_unproven_target_fails_closed_and_touches_nothing() {
+    let mut fixture = Fixture::new();
+    fixture.commit(&mut StdFs, 1).unwrap();
+    // E2 durable, F rejected; then the target slot is tampered with.
+    fixture
+        .provider
+        .inject(Fault::BeforePersist(AnchorOp::Commit));
+    assert!(fixture.commit(&mut StdFs, 2).is_err());
+    let target = fixture.slot_file("slot-b", 2);
+    flip_last_byte(&target);
+    let root_dir = fixture.root_dir.clone();
+    let result = recover_root(
+        &mut StdFs,
+        &mut fixture.provider,
+        RootLayout {
+            root_dir: &root_dir,
+        },
+    );
+    assert_eq!(
+        result,
+        Err(RootStoreError::RecoveryRequired(
+            RootRecoveryReason::PointerNamesUnprovenTarget
+        ))
+    );
+    let anchor = fixture.provider.read_root_anchor_state().unwrap();
+    let untouched = (
+        target.exists(),
+        fixture.rejected_in("slot-b"),
+        anchor.committed_floor,
+    );
+    assert_eq!(untouched, (true, 0, 1), "preserved, nothing decided");
+}
+
+#[test]
+fn a_root_for_another_installation_scope_is_refused() {
+    let mut fixture = Fixture::new();
+    let other = InstallationScopeId::from_random_bits([3u8; 16]);
+    let root = fixture.root(1);
+    let root_dir = fixture.root_dir.clone();
+    let request = RootCommitRequest {
+        scope: &other,
+        root: &root,
+        root_key_ref: &fixture.key_ref,
+    };
+    let result = commit_root(
+        &mut StdFs,
+        &mut fixture.provider,
+        RootLayout {
+            root_dir: &root_dir,
+        },
+        request,
+    );
+    assert_eq!(result.map(|_| ()), Err(RootStoreError::ScopeMismatch));
+}
+
+#[test]
+fn a_failed_atomic_pointer_rename_is_completed_forward() {
+    let mut fixture = Fixture::new();
+    fixture.commit(&mut StdFs, 1).unwrap();
+    assert!(matches!(
+        fixture.commit(&mut RootFault::Rename, 2),
+        Err(RootStoreError::Io { .. })
+    ));
+    let leftovers = names(&fixture.root_dir)
+        .into_iter()
+        .filter(|name| name.starts_with("pointer.tmp-"))
+        .count();
+    assert_eq!(leftovers, 0, "the pointer temporary is dropped");
+    assert_eq!(
+        fixture.recover(),
+        RootRecovery::Completed { root_generation: 2 }
+    );
+    assert_eq!(fixture.loaded_generation(), Ok(Some(2)));
+}
+
+#[test]
+fn a_discarded_preparation_repairs_the_pointer_to_the_committed_root() {
+    let mut fixture = Fixture::new();
+    fixture.commit(&mut StdFs, 1).unwrap();
+    // C lands for generation 2, then the pointer is lost before recovery.
+    fixture
+        .provider
+        .inject(Fault::AfterPersist(AnchorOp::Prepare));
+    assert!(fixture.commit(&mut StdFs, 2).is_err());
+    fs::remove_file(fixture.root_dir.join("pointer")).unwrap();
+    assert_eq!(fixture.recover(), RootRecovery::Discarded);
+    assert_eq!(
+        fixture.pointer().map(|pointer| pointer.root_generation),
+        Some(1)
+    );
 }

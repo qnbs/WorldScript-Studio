@@ -22,7 +22,7 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use crate::commit::relocate;
+use crate::commit::{relocate, CommitError};
 use crate::durable::{
     generation_path, stage_and_promote, DirectoryDurability, DurableFs, StageFailure, StageRequest,
     WriteOperationId,
@@ -64,6 +64,7 @@ impl RootLayout<'_> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RootStep {
     ReadSlot,
+    SyncSlot,
     WritePointer,
     ReadPointer,
     RelocateSlot,
@@ -78,6 +79,9 @@ pub enum RootRecoveryReason {
     CommittedSlotMismatch,
     /// The committed root's own key-route digest is not the anchor's route (§5.3.1 step 4).
     KeyRouteMismatch,
+    /// The pointer already names a prepared target that does not authenticate: the filesystem
+    /// moved to a root the secure anchor cannot prove it authorized (§5.3.1, after E2 before F).
+    PointerNamesUnprovenTarget,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,6 +105,9 @@ pub enum RootStoreError {
     KeyRouteMismatch,
     /// The root's evidence is not `COMMITTED` for this exact operation.
     EvidenceMismatch,
+    /// The request's installation scope is not the secure anchor's (§5.3.2): a slot sealed under it
+    /// could never be opened by cold start.
+    ScopeMismatch,
     OperationId(SealError),
 }
 
@@ -158,69 +165,106 @@ pub fn commit_root<F: DurableFs, P: KeyProvider>(
     if anchor.prepared_root_commit.is_some() {
         return Err(RootStoreError::PreparationPending);
     }
+    if anchor.installation_scope_id.as_ref() != Some(request.scope) {
+        return Err(RootStoreError::ScopeMismatch);
+    }
     let prepare = preparation(&anchor, request)?;
     let operation = WriteOperationId::generate().map_err(RootStoreError::OperationId)?;
     provider
         .prepare_root_anchor(&prepare)
         .map_err(RootStoreError::Anchor)?;
-    let slot = write_slot(fs, provider, layout, request, &operation)?;
-    let pointer = RootPointer {
-        slot: prepare.target_slot,
-        root_generation: prepare.target_root_generation,
-        root_digest: prepare.target_final_root_digest,
+    let commit = read_anchor(provider)?
+        .prepared_root_commit
+        .ok_or(RootStoreError::Anchor(KeyProviderError::RecoveryRequired))?;
+    let target = Target {
+        layout,
+        scope: request.scope,
+        commit: &commit,
     };
-    let pointer_sync = write_pointer(fs, layout, &pointer, &operation)?;
+    let slot = write_slot(fs, provider, &target, request.root)?;
+    let pointer_sync = write_pointer(fs, layout, &target.pointer(), &operation)?;
     provider
-        .commit_root_anchor(&prepare.operation_id, prepare.target_root_generation)
+        .commit_root_anchor(&commit.operation_id, commit.target_root_generation)
         .map_err(RootStoreError::Anchor)?;
     Ok(RootCommitted {
-        root_generation: prepare.target_root_generation,
-        root_slot: prepare.target_slot,
-        root_digest: prepare.target_final_root_digest,
+        root_generation: commit.target_root_generation,
+        root_slot: commit.target_slot,
+        root_digest: commit.target_final_root_digest,
         directories: both(slot, pointer_sync),
     })
 }
 
-/// Startup resolution of an interrupted root commit (§5.3.1 crash table): completes forward only
-/// when the target slot authenticates to exactly the prepared final digest; otherwise discards the
-/// preparation, relocating a non-matching target slot so a retry can use the generation name.
+/// Startup resolution of an interrupted root commit (§5.3.1 crash table). It completes forward
+/// only when the target slot authenticates to exactly the prepared final digest (re-syncing its
+/// directory first). Otherwise, if the pointer already names the target, the filesystem moved to a
+/// root the anchor cannot prove it authorized: `RECOVERY_REQUIRED`, nothing touched. Only when the
+/// pointer still names the prior root is the preparation discarded, a non-matching target slot
+/// relocated (never deleted) and the pointer repaired to the committed root. A read or sync failure
+/// decides nothing.
 pub fn recover_root<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     layout: RootLayout<'_>,
 ) -> Result<RootRecovery, RootStoreError> {
     let anchor = read_anchor(provider)?;
-    let Some(prepared) = anchor.prepared_root_commit.clone() else {
+    let Some(commit) = anchor.prepared_root_commit.clone() else {
         return Ok(RootRecovery::NothingPending);
     };
     let scope = anchor
         .installation_scope_id
         .clone()
         .ok_or(RootStoreError::Anchor(KeyProviderError::RecoveryRequired))?;
-    if target_authenticates(fs, provider, layout, &scope, &prepared)? {
-        let pointer = RootPointer {
-            slot: prepared.target_slot,
-            root_generation: prepared.target_root_generation,
-            root_digest: prepared.target_final_root_digest,
-        };
-        ensure_pointer(fs, layout, &pointer)?;
+    let target = Target {
+        layout,
+        scope: &scope,
+        commit: &commit,
+    };
+    let state = target_state(fs, provider, &target)?;
+    if state == TargetState::Matches {
+        fs.sync_dir(&target.slot_dir())
+            .map_err(|error| io_error(RootStep::SyncSlot, &error))?;
+        ensure_pointer(fs, layout, &target.pointer())?;
         provider
-            .commit_root_anchor(&prepared.operation_id, prepared.target_root_generation)
+            .commit_root_anchor(&commit.operation_id, commit.target_root_generation)
             .map_err(RootStoreError::Anchor)?;
         return Ok(RootRecovery::Completed {
-            root_generation: prepared.target_root_generation,
+            root_generation: commit.target_root_generation,
         });
     }
+    if read_pointer(fs, layout)? == Some(target.pointer()) {
+        return Err(recovery(RootRecoveryReason::PointerNamesUnprovenTarget));
+    }
+    if state == TargetState::Mismatch {
+        relocate(
+            fs,
+            &target.slot_dir(),
+            &target.slot_file(),
+            &commit.operation_id,
+        )
+        .map_err(|error| RootStoreError::Io {
+            step: RootStep::RelocateSlot,
+            kind: commit_io_kind(&error),
+        })?;
+    }
     provider
-        .abort_or_recover_root_anchor(&prepared.operation_id)
+        .abort_or_recover_root_anchor(&commit.operation_id)
         .map_err(RootStoreError::Anchor)?;
+    if let Some(committed) = anchor.committed_root {
+        let prior = RootPointer {
+            slot: committed.root_slot,
+            root_generation: committed.root_generation,
+            root_digest: committed.root_digest,
+        };
+        ensure_pointer(fs, layout, &prior)?;
+    }
     Ok(RootRecovery::Discarded)
 }
 
 /// The trusted cold start (§5.3.1 steps 0–4): the scope, slot, generation, digest and key route
-/// come only from the secure anchor; the slot must authenticate to exactly the committed digest and
-/// bind the committed route. A pointer that does not name the committed root is repaired to it — it
-/// is recoverable state, never authority. `None` before the first root commit.
+/// come only from the secure anchor; the slot must authenticate to exactly the committed digest,
+/// carry `COMMITTED` evidence and bind the committed route. A pointer that does not name the
+/// committed root is repaired to it — it is recoverable state, never authority. `None` before the
+/// first root commit.
 pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,
@@ -252,7 +296,8 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
     };
     let (root, digest) = open_root_slot(&key, &read)
         .map_err(|_| recovery(RootRecoveryReason::CommittedSlotMismatch))?;
-    if digest != committed.root_digest {
+    let committed_evidence = root.commit_evidence.state == RootCommitState::Committed;
+    if digest != committed.root_digest || !committed_evidence {
         return Err(recovery(RootRecoveryReason::CommittedSlotMismatch));
     }
     if root.root_key_ref_digest != committed.root_key_ref.digest() {
@@ -308,34 +353,67 @@ fn preparation(
     })
 }
 
+/// A prepared root commit's filesystem target: where its slot lives and which scope it is sealed in.
+struct Target<'a> {
+    layout: RootLayout<'a>,
+    scope: &'a InstallationScopeId,
+    commit: &'a PreparedRootCommit,
+}
+
+impl Target<'_> {
+    fn slot_dir(&self) -> PathBuf {
+        self.layout.slot_dir(self.commit.target_slot)
+    }
+
+    fn slot_file(&self) -> PathBuf {
+        self.layout
+            .slot_file(self.commit.target_slot, self.commit.target_root_generation)
+    }
+
+    fn pointer(&self) -> RootPointer {
+        RootPointer {
+            slot: self.commit.target_slot,
+            root_generation: self.commit.target_root_generation,
+            root_digest: self.commit.target_final_root_digest,
+        }
+    }
+}
+
+/// What the filesystem holds at a prepared target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TargetState {
+    Absent,
+    /// Authenticates to exactly the prepared final digest with `COMMITTED` evidence.
+    Matches,
+    /// Present but not that root.
+    Mismatch,
+}
+
 /// Steps D+E1: seals and promotes the target slot in its `COMMITTED` form, then re-authenticates
-/// it to exactly the prepared final digest before the pointer may move.
+/// it to exactly the prepared final digest before the pointer may move. A mismatch is left in
+/// place for [`recover_root`] to decide.
 fn write_slot<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,
-    layout: RootLayout<'_>,
-    request: RootCommitRequest<'_>,
-    operation: &WriteOperationId,
+    target: &Target<'_>,
+    root: &RootBody,
 ) -> Result<DirectoryDurability, RootStoreError> {
-    let anchor = read_anchor(provider)?;
-    let prepared = anchor
-        .prepared_root_commit
-        .ok_or(RootStoreError::Anchor(KeyProviderError::RecoveryRequired))?;
+    let operation = WriteOperationId::generate().map_err(RootStoreError::OperationId)?;
     let key = provider
-        .resolve_ref(request.root_key_ref)
+        .resolve_ref(&target.commit.target_root_key_ref)
         .map_err(RootStoreError::Anchor)?;
-    let (meta, payload) = root_slot_plaintext(request.root).map_err(RootStoreError::Record)?;
-    let identity = root_identity(request.scope).map_err(RootStoreError::Record)?;
+    let (meta, payload) = root_slot_plaintext(root).map_err(RootStoreError::Record)?;
+    let identity = root_identity(target.scope).map_err(RootStoreError::Record)?;
     let stage = StageRequest {
-        dir: &layout.slot_dir(prepared.target_slot),
+        dir: &target.slot_dir(),
         identity: &identity,
         meta,
-        operation,
+        operation: &operation,
         retain_staging: false,
     };
     let promoted =
         stage_and_promote(fs, &key, &stage, &payload).map_err(RootStoreError::SlotWrite)?;
-    if target_authenticates(fs, provider, layout, request.scope, &prepared)? {
+    if target_state(fs, provider, target)? == TargetState::Matches {
         Ok(promoted.directory)
     } else {
         Err(RootStoreError::Record(RootRecordError::Corrupt(
@@ -344,40 +422,54 @@ fn write_slot<F: DurableFs, P: KeyProvider>(
     }
 }
 
-/// Whether the prepared target slot exists and authenticates to exactly the prepared final
-/// digest. A missing slot is `false`; a present slot that does not match is relocated (never
-/// deleted) and `false`; any other read failure decides nothing.
-fn target_authenticates<F: DurableFs, P: KeyProvider>(
+/// Reads the prepared target slot and classifies it; a read failure other than absence decides
+/// nothing.
+fn target_state<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,
-    layout: RootLayout<'_>,
-    scope: &InstallationScopeId,
-    prepared: &PreparedRootCommit,
-) -> Result<bool, RootStoreError> {
-    let path = layout.slot_file(prepared.target_slot, prepared.target_root_generation);
-    let envelope = match fs.read(&path) {
+    target: &Target<'_>,
+) -> Result<TargetState, RootStoreError> {
+    let envelope = match fs.read(&target.slot_file()) {
         Ok(bytes) => bytes,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(TargetState::Absent),
         Err(error) => return Err(io_error(RootStep::ReadSlot, &error)),
     };
     let key = provider
-        .resolve_ref(&prepared.target_root_key_ref)
+        .resolve_ref(&target.commit.target_root_key_ref)
         .map_err(RootStoreError::Anchor)?;
     let read = RootSlotRead {
-        scope,
-        root_generation: prepared.target_root_generation,
+        scope: target.scope,
+        root_generation: target.commit.target_root_generation,
         envelope: &envelope,
     };
-    let matches = open_root_slot(&key, &read)
-        .is_ok_and(|(_, digest)| digest == prepared.target_final_root_digest);
-    if !matches {
-        let dir = layout.slot_dir(prepared.target_slot);
-        relocate(fs, &dir, &path, &prepared.operation_id).map_err(|_| RootStoreError::Io {
-            step: RootStep::RelocateSlot,
-            kind: io::ErrorKind::Other,
-        })?;
+    let matches = open_root_slot(&key, &read).is_ok_and(|(root, digest)| {
+        digest == target.commit.target_final_root_digest
+            && root.commit_evidence.state == RootCommitState::Committed
+    });
+    Ok(if matches {
+        TargetState::Matches
+    } else {
+        TargetState::Mismatch
+    })
+}
+
+/// The pointer as the filesystem holds it; a malformed pointer is `None` (recoverable state).
+fn read_pointer<F: DurableFs>(
+    fs: &mut F,
+    layout: RootLayout<'_>,
+) -> Result<Option<RootPointer>, RootStoreError> {
+    match fs.read(&layout.pointer_file()) {
+        Ok(bytes) => Ok(RootPointer::decode(&bytes).ok()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(io_error(RootStep::ReadPointer, &error)),
     }
-    Ok(matches)
+}
+
+fn commit_io_kind(error: &CommitError) -> io::ErrorKind {
+    match error {
+        CommitError::Io { kind, .. } => *kind,
+        _ => io::ErrorKind::Other,
+    }
 }
 
 /// Makes the pointer name `pointer`, writing it only if it does not already; returns whether it
@@ -387,12 +479,7 @@ fn ensure_pointer<F: DurableFs>(
     layout: RootLayout<'_>,
     pointer: &RootPointer,
 ) -> Result<bool, RootStoreError> {
-    let current = match fs.read(&layout.pointer_file()) {
-        Ok(bytes) => RootPointer::decode(&bytes).ok(),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
-        Err(error) => return Err(io_error(RootStep::ReadPointer, &error)),
-    };
-    if current.as_ref() == Some(pointer) {
+    if read_pointer(fs, layout)?.as_ref() == Some(pointer) {
         return Ok(false);
     }
     let operation = WriteOperationId::generate().map_err(RootStoreError::OperationId)?;

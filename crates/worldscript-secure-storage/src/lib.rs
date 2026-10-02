@@ -7,7 +7,7 @@
 //! ([`record`]), the §10.4.1 record-class disposition ([`mod@disposition`]), the Gate 3
 //! slice 3A durable staging and promotion of one generation ([`durable`]), and slice 3B's
 //! `record-commit` marker codec ([`marker`]) and marker commit protocol with startup reconciliation
-//! ([`commit`]), and slice 3C's authority-root digests ([`root`]), record catalog ([`catalog`])
+//! ([`commit`]), and slice 3C's authority-root digests ([`root`]), record catalog ([`catalog`]),
 //! persisted root records ([`root_record`]) and the two-phase root commit ([`root_store`]).
 //! It changes no current
 //! TypeScript/Tauri storage authority and holds no journal or authority-root commit yet.
