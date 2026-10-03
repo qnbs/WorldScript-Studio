@@ -3189,8 +3189,10 @@ Cross-process retention uses the additional exclusive-reclamation barrier specif
 Lock/unlock/shutdown use exclusive acquisition only after shared work drains. A confirmed lock
 clears runtime keys and retains exclusive kernel ownership until verified unlock, preventing another
 process's previously loaded runtime from continuing ordinary operations. Failed unlock clears keys
-and retains the barrier. Unresolved roots or non-ACTIVE catalog descriptors refuse clean shutdown;
-forced exit still releases kernel ownership and leaves recovery evidence intact. The legacy Gate-3
+and retains the barrier, including on unwind. Unresolved roots or non-ACTIVE catalog descriptors
+refuse clean shutdown. Verified shutdown terminates only this coordinator, clears local keys and
+releases admission; it is not an installation-wide LOCKED state or durable authority change.
+Forced exit still releases kernel ownership and leaves recovery evidence intact. The legacy Gate-3
 raw protected entrypoints are test-support only; normal semantic callers use `ProtectedStorage`.
 The authenticated journal, rekey execution, first enable/disable closure, migration inventory,
 physical deletion and production authority switch remain later owners (4C–4E, Gate 5, #948, Gate 7).

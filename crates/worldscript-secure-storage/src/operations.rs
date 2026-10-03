@@ -115,6 +115,15 @@ struct Scope {
 }
 
 impl Scope {
+    fn validate(&self) -> Result<(), OperationError> {
+        let root = std::fs::canonicalize(&self.root).map_err(AdmissionError::from)?;
+        let installation =
+            std::fs::canonicalize(&self.installation).map_err(AdmissionError::from)?;
+        if root == installation.join(WRITER_RESOURCE) {
+            return Err(AdmissionError::InvalidScope.into());
+        }
+        Ok(())
+    }
     fn admission(&self) -> AdmissionScope<'_> {
         AdmissionScope {
             installation_dir: &self.installation,
@@ -131,9 +140,24 @@ impl Scope {
 #[derive(Default)]
 struct Lifecycle {
     locked: Option<ExclusiveAdmissionGuard>,
+    pending_record: Option<(RecordIdentity, LocationPins)>,
     /// A lock that authenticated a quiescent catalog may close without unlocking keys again.
     quiescent: bool,
     closed: bool,
+}
+
+/// Failed or unwound unlock attempts clear runtime keys; the lifecycle retains its kernel fence.
+struct UnlockAttempt<'a, P: KeyProvider> {
+    provider: PublishedProvider<'a, P>,
+    completed: bool,
+}
+
+impl<P: KeyProvider> Drop for UnlockAttempt<'_, P> {
+    fn drop(&mut self) {
+        if !self.completed {
+            self.provider.lock();
+        }
+    }
 }
 
 /// Renderer-neutral owner of a provider and its snapshot publication cell. Constructing it performs
@@ -180,6 +204,33 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         Ok(())
     }
 
+    /// One unresolved record at most: writer serialization forbids starting another until recovery.
+    fn track_mutation(
+        &self,
+        record: ProtectedRecord<'_>,
+        unresolved: bool,
+    ) -> Result<(), OperationError> {
+        let mut state = self
+            .lifecycle
+            .lock()
+            .map_err(|_| OperationError::RecoveryPending)?;
+        if let Some((identity, pins)) = &state.pending_record {
+            if identity != record.identity {
+                return Err(OperationError::RecoveryPending);
+            }
+            pins.check(record.location)?;
+        }
+        if !unresolved {
+            state.pending_record = None;
+        } else if state.pending_record.is_none() {
+            state.pending_record = Some((
+                record.identity.clone(),
+                LocationPins::open(&self.scope, record.location)?,
+            ));
+        }
+        Ok(())
+    }
+
     /// None is contention BEFORE any provider observation, never record absence. Once admitted,
     /// the snapshot pin and its key are captured atomically with respect to local step F.
     pub fn try_authority_snapshot<F: DurableFs>(
@@ -201,6 +252,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         if !admission.guards(self.scope.admission()) {
             return Err(AdmissionError::IdentityChanged.into());
         }
+        self.scope.validate()?;
         let mut cell = lock_cell(&self.cell)?;
         match cell.provider.state()? {
             KeyState::Unconfigured | KeyState::Migrating { .. } => {
@@ -253,10 +305,11 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         mutation: ProtectedMutation<'_>,
     ) -> Result<Option<ProtectedCommitted>, OperationError> {
         let ProtectedMutation {
-            record: ProtectedRecord { identity, location },
+            record,
             expected_generation,
             write,
         } = mutation;
+        let ProtectedRecord { identity, location } = record;
         if !has_ordinary_marker(identity.class()) {
             return Err(ProtectedError::NotAnOrdinaryRecord.into());
         }
@@ -283,6 +336,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             key_epoch: catalog.root.active_key_epoch,
         };
         let mut provider = PublishedProvider(&self.cell);
+        self.track_mutation(record, true)?;
         let result = protected::protected_write_admitted(
             fs,
             &mut provider,
@@ -294,6 +348,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         pins.check(location)?;
         writer.check()?;
         operation.check()?;
+        self.track_mutation(record, false)?;
         Ok(Some(result))
     }
 
@@ -328,6 +383,8 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             key_epoch: catalog.root.active_key_epoch,
         };
         let mut provider = PublishedProvider(&self.cell);
+        let record = ProtectedRecord { identity, location };
+        self.track_mutation(record, true)?;
         let result = protected::reconcile_protected_admitted(
             fs,
             &mut provider,
@@ -337,6 +394,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         pins.check(location)?;
         writer.check()?;
         operation.check()?;
+        self.track_mutation(record, false)?;
         Ok(Some(result))
     }
 
@@ -351,14 +409,16 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             return Err(OperationError::Closed);
         }
         if let Some(held) = &lifecycle.locked {
-            if !held.guards(self.scope.admission()) {
-                return Err(AdmissionError::IdentityChanged.into());
-            }
+            self.check_exclusive(held)?;
             return Ok(Some(KeyState::Locked));
         }
         let Some(held) = ExclusiveAdmissionGuard::try_acquire(self.scope.admission())? else {
             return Ok(None);
         };
+        self.check_exclusive(&held)?;
+        if lifecycle.pending_record.is_some() {
+            return Err(OperationError::RecoveryPending);
+        }
         let provider = PublishedProvider(&self.cell);
         let quiescent = match provider.state()? {
             KeyState::Unlocked { .. } => {
@@ -368,9 +428,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             KeyState::Locked => false,
             _ => return Err(OperationError::RecoveryPending),
         };
-        if !held.guards(self.scope.admission()) {
-            return Err(AdmissionError::IdentityChanged.into());
-        }
+        self.check_exclusive(&held)?;
         lock_cell(&self.cell)?.provider.lock();
         lifecycle.quiescent = quiescent;
         lifecycle.locked = Some(held);
@@ -387,28 +445,29 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         if lifecycle.closed {
             return Err(OperationError::Closed);
         }
-        let held = match lifecycle.locked.take() {
-            Some(held) => held,
-            None => match ExclusiveAdmissionGuard::try_acquire(self.scope.admission())? {
-                Some(held) => held,
-                None => return Ok(None),
-            },
-        };
-        let mut provider = PublishedProvider(&self.cell);
-        let verified = self.verify_unlock(fs, &mut provider, &held);
-        match verified {
-            Ok(state) => {
-                lifecycle.quiescent = false;
-                drop(held);
-                Ok(Some(state))
-            }
-            Err(error) => {
-                lifecycle.quiescent = false;
-                lifecycle.locked = Some(held);
-                provider.lock();
-                Err(error)
-            }
+        if lifecycle.locked.is_none() {
+            let Some(held) = ExclusiveAdmissionGuard::try_acquire(self.scope.admission())? else {
+                return Ok(None);
+            };
+            self.check_exclusive(&held)?;
+            lifecycle.locked = Some(held);
         }
+        lifecycle.quiescent = false;
+        let mut attempt = UnlockAttempt {
+            provider: PublishedProvider(&self.cell),
+            completed: false,
+        };
+        let state = self.verify_unlock(
+            fs,
+            &mut attempt.provider,
+            lifecycle
+                .locked
+                .as_ref()
+                .ok_or(OperationError::RecoveryPending)?,
+        )?;
+        attempt.completed = true;
+        lifecycle.locked = None;
+        Ok(Some(state))
     }
 
     fn verify_unlock<F: DurableFs>(
@@ -428,13 +487,14 @@ impl<P: KeyProvider> ProtectedStorage<P> {
     }
 
     fn check_exclusive(&self, held: &ExclusiveAdmissionGuard) -> Result<(), OperationError> {
-        if held.guards(self.scope.admission()) {
-            Ok(())
-        } else {
-            Err(AdmissionError::IdentityChanged.into())
+        if !held.guards(self.scope.admission()) {
+            return Err(AdmissionError::IdentityChanged.into());
         }
+        self.scope.validate()
     }
 
+    /// Closes this coordinator after an authenticated drain, clears its keys and releases admission.
+    /// It is session termination, not an installation-wide LOCKED state or durable authority change.
     pub fn try_shutdown<F: DurableFs>(&self, fs: &mut F) -> Result<Option<()>, OperationError> {
         let mut lifecycle = self
             .lifecycle
@@ -444,9 +504,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             return Ok(Some(()));
         }
         if let Some(held) = &lifecycle.locked {
-            if !held.guards(self.scope.admission()) {
-                return Err(AdmissionError::IdentityChanged.into());
-            }
+            self.check_exclusive(held)?;
             if !lifecycle.quiescent {
                 return Err(OperationError::RecoveryPending);
             }
@@ -454,11 +512,13 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             let Some(held) = ExclusiveAdmissionGuard::try_acquire(self.scope.admission())? else {
                 return Ok(None);
             };
+            self.check_exclusive(&held)?;
+            if lifecycle.pending_record.is_some() {
+                return Err(OperationError::RecoveryPending);
+            }
             let provider = PublishedProvider(&self.cell);
             self.verify_transition(fs, &provider, true)?;
-            if !held.guards(self.scope.admission()) {
-                return Err(AdmissionError::IdentityChanged.into());
-            }
+            self.check_exclusive(&held)?;
             lock_cell(&self.cell)?.provider.lock();
             lifecycle.closed = true;
             return Ok(Some(()));
@@ -496,9 +556,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         witness: &SnapshotRetention,
         other_recovery_reason: bool,
     ) -> Result<bool, OperationError> {
-        if !held.guards(self.scope.admission()) {
-            return Err(AdmissionError::IdentityChanged.into());
-        }
+        self.check_exclusive(held)?;
         let mut cell = lock_cell(&self.cell)?;
         if !cell.owns_retention(witness) {
             return Err(AdmissionError::InvalidScope.into());

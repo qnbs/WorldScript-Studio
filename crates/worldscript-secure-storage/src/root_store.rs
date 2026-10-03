@@ -422,7 +422,13 @@ fn open_retained_epochs<F: DurableFs>(
                     &layout.key_epoch_dir(entry.epoch),
                     entry.registry_generation,
                 ))
-                .map_err(|_| recovery(RootRecoveryReason::KeyEpochSetMismatch))?;
+                .map_err(|error| {
+                    if error.kind() == io::ErrorKind::NotFound {
+                        recovery(RootRecoveryReason::KeyEpochSetMismatch)
+                    } else {
+                        io_error(RootStep::ReadKeyEpoch, &error)
+                    }
+                })?;
             let read = KeyEpochRead {
                 address: KeyEpochAddress {
                     scope,
