@@ -243,6 +243,8 @@ journal, or any other persisted structure. This is a deliberate simplification, 
 
 ## 7. Non-goals
 
-No implementation. No production authority switch. No change to any S5-A digest, envelope, or
-migration semantics. No multi-process/multi-window reader coordination (§4). No hazard-pointer or
-RCU design (§2) unless a future revision demonstrates necessity.
+This slice implements the cross-process reader-lifetime barrier in §4: shared operation admission
+is held through payload handoff and exclusive admission drains it before a transition. It does not
+implement a durable reader registry, persisted guards/reference counts, physical reclamation, a
+hazard-pointer/RCU design, a production authority switch, or any S5-A digest, envelope, or
+migration semantics.

@@ -60,6 +60,18 @@ impl Snapshot {
             std::cmp::Ordering::Greater => true,
         }
     }
+
+    fn allows_same_key_forward(&self, anchor: &AnchorState) -> Result<bool, KeyProviderError> {
+        anchor::validate(anchor)?;
+        let (Some(scope), Some(root)) = (&anchor.installation_scope_id, &anchor.committed_root)
+        else {
+            return Ok(false);
+        };
+        Ok(self.scope == *scope
+            && root.root_generation > self.root.root_generation
+            && root.root_key_ref == self.root.root_key_ref)
+    }
+
     pub(crate) fn retention(this: &Arc<Self>) -> SnapshotRetention {
         SnapshotRetention {
             generation: this.root.root_generation,
@@ -87,6 +99,7 @@ impl<P: KeyProvider> AuthorityCell<P> {
     ) -> Result<(Arc<Snapshot>, Key), KeyProviderError> {
         match self.provider.state()? {
             KeyState::Unlocked { .. } => {}
+            KeyState::Locked if self.rebind_locked_same_key_forward()? => {}
             KeyState::Locked => return Err(KeyProviderError::Locked),
             KeyState::KeyLost => return Err(KeyProviderError::KeyLost),
             _ => return Err(KeyProviderError::RecoveryRequired),
@@ -103,6 +116,50 @@ impl<P: KeyProvider> AuthorityCell<P> {
         // Only the anchor route, never a route/epoch supplied by the caller or filesystem header.
         let key = self.provider.resolve_ref(&snapshot.root.root_key_ref)?;
         Ok((snapshot, key))
+    }
+
+    /// An externally committed ordinary write invalidates a runtime's exact session binding. The
+    /// coordinator may rebind only to a validated, same-route forward root while shared admission
+    /// is already live; rotation, rollback, explicit lock, and any concurrent change refuse.
+    fn rebind_locked_same_key_forward(&mut self) -> Result<bool, KeyProviderError> {
+        let before = self.provider.read_root_anchor_state()?;
+        let Some(current) = self.current.as_ref() else {
+            return Ok(false);
+        };
+        if !current.allows_same_key_forward(&before)? {
+            return Ok(false);
+        }
+        match self.provider.unlock() {
+            Ok(KeyState::Unlocked { .. }) => {}
+            Ok(KeyState::KeyLost) => {
+                self.provider.lock();
+                return Err(KeyProviderError::KeyLost);
+            }
+            Ok(_) => {
+                self.provider.lock();
+                return Err(KeyProviderError::RecoveryRequired);
+            }
+            Err(error) => {
+                self.provider.lock();
+                return Err(error);
+            }
+        }
+        let after = match self.provider.read_root_anchor_state() {
+            Ok(anchor) => anchor,
+            Err(error) => {
+                self.provider.lock();
+                return Err(error);
+            }
+        };
+        if after != before || !current.allows_same_key_forward(&after)? {
+            self.provider.lock();
+            return Err(KeyProviderError::RecoveryRequired);
+        }
+        if let Err(error) = self.publish(&after) {
+            self.provider.lock();
+            return Err(error);
+        }
+        Ok(true)
     }
 
     pub(crate) fn publish(&mut self, anchor: &AnchorState) -> Result<(), KeyProviderError> {
@@ -141,6 +198,9 @@ mod tests {
     use super::*;
     use crate::memory_provider::MemoryKeyProvider;
     use crate::provider::{PrepareRootAnchor, RootKeyRefV1, RootSlot};
+    use crate::secure_store::MemorySecretStore;
+    use crate::store_authority::SecureStoreAuthority;
+    use crate::store_runtime::SecureStoreRuntime;
     use std::sync::{mpsc, TryLockError};
     use std::thread;
     use std::time::Duration;
@@ -169,6 +229,62 @@ mod tests {
         provider.prepare_root_anchor(&first).unwrap();
         provider.commit_root_anchor(&first.operation_id, 1).unwrap();
         (provider, route)
+    }
+
+    fn shared_runtimes() -> (
+        SecureStoreRuntime<MemorySecretStore>,
+        SecureStoreRuntime<MemorySecretStore>,
+        RootKeyRefV1,
+    ) {
+        let store = MemorySecretStore::new();
+        let mut writer = SecureStoreRuntime::new(SecureStoreAuthority::new(store.clone()));
+        writer.read_or_provision_installation_scope().unwrap();
+        let route = writer.provision_epoch_key(1).unwrap();
+        writer.unlock().unwrap();
+        let first = request(&route, 0);
+        writer.prepare_root_anchor(&first).unwrap();
+        writer.commit_root_anchor(&first.operation_id, 1).unwrap();
+
+        let mut reader = SecureStoreRuntime::new(SecureStoreAuthority::new(store));
+        assert!(matches!(reader.unlock(), Ok(KeyState::Unlocked { .. })));
+        (writer, reader, route)
+    }
+
+    #[test]
+    fn locked_reader_rebinds_only_to_a_same_key_forward_root() {
+        let (mut writer, reader, route) = shared_runtimes();
+        let mut cell = AuthorityCell::new(reader);
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 1);
+
+        let next = request(&route, 1);
+        writer.prepare_root_anchor(&next).unwrap();
+        writer.commit_root_anchor(&next.operation_id, 2).unwrap();
+        assert_eq!(cell.provider.state(), Ok(KeyState::Locked));
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 2);
+        assert!(matches!(
+            cell.provider.state(),
+            Ok(KeyState::Unlocked { .. })
+        ));
+    }
+
+    #[test]
+    fn locked_reader_does_not_rebind_an_explicit_lock_or_route_change() {
+        let (mut writer, reader, route) = shared_runtimes();
+        let mut cell = AuthorityCell::new(reader);
+        let _ = cell.capture().unwrap();
+        cell.provider.lock();
+        assert_eq!(cell.capture().err(), Some(KeyProviderError::Locked));
+        assert_eq!(cell.provider.state(), Ok(KeyState::Locked));
+
+        let replacement_route = writer.provision_epoch_key(2).unwrap();
+        let replacement = request(&replacement_route, 1);
+        writer.prepare_root_anchor(&replacement).unwrap();
+        writer
+            .commit_root_anchor(&replacement.operation_id, 2)
+            .unwrap();
+        assert_eq!(cell.capture().err(), Some(KeyProviderError::Locked));
+        assert_eq!(cell.provider.state(), Ok(KeyState::Locked));
+        assert_ne!(replacement_route, route);
     }
 
     #[test]

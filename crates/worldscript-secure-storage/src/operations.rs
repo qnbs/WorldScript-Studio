@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::admission::{AdmissionError, AdmissionScope, SharedAdmissionGuard};
 use crate::authority::{load_snapshot_catalog, AuthorityError, LoadedCatalog};
+use crate::catalog::CatalogDescriptor;
 use crate::commit::{RecordLocation, RecordStore};
 use crate::durable::DurableFs;
 use crate::error::KeyProviderError;
@@ -199,6 +200,18 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         };
         read.read_record(fs, record, handoff).map(Some)
     }
+
+    /// Enumerates authenticated catalog identities while the same shared admission used by reads
+    /// remains live. `None` means an exclusive transition prevented provider/key observation.
+    pub fn try_list_records<F: DurableFs>(
+        &self,
+        fs: &mut F,
+    ) -> Result<Option<Vec<CatalogDescriptor>>, OperationError> {
+        let Some(mut snapshot) = self.try_authority_snapshot(fs)? else {
+            return Ok(None);
+        };
+        snapshot.list_records(fs).map(Some)
+    }
 }
 
 impl AuthoritySnapshotGuard {
@@ -207,6 +220,15 @@ impl AuthoritySnapshotGuard {
     }
     pub fn retention(&self) -> SnapshotRetention {
         Snapshot::retention(&self.snapshot)
+    }
+
+    pub fn list_records<F: DurableFs>(
+        &mut self,
+        fs: &mut F,
+    ) -> Result<Vec<CatalogDescriptor>, OperationError> {
+        let catalog = self.catalog(fs)?;
+        self.check()?;
+        Ok(catalog.descriptors().cloned().collect())
     }
 
     fn check(&self) -> Result<(), OperationError> {

@@ -4,12 +4,15 @@ mod support;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use support::{
     child_probe, payload, Event, Fixture, HookFs, ObservedProvider, Probe, CHILD_MODE, CHILD_SCOPE,
 };
 use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
+use worldscript_secure_storage::secure_store::MemorySecretStore;
+use worldscript_secure_storage::store_authority::SecureStoreAuthority;
+use worldscript_secure_storage::store_runtime::SecureStoreRuntime;
 use worldscript_secure_storage::*;
 
 #[test]
@@ -76,6 +79,168 @@ fn shared_readers_are_send_and_retain_admission_and_non_authorizing_witness() {
         .is_some());
     // The current authority cell still owns its local reference; this is not deletion permission.
     assert!(witness.is_referenced());
+}
+
+#[test]
+fn admitted_catalog_enumeration_holds_the_read_barrier() {
+    let fixture = Fixture::new();
+    assert_eq!(
+        fixture
+            .storage()
+            .try_list_records(&mut StdFs)
+            .unwrap()
+            .unwrap()
+            .iter()
+            .map(|descriptor| descriptor.record())
+            .collect::<Vec<_>>(),
+        vec![&fixture.identity]
+    );
+    let held = ExclusiveAdmissionGuard::try_acquire(fixture.scope())
+        .unwrap()
+        .unwrap();
+    let before = fixture.probe.observations.load(Ordering::SeqCst);
+    assert_eq!(
+        fixture.storage().try_list_records(&mut StdFs).unwrap(),
+        None
+    );
+    assert_eq!(fixture.probe.observations.load(Ordering::SeqCst), before);
+    drop(held);
+}
+
+#[test]
+fn external_same_key_root_commit_rebinds_the_admitted_reader() {
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let base = std::env::temp_dir().join(format!(
+        "wss-gate4b-runtime-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = fs::remove_dir_all(&base);
+    let (root, records, markers) = (
+        base.join("authority"),
+        base.join("records"),
+        base.join("markers"),
+    );
+    for path in [
+        root.join("slot-a"),
+        root.join("slot-b"),
+        records.clone(),
+        markers.clone(),
+    ] {
+        fs::create_dir_all(path).unwrap();
+    }
+    let (base, root, records, markers) = (
+        fs::canonicalize(base).unwrap(),
+        fs::canonicalize(root).unwrap(),
+        fs::canonicalize(records).unwrap(),
+        fs::canonicalize(markers).unwrap(),
+    );
+    let store = MemorySecretStore::new();
+    let mut writer = SecureStoreRuntime::new(SecureStoreAuthority::new(store.clone()));
+    let scope = writer.read_or_provision_installation_scope().unwrap();
+    let route = writer.provision_epoch_key(1).unwrap();
+    writer.unlock().unwrap();
+    let admission = AdmissionScope {
+        installation_dir: &base,
+        root_dir: &root,
+    };
+    let mut exclusive = ExclusiveAdmissionGuard::try_acquire(admission)
+        .unwrap()
+        .unwrap();
+    let event = exclusive.try_root_commit().unwrap().unwrap();
+    write_key_epoch(
+        &mut StdFs,
+        &writer,
+        RootLayout { root_dir: &root },
+        KeyEpochCommit {
+            scope: &scope,
+            record: &KeyEpochRecord {
+                epoch: 1,
+                status: KeyEpochStatus::Active,
+                root_key_ref: route.clone(),
+            },
+            registry_generation: 1,
+            root_key_ref: &route,
+            key_epoch: 1,
+            held: event.root_guard().unwrap(),
+        },
+    )
+    .unwrap();
+    drop(event);
+    commit_catalog_change(
+        &mut StdFs,
+        &mut writer,
+        RootLayout { root_dir: &root },
+        CatalogCommit {
+            change: CatalogChange {
+                upsert: &[],
+                remove: &[],
+            },
+            root_key_ref: &route,
+            active_key_epoch: 1,
+            operation_id: "runtime-fixture",
+        },
+    )
+    .unwrap();
+    drop(exclusive);
+    let identity = RecordIdentity::new(RecordClass::Codex, &["runtime"]).unwrap();
+    let write = |writer: &mut SecureStoreRuntime<MemorySecretStore>, plaintext: &[u8]| {
+        let key = writer.resolve_ref(&route).unwrap();
+        let result = protected_write(
+            &mut StdFs,
+            writer,
+            ProtectedTarget {
+                layout: RootLayout { root_dir: &root },
+                store: RecordStore {
+                    key: &key,
+                    record: &identity,
+                    location: RecordLocation {
+                        record_dir: &records,
+                        marker_dir: &markers,
+                    },
+                },
+                root_key_ref: &route,
+                key_epoch: 1,
+            },
+            ProtectedWrite {
+                record_schema: 1,
+                plaintext,
+            },
+        );
+        drop(key);
+        result
+    };
+    write(&mut writer, b"first").unwrap();
+    let mut reader = SecureStoreRuntime::new(SecureStoreAuthority::new(store));
+    reader.unlock().unwrap();
+    let storage = ProtectedStorage::new(admission, reader);
+    assert!(storage
+        .try_authority_snapshot(&mut StdFs)
+        .unwrap()
+        .is_some());
+    let shared = SharedAdmissionGuard::try_acquire(admission)
+        .unwrap()
+        .unwrap();
+    write(&mut writer, b"second").unwrap();
+    drop(shared);
+    assert_eq!(
+        storage
+            .try_read_record(
+                &mut StdFs,
+                ProtectedRecord {
+                    identity: &identity,
+                    location: RecordLocation {
+                        record_dir: &records,
+                        marker_dir: &markers
+                    }
+                },
+                payload,
+            )
+            .unwrap(),
+        Some(b"second".to_vec())
+    );
+    drop(storage);
+    let _ = fs::remove_dir_all(base);
 }
 
 #[test]
@@ -152,6 +317,7 @@ fn exclusive_and_locked_or_migrating_plaintext_never_bypass_policy() {
             .storage()
             .try_read_record(&mut filesystem, fixture.record(), |_| called = true)
             .is_err());
+        assert!(fixture.storage().try_list_records(&mut filesystem).is_err());
         assert!(!called);
         assert_eq!(fixture.probe.keys.load(Ordering::SeqCst), keys);
         assert_eq!(fs::read(&legacy).unwrap(), b"legacy plaintext fixture");

@@ -199,6 +199,7 @@ pub(crate) fn load_snapshot_catalog<F: DurableFs>(
 
 /// `list_records` (§5.5): every catalogued record's descriptor, verified against the committed
 /// root. A descriptor may name a record that is enumerable but not yet readable (§5.5).
+#[cfg(feature = "test-support")]
 pub fn list_records<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,

@@ -24,6 +24,13 @@ authenticates only the catalog-named generation. Locked, unconfigured, migrating
 transition states never become legacy plaintext access. Admission, key and snapshot stay live
 through the caller's handoff callback. Field order drops key/pin before shared admission.
 
+An externally committed ordinary same-key root advance can rebind the coordinator's private
+runtime only while shared admission is held and only after a validated anchor proves the same scope,
+strictly forward generation and exact root-key route. The post-unlock anchor must be unchanged;
+explicit lock, rotation, rollback, missing, malformed and ambiguous authority remain refused.
+Catalog enumeration follows the same admitted snapshot path; raw catalog enumeration is test-support
+only and is not a production public API.
+
 `AuthoritySnapshotGuard` is Send, not Sync or Clone. `SnapshotRetention` is a Weak local reference
 observation, not scope/deletion authorization. The current cell may itself keep that reference.
 Physical reclamation still requires exclusive admission and every durable/recovery condition.
@@ -35,7 +42,10 @@ Physical reclamation still requires exclusive admission and every durable/recove
   missing versus transient retained-epoch I/O; reserved/foreign absent locators; nonordinary
   zero-observation refusal; locked/unconfigured/migrating plaintext preservation.
 - `operation_authority` unit test: forced capture-to-pin pause, competing publication blocked by
-  the same mutex, old handle survives publication, owning pin release updates Weak observation.
+  the same mutex, old handle survives publication, owning pin release updates Weak observation,
+  and a second runtime adopts only an external same-key forward root advance.
+- `gate4b_read_snapshot_test`: admitted enumeration returns catalogued identities and refuses
+  exclusive/locked/unconfigured/migrating access before catalog/key work.
 - `root_store` unit test: old root remains valid after later registry/root publication using its
   retained authenticated epoch evidence; latest-set substitution, tamper and missing bytes refuse.
 - Compile-fail doctests prohibit sharing/cloning one snapshot guard.
