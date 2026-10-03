@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4B read/snapshot admission (#445):** shared admission now covers authenticated
+  snapshot/key capture and the complete protected-read handoff; retained views authenticate their
+  exact immutable epoch evidence. Locked, migrating and misrouted reads fail closed without legacy
+  plaintext fallback. This supersedes the read half of #952 only; mutation/root-recovery/lifecycle
+  closure still owns #360. Production authority is unchanged.
 - **R-15 Gate 4B foundation — shared operations and exclusive transitions (#445):** the headless
   core now has kernel-backed admission across processes, automatic crash release and typed guards
   that bind the installation and authority-root directories. Root events stay beneath the same

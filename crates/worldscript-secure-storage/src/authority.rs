@@ -169,8 +169,17 @@ pub fn load_catalog<F: DurableFs, P: KeyProvider>(
         return Ok(None);
     };
     let key = resolve(provider, &view.root_key_ref)?;
+    load_snapshot_catalog(fs, layout, view, &key).map(Some)
+}
+
+pub(crate) fn load_snapshot_catalog<F: DurableFs>(
+    fs: &mut F,
+    layout: RootLayout<'_>,
+    view: crate::root_store::CommittedRootView,
+    key: &Key,
+) -> Result<LoadedCatalog, AuthorityError> {
     let reader = PageRead {
-        key: &key,
+        key,
         scope: &view.scope,
         key_epoch: view.root.active_key_epoch,
     };
@@ -181,11 +190,11 @@ pub fn load_catalog<F: DurableFs, P: KeyProvider>(
         }
     }
     verify_catalog(&view.root, &shards)?;
-    Ok(Some(LoadedCatalog {
+    Ok(LoadedCatalog {
         root: view.root,
         scope: view.scope,
         shards,
-    }))
+    })
 }
 
 /// `list_records` (§5.5): every catalogued record's descriptor, verified against the committed

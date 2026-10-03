@@ -206,10 +206,12 @@ journal, or any other persisted structure. This is a deliberate simplification, 
   evidence that reclamation was safe at some point *before* the crash — the durable retention rule
   (§5.5) is the only cross-restart authority, exactly as the parent contract already requires for
   every other authority decision.
-- A multi-process or multi-tab scenario (the packaged desktop app run twice, or a future
-  multi-window Core) is out of this document's scope: `AuthoritySnapshotGuard` as specified here is a
-  single-process, in-memory mechanism. Coordinating reader pins across process boundaries — if ever
-  required — needs its own explicit contract and is not implied or half-specified here.
+- Gate 4B's read/snapshot candidate adds a cross-process barrier: shared operation admission is
+  acquired before authority/key capture and held through payload handoff. Key and local snapshot
+  pins drop before admission. Exclusive admission must drain those readers before a transition.
+  The Arc count remains local, is never persisted, and is not physical deletion authority.
+  A future collector still requires exclusive admission plus every durable current/previous/
+  prepared-root and recovery-retention condition. No collector is implemented by this slice.
 
 ## 5. What this document does not change
 
