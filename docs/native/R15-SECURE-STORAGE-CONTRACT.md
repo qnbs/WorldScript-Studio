@@ -3985,7 +3985,10 @@ Later implementation may be admitted only in these bounded gates:
      same-process and child-process mode matrices, normal exit and abort release, unwind, `Send` /
      non-`Sync` / non-`Clone` and admission/root-event lifetime, independent installations,
      canonical aliases, fail-closed directory replacement and Windows handle/path file-ID comparison
-     for distinct existing objects and ancestor replacement. Platform CI runs the suite on
+     for distinct existing objects and ancestor replacement. Acquisition pins both directory
+     identities before canonicalization; a deterministic interruption test replaces either pinned
+     directory before subsequent resolution and proves refusal (or Windows kernel prevention),
+     without silently retrying against the replacement. Platform CI runs the suite on
      Linux/macOS/Windows; packaged and power-loss qualification remain Gate 6. The deferred #950
      `moved` pre-clean is included. #360 remains open: the next 4B slice integrates admission into
      protected read/write/reconciliation, authority/key selection and lock/unlock/shutdown.

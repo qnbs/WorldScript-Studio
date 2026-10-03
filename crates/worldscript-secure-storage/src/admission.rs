@@ -6,6 +6,8 @@
 //! and pins both directories with no-delete-share handles. No lock body is read or written.
 //! Windows also compares volume + 128-bit file IDs from held/reopened handles; an existing path
 //! alone never proves identity, and an unsupported identity query fails closed.
+//! Directory handles are pinned before canonicalization: later path resolution cannot silently
+//! replace the objects selected at acquisition. A replacement fails closed, without retrying it.
 //! The installation locator is not an authenticated `InstallationScopeId`; the integration layer
 //! must validate the anchor and select keys only AFTER obtaining admission.
 //!
@@ -120,13 +122,22 @@ impl ExclusiveAdmissionGuard {
 
 impl<Mode> AdmissionGuard<Mode> {
     fn acquire(scope: AdmissionScope<'_>, shared: bool) -> Result<Option<Self>, AdmissionError> {
+        let installation_pin = sys::open_directory(scope.installation_dir)?;
+        let root_pin = sys::open_directory(scope.root_dir)?;
+        Self::acquire_pinned(scope, shared, installation_pin, root_pin)
+    }
+
+    fn acquire_pinned(
+        scope: AdmissionScope<'_>,
+        shared: bool,
+        installation_pin: File,
+        root_pin: File,
+    ) -> Result<Option<Self>, AdmissionError> {
         let installation_dir = std::fs::canonicalize(scope.installation_dir)?;
         let root_dir = std::fs::canonicalize(scope.root_dir)?;
         if root_dir.parent() != Some(installation_dir.as_path()) {
             return Err(AdmissionError::InvalidScope);
         }
-        let installation_pin = sys::open_directory(&installation_dir)?;
-        let root_pin = sys::open_directory(&root_dir)?;
         let target = sys::admission_target(&installation_dir);
         // Windows shares 4A's no-delete-share file mechanism; Unix opens the directory itself.
         let lock = sys::open_admission_target(&target)?;
@@ -174,6 +185,69 @@ impl<Mode> AdmissionGuard<Mode> {
             root,
             admission: &mut self.held,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replacement_between_pinning_and_canonicalization_cannot_be_admitted() {
+        let fixture =
+            std::env::temp_dir().join(format!("wss-gate4b-acquisition-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&fixture);
+        std::fs::create_dir_all(&fixture).unwrap();
+        for replace_installation in [false, true] {
+            for shared in [false, true] {
+                let installation = fixture.join(format!("install-{replace_installation}-{shared}"));
+                let root = installation.join("authority");
+                std::fs::create_dir_all(&root).unwrap();
+                let scope = AdmissionScope {
+                    installation_dir: &installation,
+                    root_dir: &root,
+                };
+                let installation_pin = sys::open_directory(&installation).unwrap();
+                let root_pin = sys::open_directory(&root).unwrap();
+                let replaced = if replace_installation {
+                    &installation
+                } else {
+                    &root
+                };
+                let moved = fixture.join(format!("moved-{replace_installation}-{shared}"));
+                // Interrupt the production acquisition exactly after its first identity observations.
+                // Windows may prevent replacement via no-delete-share; Unix permits the race.
+                let replaced = match std::fs::rename(replaced, &moved) {
+                    Ok(()) => {
+                        std::fs::create_dir_all(&root).unwrap();
+                        true
+                    }
+                    Err(_) if cfg!(windows) => false,
+                    Err(error) => panic!("unexpected rename failure: {error}"),
+                };
+                let result = if shared {
+                    SharedAdmissionGuard::acquire_pinned(scope, true, installation_pin, root_pin)
+                        .map(|guard| guard.map(|guard| guard.guards(scope)))
+                } else {
+                    ExclusiveAdmissionGuard::acquire_pinned(
+                        scope,
+                        false,
+                        installation_pin,
+                        root_pin,
+                    )
+                    .map(|guard| guard.map(|guard| guard.guards(scope)))
+                };
+                if replaced {
+                    assert_eq!(result, Err(AdmissionError::IdentityChanged));
+                } else {
+                    assert_eq!(result, Ok(Some(true)));
+                }
+                assert!(ExclusiveAdmissionGuard::try_acquire(scope)
+                    .unwrap()
+                    .is_some());
+            }
+        }
+        std::fs::remove_dir_all(&fixture).unwrap();
     }
 }
 
