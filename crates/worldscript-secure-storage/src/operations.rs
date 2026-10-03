@@ -307,12 +307,35 @@ impl LocationPins {
         Ok(pins)
     }
     fn check(&self, location: RecordLocation<'_>) -> Result<(), OperationError> {
-        if sys::still_named(&self.record, location.record_dir).unwrap_or(false)
-            && sys::still_named(&self.marker, location.marker_dir).unwrap_or(false)
-        {
+        Self::check_identity(sys::still_named(&self.record, location.record_dir))?;
+        Self::check_identity(sys::still_named(&self.marker, location.marker_dir))
+    }
+    fn check_identity(identity: std::io::Result<bool>) -> Result<(), OperationError> {
+        if identity.map_err(AdmissionError::from)? {
             Ok(())
         } else {
             Err(AdmissionError::IdentityChanged.into())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+
+    #[test]
+    fn locator_identity_io_is_preserved_and_never_authorizes_the_read() {
+        for kind in [io::ErrorKind::PermissionDenied, io::ErrorKind::Interrupted] {
+            assert_eq!(
+                LocationPins::check_identity(Err(io::Error::from(kind))),
+                Err(OperationError::Admission(AdmissionError::Io(kind)))
+            );
+        }
+        assert_eq!(
+            LocationPins::check_identity(Ok(false)),
+            Err(OperationError::Admission(AdmissionError::IdentityChanged))
+        );
+        assert_eq!(LocationPins::check_identity(Ok(true)), Ok(()));
     }
 }
