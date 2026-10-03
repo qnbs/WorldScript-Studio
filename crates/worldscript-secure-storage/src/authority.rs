@@ -169,8 +169,17 @@ pub fn load_catalog<F: DurableFs, P: KeyProvider>(
         return Ok(None);
     };
     let key = resolve(provider, &view.root_key_ref)?;
+    load_snapshot_catalog(fs, layout, view, &key).map(Some)
+}
+
+pub(crate) fn load_snapshot_catalog<F: DurableFs>(
+    fs: &mut F,
+    layout: RootLayout<'_>,
+    view: crate::root_store::CommittedRootView,
+    key: &Key,
+) -> Result<LoadedCatalog, AuthorityError> {
     let reader = PageRead {
-        key: &key,
+        key,
         scope: &view.scope,
         key_epoch: view.root.active_key_epoch,
     };
@@ -181,11 +190,11 @@ pub fn load_catalog<F: DurableFs, P: KeyProvider>(
         }
     }
     verify_catalog(&view.root, &shards)?;
-    Ok(Some(LoadedCatalog {
+    Ok(LoadedCatalog {
         root: view.root,
         scope: view.scope,
         shards,
-    }))
+    })
 }
 
 /// `list_records` (§5.5): every catalogued record's descriptor, verified against the committed
@@ -219,6 +228,20 @@ pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
             kind: error.kind(),
         })
     })?;
+    commit_catalog_change_held(fs, provider, layout, commit, &held)
+}
+
+pub(crate) fn commit_catalog_change_held<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    commit: CatalogCommit<'_>,
+    held: &RootCommitGuard,
+) -> Result<RootCommitted, AuthorityError> {
+    if !held.guards(layout.root_dir) {
+        return Err(AuthorityError::Root(RootStoreError::MutexNotHeld));
+    }
+    check_operation_id(commit.operation_id).map_err(|_| AuthorityError::InvalidOperationId)?;
     let current = load_catalog(fs, provider, layout)?;
     let scope = match &current {
         Some(catalog) if !keeps_key_route(&catalog.root, commit) => {
@@ -252,7 +275,7 @@ pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
         scope: &scope,
         root: &root,
         root_key_ref: commit.root_key_ref,
-        held: &held,
+        held,
     };
     let mut committed = commit_root(fs, provider, layout, request)?;
     // `Confirmed` only if every page directory sync was too, not just the slot and pointer ones.
