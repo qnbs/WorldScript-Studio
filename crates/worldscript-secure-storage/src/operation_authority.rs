@@ -97,14 +97,49 @@ impl<P: KeyProvider> AuthorityCell<P> {
         &mut self,
         before_pin: impl FnOnce(),
     ) -> Result<(Arc<Snapshot>, Key), KeyProviderError> {
-        match self.provider.state()? {
-            KeyState::Unlocked { .. } => {}
-            KeyState::Locked if self.rebind_locked_same_key_forward()? => {}
-            KeyState::Locked => return Err(KeyProviderError::Locked),
+        self.capture_interleaved(|| {}, before_pin)
+    }
+
+    fn capture_interleaved(
+        &mut self,
+        after_state: impl FnOnce(),
+        before_pin: impl FnOnce(),
+    ) -> Result<(Arc<Snapshot>, Key), KeyProviderError> {
+        let state = self.provider.state()?;
+        match state {
+            KeyState::Unlocked { .. } | KeyState::Locked => {}
             KeyState::KeyLost => return Err(KeyProviderError::KeyLost),
             _ => return Err(KeyProviderError::RecoveryRequired),
         }
+        after_state();
         let anchor = self.provider.read_root_anchor_state()?;
+        anchor::validate(&anchor)?;
+        let (Some(scope), Some(root)) = (&anchor.installation_scope_id, &anchor.committed_root)
+        else {
+            return Err(KeyProviderError::RecoveryRequired);
+        };
+        if let Some(current) = &self.current {
+            if !current.accepts(scope, root) {
+                return Err(KeyProviderError::RecoveryRequired);
+            }
+            if root.root_key_ref != current.root.root_key_ref {
+                return Err(KeyProviderError::Locked);
+            }
+        }
+        if state == KeyState::Locked && !self.rebind_locked_same_key_forward(&anchor)? {
+            return Err(KeyProviderError::Locked);
+        }
+        // Resolve before publication: a state-to-anchor race must not poison the current cell.
+        let key = match self.provider.resolve_ref(&root.root_key_ref) {
+            Err(KeyProviderError::Locked) if self.rebind_locked_same_key_forward(&anchor)? => {
+                self.provider.resolve_ref(&root.root_key_ref)?
+            }
+            result => result?,
+        };
+        if self.provider.read_root_anchor_state()? != anchor {
+            self.provider.lock();
+            return Err(KeyProviderError::RecoveryRequired);
+        }
         self.publish(&anchor)?;
         // Private seam for proving the exact capture-to-pin window while the cell remains held.
         before_pin();
@@ -113,20 +148,20 @@ impl<P: KeyProvider> AuthorityCell<P> {
             .as_ref()
             .cloned()
             .ok_or(KeyProviderError::RecoveryRequired)?;
-        // Only the anchor route, never a route/epoch supplied by the caller or filesystem header.
-        let key = self.provider.resolve_ref(&snapshot.root.root_key_ref)?;
         Ok((snapshot, key))
     }
 
     /// An externally committed ordinary write invalidates a runtime's exact session binding. The
     /// coordinator may rebind only to a validated, same-route forward root while shared admission
     /// is already live; rotation, rollback, explicit lock, and any concurrent change refuse.
-    fn rebind_locked_same_key_forward(&mut self) -> Result<bool, KeyProviderError> {
-        let before = self.provider.read_root_anchor_state()?;
+    fn rebind_locked_same_key_forward(
+        &mut self,
+        before: &AnchorState,
+    ) -> Result<bool, KeyProviderError> {
         let Some(current) = self.current.as_ref() else {
             return Ok(false);
         };
-        if !current.allows_same_key_forward(&before)? {
+        if !current.allows_same_key_forward(before)? {
             return Ok(false);
         }
         match self.provider.unlock() {
@@ -151,13 +186,9 @@ impl<P: KeyProvider> AuthorityCell<P> {
                 return Err(error);
             }
         };
-        if after != before || !current.allows_same_key_forward(&after)? {
+        if &after != before || !current.allows_same_key_forward(&after)? {
             self.provider.lock();
             return Err(KeyProviderError::RecoveryRequired);
-        }
-        if let Err(error) = self.publish(&after) {
-            self.provider.lock();
-            return Err(error);
         }
         Ok(true)
     }
@@ -265,6 +296,30 @@ mod tests {
             cell.provider.state(),
             Ok(KeyState::Unlocked { .. })
         ));
+    }
+
+    #[test]
+    fn external_commit_between_state_and_anchor_does_not_poison_publication() {
+        let (mut writer, reader, route) = shared_runtimes();
+        let mut cell = AuthorityCell::new(reader);
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 1);
+        let (snapshot, key) = cell
+            .capture_interleaved(
+                || {
+                    let next = request(&route, 1);
+                    writer.prepare_root_anchor(&next).unwrap();
+                    writer.commit_root_anchor(&next.operation_id, 2).unwrap();
+                },
+                || {},
+            )
+            .unwrap();
+        assert_eq!(snapshot.root.root_generation, 2);
+        assert!(matches!(
+            cell.provider.state(),
+            Ok(KeyState::Unlocked { .. })
+        ));
+        drop((snapshot, key));
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 2);
     }
 
     #[test]
