@@ -41,6 +41,10 @@ fn write_cas_and_two_root_events_are_one_admitted_operation() {
             .root_generation(),
         5
     );
+    assert_eq!(
+        fixture.storage().try_lock(&mut StdFs).unwrap(),
+        Some(KeyState::Locked)
+    );
 }
 
 #[test]
