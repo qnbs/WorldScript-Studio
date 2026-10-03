@@ -20,7 +20,8 @@ without unbounded lock inventories. Readers remain admitted and never take the r
 ```text
 write: shared admission → writer resource → snapshot/key/reconciliation/CAS
        → finite PENDING root event → staging/promotion → finite ACTIVE root event → completion
-read:  shared admission → atomic snapshot pin/key → authenticate pinned view → handoff → release
+read:  shared admission → atomic snapshot pin/key → authenticate root/retain exact epoch entries
+       → authenticate pinned view → handoff → drop key/pin/epoch metadata → release admission
 lock:  exclusive admission/drain → authenticate quiescence → clear keys → retain exclusion
 unlock: retained/new exclusive → load keys/authenticate authority → release, or clear/retain on error
 ```
@@ -35,6 +36,12 @@ keys and pins drop before shared admission. The handoff callback runs while all 
 reader may keep an old immutable view across arbitrarily many later root commits. Shared admission
 blocks cross-process exclusive reclamation, in addition to local pins and durable retention (§4.1 of
 `AUTHORITY-SNAPSHOT-LIFETIME.md`). Weak retention observations cannot grant deletion authority.
+
+Pinned reads reopen the exact immutable epoch-control generations authenticated at capture, not
+later directory heads. Current cold start/root commits retain strict newest-set verification.
+At step F an original provider failure is preserved as an uncertain root-commit outcome, never
+permission to replay the logical mutation. Successful F with failed local refresh is specifically
+`CommittedRefreshRequired`; recover/reload the committed intent, do not start a fresh write.
 
 | Invariant / race | Code owner | Focused proof |
 |---|---|---|

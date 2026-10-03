@@ -56,6 +56,16 @@ impl fmt::Debug for SnapshotRetention {
 }
 
 impl Snapshot {
+    fn accepts(&self, scope: &InstallationScopeId, root: &CommittedRoot) -> bool {
+        if &self.scope != scope {
+            return false;
+        }
+        match root.root_generation.cmp(&self.root.root_generation) {
+            std::cmp::Ordering::Less => false,
+            std::cmp::Ordering::Equal => root == &self.root,
+            std::cmp::Ordering::Greater => true,
+        }
+    }
     pub(crate) fn retention(this: &Arc<Self>) -> SnapshotRetention {
         SnapshotRetention {
             generation: this.root.root_generation,
@@ -114,10 +124,7 @@ impl<P: KeyProvider> AuthorityCell<P> {
             return Ok(());
         };
         if let Some(current) = &self.current {
-            if &current.scope != scope
-                || root.root_generation < current.root.root_generation
-                || (root.root_generation == current.root.root_generation && root != &current.root)
-            {
+            if !current.accepts(scope, root) {
                 return Err(KeyProviderError::RecoveryRequired);
             }
             if root == &current.root {
@@ -147,6 +154,28 @@ pub(crate) fn lock_cell<P>(
 /// call is short; filesystem staging never holds the authority-cell mutex. In particular, readers
 /// may capture the prior snapshot during C/E; only F's store write + current replacement are atomic.
 pub(crate) struct PublishedProvider<'a, P>(pub(crate) &'a Mutex<AuthorityCell<P>>);
+
+impl<P: KeyProvider> PublishedProvider<'_, P> {
+    fn commit_with_refresh(
+        &mut self,
+        operation: &str,
+        generation: u64,
+        after_commit: impl FnOnce(&mut P),
+    ) -> Result<(), KeyProviderError> {
+        let mut cell = lock_cell(self.0)?;
+        let result = cell.provider.commit_root_anchor(operation, generation);
+        // Private fault seam: tests can make the refresh fail after the actual durable attempt.
+        after_commit(&mut cell.provider);
+        let refreshed = cell
+            .provider
+            .read_root_anchor_state()
+            .and_then(|anchor| cell.publish(&anchor));
+        match result {
+            Err(original) => Err(original),
+            Ok(()) => refreshed.map_err(|_| KeyProviderError::CommittedRefreshRequired),
+        }
+    }
+}
 
 impl<P: KeyProvider> KeyProvider for PublishedProvider<'_, P> {
     fn state(&self) -> Result<KeyState, KeyProviderError> {
@@ -191,13 +220,7 @@ impl<P: KeyProvider> KeyProvider for PublishedProvider<'_, P> {
         operation: &str,
         generation: u64,
     ) -> Result<(), KeyProviderError> {
-        let mut cell = lock_cell(self.0)?;
-        let result = cell.provider.commit_root_anchor(operation, generation);
-        // An ambiguous result may have durably published F. Refresh under the same mutex, without
-        // turning that ambiguity into success. No reader can acquire a lagging current handle.
-        let anchor = cell.provider.read_root_anchor_state()?;
-        cell.publish(&anchor)?;
-        result
+        self.commit_with_refresh(operation, generation, |_| {})
     }
     fn abort_or_recover_root_anchor(&mut self, operation: &str) -> Result<(), KeyProviderError> {
         lock_cell(self.0)?
@@ -210,6 +233,7 @@ impl<P: KeyProvider> KeyProvider for PublishedProvider<'_, P> {
 mod tests {
     use super::*;
     use crate::memory_provider::MemoryKeyProvider;
+    use crate::memory_provider::{AnchorOp, Fault};
     use crate::provider::RootSlot;
     use std::sync::{mpsc, TryLockError};
     use std::thread;
@@ -239,6 +263,54 @@ mod tests {
         provider.prepare_root_anchor(&first).unwrap();
         provider.commit_root_anchor(&first.operation_id, 1).unwrap();
         (provider, route)
+    }
+
+    #[test]
+    fn commit_error_is_preserved_and_durable_success_is_not_reported_as_uncommitted() {
+        for fault in [
+            None,
+            Some(Fault::BeforePersist(AnchorOp::Commit)),
+            Some(Fault::AfterPersist(AnchorOp::Commit)),
+        ] {
+            let (mut provider, route) = configured();
+            let next = request(&route, 1);
+            provider.prepare_root_anchor(&next).unwrap();
+            if let Some(fault) = fault {
+                provider.inject(fault);
+            }
+            let cell = Mutex::new(AuthorityCell::new(provider));
+            let error = PublishedProvider(&cell)
+                .commit_with_refresh(&next.operation_id, 2, |provider| {
+                    provider.set_available(false)
+                })
+                .unwrap_err();
+            assert_eq!(
+                error,
+                if fault.is_none() {
+                    KeyProviderError::CommittedRefreshRequired
+                } else {
+                    KeyProviderError::Unavailable
+                }
+            );
+            assert!(lock_cell(&cell).unwrap().capture().is_err());
+            let mut state = lock_cell(&cell).unwrap();
+            state.provider.set_available(true);
+            let floor = state
+                .provider
+                .read_root_anchor_state()
+                .unwrap()
+                .committed_floor;
+            assert_eq!(
+                floor,
+                if fault == Some(Fault::BeforePersist(AnchorOp::Commit)) {
+                    1
+                } else {
+                    2
+                }
+            );
+            let (snapshot, _) = state.capture().unwrap();
+            assert_eq!(snapshot.root.root_generation, floor);
+        }
     }
 
     #[test]

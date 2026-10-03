@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use support::{
     child_probe, payload, Event, Fixture, HookFs, ObservedProvider, Probe, CHILD_MODE, CHILD_SCOPE,
@@ -35,7 +35,7 @@ fn write_cas_and_two_root_events_are_one_admitted_operation() {
     assert_eq!(
         fixture
             .storage()
-            .try_authority_snapshot()
+            .try_authority_snapshot(&mut StdFs)
             .unwrap()
             .unwrap()
             .root_generation(),
@@ -47,13 +47,17 @@ fn write_cas_and_two_root_events_are_one_admitted_operation() {
 fn old_snapshot_survives_multiple_publishes_and_blocks_reclamation() {
     let fixture = Fixture::new();
     fixture.write(&mut StdFs, None, b"first").unwrap();
-    let mut old = fixture.storage().try_authority_snapshot().unwrap().unwrap();
+    let mut old = fixture
+        .storage()
+        .try_authority_snapshot(&mut StdFs)
+        .unwrap()
+        .unwrap();
     let witness = old.retention();
     fixture.write(&mut StdFs, Some(1), b"second").unwrap();
     fixture.write(&mut StdFs, Some(2), b"third").unwrap();
     assert_eq!(old.root_generation(), 3);
     assert_eq!(
-        old.read_record(&mut StdFs, &fixture.identity, fixture.location(), payload)
+        old.read_record(&mut StdFs, fixture.record(), payload)
             .unwrap(),
         b"first"
     );
@@ -100,7 +104,7 @@ fn read_handoff_holds_admission_until_consumer_returns() {
     fixture.write(&mut StdFs, None, b"value").unwrap();
     let result = fixture
         .storage()
-        .try_read_record(&mut StdFs, &fixture.identity, fixture.location(), |read| {
+        .try_read_record(&mut StdFs, fixture.record(), |read| {
             assert_eq!(fixture.storage().try_lock(&mut StdFs).unwrap(), None);
             assert_eq!(fixture.storage().try_unlock(&mut StdFs).unwrap(), None);
             assert_eq!(fixture.storage().try_shutdown(&mut StdFs).unwrap(), None);
@@ -127,7 +131,7 @@ fn confirmed_lock_and_failed_unlock_retain_cross_process_exclusion() {
         .unwrap()
         .is_none());
     assert!(matches!(
-        fixture.storage().try_authority_snapshot(),
+        fixture.storage().try_authority_snapshot(&mut StdFs),
         Err(OperationError::Provider(KeyProviderError::Locked))
     ));
     child_probe(&fixture, "read");
@@ -158,9 +162,7 @@ fn exclusive_and_locked_or_migrating_plaintext_never_bypass_policy() {
     assert_eq!(
         fixture
             .storage()
-            .try_read_record(&mut StdFs, &fixture.identity, fixture.location(), |_| {
-                called = true
-            })
+            .try_read_record(&mut StdFs, fixture.record(), |_| { called = true })
             .unwrap(),
         None
     );
@@ -181,12 +183,7 @@ fn exclusive_and_locked_or_migrating_plaintext_never_bypass_policy() {
         });
         assert!(fixture
             .storage()
-            .try_read_record(
-                &mut filesystem,
-                &fixture.identity,
-                fixture.location(),
-                |_| called = true
-            )
+            .try_read_record(&mut filesystem, fixture.record(), |_| called = true)
             .is_err());
         assert!(!called);
         assert_eq!(fixture.probe.keys.load(Ordering::SeqCst), keys);
@@ -250,17 +247,19 @@ fn pinned_reader_runs_at_both_pointer_before_anchor_windows_without_root_lock() 
     let (result_tx, result_rx) = mpsc::channel();
     let reader = thread::spawn(move || {
         // Acquire admission BEFORE the writer's root event; the signal never acquires admission.
-        let mut snapshot = storage.try_authority_snapshot().unwrap().unwrap();
+        let mut snapshot = storage.try_authority_snapshot(&mut StdFs).unwrap().unwrap();
         ready_tx.send(()).unwrap();
         for _ in 0..2 {
             read_rx.recv_timeout(Duration::from_secs(10)).unwrap();
             let value = snapshot
                 .read_record(
                     &mut StdFs,
-                    &identity,
-                    RecordLocation {
-                        record_dir: &records,
-                        marker_dir: &markers,
+                    ProtectedRecord {
+                        identity: &identity,
+                        location: RecordLocation {
+                            record_dir: &records,
+                            marker_dir: &markers,
+                        },
                     },
                     payload,
                 )
@@ -364,7 +363,7 @@ fn cancellation_preserves_pending_data_and_releases_all_kernel_ownership() {
         Some(())
     );
     assert!(matches!(
-        fixture.storage().try_authority_snapshot(),
+        fixture.storage().try_authority_snapshot(&mut StdFs),
         Err(OperationError::Closed)
     ));
 }
@@ -374,14 +373,29 @@ fn shutdown_is_idempotent_and_location_cannot_escape_installation() {
     let fixture = Fixture::new();
     let foreign = Fixture::new();
     assert_eq!(
+        fixture.storage().try_read_record(
+            &mut StdFs,
+            ProtectedRecord {
+                identity: &fixture.identity,
+                location: foreign.location()
+            },
+            |_| ()
+        ),
+        Err(OperationError::Admission(AdmissionError::InvalidScope))
+    );
+    assert_eq!(
         fixture.storage().try_write_record(
             &mut StdFs,
-            &fixture.identity,
-            foreign.location(),
-            None,
-            ProtectedWrite {
-                record_schema: 1,
-                plaintext: b"wrong scope"
+            ProtectedMutation {
+                record: ProtectedRecord {
+                    identity: &fixture.identity,
+                    location: foreign.location()
+                },
+                expected_generation: None,
+                write: ProtectedWrite {
+                    record_schema: 1,
+                    plaintext: b"wrong scope"
+                }
             }
         ),
         Err(OperationError::Admission(AdmissionError::InvalidScope))
@@ -398,12 +412,16 @@ fn shutdown_is_idempotent_and_location_cannot_escape_installation() {
     assert_eq!(
         collision.try_write_record(
             &mut StdFs,
-            &fixture.identity,
-            fixture.location(),
-            None,
-            ProtectedWrite {
-                record_schema: 1,
-                plaintext: b"reserved root"
+            ProtectedMutation {
+                record: ProtectedRecord {
+                    identity: &fixture.identity,
+                    location: fixture.location()
+                },
+                expected_generation: None,
+                write: ProtectedWrite {
+                    record_schema: 1,
+                    plaintext: b"reserved root"
+                }
             }
         ),
         Err(OperationError::Admission(AdmissionError::InvalidScope))
@@ -442,57 +460,13 @@ fn snapshot_is_send_and_two_readers_pin_across_three_writer_operations() {
         );
         let (ready, racing, finished) = (ready_tx.clone(), racing_tx.clone(), finished.clone());
         readers.push(thread::spawn(move || {
-            let mut snapshot = storage.try_authority_snapshot().unwrap().unwrap();
-            ready.send(()).unwrap();
-            let deadline = Instant::now() + Duration::from_secs(30);
-            let mut saw_pending = false;
-            while !finished.load(Ordering::Acquire) && Instant::now() < deadline {
-                let mut fresh = storage.try_authority_snapshot().unwrap().unwrap();
-                let generation = fresh.root_generation();
-                assert!((3..=9).contains(&generation));
-                let value = fresh
-                    .read_record(
-                        &mut StdFs,
-                        &identity,
-                        RecordLocation {
-                            record_dir: &records,
-                            marker_dir: &markers,
-                        },
-                        payload,
-                    )
-                    .unwrap();
-                assert_eq!(
-                    value,
-                    if generation <= 4 {
-                        b"baseline".as_slice()
-                    } else {
-                        b"next".as_slice()
-                    }
-                );
-                if generation == 4 && !saw_pending {
-                    saw_pending = true;
-                    racing.send(()).unwrap();
-                }
-                thread::yield_now();
+            support::PinnedReader {
+                storage,
+                identity,
+                records,
+                markers,
             }
-            assert!(
-                finished.load(Ordering::Acquire),
-                "writer did not finish within the proof deadline"
-            );
-            assert_eq!(
-                snapshot
-                    .read_record(
-                        &mut StdFs,
-                        &identity,
-                        RecordLocation {
-                            record_dir: &records,
-                            marker_dir: &markers
-                        },
-                        payload
-                    )
-                    .unwrap(),
-                b"baseline"
-            );
+            .run(ready, racing, finished);
         }));
     }
     for _ in 0..2 {
@@ -530,20 +504,44 @@ fn snapshot_is_send_and_two_readers_pin_across_three_writer_operations() {
 #[test]
 fn current_and_previous_root_remain_retained_after_their_reader_releases() {
     let fixture = Fixture::new();
+    #[cfg(unix)]
+    let fixture = {
+        let alias = fixture.base.join("aliased-temp");
+        std::os::unix::fs::symlink(&fixture.base, &alias).unwrap();
+        assert_ne!(alias, fs::canonicalize(&alias).unwrap());
+        // Deterministically exercise macOS's equivalent /var -> /private/var ancestor alias.
+        let candidate = Fixture::new_in(&alias);
+        let lexical_records = alias
+            .join(candidate.base.file_name().unwrap())
+            .join("records");
+        assert_ne!(lexical_records, candidate.records);
+        assert_eq!(
+            fs::canonicalize(lexical_records).unwrap(),
+            candidate.records
+        );
+        candidate
+    };
     fixture.write(&mut StdFs, None, b"first").unwrap();
     let mut previous = None;
     let mut filesystem = HookFs(|path: &std::path::Path, event| {
         if event == Event::Create && path.parent() == Some(fixture.records.as_path()) {
-            previous = fixture.storage().try_authority_snapshot().unwrap();
+            previous = fixture
+                .storage()
+                .try_authority_snapshot(&mut StdFs)
+                .unwrap();
         }
         Ok(())
     });
     fixture.write(&mut filesystem, Some(1), b"second").unwrap();
-    let previous = previous.unwrap();
+    let previous = previous.expect("canonical record staging hook must capture the previous root");
     assert_eq!(previous.root_generation(), 4);
     let previous_witness = previous.retention();
     drop(previous);
-    let current = fixture.storage().try_authority_snapshot().unwrap().unwrap();
+    let current = fixture
+        .storage()
+        .try_authority_snapshot(&mut StdFs)
+        .unwrap()
+        .unwrap();
     let current_witness = current.retention();
     drop(current);
     let held = ExclusiveAdmissionGuard::try_acquire(fixture.scope())
@@ -604,14 +602,31 @@ fn nonordinary_member_is_refused_before_coordination_or_authority_observation() 
     let fixture = Fixture::new();
     let member = RecordIdentity::new(RecordClass::Asset, &["p1", "a1"]).unwrap();
     assert_eq!(
+        fixture.storage().try_read_record(
+            &mut StdFs,
+            ProtectedRecord {
+                identity: &member,
+                location: fixture.location()
+            },
+            |_| ()
+        ),
+        Err(OperationError::Protected(
+            ProtectedError::NotAnOrdinaryRecord
+        ))
+    );
+    assert_eq!(
         fixture.storage().try_write_record(
             &mut StdFs,
-            &member,
-            fixture.location(),
-            None,
-            ProtectedWrite {
-                record_schema: 1,
-                plaintext: b"member"
+            ProtectedMutation {
+                record: ProtectedRecord {
+                    identity: &member,
+                    location: fixture.location()
+                },
+                expected_generation: None,
+                write: ProtectedWrite {
+                    record_schema: 1,
+                    plaintext: b"member"
+                }
             }
         ),
         Err(OperationError::Protected(
@@ -620,6 +635,32 @@ fn nonordinary_member_is_refused_before_coordination_or_authority_observation() 
     );
     assert_eq!(fixture.probe.observations.load(Ordering::SeqCst), 0);
     assert!(!fixture.base.join("ordinary-writers").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn eligibility_refuses_root_replacement_during_anchor_observation() {
+    let fixture = Fixture::new();
+    fixture.write(&mut StdFs, None, b"first").unwrap();
+    let pin = fixture
+        .storage()
+        .try_authority_snapshot(&mut StdFs)
+        .unwrap()
+        .unwrap();
+    let witness = pin.retention();
+    drop(pin);
+    fixture.write(&mut StdFs, Some(1), b"second").unwrap();
+    let held = ExclusiveAdmissionGuard::try_acquire(fixture.scope())
+        .unwrap()
+        .unwrap();
+    *fixture.probe.replace_root.lock().unwrap() =
+        Some((fixture.root.clone(), fixture.base.join("moved-root")));
+    assert_eq!(
+        fixture
+            .storage()
+            .root_reclamation_eligible(&held, &witness, false),
+        Err(OperationError::Admission(AdmissionError::IdentityChanged))
+    );
 }
 
 #[test]
@@ -648,12 +689,16 @@ fn operation_child() {
             storage
                 .try_write_record(
                     &mut StdFs,
-                    &identity,
-                    location,
-                    None,
-                    ProtectedWrite {
-                        record_schema: 1,
-                        plaintext: b"must not enter"
+                    ProtectedMutation {
+                        record: ProtectedRecord {
+                            identity: &identity,
+                            location
+                        },
+                        expected_generation: None,
+                        write: ProtectedWrite {
+                            record_schema: 1,
+                            plaintext: b"must not enter"
+                        }
                     }
                 )
                 .unwrap(),
@@ -661,9 +706,14 @@ fn operation_child() {
         ),
         "read" => assert_eq!(
             storage
-                .try_read_record(&mut StdFs, &identity, location, |_| panic!(
-                    "unadmitted handoff"
-                ))
+                .try_read_record(
+                    &mut StdFs,
+                    ProtectedRecord {
+                        identity: &identity,
+                        location
+                    },
+                    |_| panic!("unadmitted handoff")
+                )
                 .unwrap(),
             None
         ),
