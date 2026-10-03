@@ -189,6 +189,7 @@ fn a_replaced_root_directory_voids_the_guard_that_locked_the_old_one() {
     // Unix locks the root directory itself: a directory put in its place is a different mutex, so
     // the old guard must stop authorizing root writes and the new directory is free.
     let moved = root.with_extension("moved");
+    let _ = fs::remove_dir_all(&moved);
     fs::rename(&root, &moved).unwrap();
     fs::create_dir_all(&root).unwrap();
     assert!(!guard.guards(&root));
