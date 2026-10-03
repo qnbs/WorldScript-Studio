@@ -17,6 +17,7 @@
 #![deny(unsafe_code)]
 
 pub mod aad;
+pub mod admission;
 pub mod anchor;
 pub mod anchor_codec;
 pub mod authority;
@@ -48,6 +49,10 @@ pub mod store_layout;
 pub mod store_runtime;
 
 pub use aad::{canonical_aad, RecordContext};
+pub use admission::{
+    AdmissionError, AdmissionScope, AdmittedRootCommitGuard, ExclusiveAdmissionGuard,
+    SharedAdmissionGuard, OPERATION_ADMISSION_LOCK_FILE,
+};
 pub use authority::{
     commit_catalog_change, list_records, load_catalog, AuthorityError, CatalogChange,
     CatalogCommit, CatalogRecoveryReason, CatalogStep, CommittedShard, LoadedCatalog,
