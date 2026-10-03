@@ -344,12 +344,14 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             write,
             expected_generation,
             &mut operation.admission,
-        )?;
-        pins.check(location)?;
-        writer.check()?;
-        operation.check()?;
-        self.track_mutation(record, false)?;
-        Ok(Some(result))
+        );
+        if matches!(&result, Ok(_) | Err(ProtectedError::StaleGeneration)) {
+            pins.check(location)?;
+            writer.check()?;
+            operation.check()?;
+            self.track_mutation(record, false)?;
+        }
+        result.map(Some).map_err(OperationError::from)
     }
 
     /// Recover one record only after obtaining the same writer serialization as ordinary writes.
