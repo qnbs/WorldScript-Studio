@@ -40,7 +40,8 @@ impl SnapshotRetention {
         self.generation
     }
 
-    /// Conservative: includes the current cell's own reference while this root is current.
+    /// This witness's local reference observation only, including the current cell's reference.
+    /// It does not prove caller ownership, root scope or reclamation eligibility.
     pub fn is_referenced(&self) -> bool {
         self.handle.strong_count() != 0
     }

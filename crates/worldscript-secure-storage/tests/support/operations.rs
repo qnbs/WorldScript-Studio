@@ -19,6 +19,7 @@ pub struct Probe {
     pub keys: AtomicUsize,
     pub state: Mutex<Option<KeyState>>,
     pub fail_unlock: AtomicBool,
+    pub lock_calls: AtomicUsize,
     pub replace_root: Mutex<Option<(PathBuf, PathBuf)>>,
 }
 
@@ -43,6 +44,7 @@ impl KeyProvider for ObservedProvider {
         self.0.resolve_ref(route)
     }
     fn lock(&mut self) {
+        self.1.lock_calls.fetch_add(1, Ordering::SeqCst);
         self.0.lock();
     }
     fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
@@ -246,17 +248,22 @@ impl Fixture {
         expected: Option<u64>,
         payload: &[u8],
     ) -> Result<Option<ProtectedCommitted>, OperationError> {
-        self.storage().try_write_record(
-            fs,
-            ProtectedMutation {
-                record: self.record(),
-                expected_generation: expected,
-                write: ProtectedWrite {
-                    record_schema: 1,
-                    plaintext: payload,
-                },
+        self.storage()
+            .try_write_record(fs, self.mutation(expected, payload))
+    }
+    pub fn mutation<'a>(
+        &'a self,
+        expected: Option<u64>,
+        payload: &'a [u8],
+    ) -> ProtectedMutation<'a> {
+        ProtectedMutation {
+            record: self.record(),
+            expected_generation: expected,
+            write: ProtectedWrite {
+                record_schema: 1,
+                plaintext: payload,
             },
-        )
+        }
     }
     pub fn payload(&self) -> Vec<u8> {
         self.storage()

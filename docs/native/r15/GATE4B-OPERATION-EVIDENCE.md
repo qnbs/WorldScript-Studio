@@ -24,6 +24,7 @@ read:  shared admission → atomic snapshot pin/key → authenticate root/retain
        → authenticate pinned view → handoff → drop key/pin/epoch metadata → release admission
 lock:  exclusive admission/drain → authenticate quiescence → clear keys → retain exclusion
 unlock: retained/new exclusive → load keys/authenticate authority → release, or clear/retain on error
+close: exclusive drain → authenticate quiescence → clear local keys → close coordinator/release
 ```
 
 No upgrade, no admission acquisition while holding a root event, no root mutex during staging,
@@ -42,6 +43,16 @@ later directory heads. Current cold start/root commits retain strict newest-set 
 At step F an original provider failure is preserved as an uncertain root-commit outcome, never
 permission to replay the logical mutation. Successful F with failed local refresh is specifically
 `CommittedRefreshRequired`; recover/reload the committed intent, do not start a fresh write.
+
+The snapshot pin is the logical `Arc<Snapshot>` generation handle, not an open filesystem handle
+for every control file. Generation/address authentication and committed digests fix the bytes that
+can be returned; different or missing retained evidence fails closed. Admission pins root identity;
+record/marker directory handles are checked per read and remain live through the handoff.
+Shutdown closes this coordinator, not the installation: after verified drain it releases exclusion
+without changing durable authority, allowing another verified session to resume. Failed unlock,
+including unwind, retains the fence and clears keys; mutex poison refuses subsequent local access.
+One local pending-record latch pins its original record/marker directories and refuses clean drain;
+only same-identity/pinned-locator reconciliation/write clears it. This is not the 4C durable journal.
 
 | Invariant / race | Code owner | Focused proof |
 |---|---|---|
