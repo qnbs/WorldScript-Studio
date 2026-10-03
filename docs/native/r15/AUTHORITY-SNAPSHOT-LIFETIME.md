@@ -206,10 +206,12 @@ journal, or any other persisted structure. This is a deliberate simplification, 
   evidence that reclamation was safe at some point *before* the crash — the durable retention rule
   (§5.5) is the only cross-restart authority, exactly as the parent contract already requires for
   every other authority decision.
-- A multi-process or multi-tab scenario (the packaged desktop app run twice, or a future
-  multi-window Core) is out of this document's scope: `AuthoritySnapshotGuard` as specified here is a
-  single-process, in-memory mechanism. Coordinating reader pins across process boundaries — if ever
-  required — needs its own explicit contract and is not implied or half-specified here.
+- Gate 4B's read/snapshot candidate adds a cross-process barrier: shared operation admission is
+  acquired before authority/key capture and held through payload handoff. Key and local snapshot
+  pins drop before admission. Exclusive admission must drain those readers before a transition.
+  The Arc count remains local, is never persisted, and is not physical deletion authority.
+  A future collector still requires exclusive admission plus every durable current/previous/
+  prepared-root and recovery-retention condition. No collector is implemented by this slice.
 
 ## 5. What this document does not change
 
@@ -241,6 +243,8 @@ journal, or any other persisted structure. This is a deliberate simplification, 
 
 ## 7. Non-goals
 
-No implementation. No production authority switch. No change to any S5-A digest, envelope, or
-migration semantics. No multi-process/multi-window reader coordination (§4). No hazard-pointer or
-RCU design (§2) unless a future revision demonstrates necessity.
+This slice implements the cross-process reader-lifetime barrier in §4: shared operation admission
+is held through payload handoff and exclusive admission drains it before a transition. It does not
+implement a durable reader registry, persisted guards/reference counts, physical reclamation, a
+hazard-pointer/RCU design, a production authority switch, or any S5-A digest, envelope, or
+migration semantics.

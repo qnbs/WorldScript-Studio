@@ -367,6 +367,7 @@ pub(crate) fn finish_write<F: DurableFs>(
 
 /// Reads the committed generation: the `ACTIVE` one, or the old one while a write is pending. The
 /// file must be exactly the envelope the marker committed and must open under the record.
+#[cfg(feature = "test-support")]
 pub fn read_committed<F: DurableFs>(
     fs: &mut F,
     store: RecordStore<'_>,
