@@ -71,6 +71,9 @@ pub enum RecoveryError {
 /// Key-provider and secure-anchor outcomes (§8.1, §8.2, §5.3.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyProviderError {
+    /// The anchor commit succeeded durably, but the local authority-cell refresh failed.
+    /// Reload/recover that committed intent; never retry it as a new logical mutation.
+    CommittedRefreshRequired,
     /// The provider could not complete this call; retrying may succeed.
     Unavailable,
     /// Configured keys exist but are not unlocked.

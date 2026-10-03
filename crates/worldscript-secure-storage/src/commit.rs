@@ -382,7 +382,7 @@ pub fn read_committed<F: DurableFs>(
 /// does not. `None` when the record has no marker yet. It describes the chain as it stands: a first
 /// write that reconciliation rolled back (`Resolution::RolledBack { restored: None }`) still reads
 /// as `PENDING(none -> 1)` here, because version 1 has no `ABSENT` marker body;
-/// [`reconcile_protected`](crate::protected::reconcile_protected) consumes the reconciliation
+/// The admitted protected reconciliation consumes the reconciliation
 /// outcome and drops such a record, so a catalog is never built from this helper alone.
 pub fn describe_record<F: DurableFs>(
     fs: &mut F,
