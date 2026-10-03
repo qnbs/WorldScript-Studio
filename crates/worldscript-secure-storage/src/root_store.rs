@@ -26,6 +26,7 @@
 //! [`RootCommitGuard`] (§11.1); cold start never writes, and
 //! [`repair_root_pointer`] repairs a stale pointer under the guard. Operation admission is slice 4B.
 
+use crate::seal::Key;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
@@ -325,6 +326,21 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
     else {
         return Ok(None);
     };
+    let key = provider
+        .resolve_ref(&committed.root_key_ref)
+        .map_err(RootStoreError::Anchor)?;
+    load_snapshot_root(fs, layout, &scope, &committed, &key).map(Some)
+}
+
+/// Authenticates exactly an already-pinned anchor snapshot. A concurrent preparation/pointer
+/// move cannot replace its read authority; the caller holds admission and the snapshot's key.
+pub(crate) fn load_snapshot_root<F: DurableFs>(
+    fs: &mut F,
+    layout: RootLayout<'_>,
+    scope: &InstallationScopeId,
+    committed: &crate::provider::CommittedRoot,
+    key: &Key,
+) -> Result<CommittedRootView, RootStoreError> {
     let path = layout.slot_file(committed.root_slot, committed.root_generation);
     let envelope = match fs.read(&path) {
         Ok(bytes) => bytes,
@@ -333,15 +349,12 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
         }
         Err(error) => return Err(io_error(RootStep::ReadSlot, &error)),
     };
-    let key = provider
-        .resolve_ref(&committed.root_key_ref)
-        .map_err(RootStoreError::Anchor)?;
     let read = RootSlotRead {
-        scope: &scope,
+        scope,
         root_generation: committed.root_generation,
         envelope: &envelope,
     };
-    let (root, digest) = open_root_slot(&key, &read)
+    let (root, digest) = open_root_slot(key, &read)
         .map_err(|_| recovery(RootRecoveryReason::CommittedSlotMismatch))?;
     let committed_evidence = root.commit_evidence.state == RootCommitState::Committed;
     if digest != committed.root_digest || !committed_evidence {
@@ -350,7 +363,7 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
     if root.root_key_ref_digest != committed.root_key_ref.digest() {
         return Err(recovery(RootRecoveryReason::KeyRouteMismatch));
     }
-    let key_epochs = load_key_epoch_set(fs, provider, layout, &scope, &committed.root_key_ref)?;
+    let key_epochs = load_snapshot_key_epochs(fs, layout, scope, key)?;
     verify_key_epochs(&root, &key_epochs)?;
     let pointer = RootPointer {
         slot: committed.root_slot,
@@ -360,14 +373,14 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
     // The pointer is recoverable state, never authority: an unreadable or undecodable pointer is
     // reported as stale like a missing one, never a reason to refuse the authenticated root.
     let pointer_stale = !matches!(read_pointer(fs, layout), Ok(Some(found)) if found == pointer);
-    Ok(Some(CommittedRootView {
+    Ok(CommittedRootView {
         root,
         root_digest: digest,
         root_slot: committed.root_slot,
-        scope,
-        root_key_ref: committed.root_key_ref,
+        scope: scope.clone(),
+        root_key_ref: committed.root_key_ref.clone(),
         pointer_stale,
-    }))
+    })
 }
 
 /// Repairs a stale or missing pointer to the committed root, under the held `root_commit_mutex`:
@@ -477,6 +490,30 @@ pub fn load_key_epoch_set<F: DurableFs, P: KeyProvider>(
     let key = provider
         .resolve_ref(root_key_ref)
         .map_err(RootStoreError::Anchor)?;
+    open_epoch_set(fs, layout, scope, &key, names)
+}
+
+fn load_snapshot_key_epochs<F: DurableFs>(
+    fs: &mut F,
+    layout: RootLayout<'_>,
+    scope: &InstallationScopeId,
+    key: &Key,
+) -> Result<Vec<(KeyEpochRecord, KeyEpochEntry)>, RootStoreError> {
+    let names = match fs.list_dir(&layout.key_epochs_dir()) {
+        Ok(names) => names,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(io_error(RootStep::ReadKeyEpoch, &error)),
+    };
+    open_epoch_set(fs, layout, scope, key, names)
+}
+
+fn open_epoch_set<F: DurableFs>(
+    fs: &mut F,
+    layout: RootLayout<'_>,
+    scope: &InstallationScopeId,
+    key: &Key,
+    names: Vec<std::ffi::OsString>,
+) -> Result<Vec<(KeyEpochRecord, KeyEpochEntry)>, RootStoreError> {
     let mut set = Vec::with_capacity(names.len());
     for name in names {
         let epoch = name
@@ -501,7 +538,7 @@ pub fn load_key_epoch_set<F: DurableFs, P: KeyProvider>(
             envelope: &envelope,
         };
         set.push(
-            KeyEpochRecord::open(&key, &read)
+            KeyEpochRecord::open(key, &read)
                 .map_err(|_| recovery(RootRecoveryReason::KeyEpochSetMismatch))?,
         );
     }

@@ -3155,8 +3155,45 @@ result, never absence, and callers can cancel before acquisition without leaving
 wait. No fairness guarantee is claimed. RAII release, unwind, normal process exit and process death
 release kernel ownership without clock/PID-based reclamation. Guards are `Send`, not `Sync` or
 `Clone`; one root event mutably borrows its admission so the event cannot outlive it. This
-foundation alone does not satisfy #360: protected read/write integration, atomic authority/key
-selection, reader-pin lifetime, lock/unlock drain and shutdown are the successor 4B proof boundary.
+foundation alone does not satisfy #360; the protected-operation integration below supplies its
+authority/key, reader-pin and lifecycle proof boundary.
+
+**4B protected-operation integration.** `ProtectedStorage` owns the provider and admits an ordinary
+operation before any authority/key observation. Callers supply a typed identity, physical locators,
+payload and expected record generation, never a key or epoch. Shared write admission spans
+reconciliation, the PENDING root, ciphertext staging/promotion, the ACTIVE root and completion.
+The generation CAS is checked after reconciliation, since recovery can publish a completed pending
+generation. Each root event borrows this same admission; root contention preserves the intent and
+returns a typed pending/recovery error without upgrade or re-admission.
+
+Version 1 additionally serializes ordinary writers/reconciliation with the same kernel foundation
+on a dedicated immediate child `<installation_dir>/ordinary-writers`: `flock` on that directory on
+Unix, `LockFileEx` on its no-delete-share `root-commit.lock` on Windows. This resource is not the
+authority-root mutex and carries no authoritative body. Directory handles are pinned before
+canonicalization and checked against their current path identities. The authority root cannot be
+this reserved writer resource; such a scope is refused before provider observation. The order is **operation
+admission → ordinary-writer serialization → finite authority-root mutex**. This bounded conservative
+choice prevents same-record reconciliation/staging races without a per-record lock inventory;
+readers still coexist and the authority-root mutex is released during staging. Parallel staging is
+not promised. Any future relaxation must prove the same lifetime/CAS invariant.
+
+Reads acquire and pin an exact committed-anchor snapshot under the same local mutex that wraps
+step F's durable publication and current-handle replacement. They resolve only that snapshot's
+route, authenticate its immutable root/catalog/marker/data generations, and hold shared admission,
+key and pin through payload handoff. They never acquire the root mutex or infer authority from the
+recoverable pointer. The key and pin drop before admission. Exclusive transition contention is not
+record absence; locked/migrating/unconfigured authority is refused without legacy plaintext access.
+Cross-process retention uses the additional exclusive-reclamation barrier specified in
+`r15/AUTHORITY-SNAPSHOT-LIFETIME.md` §4.1, not persisted reader counts.
+
+Lock/unlock/shutdown use exclusive acquisition only after shared work drains. A confirmed lock
+clears runtime keys and retains exclusive kernel ownership until verified unlock, preventing another
+process's previously loaded runtime from continuing ordinary operations. Failed unlock clears keys
+and retains the barrier. Unresolved roots or non-ACTIVE catalog descriptors refuse clean shutdown;
+forced exit still releases kernel ownership and leaves recovery evidence intact. The legacy Gate-3
+raw protected entrypoints are test-support only; normal semantic callers use `ProtectedStorage`.
+The authenticated journal, rekey execution, first enable/disable closure, migration inventory,
+physical deletion and production authority switch remain later owners (4C–4E, Gate 5, #948, Gate 7).
 
 `enable` is admitted through the journaled state machine. `disable` is an explicit refusal state in
 R-15 (`unsupported/locked`) until a separate product/security decision defines a safe non-plaintext
@@ -3618,7 +3655,7 @@ R15_GATE1A=IMPLEMENTED_HEADLESS
 R15_GATE1B=IMPLEMENTED_HEADLESS_AND_PLATFORM_ADAPTER
 R15_GATE2=IMPLEMENTED_HEADLESS
 R15_GATE3=IMPLEMENTED_HEADLESS
-R15_GATE4=SLICE_4B_ADMISSION_FOUNDATION
+R15_GATE4=SLICE_4B_PROTECTED_OPERATIONS
 R15_GATE5=NOT_ADMITTED
 R15_GATE6=NOT_ADMITTED
 R15_GATE7=NOT_ADMITTED
@@ -3990,8 +4027,18 @@ Later implementation may be admitted only in these bounded gates:
      directory before subsequent resolution and proves refusal (or Windows kernel prevention),
      without silently retrying against the replacement. Platform CI runs the suite on
      Linux/macOS/Windows; packaged and power-loss qualification remain Gate 6. The deferred #950
-     `moved` pre-clean is included. #360 remains open: the next 4B slice integrates admission into
-     protected read/write/reconciliation, authority/key selection and lock/unlock/shutdown.
+     `moved` pre-clean is included. This foundation alone did not satisfy #360.
+   - **Slice 4B protected operations** — `ProtectedStorage`, its private provider/publication cell
+     and opaque `AuthoritySnapshotGuard` implement §11's continuous operation lifetime. Tests prove
+     no provider observation before contention refusal (including a second process), both root
+     events under one shared admission, reader execution during each pointer-before-F window,
+     capture-to-pin atomicity, old pins across multiple publications, durable retention bounds,
+     cancellation/reconciliation, post-recovery record CAS, locked/migrating plaintext refusal,
+     retained lock/failed-unlock exclusion, shutdown refusal and scoped record locations. Reader
+     guards are Send, not Sync/Clone; default builds expose no raw Gate-3 protected entrypoint.
+     `gate4b_operations_test` runs in Linux Core CI and the macOS/Windows platform evidence path.
+     The evidence boundary is mapped in `r15/GATE4B-OPERATION-EVIDENCE.md`; headless implementation
+     is not a terminal exact-main/packaged result by itself.
      Remaining Gate 4 work is pending: journal, rekey and enable/disable state machines remain
      4C/4D/4E, and `PRODUCTION_AUTHORITY_SWITCH_ALLOWED=NO`.
 5. **Migration admission readiness and inventory-complete migration** (admission-readiness, not full

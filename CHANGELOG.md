@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4B — protected operation lifetime (#445, #360):** headless Core reads pin an
+  authenticated view through payload handoff; writes hold one admission across key selection,
+  recovery and both root commits. Lock/unlock/shutdown drain ordinary work across processes,
+  failed unlock stays fenced, and locked/migrating legacy plaintext has no fallback. No current
+  app storage authority or production cutover is changed.
 - **R-15 Gate 4B foundation — shared operations and exclusive transitions (#445):** the headless
   core now has kernel-backed admission across processes, automatic crash release and typed guards
   that bind the installation and authority-root directories. Root events stay beneath the same
