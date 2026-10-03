@@ -42,11 +42,27 @@ use crate::protected::{
     ProtectedWrite,
 };
 use crate::provider::{KeyProvider, KeyState};
+use crate::root::KeyEpochEntry;
 use crate::root_lock::{sys, RootCommitGuard};
 use crate::root_store::{load_snapshot_root, RootLayout, RootStoreError};
 use crate::seal::Key;
 
 const WRITER_RESOURCE: &str = "ordinary-writers";
+
+/// The logical identity and physical locators of one request. Locators never supply authority.
+#[derive(Clone, Copy)]
+pub struct ProtectedRecord<'a> {
+    pub identity: &'a RecordIdentity,
+    pub location: RecordLocation<'a>,
+}
+
+/// CAS expectation and payload belong to the same logical mutation, not separate positional args.
+#[derive(Clone, Copy)]
+pub struct ProtectedMutation<'a> {
+    pub record: ProtectedRecord<'a>,
+    pub expected_generation: Option<u64>,
+    pub write: ProtectedWrite<'a>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OperationError {
@@ -133,6 +149,7 @@ pub struct ProtectedStorage<P> {
 pub struct AuthoritySnapshotGuard {
     key: Key,
     snapshot: Arc<Snapshot>,
+    epochs: Vec<KeyEpochEntry>,
     admission: SharedAdmissionGuard,
     scope: Scope,
 }
@@ -165,16 +182,20 @@ impl<P: KeyProvider> ProtectedStorage<P> {
 
     /// None is contention BEFORE any provider observation, never record absence. Once admitted,
     /// the snapshot pin and its key are captured atomically with respect to local step F.
-    pub fn try_authority_snapshot(&self) -> Result<Option<AuthoritySnapshotGuard>, OperationError> {
+    pub fn try_authority_snapshot<F: DurableFs>(
+        &self,
+        fs: &mut F,
+    ) -> Result<Option<AuthoritySnapshotGuard>, OperationError> {
         self.ordinary_allowed()?;
         let Some(admission) = SharedAdmissionGuard::try_acquire(self.scope.admission())? else {
             return Ok(None);
         };
-        self.capture(admission).map(Some)
+        self.capture(fs, admission).map(Some)
     }
 
-    fn capture(
+    fn capture<F: DurableFs>(
         &self,
+        fs: &mut F,
         admission: SharedAdmissionGuard,
     ) -> Result<AuthoritySnapshotGuard, OperationError> {
         if !admission.guards(self.scope.admission()) {
@@ -188,12 +209,22 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             _ => {}
         }
         let (snapshot, key) = cell.capture()?;
+        drop(cell);
+        let (_, epochs) = load_snapshot_root(
+            fs,
+            self.scope.layout(),
+            &snapshot.scope,
+            &snapshot.root,
+            &key,
+            None,
+        )?;
         if !admission.guards(self.scope.admission()) {
             return Err(AdmissionError::IdentityChanged.into());
         }
         Ok(AuthoritySnapshotGuard {
             key,
             snapshot,
+            epochs,
             admission,
             scope: self.scope.clone(),
         })
@@ -204,24 +235,28 @@ impl<P: KeyProvider> ProtectedStorage<P> {
     pub fn try_read_record<F: DurableFs, T>(
         &self,
         fs: &mut F,
-        identity: &RecordIdentity,
-        location: RecordLocation<'_>,
+        record: ProtectedRecord<'_>,
         handoff: impl FnOnce(ProtectedRead) -> T,
     ) -> Result<Option<T>, OperationError> {
-        let Some(mut read) = self.try_authority_snapshot()? else {
+        if !has_ordinary_marker(record.identity.class()) {
+            return Err(ProtectedError::NotAnOrdinaryRecord.into());
+        }
+        let Some(mut read) = self.try_authority_snapshot(fs)? else {
             return Ok(None);
         };
-        read.read_record(fs, identity, location, handoff).map(Some)
+        read.read_record(fs, record, handoff).map(Some)
     }
 
     pub fn try_write_record<F: DurableFs>(
         &self,
         fs: &mut F,
-        identity: &RecordIdentity,
-        location: RecordLocation<'_>,
-        expected_generation: Option<u64>,
-        write: ProtectedWrite<'_>,
+        mutation: ProtectedMutation<'_>,
     ) -> Result<Option<ProtectedCommitted>, OperationError> {
+        let ProtectedMutation {
+            record: ProtectedRecord { identity, location },
+            expected_generation,
+            write,
+        } = mutation;
         if !has_ordinary_marker(identity.class()) {
             return Err(ProtectedError::NotAnOrdinaryRecord.into());
         }
@@ -234,7 +269,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let Some(writer) = WriterGuard::try_acquire(fs, &self.scope, &admission)? else {
             return Ok(None);
         };
-        let mut operation = self.capture(admission)?;
+        let mut operation = self.capture(fs, admission)?;
         let pins = LocationPins::open(&operation.scope, location)?;
         let catalog = operation.catalog(fs)?;
         let target = ProtectedTarget {
@@ -279,7 +314,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let Some(writer) = WriterGuard::try_acquire(fs, &self.scope, &admission)? else {
             return Ok(None);
         };
-        let mut operation = self.capture(admission)?;
+        let mut operation = self.capture(fs, admission)?;
         let pins = LocationPins::open(&operation.scope, location)?;
         let catalog = operation.catalog(fs)?;
         let target = ProtectedTarget {
@@ -360,20 +395,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             },
         };
         let mut provider = PublishedProvider(&self.cell);
-        let verified = (|| {
-            if !held.guards(self.scope.admission()) {
-                return Err(AdmissionError::IdentityChanged.into());
-            }
-            let state = provider.unlock()?;
-            if !matches!(state, KeyState::Unlocked { .. }) {
-                return Err(OperationError::MigrationRequired);
-            }
-            self.verify_transition(fs, &provider, false)?;
-            if !held.guards(self.scope.admission()) {
-                return Err(AdmissionError::IdentityChanged.into());
-            }
-            Ok(state)
-        })();
+        let verified = self.verify_unlock(fs, &mut provider, &held);
         match verified {
             Ok(state) => {
                 lifecycle.quiescent = false;
@@ -386,6 +408,30 @@ impl<P: KeyProvider> ProtectedStorage<P> {
                 provider.lock();
                 Err(error)
             }
+        }
+    }
+
+    fn verify_unlock<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        provider: &mut PublishedProvider<'_, P>,
+        held: &ExclusiveAdmissionGuard,
+    ) -> Result<KeyState, OperationError> {
+        self.check_exclusive(held)?;
+        let state = provider.unlock()?;
+        if !matches!(state, KeyState::Unlocked { .. }) {
+            return Err(OperationError::MigrationRequired);
+        }
+        self.verify_transition(fs, provider, false)?;
+        self.check_exclusive(held)?;
+        Ok(state)
+    }
+
+    fn check_exclusive(&self, held: &ExclusiveAdmissionGuard) -> Result<(), OperationError> {
+        if held.guards(self.scope.admission()) {
+            Ok(())
+        } else {
+            Err(AdmissionError::IdentityChanged.into())
         }
     }
 
@@ -463,13 +509,15 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         if anchor.installation_scope_id.as_ref() != Some(&witness.scope) {
             return Err(OperationError::RecoveryPending);
         }
-        Ok(!other_recovery_reason
+        let eligible = !other_recovery_reason
             && !witness.is_referenced()
             && witness.generation < anchor.committed_floor.saturating_sub(1)
             && !anchor
                 .prepared_root_commit
                 .as_ref()
-                .is_some_and(|p| p.target_root_generation == witness.generation))
+                .is_some_and(|p| p.target_root_generation == witness.generation);
+        self.check_exclusive(held)?;
+        Ok(eligible)
     }
 }
 
@@ -491,12 +539,13 @@ impl AuthoritySnapshotGuard {
 
     fn catalog<F: DurableFs>(&self, fs: &mut F) -> Result<LoadedCatalog, OperationError> {
         self.check()?;
-        let view = load_snapshot_root(
+        let (view, _) = load_snapshot_root(
             fs,
             self.scope.layout(),
             &self.snapshot.scope,
             &self.snapshot.root,
             &self.key,
+            Some(&self.epochs),
         )?;
         if view.root.live_migration.is_some() {
             return Err(OperationError::MigrationRequired);
@@ -509,19 +558,20 @@ impl AuthoritySnapshotGuard {
     pub fn read_record<F: DurableFs, T>(
         &mut self,
         fs: &mut F,
-        identity: &RecordIdentity,
-        location: RecordLocation<'_>,
+        record: ProtectedRecord<'_>,
         handoff: impl FnOnce(ProtectedRead) -> T,
     ) -> Result<T, OperationError> {
+        let ProtectedRecord { identity, location } = record;
         if !has_ordinary_marker(identity.class()) {
             return Err(ProtectedError::NotAnOrdinaryRecord.into());
         }
+        let pins = LocationPins::open(&self.scope, location)?;
         let catalog = self.catalog(fs)?;
         let Some(named) = catalog.descriptors().find(|d| d.record() == identity) else {
             self.check()?;
+            pins.check(location)?;
             return Ok(handoff(ProtectedRead::NotCatalogued));
         };
-        let pins = LocationPins::open(&self.scope, location)?;
         if named.marker_state() == crate::marker::state_code::RECOVERY_REQUIRED {
             return Err(OperationError::RecoveryPending);
         }
@@ -610,7 +660,12 @@ impl LocationPins {
                 && !path.starts_with(&root)
                 && !path.starts_with(installation.join(WRITER_RESOURCE))
         };
-        if !valid(&record) || !valid(&marker) || record == marker {
+        for path in [&record, &marker] {
+            if !valid(path) {
+                return Err(AdmissionError::InvalidScope.into());
+            }
+        }
+        if record == marker {
             return Err(AdmissionError::InvalidScope.into());
         }
         pins.check(location)?;

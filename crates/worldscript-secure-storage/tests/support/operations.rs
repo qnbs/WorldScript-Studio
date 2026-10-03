@@ -19,6 +19,7 @@ pub struct Probe {
     pub keys: AtomicUsize,
     pub state: Mutex<Option<KeyState>>,
     pub fail_unlock: AtomicBool,
+    pub replace_root: Mutex<Option<(PathBuf, PathBuf)>>,
 }
 
 pub struct ObservedProvider(pub MemoryKeyProvider, pub Arc<Probe>);
@@ -60,7 +61,12 @@ impl KeyProvider for ObservedProvider {
     }
     fn read_root_anchor_state(&self) -> Result<AnchorState, KeyProviderError> {
         self.1.observations.fetch_add(1, Ordering::SeqCst);
-        self.0.read_root_anchor_state()
+        let anchor = self.0.read_root_anchor_state()?;
+        if let Some((root, moved)) = self.1.replace_root.lock().unwrap().take() {
+            fs::rename(&root, moved).unwrap();
+            fs::create_dir(&root).unwrap();
+        }
+        Ok(anchor)
     }
     fn read_or_provision_installation_scope(
         &mut self,
@@ -82,6 +88,74 @@ impl KeyProvider for ObservedProvider {
     }
 }
 
+/// Reader half of the deterministic N=2/M=3 race. The integration test owns the writer/signals;
+/// this half keeps its original pin and checks each freshly captured generation independently.
+pub struct PinnedReader {
+    pub storage: Arc<ProtectedStorage<ObservedProvider>>,
+    pub identity: RecordIdentity,
+    pub records: PathBuf,
+    pub markers: PathBuf,
+}
+
+impl PinnedReader {
+    fn read(&self, snapshot: &mut AuthoritySnapshotGuard) -> Vec<u8> {
+        snapshot
+            .read_record(
+                &mut StdFs,
+                ProtectedRecord {
+                    identity: &self.identity,
+                    location: RecordLocation {
+                        record_dir: &self.records,
+                        marker_dir: &self.markers,
+                    },
+                },
+                payload,
+            )
+            .unwrap()
+    }
+
+    pub fn run(
+        self,
+        ready: std::sync::mpsc::Sender<()>,
+        racing: std::sync::mpsc::Sender<()>,
+        finished: Arc<AtomicBool>,
+    ) {
+        let mut snapshot = self
+            .storage
+            .try_authority_snapshot(&mut StdFs)
+            .unwrap()
+            .unwrap();
+        ready.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut saw_pending = false;
+        while !finished.load(Ordering::Acquire) && Instant::now() < deadline {
+            let mut fresh = self
+                .storage
+                .try_authority_snapshot(&mut StdFs)
+                .unwrap()
+                .unwrap();
+            let generation = fresh.root_generation();
+            assert!((3..=9).contains(&generation));
+            let expected = if generation <= 4 {
+                b"baseline".as_slice()
+            } else {
+                b"next".as_slice()
+            };
+            assert_eq!(self.read(&mut fresh), expected);
+            if generation == 4 && !saw_pending {
+                saw_pending = true;
+                racing.send(()).unwrap();
+            }
+            thread::yield_now();
+        }
+        assert!(
+            finished.load(Ordering::Acquire),
+            "writer did not finish within the proof deadline"
+        );
+        assert_eq!(self.read(&mut snapshot), b"baseline");
+    }
+}
+
 pub struct Fixture {
     pub base: PathBuf,
     pub root: PathBuf,
@@ -94,8 +168,12 @@ pub struct Fixture {
 
 impl Fixture {
     pub fn new() -> Self {
+        Self::new_in(&std::env::temp_dir())
+    }
+
+    pub fn new_in(parent: &Path) -> Self {
         static NEXT: AtomicU32 = AtomicU32::new(0);
-        let base = std::env::temp_dir().join(format!(
+        let base = parent.join(format!(
             "wss-gate4b-ops-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
@@ -114,53 +192,15 @@ impl Fixture {
         ] {
             fs::create_dir_all(dir).unwrap();
         }
-        let mut provider = MemoryKeyProvider::new();
-        let scope = provider.read_or_provision_installation_scope().unwrap();
-        let route = provider.provision_epoch_key(1).unwrap();
-        provider.unlock().unwrap();
-        // Test-only preconfigured authority, not first enable (which remains Gate 4E).
-        let mut exclusive = ExclusiveAdmissionGuard::try_acquire(AdmissionScope {
-            installation_dir: &base,
-            root_dir: &root,
-        })
-        .unwrap()
-        .unwrap();
-        let event = exclusive.try_root_commit().unwrap().unwrap();
-        write_key_epoch(
-            &mut StdFs,
-            &provider,
-            RootLayout { root_dir: &root },
-            KeyEpochCommit {
-                scope: &scope,
-                record: &KeyEpochRecord {
-                    epoch: 1,
-                    status: KeyEpochStatus::Active,
-                    root_key_ref: route.clone(),
-                },
-                registry_generation: 1,
-                root_key_ref: &route,
-                key_epoch: 1,
-                held: event.root_guard().unwrap(),
-            },
-        )
-        .unwrap();
-        drop(event);
-        commit_catalog_change(
-            &mut StdFs,
-            &mut provider,
-            RootLayout { root_dir: &root },
-            CatalogCommit {
-                change: CatalogChange {
-                    upsert: &[],
-                    remove: &[],
-                },
-                root_key_ref: &route,
-                active_key_epoch: 1,
-                operation_id: "fixture-bootstrap",
-            },
-        )
-        .unwrap();
-        drop(exclusive);
+        // The production locators are canonical. Test event predicates must use the same physical
+        // spelling (macOS temp_dir may be /var while filesystem callbacks use /private/var).
+        let (base, root, records, markers) = (
+            fs::canonicalize(base).unwrap(),
+            fs::canonicalize(root).unwrap(),
+            fs::canonicalize(records).unwrap(),
+            fs::canonicalize(markers).unwrap(),
+        );
+        let provider = configured_provider(&base, &root);
         let probe = Arc::new(Probe::default());
         let storage = Arc::new(ProtectedStorage::new(
             AdmissionScope {
@@ -194,6 +234,12 @@ impl Fixture {
             marker_dir: &self.markers,
         }
     }
+    pub fn record(&self) -> ProtectedRecord<'_> {
+        ProtectedRecord {
+            identity: &self.identity,
+            location: self.location(),
+        }
+    }
     pub fn write(
         &self,
         fs: &mut impl DurableFs,
@@ -202,21 +248,73 @@ impl Fixture {
     ) -> Result<Option<ProtectedCommitted>, OperationError> {
         self.storage().try_write_record(
             fs,
-            &self.identity,
-            self.location(),
-            expected,
-            ProtectedWrite {
-                record_schema: 1,
-                plaintext: payload,
+            ProtectedMutation {
+                record: self.record(),
+                expected_generation: expected,
+                write: ProtectedWrite {
+                    record_schema: 1,
+                    plaintext: payload,
+                },
             },
         )
     }
     pub fn payload(&self) -> Vec<u8> {
         self.storage()
-            .try_read_record(&mut StdFs, &self.identity, self.location(), payload)
+            .try_read_record(&mut StdFs, self.record(), payload)
             .unwrap()
             .unwrap()
     }
+}
+
+fn configured_provider(base: &Path, root: &Path) -> MemoryKeyProvider {
+    let mut provider = MemoryKeyProvider::new();
+    let scope = provider.read_or_provision_installation_scope().unwrap();
+    let route = provider.provision_epoch_key(1).unwrap();
+    provider.unlock().unwrap();
+    // Test-only preconfigured authority, not first enable (which remains Gate 4E).
+    let mut exclusive = ExclusiveAdmissionGuard::try_acquire(AdmissionScope {
+        installation_dir: base,
+        root_dir: root,
+    })
+    .unwrap()
+    .unwrap();
+    let event = exclusive.try_root_commit().unwrap().unwrap();
+    write_key_epoch(
+        &mut StdFs,
+        &provider,
+        RootLayout { root_dir: root },
+        KeyEpochCommit {
+            scope: &scope,
+            record: &KeyEpochRecord {
+                epoch: 1,
+                status: KeyEpochStatus::Active,
+                root_key_ref: route.clone(),
+            },
+            registry_generation: 1,
+            root_key_ref: &route,
+            key_epoch: 1,
+            held: event.root_guard().unwrap(),
+        },
+    )
+    .unwrap();
+    drop(event);
+    commit_catalog_change(
+        &mut StdFs,
+        &mut provider,
+        RootLayout { root_dir: root },
+        CatalogCommit {
+            change: CatalogChange {
+                upsert: &[],
+                remove: &[],
+            },
+            root_key_ref: &route,
+            active_key_epoch: 1,
+            operation_id: "fixture-bootstrap",
+        },
+    )
+    .unwrap();
+    drop(exclusive);
+    provider
 }
 
 impl Drop for Fixture {

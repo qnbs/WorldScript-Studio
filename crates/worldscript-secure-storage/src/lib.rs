@@ -83,7 +83,9 @@ pub use marker::{
     content_digest, CommitMarker, MarkerBody, MarkerError, MarkerOperation, PendingBody,
 };
 pub use operation_authority::SnapshotRetention;
-pub use operations::{AuthoritySnapshotGuard, OperationError, ProtectedStorage};
+pub use operations::{
+    AuthoritySnapshotGuard, OperationError, ProtectedMutation, ProtectedRecord, ProtectedStorage,
+};
 #[cfg(feature = "test-support")]
 pub use protected::{protected_write, read_protected, reconcile_protected, ProtectedTarget};
 pub use protected::{

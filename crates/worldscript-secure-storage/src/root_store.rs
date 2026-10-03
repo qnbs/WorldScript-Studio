@@ -123,6 +123,13 @@ pub enum RootStoreError {
         kind: io::ErrorKind,
     },
     Anchor(KeyProviderError),
+    /// Step F was attempted. The original provider error is preserved; the caller must recover
+    /// this root intent, never replay the logical mutation as a fresh write. A
+    /// `CommittedRefreshRequired` cause means F succeeded but local publication needs reload.
+    AnchorCommitOutcome {
+        generation: u64,
+        error: KeyProviderError,
+    },
     Record(RootRecordError),
     Root(RootError),
     /// Writing the target slot failed (slice 3A's staging and promotion).
@@ -231,7 +238,10 @@ pub fn commit_root<F: DurableFs, P: KeyProvider>(
     let pointer_sync = write_pointer(fs, layout, &target.pointer(), &operation)?;
     provider
         .commit_root_anchor(&commit.operation_id, commit.target_root_generation)
-        .map_err(RootStoreError::Anchor)?;
+        .map_err(|error| RootStoreError::AnchorCommitOutcome {
+            generation: commit.target_root_generation,
+            error,
+        })?;
     Ok(RootCommitted {
         root_generation: commit.target_root_generation,
         root_slot: commit.target_slot,
@@ -274,7 +284,10 @@ pub fn recover_root<F: DurableFs, P: KeyProvider>(
         ensure_pointer(fs, layout, &target.pointer())?;
         provider
             .commit_root_anchor(&commit.operation_id, commit.target_root_generation)
-            .map_err(RootStoreError::Anchor)?;
+            .map_err(|error| RootStoreError::AnchorCommitOutcome {
+                generation: commit.target_root_generation,
+                error,
+            })?;
         return Ok(RootRecovery::Completed {
             root_generation: commit.target_root_generation,
         });
@@ -329,7 +342,7 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
     let key = provider
         .resolve_ref(&committed.root_key_ref)
         .map_err(RootStoreError::Anchor)?;
-    load_snapshot_root(fs, layout, &scope, &committed, &key).map(Some)
+    load_snapshot_root(fs, layout, &scope, &committed, &key, None).map(|(view, _)| Some(view))
 }
 
 /// Authenticates exactly an already-pinned anchor snapshot. A concurrent preparation/pointer
@@ -340,7 +353,8 @@ pub(crate) fn load_snapshot_root<F: DurableFs>(
     scope: &InstallationScopeId,
     committed: &crate::provider::CommittedRoot,
     key: &Key,
-) -> Result<CommittedRootView, RootStoreError> {
+    retained_epochs: Option<&[KeyEpochEntry]>,
+) -> Result<(CommittedRootView, Vec<KeyEpochEntry>), RootStoreError> {
     let path = layout.slot_file(committed.root_slot, committed.root_generation);
     let envelope = match fs.read(&path) {
         Ok(bytes) => bytes,
@@ -363,8 +377,12 @@ pub(crate) fn load_snapshot_root<F: DurableFs>(
     if root.root_key_ref_digest != committed.root_key_ref.digest() {
         return Err(recovery(RootRecoveryReason::KeyRouteMismatch));
     }
-    let key_epochs = load_snapshot_key_epochs(fs, layout, scope, key)?;
+    let key_epochs = match retained_epochs {
+        Some(entries) => open_retained_epochs(fs, layout, scope, key, entries)?,
+        None => load_snapshot_key_epochs(fs, layout, scope, key)?,
+    };
     verify_key_epochs(&root, &key_epochs)?;
+    let entries = key_epochs.iter().map(|(_, entry)| *entry).collect();
     let pointer = RootPointer {
         slot: committed.root_slot,
         root_generation: committed.root_generation,
@@ -373,14 +391,54 @@ pub(crate) fn load_snapshot_root<F: DurableFs>(
     // The pointer is recoverable state, never authority: an unreadable or undecodable pointer is
     // reported as stale like a missing one, never a reason to refuse the authenticated root.
     let pointer_stale = !matches!(read_pointer(fs, layout), Ok(Some(found)) if found == pointer);
-    Ok(CommittedRootView {
-        root,
-        root_digest: digest,
-        root_slot: committed.root_slot,
-        scope: scope.clone(),
-        root_key_ref: committed.root_key_ref.clone(),
-        pointer_stale,
-    })
+    Ok((
+        CommittedRootView {
+            root,
+            root_digest: digest,
+            root_slot: committed.root_slot,
+            scope: scope.clone(),
+            root_key_ref: committed.root_key_ref.clone(),
+            pointer_stale,
+        },
+        entries,
+    ))
+}
+
+/// A pinned view names exact immutable control generations, not the newest directory heads.
+/// Re-open and authenticate every retained entry on use; cached metadata never excuses missing,
+/// replaced or tampered bytes. Cold start and root commit still use the strict current set.
+fn open_retained_epochs<F: DurableFs>(
+    fs: &mut F,
+    layout: RootLayout<'_>,
+    scope: &InstallationScopeId,
+    key: &Key,
+    entries: &[KeyEpochEntry],
+) -> Result<Vec<(KeyEpochRecord, KeyEpochEntry)>, RootStoreError> {
+    entries
+        .iter()
+        .map(|entry| {
+            let envelope = fs
+                .read(&generation_path(
+                    &layout.key_epoch_dir(entry.epoch),
+                    entry.registry_generation,
+                ))
+                .map_err(|_| recovery(RootRecoveryReason::KeyEpochSetMismatch))?;
+            let read = KeyEpochRead {
+                address: KeyEpochAddress {
+                    scope,
+                    epoch: entry.epoch,
+                    registry_generation: entry.registry_generation,
+                },
+                envelope: &envelope,
+            };
+            let opened = KeyEpochRecord::open(key, &read)
+                .map_err(|_| recovery(RootRecoveryReason::KeyEpochSetMismatch))?;
+            if opened.1 != *entry {
+                return Err(recovery(RootRecoveryReason::KeyEpochSetMismatch));
+            }
+            Ok(opened)
+        })
+        .collect()
 }
 
 /// Repairs a stale or missing pointer to the committed root, under the held `root_commit_mutex`:
@@ -862,5 +920,112 @@ fn io_error(step: RootStep, error: &io::Error) -> RootStoreError {
     RootStoreError::Io {
         step,
         kind: error.kind(),
+    }
+}
+
+#[cfg(test)]
+mod snapshot_tests {
+    use super::*;
+    use crate::durable::StdFs;
+    use crate::memory_provider::MemoryKeyProvider;
+    use crate::root::RootCommitEvidence;
+
+    fn publish_registry_root(
+        provider: &mut MemoryKeyProvider,
+        layout: RootLayout<'_>,
+        commit: KeyEpochCommit<'_>,
+    ) {
+        let entry = write_key_epoch(&mut StdFs, provider, layout, commit).unwrap();
+        let generation = commit.registry_generation;
+        let root = RootBody {
+            root_generation: generation,
+            active_key_epoch: 1,
+            root_key_ref_digest: commit.root_key_ref.digest(),
+            marker_set_digest: [0; 32],
+            catalog_set_digest: [0; 32],
+            key_epoch_set_digest: key_epoch_set_digest(&[entry]).unwrap(),
+            commit_evidence: RootCommitEvidence {
+                operation_id: format!("retained-{generation}"),
+                fencing_generation: 0,
+                state: RootCommitState::Committed,
+            },
+            live_migration: None,
+        };
+        commit_root(
+            &mut StdFs,
+            provider,
+            layout,
+            RootCommitRequest {
+                scope: commit.scope,
+                root: &root,
+                root_key_ref: commit.root_key_ref,
+                held: commit.held,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn retained_root_uses_its_exact_epoch_evidence_after_later_registry_and_root_publication() {
+        let dir = std::env::temp_dir().join(format!("wss-retained-epochs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("slot-a")).unwrap();
+        std::fs::create_dir_all(dir.join("slot-b")).unwrap();
+        let layout = RootLayout { root_dir: &dir };
+        let mut provider = MemoryKeyProvider::new();
+        let scope = provider.read_or_provision_installation_scope().unwrap();
+        let route = provider.provision_epoch_key(1).unwrap();
+        provider.unlock().unwrap();
+        let key = provider.resolve_ref(&route).unwrap();
+        let held = RootCommitGuard::acquire(&dir).unwrap();
+        let record = KeyEpochRecord {
+            epoch: 1,
+            status: KeyEpochStatus::Active,
+            root_key_ref: route.clone(),
+        };
+        let mut prior = None;
+        for generation in 1..=2 {
+            publish_registry_root(
+                &mut provider,
+                layout,
+                KeyEpochCommit {
+                    scope: &scope,
+                    record: &record,
+                    registry_generation: generation,
+                    root_key_ref: &route,
+                    key_epoch: 1,
+                    held: &held,
+                },
+            );
+            let anchor = provider
+                .read_root_anchor_state()
+                .unwrap()
+                .committed_root
+                .unwrap();
+            let (view, entries) =
+                load_snapshot_root(&mut StdFs, layout, &scope, &anchor, &key, None).unwrap();
+            assert_eq!(view.root.root_generation, generation);
+            if generation == 1 {
+                prior = Some((anchor, entries));
+            }
+        }
+        let (old, entries) = prior.unwrap();
+        assert!(load_snapshot_root(&mut StdFs, layout, &scope, &old, &key, None).is_err());
+        let (view, _) =
+            load_snapshot_root(&mut StdFs, layout, &scope, &old, &key, Some(&entries)).unwrap();
+        assert_eq!(view.root.root_generation, 1);
+        let path = generation_path(&layout.key_epoch_dir(1), 1);
+        let bytes = std::fs::read(&path).unwrap();
+        std::fs::write(&path, b"tampered fixture").unwrap();
+        assert!(
+            load_snapshot_root(&mut StdFs, layout, &scope, &old, &key, Some(&entries)).is_err()
+        );
+        std::fs::write(&path, bytes).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert!(
+            load_snapshot_root(&mut StdFs, layout, &scope, &old, &key, Some(&entries)).is_err()
+        );
+        drop(held);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
