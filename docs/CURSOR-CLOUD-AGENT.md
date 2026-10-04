@@ -14,10 +14,13 @@ review, signing, and security policy remain in `AGENTS.md`, `docs/CI.md`, and
 ## Bootstrap (every session)
 
 1. `git fetch origin --prune` and confirm `HEAD` / base for the task.
-2. Dependencies: `node scripts/dependency-state.mjs reconcile` when `node_modules` is missing or
+2. Dependencies: on every **new worktree** (even when `node_modules` already exists from a warm
+   snapshot), run `node scripts/dependency-state.mjs reconcile` and `pnpm run deps:verify` when
    lock/workspace changed — **never** bare `pnpm install` as policy bypass.
 3. `pnpm run hooks:install` on a fresh worktree before first commit.
-4. `pnpm run cursor:cloud-doctor` — non-secret session snapshot (Git vs `gh`, deps hint).
+4. Session snapshot: `pnpm run cursor:cloud-doctor` when dependencies are installed; if
+   `node_modules` is missing, run `node scripts/cursor-cloud-doctor.mjs --json` first (does not
+   require pnpm) for Git vs `gh` and deps hints.
 5. `pnpm run signing:doctor` before creating signed history.
 
 ## PR lifecycle (Cloud)
@@ -81,6 +84,7 @@ Re-verify official Cursor Cloud docs before committing any `.cursor/*` configura
 | Command | Purpose |
 |---------|---------|
 | `pnpm run cursor:cloud-doctor` | Session snapshot (this doc) |
+| `node scripts/cursor-cloud-doctor.mjs [--json]` | Same doctor before `node_modules` / pnpm |
 | `pnpm run signing:doctor` | Signing + hook policy |
 | `pnpm run ci:prepush` | Pre-push admission |
 | `pnpm run pr:budget -- --base origin/main` | PR size governance |
