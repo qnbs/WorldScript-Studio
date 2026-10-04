@@ -290,11 +290,19 @@ fn invalid_manifest_discriminants_and_lease_fields_are_refused() {
 }
 
 #[test]
-fn overlong_lease_owner_id_is_refused_on_encode() {
+fn lease_owner_id_respects_operation_id_length_boundary() {
+    let owner_at_limit = "x".repeat(128);
     let mut manifest = bootstrap_manifest("lease-op");
     manifest.has_lease_owner = true;
-    manifest.lease_owner_id = Some("x".repeat(257));
+    manifest.lease_owner_id = Some(owner_at_limit.clone());
     manifest.lease_expires_unix_ms = Some(1);
+    let bytes = manifest
+        .encode()
+        .expect("128-byte lease owner should encode");
+    let decoded = JournalManifest::decode(&bytes).expect("128-byte lease owner should decode");
+    assert_eq!(decoded, manifest);
+
+    manifest.lease_owner_id = Some("x".repeat(129));
     assert!(matches!(
         manifest.encode(),
         Err(JournalError::InvalidOperationId)
