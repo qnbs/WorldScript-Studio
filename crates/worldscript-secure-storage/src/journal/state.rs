@@ -16,6 +16,7 @@ pub enum MigrationExecutionError {
     TerminalPhase,
     LiveBindingMismatch,
     RecoveryRequired,
+    RegressiveCheckpoint,
     Journal(JournalError),
 }
 
@@ -46,9 +47,9 @@ pub fn is_terminal_phase(phase: u32) -> bool {
     phase == phase_code::DONE || phase == phase_code::RECOVERY_REQUIRED
 }
 
-/// Ordinary mutating writes are permitted only after successful finalization (§10.3).
+/// Ordinary mutating writes during `PREPARE` (before the exclusive `ADMIT` barrier) and after `DONE` (§10.3).
 pub fn ordinary_mutating_writes_admitted(phase: u32) -> bool {
-    phase == phase_code::DONE
+    phase == phase_code::DONE || phase == phase_code::PREPARE
 }
 
 /// Refuses when the manifest fence/revision disagrees with the caller's token.
@@ -64,10 +65,11 @@ pub fn assert_fence(
     Ok(())
 }
 
-/// Refuses when the manifest operation or revision disagrees with the committed root binding.
+/// Refuses when the manifest disagrees with the committed root live-migration binding (§5.4, §10.1.1).
 pub fn assert_live_binding(
     manifest: &JournalManifest,
     live: &LiveMigration,
+    manifest_content_digest: [u8; 32],
 ) -> Result<(), MigrationExecutionError> {
     if manifest.operation_id != live.operation_id {
         return Err(MigrationExecutionError::LiveBindingMismatch);
@@ -78,15 +80,24 @@ pub fn assert_live_binding(
     if manifest.journal_revision != live.journal_revision {
         return Err(MigrationExecutionError::StaleJournalRevision);
     }
+    if manifest_content_digest != live.manifest_digest {
+        return Err(MigrationExecutionError::LiveBindingMismatch);
+    }
     Ok(())
 }
 
-/// Selects the manifest revision the root still names; newer durable candidates remain retryable debris (§10.1.1).
-pub fn authoritative_manifest_revision(live: &LiveMigration, candidate_revision: u64) -> u64 {
+/// Resolves the manifest revision the root still names (§10.1.1).
+pub fn authoritative_manifest_revision(
+    live: &LiveMigration,
+    candidate_revision: u64,
+) -> Result<u64, MigrationExecutionError> {
+    if candidate_revision < live.journal_revision {
+        return Err(MigrationExecutionError::StaleJournalRevision);
+    }
     if candidate_revision > live.journal_revision {
-        live.journal_revision
+        Ok(live.journal_revision)
     } else {
-        candidate_revision
+        Ok(candidate_revision)
     }
 }
 
@@ -110,13 +121,13 @@ fn phase_rank(phase: u32) -> Result<u32, MigrationExecutionError> {
 /// Whether `to` is an allowed idempotent or forward transition from `from` (§10.3 ordering).
 pub fn allows_phase_transition(from: u32, to: u32) -> bool {
     if from == to {
-        return true;
+        return phase_rank(from).is_ok();
     }
     if is_terminal_phase(from) {
         return false;
     }
     if to == phase_code::RECOVERY_REQUIRED {
-        return true;
+        return phase_rank(from).is_ok();
     }
     match (phase_rank(from), phase_rank(to)) {
         (Ok(left), Ok(right)) => right == left + 1,
@@ -133,7 +144,37 @@ fn bump_revision(manifest: &JournalManifest) -> Result<u64, MigrationExecutionEr
         ))
 }
 
-/// Advances to the next migration phase under an unchanged fence revision.
+fn validate_checkpoint_cursor(
+    manifest: &JournalManifest,
+    cursor_page_index: u32,
+    cursor_entry_index: u32,
+) -> Result<(), MigrationExecutionError> {
+    if manifest.page_count == 0 && manifest.entry_count == 0 {
+        if cursor_page_index != 0 || cursor_entry_index != 0 {
+            return Err(MigrationExecutionError::Journal(
+                JournalError::InvalidPageIndex,
+            ));
+        }
+        return Ok(());
+    }
+    if manifest.page_count > 0 && cursor_page_index >= manifest.page_count {
+        return Err(MigrationExecutionError::Journal(
+            JournalError::InvalidPageIndex,
+        ));
+    }
+    if manifest.entry_count > 0 && cursor_entry_index >= manifest.entry_count {
+        return Err(MigrationExecutionError::Journal(
+            JournalError::EntryCountMismatch,
+        ));
+    }
+    Ok(())
+}
+
+fn cursor_lex_key(page: u32, entry: u32) -> (u32, u32) {
+    (page, entry)
+}
+
+/// Advances to the next migration phase, bumping `journal_revision` when the phase changes (§10.1.1).
 pub fn transition_phase(
     manifest: &JournalManifest,
     fence: &MigrationFence,
@@ -147,7 +188,10 @@ pub fn transition_phase(
         return Err(MigrationExecutionError::InvalidPhaseTransition);
     }
     let mut next = manifest.clone();
-    next.phase = to_phase;
+    if next.phase != to_phase {
+        next.journal_revision = bump_revision(manifest)?;
+        next.phase = to_phase;
+    }
     next.encode()?;
     Ok(next)
 }
@@ -166,10 +210,11 @@ pub fn checkpoint_progress(
     if manifest.phase == phase_code::RECOVERY_REQUIRED {
         return Err(MigrationExecutionError::RecoveryRequired);
     }
-    if manifest.page_count > 0 && cursor_page_index >= manifest.page_count {
-        return Err(MigrationExecutionError::Journal(
-            JournalError::InvalidPageIndex,
-        ));
+    validate_checkpoint_cursor(manifest, cursor_page_index, cursor_entry_index)?;
+    if cursor_lex_key(cursor_page_index, cursor_entry_index)
+        < cursor_lex_key(manifest.cursor_page_index, manifest.cursor_entry_index)
+    {
+        return Err(MigrationExecutionError::RegressiveCheckpoint);
     }
     let mut next = manifest.clone();
     next.journal_revision = bump_revision(manifest)?;
@@ -186,7 +231,7 @@ pub fn mark_recovery(
     recovery_reason_code: u32,
 ) -> Result<JournalManifest, MigrationExecutionError> {
     assert_fence(manifest, fence)?;
-    if manifest.phase == phase_code::DONE {
+    if is_terminal_phase(manifest.phase) {
         return Err(MigrationExecutionError::TerminalPhase);
     }
     let mut next = manifest.clone();
