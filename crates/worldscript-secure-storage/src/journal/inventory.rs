@@ -244,6 +244,19 @@ impl InventorySortKey<'_> {
     }
 }
 
+impl OwnedInventorySortKey {
+    fn as_borrowed(&self) -> InventorySortKey<'_> {
+        InventorySortKey {
+            class: self.class,
+            identity: &self.identity,
+            project: &self.project,
+            source_authority_kind: self.source_authority_kind,
+            source_physical_authority_kind: self.source_physical_authority_kind,
+            source_scheme_id: self.source_scheme_id,
+        }
+    }
+}
+
 impl PartialEq for OwnedInventorySortKey {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other) == std::cmp::Ordering::Equal
@@ -259,53 +272,30 @@ impl PartialOrd for OwnedInventorySortKey {
 }
 
 fn inventory_sort_material_cmp(
-    left_class: &str,
-    left_identity: &[u8],
-    left_project: &[u8],
-    left_authority: u32,
-    left_physical: u32,
-    left_scheme: u32,
-    right_class: &str,
-    right_identity: &[u8],
-    right_project: &[u8],
-    right_authority: u32,
-    right_physical: u32,
-    right_scheme: u32,
+    left: &InventorySortKey<'_>,
+    right: &InventorySortKey<'_>,
 ) -> std::cmp::Ordering {
     (
-        left_class.as_bytes(),
-        left_identity,
-        left_project,
-        left_authority.to_be_bytes(),
-        left_physical.to_be_bytes(),
-        left_scheme.to_be_bytes(),
+        left.class.as_bytes(),
+        left.identity,
+        left.project,
+        left.source_authority_kind.to_be_bytes(),
+        left.source_physical_authority_kind.to_be_bytes(),
+        left.source_scheme_id.to_be_bytes(),
     )
         .cmp(&(
-            right_class.as_bytes(),
-            right_identity,
-            right_project,
-            right_authority.to_be_bytes(),
-            right_physical.to_be_bytes(),
-            right_scheme.to_be_bytes(),
+            right.class.as_bytes(),
+            right.identity,
+            right.project,
+            right.source_authority_kind.to_be_bytes(),
+            right.source_physical_authority_kind.to_be_bytes(),
+            right.source_scheme_id.to_be_bytes(),
         ))
 }
 
 impl Ord for OwnedInventorySortKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        inventory_sort_material_cmp(
-            self.class,
-            self.identity.as_slice(),
-            self.project.as_slice(),
-            self.source_authority_kind,
-            self.source_physical_authority_kind,
-            self.source_scheme_id,
-            other.class,
-            other.identity.as_slice(),
-            other.project.as_slice(),
-            other.source_authority_kind,
-            other.source_physical_authority_kind,
-            other.source_scheme_id,
-        )
+        inventory_sort_material_cmp(&self.as_borrowed(), &other.as_borrowed())
     }
 }
 
@@ -325,20 +315,7 @@ impl PartialOrd for InventorySortKey<'_> {
 
 impl Ord for InventorySortKey<'_> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        inventory_sort_material_cmp(
-            self.class,
-            self.identity,
-            self.project,
-            self.source_authority_kind,
-            self.source_physical_authority_kind,
-            self.source_scheme_id,
-            other.class,
-            other.identity,
-            other.project,
-            other.source_authority_kind,
-            other.source_physical_authority_kind,
-            other.source_scheme_id,
-        )
+        inventory_sort_material_cmp(self, other)
     }
 }
 

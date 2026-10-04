@@ -10,7 +10,7 @@ use super::wire::{
 };
 use super::{
     JournalError, JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA,
-    MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_PAGE_DESCRIPTORS,
+    MAX_JOURNAL_INVENTORY_ENTRIES,
 };
 
 /// One row of `journal_page_set_digest` (§10.1.1).
