@@ -10,9 +10,8 @@
 //! ([`commit`]), and slice 3C's authority-root digests ([`root`]), record catalog ([`catalog`]),
 //! persisted root records ([`root_record`]), the two-phase root commit ([`root_store`]) and the
 //! persisted, root-verified record catalog ([`authority`]), and the protected write and read paths
-//! that commit every marker transition through the root ([`protected`]).
-//! Gate 4B adds shared-admitted reads/snapshots ([`operations`]); mutation/root-recovery/lifecycle
-//! closure remains a separate successor slice.
+//! that commit every marker transition through the root ([`protected`]), and Gate 4B's kernel
+//! admission plus protected operation/snapshot/lifecycle boundary ([`operations`]).
 //! It changes no current
 //! TypeScript/Tauri storage authority and holds no journal yet.
 
@@ -88,16 +87,18 @@ pub use marker::{
     content_digest, CommitMarker, MarkerBody, MarkerError, MarkerOperation, PendingBody,
 };
 pub use operation_authority::SnapshotRetention;
-pub use operations::{AuthoritySnapshotGuard, OperationError, ProtectedRecord, ProtectedStorage};
+pub use operations::{
+    AuthoritySnapshotGuard, OperationError, ProtectedMutation, ProtectedRecord, ProtectedStorage,
+};
 #[cfg(feature = "test-support")]
-pub use protected::read_protected;
+pub use protected::{protected_write, read_protected, reconcile_protected, ProtectedTarget};
 pub use protected::{
-    protected_write, reconcile_protected, ProtectedCommitted, ProtectedError, ProtectedRead,
-    ProtectedReconciled, ProtectedTarget, ProtectedWrite, WriteDurability,
+    ProtectedCommitted, ProtectedError, ProtectedRead, ProtectedReconciled, ProtectedWrite,
+    WriteDurability,
 };
 pub use provider::{
     AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,
-    PrepareRootAnchor, PreparedRootCommit, RootKeyRefV1, RootSlot, SessionBinding,
+    PrepareRootAnchor, PreparedRootCommit, RootKeyRefV1, RootSlot,
 };
 pub use random::{OsRandom, RandomSource, RandomnessUnavailable};
 pub use record::{open_record, seal_record, OpenedRecord, ADMITTED_RECORD_SCHEMAS};

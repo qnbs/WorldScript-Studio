@@ -5,7 +5,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -18,6 +18,9 @@ pub struct Probe {
     pub observations: AtomicUsize,
     pub keys: AtomicUsize,
     pub state: Mutex<Option<KeyState>>,
+    pub fail_unlock: AtomicBool,
+    pub lock_calls: AtomicUsize,
+    pub replace_root: Mutex<Option<(PathBuf, PathBuf)>>,
 }
 
 pub struct ObservedProvider(pub MemoryKeyProvider, pub Arc<Probe>);
@@ -44,11 +47,16 @@ impl KeyProvider for ObservedProvider {
         self.0.resolve_ref(route)
     }
     fn lock(&mut self) {
+        self.1.lock_calls.fetch_add(1, Ordering::SeqCst);
         self.0.lock();
     }
     fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
         self.1.observations.fetch_add(1, Ordering::SeqCst);
-        self.0.unlock()
+        if self.1.fail_unlock.load(Ordering::SeqCst) {
+            Err(KeyProviderError::SecureAnchorUnavailable)
+        } else {
+            self.0.unlock()
+        }
     }
     fn list_epochs(&self) -> Result<Vec<EpochInfo>, KeyProviderError> {
         self.0.list_epochs()
@@ -58,7 +66,12 @@ impl KeyProvider for ObservedProvider {
     }
     fn read_root_anchor_state(&self) -> Result<AnchorState, KeyProviderError> {
         self.1.observations.fetch_add(1, Ordering::SeqCst);
-        self.0.read_root_anchor_state()
+        let anchor = self.0.read_root_anchor_state()?;
+        if let Some((root, moved)) = self.1.replace_root.lock().unwrap().take() {
+            fs::rename(&root, moved).unwrap();
+            fs::create_dir(&root).unwrap();
+        }
+        Ok(anchor)
     }
     fn read_or_provision_installation_scope(
         &mut self,
@@ -80,6 +93,83 @@ impl KeyProvider for ObservedProvider {
     }
 }
 
+/// Reader half of the deterministic N=2/M=3 race. The integration test owns the writer/signals;
+/// this half keeps its original pin and checks each freshly captured generation independently.
+pub struct PinnedReader {
+    pub storage: Arc<ProtectedStorage<ObservedProvider>>,
+    pub identity: RecordIdentity,
+    pub records: PathBuf,
+    pub markers: PathBuf,
+}
+
+impl PinnedReader {
+    fn read(&self, snapshot: &mut AuthoritySnapshotGuard) -> Vec<u8> {
+        snapshot
+            .read_record(
+                &mut StdFs,
+                ProtectedRecord {
+                    identity: &self.identity,
+                    location: RecordLocation {
+                        record_dir: &self.records,
+                        marker_dir: &self.markers,
+                    },
+                },
+                payload,
+            )
+            .unwrap()
+    }
+
+    pub fn run(
+        self,
+        ready: std::sync::mpsc::Sender<()>,
+        racing: std::sync::mpsc::Sender<()>,
+        finished: Arc<AtomicBool>,
+    ) {
+        let mut snapshot = self
+            .storage
+            .try_authority_snapshot(&mut StdFs)
+            .unwrap()
+            .unwrap();
+        ready.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut saw_pending = false;
+        while !finished.load(Ordering::Acquire) && Instant::now() < deadline {
+            let mut fresh = match self.storage.try_authority_snapshot(&mut StdFs) {
+                Ok(Some(snapshot)) => snapshot,
+                Ok(None) => {
+                    thread::yield_now();
+                    continue;
+                }
+                Err(OperationError::Root(RootStoreError::RecoveryRequired(
+                    RootRecoveryReason::KeyEpochSetMismatch,
+                ))) => {
+                    thread::yield_now();
+                    continue;
+                }
+                Err(error) => panic!("unexpected snapshot error: {error:?}"),
+            };
+            let generation = fresh.root_generation();
+            assert!((3..=9).contains(&generation));
+            let expected = if generation <= 4 {
+                b"baseline".as_slice()
+            } else {
+                b"next".as_slice()
+            };
+            assert_eq!(self.read(&mut fresh), expected);
+            if generation == 4 && !saw_pending {
+                saw_pending = true;
+                racing.send(()).unwrap();
+            }
+            thread::yield_now();
+        }
+        assert!(
+            finished.load(Ordering::Acquire),
+            "writer did not finish within the proof deadline"
+        );
+        assert_eq!(self.read(&mut snapshot), b"baseline");
+    }
+}
+
 pub struct Fixture {
     pub base: PathBuf,
     pub root: PathBuf,
@@ -92,7 +182,10 @@ pub struct Fixture {
 
 impl Fixture {
     pub fn new() -> Self {
-        let parent = std::env::temp_dir();
+        Self::new_in(&std::env::temp_dir())
+    }
+
+    pub fn new_in(parent: &Path) -> Self {
         static NEXT: AtomicU32 = AtomicU32::new(0);
         let base = parent.join(format!(
             "wss-gate4b-ops-{}-{}",
@@ -121,46 +214,7 @@ impl Fixture {
             fs::canonicalize(records).unwrap(),
             fs::canonicalize(markers).unwrap(),
         );
-        let mut provider = configured_provider(&base, &root);
-        let identity = RecordIdentity::new(RecordClass::Codex, &["p1"]).unwrap();
-        // Gate3 test-only seeding completes before provider ownership transfers to the reader.
-        let seed_admission = SharedAdmissionGuard::try_acquire(AdmissionScope {
-            installation_dir: &base,
-            root_dir: &root,
-        })
-        .unwrap()
-        .unwrap();
-        let route = provider
-            .read_root_anchor_state()
-            .unwrap()
-            .committed_root
-            .unwrap()
-            .root_key_ref;
-        let key = provider.resolve_ref(&route).unwrap();
-        protected_write(
-            &mut StdFs,
-            &mut provider,
-            ProtectedTarget {
-                layout: RootLayout { root_dir: &root },
-                store: RecordStore {
-                    key: &key,
-                    record: &identity,
-                    location: RecordLocation {
-                        record_dir: &records,
-                        marker_dir: &markers,
-                    },
-                },
-                root_key_ref: &route,
-                key_epoch: 1,
-            },
-            ProtectedWrite {
-                record_schema: 1,
-                plaintext: b"value",
-            },
-        )
-        .unwrap();
-        drop(key);
-        drop(seed_admission);
+        let provider = configured_provider(&base, &root);
         let probe = Arc::new(Probe::default());
         let storage = Arc::new(ProtectedStorage::new(
             AdmissionScope {
@@ -199,6 +253,54 @@ impl Fixture {
             identity: &self.identity,
             location: self.location(),
         }
+    }
+    pub fn write(
+        &self,
+        fs: &mut impl DurableFs,
+        expected: Option<u64>,
+        payload: &[u8],
+    ) -> Result<Option<ProtectedCommitted>, OperationError> {
+        self.storage()
+            .try_write_record(fs, self.mutation(expected, payload))
+    }
+
+    /// Nonblocking admitted writes return `Ok(None)` under shared-admission contention; poll like production retry.
+    pub fn write_until_admitted(
+        &self,
+        fs: &mut impl DurableFs,
+        expected: Option<u64>,
+        payload: &[u8],
+    ) -> Result<ProtectedCommitted, OperationError> {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            match self.write(fs, expected, payload)? {
+                Some(committed) => return Ok(committed),
+                None if Instant::now() >= deadline => {
+                    panic!("admitted write did not acquire shared admission before deadline");
+                }
+                None => thread::sleep(Duration::from_millis(5)),
+            }
+        }
+    }
+    pub fn mutation<'a>(
+        &'a self,
+        expected: Option<u64>,
+        payload: &'a [u8],
+    ) -> ProtectedMutation<'a> {
+        ProtectedMutation {
+            record: self.record(),
+            expected_generation: expected,
+            write: ProtectedWrite {
+                record_schema: 1,
+                plaintext: payload,
+            },
+        }
+    }
+    pub fn payload(&self) -> Vec<u8> {
+        self.storage()
+            .try_read_record(&mut StdFs, self.record(), payload)
+            .unwrap()
+            .unwrap()
     }
 }
 
