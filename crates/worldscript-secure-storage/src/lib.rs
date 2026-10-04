@@ -84,13 +84,13 @@ pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
 pub use error::{AadError, KdfError, KeyProviderError, OpenError, RecoveryError, SealError};
 pub use identity::{IdentityError, RecordIdentity};
 pub use journal::{
-    empty_inventory_digest, empty_journal_page_set_digest, inventory_digest, journal_page_set_digest,
-    operation_type, page_ref_for, phase_code, source_authority_kind, source_physical_authority_kind,
-    ForeignInventoryExtension, JournalError, JournalInventoryEntry, JournalInventorySource,
-    JournalManifest, JournalPage,
-    JournalPageRef, JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_PAGE_FORMAT_VERSION,
-    JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES,
-    MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
+    empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
+    journal_page_set_digest, operation_type, page_ref_for, phase_code, source_authority_kind,
+    source_physical_authority_kind, ForeignInventoryExtension, JournalError, JournalInventoryEntry,
+    JournalInventorySource, JournalManifest, JournalPage, JournalPageRef,
+    JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_PAGE_FORMAT_VERSION, JOURNAL_PAGE_RECORD_SCHEMA,
+    MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_PAGE_BYTES,
+    MAX_JOURNAL_PAGE_DESCRIPTORS,
 };
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};
 pub use marker::{

@@ -177,7 +177,9 @@ impl JournalManifest {
         let (has_lease_owner, lease_owner_id, lease_expires_unix_ms) = reader.optional_owner()?;
         let recovery_reason_code = reader.u32()?;
         if !reader.0.is_empty() {
-            return Err(JournalError::Corrupt("trailing bytes after journal manifest"));
+            return Err(JournalError::Corrupt(
+                "trailing bytes after journal manifest",
+            ));
         }
         let manifest = JournalManifest {
             operation_id,
@@ -364,13 +366,19 @@ impl JournalInventoryEntry {
 
     fn validate_legacy_plaintext(&self) -> Result<(), JournalError> {
         if self.source_generation.is_some() {
-            return Err(JournalError::Corrupt("legacy plaintext carries no generation"));
+            return Err(JournalError::Corrupt(
+                "legacy plaintext carries no generation",
+            ));
         }
         if self.source_evidence_digest.is_none() {
-            return Err(JournalError::Corrupt("legacy plaintext requires evidence digest"));
+            return Err(JournalError::Corrupt(
+                "legacy plaintext requires evidence digest",
+            ));
         }
         if self.foreign.is_some() {
-            return Err(JournalError::Corrupt("legacy plaintext has no foreign extension"));
+            return Err(JournalError::Corrupt(
+                "legacy plaintext has no foreign extension",
+            ));
         }
         Ok(())
     }
@@ -384,17 +392,23 @@ impl JournalInventoryEntry {
             return Err(JournalError::Corrupt("r15 protected omits evidence digest"));
         }
         if self.foreign.is_some() {
-            return Err(JournalError::Corrupt("r15 protected has no foreign extension"));
+            return Err(JournalError::Corrupt(
+                "r15 protected has no foreign extension",
+            ));
         }
         Ok(())
     }
 
     fn validate_foreign_protected(&self) -> Result<(), JournalError> {
         if self.source_evidence_digest.is_none() {
-            return Err(JournalError::Corrupt("foreign protected requires evidence digest"));
+            return Err(JournalError::Corrupt(
+                "foreign protected requires evidence digest",
+            ));
         }
         if self.foreign.is_none() {
-            return Err(JournalError::Corrupt("foreign protected requires extension"));
+            return Err(JournalError::Corrupt(
+                "foreign protected requires extension",
+            ));
         }
         Ok(())
     }
@@ -453,7 +467,11 @@ pub struct JournalPage {
 }
 
 impl JournalPage {
-    pub fn new(page_index: u32, page_generation: u64, entries: Vec<JournalInventoryEntry>) -> Result<Self, JournalError> {
+    pub fn new(
+        page_index: u32,
+        page_generation: u64,
+        entries: Vec<JournalInventoryEntry>,
+    ) -> Result<Self, JournalError> {
         if entries.len() > MAX_JOURNAL_PAGE_DESCRIPTORS {
             return Err(JournalError::InvalidDescriptorCount);
         }
@@ -565,8 +583,7 @@ impl JournalPage {
         page_generation: u64,
         envelope: &[u8],
     ) -> Result<Self, JournalError> {
-        let opened =
-            open_record(key, record, envelope).map_err(JournalError::Open)?;
+        let opened = open_record(key, record, envelope).map_err(JournalError::Open)?;
         if opened.header.record_generation != page_generation {
             return Err(JournalError::GenerationMismatch);
         }
@@ -631,15 +648,13 @@ pub fn inventory_digest(
     }
     let mut sorted: Vec<&JournalInventoryEntry> = entries.iter().collect();
     sorted.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
-    sorted
-        .windows(2)
-        .try_for_each(|pair| {
-            if pair[0].sort_key() == pair[1].sort_key() {
-                Err(JournalError::DuplicateEntry)
-            } else {
-                Ok(())
-            }
-        })?;
+    sorted.windows(2).try_for_each(|pair| {
+        if pair[0].sort_key() == pair[1].sort_key() {
+            Err(JournalError::DuplicateEntry)
+        } else {
+            Ok(())
+        }
+    })?;
     let mut hasher = Sha256::new().chain_update(INVENTORY_DOMAIN);
     hasher.update(inventory_version.to_be_bytes());
     hasher.update(entry_count(sorted.len())?);
@@ -655,10 +670,14 @@ pub fn inventory_digest(
             hasher.update(value.to_be_bytes());
             Ok(())
         })?;
-        hash_optional(&mut hasher, entry.source_evidence_digest, |hasher, digest| {
-            hasher.update(digest);
-            Ok(())
-        })?;
+        hash_optional(
+            &mut hasher,
+            entry.source_evidence_digest,
+            |hasher, digest| {
+                hasher.update(digest);
+                Ok(())
+            },
+        )?;
         if let Some(foreign) = &entry.foreign {
             hasher.update(foreign.source_scheme_id.to_be_bytes());
             hasher.update(foreign.source_format_version.to_be_bytes());
@@ -689,27 +708,23 @@ pub fn page_ref_for(page: &JournalPage, envelope: &[u8]) -> Result<JournalPageRe
 }
 
 fn refuse_duplicate_pages(pages: &[JournalPageRef]) -> Result<(), JournalError> {
-    pages
-        .windows(2)
-        .try_for_each(|pair| {
-            if pair[0].page_index == pair[1].page_index {
-                Err(JournalError::DuplicateEntry)
-            } else {
-                Ok(())
-            }
-        })
+    pages.windows(2).try_for_each(|pair| {
+        if pair[0].page_index == pair[1].page_index {
+            Err(JournalError::DuplicateEntry)
+        } else {
+            Ok(())
+        }
+    })
 }
 
 fn refuse_duplicate_entries(entries: &[JournalInventoryEntry]) -> Result<(), JournalError> {
-    entries
-        .windows(2)
-        .try_for_each(|pair| {
-            if pair[0].sort_key() == pair[1].sort_key() {
-                Err(JournalError::DuplicateEntry)
-            } else {
-                Ok(())
-            }
-        })
+    entries.windows(2).try_for_each(|pair| {
+        if pair[0].sort_key() == pair[1].sort_key() {
+            Err(JournalError::DuplicateEntry)
+        } else {
+            Ok(())
+        }
+    })
 }
 
 fn entry_count(len: usize) -> Result<[u8; 4], JournalError> {
