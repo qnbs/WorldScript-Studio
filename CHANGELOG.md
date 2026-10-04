@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Cursor Cloud Agent tooling (QNB-193):** document Cloud bootstrap, PR/review lifecycle, and
+  resulting-main verification semantics; add `pnpm run cursor:cloud-doctor` for non-secret Git vs
+  `gh` diagnostics. PR #955.
 - **R-15 Gate 4B read/snapshot admission (#445):** shared admission now covers authenticated
   snapshot/key capture and the complete protected-read handoff; retained views authenticate their
   exact immutable epoch evidence. Locked, migrating and misrouted reads fail closed without legacy
