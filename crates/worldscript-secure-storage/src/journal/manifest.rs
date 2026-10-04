@@ -3,9 +3,6 @@ use crate::record::{open_record, seal_record};
 use crate::record_class::RecordClass;
 use crate::seal::{Key, RecordMeta};
 
-use super::digest::{inventory_digest, journal_page_set_digest, InventoryDigestVerifier};
-use super::inventory::JournalInventoryEntry;
-use super::page::JournalPage;
 use super::wire::{
     check_counter, push_operation_id, push_optional, push_optional_owner, validate_epoch,
     validate_inventory_version, validate_journal_revision, validate_lease_fields,
@@ -204,65 +201,5 @@ impl JournalManifest {
         validate_target_key_ref(self)?;
         validate_lease_fields(self)?;
         Ok(())
-    }
-
-    /// Refuses a manifest whose page-set digest does not match the supplied page refs.
-    pub fn verify_page_set(&self, pages: &[JournalPageRef]) -> Result<(), JournalError> {
-        if pages.len() as u32 != self.page_count {
-            return Err(JournalError::PageSetMismatch);
-        }
-        let mut entry_total = 0u64;
-        for page in pages {
-            if page.page_entry_count > MAX_JOURNAL_PAGE_DESCRIPTORS as u32 {
-                return Err(JournalError::InvalidDescriptorCount);
-            }
-            entry_total = entry_total
-                .checked_add(page.page_entry_count as u64)
-                .ok_or(JournalError::TooManyEntries)?;
-            if entry_total > MAX_JOURNAL_INVENTORY_ENTRIES as u64 {
-                return Err(JournalError::TooManyEntries);
-            }
-        }
-        if entry_total != self.entry_count as u64 {
-            return Err(JournalError::EntryCountMismatch);
-        }
-        let digest = journal_page_set_digest(pages)?;
-        if digest != self.journal_page_set_digest {
-            return Err(JournalError::PageSetMismatch);
-        }
-        Ok(())
-    }
-
-    /// Refuses when manifest counters or `inventory_digest` disagree with supplied entries.
-    pub fn verify_inventory(&self, entries: &[JournalInventoryEntry]) -> Result<(), JournalError> {
-        if entries.len() as u32 != self.entry_count {
-            return Err(JournalError::EntryCountMismatch);
-        }
-        let digest = inventory_digest(self.inventory_version, entries)?;
-        if digest != self.inventory_digest {
-            return Err(JournalError::InconsistentInventory);
-        }
-        Ok(())
-    }
-
-    /// Verifies a paged inventory against this manifest without loading every entry at once.
-    pub fn verify_inventory_pages(&self, pages: &[JournalPage]) -> Result<(), JournalError> {
-        if pages.len() as u32 != self.page_count {
-            return Err(JournalError::PageSetMismatch);
-        }
-        let mut sorted_pages: Vec<&JournalPage> = pages.iter().collect();
-        sorted_pages.sort_by_key(|page| page.page_index());
-        sorted_pages.windows(2).try_for_each(|pair| {
-            if pair[0].page_index() == pair[1].page_index() {
-                Err(JournalError::DuplicateEntry)
-            } else {
-                Ok(())
-            }
-        })?;
-        let mut verifier = InventoryDigestVerifier::new(self.inventory_version, self.entry_count)?;
-        for page in sorted_pages {
-            verifier.absorb_page(page)?;
-        }
-        verifier.finish(self.inventory_digest)
     }
 }

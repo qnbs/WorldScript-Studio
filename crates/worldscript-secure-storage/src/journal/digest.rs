@@ -98,21 +98,13 @@ impl InventoryDigestVerifier {
     }
 
     pub fn absorb_page(&mut self, page: &JournalPage) -> Result<(), JournalError> {
-        check_counter(page.page_generation)?;
+        check_counter(page.page_generation())?;
         let mut previous_in_page: Option<OwnedInventorySortKey> = None;
         for entry in page.entries() {
             entry.validate()?;
             let key = entry.sort_key().owned();
-            if let Some(prev) = &previous_in_page {
-                if key <= *prev {
-                    return Err(JournalError::NotStrictlyAscending);
-                }
-            }
-            if let Some(prev) = &self.previous_key {
-                if key <= *prev {
-                    return Err(JournalError::NotStrictlyAscending);
-                }
-            }
+            require_strictly_after(previous_in_page.as_ref(), &key)?;
+            require_strictly_after(self.previous_key.as_ref(), &key)?;
             hash_inventory_entry(&mut self.hasher, entry)?;
             previous_in_page = Some(key.clone());
             self.previous_key = Some(key);
@@ -144,4 +136,14 @@ pub fn page_ref_for(page: &JournalPage, envelope: &[u8]) -> Result<JournalPageRe
         page_entry_count: page.entries().len() as u32,
         page_content_digest: content_digest(envelope),
     })
+}
+
+fn require_strictly_after(
+    previous: Option<&OwnedInventorySortKey>,
+    key: &OwnedInventorySortKey,
+) -> Result<(), JournalError> {
+    if previous.is_some_and(|prev| key <= prev) {
+        return Err(JournalError::NotStrictlyAscending);
+    }
+    Ok(())
 }

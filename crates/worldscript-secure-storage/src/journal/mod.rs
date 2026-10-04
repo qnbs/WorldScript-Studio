@@ -7,6 +7,7 @@
 mod digest;
 mod inventory;
 mod manifest;
+mod manifest_verify;
 mod page;
 mod wire;
 

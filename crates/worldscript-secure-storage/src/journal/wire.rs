@@ -14,9 +14,12 @@ use super::source_scheme_id;
 use super::JournalError;
 use super::MAX_JOURNAL_ENTRY_BYTES;
 
-pub(crate) fn refuse_duplicate_pages(pages: &[JournalPageRef]) -> Result<(), JournalError> {
-    pages.windows(2).try_for_each(|pair| {
-        if pair[0].page_index == pair[1].page_index {
+pub(crate) fn refuse_duplicate_adjacent<T>(
+    items: &[T],
+    is_duplicate: impl Fn(&T, &T) -> bool,
+) -> Result<(), JournalError> {
+    items.windows(2).try_for_each(|pair| {
+        if is_duplicate(&pair[0], &pair[1]) {
             Err(JournalError::DuplicateEntry)
         } else {
             Ok(())
@@ -24,16 +27,14 @@ pub(crate) fn refuse_duplicate_pages(pages: &[JournalPageRef]) -> Result<(), Jou
     })
 }
 
+pub(crate) fn refuse_duplicate_pages(pages: &[JournalPageRef]) -> Result<(), JournalError> {
+    refuse_duplicate_adjacent(pages, |left, right| left.page_index == right.page_index)
+}
+
 pub(crate) fn refuse_duplicate_entries(
     entries: &[JournalInventoryEntry],
 ) -> Result<(), JournalError> {
-    entries.windows(2).try_for_each(|pair| {
-        if pair[0].sort_key() == pair[1].sort_key() {
-            Err(JournalError::DuplicateEntry)
-        } else {
-            Ok(())
-        }
-    })
+    refuse_duplicate_adjacent(entries, |left, right| left.sort_key() == right.sort_key())
 }
 
 pub(crate) fn entry_count(len: usize) -> Result<[u8; 4], JournalError> {
@@ -321,7 +322,9 @@ impl<'a> Reader<'a> {
             .map_err(|_| JournalError::Corrupt("operation_id is not UTF-8"))
     }
 
-    pub(crate) fn optional_owner(&mut self) -> Result<(bool, Option<String>, Option<u64>), JournalError> {
+    pub(crate) fn optional_owner(
+        &mut self,
+    ) -> Result<(bool, Option<String>, Option<u64>), JournalError> {
         match self.take(1)?[0] {
             0 => Ok((false, None, None)),
             1 => {
