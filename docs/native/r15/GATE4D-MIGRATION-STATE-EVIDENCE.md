@@ -11,12 +11,13 @@ record conversion, root live-migration binding updates, cross-process lease CAS,
 
 | Requirement | Implementation | Focused proof |
 |---|---|---|
-| Forward-only §10.3 phase order | `allows_phase_transition`, `transition_phase` | `happy_path_phase_sequence_is_forward_only` |
-| Fence token on every mutation | `MigrationFence`, `assert_fence` | `stale_fence_is_refused_before_mutation` |
-| Root-bound authoritative revision | `authoritative_manifest_revision`, `assert_live_binding` | `live_binding_rejects_ahead_revision_candidate` |
-| Checkpoint revision bump + cursor | `checkpoint_progress` | `checkpoint_bumps_revision_and_moves_cursor` |
-| Terminal refusal/success | `mark_recovery`, `mark_done`, `is_terminal_phase` | `recovery_and_done_are_terminal` |
-| Ordinary write gate | `ordinary_mutating_writes_admitted` | `recovery_and_done_are_terminal` |
+| Root-bound manifest digest | `assert_live_binding(..., manifest_content_digest)` | `live_binding_requires_exact_manifest_digest_and_revision` |
+| Exact root-bound journal revision | `authoritative_manifest_revision` | rejects `<`, accepts `==`, debris `>` |
+| Phase transition revision bump | `transition_phase` | `transition_phase_bumps_revision_on_forward_change` |
+| Terminal `RECOVERY_REQUIRED` | `mark_recovery` on terminal phases | `recovery_and_done_are_terminal_and_prepare_admits_writes` |
+| Checkpoint cursor bounds | `validate_checkpoint_cursor` | empty + out-of-range + regressive tests |
+| Unsupported phase idempotence | `allows_phase_transition` | `happy_path_phase_sequence_is_forward_only` |
+| `PREPARE` ordinary writes (§10.3) | `ordinary_mutating_writes_admitted` | `recovery_and_done_are_terminal_and_prepare_admits_writes` |
 
 `PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`.
 
