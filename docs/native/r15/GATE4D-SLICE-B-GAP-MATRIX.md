@@ -17,18 +17,35 @@ checkpoint cursor bounds, terminal `RECOVERY_REQUIRED` / `DONE`, `PREPARE` write
 | Durable journal manifest generations | §10.1.1 immutable republish per `journal_revision` | Seal/open in memory only (`gate4c_journal_test`) | Stage/promote sealed manifest bytes via `durable` (3A), generation-addressed under `migration:<op>` |
 | Durable journal pages | §10.1.1 `migration-page:<op>:<idx>` | Codec only | Same 3A pattern per page generation |
 | `with_fence` boundary | §10.1 preface | `MigrationFence` in-process only | Adapter holds fence through mutation + sync; refuse stale token before I/O |
-| Root `LiveMigration` binding update | §5.4 / §10.1.1 retention | Root types exist; no journal publish hook | After manifest durability, advance root live binding in same fenced sequence (bounded subset in B) |
+| Root `LiveMigration` binding update | §5.4 / §10.1.1 retention | Root types exist; no journal publish hook | **Defer** until a tested restart/reconciliation path loads a durable manifest when root still names an older revision/digest (no same-fence crash window in B PR 1) |
 | Cross-process lease CAS | §10.1 lease fields on manifest | Wire validation only | Out of minimal B unless required for single-process durable proof |
 | Inventory execution / mixed-key conversion | §10.2+ | Deferred 4D slices C+ | Not B |
 
 ## Smallest safe first PR (recommended)
 
-1. Headless `journal/durable.rs` (name TBD): publish one manifest revision using existing
-   `DurableFs::stage_and_promote`, keyed by `RecordIdentity` + `RecordMeta` generation =
-   `journal_revision`, with tests on tempdir + `StdFs`.
+Journal revision and `RecordMeta.record_generation` stay aligned per `JournalManifest::seal`, but
+**normal** `DurableFs::stage_and_promote` always seals through `seal_record`, which rejects
+generation `0`. Bootstrap revision `0` is already sealed via `JournalManifest::seal` →
+`seal_journal_manifest_bootstrap` on `main` (`journal/manifest.rs`); Slice B must not pretend
+`stage_and_promote` alone publishes revision `0`.
+
+1. Headless `journal/durable.rs` (name TBD): durable promotion keyed by `RecordIdentity` +
+   generation = `journal_revision`, with tests on tempdir + `StdFs`.
+   - **`journal_revision > 0`:** seal with `JournalManifest::seal` (or equivalent) then promote
+     the envelope with `DurableFs` (or extend promotion to accept a pre-sealed envelope without
+     re-entering `seal_record` for generation `0`).
+   - **`journal_revision == 0`:** use the existing bootstrap sealing path only; specify how the
+     sealed bootstrap envelope is promoted durably without calling `stage_and_promote`'s
+     `seal_record` entrypoint.
 2. In-process `with_fence` wrapper that pairs `MigrationFence` with a mutex (single-process
    stand-in for cross-process lock until platform adapter exists).
 3. Evidence doc `GATE4D-JOURNAL-DURABLE-EVIDENCE.md` + focused integration test; no TS/Tauri wiring.
+
+**Not in Slice B PR 1:** advancing root `LiveMigration` in the same fenced sequence as manifest
+durability. A crash after manifest sync and before root update can leave a newer durable manifest
+than `LiveMigration` names; `assert_live_binding` rejects that mismatch until reconciliation exists
+(`authoritative_manifest_revision` selects the root revision but no durable caller proves restart
+load of the newer generation yet).
 
 ## Explicit non-goals for Slice B PR 1
 
@@ -40,6 +57,7 @@ checkpoint cursor bounds, terminal `RECOVERY_REQUIRED` / `DONE`, `PREPARE` write
 
 ## Successor slices (not B)
 
+- Slice B2: tested restart/reconciliation for manifest-ahead-of-root + root `LiveMigration` advance
 - Slice C: record conversion / mixed-key inventory execution as live truth requires
 - Gate 4E: first enable/disable closure
-- Root two-phase commit coupling with step F when journal + root must advance together (may span B2)
+- Root two-phase commit coupling with step F when journal + root must advance together (after B2)
