@@ -6,6 +6,8 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
 use support::{
     child_probe, payload, Event, Fixture, HookFs, ObservedProvider, Probe, CHILD_MODE, CHILD_SCOPE,
 };
@@ -14,6 +16,20 @@ use worldscript_secure_storage::secure_store::MemorySecretStore;
 use worldscript_secure_storage::store_authority::SecureStoreAuthority;
 use worldscript_secure_storage::store_runtime::SecureStoreRuntime;
 use worldscript_secure_storage::*;
+
+fn wait_for_exclusive(scope: AdmissionScope<'_>) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
+        if ExclusiveAdmissionGuard::try_acquire(scope)
+            .unwrap()
+            .is_some()
+        {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    false
+}
 
 #[test]
 fn read_handoff_holds_admission_until_consumer_returns() {
@@ -74,9 +90,10 @@ fn shared_readers_are_send_and_retain_admission_and_non_authorizing_witness() {
         .unwrap()
         .is_none());
     drop(second);
-    assert!(ExclusiveAdmissionGuard::try_acquire(fixture.scope())
-        .unwrap()
-        .is_some());
+    assert!(
+        wait_for_exclusive(fixture.scope()),
+        "exclusive admission must become available after the last shared holder releases"
+    );
     // The current authority cell still owns its local reference; this is not deletion permission.
     assert!(witness.is_referenced());
 }
