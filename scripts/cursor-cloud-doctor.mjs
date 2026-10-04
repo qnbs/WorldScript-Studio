@@ -53,38 +53,80 @@ function readPackageJson(root = cwd) {
   }
 }
 
+function resolveGitTransport(gitTransportProbe) {
+  if (gitTransportProbe === 'offline-skipped') {
+    return 'offline-skipped';
+  }
+  if (gitTransportProbe && !gitTransportProbe.startsWith('error')) {
+    return 'origin readable';
+  }
+  return 'origin read failed';
+}
+
+function resolveDepsHint(nodeModules) {
+  if (!nodeModules) {
+    return 'node_modules missing — run node scripts/dependency-state.mjs reconcile';
+  }
+  if (existsSync(join(cwd, 'scripts/dependency-state.mjs'))) {
+    return 'node_modules present (run deps:reconcile after lock changes)';
+  }
+  return 'node_modules present';
+}
+
+function resolveGhApiLabel(ghApiProbe, ghAuth) {
+  if (ghApiProbe?.startsWith('error')) {
+    return ghApiProbe;
+  }
+  if (ghApiProbe) {
+    return `authenticated (${ghApiProbe})`;
+  }
+  return ghAuth;
+}
+
+function resolveAgentRuntime() {
+  // biome-ignore lint/suspicious/noUndeclaredEnvVars: optional Cursor Cloud session markers for diagnostics only
+  if (process.env.CURSOR_CLOUD === '1' || process.env.CURSOR_AGENT) {
+    return 'cursor-cloud';
+  }
+  return 'unknown-local';
+}
+
+function readGhAuthStatus() {
+  try {
+    return runGh(['auth', 'status']);
+  } catch {
+    return 'unavailable';
+  }
+}
+
+function probeGhApiLogin() {
+  if (isOfflineDoctorMode()) {
+    return 'offline-skipped';
+  }
+  return runGh(['api', 'user', '-q', '.login']);
+}
+
+function probeGitTransport() {
+  if (isOfflineDoctorMode()) {
+    return 'offline-skipped';
+  }
+  return runGit(['ls-remote', '--heads', 'origin', 'main']);
+}
+
 function buildSummary(input) {
   const pkg = input.pkg ?? {};
-  const gitTransport =
-    input.gitTransportProbe === 'offline-skipped'
-      ? 'offline-skipped'
-      : input.gitTransportProbe && !input.gitTransportProbe.startsWith('error')
-        ? 'origin readable'
-        : 'origin read failed';
-
-  const deps =
-    input.nodeModules && existsSync(join(cwd, 'scripts/dependency-state.mjs'))
-      ? 'node_modules present (run deps:reconcile after lock changes)'
-      : input.nodeModules
-        ? 'node_modules present'
-        : 'node_modules missing — run node scripts/dependency-state.mjs reconcile';
-
   return {
     agentRuntime: input.agentRuntime ?? 'unknown-local',
     head: input.head,
     branch: input.branch,
     originMain: input.originMain,
     worktreeClean: input.worktreeClean,
-    gitTransport,
-    ghApi: input.ghApiProbe?.startsWith('error')
-      ? input.ghApiProbe
-      : input.ghApiProbe
-        ? `authenticated (${input.ghApiProbe})`
-        : input.ghAuth,
+    gitTransport: resolveGitTransport(input.gitTransportProbe),
+    ghApi: resolveGhApiLabel(input.ghApiProbe, input.ghAuth),
     node: process.version,
     packageManager: pkg.packageManager ?? 'unknown',
     enginesNode: pkg.engines?.node ?? 'unknown',
-    deps,
+    deps: resolveDepsHint(input.nodeModules),
     signingDoctor: 'run pnpm run signing:doctor',
     ciPrepush: 'run pnpm run ci:prepush before push',
     docs: 'docs/CURSOR-CLOUD-AGENT.md',
@@ -93,64 +135,43 @@ function buildSummary(input) {
 
 function collectLiveSummary() {
   const pkg = readPackageJson();
-  const head = runGit(['rev-parse', 'HEAD']);
-  const branch = runGit(['branch', '--show-current']);
-  const originMain = runGit(['rev-parse', 'origin/main']);
-  const worktreeClean = runGit(['status', '--porcelain']) === '';
-
-  let ghAuth = 'not checked';
-  try {
-    ghAuth = runGh(['auth', 'status']);
-  } catch {
-    ghAuth = 'unavailable';
-  }
-
-  const ghApiProbe = isOfflineDoctorMode()
-    ? 'offline-skipped'
-    : runGh(['api', 'user', '-q', '.login']);
-  const gitTransportProbe = isOfflineDoctorMode()
-    ? 'offline-skipped'
-    : runGit(['ls-remote', '--heads', 'origin', 'main']);
-  const nodeModules = existsSync(join(cwd, 'node_modules'));
-  const agentRuntime =
-    // biome-ignore lint/suspicious/noUndeclaredEnvVars: optional Cursor Cloud session markers for diagnostics only
-    process.env.CURSOR_CLOUD === '1' || process.env.CURSOR_AGENT ? 'cursor-cloud' : 'unknown-local';
-
   return buildSummary({
-    head,
-    branch,
-    originMain,
-    worktreeClean,
-    gitTransportProbe,
-    ghApiProbe,
-    ghAuth,
-    nodeModules,
+    head: runGit(['rev-parse', 'HEAD']),
+    branch: runGit(['branch', '--show-current']),
+    originMain: runGit(['rev-parse', 'origin/main']),
+    worktreeClean: runGit(['status', '--porcelain']) === '',
+    gitTransportProbe: probeGitTransport(),
+    ghApiProbe: probeGhApiLogin(),
+    ghAuth: readGhAuthStatus(),
+    nodeModules: existsSync(join(cwd, 'node_modules')),
     pkg,
-    agentRuntime,
+    agentRuntime: resolveAgentRuntime(),
   });
+}
+
+function printHumanSummary(summary) {
+  console.log(`AGENT_RUNTIME=${summary.agentRuntime}`);
+  console.log(`HEAD=${summary.head ?? 'unknown'}`);
+  console.log(`BRANCH=${summary.branch ?? 'unknown'}`);
+  console.log(`ORIGIN_MAIN=${summary.originMain ?? 'unknown'}`);
+  console.log(`WORKTREE_CLEAN=${summary.worktreeClean ? 'yes' : 'no'}`);
+  console.log(`GIT_TRANSPORT=${summary.gitTransport}`);
+  console.log(`GH_API=${summary.ghApi}`);
+  console.log(`NODE=${summary.node}`);
+  console.log(`PNPM=${summary.packageManager}`);
+  console.log(`DEPS=${summary.deps}`);
+  console.log(`SIGNING=${summary.signingDoctor}`);
+  console.log(`CI_PREPUSH=${summary.ciPrepush}`);
+  console.log(`DOCS=${summary.docs}`);
 }
 
 function main() {
   const summary = collectLiveSummary();
-
   if (jsonMode) {
     process.stdout.write(`${JSON.stringify(summary, null, 0)}\n`);
   } else {
-    console.log(`AGENT_RUNTIME=${summary.agentRuntime}`);
-    console.log(`HEAD=${summary.head ?? 'unknown'}`);
-    console.log(`BRANCH=${summary.branch ?? 'unknown'}`);
-    console.log(`ORIGIN_MAIN=${summary.originMain ?? 'unknown'}`);
-    console.log(`WORKTREE_CLEAN=${summary.worktreeClean ? 'yes' : 'no'}`);
-    console.log(`GIT_TRANSPORT=${summary.gitTransport}`);
-    console.log(`GH_API=${summary.ghApi}`);
-    console.log(`NODE=${summary.node}`);
-    console.log(`PNPM=${summary.packageManager}`);
-    console.log(`DEPS=${summary.deps}`);
-    console.log(`SIGNING=${summary.signingDoctor}`);
-    console.log(`CI_PREPUSH=${summary.ciPrepush}`);
-    console.log(`DOCS=${summary.docs}`);
+    printHumanSummary(summary);
   }
-
   process.exitCode = 0;
 }
 
