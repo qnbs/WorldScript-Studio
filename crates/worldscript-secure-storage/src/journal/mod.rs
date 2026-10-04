@@ -1,14 +1,16 @@
-//! Gate 4 slice 4C: migration journal manifest and paged inventory codec (§10.1, §10.1.1).
+//! Gate 4 slice 4C/4D: migration journal manifest, paged inventory codec (§10.1, §10.1.1), and
+//! execution state helpers (§10.3) for crash-resumable rotation/rekey.
 //!
 //! Defines `journal_page_set_digest`, the authenticated journal manifest body sealed under
 //! `migration:<operation-id>`, and the page bodies sealed under `migration-page:<operation-id>:<page-index>`.
-//! No migration state machine, durable I/O, or root live-migration binding updates live here.
+//! Slice 4D part A adds phase/fence/revision state only; durable I/O and root binding updates follow.
 
 mod digest;
 mod inventory;
 mod manifest;
 mod manifest_verify;
 mod page;
+mod state;
 mod wire;
 
 use crate::root::RootError;
@@ -111,3 +113,8 @@ pub use digest::{
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
 pub use manifest::{JournalManifest, JournalPageRef};
 pub use page::JournalPage;
+pub use state::{
+    allows_phase_transition, assert_fence, assert_live_binding, authoritative_manifest_revision,
+    checkpoint_progress, is_terminal_phase, mark_done, mark_recovery,
+    ordinary_mutating_writes_admitted, transition_phase, MigrationExecutionError, MigrationFence,
+};
