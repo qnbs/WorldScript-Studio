@@ -125,10 +125,20 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   rollback history, active-PR previews, and uncertain metadata; redact provider secrets and
   creator emails. Do not use project-wide Vercel removal.
 
+## Cursor Cloud Agent
+
+Cloud Agents run on Linux VMs with Cursor-managed signing and GitHub integration. `gh` API auth
+may fail while Git push/PR operations still work — diagnose both separately. Use Draft PRs only
+for short bootstrap; mark **Ready for Review** early so CodeRabbit and CI run in parallel (see
+`config/reviewer-registry.json`). After merge, prove **resulting-main** CI/CodeQL/Vercel Production
+on the squash commit SHA, not the PR head. Operational detail: `docs/CURSOR-CLOUD-AGENT.md`;
+session snapshot: `pnpm run cursor:cloud-doctor`.
+
 ## On-demand references
 
 - Product and setup overview: `README.md` and `CONTRIBUTING.md`.
 - CI and workflow mechanics: `docs/CI.md` and `docs/PR-CI-MERGE-WORKFLOW.md`.
+- Cursor Cloud Agent execution: `docs/CURSOR-CLOUD-AGENT.md`.
 - Native architecture: `docs/native/CORE-MIGRATION-LEDGER.md` and `docs/adr/0021-qt-gpui-native-desktop-strategy.md`.
 - i18n: `scripts/build-i18n.mjs`, `scripts/check-i18n-keys.mjs`, and `.cursor/rules/150-i18n-and-content.mdc`.
 - Architecture/dependency investigation: `docs/graphify.md` and `docs/codegraph.md`; use tools on demand.
