@@ -28,9 +28,12 @@ An externally committed ordinary same-key root advance can rebind the coordinato
 runtime only while shared admission is held and only after a validated anchor proves the same scope,
 strictly forward generation and exact root-key route. The provider's live unlock-session binding
 supplies the baseline even before first capture; explicit lock clears that non-authorizing witness.
+Only an attempted automatic rebind retains a private prior-session retry witness after failure;
+it grants nothing without fresh admission/anchor/key proof and clears after successful capture.
+Future coordinator lifecycle locking must discard this retry together with the provider session.
 The post-unlock and post-key-resolution committed read-authority projections must be unchanged;
 both full anchors are validated, but prepared recovery intent is not committed read authority.
-explicit lock, rotation, rollback, missing, malformed and ambiguous authority remain refused.
+Explicit lock, rotation, rollback, missing, malformed and ambiguous authority remain refused.
 Catalog enumeration follows the same admitted snapshot path; raw catalog enumeration is test-support
 only and is not a production public API.
 

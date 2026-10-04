@@ -8,12 +8,17 @@ use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
 use crate::anchor;
 use crate::error::KeyProviderError;
-use crate::provider::{AnchorState, CommittedRoot, InstallationScopeId, KeyProvider, KeyState};
+use crate::provider::{
+    AnchorState, CommittedRoot, InstallationScopeId, KeyProvider, KeyState, SessionBinding,
+};
 use crate::seal::Key;
 
 pub(crate) struct AuthorityCell<P> {
     pub(crate) provider: P,
     current: Option<Arc<Snapshot>>,
+    // Only an automatic rebind may retain this non-authorizing prior session evidence. The
+    // provider is private; future coordinator lifecycle locking must also discard this retry.
+    rebind_retry: Option<SessionBinding>,
 }
 
 pub(crate) struct Snapshot {
@@ -85,6 +90,7 @@ impl<P: KeyProvider> AuthorityCell<P> {
         Self {
             provider,
             current: None,
+            rebind_retry: None,
         }
     }
 
@@ -130,6 +136,7 @@ impl<P: KeyProvider> AuthorityCell<P> {
         let binding = self
             .provider
             .session_binding()
+            .or_else(|| self.rebind_retry.clone())
             .ok_or(KeyProviderError::Locked)?;
         let baseline = Snapshot {
             scope: binding.scope,
@@ -160,6 +167,7 @@ impl<P: KeyProvider> AuthorityCell<P> {
             return Err(KeyProviderError::RecoveryRequired);
         }
         self.publish(&anchor)?;
+        self.rebind_retry = None;
         // Private seam for proving the exact capture-to-pin window while the cell remains held.
         before_pin();
         let snapshot = self
@@ -177,16 +185,30 @@ impl<P: KeyProvider> AuthorityCell<P> {
         &mut self,
         before: &AnchorState,
     ) -> Result<bool, KeyProviderError> {
-        let Some(binding) = self.provider.session_binding() else {
+        self.rebind_interleaved(before, || {})
+    }
+
+    fn rebind_interleaved(
+        &mut self,
+        before: &AnchorState,
+        before_unlock: impl FnOnce(),
+    ) -> Result<bool, KeyProviderError> {
+        let Some(binding) = self
+            .provider
+            .session_binding()
+            .or_else(|| self.rebind_retry.clone())
+        else {
             return Ok(false);
         };
         let baseline = Snapshot {
-            scope: binding.scope,
-            root: binding.root,
+            scope: binding.scope.clone(),
+            root: binding.root.clone(),
         };
         if !baseline.allows_same_key_forward(before)? {
             return Ok(false);
         }
+        self.rebind_retry = Some(binding);
+        before_unlock();
         match self.provider.unlock() {
             Ok(KeyState::Unlocked { .. }) => {}
             Ok(KeyState::KeyLost) => {
@@ -292,6 +314,16 @@ mod tests {
         SecureStoreRuntime<MemorySecretStore>,
         RootKeyRefV1,
     ) {
+        let (writer, reader, route, _) = shared_runtimes_with_store();
+        (writer, reader, route)
+    }
+
+    fn shared_runtimes_with_store() -> (
+        SecureStoreRuntime<MemorySecretStore>,
+        SecureStoreRuntime<MemorySecretStore>,
+        RootKeyRefV1,
+        MemorySecretStore,
+    ) {
         let store = MemorySecretStore::new();
         let mut writer = SecureStoreRuntime::new(SecureStoreAuthority::new(store.clone()));
         writer.read_or_provision_installation_scope().unwrap();
@@ -301,9 +333,55 @@ mod tests {
         writer.prepare_root_anchor(&first).unwrap();
         writer.commit_root_anchor(&first.operation_id, 1).unwrap();
 
-        let mut reader = SecureStoreRuntime::new(SecureStoreAuthority::new(store));
+        let mut reader = SecureStoreRuntime::new(SecureStoreAuthority::new(store.clone()));
         assert!(matches!(reader.unlock(), Ok(KeyState::Unlocked { .. })));
-        (writer, reader, route)
+        (writer, reader, route, store)
+    }
+
+    #[test]
+    fn failed_automatic_rebind_keeps_only_a_same_key_forward_retry_witness() {
+        let (mut writer, reader, route, store) = shared_runtimes_with_store();
+        let mut cell = AuthorityCell::new(reader);
+        let next = request(&route, 1);
+        writer.prepare_root_anchor(&next).unwrap();
+        writer.commit_root_anchor(&next.operation_id, 2).unwrap();
+        let candidate = writer.read_root_anchor_state().unwrap();
+        assert_eq!(
+            cell.rebind_interleaved(&candidate, || store.set_unavailable(true)),
+            Err(KeyProviderError::SecureAnchorUnavailable)
+        );
+        assert!(cell.provider.session_binding().is_none());
+        assert!(cell.current.is_none());
+        store.set_unavailable(false);
+        // Another forward commit during unlock must refuse this capture, not lose retryability.
+        let third = request(&route, 2);
+        assert_eq!(
+            cell.rebind_interleaved(&candidate, || {
+                writer.prepare_root_anchor(&third).unwrap();
+                writer.commit_root_anchor(&third.operation_id, 3).unwrap();
+            }),
+            Err(KeyProviderError::RecoveryRequired)
+        );
+        assert!(cell.provider.session_binding().is_none());
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 3);
+        assert!(cell.rebind_retry.is_none());
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 3);
+
+        let fourth = request(&route, 3);
+        writer.prepare_root_anchor(&fourth).unwrap();
+        writer.commit_root_anchor(&fourth.operation_id, 4).unwrap();
+        let candidate = writer.read_root_anchor_state().unwrap();
+        let changed_route = writer.provision_epoch_key(2).unwrap();
+        let rotated = request(&changed_route, 4);
+        assert_eq!(
+            cell.rebind_interleaved(&candidate, || {
+                writer.prepare_root_anchor(&rotated).unwrap();
+                writer.commit_root_anchor(&rotated.operation_id, 5).unwrap();
+            }),
+            Err(KeyProviderError::RecoveryRequired)
+        );
+        assert_eq!(cell.capture().err(), Some(KeyProviderError::Locked));
+        assert_eq!(cell.current.as_ref().unwrap().root.root_generation, 3);
     }
 
     #[test]
