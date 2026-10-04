@@ -12,7 +12,7 @@ switch. Gate 4 remains partial until 4D/4E close.
 | `journal_page_set_digest` domain, sort order, duplicate refusal | `journal.rs` | `gate4c_journal_test`: empty bootstrap constant; sort stability; duplicate page index |
 | Bootstrap manifest body (`journal_revision = 0`, empty page set) | `JournalManifest` encode/decode | bootstrap roundtrip; `verify_page_set(&[])` |
 | Manifest discriminants (`operation_type`, `phase`, `inventory_version`, fencing) | `validate_*` on encode/decode | invalid discriminants and orphan lease fields refused |
-| §10.1 target root key ref on ENABLE/BOOTSTRAP paths | `has_target_root_key_ref`, `target_root_key_ref_digest` wire field | bootstrap helper + encode/decode roundtrip |
+| Target root key ref (§10.1) | `has_target_root_key_ref`, `target_root_key_ref_digest`; required for `ENABLE`, `ROTATE`, and `BOOTSTRAP_TARGET` phase | bootstrap helper + encode/decode roundtrip |
 | Lease owner consistency | `validate_lease_fields`; encode refuses orphan lease fields | invalid lease field test |
 | `inventory_digest` over canonical descriptor tuples | `inventory_digest`, `JournalInventoryEntry` | legacy settings entry; `verify_inventory` |
 | Paged inventory without full in-memory flatten | `InventoryDigestVerifier`, `verify_inventory_pages` | `paged_inventory_verifier_matches_flat_digest` |
@@ -20,7 +20,9 @@ switch. Gate 4 remains partial until 4D/4E close.
 | Page generation / record class on page open | `JournalPage::open` | seal/open roundtrip with `page_ref_for` + envelope content digest |
 | Page-set vs manifest binding (counts and digest) | `verify_page_set` | digest mismatch; per-page entry caps vs manifest `entry_count` |
 | Inventory count/digest binding | `verify_inventory` | matching entries OK; wrong digest refused |
-| Source-authority invariants (legacy / R15 / foreign scheme) | `JournalInventoryEntry::validate_semantics`, `source_scheme_id` | construction errors; adversarial decode paths |
+| Foreign `source_scheme_id` / `source_format_version` (§10.1.2) | registered scheme codes only for `FOREIGN_PROTECTED`; format version `1` for v1 schemes | `foreign_inventory_rejects_none_scheme_and_bad_format_version` |
+| Lease owner id encode/decode symmetry | `validate_lease_fields` + bounded owner string on encode (`MAX_OPERATION_ID_LEN`) | `overlong_lease_owner_id_is_refused_on_encode` |
+| Paged inventory without cloning all pages | `verify_inventory_pages` sorts `&JournalPage` references | `paged_inventory_verifier_matches_flat_digest` |
 | Identity / project-scope bindings (non-public mutators) | private binding fields + `validate_identity_bindings` | entry roundtrip and validation failures |
 | Envelope seal/open for manifest and page records | `JournalManifest::seal/open`, `JournalPage::seal/open` (`JOURNAL_*_RECORD_SCHEMA`) | `manifest_and_page_seal_open_roundtrip` (revision ≥ 1 for seal counters) |
 | Deterministic bounds (`MAX_*`) | constants + decode/encode checks | malformed/truncated inputs refused in tests |

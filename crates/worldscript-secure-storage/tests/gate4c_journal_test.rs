@@ -1,9 +1,10 @@
 use worldscript_secure_storage::{
     empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
     journal_page_set_digest, operation_type, page_ref_for, phase_code, source_authority_kind,
-    source_physical_authority_kind, source_scheme_id, JournalError, JournalInventoryEntry,
-    JournalInventorySource, JournalManifest, JournalPage, JournalPageRef, Key, RecordClass,
-    RecordIdentity, RecordMeta, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA,
+    source_physical_authority_kind, source_scheme_id, ForeignInventoryExtension, JournalError,
+    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, JournalPageRef,
+    Key, RecordClass, RecordIdentity, RecordMeta, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    JOURNAL_PAGE_RECORD_SCHEMA,
 };
 
 fn key() -> Key {
@@ -286,4 +287,55 @@ fn invalid_manifest_discriminants_and_lease_fields_are_refused() {
     manifest.has_lease_owner = false;
     manifest.lease_owner_id = Some("stale".into());
     assert!(manifest.encode().is_err());
+}
+
+#[test]
+fn overlong_lease_owner_id_is_refused_on_encode() {
+    let mut manifest = bootstrap_manifest("lease-op");
+    manifest.has_lease_owner = true;
+    manifest.lease_owner_id = Some("x".repeat(257));
+    manifest.lease_expires_unix_ms = Some(1);
+    assert!(matches!(
+        manifest.encode(),
+        Err(JournalError::InvalidOperationId)
+    ));
+}
+
+#[test]
+fn foreign_inventory_rejects_none_scheme_and_bad_format_version() {
+    let record = RecordIdentity::new(RecordClass::Settings, &[]).unwrap();
+    let absent_binding = vec![0u8];
+    assert!(JournalInventoryEntry::new(
+        record.clone(),
+        JournalInventorySource {
+            authority_kind: source_authority_kind::FOREIGN_PROTECTED,
+            physical_authority_kind: source_physical_authority_kind::WEBVIEW_INDEXEDDB,
+            generation: None,
+            evidence_digest: Some([0x33; 32]),
+            foreign: Some(ForeignInventoryExtension {
+                source_scheme_id: source_scheme_id::NONE_PLAINTEXT,
+                source_format_version: 1,
+                source_identity_binding: absent_binding.clone(),
+                source_project_scope_binding: absent_binding.clone(),
+            }),
+        },
+    )
+    .is_err());
+
+    assert!(JournalInventoryEntry::new(
+        record,
+        JournalInventorySource {
+            authority_kind: source_authority_kind::FOREIGN_PROTECTED,
+            physical_authority_kind: source_physical_authority_kind::WEBVIEW_INDEXEDDB,
+            generation: None,
+            evidence_digest: Some([0x33; 32]),
+            foreign: Some(ForeignInventoryExtension {
+                source_scheme_id: source_scheme_id::WEBVIEW_IDB_AT_REST_V1,
+                source_format_version: 0,
+                source_identity_binding: absent_binding.clone(),
+                source_project_scope_binding: absent_binding,
+            }),
+        },
+    )
+    .is_err());
 }

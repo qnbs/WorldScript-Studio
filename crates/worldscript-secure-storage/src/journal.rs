@@ -341,8 +341,8 @@ impl JournalManifest {
         if pages.len() as u32 != self.page_count {
             return Err(JournalError::PageSetMismatch);
         }
-        let mut sorted_pages = pages.to_vec();
-        sorted_pages.sort_by_key(|page| page.page_index);
+        let mut sorted_pages: Vec<&JournalPage> = pages.iter().collect();
+        sorted_pages.sort_by_key(|page| page.page_index());
         sorted_pages.windows(2).try_for_each(|pair| {
             if pair[0].page_index() == pair[1].page_index() {
                 Err(JournalError::DuplicateEntry)
@@ -352,7 +352,7 @@ impl JournalManifest {
         })?;
         let mut verifier = InventoryDigestVerifier::new(self.inventory_version, self.entry_count)?;
         for page in sorted_pages {
-            verifier.absorb_page(&page)?;
+            verifier.absorb_page(page)?;
         }
         verifier.finish(self.inventory_digest)
     }
@@ -547,7 +547,11 @@ impl JournalInventoryEntry {
         let foreign = self.foreign.as_ref().ok_or(JournalError::Corrupt(
             "foreign protected requires extension",
         ))?;
-        validate_source_scheme_id(foreign.source_scheme_id)?;
+        validate_registered_foreign_source_scheme(foreign.source_scheme_id)?;
+        validate_foreign_source_format_version(
+            foreign.source_scheme_id,
+            foreign.source_format_version,
+        )?;
         validate_canonical_binding(&foreign.source_identity_binding)?;
         validate_canonical_binding(&foreign.source_project_scope_binding)?;
         Ok(())
@@ -1073,11 +1077,30 @@ fn validate_physical_authority_kind(value: u32) -> Result<(), JournalError> {
     }
 }
 
-fn validate_source_scheme_id(value: u32) -> Result<(), JournalError> {
+fn validate_registered_foreign_source_scheme(value: u32) -> Result<(), JournalError> {
     match value {
-        source_scheme_id::NONE_PLAINTEXT
-        | source_scheme_id::WEBVIEW_IDB_AT_REST_V1
-        | source_scheme_id::CREDENTIAL_IDB_KEYSTORE_V1 => Ok(()),
+        source_scheme_id::WEBVIEW_IDB_AT_REST_V1 | source_scheme_id::CREDENTIAL_IDB_KEYSTORE_V1 => {
+            Ok(())
+        }
+        other => Err(JournalError::UnsupportedSourceScheme(other)),
+    }
+}
+
+fn validate_foreign_source_format_version(
+    scheme_id: u32,
+    version: u32,
+) -> Result<(), JournalError> {
+    if version == 0 || version == u32::MAX {
+        return Err(JournalError::UnsupportedFormat(version));
+    }
+    match scheme_id {
+        source_scheme_id::WEBVIEW_IDB_AT_REST_V1 | source_scheme_id::CREDENTIAL_IDB_KEYSTORE_V1 => {
+            if version == 1 {
+                Ok(())
+            } else {
+                Err(JournalError::UnsupportedFormat(version))
+            }
+        }
         other => Err(JournalError::UnsupportedSourceScheme(other)),
     }
 }
@@ -1118,6 +1141,16 @@ fn validate_target_key_ref(manifest: &JournalManifest) -> Result<(), JournalErro
 
 fn validate_lease_fields(manifest: &JournalManifest) -> Result<(), JournalError> {
     if manifest.has_lease_owner {
+        let owner = manifest
+            .lease_owner_id
+            .as_ref()
+            .ok_or(JournalError::Corrupt("lease owner flag without id"))?;
+        if owner.is_empty() || owner.len() > MAX_OPERATION_ID_LEN {
+            return Err(JournalError::InvalidOperationId);
+        }
+        if manifest.lease_expires_unix_ms.is_none() {
+            return Err(JournalError::Corrupt("lease owner flag without expiry"));
+        }
         return Ok(());
     }
     if manifest.lease_owner_id.is_some() || manifest.lease_expires_unix_ms.is_some() {
@@ -1149,7 +1182,7 @@ fn push_optional_owner(out: &mut Vec<u8>, manifest: &JournalManifest) -> Result<
         .lease_owner_id
         .as_ref()
         .ok_or(JournalError::Corrupt("lease owner flag without id"))?;
-    push_string(out, owner);
+    push_bounded_string(out, owner, MAX_OPERATION_ID_LEN)?;
     let expires = manifest
         .lease_expires_unix_ms
         .ok_or(JournalError::Corrupt("lease owner flag without expiry"))?;
@@ -1160,6 +1193,14 @@ fn push_optional_owner(out: &mut Vec<u8>, manifest: &JournalManifest) -> Result<
 fn push_string(out: &mut Vec<u8>, value: &str) {
     out.extend_from_slice(&(value.len() as u32).to_be_bytes());
     out.extend_from_slice(value.as_bytes());
+}
+
+fn push_bounded_string(out: &mut Vec<u8>, value: &str, max_len: usize) -> Result<(), JournalError> {
+    if value.is_empty() || value.len() > max_len {
+        return Err(JournalError::InvalidOperationId);
+    }
+    push_string(out, value);
+    Ok(())
 }
 
 fn push_optional<T, W>(
