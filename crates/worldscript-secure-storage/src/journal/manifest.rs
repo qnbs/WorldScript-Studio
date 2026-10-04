@@ -1,0 +1,268 @@
+use crate::identity::RecordIdentity;
+use crate::record::{open_record, seal_record};
+use crate::record_class::RecordClass;
+use crate::seal::{Key, RecordMeta};
+
+use super::digest::{inventory_digest, journal_page_set_digest, InventoryDigestVerifier};
+use super::inventory::JournalInventoryEntry;
+use super::page::JournalPage;
+use super::wire::{
+    check_counter, push_operation_id, push_optional, push_optional_owner, validate_epoch,
+    validate_inventory_version, validate_journal_revision, validate_lease_fields,
+    validate_operation_type, validate_phase, validate_target_key_ref, Reader,
+};
+use super::{
+    JournalError, JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_PAGE_DESCRIPTORS,
+};
+
+/// One row of `journal_page_set_digest` (§10.1.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JournalPageRef {
+    pub page_index: u32,
+    pub page_generation: u64,
+    pub page_entry_count: u32,
+    pub page_content_digest: [u8; 32],
+}
+
+/// The authenticated journal manifest body (§10.1.1), excluding the envelope header.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JournalManifest {
+    pub operation_id: String,
+    pub journal_revision: u64,
+    pub operation_type: u32,
+    pub phase: u32,
+    pub source_epoch: u64,
+    pub target_epoch: u64,
+    pub has_target_root_key_ref: bool,
+    pub target_root_key_ref_digest: Option<[u8; 32]>,
+    pub fencing_generation: u64,
+    pub inventory_version: u32,
+    pub inventory_digest: [u8; 32],
+    pub page_count: u32,
+    pub entry_count: u32,
+    pub journal_page_set_digest: [u8; 32],
+    pub cursor_page_index: u32,
+    pub cursor_entry_index: u32,
+    pub has_lease_owner: bool,
+    pub lease_owner_id: Option<String>,
+    pub lease_expires_unix_ms: Option<u64>,
+    pub recovery_reason_code: u32,
+}
+
+impl JournalManifest {
+    pub fn encode(&self) -> Result<Vec<u8>, JournalError> {
+        self.validate_semantics()?;
+        let mut out = Vec::with_capacity(512);
+        out.extend_from_slice(&JOURNAL_MANIFEST_FORMAT_VERSION.to_be_bytes());
+        push_operation_id(&mut out, &self.operation_id)?;
+        out.extend_from_slice(&self.journal_revision.to_be_bytes());
+        out.extend_from_slice(&self.operation_type.to_be_bytes());
+        out.extend_from_slice(&self.phase.to_be_bytes());
+        out.extend_from_slice(&self.source_epoch.to_be_bytes());
+        out.extend_from_slice(&self.target_epoch.to_be_bytes());
+        push_optional(&mut out, self.target_root_key_ref_digest, |out, digest| {
+            out.extend_from_slice(&digest);
+            Ok(())
+        })?;
+        out.extend_from_slice(&self.fencing_generation.to_be_bytes());
+        out.extend_from_slice(&self.inventory_version.to_be_bytes());
+        out.extend_from_slice(&self.inventory_digest);
+        out.extend_from_slice(&self.page_count.to_be_bytes());
+        out.extend_from_slice(&self.entry_count.to_be_bytes());
+        out.extend_from_slice(&self.journal_page_set_digest);
+        out.extend_from_slice(&self.cursor_page_index.to_be_bytes());
+        out.extend_from_slice(&self.cursor_entry_index.to_be_bytes());
+        push_optional_owner(&mut out, self)?;
+        out.extend_from_slice(&self.recovery_reason_code.to_be_bytes());
+        Ok(out)
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self, JournalError> {
+        let mut reader = Reader(bytes);
+        let format = reader.u32()?;
+        if format != JOURNAL_MANIFEST_FORMAT_VERSION {
+            return Err(JournalError::UnsupportedFormat(format));
+        }
+        let operation_id = reader.operation_id()?;
+        let journal_revision = reader.u64()?;
+        let operation_type = reader.u32()?;
+        let phase = reader.u32()?;
+        let source_epoch = reader.u64()?;
+        let target_epoch = reader.u64()?;
+        let target_root_key_ref_digest = reader.optional_digest()?;
+        let fencing_generation = reader.u64()?;
+        let inventory_version = reader.u32()?;
+        let inventory_digest = reader.digest()?;
+        let page_count = reader.u32()?;
+        let entry_count = reader.u32()?;
+        let journal_page_set_digest = reader.digest()?;
+        let cursor_page_index = reader.u32()?;
+        let cursor_entry_index = reader.u32()?;
+        let (has_lease_owner, lease_owner_id, lease_expires_unix_ms) = reader.optional_owner()?;
+        let recovery_reason_code = reader.u32()?;
+        if !reader.0.is_empty() {
+            return Err(JournalError::Corrupt(
+                "trailing bytes after journal manifest",
+            ));
+        }
+        let manifest = JournalManifest {
+            operation_id,
+            journal_revision,
+            operation_type,
+            phase,
+            source_epoch,
+            target_epoch,
+            has_target_root_key_ref: target_root_key_ref_digest.is_some(),
+            target_root_key_ref_digest,
+            fencing_generation,
+            inventory_version,
+            inventory_digest,
+            page_count,
+            entry_count,
+            journal_page_set_digest,
+            cursor_page_index,
+            cursor_entry_index,
+            has_lease_owner,
+            lease_owner_id,
+            lease_expires_unix_ms,
+            recovery_reason_code,
+        };
+        manifest.encode()?;
+        Ok(manifest)
+    }
+
+    pub fn seal(
+        &self,
+        key: &Key,
+        record: &RecordIdentity,
+        meta: RecordMeta,
+    ) -> Result<Vec<u8>, JournalError> {
+        if record.class() != RecordClass::Migration {
+            return Err(JournalError::Corrupt("journal manifest identity required"));
+        }
+        if record.components().first().map(String::as_str) != Some(self.operation_id.as_str()) {
+            return Err(JournalError::Corrupt(
+                "migration identity disagrees with manifest",
+            ));
+        }
+        if meta.record_generation != self.journal_revision {
+            return Err(JournalError::GenerationMismatch);
+        }
+        if meta.record_schema != JOURNAL_MANIFEST_RECORD_SCHEMA {
+            return Err(JournalError::UnsupportedFormat(meta.record_schema));
+        }
+        let payload = self.encode()?;
+        seal_record(key, record, meta, &payload).map_err(JournalError::Seal)
+    }
+
+    pub fn open(
+        key: &Key,
+        record: &RecordIdentity,
+        journal_revision: u64,
+        envelope: &[u8],
+    ) -> Result<Self, JournalError> {
+        if record.class() != RecordClass::Migration {
+            return Err(JournalError::Corrupt("journal manifest identity required"));
+        }
+        let opened = open_record(key, record, envelope).map_err(JournalError::Open)?;
+        if opened.header.record_schema != JOURNAL_MANIFEST_RECORD_SCHEMA {
+            return Err(JournalError::UnsupportedFormat(opened.header.record_schema));
+        }
+        if opened.header.record_generation != journal_revision {
+            return Err(JournalError::GenerationMismatch);
+        }
+        let manifest = JournalManifest::decode(&opened.payload)?;
+        if manifest.journal_revision != journal_revision {
+            return Err(JournalError::GenerationMismatch);
+        }
+        if record.components().first().map(String::as_str) != Some(manifest.operation_id.as_str()) {
+            return Err(JournalError::Corrupt(
+                "migration identity disagrees with manifest",
+            ));
+        }
+        Ok(manifest)
+    }
+
+    fn validate_semantics(&self) -> Result<(), JournalError> {
+        validate_journal_revision(self.journal_revision)?;
+        validate_epoch(self.source_epoch, true)?;
+        validate_epoch(self.target_epoch, false)?;
+        validate_operation_type(self.operation_type)?;
+        validate_phase(self.phase)?;
+        validate_inventory_version(self.inventory_version)?;
+        check_counter(self.fencing_generation)?;
+        if self.page_count as u64 > MAX_JOURNAL_INVENTORY_ENTRIES as u64 {
+            return Err(JournalError::TooManyEntries);
+        }
+        if self.entry_count > MAX_JOURNAL_INVENTORY_ENTRIES {
+            return Err(JournalError::TooManyEntries);
+        }
+        if self.page_count > 0 && self.cursor_page_index >= self.page_count {
+            return Err(JournalError::InvalidPageIndex);
+        }
+        validate_target_key_ref(self)?;
+        validate_lease_fields(self)?;
+        Ok(())
+    }
+
+    /// Refuses a manifest whose page-set digest does not match the supplied page refs.
+    pub fn verify_page_set(&self, pages: &[JournalPageRef]) -> Result<(), JournalError> {
+        if pages.len() as u32 != self.page_count {
+            return Err(JournalError::PageSetMismatch);
+        }
+        let mut entry_total = 0u64;
+        for page in pages {
+            if page.page_entry_count > MAX_JOURNAL_PAGE_DESCRIPTORS as u32 {
+                return Err(JournalError::InvalidDescriptorCount);
+            }
+            entry_total = entry_total
+                .checked_add(page.page_entry_count as u64)
+                .ok_or(JournalError::TooManyEntries)?;
+            if entry_total > MAX_JOURNAL_INVENTORY_ENTRIES as u64 {
+                return Err(JournalError::TooManyEntries);
+            }
+        }
+        if entry_total != self.entry_count as u64 {
+            return Err(JournalError::EntryCountMismatch);
+        }
+        let digest = journal_page_set_digest(pages)?;
+        if digest != self.journal_page_set_digest {
+            return Err(JournalError::PageSetMismatch);
+        }
+        Ok(())
+    }
+
+    /// Refuses when manifest counters or `inventory_digest` disagree with supplied entries.
+    pub fn verify_inventory(&self, entries: &[JournalInventoryEntry]) -> Result<(), JournalError> {
+        if entries.len() as u32 != self.entry_count {
+            return Err(JournalError::EntryCountMismatch);
+        }
+        let digest = inventory_digest(self.inventory_version, entries)?;
+        if digest != self.inventory_digest {
+            return Err(JournalError::InconsistentInventory);
+        }
+        Ok(())
+    }
+
+    /// Verifies a paged inventory against this manifest without loading every entry at once.
+    pub fn verify_inventory_pages(&self, pages: &[JournalPage]) -> Result<(), JournalError> {
+        if pages.len() as u32 != self.page_count {
+            return Err(JournalError::PageSetMismatch);
+        }
+        let mut sorted_pages: Vec<&JournalPage> = pages.iter().collect();
+        sorted_pages.sort_by_key(|page| page.page_index());
+        sorted_pages.windows(2).try_for_each(|pair| {
+            if pair[0].page_index() == pair[1].page_index() {
+                Err(JournalError::DuplicateEntry)
+            } else {
+                Ok(())
+            }
+        })?;
+        let mut verifier = InventoryDigestVerifier::new(self.inventory_version, self.entry_count)?;
+        for page in sorted_pages {
+            verifier.absorb_page(page)?;
+        }
+        verifier.finish(self.inventory_digest)
+    }
+}
