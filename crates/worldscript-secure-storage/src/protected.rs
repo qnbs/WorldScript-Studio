@@ -198,6 +198,7 @@ pub fn reconcile_protected<F: DurableFs, P: KeyProvider>(
 
 /// Reads the generation the root-named descriptor makes readable: its marker must be in the chain
 /// with the exact entry digest, and the file must be exactly the envelope that marker committed.
+#[cfg(feature = "test-support")]
 pub fn read_protected<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,
@@ -209,6 +210,15 @@ pub fn read_protected<F: DurableFs, P: KeyProvider>(
     let Some(named) = named_descriptor(catalog.as_ref(), store) else {
         return Ok(ProtectedRead::NotCatalogued);
     };
+    read_named_protected(fs, store, named)
+}
+
+pub(crate) fn read_named_protected<F: DurableFs>(
+    fs: &mut F,
+    store: RecordStore<'_>,
+    named: &CatalogDescriptor,
+) -> Result<ProtectedRead, ProtectedError> {
+    ensure_ordinary(store)?;
     verify_named_marker(fs, store, named)?;
     match named.readable() {
         None => Ok(ProtectedRead::NotYetReadable),
