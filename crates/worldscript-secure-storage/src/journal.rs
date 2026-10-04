@@ -249,14 +249,20 @@ pub struct ForeignInventoryExtension {
     pub source_project_scope_binding: Vec<u8>,
 }
 
+/// Source-side fields for one migration inventory descriptor (§10.1).
+#[derive(Clone, PartialEq, Eq)]
+pub struct JournalInventorySource {
+    pub authority_kind: u32,
+    pub physical_authority_kind: u32,
+    pub generation: Option<u64>,
+    pub evidence_digest: Option<[u8; 32]>,
+    pub foreign: Option<ForeignInventoryExtension>,
+}
+
 impl JournalInventoryEntry {
     pub fn new(
         record: RecordIdentity,
-        source_authority_kind: u32,
-        source_physical_authority_kind: u32,
-        source_generation: Option<u64>,
-        source_evidence_digest: Option<[u8; 32]>,
-        foreign: Option<ForeignInventoryExtension>,
+        source: JournalInventorySource,
     ) -> Result<Self, JournalError> {
         let (identity_binding, project_scope_binding) =
             tagged_identity_binding_parts(&record.context())
@@ -265,11 +271,11 @@ impl JournalInventoryEntry {
             record,
             identity_binding,
             project_scope_binding,
-            source_authority_kind,
-            source_physical_authority_kind,
-            source_generation,
-            source_evidence_digest,
-            foreign,
+            source_authority_kind: source.authority_kind,
+            source_physical_authority_kind: source.physical_authority_kind,
+            source_generation: source.generation,
+            source_evidence_digest: source.evidence_digest,
+            foreign: source.foreign,
         };
         entry.validate()?;
         Ok(entry)
@@ -307,8 +313,15 @@ impl JournalInventoryEntry {
         out.extend_from_slice(&self.project_scope_binding);
         out.extend_from_slice(&self.source_authority_kind.to_be_bytes());
         out.extend_from_slice(&self.source_physical_authority_kind.to_be_bytes());
-        push_optional_u64(out, self.source_generation)?;
-        push_optional_digest(out, self.source_evidence_digest)?;
+        push_optional(out, self.source_generation, |out, value| {
+            check_counter(value)?;
+            out.extend_from_slice(&value.to_be_bytes());
+            Ok(())
+        })?;
+        push_optional(out, self.source_evidence_digest, |out, digest| {
+            out.extend_from_slice(&digest);
+            Ok(())
+        })?;
         match &self.foreign {
             None => out.push(0),
             Some(foreign) => {
@@ -342,38 +355,46 @@ impl JournalInventoryEntry {
             ));
         }
         match self.source_authority_kind {
-            source_authority_kind::LEGACY_PLAINTEXT => {
-                if self.source_generation.is_some() {
-                    return Err(JournalError::Corrupt("legacy plaintext carries no generation"));
-                }
-                if self.source_evidence_digest.is_none() {
-                    return Err(JournalError::Corrupt("legacy plaintext requires evidence digest"));
-                }
-                if self.foreign.is_some() {
-                    return Err(JournalError::Corrupt("legacy plaintext has no foreign extension"));
-                }
-            }
-            source_authority_kind::R15_PROTECTED => {
-                let generation = self
-                    .source_generation
-                    .ok_or(JournalError::Corrupt("r15 protected requires generation"))?;
-                check_counter(generation)?;
-                if self.source_evidence_digest.is_some() {
-                    return Err(JournalError::Corrupt("r15 protected omits evidence digest"));
-                }
-                if self.foreign.is_some() {
-                    return Err(JournalError::Corrupt("r15 protected has no foreign extension"));
-                }
-            }
-            source_authority_kind::FOREIGN_PROTECTED => {
-                if self.source_evidence_digest.is_none() {
-                    return Err(JournalError::Corrupt("foreign protected requires evidence digest"));
-                }
-                if self.foreign.is_none() {
-                    return Err(JournalError::Corrupt("foreign protected requires extension"));
-                }
-            }
-            other => return Err(JournalError::UnsupportedSourceAuthority(other)),
+            source_authority_kind::LEGACY_PLAINTEXT => self.validate_legacy_plaintext(),
+            source_authority_kind::R15_PROTECTED => self.validate_r15_protected(),
+            source_authority_kind::FOREIGN_PROTECTED => self.validate_foreign_protected(),
+            other => Err(JournalError::UnsupportedSourceAuthority(other)),
+        }
+    }
+
+    fn validate_legacy_plaintext(&self) -> Result<(), JournalError> {
+        if self.source_generation.is_some() {
+            return Err(JournalError::Corrupt("legacy plaintext carries no generation"));
+        }
+        if self.source_evidence_digest.is_none() {
+            return Err(JournalError::Corrupt("legacy plaintext requires evidence digest"));
+        }
+        if self.foreign.is_some() {
+            return Err(JournalError::Corrupt("legacy plaintext has no foreign extension"));
+        }
+        Ok(())
+    }
+
+    fn validate_r15_protected(&self) -> Result<(), JournalError> {
+        let generation = self
+            .source_generation
+            .ok_or(JournalError::Corrupt("r15 protected requires generation"))?;
+        check_counter(generation)?;
+        if self.source_evidence_digest.is_some() {
+            return Err(JournalError::Corrupt("r15 protected omits evidence digest"));
+        }
+        if self.foreign.is_some() {
+            return Err(JournalError::Corrupt("r15 protected has no foreign extension"));
+        }
+        Ok(())
+    }
+
+    fn validate_foreign_protected(&self) -> Result<(), JournalError> {
+        if self.source_evidence_digest.is_none() {
+            return Err(JournalError::Corrupt("foreign protected requires evidence digest"));
+        }
+        if self.foreign.is_none() {
+            return Err(JournalError::Corrupt("foreign protected requires extension"));
         }
         Ok(())
     }
@@ -519,11 +540,13 @@ impl JournalPage {
         &self,
         key: &Key,
         record: &RecordIdentity,
-        page_generation: u64,
-        key_epoch: u64,
+        meta: RecordMeta,
     ) -> Result<Vec<u8>, JournalError> {
-        if page_generation != self.page_generation {
+        if meta.record_generation != self.page_generation {
             return Err(JournalError::GenerationMismatch);
+        }
+        if meta.record_schema != JOURNAL_PAGE_RECORD_SCHEMA {
+            return Err(JournalError::UnsupportedFormat(meta.record_schema));
         }
         if record.class() != RecordClass::MigrationPage {
             return Err(JournalError::WrongPageIndex);
@@ -533,17 +556,7 @@ impl JournalPage {
             return Err(JournalError::WrongPageIndex);
         }
         let payload = self.encode()?;
-        seal_record(
-            key,
-            record,
-            RecordMeta {
-                key_epoch,
-                record_generation: page_generation,
-                record_schema: JOURNAL_PAGE_RECORD_SCHEMA,
-            },
-            &payload,
-        )
-        .map_err(JournalError::Seal)
+        seal_record(key, record, meta, &payload).map_err(JournalError::Seal)
     }
 
     pub fn open(
@@ -637,8 +650,15 @@ pub fn inventory_digest(
         hasher.update(&entry.project_scope_binding);
         hasher.update(entry.source_authority_kind.to_be_bytes());
         hasher.update(entry.source_physical_authority_kind.to_be_bytes());
-        hash_optional_u64(&mut hasher, entry.source_generation)?;
-        hash_optional_digest(&mut hasher, entry.source_evidence_digest)?;
+        hash_optional(&mut hasher, entry.source_generation, |hasher, value| {
+            check_counter(value)?;
+            hasher.update(value.to_be_bytes());
+            Ok(())
+        })?;
+        hash_optional(&mut hasher, entry.source_evidence_digest, |hasher, digest| {
+            hasher.update(digest);
+            Ok(())
+        })?;
         if let Some(foreign) = &entry.foreign {
             hasher.update(foreign.source_scheme_id.to_be_bytes());
             hasher.update(foreign.source_format_version.to_be_bytes());
@@ -767,27 +787,37 @@ fn push_string(out: &mut Vec<u8>, value: &str) {
     out.extend_from_slice(value.as_bytes());
 }
 
-fn push_optional_u64(out: &mut Vec<u8>, value: Option<u64>) -> Result<(), JournalError> {
+fn push_optional<T, W>(
+    out: &mut Vec<u8>,
+    value: Option<T>,
+    write_present: W,
+) -> Result<(), JournalError>
+where
+    W: FnOnce(&mut Vec<u8>, T) -> Result<(), JournalError>,
+{
     match value {
         None => out.push(0),
         Some(value) => {
-            check_counter(value)?;
             out.push(1);
-            out.extend_from_slice(&value.to_be_bytes());
+            write_present(out, value)?;
         }
     }
     Ok(())
 }
 
-fn push_optional_digest(
-    out: &mut Vec<u8>,
-    value: Option<[u8; 32]>,
-) -> Result<(), JournalError> {
+fn hash_optional<T, H>(
+    hasher: &mut Sha256,
+    value: Option<T>,
+    hash_present: H,
+) -> Result<(), JournalError>
+where
+    H: FnOnce(&mut Sha256, T) -> Result<(), JournalError>,
+{
     match value {
-        None => out.push(0),
-        Some(digest) => {
-            out.push(1);
-            out.extend_from_slice(&digest);
+        None => hasher.update([0]),
+        Some(value) => {
+            hasher.update([1]);
+            hash_present(hasher, value)?;
         }
     }
     Ok(())
@@ -907,11 +937,13 @@ impl<'a> Reader<'a> {
         }
         JournalInventoryEntry::new(
             record,
-            source_authority_kind,
-            source_physical_authority_kind,
-            source_generation,
-            source_evidence_digest,
-            foreign,
+            JournalInventorySource {
+                authority_kind: source_authority_kind,
+                physical_authority_kind: source_physical_authority_kind,
+                generation: source_generation,
+                evidence_digest: source_evidence_digest,
+                foreign,
+            },
         )
     }
 
@@ -949,27 +981,4 @@ fn migration_page_index(record: &RecordIdentity) -> Result<u32, JournalError> {
 fn hash_string(hasher: &mut Sha256, value: &str) {
     hasher.update((value.len() as u32).to_be_bytes());
     hasher.update(value.as_bytes());
-}
-
-fn hash_optional_u64(hasher: &mut Sha256, value: Option<u64>) -> Result<(), JournalError> {
-    match value {
-        None => hasher.update([0]),
-        Some(value) => {
-            check_counter(value)?;
-            hasher.update([1]);
-            hasher.update(value.to_be_bytes());
-        }
-    }
-    Ok(())
-}
-
-fn hash_optional_digest(hasher: &mut Sha256, value: Option<[u8; 32]>) -> Result<(), JournalError> {
-    match value {
-        None => hasher.update([0]),
-        Some(digest) => {
-            hasher.update([1]);
-            hasher.update(digest);
-        }
-    }
-    Ok(())
 }

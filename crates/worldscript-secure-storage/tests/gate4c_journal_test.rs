@@ -1,8 +1,8 @@
 use worldscript_secure_storage::{
     empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
     journal_page_set_digest, operation_type, phase_code, source_authority_kind,
-    source_physical_authority_kind, JournalError, JournalInventoryEntry, JournalManifest,
-    JournalPage, JournalPageRef, RecordClass, RecordIdentity,
+    source_physical_authority_kind, JournalError, JournalInventoryEntry, JournalInventorySource,
+    JournalManifest, JournalPage, JournalPageRef, RecordClass, RecordIdentity,
 };
 
 #[test]
@@ -66,11 +66,13 @@ fn inventory_entry_and_page_roundtrip() {
     let record = RecordIdentity::new(RecordClass::Settings, &[]).unwrap();
     let entry = JournalInventoryEntry::new(
         record,
-        source_authority_kind::LEGACY_PLAINTEXT,
-        source_physical_authority_kind::TAURI_FILESYSTEM,
-        None,
-        Some([0x33; 32]),
-        None,
+        JournalInventorySource {
+            authority_kind: source_authority_kind::LEGACY_PLAINTEXT,
+            physical_authority_kind: source_physical_authority_kind::TAURI_FILESYSTEM,
+            generation: None,
+            evidence_digest: Some([0x33; 32]),
+            foreign: None,
+        },
     )
     .unwrap();
     let digest = inventory_digest(1, std::slice::from_ref(&entry)).unwrap();
@@ -125,11 +127,13 @@ fn manifest_inventory_digest_must_match_entries() {
     let record = RecordIdentity::new(RecordClass::Settings, &[]).unwrap();
     let entry = JournalInventoryEntry::new(
         record,
-        source_authority_kind::LEGACY_PLAINTEXT,
-        source_physical_authority_kind::TAURI_FILESYSTEM,
-        None,
-        Some([0x55; 32]),
-        None,
+        JournalInventorySource {
+            authority_kind: source_authority_kind::LEGACY_PLAINTEXT,
+            physical_authority_kind: source_physical_authority_kind::TAURI_FILESYSTEM,
+            generation: None,
+            evidence_digest: Some([0x55; 32]),
+            foreign: None,
+        },
     )
     .unwrap();
     let digest = inventory_digest(1, std::slice::from_ref(&entry)).unwrap();
