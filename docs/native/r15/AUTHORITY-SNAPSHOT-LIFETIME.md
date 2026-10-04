@@ -4,7 +4,7 @@
 
 **Status:** `S5_B2_ADMITTED = YES`. Admits the race-free `AuthoritySnapshotGuard` acquisition
 mechanism that `docs/native/R15-SECURE-STORAGE-CONTRACT.md` §5.3.3 explicitly left unadmitted (its
-"S5-B2 blocker" paragraph). Production implementation not started.
+"S5-B2 blocker" paragraph). Gate 4B implements it headlessly; production authority is unchanged.
 
 **Baseline:** `docs/native/R15-SECURE-STORAGE-CONTRACT.md` at the S5-A baseline merged in PR #564
 (`main` commit `3e89e483`). This document extends that contract's §5.3.1–§5.3.3 without
@@ -206,12 +206,32 @@ journal, or any other persisted structure. This is a deliberate simplification, 
   evidence that reclamation was safe at some point *before* the crash — the durable retention rule
   (§5.5) is the only cross-restart authority, exactly as the parent contract already requires for
   every other authority decision.
-- Gate 4B's read/snapshot candidate adds a cross-process barrier: shared operation admission is
-  acquired before authority/key capture and held through payload handoff. Key and local snapshot
-  pins drop before admission. Exclusive admission must drain those readers before a transition.
-  The Arc count remains local, is never persisted, and is not physical deletion authority.
-  A future collector still requires exclusive admission plus every durable current/previous/
-  prepared-root and recovery-retention condition. No collector is implemented by this slice.
+- Arc pins themselves remain single-process. The narrow multi-process desktop extension is §4.1;
+  it does not pretend that a local Arc count can observe another process's readers.
+
+### 4.1 Gate 4B cross-process reclamation barrier
+
+Every protected reader must first acquire the installation/root's shared kernel operation admission
+(parent contract §11), before anchor/key observation, and retain it through pin release and payload
+handoff. Every future collector must acquire **exclusive admission for that exact scope**, before
+observing retention eligibility or taking a finite root event, and hold it through any physical
+reclamation. Exclusive acquisition drains all shared operations in all participating processes and
+prevents new readers from entering; it is stronger and more conservative than distributing each
+root pin. This is the explicit cross-process no-reader proof, not a replacement for local pins.
+
+Under that barrier, all §3 conditions still apply together: authenticated current/previous/prepared
+root retention (including transitively reachable control/data generations), zero local root-handle
+references, and every other recovery-retention reason. A local weak retention witness is bound to
+its own coordinator namespace and installation identity, is not reusable in another coordinator,
+and never authorizes deletion. The 4B API reports root-handle eligibility only; no physical collector,
+transitive inventory or deletion implementation is introduced. No missing pin file, pathname,
+timestamp or PID establishes eligibility. Unknown generations remain preserved.
+
+Crash/normal exit/unwind release kernel ownership; no reader count, pin or lease body is persisted.
+After restart the local cell/pin namespace is empty and is rebuilt from the authenticated secure
+anchor. A fresh coordinator cannot reuse old retention witnesses. Current/previous/prepared and
+other recovery retention survive unchanged. Browser/renderer-private lock coordination, distributed
+per-generation reader counts, and concurrent reclamation during shared operations are not admitted.
 
 ## 5. What this document does not change
 
@@ -243,8 +263,6 @@ journal, or any other persisted structure. This is a deliberate simplification, 
 
 ## 7. Non-goals
 
-This slice implements the cross-process reader-lifetime barrier in §4: shared operation admission
-is held through payload handoff and exclusive admission drains it before a transition. It does not
-implement a durable reader registry, persisted guards/reference counts, physical reclamation, a
-hazard-pointer/RCU design, a production authority switch, or any S5-A digest, envelope, or
-migration semantics.
+No production authority switch or physical reclamation implementation. No change to any S5-A digest,
+envelope, or migration semantics. No multi-process pin distribution beyond §4.1's barrier. No hazard-pointer or
+RCU design (§2) unless a future revision demonstrates necessity.

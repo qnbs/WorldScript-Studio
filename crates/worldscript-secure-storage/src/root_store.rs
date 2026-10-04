@@ -123,6 +123,13 @@ pub enum RootStoreError {
         kind: io::ErrorKind,
     },
     Anchor(KeyProviderError),
+    /// Step F was attempted. The original provider error is preserved; the caller must recover
+    /// this root intent, never replay the logical mutation as a fresh write. A
+    /// `CommittedRefreshRequired` cause means F succeeded but local publication needs reload.
+    AnchorCommitOutcome {
+        generation: u64,
+        error: KeyProviderError,
+    },
     Record(RootRecordError),
     Root(RootError),
     /// Writing the target slot failed (slice 3A's staging and promotion).
@@ -231,7 +238,10 @@ pub fn commit_root<F: DurableFs, P: KeyProvider>(
     let pointer_sync = write_pointer(fs, layout, &target.pointer(), &operation)?;
     provider
         .commit_root_anchor(&commit.operation_id, commit.target_root_generation)
-        .map_err(RootStoreError::Anchor)?;
+        .map_err(|error| RootStoreError::AnchorCommitOutcome {
+            generation: commit.target_root_generation,
+            error,
+        })?;
     Ok(RootCommitted {
         root_generation: commit.target_root_generation,
         root_slot: commit.target_slot,
@@ -274,7 +284,10 @@ pub fn recover_root<F: DurableFs, P: KeyProvider>(
         ensure_pointer(fs, layout, &target.pointer())?;
         provider
             .commit_root_anchor(&commit.operation_id, commit.target_root_generation)
-            .map_err(RootStoreError::Anchor)?;
+            .map_err(|error| RootStoreError::AnchorCommitOutcome {
+                generation: commit.target_root_generation,
+                error,
+            })?;
         return Ok(RootRecovery::Completed {
             root_generation: commit.target_root_generation,
         });

@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exact immutable epoch evidence. Locked, migrating and misrouted reads fail closed without legacy
   plaintext fallback. This supersedes the read half of #952 only; mutation/root-recovery/lifecycle
   closure still owns #360. Production authority is unchanged. PR #953.
+- **R-15 Gate 4B mutation, root-recovery and lifecycle (#445):** protected writes, lock/unlock,
+  shutdown, prepared-root step-F recovery, and namespace-scoped snapshot retention now share the
+  same admission ordering as read/snapshot capture; Successor A session-binding and rebind semantics
+  are preserved. This supersedes the mutation half of frozen #952 only. Production authority is
+  unchanged. PR #954.
 - **R-15 Gate 4B foundation — shared operations and exclusive transitions (#445):** the headless
   core now has kernel-backed admission across processes, automatic crash release and typed guards
   that bind the installation and authority-root directories. Root events stay beneath the same
