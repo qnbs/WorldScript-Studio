@@ -1,7 +1,7 @@
 use crate::identity::RecordIdentity;
 use crate::record::{open_record, seal_record};
 use crate::record_class::RecordClass;
-use crate::seal::{Key, RecordMeta};
+use crate::seal::{seal_journal_manifest_bootstrap, Key, RecordMeta, SealTarget};
 
 use super::wire::{
     check_counter, push_operation_id, push_optional, push_optional_owner, validate_epoch,
@@ -150,6 +150,17 @@ impl JournalManifest {
             return Err(JournalError::UnsupportedFormat(meta.record_schema));
         }
         let payload = self.encode()?;
+        if self.journal_revision == 0 {
+            if meta.record_generation != 0 {
+                return Err(JournalError::GenerationMismatch);
+            }
+            let target = SealTarget {
+                context: record.context(),
+                meta,
+            };
+            return seal_journal_manifest_bootstrap(key, &target, &payload)
+                .map_err(JournalError::Seal);
+        }
         seal_record(key, record, meta, &payload).map_err(JournalError::Seal)
     }
 

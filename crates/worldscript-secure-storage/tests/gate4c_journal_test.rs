@@ -1,9 +1,10 @@
 use worldscript_secure_storage::{
     empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
-    journal_page_set_digest, operation_type, page_ref_for, phase_code, source_authority_kind,
-    source_physical_authority_kind, source_scheme_id, ForeignInventoryExtension, JournalError,
-    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, JournalPageRef,
-    Key, RecordClass, RecordIdentity, RecordMeta, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    journal_page_set_digest, operation_type, page_ref_for, phase_code, seal_record,
+    source_authority_kind, source_physical_authority_kind, source_scheme_id,
+    ForeignInventoryExtension, IdentityError, JournalError, JournalInventoryEntry,
+    JournalInventorySource, JournalManifest, JournalPage, JournalPageRef, Key, RecordClass,
+    RecordIdentity, RecordMeta, SealError, JOURNAL_MANIFEST_RECORD_SCHEMA,
     JOURNAL_PAGE_RECORD_SCHEMA,
 };
 
@@ -346,4 +347,99 @@ fn foreign_inventory_rejects_none_scheme_and_bad_format_version() {
         },
     )
     .is_err());
+}
+
+#[test]
+fn revision_zero_manifest_seal_open_roundtrip() {
+    let manifest = bootstrap_manifest("rev0-op");
+    let migration = RecordIdentity::new(RecordClass::Migration, &["rev0-op"]).unwrap();
+    let meta = RecordMeta {
+        key_epoch: 1,
+        record_generation: 0,
+        record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
+    };
+    let envelope = manifest.seal(&key(), &migration, meta).unwrap();
+    let opened = JournalManifest::open(&key(), &migration, 0, &envelope).unwrap();
+    assert_eq!(opened, manifest);
+}
+
+#[test]
+fn generic_seal_record_still_refuses_generation_zero() {
+    let record = RecordIdentity::new(RecordClass::Settings, &[]).unwrap();
+    let meta = RecordMeta {
+        key_epoch: 1,
+        record_generation: 0,
+        record_schema: 1,
+    };
+    assert_eq!(
+        seal_record(&key(), &record, meta, b"payload"),
+        Err(SealError::UnassignedCounter)
+    );
+}
+
+#[test]
+fn migration_page_seal_still_refuses_generation_zero() {
+    let record = RecordIdentity::new(RecordClass::MigrationPage, &["page-op", "0"]).unwrap();
+    let meta = RecordMeta {
+        key_epoch: 1,
+        record_generation: 0,
+        record_schema: JOURNAL_PAGE_RECORD_SCHEMA,
+    };
+    assert_eq!(
+        seal_record(&key(), &record, meta, b"payload"),
+        Err(SealError::UnassignedCounter)
+    );
+}
+
+#[test]
+fn journal_revision_max_is_refused() {
+    let mut manifest = bootstrap_manifest("max-rev");
+    manifest.journal_revision = u64::MAX;
+    assert!(matches!(
+        manifest.encode(),
+        Err(JournalError::InvalidCounter)
+    ));
+    let migration = RecordIdentity::new(RecordClass::Migration, &["max-rev"]).unwrap();
+    let meta = RecordMeta {
+        key_epoch: 1,
+        record_generation: u64::MAX,
+        record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
+    };
+    assert!(manifest.seal(&key(), &migration, meta).is_err());
+}
+
+#[test]
+fn manifest_operation_id_rejects_control_characters_on_encode() {
+    let mut manifest = bootstrap_manifest("valid-op");
+    manifest.operation_id = "line\nbreak".into();
+    assert!(matches!(
+        manifest.encode(),
+        Err(JournalError::InvalidOperationId)
+    ));
+    manifest.operation_id = "nul\0byte".into();
+    assert!(matches!(
+        manifest.encode(),
+        Err(JournalError::InvalidOperationId)
+    ));
+    assert!(matches!(
+        RecordIdentity::new(RecordClass::Migration, &["bad\n"]),
+        Err(IdentityError::ControlCharacter)
+    ));
+}
+
+#[test]
+fn manifest_decode_rejects_control_characters_in_operation_id() {
+    let manifest = bootstrap_manifest("wire-op");
+    let mut bytes = manifest.encode().unwrap();
+    let op_body_offset = 4 + 4;
+    bytes[op_body_offset] = b'\n';
+    assert!(matches!(
+        JournalManifest::decode(&bytes),
+        Err(JournalError::InvalidOperationId)
+    ));
+    bytes[op_body_offset] = 0;
+    assert!(matches!(
+        JournalManifest::decode(&bytes),
+        Err(JournalError::InvalidOperationId)
+    ));
 }

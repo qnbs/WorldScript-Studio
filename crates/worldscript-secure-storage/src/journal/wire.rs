@@ -199,12 +199,19 @@ pub(crate) fn validate_lease_fields(manifest: &JournalManifest) -> Result<(), Jo
     Ok(())
 }
 
-pub(crate) fn push_operation_id(out: &mut Vec<u8>, value: &str) -> Result<(), JournalError> {
-    let len = value.len();
-    if len == 0 || len > MAX_OPERATION_ID_LEN {
+pub(crate) fn validate_migration_operation_id(value: &str) -> Result<(), JournalError> {
+    if value.is_empty() || value.len() > MAX_OPERATION_ID_LEN {
         return Err(JournalError::InvalidOperationId);
     }
-    out.extend_from_slice(&(len as u32).to_be_bytes());
+    if value.chars().any(char::is_control) {
+        return Err(JournalError::InvalidOperationId);
+    }
+    Ok(())
+}
+
+pub(crate) fn push_operation_id(out: &mut Vec<u8>, value: &str) -> Result<(), JournalError> {
+    validate_migration_operation_id(value)?;
+    out.extend_from_slice(&(value.len() as u32).to_be_bytes());
     out.extend_from_slice(value.as_bytes());
     Ok(())
 }
@@ -317,9 +324,10 @@ impl<'a> Reader<'a> {
         if len == 0 || len > MAX_OPERATION_ID_LEN {
             return Err(JournalError::InvalidOperationId);
         }
-        std::str::from_utf8(self.take(len)?)
-            .map(str::to_owned)
-            .map_err(|_| JournalError::Corrupt("operation_id is not UTF-8"))
+        let value = std::str::from_utf8(self.take(len)?)
+            .map_err(|_| JournalError::Corrupt("operation_id is not UTF-8"))?;
+        validate_migration_operation_id(value)?;
+        Ok(value.to_owned())
     }
 
     pub(crate) fn optional_owner(
