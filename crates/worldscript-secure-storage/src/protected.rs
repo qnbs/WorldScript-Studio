@@ -307,6 +307,34 @@ pub(crate) fn read_named_protected<F: DurableFs>(
     }
 }
 
+/// Whether reconciling this record would mutate the root catalog. Root events are finite and must
+/// not be consumed when the catalog already matches the chain outcome.
+fn needs_catalog_root_commit<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    target: ProtectedTarget<'_>,
+    drop_record: bool,
+) -> Result<bool, ProtectedError> {
+    let catalog = load_catalog(fs, provider, target.layout)?;
+    let named = named_descriptor(catalog.as_ref(), target.store);
+    let desired = if drop_record {
+        None
+    } else {
+        describe_record(fs, target.store)?
+    };
+    if named == desired.as_ref() {
+        return Ok(false);
+    }
+    if let Some(readable) = desired.as_ref().and_then(CatalogDescriptor::readable) {
+        verify_committed(fs, target.store, readable)?;
+    }
+    let upsert: Vec<CatalogDescriptor> = desired.into_iter().collect();
+    Ok(match (upsert.is_empty(), named.is_some()) {
+        (true, false) => false,
+        _ => true,
+    })
+}
+
 /// Commits the catalog to the record's current chain: its descriptor (from the verified chain
 /// only), or no descriptor when `drop_record` (a rolled-back first write). `None` when the catalog
 /// already states exactly that.
@@ -383,6 +411,9 @@ impl RootEvents<'_> {
     ) -> Result<Option<RootCommitted>, ProtectedError> {
         match self {
             Self::Admitted(admission) => {
+                if !needs_catalog_root_commit(fs, provider, target, drop_record)? {
+                    return Ok(None);
+                }
                 let event = admission
                     .try_root_commit()
                     .map_err(ProtectedError::Admission)?

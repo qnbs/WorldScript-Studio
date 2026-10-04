@@ -21,7 +21,7 @@ pub mod aad;
 pub mod admission;
 pub mod anchor;
 pub mod anchor_codec;
-pub mod authority;
+mod authority;
 pub mod catalog;
 pub mod commit;
 pub mod disposition;
@@ -57,18 +57,22 @@ pub use admission::{
     SharedAdmissionGuard, OPERATION_ADMISSION_LOCK_FILE,
 };
 pub use authority::{
-    commit_catalog_change, list_records, load_catalog, AuthorityError, CatalogChange,
-    CatalogCommit, CatalogRecoveryReason, CatalogStep, CommittedShard, LoadedCatalog,
+    commit_catalog_change, AuthorityError, CatalogChange, CatalogCommit, CatalogRecoveryReason,
+    CatalogStep, CommittedShard, LoadedCatalog,
 };
+#[cfg(feature = "test-support")]
+pub use authority::{list_records, load_catalog};
 pub use catalog::{
     catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, PageAddress,
     CATALOG_SHARD_COUNT, MAX_CATALOG_PAGE_DESCRIPTORS,
 };
 pub use commit::{
-    commit_write, describe_record, load_authority, read_committed, reconcile, Authority,
-    CommitError, CommitStep, CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled,
-    RecordLocation, RecordStore, RecoveryReason, Resolution, WriteRequest,
+    commit_write, describe_record, load_authority, reconcile, Authority, CommitError, CommitStep,
+    CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled, RecordLocation,
+    RecordStore, RecoveryReason, Resolution, WriteRequest,
 };
+#[cfg(feature = "test-support")]
+pub use commit::read_committed;
 pub use disposition::{disposition, is_r15_record_class, Disposition};
 pub use durable::{
     generation_path, stage_and_promote, staging_path, DirectoryDurability, DurableFs,

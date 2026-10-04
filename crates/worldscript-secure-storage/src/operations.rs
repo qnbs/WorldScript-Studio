@@ -45,7 +45,7 @@ use crate::protected::{
 use crate::provider::{KeyProvider, KeyState};
 use crate::root::KeyEpochEntry;
 use crate::root_lock::{sys, RootCommitGuard};
-use crate::root_store::{load_snapshot_root, RootLayout, RootStoreError};
+use crate::root_store::{load_snapshot_root, recover_root, RootLayout, RootStoreError};
 use crate::seal::Key;
 
 const WRITER_RESOURCE: &str = "ordinary-writers";
@@ -232,6 +232,34 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         Ok(())
     }
 
+    /// Resolve a durable prepared root under the same admitted root event used for catalog work.
+    /// `None` means root-event contention before any catalog observation.
+    fn recover_prepared_root_admitted<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        provider: &mut PublishedProvider<'_, P>,
+        admission: &mut SharedAdmissionGuard,
+    ) -> Result<Option<()>, OperationError> {
+        if provider
+            .read_root_anchor_state()?
+            .prepared_root_commit
+            .is_none()
+        {
+            return Ok(Some(()));
+        }
+        let Some(event) = admission
+            .try_root_commit()
+            .map_err(OperationError::from)?
+        else {
+            return Ok(None);
+        };
+        let held = event.root_guard().map_err(OperationError::from)?;
+        recover_root(fs, provider, self.scope.layout(), held)?;
+        let anchor = provider.read_root_anchor_state()?;
+        lock_cell(&self.cell)?.publish(&anchor)?;
+        Ok(Some(()))
+    }
+
     /// None is contention BEFORE any provider observation, never record absence. Once admitted,
     /// the snapshot pin and its key are captured atomically with respect to local step F.
     pub fn try_authority_snapshot<F: DurableFs>(
@@ -337,6 +365,13 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         };
         let mut operation = self.capture(fs, admission)?;
         let pins = LocationPins::open(&operation.scope, location)?;
+        let mut provider = PublishedProvider(&self.cell);
+        if self
+            .recover_prepared_root_admitted(fs, &mut provider, &mut operation.admission)?
+            .is_none()
+        {
+            return Ok(None);
+        }
         let catalog = operation.catalog(fs)?;
         let target = ProtectedTarget {
             layout: operation.scope.layout(),
@@ -348,7 +383,6 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             root_key_ref: &operation.snapshot.root.root_key_ref,
             key_epoch: catalog.root.active_key_epoch,
         };
-        let mut provider = PublishedProvider(&self.cell);
         self.track_mutation(record, true)?;
         let result = protected::protected_write_admitted(
             fs,
@@ -386,6 +420,13 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         };
         let mut operation = self.capture(fs, admission)?;
         let pins = LocationPins::open(&operation.scope, location)?;
+        let mut provider = PublishedProvider(&self.cell);
+        if self
+            .recover_prepared_root_admitted(fs, &mut provider, &mut operation.admission)?
+            .is_none()
+        {
+            return Ok(None);
+        }
         let catalog = operation.catalog(fs)?;
         let target = ProtectedTarget {
             layout: operation.scope.layout(),
@@ -397,7 +438,6 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             root_key_ref: &operation.snapshot.root.root_key_ref,
             key_epoch: catalog.root.active_key_epoch,
         };
-        let mut provider = PublishedProvider(&self.cell);
         let record = ProtectedRecord { identity, location };
         self.track_mutation(record, true)?;
         let result = protected::reconcile_protected_admitted(
