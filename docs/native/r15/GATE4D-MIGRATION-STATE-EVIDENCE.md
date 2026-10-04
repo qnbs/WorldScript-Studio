@@ -2,6 +2,8 @@
 
 Owner: QNB-11 / GitHub #359 under program QNB-168 / #922 / #445. Predecessor: Gate 4C journal codec (PR #956).
 
+**Slice A terminal on `main`:** squash merge `8f1400c4bb6a84be8da940584b86b00233df1d4b` (PR #957, matched head `84e8a7c4…`). Gate 4D remains open; durable I/O and fence integration are Slice B+.
+
 This slice adds headless Core **execution state** for §10.3 — phase ordering, fence/revision checks,
 authoritative manifest revision selection against `LiveMigration`, checkpoint revision bumps, and
 terminal `DONE` / `RECOVERY_REQUIRED` transitions. It does **not** include durable journal I/O,
