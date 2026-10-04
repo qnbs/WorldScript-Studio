@@ -26,7 +26,10 @@ through the caller's handoff callback. Field order drops key/pin before shared a
 
 An externally committed ordinary same-key root advance can rebind the coordinator's private
 runtime only while shared admission is held and only after a validated anchor proves the same scope,
-strictly forward generation and exact root-key route. The post-unlock anchor must be unchanged;
+strictly forward generation and exact root-key route. The provider's live unlock-session binding
+supplies the baseline even before first capture; explicit lock clears that non-authorizing witness.
+The post-unlock and post-key-resolution committed read-authority projections must be unchanged;
+both full anchors are validated, but prepared recovery intent is not committed read authority.
 explicit lock, rotation, rollback, missing, malformed and ambiguous authority remain refused.
 Catalog enumeration follows the same admitted snapshot path; raw catalog enumeration is test-support
 only and is not a production public API.

@@ -23,6 +23,11 @@ pub struct Probe {
 pub struct ObservedProvider(pub MemoryKeyProvider, pub Arc<Probe>);
 
 impl KeyProvider for ObservedProvider {
+    fn session_binding(&self) -> Option<SessionBinding> {
+        self.1.observations.fetch_add(1, Ordering::SeqCst);
+        self.0.session_binding()
+    }
+
     fn state(&self) -> Result<KeyState, KeyProviderError> {
         self.1.observations.fetch_add(1, Ordering::SeqCst);
         match *self.1.state.lock().unwrap() {

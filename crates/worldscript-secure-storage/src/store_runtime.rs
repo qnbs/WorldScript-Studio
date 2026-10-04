@@ -12,7 +12,7 @@ use zeroize::Zeroizing;
 use crate::error::KeyProviderError;
 use crate::provider::{
     AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,
-    PrepareRootAnchor, RootKeyRefV1,
+    PrepareRootAnchor, RootKeyRefV1, SessionBinding,
 };
 use crate::random::{OsRandom, RandomSource};
 use crate::seal::Key;
@@ -34,6 +34,7 @@ pub struct SecureStoreRuntime<S, R = OsRandom> {
     /// The complete committed root (generation, digest, slot and key route) this unlock was bound
     /// to; resolution requires it to stay exactly this.
     unlocked_root: Option<CommittedRoot>,
+    unlocked_scope: Option<InstallationScopeId>,
     /// The preparation this session made itself (`operation_id`, target generation): only a commit
     /// of exactly that operation — including the retry of an ambiguous one — may rebind the session.
     own_preparation: Option<(String, u64)>,
@@ -51,6 +52,7 @@ where
             runtime: Vec::new(),
             unlocked: false,
             unlocked_root: None,
+            unlocked_scope: None,
             own_preparation: None,
         }
     }
@@ -92,7 +94,8 @@ where
     /// passphrase). A lost committed root key is `KeyLost`, and any failure grants nothing.
     pub fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
         self.lock();
-        let root = self.bound_root()?;
+        let before = self.authority.validated_anchor()?;
+        let root = before.committed_root.clone();
         let epochs = self.authority.list_epochs()?;
         let mut loaded = Vec::with_capacity(epochs.len());
         for entry in epochs.iter().filter(|entry| entry.available) {
@@ -111,8 +114,12 @@ where
         if epochs != self.authority.list_epochs()? {
             return Err(KeyProviderError::Unavailable);
         }
+        if !crate::anchor::same_read_authority(&before, &self.authority.validated_anchor()?)? {
+            return Err(KeyProviderError::Unavailable);
+        }
         self.runtime = loaded;
         self.unlocked_root = root;
+        self.unlocked_scope = before.installation_scope_id;
         self.unlocked = true;
         let outcome = self.state();
         self.settle_unlock(outcome)
@@ -141,6 +148,7 @@ where
         self.runtime.clear();
         self.unlocked = false;
         self.unlocked_root = None;
+        self.unlocked_scope = None;
     }
 
     /// The key of a data epoch, taken from the validated index only.
@@ -187,7 +195,14 @@ where
     /// session's own step F) establishes the new binding. Only then is a missing key `KeyLost`. A
     /// prepared target is recovery authorization only, so its key loss is not decided here.
     fn bound_root(&self) -> Result<Option<CommittedRoot>, KeyProviderError> {
-        let current = self.authority.validated_anchor()?.committed_root;
+        let anchor = self.authority.validated_anchor()?;
+        if self.unlocked
+            && self.unlocked_root.is_some()
+            && anchor.installation_scope_id != self.unlocked_scope
+        {
+            return Err(KeyProviderError::RecoveryRequired);
+        }
+        let current = anchor.committed_root;
         if self.unlocked && current != self.unlocked_root {
             return match (&self.unlocked_root, &current) {
                 (Some(_), None) => Err(KeyProviderError::RecoveryRequired),
@@ -289,6 +304,7 @@ where
             }),
         }
         self.unlocked_root = Some(root);
+        self.unlocked_scope = committed.installation_scope_id.clone();
         Ok(())
     }
 
@@ -331,6 +347,16 @@ where
 {
     fn state(&self) -> Result<KeyState, KeyProviderError> {
         SecureStoreRuntime::state(self)
+    }
+
+    fn session_binding(&self) -> Option<SessionBinding> {
+        if !self.unlocked {
+            return None;
+        }
+        Some(SessionBinding {
+            scope: self.unlocked_scope.clone()?,
+            root: self.unlocked_root.clone()?,
+        })
     }
 
     fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError> {

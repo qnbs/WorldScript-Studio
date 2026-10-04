@@ -97,12 +97,13 @@ impl<P: KeyProvider> AuthorityCell<P> {
         &mut self,
         before_pin: impl FnOnce(),
     ) -> Result<(Arc<Snapshot>, Key), KeyProviderError> {
-        self.capture_interleaved(|| {}, before_pin)
+        self.capture_interleaved(|| {}, || {}, before_pin)
     }
 
     fn capture_interleaved(
         &mut self,
         after_state: impl FnOnce(),
+        after_resolve: impl FnOnce(),
         before_pin: impl FnOnce(),
     ) -> Result<(Arc<Snapshot>, Key), KeyProviderError> {
         let state = self.provider.state()?;
@@ -126,7 +127,25 @@ impl<P: KeyProvider> AuthorityCell<P> {
                 return Err(KeyProviderError::Locked);
             }
         }
-        if state == KeyState::Locked && !self.rebind_locked_same_key_forward(&anchor)? {
+        let binding = self
+            .provider
+            .session_binding()
+            .ok_or(KeyProviderError::Locked)?;
+        let baseline = Snapshot {
+            scope: binding.scope,
+            root: binding.root,
+        };
+        if !baseline.accepts(scope, root) {
+            return Err(KeyProviderError::RecoveryRequired);
+        }
+        if root.root_key_ref != baseline.root.root_key_ref {
+            return Err(KeyProviderError::Locked);
+        }
+        if root != &baseline.root {
+            if !self.rebind_locked_same_key_forward(&anchor)? {
+                return Err(KeyProviderError::Locked);
+            }
+        } else if state == KeyState::Locked {
             return Err(KeyProviderError::Locked);
         }
         // Resolve before publication: a state-to-anchor race must not poison the current cell.
@@ -136,8 +155,8 @@ impl<P: KeyProvider> AuthorityCell<P> {
             }
             result => result?,
         };
-        if self.provider.read_root_anchor_state()? != anchor {
-            self.provider.lock();
+        after_resolve();
+        if !anchor::same_read_authority(&anchor, &self.provider.read_root_anchor_state()?)? {
             return Err(KeyProviderError::RecoveryRequired);
         }
         self.publish(&anchor)?;
@@ -158,10 +177,14 @@ impl<P: KeyProvider> AuthorityCell<P> {
         &mut self,
         before: &AnchorState,
     ) -> Result<bool, KeyProviderError> {
-        let Some(current) = self.current.as_ref() else {
+        let Some(binding) = self.provider.session_binding() else {
             return Ok(false);
         };
-        if !current.allows_same_key_forward(before)? {
+        let baseline = Snapshot {
+            scope: binding.scope,
+            root: binding.root,
+        };
+        if !baseline.allows_same_key_forward(before)? {
             return Ok(false);
         }
         match self.provider.unlock() {
@@ -186,11 +209,13 @@ impl<P: KeyProvider> AuthorityCell<P> {
                 return Err(error);
             }
         };
-        if &after != before || !current.allows_same_key_forward(&after)? {
-            self.provider.lock();
-            return Err(KeyProviderError::RecoveryRequired);
+        match anchor::same_read_authority(before, &after) {
+            Ok(true) => Ok(true),
+            outcome => {
+                self.provider.lock();
+                Err(outcome.err().unwrap_or(KeyProviderError::RecoveryRequired))
+            }
         }
-        Ok(true)
     }
 
     pub(crate) fn publish(&mut self, anchor: &AnchorState) -> Result<(), KeyProviderError> {
@@ -311,6 +336,7 @@ mod tests {
                     writer.commit_root_anchor(&next.operation_id, 2).unwrap();
                 },
                 || {},
+                || {},
             )
             .unwrap();
         assert_eq!(snapshot.root.root_generation, 2);
@@ -319,6 +345,63 @@ mod tests {
             Ok(KeyState::Unlocked { .. })
         ));
         drop((snapshot, key));
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 2);
+    }
+
+    #[test]
+    fn prepared_only_capture_race_and_abort_preserve_the_live_session() {
+        let (mut writer, reader, route) = shared_runtimes();
+        let mut cell = AuthorityCell::new(reader);
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 1);
+        let next = request(&route, 1);
+        let (snapshot, key) = cell
+            .capture_interleaved(|| {}, || writer.prepare_root_anchor(&next).unwrap(), || {})
+            .unwrap();
+        assert_eq!(snapshot.root.root_generation, 1);
+        assert!(matches!(
+            cell.provider.state(),
+            Ok(KeyState::Unlocked { .. })
+        ));
+        drop((snapshot, key));
+        writer
+            .abort_or_recover_root_anchor(&next.operation_id)
+            .unwrap();
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 1);
+    }
+
+    #[test]
+    fn explicit_lock_is_not_reversed_by_a_same_key_forward_commit() {
+        let (mut writer, reader, route) = shared_runtimes();
+        let mut cell = AuthorityCell::new(reader);
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 1);
+        cell.provider.lock();
+        assert!(cell.provider.session_binding().is_none());
+        let next = request(&route, 1);
+        writer.prepare_root_anchor(&next).unwrap();
+        writer.commit_root_anchor(&next.operation_id, 2).unwrap();
+        assert_eq!(cell.capture().err(), Some(KeyProviderError::Locked));
+        assert_eq!(cell.provider.state(), Ok(KeyState::Locked));
+        assert_eq!(cell.current.as_ref().unwrap().root.root_generation, 1);
+    }
+
+    #[test]
+    fn live_session_rebinds_before_first_snapshot_without_a_caller_baseline() {
+        let (mut writer, reader, route) = shared_runtimes();
+        let mut cell = AuthorityCell::new(reader);
+        assert!(cell.current.is_none());
+        let next = request(&route, 1);
+        writer.prepare_root_anchor(&next).unwrap();
+        writer.commit_root_anchor(&next.operation_id, 2).unwrap();
+        assert_eq!(cell.provider.state(), Ok(KeyState::Locked));
+        assert_eq!(
+            cell.provider
+                .session_binding()
+                .unwrap()
+                .root
+                .root_generation,
+            1
+        );
+        assert_eq!(cell.capture().unwrap().0.root.root_generation, 2);
         assert_eq!(cell.capture().unwrap().0.root.root_generation, 2);
     }
 

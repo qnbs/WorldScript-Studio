@@ -140,6 +140,14 @@ pub struct CommittedRoot {
     pub root_key_ref: RootKeyRefV1,
 }
 
+/// Non-secret witness of a live, validated unlock session, not read authorization. External
+/// commits may stale this binding; explicit lock and failed unlock must clear it with the keys.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionBinding {
+    pub scope: InstallationScopeId,
+    pub root: CommittedRoot,
+}
+
 /// `prepared_root_commit` (§5.3.1): recovery authorization only, never read authority.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedRootCommit {
@@ -217,6 +225,9 @@ pub trait KeyProvider {
     /// anchor. An unavailable secure store or unsupported anchor format is returned as its own
     /// error, never disguised as a key state.
     fn state(&self) -> Result<KeyState, KeyProviderError>;
+    /// Local session evidence only: never infer this from the current durable anchor or callers.
+    /// Return None without a live unlocked session bound to a committed root, including after lock.
+    fn session_binding(&self) -> Option<SessionBinding>;
     /// Opaque key for a data epoch, or a typed unavailable result.
     fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError>;
     /// The trusted cold-start route: resolves exactly this reference, never searches (§5.3.1).

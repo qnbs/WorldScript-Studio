@@ -97,7 +97,7 @@ pub use protected::{
 };
 pub use provider::{
     AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,
-    PrepareRootAnchor, PreparedRootCommit, RootKeyRefV1, RootSlot,
+    PrepareRootAnchor, PreparedRootCommit, RootKeyRefV1, RootSlot, SessionBinding,
 };
 pub use random::{OsRandom, RandomSource, RandomnessUnavailable};
 pub use record::{open_record, seal_record, OpenedRecord, ADMITTED_RECORD_SCHEMAS};

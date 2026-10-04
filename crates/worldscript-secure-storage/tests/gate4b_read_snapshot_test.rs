@@ -211,6 +211,9 @@ fn external_same_key_root_commit_rebinds_the_admitted_reader() {
         result
     };
     write(&mut writer, b"first").unwrap();
+    let mut uncaptured = SecureStoreRuntime::new(SecureStoreAuthority::new(store.clone()));
+    uncaptured.unlock().unwrap();
+    let uncaptured = ProtectedStorage::new(admission, uncaptured);
     let mut reader = SecureStoreRuntime::new(SecureStoreAuthority::new(store));
     reader.unlock().unwrap();
     let storage = ProtectedStorage::new(admission, reader);
@@ -223,22 +226,26 @@ fn external_same_key_root_commit_rebinds_the_admitted_reader() {
         .unwrap();
     write(&mut writer, b"second").unwrap();
     drop(shared);
-    assert_eq!(
-        storage
-            .try_read_record(
-                &mut StdFs,
-                ProtectedRecord {
-                    identity: &identity,
-                    location: RecordLocation {
-                        record_dir: &records,
-                        marker_dir: &markers
-                    }
-                },
-                payload,
-            )
-            .unwrap(),
-        Some(b"second".to_vec())
-    );
+    for reader in [&storage, &uncaptured] {
+        assert_eq!(
+            reader
+                .try_read_record(
+                    &mut StdFs,
+                    ProtectedRecord {
+                        identity: &identity,
+                        location: RecordLocation {
+                            record_dir: &records,
+                            marker_dir: &markers
+                        }
+                    },
+                    payload,
+                )
+                .unwrap(),
+            Some(b"second".to_vec())
+        );
+        assert!(reader.try_authority_snapshot(&mut StdFs).unwrap().is_some());
+    }
+    drop(uncaptured);
     drop(storage);
     let _ = fs::remove_dir_all(base);
 }
