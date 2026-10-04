@@ -3,7 +3,7 @@
 //!
 //! The current marker of a record is exactly the one the committed root's `marker_set_digest`
 //! names, through the record's catalog descriptor (§5.4); a marker on disk newer than that is a
-//! pending transition, never a readable generation. [`protected_write`] follows §9: it verifies the
+//! pending transition, never a readable generation. The protected write follows §9: it verifies the
 //! root-named marker, reconciles the record (§9 step 11) and brings the catalog to the reconciled
 //! chain, records `PENDING(old -> new)` and commits it through the root (§9 step 2, the
 //! ordinary-write coherence rule of §5.5), stages and promotes the candidate and records
@@ -12,11 +12,11 @@
 //! `DURABLE_COMMIT_SUCCESS` (§9 step 10, §9.1).
 //!
 //! A crash between a marker and the root that names it leaves the chain ahead of the root.
-//! [`reconcile_protected`] resolves it at startup from authenticated evidence only: the root-named
+//! Protected reconciliation resolves it at startup from authenticated evidence only: the root-named
 //! marker must still be in the chain with its exact entry digest, the record's own reconciliation
 //! completes or rolls back a pending write, and the catalog is then committed to the chain's
 //! result — or, for a rolled-back first write (no `ABSENT` marker body exists in version 1), the
-//! record is dropped from its shard. [`read_protected`] serves only the generation the root-named
+//! record is dropped from its shard. The protected read serves only the generation the root-named
 //! descriptor makes readable.
 //!
 //! Retention (§5.5): nothing here deletes a marker, catalog page, root slot or record generation;
@@ -24,8 +24,9 @@
 //! commit here runs under the `root_commit_mutex` (§11.1); record-level write admission — one writer
 //! per record across its two root commits — is slice 4B.
 
+use crate::admission::{AdmissionError, SharedAdmissionGuard};
 use crate::authority::{
-    commit_catalog_change, load_catalog, AuthorityError, CatalogChange, CatalogCommit,
+    commit_catalog_change_held, load_catalog, AuthorityError, CatalogChange, CatalogCommit,
     CatalogRecoveryReason, LoadedCatalog,
 };
 use crate::catalog::CatalogDescriptor;
@@ -37,6 +38,7 @@ use crate::durable::{DirectoryDurability, DurableFs, WriteOperationId};
 use crate::identity::has_ordinary_marker;
 use crate::provider::{KeyProvider, RootKeyRefV1};
 use crate::record::OpenedRecord;
+use crate::root_lock::RootCommitGuard;
 use crate::root_store::{RootCommitted, RootLayout};
 
 /// One protected record under the authority root: where the root lives, the record, and the key
@@ -59,6 +61,11 @@ pub struct ProtectedWrite<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProtectedError {
+    Admission(AdmissionError),
+    /// A finite root event is busy. No upgrade/re-admission occurs; preserve any staged intent.
+    RootBusy,
+    /// Reconciliation established a generation different from the caller's CAS expectation.
+    StaleGeneration,
     /// The record's marker chain or committed generation (slice 3B).
     Commit(CommitError),
     /// The catalog or root commit (slice 3C).
@@ -116,27 +123,80 @@ pub enum ProtectedRead {
     Record(OpenedRecord),
 }
 
-/// Writes `write.plaintext` as the next generation of the record, committing the `PENDING` and the
-/// `ACTIVE` marker each through the authority root (§9 steps 2 and 9).
+/// Test-only Gate-3 vector entrypoint. Normal callers use `ProtectedStorage`, which selects keys
+/// only after admission and keeps it through both root events.
+#[cfg(feature = "test-support")]
 pub fn protected_write<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     target: ProtectedTarget<'_>,
     write: ProtectedWrite<'_>,
 ) -> Result<ProtectedCommitted, ProtectedError> {
+    write_internal(
+        fs,
+        provider,
+        target,
+        write,
+        WriteExpectation::Unchecked,
+        &mut RootEvents::Test,
+    )
+}
+
+pub(crate) fn protected_write_admitted<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    target: ProtectedTarget<'_>,
+    write: ProtectedWrite<'_>,
+    expected_generation: Option<u64>,
+    admission: &mut SharedAdmissionGuard,
+) -> Result<ProtectedCommitted, ProtectedError> {
+    write_internal(
+        fs,
+        provider,
+        target,
+        write,
+        WriteExpectation::Expected(expected_generation),
+        &mut RootEvents::Admitted(admission),
+    )
+}
+
+fn write_internal<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    target: ProtectedTarget<'_>,
+    write: ProtectedWrite<'_>,
+    expectation: WriteExpectation,
+    events: &mut RootEvents<'_>,
+) -> Result<ProtectedCommitted, ProtectedError> {
     ensure_ordinary(target.store)?;
-    let mut durability = reconcile_protected(fs, provider, target)?.durability;
+    let reconciled = reconcile_internal(fs, provider, target, events)?;
+    match expectation {
+        WriteExpectation::Expected(expected) => {
+            let actual = reconciled
+                .descriptor
+                .as_ref()
+                .and_then(|d| d.readable())
+                .map(|g| g.generation);
+            if actual != expected {
+                return Err(ProtectedError::StaleGeneration);
+            }
+        }
+        #[cfg(feature = "test-support")]
+        WriteExpectation::Unchecked => {}
+    }
+    let mut durability = reconciled.durability;
     let request = WriteRequest {
         key_epoch: target.key_epoch,
         record_schema: write.record_schema,
     };
     let begun = begin_write(fs, target.store, request)?;
-    let pending_root = commit_chain_state(fs, provider, target, false)?;
+    let pending_root = events.commit(fs, provider, target, false)?;
     durability = both(durability, pending_root.map(|root| root.directories));
     let marker = finish_write(fs, target.store, begun, write.plaintext)?;
     durability = both(durability, Some(marker.directories));
-    let active_root =
-        commit_chain_state(fs, provider, target, false)?.ok_or(ProtectedError::RootNotAdvanced)?;
+    let active_root = events
+        .commit(fs, provider, target, false)?
+        .ok_or(ProtectedError::RootNotAdvanced)?;
     durability = both(durability, Some(active_root.directories));
     Ok(ProtectedCommitted {
         generation: marker.generation,
@@ -149,7 +209,7 @@ pub fn protected_write<F: DurableFs, P: KeyProvider>(
     })
 }
 
-/// How [`reconcile_protected`] left the record.
+/// How protected reconciliation left the record.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtectedReconciled {
     /// The record's committed descriptor afterwards; `None` if it is not catalogued.
@@ -163,10 +223,29 @@ pub struct ProtectedReconciled {
 /// Startup resolution of one record (§9 step 11): the root-named marker must still be in the
 /// chain, the record's pending write is completed or rolled back from authenticated evidence, and
 /// the catalog is committed to the result — a rolled-back first write is dropped from its shard.
+#[cfg(feature = "test-support")]
 pub fn reconcile_protected<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     target: ProtectedTarget<'_>,
+) -> Result<ProtectedReconciled, ProtectedError> {
+    reconcile_internal(fs, provider, target, &mut RootEvents::Test)
+}
+
+pub(crate) fn reconcile_protected_admitted<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    target: ProtectedTarget<'_>,
+    admission: &mut SharedAdmissionGuard,
+) -> Result<ProtectedReconciled, ProtectedError> {
+    reconcile_internal(fs, provider, target, &mut RootEvents::Admitted(admission))
+}
+
+fn reconcile_internal<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    target: ProtectedTarget<'_>,
+    events: &mut RootEvents<'_>,
 ) -> Result<ProtectedReconciled, ProtectedError> {
     ensure_ordinary(target.store)?;
     let catalog = load_catalog(fs, provider, target.layout)?;
@@ -180,7 +259,7 @@ pub fn reconcile_protected<F: DurableFs, P: KeyProvider>(
     if !(catalogued || rolled_back_first) {
         refuse_unrooted_chain(fs, target.store)?;
     }
-    let root = commit_chain_state(fs, provider, target, rolled_back_first)?;
+    let root = events.commit(fs, provider, target, rolled_back_first)?;
     let catalog = load_catalog(fs, provider, target.layout)?;
     let durability = both(
         reconciled
@@ -236,6 +315,7 @@ fn commit_chain_state<F: DurableFs, P: KeyProvider>(
     provider: &mut P,
     target: ProtectedTarget<'_>,
     drop_record: bool,
+    held: &RootCommitGuard,
 ) -> Result<Option<RootCommitted>, ProtectedError> {
     let catalog = load_catalog(fs, provider, target.layout)?;
     let named = named_descriptor(catalog.as_ref(), target.store);
@@ -272,12 +352,52 @@ fn commit_chain_state<F: DurableFs, P: KeyProvider>(
         active_key_epoch: target.key_epoch,
         operation_id: operation.as_str(),
     };
-    Ok(Some(commit_catalog_change(
+    Ok(Some(commit_catalog_change_held(
         fs,
         provider,
         target.layout,
         commit,
+        held,
     )?))
+}
+
+enum WriteExpectation {
+    Expected(Option<u64>),
+    #[cfg(feature = "test-support")]
+    Unchecked,
+}
+
+enum RootEvents<'a> {
+    Admitted(&'a mut SharedAdmissionGuard),
+    #[cfg(feature = "test-support")]
+    Test,
+}
+
+impl RootEvents<'_> {
+    fn commit<F: DurableFs, P: KeyProvider>(
+        &mut self,
+        fs: &mut F,
+        provider: &mut P,
+        target: ProtectedTarget<'_>,
+        drop_record: bool,
+    ) -> Result<Option<RootCommitted>, ProtectedError> {
+        match self {
+            Self::Admitted(admission) => {
+                let event = admission
+                    .try_root_commit()
+                    .map_err(ProtectedError::Admission)?
+                    .ok_or(ProtectedError::RootBusy)?;
+                let held = event.root_guard().map_err(ProtectedError::Admission)?;
+                commit_chain_state(fs, provider, target, drop_record, held)
+            }
+            #[cfg(feature = "test-support")]
+            Self::Test => {
+                let held = RootCommitGuard::acquire(target.layout.root_dir)
+                    .map_err(|e| ProtectedError::Admission(AdmissionError::Io(e.kind())))?;
+                commit_chain_state(fs, provider, target, drop_record, &held)
+            }
+        }
+    }
 }
 
 /// Only an ordinary record (§10.4.1 `MIGRATE_TO_R15`, not an asset-pair member) takes this path.

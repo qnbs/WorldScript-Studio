@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use crate::anchor;
 use crate::error::KeyProviderError;
 use crate::provider::{
-    AnchorState, CommittedRoot, InstallationScopeId, KeyProvider, KeyState, SessionBinding,
+    AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,
+    PrepareRootAnchor, RootKeyRefV1, SessionBinding,
 };
 use crate::seal::Key;
 
@@ -17,20 +18,24 @@ pub(crate) struct AuthorityCell<P> {
     pub(crate) provider: P,
     current: Option<Arc<Snapshot>>,
     // Only an automatic rebind may retain this non-authorizing prior session evidence. The
-    // provider is private; future coordinator lifecycle locking must also discard this retry.
+    // provider is private; coordinator lifecycle locking must also discard this retry.
     rebind_retry: Option<SessionBinding>,
+    namespace: Arc<()>,
 }
 
 pub(crate) struct Snapshot {
     pub(crate) scope: InstallationScopeId,
     pub(crate) root: CommittedRoot,
+    namespace: Arc<()>,
 }
 
 /// Non-authorizing retention observation, not permission to delete bytes. A future collector must
 /// also prove durable current/previous/prepared retention and every other recovery reason.
 pub struct SnapshotRetention {
     pub(crate) generation: u64,
+    pub(crate) scope: InstallationScopeId,
     handle: Weak<Snapshot>,
+    namespace: Weak<()>,
 }
 
 impl SnapshotRetention {
@@ -80,7 +85,9 @@ impl Snapshot {
     pub(crate) fn retention(this: &Arc<Self>) -> SnapshotRetention {
         SnapshotRetention {
             generation: this.root.root_generation,
+            scope: this.scope.clone(),
             handle: Arc::downgrade(this),
+            namespace: Arc::downgrade(&this.namespace),
         }
     }
 }
@@ -91,6 +98,7 @@ impl<P: KeyProvider> AuthorityCell<P> {
             provider,
             current: None,
             rebind_retry: None,
+            namespace: Arc::new(()),
         }
     }
 
@@ -141,6 +149,7 @@ impl<P: KeyProvider> AuthorityCell<P> {
         let baseline = Snapshot {
             scope: binding.scope,
             root: binding.root,
+            namespace: self.namespace.clone(),
         };
         if !baseline.accepts(scope, root) {
             return Err(KeyProviderError::RecoveryRequired);
@@ -203,6 +212,7 @@ impl<P: KeyProvider> AuthorityCell<P> {
         let baseline = Snapshot {
             scope: binding.scope.clone(),
             root: binding.root.clone(),
+            namespace: self.namespace.clone(),
         };
         if !baseline.allows_same_key_forward(before)? {
             return Ok(false);
@@ -260,8 +270,18 @@ impl<P: KeyProvider> AuthorityCell<P> {
         self.current = Some(Arc::new(Snapshot {
             scope: scope.clone(),
             root: root.clone(),
+            namespace: self.namespace.clone(),
         }));
         Ok(())
+    }
+
+    pub(crate) fn owns_retention(&self, witness: &SnapshotRetention) -> bool {
+        Weak::ptr_eq(&witness.namespace, &Arc::downgrade(&self.namespace))
+    }
+
+    pub(crate) fn lifecycle_lock_provider(&mut self) {
+        self.provider.lock();
+        self.rebind_retry = None;
     }
 }
 
@@ -269,6 +289,98 @@ pub(crate) fn lock_cell<P>(
     cell: &Mutex<AuthorityCell<P>>,
 ) -> Result<MutexGuard<'_, AuthorityCell<P>>, KeyProviderError> {
     cell.lock().map_err(|_| KeyProviderError::RecoveryRequired)
+}
+
+/// Private mechanism adapter. Core constructs it only beneath operation admission. Each store
+/// call is short; filesystem staging never holds the authority-cell mutex. In particular, readers
+/// may capture the prior snapshot during C/E; only F's store write + current replacement are atomic.
+pub(crate) struct PublishedProvider<'a, P>(pub(crate) &'a Mutex<AuthorityCell<P>>);
+
+impl<P: KeyProvider> PublishedProvider<'_, P> {
+    fn commit_with_refresh(
+        &mut self,
+        operation: &str,
+        generation: u64,
+        after_commit: impl FnOnce(&mut P),
+    ) -> Result<(), KeyProviderError> {
+        let mut cell = lock_cell(self.0)?;
+        let result = cell.provider.commit_root_anchor(operation, generation);
+        // Private fault seam: tests can make the refresh fail after the actual durable attempt.
+        after_commit(&mut cell.provider);
+        let refreshed = cell
+            .provider
+            .read_root_anchor_state()
+            .and_then(|anchor| cell.publish(&anchor));
+        match result {
+            Err(original) => Err(original),
+            Ok(()) => refreshed.map_err(|_| KeyProviderError::CommittedRefreshRequired),
+        }
+    }
+}
+
+impl<P: KeyProvider> KeyProvider for PublishedProvider<'_, P> {
+    fn state(&self) -> Result<KeyState, KeyProviderError> {
+        lock_cell(self.0)?.provider.state()
+    }
+
+    fn session_binding(&self) -> Option<SessionBinding> {
+        lock_cell(self.0).ok()?.provider.session_binding()
+    }
+
+    fn resolve(&self, epoch: u64) -> Result<Key, KeyProviderError> {
+        lock_cell(self.0)?.provider.resolve(epoch)
+    }
+
+    fn resolve_ref(&self, route: &RootKeyRefV1) -> Result<Key, KeyProviderError> {
+        lock_cell(self.0)?.provider.resolve_ref(route)
+    }
+
+    fn lock(&mut self) {
+        let mut cell = self.0.lock().unwrap_or_else(|poison| poison.into_inner());
+        cell.lifecycle_lock_provider();
+    }
+
+    fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
+        lock_cell(self.0)?.provider.unlock()
+    }
+
+    fn list_epochs(&self) -> Result<Vec<EpochInfo>, KeyProviderError> {
+        lock_cell(self.0)?.provider.list_epochs()
+    }
+
+    fn provision_epoch_key(&mut self, epoch: u64) -> Result<RootKeyRefV1, KeyProviderError> {
+        lock_cell(self.0)?.provider.provision_epoch_key(epoch)
+    }
+
+    fn read_root_anchor_state(&self) -> Result<AnchorState, KeyProviderError> {
+        lock_cell(self.0)?.provider.read_root_anchor_state()
+    }
+
+    fn read_or_provision_installation_scope(
+        &mut self,
+    ) -> Result<InstallationScopeId, KeyProviderError> {
+        lock_cell(self.0)?
+            .provider
+            .read_or_provision_installation_scope()
+    }
+
+    fn prepare_root_anchor(&mut self, request: &PrepareRootAnchor) -> Result<(), KeyProviderError> {
+        lock_cell(self.0)?.provider.prepare_root_anchor(request)
+    }
+
+    fn commit_root_anchor(
+        &mut self,
+        operation: &str,
+        generation: u64,
+    ) -> Result<(), KeyProviderError> {
+        self.commit_with_refresh(operation, generation, |_| {})
+    }
+
+    fn abort_or_recover_root_anchor(&mut self, operation: &str) -> Result<(), KeyProviderError> {
+        lock_cell(self.0)?
+            .provider
+            .abort_or_recover_root_anchor(operation)
+    }
 }
 
 #[cfg(test)]

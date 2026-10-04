@@ -367,7 +367,6 @@ pub(crate) fn finish_write<F: DurableFs>(
 
 /// Reads the committed generation: the `ACTIVE` one, or the old one while a write is pending. The
 /// file must be exactly the envelope the marker committed and must open under the record.
-#[cfg(feature = "test-support")]
 pub fn read_committed<F: DurableFs>(
     fs: &mut F,
     store: RecordStore<'_>,
@@ -383,7 +382,7 @@ pub fn read_committed<F: DurableFs>(
 /// does not. `None` when the record has no marker yet. It describes the chain as it stands: a first
 /// write that reconciliation rolled back (`Resolution::RolledBack { restored: None }`) still reads
 /// as `PENDING(none -> 1)` here, because version 1 has no `ABSENT` marker body;
-/// [`reconcile_protected`](crate::protected::reconcile_protected) consumes the reconciliation
+/// The admitted protected reconciliation consumes the reconciliation
 /// outcome and drops such a record, so a catalog is never built from this helper alone.
 pub fn describe_record<F: DurableFs>(
     fs: &mut F,

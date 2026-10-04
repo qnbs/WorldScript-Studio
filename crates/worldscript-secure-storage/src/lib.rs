@@ -10,9 +10,8 @@
 //! ([`commit`]), and slice 3C's authority-root digests ([`root`]), record catalog ([`catalog`]),
 //! persisted root records ([`root_record`]), the two-phase root commit ([`root_store`]) and the
 //! persisted, root-verified record catalog ([`authority`]), and the protected write and read paths
-//! that commit every marker transition through the root ([`protected`]).
-//! Gate 4B adds shared-admitted reads/snapshots ([`operations`]); mutation/root-recovery/lifecycle
-//! closure remains a separate successor slice.
+//! that commit every marker transition through the root ([`protected`]), and Gate 4B's kernel
+//! admission plus protected operation/snapshot/lifecycle boundary ([`operations`]).
 //! It changes no current
 //! TypeScript/Tauri storage authority and holds no journal yet.
 
@@ -22,7 +21,7 @@ pub mod aad;
 pub mod admission;
 pub mod anchor;
 pub mod anchor_codec;
-mod authority;
+pub mod authority;
 pub mod catalog;
 pub mod commit;
 pub mod disposition;
@@ -58,21 +57,17 @@ pub use admission::{
     SharedAdmissionGuard, OPERATION_ADMISSION_LOCK_FILE,
 };
 pub use authority::{
-    commit_catalog_change, AuthorityError, CatalogChange, CatalogCommit, CatalogRecoveryReason,
-    CatalogStep, CommittedShard, LoadedCatalog,
+    commit_catalog_change, list_records, load_catalog, AuthorityError, CatalogChange,
+    CatalogCommit, CatalogRecoveryReason, CatalogStep, CommittedShard, LoadedCatalog,
 };
-#[cfg(feature = "test-support")]
-pub use authority::{list_records, load_catalog};
 pub use catalog::{
     catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, PageAddress,
     CATALOG_SHARD_COUNT, MAX_CATALOG_PAGE_DESCRIPTORS,
 };
-#[cfg(feature = "test-support")]
-pub use commit::read_committed;
 pub use commit::{
-    commit_write, describe_record, load_authority, reconcile, Authority, CommitError, CommitStep,
-    CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled, RecordLocation,
-    RecordStore, RecoveryReason, Resolution, WriteRequest,
+    commit_write, describe_record, load_authority, read_committed, reconcile, Authority,
+    CommitError, CommitStep, CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled,
+    RecordLocation, RecordStore, RecoveryReason, Resolution, WriteRequest,
 };
 pub use disposition::{disposition, is_r15_record_class, Disposition};
 pub use durable::{
@@ -88,16 +83,18 @@ pub use marker::{
     content_digest, CommitMarker, MarkerBody, MarkerError, MarkerOperation, PendingBody,
 };
 pub use operation_authority::SnapshotRetention;
-pub use operations::{AuthoritySnapshotGuard, OperationError, ProtectedRecord, ProtectedStorage};
+pub use operations::{
+    AuthoritySnapshotGuard, OperationError, ProtectedMutation, ProtectedRecord, ProtectedStorage,
+};
 #[cfg(feature = "test-support")]
-pub use protected::read_protected;
+pub use protected::{protected_write, read_protected, reconcile_protected, ProtectedTarget};
 pub use protected::{
-    protected_write, reconcile_protected, ProtectedCommitted, ProtectedError, ProtectedRead,
-    ProtectedReconciled, ProtectedTarget, ProtectedWrite, WriteDurability,
+    ProtectedCommitted, ProtectedError, ProtectedRead, ProtectedReconciled, ProtectedWrite,
+    WriteDurability,
 };
 pub use provider::{
     AnchorState, CommittedRoot, EpochInfo, InstallationScopeId, KeyProvider, KeyState,
-    PrepareRootAnchor, PreparedRootCommit, RootKeyRefV1, RootSlot, SessionBinding,
+    PrepareRootAnchor, PreparedRootCommit, RootKeyRefV1, RootSlot,
 };
 pub use random::{OsRandom, RandomSource, RandomnessUnavailable};
 pub use record::{open_record, seal_record, OpenedRecord, ADMITTED_RECORD_SCHEMAS};
