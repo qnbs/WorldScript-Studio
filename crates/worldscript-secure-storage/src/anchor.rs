@@ -79,6 +79,20 @@ pub fn validate(state: &AnchorState) -> Result<(), KeyProviderError> {
     validate_prepared(state)
 }
 
+/// Prepared intent is recovery authorization only. Validate both complete envelopes before
+/// comparing the committed read-authority projection; malformed preparation is still refused.
+pub(crate) fn same_read_authority(
+    before: &AnchorState,
+    after: &AnchorState,
+) -> Result<bool, KeyProviderError> {
+    validate(before)?;
+    validate(after)?;
+    Ok(before.installation_scope_id == after.installation_scope_id
+        && before.committed_floor == after.committed_floor
+        && before.committed_root == after.committed_root
+        && before.last_committed_operation_id == after.last_committed_operation_id)
+}
+
 /// The existing scope of a valid anchor, without generating anything (§5.3.2 read path).
 pub fn existing_installation_scope(
     state: &AnchorState,

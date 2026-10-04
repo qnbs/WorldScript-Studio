@@ -7,7 +7,7 @@ use crate::anchor;
 use crate::error::KeyProviderError;
 use crate::provider::{
     AnchorState, EpochInfo, InstallationScopeId, KeyProvider, KeyState, PrepareRootAnchor,
-    RootKeyRefV1,
+    RootKeyRefV1, SessionBinding,
 };
 use crate::random::{OsRandom, RandomSource, RandomnessUnavailable};
 use crate::seal::Key;
@@ -58,6 +58,7 @@ pub struct MemoryKeyProvider {
     store: Vec<StoredKey>,
     runtime: Vec<(RootKeyRefV1, Zeroizing<[u8; 32]>)>,
     unlocked: bool,
+    session_binding: Option<SessionBinding>,
     available: bool,
     lost: bool,
     fault: Option<Fault>,
@@ -78,6 +79,7 @@ impl MemoryKeyProvider {
             store: Vec::new(),
             runtime: Vec::new(),
             unlocked: false,
+            session_binding: None,
             available: true,
             lost: false,
             fault: None,
@@ -95,6 +97,7 @@ impl MemoryKeyProvider {
     pub fn lose_keys(&mut self) {
         self.store.clear();
         self.runtime.clear();
+        self.session_binding = None;
         self.lost = true;
     }
 
@@ -195,6 +198,10 @@ impl MemoryKeyProvider {
 }
 
 impl KeyProvider for MemoryKeyProvider {
+    fn session_binding(&self) -> Option<SessionBinding> {
+        self.session_binding.clone()
+    }
+
     fn state(&self) -> Result<KeyState, KeyProviderError> {
         let anchor = match self.read_root_anchor_state() {
             Ok(anchor) => anchor,
@@ -240,20 +247,37 @@ impl KeyProvider for MemoryKeyProvider {
         // Dropping each Zeroizing handle clears its bytes.
         self.runtime.clear();
         self.unlocked = false;
+        self.session_binding = None;
     }
 
     fn unlock(&mut self) -> Result<KeyState, KeyProviderError> {
+        self.lock();
         self.ensure_available()?;
         if self.lost {
             return Err(KeyProviderError::KeyLost);
         }
+        let anchor = self.read_root_anchor_state()?;
         self.runtime = self
             .store
             .iter()
             .map(|k| (k.key_ref.clone(), k.material.clone()))
             .collect();
         self.unlocked = true;
-        self.state()
+        let state = match self.state() {
+            Ok(state @ (KeyState::Unlocked { .. } | KeyState::Unconfigured)) => state,
+            outcome => {
+                self.lock();
+                return Err(match outcome {
+                    Err(error) => error,
+                    Ok(_) => KeyProviderError::RecoveryRequired,
+                });
+            }
+        };
+        self.session_binding = anchor
+            .installation_scope_id
+            .zip(anchor.committed_root)
+            .map(|(scope, root)| SessionBinding { scope, root });
+        Ok(state)
     }
 
     fn list_epochs(&self) -> Result<Vec<EpochInfo>, KeyProviderError> {
@@ -334,7 +358,16 @@ impl KeyProvider for MemoryKeyProvider {
     ) -> Result<(), KeyProviderError> {
         self.apply(AnchorOp::Commit, |state| {
             anchor::commit(state, operation_id, target_root_generation)
-        })
+        })?;
+        if self.unlocked {
+            self.session_binding = self
+                .anchor
+                .installation_scope_id
+                .clone()
+                .zip(self.anchor.committed_root.clone())
+                .map(|(scope, root)| SessionBinding { scope, root });
+        }
+        Ok(())
     }
 
     fn abort_or_recover_root_anchor(&mut self, operation_id: &str) -> Result<(), KeyProviderError> {
