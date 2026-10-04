@@ -134,11 +134,20 @@ impl PinnedReader {
         let deadline = Instant::now() + Duration::from_secs(30);
         let mut saw_pending = false;
         while !finished.load(Ordering::Acquire) && Instant::now() < deadline {
-            let mut fresh = self
-                .storage
-                .try_authority_snapshot(&mut StdFs)
-                .unwrap()
-                .unwrap();
+            let mut fresh = match self.storage.try_authority_snapshot(&mut StdFs) {
+                Ok(Some(snapshot)) => snapshot,
+                Ok(None) => {
+                    thread::yield_now();
+                    continue;
+                }
+                Err(OperationError::Root(RootStoreError::RecoveryRequired(
+                    RootRecoveryReason::KeyEpochSetMismatch,
+                ))) => {
+                    thread::yield_now();
+                    continue;
+                }
+                Err(error) => panic!("unexpected snapshot error: {error:?}"),
+            };
             let generation = fresh.root_generation();
             assert!((3..=9).contains(&generation));
             let expected = if generation <= 4 {
@@ -253,6 +262,25 @@ impl Fixture {
     ) -> Result<Option<ProtectedCommitted>, OperationError> {
         self.storage()
             .try_write_record(fs, self.mutation(expected, payload))
+    }
+
+    /// Nonblocking admitted writes return `Ok(None)` under shared-admission contention; poll like production retry.
+    pub fn write_until_admitted(
+        &self,
+        fs: &mut impl DurableFs,
+        expected: Option<u64>,
+        payload: &[u8],
+    ) -> Result<ProtectedCommitted, OperationError> {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            match self.write(fs, expected, payload)? {
+                Some(committed) => return Ok(committed),
+                None if Instant::now() >= deadline => {
+                    panic!("admitted write did not acquire shared admission before deadline");
+                }
+                None => thread::sleep(Duration::from_millis(5)),
+            }
+        }
     }
     pub fn mutation<'a>(
         &'a self,

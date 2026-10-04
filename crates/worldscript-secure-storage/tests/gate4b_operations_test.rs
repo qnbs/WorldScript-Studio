@@ -543,8 +543,7 @@ fn snapshot_is_send_and_two_readers_pin_across_three_writer_operations() {
         .unwrap();
     for generation in 2..=3 {
         fixture
-            .write(&mut StdFs, Some(generation), b"next")
-            .unwrap()
+            .write_until_admitted(&mut StdFs, Some(generation), b"next")
             .unwrap();
     }
     assert_eq!(fixture.storage().try_lock(&mut StdFs).unwrap(), None);
