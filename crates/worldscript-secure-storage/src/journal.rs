@@ -17,6 +17,7 @@ use crate::root::RootError;
 use crate::seal::{Key, RecordMeta};
 
 pub const JOURNAL_MANIFEST_FORMAT_VERSION: u32 = 1;
+pub const JOURNAL_MANIFEST_RECORD_SCHEMA: u32 = 1;
 pub const JOURNAL_PAGE_FORMAT_VERSION: u32 = 1;
 pub const JOURNAL_PAGE_RECORD_SCHEMA: u32 = 1;
 pub const MAX_JOURNAL_PAGE_DESCRIPTORS: usize = 4096;
@@ -64,6 +65,12 @@ pub mod source_physical_authority_kind {
     pub const R15_CORE: u32 = 6;
 }
 
+pub mod source_scheme_id {
+    pub const NONE_PLAINTEXT: u32 = 0;
+    pub const WEBVIEW_IDB_AT_REST_V1: u32 = 1;
+    pub const CREDENTIAL_IDB_KEYSTORE_V1: u32 = 2;
+}
+
 /// Why journal bytes were refused. A refused value is never partially trusted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JournalError {
@@ -82,6 +89,11 @@ pub enum JournalError {
     WrongPageIndex,
     EntryCountMismatch,
     UnsupportedSourceAuthority(u32),
+    UnsupportedOperationType(u32),
+    UnsupportedPhase(u32),
+    UnsupportedPhysicalAuthority(u32),
+    UnsupportedSourceScheme(u32),
+    BindingMismatch,
     InvalidIdentity(crate::error::AadError),
     Seal(crate::error::SealError),
     Open(crate::error::OpenError),
@@ -113,6 +125,8 @@ pub struct JournalManifest {
     pub phase: u32,
     pub source_epoch: u64,
     pub target_epoch: u64,
+    pub has_target_root_key_ref: bool,
+    pub target_root_key_ref_digest: Option<[u8; 32]>,
     pub fencing_generation: u64,
     pub inventory_version: u32,
     pub inventory_digest: [u8; 32],
@@ -129,10 +143,7 @@ pub struct JournalManifest {
 
 impl JournalManifest {
     pub fn encode(&self) -> Result<Vec<u8>, JournalError> {
-        validate_journal_revision(self.journal_revision)?;
-        validate_epoch(self.source_epoch, true)?;
-        validate_epoch(self.target_epoch, false)?;
-        validate_fence(self.fencing_generation, self.phase)?;
+        self.validate_semantics()?;
         let mut out = Vec::with_capacity(512);
         out.extend_from_slice(&JOURNAL_MANIFEST_FORMAT_VERSION.to_be_bytes());
         push_operation_id(&mut out, &self.operation_id)?;
@@ -141,6 +152,10 @@ impl JournalManifest {
         out.extend_from_slice(&self.phase.to_be_bytes());
         out.extend_from_slice(&self.source_epoch.to_be_bytes());
         out.extend_from_slice(&self.target_epoch.to_be_bytes());
+        push_optional(&mut out, self.target_root_key_ref_digest, |out, digest| {
+            out.extend_from_slice(&digest);
+            Ok(())
+        })?;
         out.extend_from_slice(&self.fencing_generation.to_be_bytes());
         out.extend_from_slice(&self.inventory_version.to_be_bytes());
         out.extend_from_slice(&self.inventory_digest);
@@ -166,6 +181,7 @@ impl JournalManifest {
         let phase = reader.u32()?;
         let source_epoch = reader.u64()?;
         let target_epoch = reader.u64()?;
+        let target_root_key_ref_digest = reader.optional_digest()?;
         let fencing_generation = reader.u64()?;
         let inventory_version = reader.u32()?;
         let inventory_digest = reader.digest()?;
@@ -188,6 +204,8 @@ impl JournalManifest {
             phase,
             source_epoch,
             target_epoch,
+            has_target_root_key_ref: target_root_key_ref_digest.is_some(),
+            target_root_key_ref_digest,
             fencing_generation,
             inventory_version,
             inventory_digest,
@@ -205,10 +223,99 @@ impl JournalManifest {
         Ok(manifest)
     }
 
+    pub fn seal(
+        &self,
+        key: &Key,
+        record: &RecordIdentity,
+        meta: RecordMeta,
+    ) -> Result<Vec<u8>, JournalError> {
+        if record.class() != RecordClass::Migration {
+            return Err(JournalError::Corrupt("journal manifest identity required"));
+        }
+        if record.components().first().map(String::as_str) != Some(self.operation_id.as_str()) {
+            return Err(JournalError::Corrupt(
+                "migration identity disagrees with manifest",
+            ));
+        }
+        if meta.record_generation != self.journal_revision {
+            return Err(JournalError::GenerationMismatch);
+        }
+        if meta.record_schema != JOURNAL_MANIFEST_RECORD_SCHEMA {
+            return Err(JournalError::UnsupportedFormat(meta.record_schema));
+        }
+        let payload = self.encode()?;
+        seal_record(key, record, meta, &payload).map_err(JournalError::Seal)
+    }
+
+    pub fn open(
+        key: &Key,
+        record: &RecordIdentity,
+        journal_revision: u64,
+        envelope: &[u8],
+    ) -> Result<Self, JournalError> {
+        if record.class() != RecordClass::Migration {
+            return Err(JournalError::Corrupt("journal manifest identity required"));
+        }
+        let opened = open_record(key, record, envelope).map_err(JournalError::Open)?;
+        if opened.header.record_schema != JOURNAL_MANIFEST_RECORD_SCHEMA {
+            return Err(JournalError::UnsupportedFormat(opened.header.record_schema));
+        }
+        if opened.header.record_generation != journal_revision {
+            return Err(JournalError::GenerationMismatch);
+        }
+        let manifest = JournalManifest::decode(&opened.payload)?;
+        if manifest.journal_revision != journal_revision {
+            return Err(JournalError::GenerationMismatch);
+        }
+        if record.components().first().map(String::as_str) != Some(manifest.operation_id.as_str()) {
+            return Err(JournalError::Corrupt(
+                "migration identity disagrees with manifest",
+            ));
+        }
+        Ok(manifest)
+    }
+
+    fn validate_semantics(&self) -> Result<(), JournalError> {
+        validate_journal_revision(self.journal_revision)?;
+        validate_epoch(self.source_epoch, true)?;
+        validate_epoch(self.target_epoch, false)?;
+        validate_operation_type(self.operation_type)?;
+        validate_phase(self.phase)?;
+        validate_inventory_version(self.inventory_version)?;
+        check_counter(self.fencing_generation)?;
+        if self.page_count as u64 > MAX_JOURNAL_INVENTORY_ENTRIES as u64 {
+            return Err(JournalError::TooManyEntries);
+        }
+        if self.entry_count > MAX_JOURNAL_INVENTORY_ENTRIES {
+            return Err(JournalError::TooManyEntries);
+        }
+        if self.page_count > 0 && self.cursor_page_index >= self.page_count {
+            return Err(JournalError::InvalidPageIndex);
+        }
+        validate_target_key_ref(self)?;
+        validate_lease_fields(self)?;
+        Ok(())
+    }
+
     /// Refuses a manifest whose page-set digest does not match the supplied page refs.
     pub fn verify_page_set(&self, pages: &[JournalPageRef]) -> Result<(), JournalError> {
         if pages.len() as u32 != self.page_count {
             return Err(JournalError::PageSetMismatch);
+        }
+        let mut entry_total = 0u64;
+        for page in pages {
+            if page.page_entry_count > MAX_JOURNAL_PAGE_DESCRIPTORS as u32 {
+                return Err(JournalError::InvalidDescriptorCount);
+            }
+            entry_total = entry_total
+                .checked_add(page.page_entry_count as u64)
+                .ok_or(JournalError::TooManyEntries)?;
+            if entry_total > MAX_JOURNAL_INVENTORY_ENTRIES as u64 {
+                return Err(JournalError::TooManyEntries);
+            }
+        }
+        if entry_total != self.entry_count as u64 {
+            return Err(JournalError::EntryCountMismatch);
         }
         let digest = journal_page_set_digest(pages)?;
         if digest != self.journal_page_set_digest {
@@ -228,14 +335,35 @@ impl JournalManifest {
         }
         Ok(())
     }
+
+    /// Verifies a paged inventory against this manifest without loading every entry at once.
+    pub fn verify_inventory_pages(&self, pages: &[JournalPage]) -> Result<(), JournalError> {
+        if pages.len() as u32 != self.page_count {
+            return Err(JournalError::PageSetMismatch);
+        }
+        let mut sorted_pages = pages.to_vec();
+        sorted_pages.sort_by_key(|page| page.page_index);
+        sorted_pages.windows(2).try_for_each(|pair| {
+            if pair[0].page_index() == pair[1].page_index() {
+                Err(JournalError::DuplicateEntry)
+            } else {
+                Ok(())
+            }
+        })?;
+        let mut verifier = InventoryDigestVerifier::new(self.inventory_version, self.entry_count)?;
+        for page in sorted_pages {
+            verifier.absorb_page(&page)?;
+        }
+        verifier.finish(self.inventory_digest)
+    }
 }
 
 /// §10.1 / §5.4 migration inventory descriptor carried on a journal page.
 #[derive(Clone, PartialEq, Eq)]
 pub struct JournalInventoryEntry {
     pub record: RecordIdentity,
-    pub identity_binding: Vec<u8>,
-    pub project_scope_binding: Vec<u8>,
+    identity_binding: Vec<u8>,
+    project_scope_binding: Vec<u8>,
     pub source_authority_kind: u32,
     pub source_physical_authority_kind: u32,
     pub source_generation: Option<u64>,
@@ -344,8 +472,18 @@ impl JournalInventoryEntry {
 
     fn validate(&self) -> Result<(), JournalError> {
         self.validate_semantics()?;
+        self.validate_identity_bindings()?;
         if self.encoded_len()? > MAX_JOURNAL_ENTRY_BYTES {
             return Err(JournalError::TooLarge);
+        }
+        Ok(())
+    }
+
+    fn validate_identity_bindings(&self) -> Result<(), JournalError> {
+        let (identity, project) = tagged_identity_binding_parts(&self.record.context())
+            .map_err(JournalError::InvalidIdentity)?;
+        if identity != self.identity_binding || project != self.project_scope_binding {
+            return Err(JournalError::BindingMismatch);
         }
         Ok(())
     }
@@ -362,6 +500,7 @@ impl JournalInventoryEntry {
             source_authority_kind::FOREIGN_PROTECTED => self.validate_foreign_protected(),
             other => Err(JournalError::UnsupportedSourceAuthority(other)),
         }
+        .and_then(|()| validate_physical_authority_kind(self.source_physical_authority_kind))
     }
 
     fn validate_legacy_plaintext(&self) -> Result<(), JournalError> {
@@ -405,11 +544,12 @@ impl JournalInventoryEntry {
                 "foreign protected requires evidence digest",
             ));
         }
-        if self.foreign.is_none() {
-            return Err(JournalError::Corrupt(
-                "foreign protected requires extension",
-            ));
-        }
+        let foreign = self.foreign.as_ref().ok_or(JournalError::Corrupt(
+            "foreign protected requires extension",
+        ))?;
+        validate_source_scheme_id(foreign.source_scheme_id)?;
+        validate_canonical_binding(&foreign.source_identity_binding)?;
+        validate_canonical_binding(&foreign.source_project_scope_binding)?;
         Ok(())
     }
 }
@@ -421,6 +561,64 @@ struct InventorySortKey<'a> {
     source_authority_kind: u32,
     source_physical_authority_kind: u32,
     source_scheme_id: u32,
+}
+
+#[derive(Clone)]
+struct OwnedInventorySortKey {
+    class: &'static str,
+    identity: Vec<u8>,
+    project: Vec<u8>,
+    source_authority_kind: u32,
+    source_physical_authority_kind: u32,
+    source_scheme_id: u32,
+}
+
+impl InventorySortKey<'_> {
+    fn owned(&self) -> OwnedInventorySortKey {
+        OwnedInventorySortKey {
+            class: self.class,
+            identity: self.identity.to_vec(),
+            project: self.project.to_vec(),
+            source_authority_kind: self.source_authority_kind,
+            source_physical_authority_kind: self.source_physical_authority_kind,
+            source_scheme_id: self.source_scheme_id,
+        }
+    }
+}
+
+impl PartialEq for OwnedInventorySortKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == std::cmp::Ordering::Equal
+    }
+}
+
+impl Eq for OwnedInventorySortKey {}
+
+impl PartialOrd for OwnedInventorySortKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for OwnedInventorySortKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (
+            self.class.as_bytes(),
+            self.identity.as_slice(),
+            self.project.as_slice(),
+            self.source_authority_kind.to_be_bytes(),
+            self.source_physical_authority_kind.to_be_bytes(),
+            self.source_scheme_id.to_be_bytes(),
+        )
+            .cmp(&(
+                other.class.as_bytes(),
+                other.identity.as_slice(),
+                other.project.as_slice(),
+                other.source_authority_kind.to_be_bytes(),
+                other.source_physical_authority_kind.to_be_bytes(),
+                other.source_scheme_id.to_be_bytes(),
+            ))
+    }
 }
 
 impl PartialEq for InventorySortKey<'_> {
@@ -550,10 +748,6 @@ impl JournalPage {
         Ok(page)
     }
 
-    pub fn content_digest(&self) -> Result<[u8; 32], JournalError> {
-        Ok(content_digest(&self.encode()?))
-    }
-
     pub fn seal(
         &self,
         key: &Key,
@@ -583,6 +777,9 @@ impl JournalPage {
         page_generation: u64,
         envelope: &[u8],
     ) -> Result<Self, JournalError> {
+        if record.class() != RecordClass::MigrationPage {
+            return Err(JournalError::WrongPageIndex);
+        }
         let opened = open_record(key, record, envelope).map_err(JournalError::Open)?;
         if opened.header.record_generation != page_generation {
             return Err(JournalError::GenerationMismatch);
@@ -591,6 +788,9 @@ impl JournalPage {
             return Err(JournalError::UnsupportedFormat(opened.header.record_schema));
         }
         let page = JournalPage::decode(&opened.payload)?;
+        if page.page_generation != page_generation {
+            return Err(JournalError::GenerationMismatch);
+        }
         if migration_page_index(record)? != page.page_index {
             return Err(JournalError::WrongPageIndex);
         }
@@ -660,32 +860,36 @@ pub fn inventory_digest(
     hasher.update(entry_count(sorted.len())?);
     for entry in sorted {
         entry.validate()?;
-        hash_string(&mut hasher, entry.record.class().token());
-        hasher.update(&entry.identity_binding);
-        hasher.update(&entry.project_scope_binding);
-        hasher.update(entry.source_authority_kind.to_be_bytes());
-        hasher.update(entry.source_physical_authority_kind.to_be_bytes());
-        hash_optional(&mut hasher, entry.source_generation, |hasher, value| {
-            check_counter(value)?;
-            hasher.update(value.to_be_bytes());
-            Ok(())
-        })?;
-        hash_optional(
-            &mut hasher,
-            entry.source_evidence_digest,
-            |hasher, digest| {
-                hasher.update(digest);
-                Ok(())
-            },
-        )?;
-        if let Some(foreign) = &entry.foreign {
-            hasher.update(foreign.source_scheme_id.to_be_bytes());
-            hasher.update(foreign.source_format_version.to_be_bytes());
-            hasher.update(&foreign.source_identity_binding);
-            hasher.update(&foreign.source_project_scope_binding);
-        }
+        hash_inventory_entry(&mut hasher, entry)?;
     }
     Ok(hasher.finalize().into())
+}
+
+fn hash_inventory_entry(
+    hasher: &mut Sha256,
+    entry: &JournalInventoryEntry,
+) -> Result<(), JournalError> {
+    hash_string(hasher, entry.record.class().token());
+    hasher.update(&entry.identity_binding);
+    hasher.update(&entry.project_scope_binding);
+    hasher.update(entry.source_authority_kind.to_be_bytes());
+    hasher.update(entry.source_physical_authority_kind.to_be_bytes());
+    hash_optional(hasher, entry.source_generation, |hasher, value| {
+        check_counter(value)?;
+        hasher.update(value.to_be_bytes());
+        Ok(())
+    })?;
+    hash_optional(hasher, entry.source_evidence_digest, |hasher, digest| {
+        hasher.update(digest);
+        Ok(())
+    })?;
+    if let Some(foreign) = &entry.foreign {
+        hasher.update(foreign.source_scheme_id.to_be_bytes());
+        hasher.update(foreign.source_format_version.to_be_bytes());
+        hasher.update(&foreign.source_identity_binding);
+        hasher.update(&foreign.source_project_scope_binding);
+    }
+    Ok(())
 }
 
 pub fn empty_inventory_digest(inventory_version: u32) -> [u8; 32] {
@@ -695,6 +899,70 @@ pub fn empty_inventory_digest(inventory_version: u32) -> [u8; 32] {
         .chain_update(0u32.to_be_bytes())
         .finalize()
         .into()
+}
+
+/// Incrementally verifies a paged inventory against `inventory_digest` without retaining all entries.
+pub struct InventoryDigestVerifier {
+    expected_entry_count: u32,
+    seen_entry_count: u32,
+    previous_key: Option<OwnedInventorySortKey>,
+    hasher: Sha256,
+}
+
+impl InventoryDigestVerifier {
+    pub fn new(inventory_version: u32, expected_entry_count: u32) -> Result<Self, JournalError> {
+        validate_inventory_version(inventory_version)?;
+        if expected_entry_count > MAX_JOURNAL_INVENTORY_ENTRIES {
+            return Err(JournalError::TooManyEntries);
+        }
+        let mut hasher = Sha256::new().chain_update(INVENTORY_DOMAIN);
+        hasher.update(inventory_version.to_be_bytes());
+        hasher.update(expected_entry_count.to_be_bytes());
+        Ok(Self {
+            expected_entry_count,
+            seen_entry_count: 0,
+            previous_key: None,
+            hasher,
+        })
+    }
+
+    pub fn absorb_page(&mut self, page: &JournalPage) -> Result<(), JournalError> {
+        check_counter(page.page_generation)?;
+        let mut previous_in_page: Option<OwnedInventorySortKey> = None;
+        for entry in page.entries() {
+            entry.validate()?;
+            let key = entry.sort_key().owned();
+            if let Some(prev) = &previous_in_page {
+                if key <= *prev {
+                    return Err(JournalError::NotStrictlyAscending);
+                }
+            }
+            if let Some(prev) = &self.previous_key {
+                if key <= *prev {
+                    return Err(JournalError::NotStrictlyAscending);
+                }
+            }
+            hash_inventory_entry(&mut self.hasher, entry)?;
+            previous_in_page = Some(key.clone());
+            self.previous_key = Some(key);
+            self.seen_entry_count += 1;
+            if self.seen_entry_count > self.expected_entry_count {
+                return Err(JournalError::TooManyEntries);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn finish(self, expected_digest: [u8; 32]) -> Result<(), JournalError> {
+        if self.seen_entry_count != self.expected_entry_count {
+            return Err(JournalError::EntryCountMismatch);
+        }
+        let digest: [u8; 32] = self.hasher.finalize().into();
+        if digest != expected_digest {
+            return Err(JournalError::InconsistentInventory);
+        }
+        Ok(())
+    }
 }
 
 /// Builds the page-set row for a sealed page.
@@ -759,12 +1027,103 @@ fn validate_epoch(value: u64, allow_zero: bool) -> Result<(), JournalError> {
     Ok(())
 }
 
-fn validate_fence(fencing_generation: u64, phase: u32) -> Result<(), JournalError> {
-    if fencing_generation == u64::MAX {
-        return Err(JournalError::InvalidCounter);
+fn validate_operation_type(value: u32) -> Result<(), JournalError> {
+    match value {
+        operation_type::ENABLE | operation_type::ROTATE | operation_type::ENVELOPE_MIGRATION => {
+            Ok(())
+        }
+        other => Err(JournalError::UnsupportedOperationType(other)),
     }
-    if phase == phase_code::BOOTSTRAP_TARGET && fencing_generation == 0 {
-        return Err(JournalError::InvalidCounter);
+}
+
+fn validate_phase(value: u32) -> Result<(), JournalError> {
+    match value {
+        phase_code::BOOTSTRAP_TARGET
+        | phase_code::DISCOVER
+        | phase_code::PREPARE
+        | phase_code::ADMIT
+        | phase_code::CONVERT
+        | phase_code::VERIFY
+        | phase_code::COMMIT
+        | phase_code::RETIRE_OLD_AUTHORITY
+        | phase_code::FINALIZE
+        | phase_code::DONE
+        | phase_code::RECOVERY_REQUIRED => Ok(()),
+        other => Err(JournalError::UnsupportedPhase(other)),
+    }
+}
+
+fn validate_inventory_version(value: u32) -> Result<(), JournalError> {
+    if value == 0 {
+        Err(JournalError::UnsupportedFormat(value))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_physical_authority_kind(value: u32) -> Result<(), JournalError> {
+    match value {
+        source_physical_authority_kind::TAURI_FILESYSTEM
+        | source_physical_authority_kind::PACKAGED_IDB
+        | source_physical_authority_kind::WEBVIEW_LOCALSTORAGE
+        | source_physical_authority_kind::WEBVIEW_INDEXEDDB
+        | source_physical_authority_kind::WEBVIEW_OPFS
+        | source_physical_authority_kind::R15_CORE => Ok(()),
+        other => Err(JournalError::UnsupportedPhysicalAuthority(other)),
+    }
+}
+
+fn validate_source_scheme_id(value: u32) -> Result<(), JournalError> {
+    match value {
+        source_scheme_id::NONE_PLAINTEXT
+        | source_scheme_id::WEBVIEW_IDB_AT_REST_V1
+        | source_scheme_id::CREDENTIAL_IDB_KEYSTORE_V1 => Ok(()),
+        other => Err(JournalError::UnsupportedSourceScheme(other)),
+    }
+}
+
+fn validate_canonical_binding(bytes: &[u8]) -> Result<(), JournalError> {
+    let mut reader = Reader(bytes);
+    reader.binding()?;
+    if !reader.0.is_empty() {
+        return Err(JournalError::Corrupt("trailing bytes in canonical binding"));
+    }
+    Ok(())
+}
+
+fn validate_target_key_ref(manifest: &JournalManifest) -> Result<(), JournalError> {
+    if manifest.has_target_root_key_ref != manifest.target_root_key_ref_digest.is_some() {
+        return Err(JournalError::Corrupt(
+            "target key-ref flag disagrees with digest presence",
+        ));
+    }
+    let requires = matches!(
+        manifest.operation_type,
+        operation_type::ENABLE | operation_type::ROTATE
+    ) || manifest.phase == phase_code::BOOTSTRAP_TARGET;
+    if requires && manifest.target_root_key_ref_digest.is_none() {
+        return Err(JournalError::Corrupt(
+            "target root key reference required for this manifest",
+        ));
+    }
+    if let Some(digest) = manifest.target_root_key_ref_digest {
+        if digest == [0u8; 32] {
+            return Err(JournalError::Corrupt(
+                "target root key reference digest is zero",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_lease_fields(manifest: &JournalManifest) -> Result<(), JournalError> {
+    if manifest.has_lease_owner {
+        return Ok(());
+    }
+    if manifest.lease_owner_id.is_some() || manifest.lease_expires_unix_ms.is_some() {
+        return Err(JournalError::Corrupt(
+            "lease owner fields present while lease flag is absent",
+        ));
     }
     Ok(())
 }
@@ -780,6 +1139,7 @@ fn push_operation_id(out: &mut Vec<u8>, value: &str) -> Result<(), JournalError>
 }
 
 fn push_optional_owner(out: &mut Vec<u8>, manifest: &JournalManifest) -> Result<(), JournalError> {
+    validate_lease_fields(manifest)?;
     if !manifest.has_lease_owner {
         out.push(0);
         return Ok(());
@@ -908,16 +1268,30 @@ impl<'a> Reader<'a> {
         Ok(start[..=body_len].to_vec())
     }
 
+    fn require_entry_budget(&self, entry_start: usize) -> Result<(), JournalError> {
+        let consumed = entry_start - self.0.len();
+        if consumed > MAX_JOURNAL_ENTRY_BYTES {
+            Err(JournalError::TooLarge)
+        } else {
+            Ok(())
+        }
+    }
+
     fn inventory_entry(&mut self) -> Result<JournalInventoryEntry, JournalError> {
-        let start_len = self.0.len();
+        let entry_start = self.0.len();
         let class = RecordClass::from_token(self.string(64)?)
             .ok_or(JournalError::Corrupt("unknown record class"))?;
+        self.require_entry_budget(entry_start)?;
         let identity_binding = self.binding()?;
+        self.require_entry_budget(entry_start)?;
         let project_scope_binding = self.binding()?;
+        self.require_entry_budget(entry_start)?;
         let source_authority_kind = self.u32()?;
         let source_physical_authority_kind = self.u32()?;
+        self.require_entry_budget(entry_start)?;
         let source_generation = self.optional_u64()?;
         let source_evidence_digest = self.optional_digest()?;
+        self.require_entry_budget(entry_start)?;
         let foreign = match self.take(1)?[0] {
             0 => None,
             1 => Some(ForeignInventoryExtension {
@@ -928,18 +1302,17 @@ impl<'a> Reader<'a> {
             }),
             _ => return Err(JournalError::Corrupt("foreign extension flag invalid")),
         };
+        self.require_entry_budget(entry_start)?;
         let component_count = self.u32()? as usize;
         if component_count > 8 {
             return Err(JournalError::Corrupt("too many identity components"));
         }
         let mut component_strings = Vec::with_capacity(component_count);
         for _ in 0..component_count {
+            self.require_entry_budget(entry_start)?;
             component_strings.push(self.string(16_384)?.to_owned());
         }
-        let consumed = start_len - self.0.len();
-        if consumed > MAX_JOURNAL_ENTRY_BYTES {
-            return Err(JournalError::TooLarge);
-        }
+        self.require_entry_budget(entry_start)?;
         let component_refs: Vec<&str> = component_strings.iter().map(String::as_str).collect();
         let record = RecordIdentity::new(class, &component_refs)
             .map_err(|_| JournalError::Corrupt("inventory entry identity does not rebuild"))?;
