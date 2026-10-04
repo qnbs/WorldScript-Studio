@@ -247,10 +247,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         {
             return Ok(Some(()));
         }
-        let Some(event) = admission
-            .try_root_commit()
-            .map_err(OperationError::from)?
-        else {
+        let Some(event) = admission.try_root_commit().map_err(OperationError::from)? else {
             return Ok(None);
         };
         let held = event.root_guard().map_err(OperationError::from)?;

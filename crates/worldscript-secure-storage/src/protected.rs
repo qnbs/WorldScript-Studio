@@ -329,10 +329,10 @@ fn needs_catalog_root_commit<F: DurableFs, P: KeyProvider>(
         verify_committed(fs, target.store, readable)?;
     }
     let upsert: Vec<CatalogDescriptor> = desired.into_iter().collect();
-    Ok(match (upsert.is_empty(), named.is_some()) {
-        (true, false) => false,
-        _ => true,
-    })
+    Ok(!matches!(
+        (upsert.is_empty(), named.is_some()),
+        (true, false)
+    ))
 }
 
 /// Commits the catalog to the record's current chain: its descriptor (from the verified chain

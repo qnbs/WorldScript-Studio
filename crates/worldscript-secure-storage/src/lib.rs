@@ -66,13 +66,13 @@ pub use catalog::{
     catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, PageAddress,
     CATALOG_SHARD_COUNT, MAX_CATALOG_PAGE_DESCRIPTORS,
 };
+#[cfg(feature = "test-support")]
+pub use commit::read_committed;
 pub use commit::{
     commit_write, describe_record, load_authority, reconcile, Authority, CommitError, CommitStep,
     CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled, RecordLocation,
     RecordStore, RecoveryReason, Resolution, WriteRequest,
 };
-#[cfg(feature = "test-support")]
-pub use commit::read_committed;
 pub use disposition::{disposition, is_r15_record_class, Disposition};
 pub use durable::{
     generation_path, stage_and_promote, staging_path, DirectoryDurability, DurableFs,
