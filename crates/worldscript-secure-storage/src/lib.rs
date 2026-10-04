@@ -91,10 +91,12 @@ pub use journal::{
     ordinary_mutating_writes_admitted, page_ref_for, phase_code, source_authority_kind,
     source_physical_authority_kind, source_scheme_id, transition_phase, ForeignInventoryExtension,
     InventoryDigestVerifier, JournalCheckpointCursor, JournalError, JournalInventoryEntry,
-    JournalInventorySource, JournalManifest, JournalPage, JournalPageRef, MigrationExecutionError,
-    MigrationFence, JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA,
-    JOURNAL_PAGE_FORMAT_VERSION, JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES,
-    MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
+    JournalInventoryExtent, JournalInventorySource, JournalManifest, JournalPage, JournalPageRef,
+    JournalRevision, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
+    MigrationPhase, RecoveryReasonCode, JOURNAL_MANIFEST_FORMAT_VERSION,
+    JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION, JOURNAL_PAGE_RECORD_SCHEMA,
+    MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_PAGE_BYTES,
+    MAX_JOURNAL_PAGE_DESCRIPTORS,
 };
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};
 pub use marker::{

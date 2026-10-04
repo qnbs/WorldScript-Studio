@@ -26,6 +26,78 @@ impl From<JournalError> for MigrationExecutionError {
     }
 }
 
+/// §10.3 phase code carried as a typed value instead of a bare `u32`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MigrationPhase(u32);
+
+impl MigrationPhase {
+    pub const fn from_wire(code: u32) -> Self {
+        Self(code)
+    }
+
+    pub fn wire(self) -> u32 {
+        self.0
+    }
+}
+
+/// Authenticated manifest envelope `content_digest` (§5.4, §10.1.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ManifestEnvelopeDigest([u8; 32]);
+
+impl ManifestEnvelopeDigest {
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+/// Paged inventory extent named by a journal manifest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JournalInventoryExtent {
+    pub page_count: u32,
+    pub entry_count: u32,
+}
+
+impl JournalInventoryExtent {
+    pub fn from_manifest(manifest: &JournalManifest) -> Self {
+        Self {
+            page_count: manifest.page_count,
+            entry_count: manifest.entry_count,
+        }
+    }
+}
+
+/// Durable terminal refusal reason code stored in the manifest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecoveryReasonCode(u32);
+
+impl RecoveryReasonCode {
+    pub const fn new(code: u32) -> Self {
+        Self(code)
+    }
+
+    pub fn wire(self) -> u32 {
+        self.0
+    }
+}
+
+/// Monotonic journal manifest generation (§10.1.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct JournalRevision(u64);
+
+impl JournalRevision {
+    pub const fn from_wire(revision: u64) -> Self {
+        Self(revision)
+    }
+
+    pub fn wire(self) -> u64 {
+        self.0
+    }
+}
+
 /// Checkpoint cursor coordinates validated against manifest inventory bounds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct JournalCheckpointCursor {
@@ -54,32 +126,37 @@ impl JournalCheckpointCursor {
         }
     }
 
-    fn ensure_page_in_range(self, page_count: u32) -> Result<(), MigrationExecutionError> {
-        if page_count > 0 && self.page_index >= page_count {
+    fn ensure_page_in_range(
+        self,
+        extent: JournalInventoryExtent,
+    ) -> Result<(), MigrationExecutionError> {
+        if extent.page_count > 0 && self.page_index >= extent.page_count {
             Err(JournalError::InvalidPageIndex.into())
         } else {
             Ok(())
         }
     }
 
-    fn ensure_entry_in_range(self, entry_count: u32) -> Result<(), MigrationExecutionError> {
-        if entry_count > 0 && self.entry_index >= entry_count {
+    fn ensure_entry_in_range(
+        self,
+        extent: JournalInventoryExtent,
+    ) -> Result<(), MigrationExecutionError> {
+        if extent.entry_count > 0 && self.entry_index >= extent.entry_count {
             Err(JournalError::EntryCountMismatch.into())
         } else {
             Ok(())
         }
     }
 
-    pub(crate) fn validate_for_inventory(
+    pub(crate) fn validate_for_extent(
         self,
-        page_count: u32,
-        entry_count: u32,
+        extent: JournalInventoryExtent,
     ) -> Result<(), MigrationExecutionError> {
-        if page_count == 0 && entry_count == 0 {
+        if extent.page_count == 0 && extent.entry_count == 0 {
             return self.ensure_empty_inventory_cursor();
         }
-        self.ensure_page_in_range(page_count)?;
-        self.ensure_entry_in_range(entry_count)?;
+        self.ensure_page_in_range(extent)?;
+        self.ensure_entry_in_range(extent)?;
         Ok(())
     }
 }
@@ -101,13 +178,14 @@ impl MigrationFence {
 }
 
 /// Returns whether `phase` is terminal success or terminal refusal.
-pub fn is_terminal_phase(phase: u32) -> bool {
-    phase == phase_code::DONE || phase == phase_code::RECOVERY_REQUIRED
+pub fn is_terminal_phase(phase: MigrationPhase) -> bool {
+    let code = phase.wire();
+    code == phase_code::DONE || code == phase_code::RECOVERY_REQUIRED
 }
 
 /// Ordinary mutating writes during `PREPARE` (before the exclusive `ADMIT` barrier) and after `DONE` (§10.3).
-pub fn ordinary_mutating_writes_admitted(phase: u32) -> bool {
-    phase == phase_code::DONE || phase == phase_code::PREPARE
+pub fn ordinary_mutating_writes_admitted(phase: MigrationPhase) -> bool {
+    matches!(phase.wire(), phase_code::DONE | phase_code::PREPARE)
 }
 
 /// Refuses when the manifest fence/revision disagrees with the caller's token.
@@ -127,7 +205,7 @@ pub fn assert_fence(
 pub fn assert_live_binding(
     manifest: &JournalManifest,
     live: &LiveMigration,
-    manifest_content_digest: [u8; 32],
+    manifest_content_digest: ManifestEnvelopeDigest,
 ) -> Result<(), MigrationExecutionError> {
     if manifest.operation_id != live.operation_id {
         return Err(MigrationExecutionError::LiveBindingMismatch);
@@ -138,7 +216,7 @@ pub fn assert_live_binding(
     if manifest.journal_revision != live.journal_revision {
         return Err(MigrationExecutionError::StaleJournalRevision);
     }
-    if manifest_content_digest != live.manifest_digest {
+    if manifest_content_digest.as_bytes() != &live.manifest_digest {
         return Err(MigrationExecutionError::LiveBindingMismatch);
     }
     Ok(())
@@ -147,20 +225,21 @@ pub fn assert_live_binding(
 /// Resolves the manifest revision the root still names (§10.1.1).
 pub fn authoritative_manifest_revision(
     live: &LiveMigration,
-    candidate_revision: u64,
-) -> Result<u64, MigrationExecutionError> {
-    if candidate_revision < live.journal_revision {
+    candidate_revision: JournalRevision,
+) -> Result<JournalRevision, MigrationExecutionError> {
+    let candidate = candidate_revision.wire();
+    if candidate < live.journal_revision {
         return Err(MigrationExecutionError::StaleJournalRevision);
     }
-    if candidate_revision > live.journal_revision {
-        Ok(live.journal_revision)
+    if candidate > live.journal_revision {
+        Ok(JournalRevision::from_wire(live.journal_revision))
     } else {
         Ok(candidate_revision)
     }
 }
 
-fn phase_rank(phase: u32) -> Result<u32, MigrationExecutionError> {
-    Ok(match phase {
+fn phase_rank(phase: MigrationPhase) -> Result<u32, MigrationExecutionError> {
+    Ok(match phase.wire() {
         phase_code::BOOTSTRAP_TARGET => 0,
         phase_code::DISCOVER => 1,
         phase_code::PREPARE => 2,
@@ -177,14 +256,14 @@ fn phase_rank(phase: u32) -> Result<u32, MigrationExecutionError> {
 }
 
 /// Whether `to` is an allowed idempotent or forward transition from `from` (§10.3 ordering).
-pub fn allows_phase_transition(from: u32, to: u32) -> bool {
+pub fn allows_phase_transition(from: MigrationPhase, to: MigrationPhase) -> bool {
     if from == to {
         return phase_rank(from).is_ok();
     }
     if is_terminal_phase(from) {
         return false;
     }
-    if to == phase_code::RECOVERY_REQUIRED {
+    if to.wire() == phase_code::RECOVERY_REQUIRED {
         return phase_rank(from).is_ok();
     }
     match (phase_rank(from), phase_rank(to)) {
@@ -193,10 +272,11 @@ pub fn allows_phase_transition(from: u32, to: u32) -> bool {
     }
 }
 
-fn bump_revision(manifest: &JournalManifest) -> Result<u64, MigrationExecutionError> {
+fn bump_revision(manifest: &JournalManifest) -> Result<JournalRevision, MigrationExecutionError> {
     manifest
         .journal_revision
         .checked_add(1)
+        .map(JournalRevision::from_wire)
         .ok_or(MigrationExecutionError::Journal(
             JournalError::InvalidCounter,
         ))
@@ -206,26 +286,30 @@ fn validate_checkpoint_cursor(
     manifest: &JournalManifest,
     cursor: JournalCheckpointCursor,
 ) -> Result<(), MigrationExecutionError> {
-    cursor.validate_for_inventory(manifest.page_count, manifest.entry_count)
+    cursor.validate_for_extent(JournalInventoryExtent::from_manifest(manifest))
+}
+
+fn manifest_phase(manifest: &JournalManifest) -> MigrationPhase {
+    MigrationPhase::from_wire(manifest.phase)
 }
 
 /// Advances to the next migration phase, bumping `journal_revision` when the phase changes (§10.1.1).
 pub fn transition_phase(
     manifest: &JournalManifest,
     fence: &MigrationFence,
-    to_phase: u32,
+    to_phase: MigrationPhase,
 ) -> Result<JournalManifest, MigrationExecutionError> {
     assert_fence(manifest, fence)?;
-    if is_terminal_phase(manifest.phase) {
+    if is_terminal_phase(manifest_phase(manifest)) {
         return Err(MigrationExecutionError::TerminalPhase);
     }
-    if !allows_phase_transition(manifest.phase, to_phase) {
+    if !allows_phase_transition(manifest_phase(manifest), to_phase) {
         return Err(MigrationExecutionError::InvalidPhaseTransition);
     }
     let mut next = manifest.clone();
-    if next.phase != to_phase {
-        next.journal_revision = bump_revision(manifest)?;
-        next.phase = to_phase;
+    if next.phase != to_phase.wire() {
+        next.journal_revision = bump_revision(manifest)?.wire();
+        next.phase = to_phase.wire();
     }
     next.encode()?;
     Ok(next)
@@ -238,7 +322,7 @@ pub fn checkpoint_progress(
     cursor: JournalCheckpointCursor,
 ) -> Result<JournalManifest, MigrationExecutionError> {
     assert_fence(manifest, fence)?;
-    if is_terminal_phase(manifest.phase) {
+    if is_terminal_phase(manifest_phase(manifest)) {
         return Err(MigrationExecutionError::TerminalPhase);
     }
     if manifest.phase == phase_code::RECOVERY_REQUIRED {
@@ -251,7 +335,7 @@ pub fn checkpoint_progress(
         return Err(MigrationExecutionError::RegressiveCheckpoint);
     }
     let mut next = manifest.clone();
-    next.journal_revision = bump_revision(manifest)?;
+    next.journal_revision = bump_revision(manifest)?.wire();
     next.cursor_page_index = cursor.page_index;
     next.cursor_entry_index = cursor.entry_index;
     next.encode()?;
@@ -262,17 +346,17 @@ pub fn checkpoint_progress(
 pub fn mark_recovery(
     manifest: &JournalManifest,
     fence: &MigrationFence,
-    recovery_reason_code: u32,
+    recovery_reason_code: RecoveryReasonCode,
 ) -> Result<JournalManifest, MigrationExecutionError> {
     assert_fence(manifest, fence)?;
-    if is_terminal_phase(manifest.phase) {
+    if is_terminal_phase(manifest_phase(manifest)) {
         return Err(MigrationExecutionError::TerminalPhase);
     }
-    phase_rank(manifest.phase)?;
+    phase_rank(manifest_phase(manifest))?;
     let mut next = manifest.clone();
-    next.journal_revision = bump_revision(manifest)?;
+    next.journal_revision = bump_revision(manifest)?.wire();
     next.phase = phase_code::RECOVERY_REQUIRED;
-    next.recovery_reason_code = recovery_reason_code;
+    next.recovery_reason_code = recovery_reason_code.wire();
     next.encode()?;
     Ok(next)
 }
@@ -282,5 +366,5 @@ pub fn mark_done(
     manifest: &JournalManifest,
     fence: &MigrationFence,
 ) -> Result<JournalManifest, MigrationExecutionError> {
-    transition_phase(manifest, fence, phase_code::DONE)
+    transition_phase(manifest, fence, MigrationPhase::from_wire(phase_code::DONE))
 }

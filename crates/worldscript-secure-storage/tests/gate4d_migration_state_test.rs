@@ -2,8 +2,9 @@ use worldscript_secure_storage::{
     allows_phase_transition, assert_live_binding, authoritative_manifest_revision,
     checkpoint_progress, empty_inventory_digest, empty_journal_page_set_digest, is_terminal_phase,
     mark_done, mark_recovery, operation_type, ordinary_mutating_writes_admitted, phase_code,
-    transition_phase, JournalCheckpointCursor, JournalError, JournalManifest, LiveMigration,
-    MigrationExecutionError, MigrationFence,
+    transition_phase, JournalCheckpointCursor, JournalError, JournalManifest, JournalRevision,
+    LiveMigration, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence, MigrationPhase,
+    RecoveryReasonCode,
 };
 
 struct RotateFixture {
@@ -42,6 +43,10 @@ impl RotateFixture {
     }
 }
 
+fn phase(code: u32) -> MigrationPhase {
+    MigrationPhase::from_wire(code)
+}
+
 #[test]
 fn happy_path_phase_sequence_is_forward_only() {
     let phases = [
@@ -57,17 +62,17 @@ fn happy_path_phase_sequence_is_forward_only() {
         phase_code::DONE,
     ];
     for window in phases.windows(2) {
-        assert!(allows_phase_transition(window[0], window[1]));
+        assert!(allows_phase_transition(phase(window[0]), phase(window[1])));
     }
     assert!(!allows_phase_transition(
-        phase_code::DISCOVER,
-        phase_code::CONVERT
+        phase(phase_code::DISCOVER),
+        phase(phase_code::CONVERT)
     ));
     assert!(allows_phase_transition(
-        phase_code::CONVERT,
-        phase_code::RECOVERY_REQUIRED
+        phase(phase_code::CONVERT),
+        phase(phase_code::RECOVERY_REQUIRED)
     ));
-    assert!(!allows_phase_transition(999, 999));
+    assert!(!allows_phase_transition(phase(999), phase(999)));
 }
 
 #[test]
@@ -82,7 +87,7 @@ fn transition_phase_bumps_revision_on_forward_change() {
     }
     .manifest();
     let fence = MigrationFence::from_manifest(&manifest);
-    let discover = transition_phase(&manifest, &fence, phase_code::DISCOVER).unwrap();
+    let discover = transition_phase(&manifest, &fence, phase(phase_code::DISCOVER)).unwrap();
     assert_eq!(discover.phase, phase_code::DISCOVER);
     assert_eq!(discover.journal_revision, 2);
 }
@@ -166,24 +171,30 @@ fn stale_fence_is_refused_before_mutation() {
         journal_revision: 2,
     };
     assert_eq!(
-        transition_phase(&manifest, &stale, phase_code::ADMIT),
+        transition_phase(&manifest, &stale, phase(phase_code::ADMIT)),
         Err(MigrationExecutionError::StaleMigrationOwner)
     );
 }
 
 #[test]
 fn live_binding_requires_exact_manifest_digest_and_revision() {
-    let digest = [0x11; 32];
+    let digest = ManifestEnvelopeDigest::from_bytes([0x11; 32]);
     let live = LiveMigration {
         operation_id: "op-d".into(),
         fencing_generation: 1,
         journal_revision: 3,
-        manifest_digest: digest,
+        manifest_digest: [0x11; 32],
     };
-    assert_eq!(authoritative_manifest_revision(&live, 3).unwrap(), 3);
-    assert_eq!(authoritative_manifest_revision(&live, 5).unwrap(), 3);
     assert_eq!(
-        authoritative_manifest_revision(&live, 2),
+        authoritative_manifest_revision(&live, JournalRevision::from_wire(3)).unwrap(),
+        JournalRevision::from_wire(3)
+    );
+    assert_eq!(
+        authoritative_manifest_revision(&live, JournalRevision::from_wire(5)).unwrap(),
+        JournalRevision::from_wire(3)
+    );
+    assert_eq!(
+        authoritative_manifest_revision(&live, JournalRevision::from_wire(2)),
         Err(MigrationExecutionError::StaleJournalRevision)
     );
     let manifest = RotateFixture {
@@ -197,7 +208,11 @@ fn live_binding_requires_exact_manifest_digest_and_revision() {
     .manifest();
     assert!(assert_live_binding(&manifest, &live, digest).is_ok());
     assert_eq!(
-        assert_live_binding(&manifest, &live, [0x22; 32]),
+        assert_live_binding(
+            &manifest,
+            &live,
+            ManifestEnvelopeDigest::from_bytes([0x22; 32])
+        ),
         Err(MigrationExecutionError::LiveBindingMismatch)
     );
     let ahead = RotateFixture {
@@ -229,7 +244,7 @@ fn mark_recovery_refuses_unsupported_source_phase() {
     manifest.phase = 999;
     let fence = MigrationFence::from_manifest(&manifest);
     assert_eq!(
-        mark_recovery(&manifest, &fence, 7),
+        mark_recovery(&manifest, &fence, RecoveryReasonCode::new(7)),
         Err(MigrationExecutionError::Journal(
             JournalError::UnsupportedPhase(999)
         ))
@@ -248,17 +263,19 @@ fn recovery_and_done_are_terminal_and_prepare_admits_writes() {
     }
     .manifest();
     let fence = MigrationFence::from_manifest(&manifest);
-    let recovery = mark_recovery(&manifest, &fence, 42).unwrap();
+    let recovery = mark_recovery(&manifest, &fence, RecoveryReasonCode::new(42)).unwrap();
     assert_eq!(recovery.phase, phase_code::RECOVERY_REQUIRED);
     assert_eq!(recovery.recovery_reason_code, 42);
-    assert!(is_terminal_phase(recovery.phase));
-    assert!(!ordinary_mutating_writes_admitted(recovery.phase));
+    assert!(is_terminal_phase(phase(recovery.phase)));
+    assert!(!ordinary_mutating_writes_admitted(phase(recovery.phase)));
     let recovery_fence = MigrationFence::from_manifest(&recovery);
     assert_eq!(
-        mark_recovery(&recovery, &recovery_fence, 99),
+        mark_recovery(&recovery, &recovery_fence, RecoveryReasonCode::new(99)),
         Err(MigrationExecutionError::TerminalPhase)
     );
-    assert!(ordinary_mutating_writes_admitted(phase_code::PREPARE));
+    assert!(ordinary_mutating_writes_admitted(phase(
+        phase_code::PREPARE
+    )));
     let done_manifest = RotateFixture {
         operation_id: "op-f",
         phase: phase_code::FINALIZE,
@@ -272,5 +289,5 @@ fn recovery_and_done_are_terminal_and_prepare_admits_writes() {
     let done = mark_done(&done_manifest, &done_fence).unwrap();
     assert_eq!(done.phase, phase_code::DONE);
     assert_eq!(done.journal_revision, 10);
-    assert!(ordinary_mutating_writes_admitted(done.phase));
+    assert!(ordinary_mutating_writes_admitted(phase(done.phase)));
 }
