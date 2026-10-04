@@ -14,8 +14,8 @@ record conversion, root live-migration binding updates, cross-process lease CAS,
 | Root-bound manifest digest | `assert_live_binding(..., manifest_content_digest)` | `live_binding_requires_exact_manifest_digest_and_revision` |
 | Exact root-bound journal revision | `authoritative_manifest_revision` | rejects `<`, accepts `==`, debris `>` |
 | Phase transition revision bump | `transition_phase` | `transition_phase_bumps_revision_on_forward_change` |
-| Terminal `RECOVERY_REQUIRED` | `mark_recovery` on terminal phases | `recovery_and_done_are_terminal_and_prepare_admits_writes` |
-| Checkpoint cursor bounds | `validate_checkpoint_cursor` | empty + out-of-range + regressive tests |
+| Terminal `RECOVERY_REQUIRED` | `mark_recovery` validates source phase + terminal guard | `mark_recovery_refuses_unsupported_source_phase` |
+| Checkpoint cursor bounds | `JournalCheckpointCursor` | empty + out-of-range + regressive tests |
 | Unsupported phase idempotence | `allows_phase_transition` | `happy_path_phase_sequence_is_forward_only` |
 | `PREPARE` ordinary writes (§10.3) | `ordinary_mutating_writes_admitted` | `recovery_and_done_are_terminal_and_prepare_admits_writes` |
 

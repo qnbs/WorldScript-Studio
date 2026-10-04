@@ -90,11 +90,11 @@ pub use journal::{
     is_terminal_phase, journal_page_set_digest, mark_done, mark_recovery, operation_type,
     ordinary_mutating_writes_admitted, page_ref_for, phase_code, source_authority_kind,
     source_physical_authority_kind, source_scheme_id, transition_phase, ForeignInventoryExtension,
-    InventoryDigestVerifier, JournalError, JournalInventoryEntry, JournalInventorySource,
-    JournalManifest, JournalPage, JournalPageRef, MigrationExecutionError, MigrationFence,
-    JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION,
-    JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES,
-    MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
+    InventoryDigestVerifier, JournalCheckpointCursor, JournalError, JournalInventoryEntry,
+    JournalInventorySource, JournalManifest, JournalPage, JournalPageRef, MigrationExecutionError,
+    MigrationFence, JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    JOURNAL_PAGE_FORMAT_VERSION, JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES,
+    MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
 };
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};
 pub use marker::{

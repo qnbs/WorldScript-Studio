@@ -26,6 +26,64 @@ impl From<JournalError> for MigrationExecutionError {
     }
 }
 
+/// Checkpoint cursor coordinates validated against manifest inventory bounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct JournalCheckpointCursor {
+    pub page_index: u32,
+    pub entry_index: u32,
+}
+
+impl JournalCheckpointCursor {
+    pub const EMPTY: Self = Self {
+        page_index: 0,
+        entry_index: 0,
+    };
+
+    pub fn new(page_index: u32, entry_index: u32) -> Self {
+        Self {
+            page_index,
+            entry_index,
+        }
+    }
+
+    fn ensure_empty_inventory_cursor(self) -> Result<(), MigrationExecutionError> {
+        if self != Self::EMPTY {
+            Err(JournalError::InvalidPageIndex.into())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn ensure_page_in_range(self, page_count: u32) -> Result<(), MigrationExecutionError> {
+        if page_count > 0 && self.page_index >= page_count {
+            Err(JournalError::InvalidPageIndex.into())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn ensure_entry_in_range(self, entry_count: u32) -> Result<(), MigrationExecutionError> {
+        if entry_count > 0 && self.entry_index >= entry_count {
+            Err(JournalError::EntryCountMismatch.into())
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn validate_for_inventory(
+        self,
+        page_count: u32,
+        entry_count: u32,
+    ) -> Result<(), MigrationExecutionError> {
+        if page_count == 0 && entry_count == 0 {
+            return self.ensure_empty_inventory_cursor();
+        }
+        self.ensure_page_in_range(page_count)?;
+        self.ensure_entry_in_range(entry_count)?;
+        Ok(())
+    }
+}
+
 /// The fence token every mutation-capable migration step must match (§10.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MigrationFence {
@@ -146,32 +204,9 @@ fn bump_revision(manifest: &JournalManifest) -> Result<u64, MigrationExecutionEr
 
 fn validate_checkpoint_cursor(
     manifest: &JournalManifest,
-    cursor_page_index: u32,
-    cursor_entry_index: u32,
+    cursor: JournalCheckpointCursor,
 ) -> Result<(), MigrationExecutionError> {
-    if manifest.page_count == 0 && manifest.entry_count == 0 {
-        if cursor_page_index != 0 || cursor_entry_index != 0 {
-            return Err(MigrationExecutionError::Journal(
-                JournalError::InvalidPageIndex,
-            ));
-        }
-        return Ok(());
-    }
-    if manifest.page_count > 0 && cursor_page_index >= manifest.page_count {
-        return Err(MigrationExecutionError::Journal(
-            JournalError::InvalidPageIndex,
-        ));
-    }
-    if manifest.entry_count > 0 && cursor_entry_index >= manifest.entry_count {
-        return Err(MigrationExecutionError::Journal(
-            JournalError::EntryCountMismatch,
-        ));
-    }
-    Ok(())
-}
-
-fn cursor_lex_key(page: u32, entry: u32) -> (u32, u32) {
-    (page, entry)
+    cursor.validate_for_inventory(manifest.page_count, manifest.entry_count)
 }
 
 /// Advances to the next migration phase, bumping `journal_revision` when the phase changes (§10.1.1).
@@ -200,8 +235,7 @@ pub fn transition_phase(
 pub fn checkpoint_progress(
     manifest: &JournalManifest,
     fence: &MigrationFence,
-    cursor_page_index: u32,
-    cursor_entry_index: u32,
+    cursor: JournalCheckpointCursor,
 ) -> Result<JournalManifest, MigrationExecutionError> {
     assert_fence(manifest, fence)?;
     if is_terminal_phase(manifest.phase) {
@@ -210,16 +244,16 @@ pub fn checkpoint_progress(
     if manifest.phase == phase_code::RECOVERY_REQUIRED {
         return Err(MigrationExecutionError::RecoveryRequired);
     }
-    validate_checkpoint_cursor(manifest, cursor_page_index, cursor_entry_index)?;
-    if cursor_lex_key(cursor_page_index, cursor_entry_index)
-        < cursor_lex_key(manifest.cursor_page_index, manifest.cursor_entry_index)
-    {
+    validate_checkpoint_cursor(manifest, cursor)?;
+    let current =
+        JournalCheckpointCursor::new(manifest.cursor_page_index, manifest.cursor_entry_index);
+    if cursor < current {
         return Err(MigrationExecutionError::RegressiveCheckpoint);
     }
     let mut next = manifest.clone();
     next.journal_revision = bump_revision(manifest)?;
-    next.cursor_page_index = cursor_page_index;
-    next.cursor_entry_index = cursor_entry_index;
+    next.cursor_page_index = cursor.page_index;
+    next.cursor_entry_index = cursor.entry_index;
     next.encode()?;
     Ok(next)
 }
@@ -234,6 +268,7 @@ pub fn mark_recovery(
     if is_terminal_phase(manifest.phase) {
         return Err(MigrationExecutionError::TerminalPhase);
     }
+    phase_rank(manifest.phase)?;
     let mut next = manifest.clone();
     next.journal_revision = bump_revision(manifest)?;
     next.phase = phase_code::RECOVERY_REQUIRED;

@@ -116,5 +116,6 @@ pub use page::JournalPage;
 pub use state::{
     allows_phase_transition, assert_fence, assert_live_binding, authoritative_manifest_revision,
     checkpoint_progress, is_terminal_phase, mark_done, mark_recovery,
-    ordinary_mutating_writes_admitted, transition_phase, MigrationExecutionError, MigrationFence,
+    ordinary_mutating_writes_admitted, transition_phase, JournalCheckpointCursor,
+    MigrationExecutionError, MigrationFence,
 };
