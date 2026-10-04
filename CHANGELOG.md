@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **R-15 Gate 4D migration execution state (#359 / #922):** headless Core now implements §10.3
+- **R-15 Gate 4D migration execution state (#957 / #359 / #922):** headless Core now implements §10.3
   journal phase ordering, fence/revision checks, authoritative manifest revision selection against
   the root live-migration binding, checkpoint revision bumps, and terminal recovery/done transitions.
   Durable journal I/O, record conversion, and root binding updates remain later 4D slices. Production
-  authority is unchanged.
+  authority is unchanged. PR #957.
 - **R-15 Gate 4C journal codec (#445 / #922):** headless Core now implements the §10.1 migration
   journal manifest body, `inventory_digest`, `journal_page_set_digest`, canonical paged inventory
   page bodies, and manifest/page envelope seal-open helpers with fail-closed malformed-input refusal.
