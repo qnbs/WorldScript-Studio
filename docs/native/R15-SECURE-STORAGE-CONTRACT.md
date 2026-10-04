@@ -3657,7 +3657,7 @@ R15_GATE1A=IMPLEMENTED_HEADLESS
 R15_GATE1B=IMPLEMENTED_HEADLESS_AND_PLATFORM_ADAPTER
 R15_GATE2=IMPLEMENTED_HEADLESS
 R15_GATE3=IMPLEMENTED_HEADLESS
-R15_GATE4=SLICE_4B_PROTECTED_OPERATIONS
+R15_GATE4=SLICE_4C_JOURNAL_CODEC
 R15_GATE5=NOT_ADMITTED
 R15_GATE6=NOT_ADMITTED
 R15_GATE7=NOT_ADMITTED
@@ -4041,8 +4041,16 @@ Later implementation may be admitted only in these bounded gates:
      `gate4b_operations_test` runs in Linux Core CI and the macOS/Windows platform evidence path.
      The evidence boundary is mapped in `r15/GATE4B-OPERATION-EVIDENCE.md`; headless implementation
      is not a terminal exact-main/packaged result by itself.
-     Remaining Gate 4 work is pending: journal, rekey and enable/disable state machines remain
-     4C/4D/4E, and `PRODUCTION_AUTHORITY_SWITCH_ALLOWED=NO`.
+   - **Slice 4C (journal and paged manifest codec)** — `journal` implements §10.1's authenticated
+     manifest body, §5.4's `inventory_digest`, §10.1.1's `journal_page_set_digest` and paged
+     inventory page bodies, plus manifest/page record seal-open helpers. Tests in
+     `gate4c_journal_test` prove digest/canonical-encoding invariants, inventory and page-set
+     binding refusal, and malformed-input failure without partial trust. Evidence is mapped in
+     `r15/GATE4C-JOURNAL-CODEC-EVIDENCE.md`. Durable journal persistence, live-migration root
+     binding updates, and crash-resumable rotation/recovery execution remain 4D/4E;
+     `PRODUCTION_AUTHORITY_SWITCH_ALLOWED=NO`.
+     Remaining Gate 4 work is pending: rekey/recovery execution and enable/disable state machines
+     remain 4D/4E.
 5. **Migration admission readiness and inventory-complete migration** (admission-readiness, not full
    authority-ownership — ordinary reads/writes may still resolve through current TS/WebView
    authority for a class short of Gate 7, provided routed through the states below rather than an
