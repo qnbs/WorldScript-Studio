@@ -57,7 +57,10 @@ function resolveGitTransport(gitTransportProbe) {
   if (gitTransportProbe === 'offline-skipped') {
     return 'offline-skipped';
   }
-  if (gitTransportProbe && !gitTransportProbe.startsWith('error')) {
+  if (!gitTransportProbe) {
+    return 'origin read failed';
+  }
+  if (!gitTransportProbe.startsWith('error')) {
     return 'origin readable';
   }
   return 'origin read failed';
@@ -74,6 +77,9 @@ function resolveDepsHint(nodeModules) {
 }
 
 function resolveGhApiLabel(ghApiProbe, ghAuth) {
+  if (ghApiProbe === 'offline-skipped' || ghAuth === 'offline-skipped') {
+    return 'offline-skipped';
+  }
   if (ghApiProbe?.startsWith('error')) {
     return ghApiProbe;
   }
@@ -135,6 +141,7 @@ function buildSummary(input) {
 
 function collectLiveSummary() {
   const pkg = readPackageJson();
+  const offline = isOfflineDoctorMode();
   return buildSummary({
     head: runGit(['rev-parse', 'HEAD']),
     branch: runGit(['branch', '--show-current']),
@@ -142,7 +149,7 @@ function collectLiveSummary() {
     worktreeClean: runGit(['status', '--porcelain']) === '',
     gitTransportProbe: probeGitTransport(),
     ghApiProbe: probeGhApiLogin(),
-    ghAuth: readGhAuthStatus(),
+    ghAuth: offline ? 'offline-skipped' : readGhAuthStatus(),
     nodeModules: existsSync(join(cwd, 'node_modules')),
     pkg,
     agentRuntime: resolveAgentRuntime(),

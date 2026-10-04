@@ -17,8 +17,7 @@ describe('cursor-cloud-doctor.mjs', () => {
     expect(summary['head']).toEqual(expect.any(String));
     expect(summary['worktreeClean']).toEqual(expect.any(Boolean));
     expect(summary['gitTransport']).toEqual(expect.any(String));
-    expect(summary['ghApi']).toEqual(expect.any(String));
-    expect(summary['ghApi']).not.toMatch(/Bearer |ghp_|gho_/i);
+    expect(summary['ghApi']).toEqual('offline-skipped');
     expect(JSON.stringify(summary)).not.toMatch(/Bearer |ghp_|gho_/i);
   });
 });
