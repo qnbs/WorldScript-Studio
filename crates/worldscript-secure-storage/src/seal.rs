@@ -72,19 +72,30 @@ fn check_counters(meta: &RecordMeta) -> Result<(), SealError> {
     }
 }
 
-fn seal_inner(
+/// §10.2 bootstrap journal manifest: `journal_revision == 0` is carried as envelope `record_generation == 0`.
+/// Only this path may seal at generation 0; [`check_counters`] still applies everywhere else.
+fn check_counters_journal_manifest_bootstrap(meta: &RecordMeta) -> Result<(), SealError> {
+    if meta.record_generation != 0 {
+        return Err(SealError::UnassignedCounter);
+    }
+    if meta.key_epoch == 0 || meta.key_epoch == u64::MAX {
+        return Err(SealError::UnassignedCounter);
+    }
+    Ok(())
+}
+
+fn seal_inner_with_counter_policy(
     key: &Key,
     random: &mut impl RandomSource,
     target: &SealTarget<'_>,
     plaintext: &[u8],
+    counter_check: fn(&RecordMeta) -> Result<(), SealError>,
 ) -> Result<Vec<u8>, SealError> {
     let SealTarget { context, meta } = *target;
-    // §10.4.1: a class that keeps a separate approved authority (or has no admitted disposition)
-    // never yields R-15 ciphertext, whichever entry point is used.
     if !is_r15_record_class(context.record_class) {
         return Err(SealError::NotAnR15RecordClass);
     }
-    check_counters(&meta)?;
+    counter_check(&meta)?;
     let ciphertext_len = (plaintext.len() as u64)
         .checked_add(TAG_LEN as u64)
         .filter(|len| *len <= MAX_CIPHERTEXT_LEN)
@@ -102,18 +113,48 @@ fn seal_inner(
     }
     .encode();
     let aad = canonical_aad(&context, &header).map_err(SealError::InvalidContext)?;
-    // One allocation for the whole envelope: the plaintext is copied once behind the header, encrypted
-    // in place, and the tag appended, so no separate ciphertext buffer is ever materialized.
     let mut out = Vec::with_capacity(header.len() + ciphertext_len as usize);
     out.extend_from_slice(&header);
     out.extend_from_slice(plaintext);
     let tag = cipher(key)
         .encrypt_in_place_detached(Nonce::from_slice(&nonce), &aad, &mut out[header.len()..])
-        // QNBS-v3 (#445): AES-GCM encryption only fails on inputs already bounded above; surfaced as TooLarge rather than panicking.
         .map_err(|_| SealError::TooLarge)?;
     out.extend_from_slice(&tag);
     debug_assert_eq!(out.len() as u64, header.len() as u64 + ciphertext_len);
     Ok(out)
+}
+
+fn seal_inner(
+    key: &Key,
+    random: &mut impl RandomSource,
+    target: &SealTarget<'_>,
+    plaintext: &[u8],
+) -> Result<Vec<u8>, SealError> {
+    seal_inner_with_counter_policy(key, random, target, plaintext, check_counters)
+}
+
+/// Seals a §10.2 bootstrap journal manifest body whose envelope generation is exactly `0`.
+pub(crate) fn seal_journal_manifest_bootstrap(
+    key: &Key,
+    target: &SealTarget<'_>,
+    plaintext: &[u8],
+) -> Result<Vec<u8>, SealError> {
+    seal_journal_manifest_bootstrap_with_random(key, &mut OsRandom, target, plaintext)
+}
+
+pub(crate) fn seal_journal_manifest_bootstrap_with_random(
+    key: &Key,
+    random: &mut impl RandomSource,
+    target: &SealTarget<'_>,
+    plaintext: &[u8],
+) -> Result<Vec<u8>, SealError> {
+    seal_inner_with_counter_policy(
+        key,
+        random,
+        target,
+        plaintext,
+        check_counters_journal_manifest_bootstrap,
+    )
 }
 
 /// Authenticates and decrypts a parsed envelope under the caller's expected context. The caller must

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4C journal codec (#445 / #922):** headless Core now implements the §10.1 migration
+  journal manifest body, `inventory_digest`, `journal_page_set_digest`, canonical paged inventory
+  page bodies, and manifest/page envelope seal-open helpers with fail-closed malformed-input refusal.
+  No durable journal I/O, live-migration root binding, or enable/rotate state machine is included.
+  Production authority is unchanged. PR #956.
 - **Cursor Cloud Agent tooling (QNB-193):** document Cloud bootstrap, PR/review lifecycle, and
   resulting-main verification semantics; add `pnpm run cursor:cloud-doctor` for non-secret Git vs
   `gh` diagnostics. PR #955.
