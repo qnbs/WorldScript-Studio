@@ -121,8 +121,13 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   trusted base-ref workflow-policy checker must retain that proof and the evaluator must run from
   trusted base code after the introducing bootstrap; a PR must not certify its own admission logic.
 - After a merge, wait for exact resulting-main CI and CodeQL success, then follow
-  `docs/VERCEL-PREVIEW-RETENTION-POLICY.md`. Use a dry-run manifest, protect Production/main,
-  rollback history, active-PR previews, and uncertain metadata; redact provider secrets and
+  `docs/VERCEL-PREVIEW-RETENTION-POLICY.md`. Ordinary mode runs the full dry-run
+  reconciliation before dependent mutation. An explicitly declared bounded
+  dependency/toolchain maintenance train may defer only Preview housekeeping
+  under that policy; Production correctness gates stay mandatory after every
+  train merge, and one full reconciliation is required before non-train mutation
+  resumes. Use a dry-run manifest, protect Production/main, rollback history,
+  active-PR previews, and uncertain metadata; redact provider secrets and
   creator emails. Do not use project-wide Vercel removal.
 
 ## Cursor Cloud Agent

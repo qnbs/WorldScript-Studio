@@ -72,9 +72,15 @@ authenticated Vercel Preview reconciliation in
 [`VERCEL-PREVIEW-RETENTION-POLICY.md`](VERCEL-PREVIEW-RETENTION-POLICY.md):
 dry-run first, retain the newest three Previews for every open PR, protect
 Production and `main` aliases/configuration, delete only explicitly classified
-stale IDs, and verify Production plus active Previews afterwards. This is a
-Vercel artifact procedure; the existing GitHub deployment-record workflow does
-not satisfy it. Never print tokens, environment values, or creator emails.
+stale IDs, and verify Production plus active Previews afterwards. Ordinary mode
+requires that reconciliation before dependent mutation. An explicitly declared
+bounded dependency/toolchain maintenance train, defined in the retention
+policy, may defer only that Preview artifact housekeeping. Exact-main CI/CD,
+CodeQL, Production READY, canonical HTTP, and alias/promotion/rollback checks
+stay mandatory after every train merge, and one full reconciliation is required
+before non-train mutation resumes. This is a Vercel artifact procedure; the
+existing GitHub deployment-record workflow does not satisfy it. Never print
+tokens, environment values, or creator emails.
 
 **PR review-comment policy — the correction loop (proactive, automatic, every PR):** Inspect all inline comments (CodeRabbit + any other bot/human), including collapsed **nitpick** and **outside-diff-range** findings, but collect the current review wave across all three channels before mutating source or pushing again. Validate findings against the *current* code (anchors may be stale), cluster sibling findings by root cause and execution boundary, then implement the smallest complete root-cause fix (code **+ tests + i18n + docs** where applicable) or reply with evidence when a finding is false, stale, duplicate, advisory-only, or out of scope with a durable owner. **Never add a new `biome-ignore`** — the suppression ratchet (`scripts/check-suppressions.mjs`) fails the quality gate; refactor so the rule passes honestly. After a correction, reply to each actionable thread citing the resolving commit (`POST .../comments/<id>/replies`), resolve it (GraphQL `resolveReviewThread`), and leave **0 actionable unresolved**. CodeAnt AI may expose 5 CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`) to verify green, and may also post a genuine inline review thread (confirmed 2026-08-28 on PR #538) — inspect its actual current output rather than assuming from this roster, and check all three channels below regardless. This document is the canonical general PR/CI/merge workflow; [`CODEANT-REVIEW-LOOP.md`](CODEANT-REVIEW-LOOP.md) is a canonical **sub-procedure** for the review-comment reconciliation mechanics (thread fetch/reply/resolve recipes), not a competing source of overall lifecycle authority.
 

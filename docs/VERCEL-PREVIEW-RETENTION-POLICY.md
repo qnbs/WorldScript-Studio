@@ -28,6 +28,71 @@ the deletion phase and again before any dependent repository mutation. If it
 has advanced, stop the retention wave and establish the new exact-main gate
 before continuing.
 
+This lifecycle is **NORMAL MODE**. Dependent repository mutation waits for the
+full reconciliation above. The only opt-in exception is the bounded
+dependency/toolchain maintenance train in the next section.
+
+## Bounded dependency/toolchain maintenance train
+
+An explicitly declared train may defer Preview artifact housekeeping. It does
+not relax Production correctness, and it is fail-closed. Silence, a green PR
+head, or a READY Production deployment is not a train declaration.
+
+A train is valid only when all of the following are recorded before its first
+merge:
+
+```text
+TRAIN_KIND = dependency/toolchain maintenance
+TRAIN_OWNER = one named writer
+TRAIN_START_MAIN = exact SHA
+START_BASELINE_RETENTION = terminal
+MAX_MERGES = 12
+MAX_DURATION = 24h
+UNRELATED_FEATURE_MERGES = forbidden
+RELEASE/TAG/PROMOTION/ROLLBACK = forbidden
+PRODUCTION_AUTHORITY_SWITCH = forbidden
+```
+
+After every train merge, and before the next train mutation, these gates stay
+mandatory:
+
+1. capture the exact resulting `main` SHA;
+2. the push-triggered `CI / CD` run for that SHA succeeds;
+3. CodeQL for that SHA succeeds;
+4. Vercel Production is `READY` on that exact SHA;
+5. canonical Production HTTP succeeds;
+6. Production and `main` aliases show no contradictory drift;
+7. no unexpected promotion or rollback mutation is observed;
+8. append that merge to the deferred-retention ledger.
+
+If any item fails, `TRAIN_CONTINUATION_ALLOWED = NO`. Stop the train and
+complete ordinary reconciliation before further repository mutation.
+
+During a valid train, do not perform destructive Vercel retention mutation.
+The only deferred work is this artifact housekeeping:
+
+- full authenticated Vercel deployment inventory;
+- dry-run SAFE/PROTECTED/UNKNOWN classification;
+- stale Preview deletion;
+- retired Preview branch-alias cleanup;
+- the newest-three-per-open-PR Preview snapshot;
+- retention-specific rollback-history re-enumeration.
+
+The train ends immediately when any forced-close condition is met: 12 merges,
+24 hours, exact-main CI/CD or CodeQL failure, Production not `READY`, canonical
+Production HTTP failure, alias/promotion/rollback contradiction, provider
+resource pressure or unsafe state, an unrelated feature or security change
+that must merge, a release/tag/promotion/rollback as the next action, ambiguous
+operator ownership, or a repository policy change that invalidates the train.
+A new dependency or toolchain pull request joins only when it is added to the
+live ledger, remains inside the count and time bounds, and stays inside
+dependency/toolchain scope.
+
+After the final train merge, prove exact-main CI/CD, CodeQL, Production
+`READY`, and canonical Production HTTP, then run exactly one ordinary full
+reconciliation. Non-train mutation, including later feature work, resumes only
+after `TRAIN_FINAL_RETENTION_COMPLETE = YES`.
+
 ## Expected provider scope and identity
 
 Enumeration and deletion are scoped to this exact non-secret identity:
@@ -218,9 +283,12 @@ Re-enumerate all deployments and verify:
 - Production and an active Preview return a successful HTTP response where
   practical.
 
-Before dependent repository mutation, re-read current `main` and compare it
-with the gate anchor. A changed SHA requires a new truthful-green CI/CD and
-CodeQL gate; the previous result is not reusable.
+In ordinary mode, before dependent repository mutation, re-read current `main`
+and compare it with the gate anchor. A changed SHA requires a new
+truthful-green CI/CD and CodeQL gate; the previous result is not reusable.
+Inside a valid bounded dependency/toolchain maintenance train, the per-merge
+Production-correctness gates above replace this full reconciliation until the
+mandatory final pass.
 
 Any unexpected loss of protected state is an immediate hard stop. Do not
 auto-promote or rollback to compensate.
