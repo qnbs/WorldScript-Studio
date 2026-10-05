@@ -50,10 +50,17 @@ TRAIN_START_MAIN = exact SHA
 START_BASELINE_RETENTION = terminal
 MAX_MERGES = 12
 MAX_DURATION = 24h
+TRAIN_CLOCK_ORIGIN = UTC instant MERGE_1 is recorded
 UNRELATED_FEATURE_MERGES = forbidden
 RELEASE/TAG/PROMOTION/ROLLBACK = forbidden
 PRODUCTION_AUTHORITY_SWITCH = forbidden
 ```
+
+`MAX_DURATION` is 24 hours measured from `TRAIN_CLOCK_ORIGIN`. That origin is
+the UTC instant `MERGE_1` is recorded after the first merge's resulting-main
+gates pass. It is not the pull-request open time and not the declaration
+commit time. A record that omits `TRAIN_CLOCK_ORIGIN`, or that starts the 24
+hours before `MERGE_1` is recorded, is ordinary mode.
 
 ### Introducing transition
 
@@ -70,6 +77,7 @@ START_BASELINE_RETENTION = TERMINAL
 FIRST_TRAIN_PR = #963
 MAX_MERGES = 12
 MAX_DURATION = 24h
+TRAIN_CLOCK_ORIGIN = UTC instant MERGE_1 is recorded
 UNRELATED_FEATURE_MERGES = forbidden
 RELEASE/TAG/PROMOTION/ROLLBACK = forbidden
 PRODUCTION_AUTHORITY_SWITCH = forbidden
@@ -127,7 +135,7 @@ The only deferred work is this artifact housekeeping:
 - retention-specific rollback-history re-enumeration.
 
 The train ends immediately when any forced-close condition is met: 12 merges,
-24 hours, exact-main CI/CD or CodeQL failure, Production not `READY`, canonical
+24 hours from `TRAIN_CLOCK_ORIGIN`, exact-main CI/CD or CodeQL failure, Production not `READY`, canonical
 Production HTTP failure, alias/promotion/rollback contradiction, provider
 resource pressure or unsafe state, an unrelated feature or security change
 that must merge, a release/tag/promotion/rollback as the next action, ambiguous

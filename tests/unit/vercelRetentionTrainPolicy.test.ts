@@ -58,6 +58,11 @@ describe('Vercel retention train deferral', () => {
   it('fails the train closed on bound breach and requires one final reconciliation', () => {
     expect(policy).toContain('MAX_MERGES = 12');
     expect(policy).toContain('MAX_DURATION = 24h');
+    expect(policy).toContain('TRAIN_CLOCK_ORIGIN = UTC instant MERGE_1 is recorded');
+    expect(policy).toContain('24 hours measured from `TRAIN_CLOCK_ORIGIN`');
+    expect(policy).toContain('not the pull-request open time');
+    expect(policy).toContain('omits `TRAIN_CLOCK_ORIGIN`');
+    expect(policy).toContain('24 hours from `TRAIN_CLOCK_ORIGIN`');
     expect(policy).toContain('TRAIN_CONTINUATION_ALLOWED = NO');
     expect(policy).toContain('12 merges');
     expect(policy).toContain('24 hours');

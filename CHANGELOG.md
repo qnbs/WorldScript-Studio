@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   An explicitly declared bounded dependency/toolchain maintenance train may defer
   only Preview artifact housekeeping, while exact-main CI/CD, CodeQL, Production
   READY, canonical HTTP, and alias/promotion/rollback checks stay mandatory after
-  every train merge. The train is fail-closed at 12 merges or 24 hours, and one
+  every train merge. The train is fail-closed at 12 merges or 24 hours measured
+  from the UTC instant `MERGE_1` is recorded, and one
   full reconciliation is required before non-train mutation resumes. The
   introducing transition lets #963 be that train's first merge when the durable
   record is complete before merge; a later pull request cannot reuse the
