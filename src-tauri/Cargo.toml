@@ -29,7 +29,8 @@ tauri-plugin-fs = "2"
 tauri-plugin-http = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
-tauri-plugin-updater = "2"
+# 2.13 requires Rust 1.90, above this package's rust-version 1.77.2.
+tauri-plugin-updater = "~2.12.0"
 tauri-plugin-window-state = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
