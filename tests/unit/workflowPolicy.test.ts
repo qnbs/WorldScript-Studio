@@ -73,6 +73,14 @@ function isTopLevelShellCommand(lines: readonly string[], index: number): boolea
   return depth === 0 && !chained;
 }
 
+// QNBS-v3: bind node-version-file to the pnpm/setup step; a file-wide match can pass while v3 still installs Node from .nvmrc.
+function pnpmSetupUsesBlock(source: string): string {
+  const marker = '- uses: pnpm/setup@';
+  const start = source.indexOf(marker);
+  const nextStep = source.slice(start + marker.length).search(/\n[ \t]*- (?:uses|name|id):/);
+  return start >= 0 && nextStep > 0 ? source.slice(start, start + marker.length + nextStep) : '';
+}
+
 const packageJson = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
 ) as {
@@ -82,6 +90,14 @@ const tauriManifestSource = readFileSync(tauriManifestPath, 'utf8');
 
 // QNBS-v3: Keep CI path and deployment authority policy executable against the real workflow files.
 describe('CI workflow policy', () => {
+  // QNBS-v3: this workflow is protected; an empty transition manifest refuses a pin change until a base-owned predecessor admits the exact bytes.
+  it('keeps the reviewer trust workflow on the admitted pnpm/setup pin', () => {
+    const pnpmStep = pnpmSetupUsesBlock(reviewerTrustWorkflowSource);
+    expect(pnpmStep).toContain('pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0');
+    expect(pnpmStep).toContain('install: false');
+    expect(pnpmStep).not.toContain('node-version-file:');
+  });
+
   it('keeps the reviewer trust guard base-owned and data-only', () => {
     expect(reviewerTrustWorkflowSource).toContain('pull_request_target:');
     expect(reviewerTrustWorkflowSource).toContain('edited');
@@ -148,11 +164,14 @@ describe('CI workflow policy', () => {
   // QNBS-v3: the first package-manager binary must be patched and explicit before repository caching/install.
   it('bootstraps the exact secure pnpm before setup-node cache or install', () => {
     const expectedVersion = packageJson.packageManager.replace('pnpm@', '');
+    const pnpmStep = pnpmSetupUsesBlock(setupActionSource);
     const actionIndex = setupActionSource.indexOf('pnpm/setup@');
     const nodeIndex = setupActionSource.indexOf('actions/setup-node@');
-    expect(setupActionSource).toContain('pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024');
-    expect(setupActionSource).toContain('node-version-file: false');
-    expect(setupActionSource).toContain(`version: ${expectedVersion}`);
+    expect(pnpmStep).toContain('pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024');
+    expect(pnpmStep).toContain('node-version-file: false');
+    expect(pnpmStep).toContain('install: false');
+    expect(pnpmStep).toContain(`version: ${expectedVersion}`);
+    expect(pnpmStep).not.toContain('actions/setup-node@');
     expect(actionIndex).toBeGreaterThanOrEqual(0);
     expect(actionIndex).toBeLessThan(nodeIndex);
     expect(setupActionSource).not.toContain('corepack enable');
@@ -180,12 +199,14 @@ describe('CI workflow policy', () => {
   it('bootstraps the exact secure pnpm in the workflow-policy job itself, before the gate it validates', () => {
     const expectedVersion = packageJson.packageManager.replace('pnpm@', '');
     const policyBlock = extractJobBlock(workflowSource, 'workflow-policy');
+    const pnpmStep = pnpmSetupUsesBlock(policyBlock);
     const actionIndex = policyBlock.indexOf('pnpm/setup@');
     const nodeIndex = policyBlock.indexOf('actions/setup-node@');
-    expect(policyBlock).toContain('pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024');
-    expect(policyBlock).toContain('node-version-file: false');
-    expect(policyBlock).toContain(`version: ${expectedVersion}`);
-    expect(policyBlock).toContain('install: false');
+    expect(pnpmStep).toContain('pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024');
+    expect(pnpmStep).toContain('node-version-file: false');
+    expect(pnpmStep).toContain(`version: ${expectedVersion}`);
+    expect(pnpmStep).toContain('install: false');
+    expect(pnpmStep).not.toContain('actions/setup-node@');
     expect(actionIndex).toBeGreaterThanOrEqual(0);
     expect(actionIndex).toBeLessThan(nodeIndex);
     expect(policyBlock).not.toContain('pnpm/action-setup@');

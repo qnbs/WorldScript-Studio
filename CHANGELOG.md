@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **CI:** pin `pnpm/setup` v3.0.0 in the composite setup action and the two jobs that
-  duplicate it, with `node-version-file: false` so v3 does not install Node from `.nvmrc`
-  ahead of `actions/setup-node`. Supersedes the incomplete Dependabot pin in #893. PR #963.
+- **CI:** pin `pnpm/setup` v3.0.0 in `.github/actions/setup/action.yml` and the
+  `workflow-policy` job, with `node-version-file: false` so v3 does not install Node
+  from `.nvmrc` ahead of `actions/setup-node`. The base-owned
+  `reviewer-governance-trust.yml` stays on the admitted v2.1.0 pin until a
+  protected-transition predecessor authorizes the exact byte change. Supersedes
+  the incomplete Dependabot pin in #893. PR #963.
 - **R-15 Gate 4B operations integration harness:** poll nonblocking admitted writes (`write_poll` /
   `write_until_admitted`) so legal shared-admission `Ok(None)` is not treated as a committed write in
   `gate4b_operations_test`. PR #962.
