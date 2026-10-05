@@ -62,7 +62,7 @@ load of the newer generation yet).
 | Public unfenced promote entrypoints | Crate-private primitives; fenced public API | — |
 | Post-promotion read I/O failure | `StageFailure.promoted == true` + promotion `staging` residue | — |
 | Post-promotion semantic open/verify failure | Documented: `JournalDurableError::Journal` without promoted provenance | Recovery when durable generation exists but open refuses; `GenerationExists` on naive retry |
-| Mutex proof | `try_lock`/`WouldBlock` while `JournalDurableGuard` held (unit test) | Cross-process CAS when required |
+| Mutex proof | `try_lock`/`WouldBlock` under guard and inside `with_fence` closure (unit tests) | Cross-process CAS when required |
 | Stale manifest + matching fence | Not in B1 scope | Durable authoritative revision reconciliation |
 | `key_epoch: 1` in journal meta | B1 convention unchanged; not normatively proven as final epoch | Root-bound epoch + binding before root advance |
 
