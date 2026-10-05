@@ -1494,7 +1494,7 @@ dependencies = [
  "argon2",
  "base64ct",
  "dbus-secret-service",
- "getrandom 0.2.17",
+ "getrandom 0.3.4",
  "keyring",
  "rustix",
  "security-framework 3.6.0",
