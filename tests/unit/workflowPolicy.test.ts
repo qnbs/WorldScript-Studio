@@ -150,7 +150,8 @@ describe('CI workflow policy', () => {
     const expectedVersion = packageJson.packageManager.replace('pnpm@', '');
     const actionIndex = setupActionSource.indexOf('pnpm/setup@');
     const nodeIndex = setupActionSource.indexOf('actions/setup-node@');
-    expect(setupActionSource).toContain('pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b');
+    expect(setupActionSource).toContain('pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024');
+    expect(setupActionSource).toContain('node-version-file: false');
     expect(setupActionSource).toContain(`version: ${expectedVersion}`);
     expect(actionIndex).toBeGreaterThanOrEqual(0);
     expect(actionIndex).toBeLessThan(nodeIndex);
@@ -181,7 +182,8 @@ describe('CI workflow policy', () => {
     const policyBlock = extractJobBlock(workflowSource, 'workflow-policy');
     const actionIndex = policyBlock.indexOf('pnpm/setup@');
     const nodeIndex = policyBlock.indexOf('actions/setup-node@');
-    expect(policyBlock).toContain('pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b');
+    expect(policyBlock).toContain('pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024');
+    expect(policyBlock).toContain('node-version-file: false');
     expect(policyBlock).toContain(`version: ${expectedVersion}`);
     expect(policyBlock).toContain('install: false');
     expect(actionIndex).toBeGreaterThanOrEqual(0);
