@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies:** pair `@tauri-apps/plugin-updater` and `tauri-plugin-updater` on 2.12.0.
+  Updater 2.13 requires Rust 1.90, above the desktop crate's Rust 1.77.2, so the
+  one-sided npm 2.13 bump is not the admitted pair. Node runtime, updater pubkey,
+  and endpoints are unchanged. PR #901.
 - **Dependencies:** bump devDependency `@types/node` from 25.9.2 to 26.6.3.
   Runtime `engines.node` stays `>=22.19.0`. Lockfile updates are the types
   package and its peer-resolution keys. Supersedes Dependabot #891. PR #964.
