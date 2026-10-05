@@ -26,7 +26,7 @@ sha2 = "0.10"
 # Held below 1.9, whose MSRV (1.85) exceeds this crate's 1.77.2; 1.8.x (MSRV 1.60) is API-compatible.
 zeroize = { version = "~1.8", features = ["derive"] }
 # Direct pin for the same reason: zeroize_derive 1.5 also requires Rust 1.85.
-zeroize_derive = "~1.4"
+zeroize_derive = "~1.5"
 
 # Gate 1b-platform slice D (§8.2.5): the real OS secure store, only behind the `platform-keystore`
 # feature so the default Core build needs no platform libraries. keyring 3.6.x is the newest line
