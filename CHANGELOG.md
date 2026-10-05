@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Dependencies:** bump devDependency `@types/node` from 25.9.2 to 26.6.3.
   Runtime `engines.node` stays `>=22.19.0`. Lockfile updates are the types
-  package and its peer-resolution keys. Supersedes Dependabot #891.
+  package and its peer-resolution keys. Supersedes Dependabot #891. PR #964.
 - **R-15 Gate 4B operations harness:** nonblocking admission that must become
   available after a holder is released now uses a bounded retry. Direct
   `try_acquire` remains where the test proves the guard is unavailable now.
