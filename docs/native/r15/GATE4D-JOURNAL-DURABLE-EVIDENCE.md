@@ -14,6 +14,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | Surface | Role |
 |---------|------|
 | `durable::stage_and_promote_envelope` | Promote a pre-sealed WSR1 envelope without re-entering `seal_record` |
+| `journal::JournalDurableContext` | Bundles `fs`, `key`, `dir`, and `WriteOperationId` for promote/load entrypoints |
 | `journal::promote_manifest` | Seal via `JournalManifest::seal`, promote, readback via `JournalManifest::open` |
 | `journal::promote_manifest_fenced` | `with_fence` + `promote_manifest` |
 | `journal::promote_page` | `JournalPage::seal` + promote + `JournalPage::open` readback |

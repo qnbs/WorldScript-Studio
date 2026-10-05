@@ -111,13 +111,14 @@ pub use digest::{
     empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
     journal_page_set_digest, page_ref_for, InventoryDigestVerifier,
 };
+pub use durable::{
+    acquire_journal_durable_guard, load_manifest_generation, promote_manifest,
+    promote_manifest_fenced, promote_page, with_fence, JournalDurableContext, JournalDurableError,
+    JournalDurableGuard,
+};
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
 pub use manifest::{JournalManifest, JournalPageRef};
 pub use page::JournalPage;
-pub use durable::{
-    acquire_journal_durable_guard, load_manifest_generation, promote_manifest,
-    promote_manifest_fenced, promote_page, with_fence, JournalDurableError, JournalDurableGuard,
-};
 pub use state::{
     allows_phase_transition, assert_fence, assert_live_binding, authoritative_manifest_revision,
     checkpoint_progress, is_terminal_phase, mark_done, mark_recovery,

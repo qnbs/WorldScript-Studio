@@ -7,8 +7,8 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::durable::{
-    stage_and_promote_envelope, PromotedGeneration, StageFailure, StageRequest, WriteOperationId,
-    DurableFs,
+    stage_and_promote_envelope, DurableFs, PromotedGeneration, StageFailure, StageRequest,
+    WriteOperationId,
 };
 use crate::identity::RecordIdentity;
 use crate::record_class::RecordClass;
@@ -47,6 +47,30 @@ pub struct JournalDurableGuard<'a> {
     _lock: MutexGuard<'a, ()>,
 }
 
+/// Shared durable I/O target for journal promotion and load helpers.
+pub struct JournalDurableContext<'a, F: DurableFs> {
+    pub fs: &'a mut F,
+    pub key: &'a Key,
+    pub dir: &'a Path,
+    pub operation: &'a WriteOperationId,
+}
+
+impl<'a, F: DurableFs> JournalDurableContext<'a, F> {
+    pub fn new(
+        fs: &'a mut F,
+        key: &'a Key,
+        dir: &'a Path,
+        operation: &'a WriteOperationId,
+    ) -> Self {
+        Self {
+            fs,
+            key,
+            dir,
+            operation,
+        }
+    }
+}
+
 /// Acquires the single-process journal durability mutex and rejects a stale fence before I/O.
 pub fn acquire_journal_durable_guard<'a>(
     manifest: &'a JournalManifest,
@@ -74,7 +98,10 @@ fn migration_identity(operation_id: &str) -> Result<RecordIdentity, JournalError
         .map_err(|_| JournalError::InvalidOperationId)
 }
 
-fn migration_page_identity(operation_id: &str, page_index: u32) -> Result<RecordIdentity, JournalError> {
+fn migration_page_identity(
+    operation_id: &str,
+    page_index: u32,
+) -> Result<RecordIdentity, JournalError> {
     RecordIdentity::new(
         RecordClass::MigrationPage,
         &[operation_id, &page_index.to_string()],
@@ -113,82 +140,84 @@ fn stage_request<'a>(
     }
 }
 
+fn promote_sealed_envelope<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    identity: RecordIdentity,
+    meta: RecordMeta,
+    envelope: Vec<u8>,
+    verify: impl FnOnce(&Key, &RecordIdentity, &[u8]) -> Result<(), JournalError>,
+) -> Result<PromotedGeneration, JournalDurableError> {
+    let promoted = stage_and_promote_envelope(
+        ctx.fs,
+        ctx.key,
+        &stage_request(ctx.dir, &identity, meta, ctx.operation),
+        envelope,
+    )?;
+    let bytes = ctx
+        .fs
+        .read(&promoted.path)
+        .map_err(|error| JournalDurableError::Stage(stage_io(error)))?;
+    verify(ctx.key, &identity, &bytes)?;
+    Ok(promoted)
+}
+
 /// Seals `manifest` through the journal codec, durably promotes generation `journal_revision`, and
 /// readbacks through [`JournalManifest::open`].
 pub fn promote_manifest<F: DurableFs>(
-    fs: &mut F,
-    key: &Key,
-    dir: &Path,
+    ctx: &mut JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
-    operation: &WriteOperationId,
 ) -> Result<PromotedGeneration, JournalDurableError> {
     let identity = migration_identity(&manifest.operation_id)?;
     let meta = manifest_meta(manifest);
-    let envelope = manifest.seal(key, &identity, meta)?;
-    let promoted = stage_and_promote_envelope(
-        fs,
-        key,
-        &stage_request(dir, &identity, meta, operation),
-        envelope,
-    )?;
-    let bytes = fs
-        .read(&promoted.path)
-        .map_err(|error| JournalDurableError::Stage(stage_io(error)))?;
-    JournalManifest::open(key, &identity, manifest.journal_revision, &bytes)?;
-    Ok(promoted)
+    let journal_revision = manifest.journal_revision;
+    let envelope = manifest.seal(ctx.key, &identity, meta)?;
+    promote_sealed_envelope(ctx, identity, meta, envelope, move |key, id, bytes| {
+        JournalManifest::open(key, id, journal_revision, bytes).map(|_| ())
+    })
 }
 
 /// Fenced [`promote_manifest`].
 pub fn promote_manifest_fenced<F: DurableFs>(
-    fs: &mut F,
-    key: &Key,
-    dir: &Path,
+    ctx: &mut JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
     fence: &MigrationFence,
-    operation: &WriteOperationId,
 ) -> Result<PromotedGeneration, JournalDurableError> {
-    with_fence(manifest, fence, || promote_manifest(fs, key, dir, manifest, operation))
+    with_fence(manifest, fence, || promote_manifest(ctx, manifest))
 }
 
 /// Seals and durably promotes one journal page generation.
 pub fn promote_page<F: DurableFs>(
-    fs: &mut F,
-    key: &Key,
-    dir: &Path,
+    ctx: &mut JournalDurableContext<'_, F>,
     operation_id: &str,
     page: &JournalPage,
-    operation: &WriteOperationId,
 ) -> Result<PromotedGeneration, JournalDurableError> {
     let identity = migration_page_identity(operation_id, page.page_index())?;
     let meta = page_meta(page);
-    let envelope = page.seal(key, &identity, meta)?;
-    let promoted = stage_and_promote_envelope(
-        fs,
-        key,
-        &stage_request(dir, &identity, meta, operation),
-        envelope,
-    )?;
-    let bytes = fs
-        .read(&promoted.path)
-        .map_err(|error| JournalDurableError::Stage(stage_io(error)))?;
-    JournalPage::open(key, &identity, page.page_generation(), &bytes)?;
-    Ok(promoted)
+    let page_generation = page.page_generation();
+    let envelope = page.seal(ctx.key, &identity, meta)?;
+    promote_sealed_envelope(ctx, identity, meta, envelope, move |key, id, bytes| {
+        JournalPage::open(key, id, page_generation, bytes).map(|_| ())
+    })
 }
 
 /// Loads a durably stored manifest generation from `dir`.
 pub fn load_manifest_generation<F: DurableFs>(
-    fs: &mut F,
-    key: &Key,
-    dir: &Path,
+    ctx: &mut JournalDurableContext<'_, F>,
     operation_id: &str,
     journal_revision: u64,
 ) -> Result<JournalManifest, JournalDurableError> {
     let identity = migration_identity(operation_id)?;
-    let path = crate::durable::generation_path(dir, journal_revision);
-    let bytes = fs
+    let path = crate::durable::generation_path(ctx.dir, journal_revision);
+    let bytes = ctx
+        .fs
         .read(&path)
         .map_err(|error| JournalDurableError::Stage(stage_io(error)))?;
-    Ok(JournalManifest::open(key, &identity, journal_revision, &bytes)?)
+    Ok(JournalManifest::open(
+        ctx.key,
+        &identity,
+        journal_revision,
+        &bytes,
+    )?)
 }
 
 fn stage_io(error: std::io::Error) -> StageFailure {

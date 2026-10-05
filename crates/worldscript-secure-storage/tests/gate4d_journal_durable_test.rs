@@ -9,11 +9,11 @@ use std::sync::{Arc, Barrier};
 use std::thread;
 
 use worldscript_secure_storage::{
-    empty_inventory_digest, empty_journal_page_set_digest, generation_path, load_manifest_generation,
-    operation_type, phase_code, promote_manifest_fenced, promote_page, with_fence,
-    DirectoryDurability, DurableFs, JournalDurableError, JournalManifest, JournalPage,
-    MigrationExecutionError, MigrationFence, RecordClass, RecordIdentity,
-    StageFailureKind, StdFs, WriteOperationId,
+    empty_inventory_digest, empty_journal_page_set_digest, generation_path,
+    load_manifest_generation, operation_type, phase_code, promote_manifest_fenced, promote_page,
+    with_fence, DirectoryDurability, DurableFs, JournalDurableContext, JournalDurableError,
+    JournalManifest, JournalPage, MigrationExecutionError, MigrationFence, RecordClass,
+    RecordIdentity, StageFailureKind, StdFs, WriteOperationId,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -72,6 +72,15 @@ impl Drop for TempDir {
 
 fn write_op() -> WriteOperationId {
     WriteOperationId::generate().unwrap()
+}
+
+fn durable_ctx<'a>(
+    fs: &'a mut StdFs,
+    key: &'a worldscript_secure_storage::Key,
+    dir: &'a Path,
+    operation: &'a WriteOperationId,
+) -> JournalDurableContext<'a, StdFs> {
+    JournalDurableContext::new(fs, key, dir, operation)
 }
 
 struct CountingFs {
@@ -133,23 +142,27 @@ impl DurableFs for CountingFs {
     }
 }
 
+fn durable_ctx_counting<'a>(
+    fs: &'a mut CountingFs,
+    key: &'a worldscript_secure_storage::Key,
+    dir: &'a Path,
+    operation: &'a WriteOperationId,
+) -> JournalDurableContext<'a, CountingFs> {
+    JournalDurableContext::new(fs, key, dir, operation)
+}
+
 #[test]
 fn bootstrap_manifest_revision_zero_durable_roundtrip() {
     let dir = TempDir::new();
     let manifest = bootstrap_manifest("rev0-durable");
     let fence = MigrationFence::from_manifest(&manifest);
-    promote_manifest_fenced(
-        &mut StdFs,
-        &key(),
-        &dir.0,
-        &manifest,
-        &fence,
-        &write_op(),
-    )
-    .unwrap();
+    let op = write_op();
+    let key = key();
+    let mut fs = StdFs;
+    let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
+    promote_manifest_fenced(&mut ctx, &manifest, &fence).unwrap();
     assert!(generation_path(&dir.0, 0).is_file());
-    let loaded =
-        load_manifest_generation(&mut StdFs, &key(), &dir.0, "rev0-durable", 0).unwrap();
+    let loaded = load_manifest_generation(&mut ctx, "rev0-durable", 0).unwrap();
     assert_eq!(loaded, manifest);
 }
 
@@ -160,27 +173,14 @@ fn non_bootstrap_manifest_revision_promotes_and_refuses_overwrite() {
     manifest.journal_revision = 1;
     manifest.phase = phase_code::DISCOVER;
     let fence = MigrationFence::from_manifest(&manifest);
-    promote_manifest_fenced(
-        &mut StdFs,
-        &key(),
-        &dir.0,
-        &manifest,
-        &fence,
-        &write_op(),
-    )
-    .unwrap();
-    let loaded =
-        load_manifest_generation(&mut StdFs, &key(), &dir.0, "rev1-durable", 1).unwrap();
+    let op = write_op();
+    let key = key();
+    let mut fs = StdFs;
+    let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
+    promote_manifest_fenced(&mut ctx, &manifest, &fence).unwrap();
+    let loaded = load_manifest_generation(&mut ctx, "rev1-durable", 1).unwrap();
     assert_eq!(loaded.journal_revision, 1);
-    let err = promote_manifest_fenced(
-        &mut StdFs,
-        &key(),
-        &dir.0,
-        &manifest,
-        &fence,
-        &write_op(),
-    )
-    .unwrap_err();
+    let err = promote_manifest_fenced(&mut ctx, &manifest, &fence).unwrap_err();
     assert!(matches!(
         err,
         JournalDurableError::Stage(stage)
@@ -192,19 +192,14 @@ fn non_bootstrap_manifest_revision_promotes_and_refuses_overwrite() {
 fn journal_page_durable_roundtrip() {
     let dir = TempDir::new();
     let page = JournalPage::new(0, 1, vec![]).unwrap();
-    promote_page(
-        &mut StdFs,
-        &key(),
-        &dir.0,
-        "page-durable",
-        &page,
-        &write_op(),
-    )
-    .unwrap();
-    let identity =
-        RecordIdentity::new(RecordClass::MigrationPage, &["page-durable", "0"]).unwrap();
+    let op = write_op();
+    let key = key();
+    let mut fs = StdFs;
+    let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
+    promote_page(&mut ctx, "page-durable", &page).unwrap();
+    let identity = RecordIdentity::new(RecordClass::MigrationPage, &["page-durable", "0"]).unwrap();
     let bytes = std::fs::read(generation_path(&dir.0, 1)).unwrap();
-    let opened = JournalPage::open(&key(), &identity, 1, &bytes).unwrap();
+    let opened = JournalPage::open(&key, &identity, 1, &bytes).unwrap();
     assert_eq!(opened.page_index(), 0);
 }
 
@@ -217,15 +212,10 @@ fn stale_fence_rejects_before_durable_io() {
         journal_revision: manifest.journal_revision + 1,
     };
     let mut fs = CountingFs::new();
-    let err = promote_manifest_fenced(
-        &mut fs,
-        &key(),
-        &dir.0,
-        &manifest,
-        &stale,
-        &write_op(),
-    )
-    .unwrap_err();
+    let op = write_op();
+    let key = key();
+    let mut ctx = durable_ctx_counting(&mut fs, &key, &dir.0, &op);
+    let err = promote_manifest_fenced(&mut ctx, &manifest, &stale).unwrap_err();
     assert_eq!(fs.create_count(), 0);
     assert!(matches!(
         err,
