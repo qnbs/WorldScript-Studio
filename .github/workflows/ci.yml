@@ -44,10 +44,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       # QNBS-v3: pnpm/setup instead of pnpm/action-setup, mirroring .github/actions/setup/action.yml (duplicated because this job predates the trust boundary it validates and can't use that composite).
-      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+      # QNBS-v3: v3 installs Node from .nvmrc unless detection is disabled; this gate keeps Node on actions/setup-node.
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
           version: 11.22.0
           install: false
+          node-version-file: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: .nvmrc

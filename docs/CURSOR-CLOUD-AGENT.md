@@ -58,8 +58,16 @@ After merging to `main`:
 2. Wait for push-triggered **CI / CD** and **CodeQL** on that exact SHA — do not infer from PR-head green.
 3. Confirm Vercel **Production** READY on the same SHA (`target=production`, `readyState=READY`).
 4. Verify canonical HTTP (`https://worldscript-studio.vercel.app/` — see `constants/brand.ts`).
-5. Run Vercel preview retention dry-run per `docs/VERCEL-PREVIEW-RETENTION-POLICY.md` before
-   dependent engineering waves.
+5. Ordinary mode runs the Vercel preview retention dry-run per
+   `docs/VERCEL-PREVIEW-RETENTION-POLICY.md` before dependent engineering waves.
+   A declared bounded dependency/toolchain maintenance train defers only that
+   Preview housekeeping. Still prove Production READY, canonical HTTP, and
+   alias/promotion/rollback sanity, and append the deferred-retention ledger
+   entry. The introducing transition may make the pull request that first admits
+   the exception the train's first merge when its record is complete before
+   merge. A later pull request cannot reuse that transition. A failed
+   resulting-main gate aborts the train into ordinary reconciliation. One full
+   reconciliation is required before non-train mutation resumes.
 
 ## Environment configuration (D1)
 

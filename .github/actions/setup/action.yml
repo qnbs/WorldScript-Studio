@@ -17,10 +17,12 @@ runs:
   using: composite
   steps:
     # QNBS-v3: pnpm/setup fetches the standalone binary via the npm registry, verified by an npm-signed checksum against a pinned key (not a GitHub-published digest), replacing pnpm/action-setup's npm-install path measured at 20s-6min variance; pnpm store caching below is unchanged, though pnpm/setup separately manages its own exact-lockfile-hash verification-result cache regardless of that setting.
-    - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+    # QNBS-v3: v3 installs Node from .nvmrc unless detection is disabled; Node stays on actions/setup-node.
+    - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
       with:
         version: 11.22.0
         install: false
+        node-version-file: false
 
     # QNBS-v3: When node-version is set (matrix), use it; otherwise read .nvmrc so
     # non-matrix jobs stay pinned to the project's declared Node version.

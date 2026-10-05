@@ -12,7 +12,8 @@ use std::thread;
 use std::time::Duration;
 
 use support::{
-    child_probe, payload, Event, Fixture, HookFs, ObservedProvider, Probe, CHILD_MODE, CHILD_SCOPE,
+    acquire_exclusive_until_available, acquire_shared_until_available, child_probe, payload, Event,
+    Fixture, HookFs, ObservedProvider, Probe, CHILD_MODE, CHILD_SCOPE,
 };
 use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
 use worldscript_secure_storage::*;
@@ -78,9 +79,7 @@ fn old_snapshot_survives_multiple_publishes_and_blocks_reclamation() {
         .unwrap()
         .is_none());
     drop(old);
-    let held = ExclusiveAdmissionGuard::try_acquire(fixture.scope())
-        .unwrap()
-        .unwrap();
+    let held = acquire_exclusive_until_available(fixture.scope());
     assert!(!witness.is_referenced());
     assert!(fixture
         .storage()
@@ -91,9 +90,7 @@ fn old_snapshot_survives_multiple_publishes_and_blocks_reclamation() {
         .root_reclamation_eligible(&held, &witness, true)
         .unwrap());
     let other = Fixture::new();
-    let wrong = ExclusiveAdmissionGuard::try_acquire(other.scope())
-        .unwrap()
-        .unwrap();
+    let wrong = acquire_exclusive_until_available(other.scope());
     assert_eq!(
         fixture
             .storage()
@@ -107,6 +104,17 @@ fn old_snapshot_survives_multiple_publishes_and_blocks_reclamation() {
         foreign_witness,
         Err(OperationError::Admission(AdmissionError::InvalidScope))
     );
+}
+
+#[test]
+fn exclusive_admission_stays_unavailable_while_held_and_resolves_after_release() {
+    let fixture = Fixture::new();
+    let held = acquire_exclusive_until_available(fixture.scope());
+    assert!(ExclusiveAdmissionGuard::try_acquire(fixture.scope())
+        .unwrap()
+        .is_none());
+    drop(held);
+    let _released = acquire_exclusive_until_available(fixture.scope());
 }
 
 #[test]
@@ -230,9 +238,7 @@ fn exclusive_and_locked_or_migrating_plaintext_never_bypass_policy() {
     let fixture = Fixture::new();
     let legacy = fixture.records.join("legacy.txt");
     fs::write(&legacy, b"legacy plaintext fixture").unwrap();
-    let held = ExclusiveAdmissionGuard::try_acquire(fixture.scope())
-        .unwrap()
-        .unwrap();
+    let held = acquire_exclusive_until_available(fixture.scope());
     let before = fixture.probe.observations.load(Ordering::SeqCst);
     let mut called = false;
     assert_eq!(
@@ -427,9 +433,7 @@ fn cancellation_preserves_pending_data_and_releases_all_kernel_ownership() {
         fixture.storage().try_lock(&mut StdFs),
         Err(OperationError::RecoveryPending)
     );
-    assert!(ExclusiveAdmissionGuard::try_acquire(fixture.scope())
-        .unwrap()
-        .is_some());
+    drop(acquire_exclusive_until_available(fixture.scope()));
     fixture
         .storage()
         .try_reconcile_record(&mut StdFs, &fixture.identity, fixture.location())
@@ -517,9 +521,7 @@ fn shutdown_is_local_idempotent_close_and_releases_admission() {
         fixture.write(&mut StdFs, None, b"closed"),
         Err(OperationError::Closed)
     );
-    assert!(SharedAdmissionGuard::try_acquire(fixture.scope())
-        .unwrap()
-        .is_some());
+    drop(acquire_shared_until_available(fixture.scope()));
 }
 
 #[test]
@@ -621,9 +623,7 @@ fn current_and_previous_root_remain_retained_after_their_reader_releases() {
         .unwrap();
     let current_witness = current.retention();
     drop(current);
-    let held = ExclusiveAdmissionGuard::try_acquire(fixture.scope())
-        .unwrap()
-        .unwrap();
+    let held = acquire_exclusive_until_available(fixture.scope());
     assert!(!fixture
         .storage()
         .root_reclamation_eligible(&held, &previous_witness, false)
@@ -742,9 +742,7 @@ fn eligibility_refuses_root_replacement_during_anchor_observation() {
     fixture
         .write_until_admitted(&mut StdFs, Some(1), b"second")
         .unwrap();
-    let held = ExclusiveAdmissionGuard::try_acquire(fixture.scope())
-        .unwrap()
-        .unwrap();
+    let held = acquire_exclusive_until_available(fixture.scope());
     *fixture.probe.replace_root.lock().unwrap() =
         Some((fixture.root.clone(), fixture.base.join("moved-root")));
     assert_eq!(
