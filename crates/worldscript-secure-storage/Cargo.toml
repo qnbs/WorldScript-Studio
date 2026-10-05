@@ -19,7 +19,7 @@ argon2 = { version = "0.5.3", default-features = false, features = ["alloc", "ze
 # argon2 requires base64ct; 1.7+ needs Rust 1.81+, so hold the 1.6 line (MSRV 1.60).
 base64ct = "~1.6"
 # 0.3.4 keeps rust-version 1.63. The 0.4 line is not admitted. `getrandom()` is `fill` on this line.
-getrandom = "0.3"
+getrandom = "0.4"
 # §8.2.1 passphrase encoding (NFC) — MSRV 1.36.
 unicode-normalization = "0.1.25"
 sha2 = "0.10"
