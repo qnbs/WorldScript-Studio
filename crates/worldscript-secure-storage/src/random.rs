@@ -16,6 +16,7 @@ pub struct OsRandom;
 
 impl RandomSource for OsRandom {
     fn fill(&mut self, buf: &mut [u8]) -> Result<(), RandomnessUnavailable> {
-        getrandom::getrandom(buf).map_err(|_| RandomnessUnavailable)
+        // QNBS-v3: getrandom 0.3 renamed the OS entropy call to `fill`; every error still becomes RandomnessUnavailable, with no fallback PRNG.
+        getrandom::fill(buf).map_err(|_| RandomnessUnavailable)
     }
 }
