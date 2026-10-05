@@ -56,7 +56,10 @@ before dependent mutation. An explicitly declared bounded dependency/toolchain
 maintenance train may defer only that Preview artifact housekeeping; Production
 READY, canonical HTTP, and alias/promotion/rollback checks stay mandatory after
 every train merge, and one full reconciliation is required before non-train
-mutation resumes.
+mutation resumes. The introducing transition may make the pull request that
+first admits the exception the train's first merge when its record is complete
+before merge. A later pull request cannot reuse that transition. A failed
+resulting-main gate aborts the train into ordinary reconciliation.
 The GitHub workflow [`prune-deployments.yml`](../.github/workflows/prune-deployments.yml)
 prunes GitHub Deployment records only; it does not delete Vercel deployment
 artifacts.

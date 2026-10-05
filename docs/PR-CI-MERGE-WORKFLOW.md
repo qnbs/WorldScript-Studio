@@ -78,7 +78,11 @@ bounded dependency/toolchain maintenance train, defined in the retention
 policy, may defer only that Preview artifact housekeeping. Exact-main CI/CD,
 CodeQL, Production READY, canonical HTTP, and alias/promotion/rollback checks
 stay mandatory after every train merge, and one full reconciliation is required
-before non-train mutation resumes. This is a Vercel artifact procedure; the
+before non-train mutation resumes. The introducing transition in that policy
+may make the pull request that first admits the exception the train's first
+merge when its record is complete before merge. A later pull request cannot
+reuse that transition. A failed resulting-main gate aborts the train into
+ordinary reconciliation. This is a Vercel artifact procedure; the
 existing GitHub deployment-record workflow does not satisfy it. Never print
 tokens, environment values, or creator emails.
 

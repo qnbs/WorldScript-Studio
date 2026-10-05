@@ -63,7 +63,11 @@ After merging to `main`:
    A declared bounded dependency/toolchain maintenance train defers only that
    Preview housekeeping. Still prove Production READY, canonical HTTP, and
    alias/promotion/rollback sanity, and append the deferred-retention ledger
-   entry. One full reconciliation is required before non-train mutation resumes.
+   entry. The introducing transition may make the pull request that first admits
+   the exception the train's first merge when its record is complete before
+   merge. A later pull request cannot reuse that transition. A failed
+   resulting-main gate aborts the train into ordinary reconciliation. One full
+   reconciliation is required before non-train mutation resumes.
 
 ## Environment configuration (D1)
 

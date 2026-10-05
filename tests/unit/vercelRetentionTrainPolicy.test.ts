@@ -65,12 +65,32 @@ describe('Vercel retention train deferral', () => {
     expect(policy).toContain('exactly one ordinary full reconciliation');
   });
 
+  it('admits one fail-closed introducing transition and no later bootstrap', () => {
+    expect(policy).toContain('FIRST_TRAIN_PR = #963');
+    expect(policy).toContain('TRAIN_OWNER = Cursor');
+    expect(policy).toContain('TRAIN_START_MAIN = 2ec90a00a7f26895d6badb38bc1885430c0a4d3c');
+    expect(policy).toContain('START_BASELINE_RETENTION = TERMINAL');
+    expect(policy).toContain('may itself be `TRAIN_MERGE_1`');
+    expect(policy).toContain('it becomes `MERGE_1` only when');
+    expect(policy).toContain('append #963 to the deferred-retention ledger');
+    expect(policy).toContain('without destructive Preview retention');
+    expect(policy).toContain('a later pull request cannot label itself the introducing transition');
+    expect(policy).toContain('makes that pull request ordinary mode');
+    expect(policy).toContain('counts toward `MAX_MERGES`');
+    expect(policy).toContain('does not waive the per-merge Production-correctness gates');
+    expect(policy).toContain('does not authorize destructive Preview retention');
+    expect(policy).toContain('cannot reuse this bootstrap');
+    expect(policy).toContain('cannot invoke the introducing transition');
+  });
+
   it('keeps companion docs on the same bounded dependency/toolchain maintenance train', () => {
     for (const relativePath of companionPaths) {
       const source = prose(
         readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8'),
       );
       expect(source, relativePath).toContain('bounded dependency/toolchain maintenance train');
+      expect(source, relativePath).toContain('introducing transition');
+      expect(source, relativePath).toContain('cannot reuse that transition');
       expect(source, relativePath).toContain('VERCEL-PREVIEW-RETENTION-POLICY.md');
     }
   });

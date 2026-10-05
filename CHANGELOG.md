@@ -19,7 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only Preview artifact housekeeping, while exact-main CI/CD, CodeQL, Production
   READY, canonical HTTP, and alias/promotion/rollback checks stay mandatory after
   every train merge. The train is fail-closed at 12 merges or 24 hours, and one
-  full reconciliation is required before non-train mutation resumes. PR #963.
+  full reconciliation is required before non-train mutation resumes. The
+  introducing transition lets #963 be that train's first merge when the durable
+  record is complete before merge; a later pull request cannot reuse the
+  bootstrap, and a failed resulting-main gate returns the train to ordinary
+  reconciliation. PR #963.
 - **R-15 Gate 4B operations integration harness:** poll nonblocking admitted writes (`write_poll` /
   `write_until_admitted`) so legal shared-admission `Ok(None)` is not treated as a committed write in
   `gate4b_operations_test`. PR #962.

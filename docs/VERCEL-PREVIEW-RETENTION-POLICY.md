@@ -38,8 +38,10 @@ An explicitly declared train may defer Preview artifact housekeeping. It does
 not relax Production correctness, and it is fail-closed. Silence, a green PR
 head, or a READY Production deployment is not a train declaration.
 
-A train is valid only when all of the following are recorded before its first
-merge:
+A train that begins after this exception is already on `main` is valid only
+when every field below is recorded before its first merge. That first merge is
+a later pull request. It cannot be the pull request that introduced the
+exception, and it cannot invoke the introducing transition.
 
 ```text
 TRAIN_KIND = dependency/toolchain maintenance
@@ -52,6 +54,52 @@ UNRELATED_FEATURE_MERGES = forbidden
 RELEASE/TAG/PROMOTION/ROLLBACK = forbidden
 PRODUCTION_AUTHORITY_SWITCH = forbidden
 ```
+
+### Introducing transition
+
+The single pull request that first admits this exception may itself be
+`TRAIN_MERGE_1` when, before merge, the durable record contains every field
+below and no ancestor of its base already contains this exception. Silence or
+a green head does not create the record. This is the current train:
+
+```text
+TRAIN_KIND = dependency/toolchain maintenance
+TRAIN_OWNER = Cursor
+TRAIN_START_MAIN = 2ec90a00a7f26895d6badb38bc1885430c0a4d3c
+START_BASELINE_RETENTION = TERMINAL
+FIRST_TRAIN_PR = #963
+MAX_MERGES = 12
+MAX_DURATION = 24h
+UNRELATED_FEATURE_MERGES = forbidden
+RELEASE/TAG/PROMOTION/ROLLBACK = forbidden
+PRODUCTION_AUTHORITY_SWITCH = forbidden
+```
+
+`TRAIN_START_MAIN` is that pull request's exact base SHA.
+`START_BASELINE_RETENTION` is already terminal on that SHA. `FIRST_TRAIN_PR`
+is the introducing pull request. #963 consumes this record.
+
+After that pull request merges, it becomes `MERGE_1` only when exact
+resulting-main CI/CD succeeds, CodeQL succeeds, Vercel Production is `READY`
+on that exact SHA, canonical Production HTTP succeeds, and
+alias/promotion/rollback sanity passes. Then append #963 to the
+deferred-retention ledger and continue to the next train candidate without
+destructive Preview retention.
+
+If any of those gates fails, `TRAIN_CONTINUATION_ALLOWED = NO`. Abort the
+train and complete ordinary reconciliation before further repository mutation.
+
+This introducing transition is one-time and fail-closed:
+
+- a later pull request cannot label itself the introducing transition;
+- a missing field, a start SHA other than the introducing pull request's exact
+  base, or a baseline that is not terminal on that SHA makes that pull request
+  ordinary mode;
+- the introducing merge counts toward `MAX_MERGES`;
+- the transition does not waive the per-merge Production-correctness gates;
+- the transition does not authorize destructive Preview retention;
+- once this exception is on `main`, every later train uses the declaration
+  above and cannot reuse this bootstrap.
 
 After every train merge, and before the next train mutation, these gates stay
 mandatory:
@@ -286,9 +334,11 @@ Re-enumerate all deployments and verify:
 In ordinary mode, before dependent repository mutation, re-read current `main`
 and compare it with the gate anchor. A changed SHA requires a new
 truthful-green CI/CD and CodeQL gate; the previous result is not reusable.
-Inside a valid bounded dependency/toolchain maintenance train, the per-merge
-Production-correctness gates above replace this full reconciliation until the
-mandatory final pass.
+Inside a valid bounded dependency/toolchain maintenance train, including the
+one-time introducing transition after its resulting-main gates pass, the
+per-merge Production-correctness gates above replace this full reconciliation
+until the mandatory final pass. A failed introducing-merge gate aborts that
+train into ordinary reconciliation.
 
 Any unexpected loss of protected state is an immediate hard stop. Do not
 auto-promote or rollback to compensate.

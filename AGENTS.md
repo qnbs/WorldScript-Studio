@@ -124,9 +124,13 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   `docs/VERCEL-PREVIEW-RETENTION-POLICY.md`. Ordinary mode runs the full dry-run
   reconciliation before dependent mutation. An explicitly declared bounded
   dependency/toolchain maintenance train may defer only Preview housekeeping
-  under that policy; Production correctness gates stay mandatory after every
-  train merge, and one full reconciliation is required before non-train mutation
-  resumes. Use a dry-run manifest, protect Production/main, rollback history,
+  under that policy. The introducing transition may make the pull request that
+  first admits the exception the train's first merge when its record is complete
+  before merge. A later pull request cannot reuse that transition. A failed
+  resulting-main gate aborts the train into ordinary reconciliation. Production
+  correctness gates stay mandatory after every train merge, and one full
+  reconciliation is required before non-train mutation resumes. Use a dry-run
+  manifest, protect Production/main, rollback history,
   active-PR previews, and uncertain metadata; redact provider secrets and
   creator emails. Do not use project-wide Vercel removal.
 
