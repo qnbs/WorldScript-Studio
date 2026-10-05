@@ -7,11 +7,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use worldscript_secure_storage::{
-    empty_inventory_digest, empty_journal_page_set_digest, generation_path,
-    load_manifest_generation, operation_type, phase_code, promote_manifest_fenced,
-    promote_page_fenced, DirectoryDurability, DurableFs, JournalDurableContext,
-    JournalDurableError, JournalManifest, JournalPage, MigrationExecutionError, MigrationFence,
-    RecordClass, RecordIdentity, StageFailureKind, StdFs, WriteOperationId,
+    content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
+    load_authoritative_manifest, load_manifest_generation, operation_type, phase_code,
+    promote_manifest_fenced, promote_page_fenced, DirectoryDurability, DurableFs,
+    JournalDurableContext, JournalDurableError, JournalError, JournalManifest, JournalPage,
+    LiveMigration, MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity,
+    StageFailureKind, StdFs, WriteOperationId,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -221,5 +222,248 @@ fn stale_fence_rejects_before_durable_io() {
     assert!(matches!(
         err,
         JournalDurableError::Fence(MigrationExecutionError::StaleMigrationOwner)
+    ));
+}
+
+fn manifest_at(operation_id: &str, revision: u64, fencing_generation: u64) -> JournalManifest {
+    let mut manifest = bootstrap_manifest(operation_id);
+    manifest.journal_revision = revision;
+    manifest.phase = phase_code::PREPARE;
+    manifest.fencing_generation = fencing_generation;
+    manifest
+}
+
+fn promote(dir: &Path, manifest: &JournalManifest) {
+    let fence = MigrationFence::from_manifest(manifest);
+    let op = write_op();
+    let key = key();
+    let mut fs = StdFs;
+    let mut ctx = durable_ctx(&mut fs, &key, dir, &op);
+    promote_manifest_fenced(&mut ctx, manifest, &fence).unwrap();
+}
+
+fn file_bytes(dir: &Path, revision: u64) -> Vec<u8> {
+    std::fs::read(generation_path(dir, revision)).unwrap()
+}
+
+fn binding(manifest: &JournalManifest, digest: [u8; 32]) -> LiveMigration {
+    LiveMigration {
+        operation_id: manifest.operation_id.clone(),
+        fencing_generation: manifest.fencing_generation,
+        journal_revision: manifest.journal_revision,
+        manifest_digest: digest,
+    }
+}
+
+struct NoListFs(StdFs);
+
+impl DurableFs for NoListFs {
+    type File = File;
+
+    fn create_new(&mut self, path: &Path) -> io::Result<File> {
+        self.0.create_new(path)
+    }
+
+    fn sync_file(&mut self, file: &mut File) -> io::Result<()> {
+        self.0.sync_file(file)
+    }
+
+    fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+        self.0.read(path)
+    }
+
+    fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.0.link_no_replace(from, to)
+    }
+
+    fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        self.0.remove_file(path)
+    }
+
+    fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+        self.0.sync_dir(dir)
+    }
+
+    fn list_dir(&mut self, _dir: &Path) -> io::Result<Vec<OsString>> {
+        panic!("resume must not enumerate the record directory");
+    }
+
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.0.rename_replace(from, to)
+    }
+
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        self.0.create_dir_all(dir)
+    }
+}
+
+struct DenyRead;
+
+impl DurableFs for DenyRead {
+    type File = File;
+
+    fn create_new(&mut self, _path: &Path) -> io::Result<File> {
+        Err(io::Error::other("unused"))
+    }
+
+    fn sync_file(&mut self, _file: &mut File) -> io::Result<()> {
+        Err(io::Error::other("unused"))
+    }
+
+    fn read(&mut self, _path: &Path) -> io::Result<Vec<u8>> {
+        Err(io::Error::new(io::ErrorKind::PermissionDenied, "denied"))
+    }
+
+    fn link_no_replace(&mut self, _from: &Path, _to: &Path) -> io::Result<()> {
+        Err(io::Error::other("unused"))
+    }
+
+    fn remove_file(&mut self, _path: &Path) -> io::Result<()> {
+        Err(io::Error::other("unused"))
+    }
+
+    fn sync_dir(&mut self, _dir: &Path) -> io::Result<DirectoryDurability> {
+        Err(io::Error::other("unused"))
+    }
+
+    fn list_dir(&mut self, _dir: &Path) -> io::Result<Vec<OsString>> {
+        panic!("resume must not enumerate the record directory");
+    }
+
+    fn rename_replace(&mut self, _from: &Path, _to: &Path) -> io::Result<()> {
+        Err(io::Error::other("unused"))
+    }
+
+    fn create_dir_all(&mut self, _dir: &Path) -> io::Result<()> {
+        Err(io::Error::other("unused"))
+    }
+}
+
+fn resume(dir: &Path, live: &LiveMigration) -> Result<JournalManifest, JournalDurableError> {
+    let op = write_op();
+    let key = key();
+    let mut fs = NoListFs(StdFs);
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, dir, &op);
+    load_authoritative_manifest(&mut ctx, live)
+}
+
+#[test]
+fn resume_returns_only_the_root_named_generation() {
+    let dir = TempDir::new();
+    let older = manifest_at("resume-op", 1, 4);
+    let current = manifest_at("resume-op", 2, 4);
+    let newer = manifest_at("resume-op", 3, 4);
+    promote(&dir.0, &older);
+    promote(&dir.0, &current);
+    promote(&dir.0, &newer);
+    let older_bytes = file_bytes(&dir.0, 1);
+    let newer_bytes = file_bytes(&dir.0, 3);
+    let live = binding(&current, content_digest(&file_bytes(&dir.0, 2)));
+    let loaded = resume(&dir.0, &live).unwrap();
+    assert_eq!(loaded, current);
+    assert_eq!(file_bytes(&dir.0, 1), older_bytes);
+    assert_eq!(file_bytes(&dir.0, 3), newer_bytes);
+}
+
+#[test]
+fn resume_returns_the_root_named_generation_when_it_is_the_only_file() {
+    let dir = TempDir::new();
+    let current = manifest_at("resume-only", 2, 4);
+    promote(&dir.0, &current);
+    let live = binding(&current, content_digest(&file_bytes(&dir.0, 2)));
+    assert_eq!(resume(&dir.0, &live).unwrap(), current);
+}
+
+#[test]
+fn resume_returns_the_newer_generation_only_when_the_root_names_it() {
+    let dir = TempDir::new();
+    let current = manifest_at("resume-advanced", 2, 4);
+    let named = manifest_at("resume-advanced", 3, 4);
+    promote(&dir.0, &current);
+    promote(&dir.0, &named);
+    let live = binding(&named, content_digest(&file_bytes(&dir.0, 3)));
+    assert_eq!(resume(&dir.0, &live).unwrap(), named);
+}
+
+#[test]
+fn missing_root_named_generation_is_recovery_required() {
+    let dir = TempDir::new();
+    let older = manifest_at("resume-missing", 1, 4);
+    promote(&dir.0, &older);
+    let older_bytes = file_bytes(&dir.0, 1);
+    let mut live = binding(&older, content_digest(&older_bytes));
+    live.journal_revision = 2;
+    let err = resume(&dir.0, &live).unwrap_err();
+    assert_eq!(
+        err,
+        JournalDurableError::Authority(MigrationExecutionError::RecoveryRequired)
+    );
+    assert_eq!(file_bytes(&dir.0, 1), older_bytes);
+    assert!(!generation_path(&dir.0, 2).exists());
+}
+
+#[test]
+fn resume_refuses_operation_fence_and_digest_mismatches() {
+    let dir = TempDir::new();
+    let current = manifest_at("resume-match", 2, 4);
+    promote(&dir.0, &current);
+    let digest = content_digest(&file_bytes(&dir.0, 2));
+    let mut wrong_operation = binding(&current, digest);
+    wrong_operation.operation_id = "resume-other".into();
+    assert!(matches!(
+        resume(&dir.0, &wrong_operation).unwrap_err(),
+        JournalDurableError::Journal(JournalError::Open(OpenError::Tampered))
+    ));
+    let mut wrong_fence = binding(&current, digest);
+    wrong_fence.fencing_generation = 9;
+    assert_eq!(
+        resume(&dir.0, &wrong_fence).unwrap_err(),
+        JournalDurableError::Authority(MigrationExecutionError::StaleMigrationOwner)
+    );
+    let mut wrong_digest = binding(&current, digest);
+    wrong_digest.manifest_digest[0] ^= 0xff;
+    assert_eq!(
+        resume(&dir.0, &wrong_digest).unwrap_err(),
+        JournalDurableError::Authority(MigrationExecutionError::LiveBindingMismatch)
+    );
+}
+
+#[test]
+fn semantic_open_failure_does_not_become_recovery_required_or_adopt_a_sibling() {
+    let dir = TempDir::new();
+    let current = manifest_at("resume-open", 2, 4);
+    let newer = manifest_at("resume-open", 3, 4);
+    promote(&dir.0, &current);
+    promote(&dir.0, &newer);
+    let newer_bytes = file_bytes(&dir.0, 3);
+    std::fs::write(generation_path(&dir.0, 2), b"not-a-wsr1-envelope").unwrap();
+    let live = binding(&current, content_digest(b"not-a-wsr1-envelope"));
+    let err = resume(&dir.0, &live).unwrap_err();
+    assert!(matches!(
+        err,
+        JournalDurableError::Journal(JournalError::Open(_))
+    ));
+    assert!(!matches!(
+        err,
+        JournalDurableError::Authority(MigrationExecutionError::RecoveryRequired)
+    ));
+    assert_eq!(file_bytes(&dir.0, 3), newer_bytes);
+}
+
+#[test]
+fn permission_denied_stays_a_stage_io_error() {
+    let dir = TempDir::new();
+    let current = manifest_at("resume-denied", 2, 4);
+    let live = binding(&current, [0x11; 32]);
+    let op = write_op();
+    let key = key();
+    let mut fs = DenyRead;
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, &dir.0, &op);
+    let err = load_authoritative_manifest(&mut ctx, &live).unwrap_err();
+    assert!(matches!(
+        err,
+        JournalDurableError::Stage(stage)
+            if matches!(stage.kind, StageFailureKind::Io(io::ErrorKind::PermissionDenied))
+                && !stage.promoted
     ));
 }
