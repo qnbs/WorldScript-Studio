@@ -153,6 +153,8 @@ fn promote_sealed_envelope<F: DurableFs>(
         &stage_request(ctx.dir, &identity, meta, ctx.operation),
         envelope,
     )?;
+    // Post-promotion read I/O uses `StageFailure` with `promoted: true` so callers do not treat a
+    // successful promotion as absent when readback fails; semantic verify failures are `Journal`.
     let bytes = ctx
         .fs
         .read(&promoted.path)
@@ -163,7 +165,7 @@ fn promote_sealed_envelope<F: DurableFs>(
 
 /// Seals `manifest` through the journal codec, durably promotes generation `journal_revision`, and
 /// readbacks through [`JournalManifest::open`].
-pub fn promote_manifest<F: DurableFs>(
+pub(crate) fn promote_manifest<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
 ) -> Result<PromotedGeneration, JournalDurableError> {
@@ -185,8 +187,20 @@ pub fn promote_manifest_fenced<F: DurableFs>(
     with_fence(manifest, fence, || promote_manifest(ctx, manifest))
 }
 
+/// Fenced [`promote_page`]: requires the same manifest authority and fence as manifest promotion.
+pub fn promote_page_fenced<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    fence: &MigrationFence,
+    page: &JournalPage,
+) -> Result<PromotedGeneration, JournalDurableError> {
+    with_fence(manifest, fence, || {
+        promote_page(ctx, &manifest.operation_id, page)
+    })
+}
+
 /// Seals and durably promotes one journal page generation.
-pub fn promote_page<F: DurableFs>(
+pub(crate) fn promote_page<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     operation_id: &str,
     page: &JournalPage,

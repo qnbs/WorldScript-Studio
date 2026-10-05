@@ -55,6 +55,16 @@ load of the newer generation yet).
 - Crash-injection / Gate 6 packaging
 - QNB-192 CodeScene local preflight tooling
 
+## B1 hardening acceptance (closed on B1 PR; B2 still owns durable authority)
+
+| Residual | B1 outcome | B2 if still open |
+|----------|------------|------------------|
+| Public unfenced promote entrypoints | Crate-private primitives; fenced public API | — |
+| Post-promotion error provenance | Documented + `promoted: true` on post-promote read I/O | Crash/restart recovery semantics |
+| Mutex proof | Deterministic mpsc exclusion test | Cross-process CAS when required |
+| Stale manifest + matching fence | Documented limitation | Durable authoritative revision reconciliation |
+| `key_epoch: 1` in journal meta | Intentional current slice; no blind change | Root-bound epoch when binding advances |
+
 ## Successor slices (not B)
 
 - Slice B2: tested restart/reconciliation for manifest-ahead-of-root + root `LiveMigration` advance
