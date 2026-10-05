@@ -6,6 +6,7 @@
 //! Slice 4D part A adds phase/fence/revision state only; durable I/O and root binding updates follow.
 
 mod digest;
+mod durable;
 mod inventory;
 mod manifest;
 mod manifest_verify;
@@ -109,6 +110,11 @@ impl From<RootError> for JournalError {
 pub use digest::{
     empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
     journal_page_set_digest, page_ref_for, InventoryDigestVerifier,
+};
+pub use durable::{
+    acquire_journal_durable_guard, load_manifest_generation, promote_manifest,
+    promote_manifest_fenced, promote_page, with_fence, JournalDurableContext, JournalDurableError,
+    JournalDurableGuard,
 };
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
 pub use manifest::{JournalManifest, JournalPageRef};
