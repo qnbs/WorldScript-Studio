@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **R-15 Gate 4D:** resume from the journal manifest generation named by the committed
   root `LiveMigration`. A newer durable generation is retained and not adopted.
   Only a missing copy of that exact generation is recovery-required. Root binding
-  advance, R2B, and R4 stay later slices.
+  advance, R2B, and R4 stay later slices. PR #967.
 - **Dependencies:** move `worldscript-secure-storage` OS entropy from `getrandom` 0.2.17 to 0.3.4.
   The 0.3 line renames that call to `fill`. An entropy-source failure still maps to
   `RandomnessUnavailable`, with no fallback PRNG. Rust 1.77.2 and the other RustCrypto
