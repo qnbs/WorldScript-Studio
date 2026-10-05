@@ -43,9 +43,11 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 
 - Process-wide mutex serializes journal durable mutations (single-process stand-in only).
 - `assert_fence` runs before any filesystem operation in fenced entrypoints.
-- Proofs: `stale_fence_rejects_before_durable_io`; mutex exclusion via unit test
-  `journal::durable::mutex_proof::journal_durable_mutex_blocks_try_lock_while_guard_held`
-  (`try_lock` → `WouldBlock` while `JournalDurableGuard` is held).
+- Proofs: `stale_fence_rejects_before_durable_io`; mutex exclusion via unit tests in
+  `journal::durable::mutex_proof`:
+  - `journal_durable_mutex_blocks_try_lock_while_guard_held` — guard holds `JOURNAL_DURABLE_MUTEX`;
+  - `with_fence_holds_mutex_during_closure` — `with_fence` retains the guard through the callback body
+    (`try_lock` → `WouldBlock` inside the closure, available after return). No sleeps or cross-thread races.
 
 ## B1 hardening (post–#959)
 
@@ -80,7 +82,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 
 Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 cases).
 
-Unit (mutex): `journal::durable::mutex_proof::journal_durable_mutex_blocks_try_lock_while_guard_held`
-(uses `JOURNAL_DURABLE_MUTEX.try_lock()` / `WouldBlock`, not cross-thread scheduling).
+Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
+`with_fence_holds_mutex_during_closure` in `journal::durable::mutex_proof`.
 
 Gate 4D overall status: **IN PROGRESS** (journal durable I/O only; not terminal).

@@ -305,4 +305,26 @@ mod mutex_proof {
             "mutex must be acquirable after guard drop"
         );
     }
+
+    #[test]
+    fn with_fence_holds_mutex_during_closure() {
+        let manifest = sample_manifest();
+        let fence = MigrationFence::from_manifest(&manifest);
+
+        with_fence(&manifest, &fence, || {
+            match JOURNAL_DURABLE_MUTEX.try_lock() {
+                Err(TryLockError::WouldBlock) => {}
+                other => {
+                    panic!("expected WouldBlock while with_fence closure active, got {other:?}")
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+
+        assert!(
+            JOURNAL_DURABLE_MUTEX.try_lock().is_ok(),
+            "mutex must be acquirable after with_fence returns"
+        );
+    }
 }
