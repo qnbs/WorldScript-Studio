@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4B operations integration harness:** poll nonblocking admitted writes (`write_poll` /
+  `write_until_admitted`) so legal shared-admission `Ok(None)` is not treated as a committed write in
+  `gate4b_operations_test`. PR #962.
 - **R-15 Gate 4D B1 `with_fence` mutex proof closure (#359 / #922):** add deterministic unit test
   `with_fence_holds_mutex_during_closure` so mutex retention is proven through the public fenced entrypoint,
   not only via `JournalDurableGuard` acquisition. PR #961.

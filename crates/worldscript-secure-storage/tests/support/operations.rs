@@ -264,6 +264,25 @@ impl Fixture {
             .try_write_record(fs, self.mutation(expected, payload))
     }
 
+    /// Poll until the nonblocking write resolves to `Ok(Some(_))` or `Err(_)`, skipping `Ok(None)`.
+    pub fn write_poll(
+        &self,
+        fs: &mut impl DurableFs,
+        expected: Option<u64>,
+        payload: &[u8],
+    ) -> Result<Option<ProtectedCommitted>, OperationError> {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            match self.write(fs, expected, payload)? {
+                Some(committed) => return Ok(Some(committed)),
+                None if Instant::now() >= deadline => {
+                    panic!("admitted write did not resolve before deadline");
+                }
+                None => thread::sleep(Duration::from_millis(5)),
+            }
+        }
+    }
+
     /// Nonblocking admitted writes return `Ok(None)` under shared-admission contention; poll like production retry.
     pub fn write_until_admitted(
         &self,
@@ -271,15 +290,9 @@ impl Fixture {
         expected: Option<u64>,
         payload: &[u8],
     ) -> Result<ProtectedCommitted, OperationError> {
-        let deadline = Instant::now() + Duration::from_secs(30);
-        loop {
-            match self.write(fs, expected, payload)? {
-                Some(committed) => return Ok(committed),
-                None if Instant::now() >= deadline => {
-                    panic!("admitted write did not acquire shared admission before deadline");
-                }
-                None => thread::sleep(Duration::from_millis(5)),
-            }
+        match self.write_poll(fs, expected, payload)? {
+            Some(committed) => Ok(committed),
+            None => unreachable!("write_poll returns Some or panics"),
         }
     }
     pub fn mutation<'a>(
