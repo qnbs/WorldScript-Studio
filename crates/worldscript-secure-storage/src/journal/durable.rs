@@ -3,20 +3,26 @@
 //! Sealing semantics stay in [`JournalManifest::seal`] / [`JournalPage::seal`]; this module only
 //! pairs them with [`crate::durable::stage_and_promote_envelope`] and an in-process fence boundary.
 
+use std::io::ErrorKind;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::durable::{
-    stage_and_promote_envelope, DurableFs, PromotedGeneration, StageFailure, StageRequest,
-    WriteOperationId,
+    generation_path, stage_and_promote_envelope, DurableFs, PromotedGeneration, StageFailure,
+    StageRequest, WriteOperationId,
 };
 use crate::identity::RecordIdentity;
+use crate::marker::content_digest;
 use crate::record_class::RecordClass;
+use crate::root::LiveMigration;
 use crate::seal::{Key, RecordMeta};
 
 use super::manifest::JournalManifest;
 use super::page::JournalPage;
-use super::state::{assert_fence, MigrationExecutionError, MigrationFence};
+use super::state::{
+    assert_fence, assert_live_binding, ManifestEnvelopeDigest, MigrationExecutionError,
+    MigrationFence,
+};
 use super::{JournalError, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA};
 
 static JOURNAL_DURABLE_MUTEX: Mutex<()> = Mutex::new(());
@@ -27,6 +33,8 @@ pub enum JournalDurableError {
     Journal(JournalError),
     Stage(StageFailure),
     Fence(MigrationExecutionError),
+    /// Root-bound resume refused the generation the committed binding names. Not a fence check.
+    Authority(MigrationExecutionError),
     LockPoisoned,
 }
 
@@ -211,6 +219,32 @@ pub(crate) fn promote_page<F: DurableFs>(
     promote_sealed_envelope(ctx, identity, meta, envelope, move |key, id, bytes| {
         JournalPage::open(key, id, page_generation, bytes).map(|_| ())
     })
+}
+
+/// Loads the manifest generation named by the committed root live-migration binding.
+///
+/// Reads only `generation-<live.journal_revision>`. A newer file in the same directory is not
+/// authority. The binding digest is the canonical content digest of those exact envelope bytes.
+pub fn load_authoritative_manifest<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    live: &LiveMigration,
+) -> Result<JournalManifest, JournalDurableError> {
+    let identity = migration_identity(&live.operation_id)?;
+    let path = generation_path(ctx.dir, live.journal_revision);
+    let bytes = match ctx.fs.read(&path) {
+        Ok(bytes) => bytes,
+        // QNBS-v3: only NotFound for the root-named generation is RecoveryRequired; every other I/O and open failure keeps its own class, and no sibling generation is read.
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            return Err(JournalDurableError::Authority(
+                MigrationExecutionError::RecoveryRequired,
+            ));
+        }
+        Err(error) => return Err(JournalDurableError::Stage(stage_io(error))),
+    };
+    let digest = ManifestEnvelopeDigest::from_bytes(content_digest(&bytes));
+    let manifest = JournalManifest::open(ctx.key, &identity, live.journal_revision, &bytes)?;
+    assert_live_binding(&manifest, live, digest).map_err(JournalDurableError::Authority)?;
+    Ok(manifest)
 }
 
 /// Loads a durably stored manifest generation from `dir`.

@@ -68,7 +68,7 @@ load of the newer generation yet).
 
 ## Successor slices (not B)
 
-- Slice B2: tested restart/reconciliation for manifest-ahead-of-root + root `LiveMigration` advance
+- Slice B2a: a durable manifest ahead of the root resumes the root-named generation and does not adopt the newer file. Root `LiveMigration` advancement, R2B, and R4 stay separate.
 - Slice C: record conversion / mixed-key inventory execution as live truth requires
 - Gate 4E: first enable/disable closure
 - Root two-phase commit coupling with step F when journal + root must advance together (after B2)
