@@ -5,15 +5,13 @@ use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Barrier};
-use std::thread;
 
 use worldscript_secure_storage::{
     empty_inventory_digest, empty_journal_page_set_digest, generation_path,
-    load_manifest_generation, operation_type, phase_code, promote_manifest_fenced, promote_page,
-    with_fence, DirectoryDurability, DurableFs, JournalDurableContext, JournalDurableError,
-    JournalManifest, JournalPage, MigrationExecutionError, MigrationFence, RecordClass,
-    RecordIdentity, StageFailureKind, StdFs, WriteOperationId,
+    load_manifest_generation, operation_type, phase_code, promote_manifest_fenced,
+    promote_page_fenced, DirectoryDurability, DurableFs, JournalDurableContext,
+    JournalDurableError, JournalManifest, JournalPage, MigrationExecutionError, MigrationFence,
+    RecordClass, RecordIdentity, StageFailureKind, StdFs, WriteOperationId,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -191,13 +189,16 @@ fn non_bootstrap_manifest_revision_promotes_and_refuses_overwrite() {
 #[test]
 fn journal_page_durable_roundtrip() {
     let dir = TempDir::new();
+    let manifest = bootstrap_manifest("page-durable-op");
+    let fence = MigrationFence::from_manifest(&manifest);
     let page = JournalPage::new(0, 1, vec![]).unwrap();
     let op = write_op();
     let key = key();
     let mut fs = StdFs;
     let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
-    promote_page(&mut ctx, "page-durable", &page).unwrap();
-    let identity = RecordIdentity::new(RecordClass::MigrationPage, &["page-durable", "0"]).unwrap();
+    promote_page_fenced(&mut ctx, &manifest, &fence, &page).unwrap();
+    let identity =
+        RecordIdentity::new(RecordClass::MigrationPage, &["page-durable-op", "0"]).unwrap();
     let bytes = std::fs::read(generation_path(&dir.0, 1)).unwrap();
     let opened = JournalPage::open(&key, &identity, 1, &bytes).unwrap();
     assert_eq!(opened.page_index(), 0);
@@ -221,35 +222,4 @@ fn stale_fence_rejects_before_durable_io() {
         err,
         JournalDurableError::Fence(MigrationExecutionError::StaleMigrationOwner)
     ));
-}
-
-#[test]
-fn with_fence_holds_mutex_across_critical_section() {
-    let manifest = bootstrap_manifest("mutex-op");
-    let fence = MigrationFence::from_manifest(&manifest);
-    let barrier = Arc::new(Barrier::new(2));
-    let concurrent = Arc::new(AtomicUsize::new(0));
-    let b1 = barrier.clone();
-    let b2 = barrier.clone();
-    let concurrent1 = concurrent.clone();
-    let concurrent2 = concurrent.clone();
-    let manifest1 = manifest.clone();
-    let manifest2 = manifest.clone();
-    let t1 = thread::spawn(move || {
-        with_fence(&manifest1, &fence, || {
-            concurrent1.fetch_add(1, Ordering::SeqCst);
-            b1.wait();
-            concurrent1.fetch_sub(1, Ordering::SeqCst);
-            Ok::<(), JournalDurableError>(())
-        })
-    });
-    let t2 = thread::spawn(move || {
-        b2.wait();
-        with_fence(&manifest2, &fence, || {
-            assert_eq!(concurrent2.load(Ordering::SeqCst), 0);
-            Ok(())
-        })
-    });
-    t1.join().unwrap().unwrap();
-    t2.join().unwrap().unwrap();
 }

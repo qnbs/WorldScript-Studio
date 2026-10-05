@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D slice B1 journal durable API hardening (#359 / #922):** crate-private unfenced
+  `promote_manifest` / `promote_page`; public mutation only through `promote_manifest_fenced` and
+  `promote_page_fenced`; deterministic `with_fence` exclusion test; post-promotion error provenance
+  documented. PR #960.
 - **R-15 Gate 4D slice B journal durable promotion (#359 / #922):** headless Core now durably stages and
   promotes migration journal manifest and page generations via pre-sealed envelopes (including bootstrap
   revision `0` through `JournalManifest::seal` without re-entering `seal_record`), plus an in-process

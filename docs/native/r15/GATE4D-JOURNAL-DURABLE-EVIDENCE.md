@@ -1,6 +1,6 @@
-# Gate 4D slice B PR 1 — journal durable promotion evidence
+# Gate 4D slice B — journal durable promotion evidence
 
-Owner: QNB-11 / #359. Base: `main` @ `0f765753d76a8420ca6bd2d8170200cf3f3ef1cf` (post–PR #958).
+Owner: QNB-11 / #359. Base: `main` @ `5709ef95…` (post–PR #959); B1 hardening follows #959.
 
 `PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`.
 
@@ -15,9 +15,10 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 |---------|------|
 | `durable::stage_and_promote_envelope` | Promote a pre-sealed WSR1 envelope without re-entering `seal_record` |
 | `journal::JournalDurableContext` | Bundles `fs`, `key`, `dir`, and `WriteOperationId` for promote/load entrypoints |
-| `journal::promote_manifest` | Seal via `JournalManifest::seal`, promote, readback via `JournalManifest::open` |
-| `journal::promote_manifest_fenced` | `with_fence` + `promote_manifest` |
-| `journal::promote_page` | `JournalPage::seal` + promote + `JournalPage::open` readback |
+| `journal::promote_manifest` (crate-private) | Seal, promote, readback via `JournalManifest::open` |
+| `journal::promote_manifest_fenced` | Public mutation: `with_fence` + crate-private `promote_manifest` |
+| `journal::promote_page` (crate-private) | `JournalPage::seal` + promote + `JournalPage::open` readback |
+| `journal::promote_page_fenced` | Public page mutation: `with_fence` + crate-private `promote_page` |
 | `journal::load_manifest_generation` | Load one manifest generation from a journal record directory |
 | `journal::with_fence` / `acquire_journal_durable_guard` | Mutex + `assert_fence` before I/O |
 
@@ -42,7 +43,25 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 
 - Process-wide mutex serializes journal durable mutations (single-process stand-in only).
 - `assert_fence` runs before any filesystem operation in fenced entrypoints.
-- Proofs: `stale_fence_rejects_before_durable_io`, `with_fence_holds_mutex_across_critical_section`.
+- Proofs: `stale_fence_rejects_before_durable_io`; mutex exclusion via unit test
+  `journal::durable::mutex_proof::journal_durable_mutex_blocks_try_lock_while_guard_held`
+  (`try_lock` → `WouldBlock` while `JournalDurableGuard` is held).
+
+## B1 hardening (post–#959)
+
+- **R1 public fencing:** unfenced `promote_manifest` / `promote_page` are `pub(crate)`; external
+  mutation uses `promote_manifest_fenced` and `promote_page_fenced` only.
+- **R2 post-promotion errors (split):**
+  - Post-promotion **read I/O** failure → `JournalDurableError::Stage` with `StageFailure.promoted == true`
+    and promotion-time `staging` residue (B1 closed in #960).
+  - Post-promotion **semantic open/verify** failure → `JournalDurableError::Journal` without an explicit
+    promoted flag; retry may observe `GenerationExists`. B2 must define recovery/reconciliation when a
+    durable generation exists but journal open refuses (acceptance criterion in gap matrix).
+- **R4 stale caller manifest + matching fence:** B2-owned durable authority/reconciliation only; not
+  expanded in B1 (#960).
+- **R5 `key_epoch: 1` in journal `RecordMeta`:** existing B1 implementation convention for migration
+  record envelopes in this slice; authoritative epoch alignment with root `active_key_epoch` and root
+  binding advancement remain B2-owned (no value change without normative contract proof).
 
 ## Fault / refusal evidence
 
@@ -59,6 +78,9 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 
 ## Tests
 
-Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (5 cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 cases).
+
+Unit (mutex): `journal::durable::mutex_proof::journal_durable_mutex_blocks_try_lock_while_guard_held`
+(uses `JOURNAL_DURABLE_MUTEX.try_lock()` / `WouldBlock`, not cross-thread scheduling).
 
 Gate 4D overall status: **IN PROGRESS** (journal durable I/O only; not terminal).
