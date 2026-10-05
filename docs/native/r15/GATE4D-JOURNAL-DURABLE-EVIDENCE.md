@@ -80,6 +80,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 
 Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 cases).
 
-Unit (mutex): `journal::durable::mutex_proof::journal_durable_mutex_blocks_try_lock_while_guard_held`.
+Unit (mutex): `journal::durable::mutex_proof::journal_durable_mutex_blocks_try_lock_while_guard_held`
+(uses `JOURNAL_DURABLE_MUTEX.try_lock()` / `WouldBlock`, not cross-thread scheduling).
 
 Gate 4D overall status: **IN PROGRESS** (journal durable I/O only; not terminal).
