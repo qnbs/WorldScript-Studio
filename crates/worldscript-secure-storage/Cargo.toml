@@ -11,7 +11,7 @@ name = "worldscript_secure_storage"
 
 [dependencies]
 # `zeroize` on both clears the AES key schedule (aes) and the derived GHASH key (aes-gcm) on drop.
-aes = { version = "0.8.4", default-features = false, features = ["zeroize"] }
+aes = { version = "0.9.1", default-features = false, features = ["zeroize"] }
 aes-gcm = { version = "0.10.3", default-features = false, features = ["aes", "alloc", "zeroize"] }
 # Native recovery KDF (WSS_ARGON2ID_V1). 0.5.x is the newest line within this crate's Rust 1.77.2
 # minimum (0.6 needs 1.85); default features (password-hash/PHC strings) are not used.
