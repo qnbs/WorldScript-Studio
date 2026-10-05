@@ -20,15 +20,16 @@ use worldscript_secure_storage::*;
 #[test]
 fn write_cas_and_two_root_events_are_one_admitted_operation() {
     let fixture = Fixture::new();
-    let first = fixture.write(&mut StdFs, None, b"first").unwrap().unwrap();
+    let first = fixture
+        .write_until_admitted(&mut StdFs, None, b"first")
+        .unwrap();
     assert_eq!((first.generation, first.root_generation), (1, 3));
     let second = fixture
-        .write(&mut StdFs, Some(1), b"second")
-        .unwrap()
+        .write_until_admitted(&mut StdFs, Some(1), b"second")
         .unwrap();
     assert_eq!((second.generation, second.root_generation), (2, 5));
     assert_eq!(
-        fixture.write(&mut StdFs, Some(1), b"stale"),
+        fixture.write_poll(&mut StdFs, Some(1), b"stale"),
         Err(OperationError::StaleGeneration)
     );
     assert_eq!(fixture.payload(), b"second");
@@ -50,15 +51,21 @@ fn write_cas_and_two_root_events_are_one_admitted_operation() {
 #[test]
 fn old_snapshot_survives_multiple_publishes_and_blocks_reclamation() {
     let fixture = Fixture::new();
-    fixture.write(&mut StdFs, None, b"first").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, None, b"first")
+        .unwrap();
     let mut old = fixture
         .storage()
         .try_authority_snapshot(&mut StdFs)
         .unwrap()
         .unwrap();
     let witness = old.retention();
-    fixture.write(&mut StdFs, Some(1), b"second").unwrap();
-    fixture.write(&mut StdFs, Some(2), b"third").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, Some(1), b"second")
+        .unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, Some(2), b"third")
+        .unwrap();
     assert_eq!(old.root_generation(), 3);
     assert_eq!(
         old.read_record(&mut StdFs, fixture.record(), payload)
@@ -105,7 +112,9 @@ fn old_snapshot_survives_multiple_publishes_and_blocks_reclamation() {
 #[test]
 fn read_handoff_holds_admission_until_consumer_returns() {
     let fixture = Fixture::new();
-    fixture.write(&mut StdFs, None, b"value").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, None, b"value")
+        .unwrap();
     let result = fixture
         .storage()
         .try_read_record(&mut StdFs, fixture.record(), |read| {
@@ -126,7 +135,9 @@ fn read_handoff_holds_admission_until_consumer_returns() {
 #[test]
 fn confirmed_lock_and_failed_unlock_retain_cross_process_exclusion() {
     let fixture = Fixture::new();
-    fixture.write(&mut StdFs, None, b"value").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, None, b"value")
+        .unwrap();
     assert_eq!(
         fixture.storage().try_lock(&mut StdFs).unwrap(),
         Some(KeyState::Locked)
@@ -293,8 +304,7 @@ fn staging_keeps_shared_admission_but_not_root_mutex_and_serializes_writers() {
         Ok(())
     });
     fixture
-        .write(&mut filesystem, None, b"first")
-        .unwrap()
+        .write_until_admitted(&mut filesystem, None, b"first")
         .unwrap();
     assert!(observed);
     assert_eq!(fixture.payload(), b"first");
@@ -303,7 +313,9 @@ fn staging_keeps_shared_admission_but_not_root_mutex_and_serializes_writers() {
 #[test]
 fn pinned_reader_runs_at_both_pointer_before_anchor_windows_without_root_lock() {
     let fixture = Fixture::new();
-    fixture.write(&mut StdFs, None, b"prior").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, None, b"prior")
+        .unwrap();
     let storage = fixture.storage().clone();
     let identity = fixture.identity.clone();
     let (records, markers) = (fixture.records.clone(), fixture.markers.clone());
@@ -346,8 +358,7 @@ fn pinned_reader_runs_at_both_pointer_before_anchor_windows_without_root_lock() 
         Ok(())
     });
     fixture
-        .write(&mut filesystem, Some(1), b"new")
-        .unwrap()
+        .write_until_admitted(&mut filesystem, Some(1), b"new")
         .unwrap();
     reader.join().unwrap();
     assert_eq!(windows, 2);
@@ -357,7 +368,9 @@ fn pinned_reader_runs_at_both_pointer_before_anchor_windows_without_root_lock() 
 #[test]
 fn cas_is_checked_after_recovery_publishes_completed_pending_generation() {
     let fixture = Fixture::new();
-    fixture.write(&mut StdFs, None, b"first").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, None, b"first")
+        .unwrap();
     let mut pages = 0;
     let mut filesystem = HookFs(|path: &std::path::Path, event| {
         if event == Event::Create && path.starts_with(fixture.root.join("catalog")) {
@@ -369,7 +382,7 @@ fn cas_is_checked_after_recovery_publishes_completed_pending_generation() {
         Ok(())
     });
     assert!(fixture
-        .write(&mut filesystem, Some(1), b"completed pending")
+        .write_poll(&mut filesystem, Some(1), b"completed pending")
         .is_err());
     assert_eq!(pages, 2);
     assert_eq!(fixture.payload(), b"first");
@@ -378,14 +391,13 @@ fn cas_is_checked_after_recovery_publishes_completed_pending_generation() {
         Err(OperationError::RecoveryPending)
     );
     assert_eq!(
-        fixture.write(&mut StdFs, Some(1), b"must not overwrite"),
+        fixture.write_poll(&mut StdFs, Some(1), b"must not overwrite"),
         Err(OperationError::StaleGeneration)
     );
     assert_eq!(fixture.payload(), b"completed pending");
     assert_eq!(
         fixture
-            .write(&mut StdFs, Some(2), b"third")
-            .unwrap()
+            .write_until_admitted(&mut StdFs, Some(2), b"third")
             .unwrap()
             .generation,
         3
@@ -395,7 +407,9 @@ fn cas_is_checked_after_recovery_publishes_completed_pending_generation() {
 #[test]
 fn cancellation_preserves_pending_data_and_releases_all_kernel_ownership() {
     let fixture = Fixture::new();
-    fixture.write(&mut StdFs, None, b"prior").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, None, b"prior")
+        .unwrap();
     let mut filesystem = HookFs(|path: &std::path::Path, event| -> io::Result<()> {
         if event == Event::Create && path.parent() == Some(fixture.records.as_path()) {
             panic!("injected cancellation during staging");
@@ -403,7 +417,9 @@ fn cancellation_preserves_pending_data_and_releases_all_kernel_ownership() {
         Ok(())
     });
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = fixture.write(&mut filesystem, Some(1), b"candidate");
+        fixture
+            .write_poll(&mut filesystem, Some(1), b"candidate")
+            .unwrap();
     }))
     .is_err());
     assert_eq!(fixture.payload(), b"prior");
@@ -511,7 +527,9 @@ fn snapshot_is_send_and_two_readers_pin_across_three_writer_operations() {
     fn send<T: Send>() {}
     send::<AuthoritySnapshotGuard>();
     let fixture = Fixture::new();
-    fixture.write(&mut StdFs, None, b"baseline").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, None, b"baseline")
+        .unwrap();
     let mut readers = Vec::new();
     let (ready_tx, ready_rx) = mpsc::channel();
     let (racing_tx, racing_rx) = mpsc::channel();
@@ -538,8 +556,7 @@ fn snapshot_is_send_and_two_readers_pin_across_three_writer_operations() {
         Ok(())
     });
     fixture
-        .write(&mut filesystem, Some(1), b"next")
-        .unwrap()
+        .write_until_admitted(&mut filesystem, Some(1), b"next")
         .unwrap();
     for generation in 2..=3 {
         fixture
@@ -577,7 +594,9 @@ fn current_and_previous_root_remain_retained_after_their_reader_releases() {
         );
         candidate
     };
-    fixture.write(&mut StdFs, None, b"first").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, None, b"first")
+        .unwrap();
     let mut previous = None;
     let mut filesystem = HookFs(|path: &std::path::Path, event| {
         if event == Event::Create && path.parent() == Some(fixture.records.as_path()) {
@@ -588,7 +607,9 @@ fn current_and_previous_root_remain_retained_after_their_reader_releases() {
         }
         Ok(())
     });
-    fixture.write(&mut filesystem, Some(1), b"second").unwrap();
+    fixture
+        .write_until_admitted(&mut filesystem, Some(1), b"second")
+        .unwrap();
     let previous = previous.expect("canonical record staging hook must capture the previous root");
     assert_eq!(previous.root_generation(), 4);
     let previous_witness = previous.retention();
@@ -617,7 +638,9 @@ fn current_and_previous_root_remain_retained_after_their_reader_releases() {
 fn both_root_contention_windows_preserve_intents_and_refuse_clean_drain() {
     for blocked_marker in 1..=2 {
         let fixture = Fixture::new();
-        fixture.write(&mut StdFs, None, b"prior").unwrap();
+        fixture
+            .write_until_admitted(&mut StdFs, None, b"prior")
+            .unwrap();
         let mut held_root = None;
         let mut marker_creates = 0;
         let mut filesystem = HookFs(|path: &std::path::Path, event| {
@@ -632,7 +655,7 @@ fn both_root_contention_windows_preserve_intents_and_refuse_clean_drain() {
             Ok(())
         });
         assert_eq!(
-            fixture.write(&mut filesystem, Some(1), b"candidate"),
+            fixture.write_poll(&mut filesystem, Some(1), b"candidate"),
             Err(OperationError::Protected(ProtectedError::RootBusy))
         );
         drop(held_root);
@@ -706,7 +729,9 @@ fn nonordinary_member_is_refused_before_coordination_or_authority_observation() 
 #[test]
 fn eligibility_refuses_root_replacement_during_anchor_observation() {
     let fixture = Fixture::new();
-    fixture.write(&mut StdFs, None, b"first").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, None, b"first")
+        .unwrap();
     let pin = fixture
         .storage()
         .try_authority_snapshot(&mut StdFs)
@@ -714,7 +739,9 @@ fn eligibility_refuses_root_replacement_during_anchor_observation() {
         .unwrap();
     let witness = pin.retention();
     drop(pin);
-    fixture.write(&mut StdFs, Some(1), b"second").unwrap();
+    fixture
+        .write_until_admitted(&mut StdFs, Some(1), b"second")
+        .unwrap();
     let held = ExclusiveAdmissionGuard::try_acquire(fixture.scope())
         .unwrap()
         .unwrap();
