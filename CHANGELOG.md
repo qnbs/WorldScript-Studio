@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4B operations harness:** nonblocking admission that must become
+  available after a holder is released now uses a bounded retry. Direct
+  `try_acquire` remains where the test proves the guard is unavailable now.
+  Production admission semantics are unchanged. PR #963.
+- **CI:** pin `pnpm/setup` v3.0.0 in `.github/actions/setup/action.yml` and the
+  `workflow-policy` job, with `node-version-file: false` so v3 does not install Node
+  from `.nvmrc` ahead of `actions/setup-node`. The base-owned
+  `reviewer-governance-trust.yml` stays on the admitted v2.1.0 pin until a
+  protected-transition predecessor authorizes the exact byte change. Supersedes
+  the incomplete Dependabot pin in #893. PR #963.
+- **Vercel retention:** ordinary mode still requires a full authenticated Preview
+  reconciliation after every successful merge to `main` before dependent mutation.
+  An explicitly declared bounded dependency/toolchain maintenance train may defer
+  only Preview artifact housekeeping, while exact-main CI/CD, CodeQL, Production
+  READY, canonical HTTP, and alias/promotion/rollback checks stay mandatory after
+  every train merge. The train is fail-closed at 12 merges or 24 hours measured
+  from the UTC instant `MERGE_1` is recorded, and one
+  full reconciliation is required before non-train mutation resumes. The
+  introducing transition lets #963 be that train's first merge when the durable
+  record is complete before merge; a later pull request cannot reuse the
+  bootstrap, and a failed resulting-main gate returns the train to ordinary
+  reconciliation. PR #963.
 - **R-15 Gate 4B operations integration harness:** poll nonblocking admitted writes (`write_poll` /
   `write_until_admitted`) so legal shared-admission `Ok(None)` is not treated as a committed write in
   `gate4b_operations_test`. PR #962.
