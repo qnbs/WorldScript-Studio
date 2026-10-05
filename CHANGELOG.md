@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D slice B journal durable promotion (#359 / #922):** headless Core now durably stages and
+  promotes migration journal manifest and page generations via pre-sealed envelopes (including bootstrap
+  revision `0` through `JournalManifest::seal` without re-entering `seal_record`), plus an in-process
+  `with_fence` mutex boundary that rejects stale fence tokens before I/O. Root `LiveMigration` binding
+  updates and restart reconciliation remain deferred (Slice B2). Production authority is unchanged.
 - **R-15 Gate 4D migration execution state (#957 / #359 / #922):** headless Core now implements §10.3
   journal phase ordering, fence/revision checks, authoritative manifest revision selection against
   the root live-migration binding, checkpoint revision bumps, and terminal recovery/done transitions.

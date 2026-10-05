@@ -6,6 +6,7 @@
 //! Slice 4D part A adds phase/fence/revision state only; durable I/O and root binding updates follow.
 
 mod digest;
+mod durable;
 mod inventory;
 mod manifest;
 mod manifest_verify;
@@ -113,6 +114,10 @@ pub use digest::{
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
 pub use manifest::{JournalManifest, JournalPageRef};
 pub use page::JournalPage;
+pub use durable::{
+    acquire_journal_durable_guard, load_manifest_generation, promote_manifest,
+    promote_manifest_fenced, promote_page, with_fence, JournalDurableError, JournalDurableGuard,
+};
 pub use state::{
     allows_phase_transition, assert_fence, assert_live_binding, authoritative_manifest_revision,
     checkpoint_progress, is_terminal_phase, mark_done, mark_recovery,

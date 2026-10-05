@@ -269,6 +269,17 @@ pub fn stage_and_promote<F: DurableFs>(
                 StagingResidue::None,
             )
         })?;
+    stage_and_promote_envelope(fs, key, request, envelope)
+}
+
+/// Durably stages and promotes a caller-supplied sealed envelope for `request.meta.record_generation`.
+/// The envelope must already authenticate as that generation of `request.identity` (§9 step 6).
+pub fn stage_and_promote_envelope<F: DurableFs>(
+    fs: &mut F,
+    key: &Key,
+    request: &StageRequest<'_>,
+    envelope: Vec<u8>,
+) -> Result<PromotedGeneration, StageFailure> {
     let generation = request.meta.record_generation;
     let attempt = Attempt {
         key,
