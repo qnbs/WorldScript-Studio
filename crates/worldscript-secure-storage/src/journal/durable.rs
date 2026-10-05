@@ -259,11 +259,21 @@ fn stage_io_after_promote(
 #[cfg(test)]
 mod mutex_proof {
     use super::*;
-    use std::sync::TryLockError;
+    use std::sync::{Mutex, MutexGuard, TryLockError};
 
     use crate::journal::{
         empty_inventory_digest, empty_journal_page_set_digest, operation_type, phase_code,
     };
+
+    /// Serializes mutex proof tests so post-release `try_lock()` checks are not perturbed by a
+    /// parallel proof test holding `JOURNAL_DURABLE_MUTEX`. Test-only; production unchanged.
+    static MUTEX_PROOF_TEST_SERIAL: Mutex<()> = Mutex::new(());
+
+    fn proof_test_serial_guard() -> MutexGuard<'static, ()> {
+        MUTEX_PROOF_TEST_SERIAL
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     fn sample_manifest() -> JournalManifest {
         JournalManifest {
@@ -292,6 +302,7 @@ mod mutex_proof {
 
     #[test]
     fn journal_durable_mutex_blocks_try_lock_while_guard_held() {
+        let _serial = proof_test_serial_guard();
         let manifest = sample_manifest();
         let fence = MigrationFence::from_manifest(&manifest);
         let guard = acquire_journal_durable_guard(&manifest, &fence).unwrap();
@@ -308,6 +319,7 @@ mod mutex_proof {
 
     #[test]
     fn with_fence_holds_mutex_during_closure() {
+        let _serial = proof_test_serial_guard();
         let manifest = sample_manifest();
         let fence = MigrationFence::from_manifest(&manifest);
 

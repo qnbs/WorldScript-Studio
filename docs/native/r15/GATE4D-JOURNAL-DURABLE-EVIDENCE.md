@@ -48,6 +48,8 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
   - `journal_durable_mutex_blocks_try_lock_while_guard_held` — guard holds `JOURNAL_DURABLE_MUTEX`;
   - `with_fence_holds_mutex_during_closure` — `with_fence` retains the guard through the callback body
     (`try_lock` → `WouldBlock` inside the closure, available after return). No sleeps or cross-thread races.
+  - Proof tests hold a test-only `MUTEX_PROOF_TEST_SERIAL` for the full test body so the default parallel
+    unit-test harness cannot cross-contaminate post-release availability checks.
 
 ## B1 hardening (post–#959)
 
