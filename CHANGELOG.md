@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4B operations harness:** nonblocking admission that must become
+  available after a holder is released now uses a bounded retry. Direct
+  `try_acquire` remains where the test proves the guard is unavailable now.
+  Production admission semantics are unchanged. PR #963.
 - **CI:** pin `pnpm/setup` v3.0.0 in `.github/actions/setup/action.yml` and the
   `workflow-policy` job, with `node-version-file: false` so v3 does not install Node
   from `.nvmrc` ahead of `actions/setup-node`. The base-owned

@@ -317,6 +317,51 @@ impl Fixture {
     }
 }
 
+/// Release is observable only eventually: a forked child keeps an inherited `flock` descriptor until exec.
+const ADMISSION_RELEASE_DEADLINE: Duration = Duration::from_secs(5);
+const ADMISSION_RETRY_INTERVAL: Duration = Duration::from_millis(5);
+
+// QNBS-v3: `Ok(None)` after drop is legal until a forked sibling execs and closes the inherited flock descriptor.
+fn poll_until_admitted<T>(
+    expected: &str,
+    scope: AdmissionScope<'_>,
+    mut acquire: impl FnMut(AdmissionScope<'_>) -> Result<Option<T>, AdmissionError>,
+) -> T {
+    let deadline = Instant::now() + ADMISSION_RELEASE_DEADLINE;
+    loop {
+        match acquire(scope) {
+            Ok(Some(guard)) => return guard,
+            Ok(None) if Instant::now() >= deadline => {
+                panic!(
+                    "{expected} remained unavailable for installation {} root {} after bounded nonblocking retries",
+                    scope.installation_dir.display(),
+                    scope.root_dir.display()
+                );
+            }
+            Ok(None) => thread::sleep(ADMISSION_RETRY_INTERVAL),
+            Err(error) => panic!(
+                "{expected} failed for installation {} root {}: {error:?}",
+                scope.installation_dir.display(),
+                scope.root_dir.display()
+            ),
+        }
+    }
+}
+
+/// Exclusive admission after a holder has been released. Direct `try_acquire` stays for "unavailable now".
+pub fn acquire_exclusive_until_available(scope: AdmissionScope<'_>) -> ExclusiveAdmissionGuard {
+    poll_until_admitted(
+        "exclusive admission",
+        scope,
+        ExclusiveAdmissionGuard::try_acquire,
+    )
+}
+
+/// Shared admission after a conflicting holder has been released.
+pub fn acquire_shared_until_available(scope: AdmissionScope<'_>) -> SharedAdmissionGuard {
+    poll_until_admitted("shared admission", scope, SharedAdmissionGuard::try_acquire)
+}
+
 fn configured_provider(base: &Path, root: &Path) -> MemoryKeyProvider {
     let mut provider = MemoryKeyProvider::new();
     let scope = provider.read_or_provision_installation_scope().unwrap();
