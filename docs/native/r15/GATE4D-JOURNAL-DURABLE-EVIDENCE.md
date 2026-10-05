@@ -20,6 +20,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::promote_page` (crate-private) | `JournalPage::seal` + promote + `JournalPage::open` readback |
 | `journal::promote_page_fenced` | Public page mutation: `with_fence` + crate-private `promote_page` |
 | `journal::load_manifest_generation` | Load one manifest generation from a journal record directory |
+| `journal::load_authoritative_manifest` | Resume the generation the committed root names, then bind its exact envelope digest |
 | `journal::with_fence` / `acquire_journal_durable_guard` | Mutex + `assert_fence` before I/O |
 
 ## Bootstrap revision 0
@@ -72,19 +73,37 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 - Stale fence → `MigrationExecutionError::StaleMigrationOwner`, zero `create_new` calls (CountingFs).
 - Duplicate generation → `StageFailureKind::GenerationExists` (Gate 3 semantics).
 
-## Explicit non-goals (this PR)
+## B2a — root-bound durable resume selection
 
-- Root `LiveMigration` binding update — **deferred** (Slice B2).
-- Restart/reconciliation for manifest-ahead-of-root — **deferred**.
-- Cross-process lease CAS — **deferred**.
-- Mixed-key inventory conversion — **deferred** (Slice C+).
+`load_authoritative_manifest` reads only the generation named by the committed `LiveMigration`.
+The binding check uses the canonical content digest of those exact WSR1 envelope bytes
+(`SHA-256("worldscript-r15/content/v1" || envelope)`). A durable `r+1` is not adopted.
+`NotFound` for that exact generation is `JournalDurableError::Authority(RecoveryRequired)`.
+Other I/O and authenticated-open failures keep their existing classes.
+
+Proof: `gate4d_journal_durable_test` resume cases. B2a does not advance the root.
+
+## Still residual after B2a
+
+- Root `LiveMigration` advancement, under its own proof. Restart does not perform it.
+- R2B: recovery when the root-named envelope exists but semantic open refuses.
+- R4: promote-time stale caller manifest versus durable authority.
+- Root-bound `key_epoch` alignment before any later root advance.
+- Cross-process lease CAS, mixed-key conversion, Gate 4E/5/6/7, production authority switch.
+
+## Explicit non-goals (journal durable promotion)
+
+- Root `LiveMigration` binding update.
+- Adopting a manifest generation ahead of the root.
+- Cross-process lease CAS.
+- Mixed-key inventory conversion (Slice C+).
 - TypeScript/Tauri wiring, production authority switch, Gate 4E/5/6.
 
 ## Tests
 
-Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases plus 7 root-bound resume cases).
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
 `with_fence_holds_mutex_during_closure` in `journal::durable::mutex_proof`.
 
-Gate 4D overall status: **IN PROGRESS** (journal durable I/O only; not terminal).
+Gate 4D overall status: **IN PROGRESS**. B2a resume selection is in scope above; B2 is not terminal.
