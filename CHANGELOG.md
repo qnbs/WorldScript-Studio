@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D B1 `with_fence` mutex proof closure (#359 / #922):** add deterministic unit test
+  `with_fence_holds_mutex_during_closure` so mutex retention is proven through the public fenced entrypoint,
+  not only via `JournalDurableGuard` acquisition. PR #961.
 - **R-15 Gate 4D slice B1 journal durable API hardening (#359 / #922):** crate-private unfenced
   `promote_manifest` / `promote_page`; public mutation only through `promote_manifest_fenced` and
   `promote_page_fenced`; deterministic `with_fence` exclusion test; post-promotion error provenance
