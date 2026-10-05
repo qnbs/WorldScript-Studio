@@ -381,10 +381,9 @@ fn cas_is_checked_after_recovery_publishes_completed_pending_generation() {
         }
         Ok(())
     });
-    assert!(matches!(
-        fixture.write_poll(&mut filesystem, Some(1), b"completed pending"),
-        Err(_)
-    ));
+    assert!(fixture
+        .write_poll(&mut filesystem, Some(1), b"completed pending")
+        .is_err());
     assert_eq!(pages, 2);
     assert_eq!(fixture.payload(), b"first");
     assert_eq!(
