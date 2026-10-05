@@ -153,17 +153,18 @@ fn promote_sealed_envelope<F: DurableFs>(
         &stage_request(ctx.dir, &identity, meta, ctx.operation),
         envelope,
     )?;
-    let bytes = ctx
-        .fs
-        .read(&promoted.path)
-        .map_err(|error| JournalDurableError::Stage(stage_io(error)))?;
+    // Post-promotion read I/O: `StageFailure.promoted == true` and real `staging` from promotion.
+    // Post-promotion semantic open/verify failures remain `JournalDurableError::Journal` (B2 recovery).
+    let bytes = ctx.fs.read(&promoted.path).map_err(|error| {
+        JournalDurableError::Stage(stage_io_after_promote(error, promoted.staging))
+    })?;
     verify(ctx.key, &identity, &bytes)?;
     Ok(promoted)
 }
 
 /// Seals `manifest` through the journal codec, durably promotes generation `journal_revision`, and
 /// readbacks through [`JournalManifest::open`].
-pub fn promote_manifest<F: DurableFs>(
+pub(crate) fn promote_manifest<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
 ) -> Result<PromotedGeneration, JournalDurableError> {
@@ -185,8 +186,20 @@ pub fn promote_manifest_fenced<F: DurableFs>(
     with_fence(manifest, fence, || promote_manifest(ctx, manifest))
 }
 
+/// Fenced [`promote_page`]: requires the same manifest authority and fence as manifest promotion.
+pub fn promote_page_fenced<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    fence: &MigrationFence,
+    page: &JournalPage,
+) -> Result<PromotedGeneration, JournalDurableError> {
+    with_fence(manifest, fence, || {
+        promote_page(ctx, &manifest.operation_id, page)
+    })
+}
+
 /// Seals and durably promotes one journal page generation.
-pub fn promote_page<F: DurableFs>(
+pub(crate) fn promote_page<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     operation_id: &str,
     page: &JournalPage,
@@ -225,7 +238,71 @@ fn stage_io(error: std::io::Error) -> StageFailure {
     StageFailure {
         step: StageStep::VerifyPromoted,
         kind: StageFailureKind::Io(error.kind()),
-        promoted: true,
+        promoted: false,
         staging: StagingResidue::None,
+    }
+}
+
+fn stage_io_after_promote(
+    error: std::io::Error,
+    staging: crate::durable::StagingResidue,
+) -> StageFailure {
+    use crate::durable::{StageFailureKind, StageStep};
+    StageFailure {
+        step: StageStep::VerifyPromoted,
+        kind: StageFailureKind::Io(error.kind()),
+        promoted: true,
+        staging,
+    }
+}
+
+#[cfg(test)]
+mod mutex_proof {
+    use super::*;
+    use std::sync::TryLockError;
+
+    use crate::journal::{
+        empty_inventory_digest, empty_journal_page_set_digest, operation_type, phase_code,
+    };
+
+    fn sample_manifest() -> JournalManifest {
+        JournalManifest {
+            operation_id: "mutex-proof".into(),
+            journal_revision: 0,
+            operation_type: operation_type::ENABLE,
+            phase: phase_code::BOOTSTRAP_TARGET,
+            source_epoch: 0,
+            target_epoch: 1,
+            has_target_root_key_ref: true,
+            target_root_key_ref_digest: Some([0x42; 32]),
+            fencing_generation: 1,
+            inventory_version: 1,
+            inventory_digest: empty_inventory_digest(1),
+            page_count: 0,
+            entry_count: 0,
+            journal_page_set_digest: empty_journal_page_set_digest(),
+            cursor_page_index: 0,
+            cursor_entry_index: 0,
+            has_lease_owner: false,
+            lease_owner_id: None,
+            lease_expires_unix_ms: None,
+            recovery_reason_code: 0,
+        }
+    }
+
+    #[test]
+    fn journal_durable_mutex_blocks_try_lock_while_guard_held() {
+        let manifest = sample_manifest();
+        let fence = MigrationFence::from_manifest(&manifest);
+        let guard = acquire_journal_durable_guard(&manifest, &fence).unwrap();
+        match JOURNAL_DURABLE_MUTEX.try_lock() {
+            Err(TryLockError::WouldBlock) => {}
+            other => panic!("expected WouldBlock while guard held, got {other:?}"),
+        }
+        drop(guard);
+        assert!(
+            JOURNAL_DURABLE_MUTEX.try_lock().is_ok(),
+            "mutex must be acquirable after guard drop"
+        );
     }
 }
