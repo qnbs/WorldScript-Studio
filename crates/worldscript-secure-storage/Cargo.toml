@@ -50,7 +50,7 @@ dbus-secret-service = { version = "~4.0.3", optional = true, default-features = 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "=3.6.3", optional = true, default-features = false, features = ["apple-native"] }
 # 3.7 needs Rust 1.85; hold 3.6.x (MSRV 1.72).
-security-framework = { version = "~3.6", optional = true, default-features = false }
+security-framework = { version = "~3.7", optional = true, default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "=3.6.3", optional = true, default-features = false, features = ["windows-native"] }
