@@ -4,15 +4,12 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc;
-use std::sync::Arc;
-use std::thread;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use worldscript_secure_storage::{
     empty_inventory_digest, empty_journal_page_set_digest, generation_path,
     load_manifest_generation, operation_type, phase_code, promote_manifest_fenced,
-    promote_page_fenced, with_fence, DirectoryDurability, DurableFs, JournalDurableContext,
+    promote_page_fenced, DirectoryDurability, DurableFs, JournalDurableContext,
     JournalDurableError, JournalManifest, JournalPage, MigrationExecutionError, MigrationFence,
     RecordClass, RecordIdentity, StageFailureKind, StdFs, WriteOperationId,
 };
@@ -225,38 +222,4 @@ fn stale_fence_rejects_before_durable_io() {
         err,
         JournalDurableError::Fence(MigrationExecutionError::StaleMigrationOwner)
     ));
-}
-
-#[test]
-fn with_fence_excludes_second_holder_until_first_releases() {
-    let manifest = bootstrap_manifest("mutex-op");
-    let fence = MigrationFence::from_manifest(&manifest);
-    let (held_tx, held_rx) = mpsc::channel();
-    let (release_tx, release_rx) = mpsc::channel();
-    let manifest1 = manifest.clone();
-    let t1 = thread::spawn(move || {
-        with_fence(&manifest1, &fence, || {
-            held_tx.send(()).unwrap();
-            release_rx.recv().unwrap();
-            Ok::<(), JournalDurableError>(())
-        })
-    });
-    held_rx.recv().unwrap();
-    let entered = Arc::new(AtomicBool::new(false));
-    let entered2 = entered.clone();
-    let manifest2 = manifest.clone();
-    let t2 = thread::spawn(move || {
-        with_fence(&manifest2, &fence, || {
-            entered2.store(true, Ordering::SeqCst);
-            Ok(())
-        })
-    });
-    assert!(
-        !entered.load(Ordering::SeqCst),
-        "second holder must not enter while the first still holds the journal mutex"
-    );
-    release_tx.send(()).unwrap();
-    t1.join().unwrap().unwrap();
-    t2.join().unwrap().unwrap();
-    assert!(entered.load(Ordering::SeqCst));
 }

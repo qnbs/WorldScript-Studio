@@ -43,19 +43,25 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 
 - Process-wide mutex serializes journal durable mutations (single-process stand-in only).
 - `assert_fence` runs before any filesystem operation in fenced entrypoints.
-- Proofs: `stale_fence_rejects_before_durable_io`,
-  `with_fence_excludes_second_holder_until_first_releases` (mpsc handshake; no scheduler-order flake).
+- Proofs: `stale_fence_rejects_before_durable_io`; mutex exclusion via unit test
+  `journal::durable::mutex_proof::journal_durable_mutex_blocks_try_lock_while_guard_held`
+  (`try_lock` → `WouldBlock` while `JournalDurableGuard` is held).
 
 ## B1 hardening (post–#959)
 
 - **R1 public fencing:** unfenced `promote_manifest` / `promote_page` are `pub(crate)`; external
   mutation uses `promote_manifest_fenced` and `promote_page_fenced` only.
-- **R2 post-promotion errors:** durable promotion success is separated from post-promotion read I/O
-  (`StageFailure.promoted == true` via `stage_io`) vs semantic open failures (`JournalDurableError::Journal`).
-- **R4 stale caller manifest + matching fence:** in-process stand-in only; B2 must reconcile against
-  durable authoritative revision, not caller-supplied manifest/fence alone.
-- **R5 `key_epoch: 1`:** intentional for current journal record routing in this slice; root-bound
-  epoch advancement remains B2+ (do not change without contract proof).
+- **R2 post-promotion errors (split):**
+  - Post-promotion **read I/O** failure → `JournalDurableError::Stage` with `StageFailure.promoted == true`
+    and promotion-time `staging` residue (B1 closed in #960).
+  - Post-promotion **semantic open/verify** failure → `JournalDurableError::Journal` without an explicit
+    promoted flag; retry may observe `GenerationExists`. B2 must define recovery/reconciliation when a
+    durable generation exists but journal open refuses (acceptance criterion in gap matrix).
+- **R4 stale caller manifest + matching fence:** B2-owned durable authority/reconciliation only; not
+  expanded in B1 (#960).
+- **R5 `key_epoch: 1` in journal `RecordMeta`:** existing B1 implementation convention for migration
+  record envelopes in this slice; authoritative epoch alignment with root `active_key_epoch` and root
+  binding advancement remain B2-owned (no value change without normative contract proof).
 
 ## Fault / refusal evidence
 
@@ -72,6 +78,8 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 
 ## Tests
 
-Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (5 cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 cases).
+
+Unit (mutex): `journal::durable::mutex_proof::journal_durable_mutex_blocks_try_lock_while_guard_held`.
 
 Gate 4D overall status: **IN PROGRESS** (journal durable I/O only; not terminal).

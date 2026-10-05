@@ -60,10 +60,11 @@ load of the newer generation yet).
 | Residual | B1 outcome | B2 if still open |
 |----------|------------|------------------|
 | Public unfenced promote entrypoints | Crate-private primitives; fenced public API | — |
-| Post-promotion error provenance | Documented + `promoted: true` on post-promote read I/O | Crash/restart recovery semantics |
-| Mutex proof | Deterministic mpsc exclusion test | Cross-process CAS when required |
-| Stale manifest + matching fence | Documented limitation | Durable authoritative revision reconciliation |
-| `key_epoch: 1` in journal meta | Intentional current slice; no blind change | Root-bound epoch when binding advances |
+| Post-promotion read I/O failure | `StageFailure.promoted == true` + promotion `staging` residue | — |
+| Post-promotion semantic open/verify failure | Documented: `JournalDurableError::Journal` without promoted provenance | Recovery when durable generation exists but open refuses; `GenerationExists` on naive retry |
+| Mutex proof | `try_lock`/`WouldBlock` while `JournalDurableGuard` held (unit test) | Cross-process CAS when required |
+| Stale manifest + matching fence | Not in B1 scope | Durable authoritative revision reconciliation |
+| `key_epoch: 1` in journal meta | B1 convention unchanged; not normatively proven as final epoch | Root-bound epoch + binding before root advance |
 
 ## Successor slices (not B)
 
