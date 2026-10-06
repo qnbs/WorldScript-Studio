@@ -222,6 +222,59 @@ pub fn assert_live_binding(
     Ok(())
 }
 
+/// Refuses a manifest promotion whose caller is not the committed owner's next revision (§10.1).
+///
+/// `committed` is the root's live-migration binding. `None` means the root names no live
+/// migration, which admits only the bootstrap revision `0`. A durable generation ahead of the
+/// root is a candidate, never authority (§10.1.1), so `r + 1` is the only successor of a
+/// committed `r`. This compares the caller's token with the committed binding; the caller's own
+/// manifest/fence pair is checked separately by [`assert_fence`].
+pub fn assert_manifest_promote_authority(
+    manifest: &JournalManifest,
+    committed: Option<&LiveMigration>,
+) -> Result<(), MigrationExecutionError> {
+    assert_promote_authority(manifest, committed, 1)
+}
+
+/// Refuses a page promotion whose manifest is not the generation the committed root names.
+///
+/// A page is written under the committed manifest `r` and becomes reachable only when the
+/// successor manifest `r + 1` names it (§10.1.1). `None` admits only the bootstrap revision `0`.
+pub fn assert_page_promote_authority(
+    manifest: &JournalManifest,
+    committed: Option<&LiveMigration>,
+) -> Result<(), MigrationExecutionError> {
+    assert_promote_authority(manifest, committed, 0)
+}
+
+fn assert_promote_authority(
+    manifest: &JournalManifest,
+    committed: Option<&LiveMigration>,
+    successor_offset: u64,
+) -> Result<(), MigrationExecutionError> {
+    let Some(live) = committed else {
+        return if manifest.journal_revision == 0 {
+            Ok(())
+        } else {
+            Err(MigrationExecutionError::LiveBindingMismatch)
+        };
+    };
+    if manifest.operation_id != live.operation_id {
+        return Err(MigrationExecutionError::LiveBindingMismatch);
+    }
+    if manifest.fencing_generation != live.fencing_generation {
+        return Err(MigrationExecutionError::StaleMigrationOwner);
+    }
+    let Some(expected) = live.journal_revision.checked_add(successor_offset) else {
+        return Err(MigrationExecutionError::LiveBindingMismatch);
+    };
+    match manifest.journal_revision.cmp(&expected) {
+        std::cmp::Ordering::Less => Err(MigrationExecutionError::StaleJournalRevision),
+        std::cmp::Ordering::Equal => Ok(()),
+        std::cmp::Ordering::Greater => Err(MigrationExecutionError::LiveBindingMismatch),
+    }
+}
+
 /// Resolves the manifest revision the root still names (§10.1.1).
 pub fn authoritative_manifest_revision(
     live: &LiveMigration,

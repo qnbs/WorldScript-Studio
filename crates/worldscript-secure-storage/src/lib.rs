@@ -86,6 +86,7 @@ pub use error::{AadError, KdfError, KeyProviderError, OpenError, RecoveryError, 
 pub use identity::{IdentityError, RecordIdentity};
 pub use journal::{
     acquire_journal_durable_guard, allows_phase_transition, assert_fence, assert_live_binding,
+    assert_manifest_promote_authority, assert_page_promote_authority,
     authoritative_manifest_revision, checkpoint_progress, empty_inventory_digest,
     empty_journal_page_set_digest, inventory_digest, is_terminal_phase, journal_page_set_digest,
     load_authoritative_manifest, load_manifest_generation, mark_done, mark_recovery,
