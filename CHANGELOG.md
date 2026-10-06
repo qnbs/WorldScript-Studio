@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** add `commit_journal_checkpoint`, the journal owner's checkpoint. Under one root
+  lock it reads the committed live-migration binding from the root, publishes the owner's next
+  manifest revision against that binding (so a stale owner is refused before any journal write) and
+  advances the binding to the published generation. A key route or epoch change, a missing binding
+  and a wrong manifest or fence write nothing; a failure after the publish leaves the new revision
+  as an unadopted candidate and the root naming the previous one. Nothing calls it yet; adopting or
+  discarding a candidate on retry (R2B), bind, clear and takeover stay later slices. PR #991.
 - **R-15 Gate 4D:** add `advance_live_migration`, which commits a root whose live-migration
   binding is the journal owner's next revision. Under the root lock it requires the advance to be
   the CAS successor of the committed binding (same operation and fence, revision + 1) and the
