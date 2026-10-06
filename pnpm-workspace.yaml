@@ -98,7 +98,7 @@ overrides:
   # QNBS-v3 (2026-07-26): GHSA batch blocking the CI security gate — transitive-only dev paths.
   adm-zip: ">=0.6.1" # GHSA-xcpc-8h2w-3j85 + GHSA-7q85-xj36-vmfc + GHSA-vwc7-r8mq-g2x9 (onnxruntime-node)
   postcss: ">=8.5.18" # GHSA — path traversal in previous source map (vite/storybook chain)
-  sharp: ">=0.35.4" # GHSA-rgj7-g3m4-5g8c + inherited libvips vulnerabilities (@huggingface/transformers, miniflare)
+  sharp: ">=0.35.5" # GHSA-rgj7-g3m4-5g8c + GHSA-wq5f-xc86-pv6w (librsvg, fixed 0.35.5) + inherited libvips vulnerabilities (@huggingface/transformers, miniflare)
   body-parser: ">=1.20.6 <2" # GHSA-v422-hmwv-36x6 — DoS via empty urlencoded body (express via @lhci/cli, dev-only)
   compression: ">=1.8.2 <2" # GHSA-vc2v-76pw-4v95; @lhci/cli, dev-only
   proxy-addr: ">=2.0.8 <3" # GHSA-jqcg-44mw-7w3h; express via @lhci/cli, dev-only
