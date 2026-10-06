@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies:** align `@ai-sdk/google` 4.0.76→4.0.85 and `@ai-sdk/openai` 4.0.53→4.0.80
+  on one shared floor, `@ai-sdk/provider` 4.0.19 and `@ai-sdk/provider-utils` 5.0.51.
+  `undici` stays 7.29.1, which already satisfies `^7.29.0` and the workspace override
+  `>=7.29.1 <8`.   `@ai-sdk/react`, `ai`, and `@ai-sdk/gateway` keep their existing pins.
+  Supersedes Dependabot #979 and #981. PR #987.
 - **R-15 Gate 4D:** resume from the journal manifest generation named by the committed
   root `LiveMigration`. A newer durable generation is retained and not adopted.
   Only a missing copy of that exact generation is recovery-required. Root binding
