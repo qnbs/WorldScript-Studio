@@ -71,6 +71,7 @@ load of the newer generation yet).
 - Slice B2a: a durable manifest ahead of the root resumes the root-named generation and does not adopt the newer file. Root `LiveMigration` advancement and R2B stay separate.
 - Slice R4: a promote whose caller is not the committed binding's owner and revision is refused before I/O. It adds no root read or write.
 - Slice B2b-1: the root's live-migration binding advances to the journal owner's next revision only as the CAS successor of the binding read under the root lock, naming a durable, authenticated manifest generation. It writes no journal byte.
+- Slice B2b-2: the journal owner's checkpoint publishes the next manifest revision against the binding read from the root and advances the binding to it, under one root lock. Adopting or discarding an existing candidate generation (R2B), bind, clear and owner takeover stay separate.
 - Slice C: record conversion / mixed-key inventory execution as live truth requires
 - Gate 4E: first enable/disable closure
 - Root two-phase commit coupling with step F when journal + root must advance together (after B2)

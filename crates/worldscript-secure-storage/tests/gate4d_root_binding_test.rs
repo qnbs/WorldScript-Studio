@@ -8,17 +8,18 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
+use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::{
-    advance_live_migration, commit_catalog_change, commit_root, content_digest,
-    empty_inventory_digest, empty_journal_page_set_digest, generation_path, load_catalog,
-    operation_type, phase_code, promote_manifest_fenced, write_key_epoch, AuthorityError,
-    BindingAdvance, CatalogChange, CatalogCommit, DirectoryDurability, DurableFs,
-    InstallationScopeId, JournalDurableContext, JournalDurableError, JournalManifest,
-    JournalSource, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration,
-    LoadedCatalog, MigrationExecutionError, MigrationFence, RootBody, RootCommitEvidence,
-    RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout,
-    StdFs, WriteOperationId,
+    advance_live_migration, commit_catalog_change, commit_journal_checkpoint, commit_root,
+    content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
+    load_authoritative_manifest, load_catalog, operation_type, phase_code, promote_manifest_fenced,
+    write_key_epoch, AuthorityError, BindingAdvance, CatalogChange, CatalogCommit,
+    DirectoryDurability, DurableFs, InstallationScopeId, JournalCheckpoint, JournalDurableContext,
+    JournalDurableError, JournalManifest, JournalSource, KeyEpochCommit, KeyEpochRecord,
+    KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog, MigrationExecutionError,
+    MigrationFence, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
+    RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, StageFailureKind, StdFs,
+    WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -250,6 +251,46 @@ impl Fixture {
                 root_dir: &root_dir,
             },
             advance,
+        )
+    }
+
+    /// A checkpoint of `manifest` under its own fence and the committed key route and epoch.
+    fn checkpoint(&mut self, manifest: &JournalManifest) -> Result<RootCommitted, AuthorityError> {
+        let key_ref = self.key_ref.clone();
+        let route = Route {
+            key_ref: &key_ref,
+            epoch: 1,
+        };
+        self.checkpoint_with(manifest, &MigrationFence::from_manifest(manifest), route)
+    }
+
+    fn checkpoint_with(
+        &mut self,
+        manifest: &JournalManifest,
+        fence: &MigrationFence,
+        route: Route<'_>,
+    ) -> Result<RootCommitted, AuthorityError> {
+        let root_dir = self.root_dir.clone();
+        let key = journal_key();
+        let op = WriteOperationId::generate().unwrap();
+        let checkpoint = JournalCheckpoint {
+            manifest,
+            fence,
+            journal: JournalSource {
+                key: &key,
+                dir: &self.journal_dir,
+                operation: &op,
+            },
+            root_key_ref: route.key_ref,
+            active_key_epoch: route.epoch,
+        };
+        commit_journal_checkpoint(
+            &mut StdFs,
+            &mut self.provider,
+            RootLayout {
+                root_dir: &root_dir,
+            },
+            checkpoint,
         )
     }
 
@@ -560,4 +601,193 @@ fn advance_cannot_change_the_key_route_or_epoch() {
         AuthorityError::KeyRotationNotAdmitted
     );
     assert_eq!(s.fixture.loaded().root, before);
+}
+
+// ---- B2b-2: the journal-owner checkpoint (promote r+1, then advance the binding) ----
+
+/// A root that binds revision 0 of `OPERATION`, with no candidate revision published yet.
+fn bound_at_zero() -> (Fixture, LiveMigration) {
+    let mut fixture = Fixture::new();
+    let dir = fixture.journal_dir.clone();
+    let zero = manifest_at(OPERATION, 0, FENCE);
+    promote(&dir, &zero, None);
+    let bound = binding_of(&zero, digest_of(&dir, 0));
+    fixture.bind(&bound);
+    (fixture, bound)
+}
+
+fn resumed_revision(fixture: &Fixture, binding: &LiveMigration) -> u64 {
+    let op = WriteOperationId::generate().unwrap();
+    let key = journal_key();
+    let mut fs = StdFs;
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, &fixture.journal_dir, &op);
+    load_authoritative_manifest(&mut ctx, binding)
+        .unwrap()
+        .journal_revision
+}
+
+#[test]
+fn checkpoint_publishes_the_next_manifest_and_advances_the_binding() {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    let before = fixture.loaded().root;
+    let committed = fixture.checkpoint(&one).unwrap();
+    let dir = fixture.journal_dir.clone();
+    let after = fixture.loaded().root;
+    assert_eq!(committed.root_generation, before.root_generation + 1);
+    assert!(generation_path(&dir, 1).is_file());
+    let advanced = binding_of(&one, digest_of(&dir, 1));
+    assert_eq!(after.live_migration, Some(advanced.clone()));
+    assert_eq!(
+        after.commit_evidence,
+        RootCommitEvidence {
+            operation_id: OPERATION.to_owned(),
+            fencing_generation: FENCE,
+            state: RootCommitState::Committed,
+        }
+    );
+    assert_eq!(after.catalog_set_digest, before.catalog_set_digest);
+    assert_eq!(after.key_epoch_set_digest, before.key_epoch_set_digest);
+    assert_eq!(resumed_revision(&fixture, &advanced), 1);
+}
+
+#[test]
+fn checkpoint_refuses_without_a_bound_migration_and_writes_no_journal_byte() {
+    let mut fixture = Fixture::new();
+    let generation = fixture.ordinary_commit("bootstrap-root");
+    let one = manifest_at(OPERATION, 1, FENCE);
+    assert_eq!(
+        fixture.checkpoint(&one),
+        Err(AuthorityError::NoLiveMigration)
+    );
+    assert!(fixture.journal_files().is_empty());
+    assert_eq!(fixture.loaded().root.root_generation, generation);
+}
+
+#[test]
+fn checkpoint_refuses_stale_wrong_or_skipped_manifests_before_any_journal_write() {
+    let (mut fixture, _) = bound_at_zero();
+    let before = fixture.loaded().root;
+    let journal_before = fixture.journal_files();
+    let cases = [
+        (
+            "a stale owner whose own fence agrees with its manifest",
+            manifest_at(OPERATION, 1, FENCE - 1),
+            JournalDurableError::Authority(MigrationExecutionError::StaleMigrationOwner),
+        ),
+        (
+            "another operation",
+            manifest_at("other-op", 1, FENCE),
+            JournalDurableError::Authority(MigrationExecutionError::LiveBindingMismatch),
+        ),
+        (
+            "the revision the root already names",
+            manifest_at(OPERATION, 0, FENCE),
+            JournalDurableError::Authority(MigrationExecutionError::StaleJournalRevision),
+        ),
+        (
+            "a skipped revision",
+            manifest_at(OPERATION, 2, FENCE),
+            JournalDurableError::Authority(MigrationExecutionError::LiveBindingMismatch),
+        ),
+    ];
+    for (name, manifest, expected) in cases {
+        assert_eq!(
+            fixture.checkpoint(&manifest),
+            Err(AuthorityError::Journal(expected)),
+            "{name}"
+        );
+        assert_eq!(fixture.journal_files(), journal_before, "{name}");
+        assert_eq!(fixture.loaded().root, before, "{name}");
+    }
+    let one = manifest_at(OPERATION, 1, FENCE);
+    let key_ref = fixture.key_ref.clone();
+    let route = Route {
+        key_ref: &key_ref,
+        epoch: 1,
+    };
+    let mismatched = MigrationFence {
+        fencing_generation: FENCE + 5,
+        journal_revision: 1,
+    };
+    assert_eq!(
+        fixture.checkpoint_with(&one, &mismatched, route),
+        Err(AuthorityError::Journal(JournalDurableError::Fence(
+            MigrationExecutionError::StaleMigrationOwner
+        )))
+    );
+    assert_eq!(fixture.journal_files(), journal_before);
+}
+
+#[test]
+fn checkpoint_cannot_change_the_key_route_and_writes_no_journal_byte() {
+    let (mut fixture, _) = bound_at_zero();
+    let journal_before = fixture.journal_files();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    let fence = MigrationFence::from_manifest(&one);
+    let key_ref = fixture.key_ref.clone();
+    let other_epoch = Route {
+        key_ref: &key_ref,
+        epoch: 2,
+    };
+    assert_eq!(
+        fixture.checkpoint_with(&one, &fence, other_epoch),
+        Err(AuthorityError::KeyRotationNotAdmitted)
+    );
+    let other_key_ref = fixture.provider.provision_epoch_key(2).unwrap();
+    let other_route = Route {
+        key_ref: &other_key_ref,
+        epoch: 1,
+    };
+    assert_eq!(
+        fixture.checkpoint_with(&one, &fence, other_route),
+        Err(AuthorityError::KeyRotationNotAdmitted)
+    );
+    assert_eq!(fixture.journal_files(), journal_before);
+}
+
+#[test]
+fn a_failed_root_commit_leaves_the_published_manifest_as_an_unadopted_candidate() {
+    let (mut fixture, bound) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    let before = fixture.loaded().root;
+    fixture
+        .provider
+        .inject(Fault::BeforePersist(AnchorOp::Prepare));
+    let error = fixture.checkpoint(&one).unwrap_err();
+    assert!(matches!(error, AuthorityError::Root(_)), "{error:?}");
+    // The crash window: revision 1 is durable, the root still names revision 0 and resumes it.
+    let dir = fixture.journal_dir.clone();
+    assert!(generation_path(&dir, 1).is_file());
+    assert_eq!(fixture.loaded().root, before);
+    assert_eq!(resumed_revision(&fixture, &bound), 0);
+    // Adopting or discarding the candidate is R2B, so a retry meets the existing generation.
+    assert!(matches!(
+        fixture.checkpoint(&one),
+        Err(AuthorityError::Journal(JournalDurableError::Stage(stage)))
+            if matches!(stage.kind, StageFailureKind::GenerationExists)
+    ));
+    assert_eq!(fixture.loaded().root, before);
+}
+
+#[test]
+fn checkpoints_chain_and_a_repeated_revision_is_refused_once_the_root_moved_on() {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    let two = manifest_at(OPERATION, 2, FENCE);
+    fixture.checkpoint(&one).unwrap();
+    fixture.checkpoint(&two).unwrap();
+    let dir = fixture.journal_dir.clone();
+    assert_eq!(
+        fixture.loaded().root.live_migration,
+        Some(binding_of(&two, digest_of(&dir, 2)))
+    );
+    let after = fixture.loaded().root;
+    assert_eq!(
+        fixture.checkpoint(&one),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::StaleJournalRevision
+        )))
+    );
+    assert_eq!(fixture.loaded().root, after);
 }
