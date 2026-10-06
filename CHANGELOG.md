@@ -13,8 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   any write, a manifest that skips or repeats a revision, changes the operation, type, epochs or
   fence, jumps or reverses a phase, leaves a terminal phase, regresses the cursor within a phase,
   rewrites the target key after `ADMIT` or the inventory after `CONVERT`, or changes the recovery
-  reason other than by entering recovery. The journal manifest loaders now use the bounded read as
-  well. Lease fields and the cursor across a phase change stay unconstrained until their slices.
+  reason other than by entering recovery, or carries a cursor outside its own inventory.
+  `advance_live_migration` enforces the same relation, so a generation promoted directly cannot
+  become authoritative. The journal manifest loaders now use the bounded read as well. Lease fields and the cursor across a phase change stay unconstrained until their slices.
   PR #994.
 - **R-15 Gate 4B operations integration harness:** `gate4b_operations_test` no longer assumes a
   nonblocking storage operation resolves immediately after a guard is released. `Ok(None)` is legal

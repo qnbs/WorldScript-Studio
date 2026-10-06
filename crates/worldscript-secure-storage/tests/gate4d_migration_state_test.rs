@@ -440,6 +440,8 @@ fn the_phase_moves_one_step_forward_or_into_recovery_and_never_leaves_a_terminal
 #[test]
 fn the_cursor_never_regresses_within_a_phase_and_is_free_across_a_phase_change() {
     let mut prev = rotate_at(phase_code::CONVERT, 4);
+    prev.page_count = 3;
+    prev.entry_count = 10;
     prev.cursor_page_index = 1;
     prev.cursor_entry_index = 5;
     for (page, entry) in [(1, 4), (0, 9)] {
@@ -469,6 +471,39 @@ fn the_cursor_never_regresses_within_a_phase_and_is_free_across_a_phase_change()
             next.cursor_entry_index = 0;
         }),
         Ok(())
+    );
+}
+
+#[test]
+fn the_cursor_lies_inside_the_successors_own_inventory() {
+    let mut prev = rotate_at(phase_code::CONVERT, 4);
+    prev.page_count = 3;
+    prev.entry_count = 10;
+    // Beyond the entry count or the page count, in the same phase and across a phase change.
+    for (page, entry, error) in [
+        (1, u32::MAX, JournalError::EntryCountMismatch),
+        (1, 10, JournalError::EntryCountMismatch),
+        (3, 0, JournalError::InvalidPageIndex),
+    ] {
+        for phase in [phase_code::CONVERT, phase_code::VERIFY] {
+            assert_eq!(
+                refused(&prev, |next| {
+                    next.phase = phase;
+                    next.cursor_page_index = page;
+                    next.cursor_entry_index = entry;
+                }),
+                Err(MigrationExecutionError::Journal(error)),
+                "({page}, {entry}) into phase {phase}"
+            );
+        }
+    }
+    // An empty inventory accepts only the canonical empty cursor, as `checkpoint_progress` does.
+    let empty = rotate_at(phase_code::CONVERT, 4);
+    assert_eq!(
+        refused(&empty, |next| next.cursor_entry_index = 1),
+        Err(MigrationExecutionError::Journal(
+            JournalError::InvalidPageIndex
+        ))
     );
 }
 

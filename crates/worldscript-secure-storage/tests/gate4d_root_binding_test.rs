@@ -1005,3 +1005,25 @@ fn a_chain_built_by_the_transition_constructors_is_accepted_to_done_and_no_furth
         )))
     );
 }
+
+#[test]
+fn an_advance_to_a_non_successor_generation_is_refused_even_when_it_was_promoted_directly() {
+    let (mut fixture, bound) = bound_at_zero();
+    let dir = fixture.journal_dir.clone();
+    // The plain fenced promote only checks who may publish; the root must still refuse to trust it.
+    let mut jump = manifest_at(OPERATION, 1, FENCE);
+    jump.phase = phase_code::ADMIT;
+    promote(&dir, &jump, Some(&bound));
+    let before = fixture.loaded().root;
+    let journal_before = fixture.journal_files();
+    let named = binding_of(&jump, digest_of(&dir, 1));
+    assert_eq!(
+        fixture.advance(&named),
+        Err(authority_refusal(
+            MigrationExecutionError::InvalidPhaseTransition
+        ))
+    );
+    assert_eq!(fixture.loaded().root, before);
+    assert_eq!(fixture.journal_files(), journal_before);
+    assert_eq!(resumed_revision(&fixture, &bound), 0);
+}

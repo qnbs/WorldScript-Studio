@@ -308,7 +308,7 @@ pub fn assert_binding_successor(
 /// produce, plus the freezes §10.3 states: the successor carries `journal_revision + 1`; the
 /// operation, type, epochs, fencing generation and inventory version never change; the phase is
 /// unchanged, the next one, or `RECOVERY_REQUIRED`, and never leaves a terminal phase; the cursor
-/// does not regress within a phase; the target key reference is frozen once the predecessor is at
+/// lies inside the successor's own inventory and does not regress within a phase; the target key reference is frozen once the predecessor is at
 /// `ADMIT` or later; the inventory fields are frozen once it is at `CONVERT` or later (the final
 /// inventory is captured at `ADMIT`); the recovery reason changes only on entering
 /// `RECOVERY_REQUIRED`. Lease fields and the cursor across a phase change are not constrained here.
@@ -320,7 +320,7 @@ pub fn assert_manifest_successor(
     assert_operation_kept(prev, next)?;
     assert_phase_successor(prev, next)?;
     assert_frozen_fields_kept(prev, next)?;
-    assert_cursor_not_regressed(prev, next)
+    assert_cursor_successor(prev, next)
 }
 
 fn assert_successor_revision(
@@ -406,10 +406,15 @@ fn assert_frozen_fields_kept(
     }
 }
 
-fn assert_cursor_not_regressed(
+fn assert_cursor_successor(
     prev: &JournalManifest,
     next: &JournalManifest,
 ) -> Result<(), MigrationExecutionError> {
+    // The cursor must lie inside the successor's own inventory, exactly as `checkpoint_progress` requires.
+    validate_checkpoint_cursor(
+        next,
+        JournalCheckpointCursor::new(next.cursor_page_index, next.cursor_entry_index),
+    )?;
     if next.phase != prev.phase {
         return Ok(());
     }

@@ -23,7 +23,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::assert_manifest_promote_authority` / `assert_page_promote_authority` | Pure R4 predicates: the caller's token against the root's committed `Option<&LiveMigration>` |
 | `journal::assert_binding_successor` | Pure B2b-1 predicate: a binding advance is the CAS successor (same operation and fence, revision + 1) of the committed binding |
 | `journal::assert_manifest_successor` | Pure B2b-4 predicate: a manifest is a valid successor of the manifest the root names (revision + 1, kept operation identity, allowed phase step, no cursor regression within a phase, frozen target key and inventory, recovery reason only on entering recovery) |
-| `authority::advance_live_migration` | B2b-1: under `root_commit_mutex`, verify the successor and the durable manifest generation, then commit a root carrying the new binding |
+| `authority::advance_live_migration` | B2b-1/B2b-4: under `root_commit_mutex`, verify the binding successor, the durable manifest generation and that it is a valid manifest successor of the committed one, then commit a root carrying the new binding |
 | `authority::commit_journal_checkpoint` | B2b-2/B2b-3: under `root_commit_mutex`, read the committed binding, publish the owner's next manifest against it (R4; an identical candidate from a failed attempt is adopted), then advance the binding to that generation |
 | `journal::load_manifest_generation` | Load one manifest generation from a journal record directory |
 | `journal::load_authoritative_manifest` | Resume the generation the committed root names, then bind its exact envelope digest |
@@ -251,7 +251,10 @@ R4 proves who may publish which revision; it does not look at what is published.
 now also loads the generation the committed binding names (exact path, bounded, authenticated
 against the binding digest by `load_authoritative_manifest`) and refuses a manifest that is not its
 valid successor, after the R4 check and before the candidate read, any adoption and any write. The
-relation (`journal::assert_manifest_successor`) mirrors what `transition_phase`,
+relation (`journal::assert_manifest_successor`) is enforced a second time where the root starts to
+trust a generation: `advance_live_migration` loads both the committed manifest and the one the new
+binding names and refuses a non-successor with `AuthorityError::LiveMigration`, so a manifest promoted
+through the plain `promote_manifest_fenced` can never become authoritative. The relation mirrors what `transition_phase`,
 `checkpoint_progress` and `mark_recovery` produce, plus the freezes §10.3 states:
 
 | Rule | Refusal | Source |
@@ -260,6 +263,7 @@ relation (`journal::assert_manifest_successor`) mirrors what `transition_phase`,
 | operation id kept / fencing generation kept | `LiveBindingMismatch` / `StaleMigrationOwner` | §10.1, §10.3 `CONVERT` ("current fencing generation") |
 | operation type, source and target epoch, inventory version kept | `FrozenFieldChanged` | constructors clone them; epochs are immutable once a record is committed (§8.3) |
 | phase unchanged, the next phase, or `RECOVERY_REQUIRED`; no successor of `DONE` or `RECOVERY_REQUIRED` | `InvalidPhaseTransition`, `TerminalPhase` | §10.3 ordering (`allows_phase_transition`) |
+| cursor lies inside the successor's own inventory (an empty inventory takes only the empty cursor) | `Journal(EntryCountMismatch)`, `Journal(InvalidPageIndex)` | `checkpoint_progress` |
 | cursor does not regress while the phase is unchanged | `RegressiveCheckpoint` | `checkpoint_progress` |
 | target key reference (`has_target_root_key_ref`, digest) frozen once the predecessor is at `ADMIT` or later | `FrozenFieldChanged` | §10.3 `PREPARE`: target key durable before admission |
 | inventory fields (`inventory_digest`, `entry_count`, `page_count`, `journal_page_set_digest`) frozen once the predecessor is at `CONVERT` or later | `FrozenFieldChanged` | §10.3 `ADMIT`: the final inventory is captured at `ADMIT` |
@@ -274,12 +278,14 @@ The predecessor read is bounded. `load_authoritative_manifest` and `load_manifes
 through `DurableFs::read_at_most` with `MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES`; a larger generation is
 `Journal(Corrupt)`, never loaded.
 
-Proof: seven pure cases in `gate4d_migration_state_test` (every constructor product is valid, the
-revision table, the operation identity, the phase table including terminal phases, the cursor, the
-target-key and inventory freeze table per phase, the recovery reason and lease rules), three in
+Proof: eight pure cases in `gate4d_migration_state_test` (every constructor product is valid, the
+revision table, the operation identity, the phase table including terminal phases, the cursor
+regression rule, the cursor-inside-the-inventory rule, the target-key and inventory freeze table per
+phase, the recovery reason and lease rules), four in
 `gate4d_root_binding_test` (a phase jump and a changed epoch are refused with no journal write and
 the root unchanged, an already-durable non-successor candidate is not adopted, a chain built only
-through `transition_phase` is accepted through `DONE` and nothing follows `DONE`) and three in
+through `transition_phase` is accepted through `DONE` and nothing follows `DONE`, and an advance to a
+directly promoted non-successor is refused) and three in
 `gate4d_journal_durable_test` (a non-successor candidate is not adopted, an oversized root-named
 generation is corrupt for both loaders).
 
@@ -313,8 +319,8 @@ generation is corrupt for both loaders).
 ## Tests
 
 Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, 9 R4 caller-authority cases, 7 B2b-3 publish and bounded-read cases and 3 B2b-4 cases).
-Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases, 5 B2b-3 candidate-retry cases and 3 B2b-4 successor cases).
-Unit: `crates/worldscript-secure-storage/tests/gate4d_migration_state_test.rs` (7 B2b-4 successor-relation cases beside the earlier state-machine cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases, 5 B2b-3 candidate-retry cases and 4 B2b-4 successor cases).
+Unit: `crates/worldscript-secure-storage/tests/gate4d_migration_state_test.rs` (8 B2b-4 successor-relation cases beside the earlier state-machine cases).
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
 `with_fence_holds_mutex_during_closure` in `journal::durable::mutex_proof`.
