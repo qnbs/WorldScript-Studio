@@ -215,7 +215,11 @@ impl Fixture {
 
     fn advance(&mut self, next: &LiveMigration) -> Result<u64, AuthorityError> {
         let key_ref = self.key_ref.clone();
-        self.advance_with(&mut StdFs, next, &key_ref, 1)
+        let route = Route {
+            key_ref: &key_ref,
+            epoch: 1,
+        };
+        self.advance_with(&mut StdFs, next, route)
             .map(|committed| committed.root_generation)
     }
 
@@ -224,8 +228,7 @@ impl Fixture {
         &mut self,
         fs: &mut F,
         next: &LiveMigration,
-        root_key_ref: &RootKeyRefV1,
-        active_key_epoch: u64,
+        route: Route<'_>,
     ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
         let key = journal_key();
@@ -237,8 +240,8 @@ impl Fixture {
                 dir: &self.journal_dir,
                 operation: &op,
             },
-            root_key_ref,
-            active_key_epoch,
+            root_key_ref: route.key_ref,
+            active_key_epoch: route.epoch,
         };
         advance_live_migration(
             fs,
@@ -270,6 +273,13 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.base);
     }
+}
+
+/// The key route and active epoch an advance is committed under.
+#[derive(Clone, Copy)]
+struct Route<'a> {
+    key_ref: &'a RootKeyRefV1,
+    epoch: u64,
 }
 
 /// Records every directory sync and every atomic rename (the root pointer move), in call order.
@@ -503,10 +513,12 @@ fn an_ordinary_catalog_commit_keeps_the_advanced_binding() {
 fn advance_syncs_the_journal_directory_before_the_root_is_published() {
     let mut s = scenario();
     let key_ref = s.fixture.key_ref.clone();
+    let route = Route {
+        key_ref: &key_ref,
+        epoch: 1,
+    };
     let mut fs = RecordingFs::new();
-    s.fixture
-        .advance_with(&mut fs, &s.next, &key_ref, 1)
-        .unwrap();
+    s.fixture.advance_with(&mut fs, &s.next, route).unwrap();
     let journal_sync = format!("sync_dir {}", s.fixture.journal_dir.display());
     let synced = fs
         .log
@@ -526,16 +538,24 @@ fn advance_cannot_change_the_key_route_or_epoch() {
     let mut s = scenario();
     let before = s.fixture.loaded().root;
     let key_ref = s.fixture.key_ref.clone();
+    let other_epoch = Route {
+        key_ref: &key_ref,
+        epoch: 2,
+    };
     assert_eq!(
         s.fixture
-            .advance_with(&mut StdFs, &s.next, &key_ref, 2)
+            .advance_with(&mut StdFs, &s.next, other_epoch)
             .unwrap_err(),
         AuthorityError::KeyRotationNotAdmitted
     );
-    let other_route = s.fixture.provider.provision_epoch_key(2).unwrap();
+    let other_key_ref = s.fixture.provider.provision_epoch_key(2).unwrap();
+    let other_route = Route {
+        key_ref: &other_key_ref,
+        epoch: 1,
+    };
     assert_eq!(
         s.fixture
-            .advance_with(&mut StdFs, &s.next, &other_route, 1)
+            .advance_with(&mut StdFs, &s.next, other_route)
             .unwrap_err(),
         AuthorityError::KeyRotationNotAdmitted
     );
