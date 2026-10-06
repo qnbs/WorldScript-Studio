@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4B operations integration harness:** `gate4b_operations_test` no longer assumes a
+  nonblocking storage operation resolves immediately after a guard is released. `Ok(None)` is legal
+  until a forked probe child execs and closes its inherited `flock` descriptor, so the lock,
+  unlock, shutdown, snapshot and reconcile calls that expect a result now go through a bounded
+  `poll_admitted` helper, while the tests that assert `Ok(None)` because they hold admission still
+  call the operation directly. Closes the recurring `both_root_contention_windows_preserve_intents_and_refuse_clean_drain` flake, the same
+  family as the write helper from PR #962. PR #993.
 - **R-15 Gate 4D:** `commit_journal_checkpoint` now adopts an identical candidate on retry. After a
   failed root commit the new manifest revision stays durable as an unadopted candidate; the retry
   reads that exact generation under the same fence and authority check and, if it authenticates,

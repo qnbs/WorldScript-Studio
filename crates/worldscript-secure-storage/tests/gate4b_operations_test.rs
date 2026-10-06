@@ -12,8 +12,8 @@ use std::thread;
 use std::time::Duration;
 
 use support::{
-    acquire_exclusive_until_available, acquire_shared_until_available, child_probe, payload, Event,
-    Fixture, HookFs, ObservedProvider, Probe, CHILD_MODE, CHILD_SCOPE,
+    acquire_exclusive_until_available, acquire_shared_until_available, child_probe, payload,
+    poll_admitted, Event, Fixture, HookFs, ObservedProvider, Probe, CHILD_MODE, CHILD_SCOPE,
 };
 use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
 use worldscript_secure_storage::*;
@@ -35,17 +35,14 @@ fn write_cas_and_two_root_events_are_one_admitted_operation() {
     );
     assert_eq!(fixture.payload(), b"second");
     assert_eq!(
-        fixture
-            .storage()
-            .try_authority_snapshot(&mut StdFs)
-            .unwrap()
+        poll_admitted(|| fixture.storage().try_authority_snapshot(&mut StdFs))
             .unwrap()
             .root_generation(),
         5
     );
     assert_eq!(
-        fixture.storage().try_lock(&mut StdFs).unwrap(),
-        Some(KeyState::Locked)
+        poll_admitted(|| fixture.storage().try_lock(&mut StdFs)),
+        Ok(KeyState::Locked)
     );
 }
 
@@ -55,11 +52,7 @@ fn old_snapshot_survives_multiple_publishes_and_blocks_reclamation() {
     fixture
         .write_until_admitted(&mut StdFs, None, b"first")
         .unwrap();
-    let mut old = fixture
-        .storage()
-        .try_authority_snapshot(&mut StdFs)
-        .unwrap()
-        .unwrap();
+    let mut old = poll_admitted(|| fixture.storage().try_authority_snapshot(&mut StdFs)).unwrap();
     let witness = old.retention();
     fixture
         .write_until_admitted(&mut StdFs, Some(1), b"second")
@@ -135,8 +128,8 @@ fn read_handoff_holds_admission_until_consumer_returns() {
         .unwrap();
     assert_eq!(result, b"value");
     assert_eq!(
-        fixture.storage().try_lock(&mut StdFs).unwrap(),
-        Some(KeyState::Locked)
+        poll_admitted(|| fixture.storage().try_lock(&mut StdFs)),
+        Ok(KeyState::Locked)
     );
 }
 
@@ -147,8 +140,8 @@ fn confirmed_lock_and_failed_unlock_retain_cross_process_exclusion() {
         .write_until_admitted(&mut StdFs, None, b"value")
         .unwrap();
     assert_eq!(
-        fixture.storage().try_lock(&mut StdFs).unwrap(),
-        Some(KeyState::Locked)
+        poll_admitted(|| fixture.storage().try_lock(&mut StdFs)),
+        Ok(KeyState::Locked)
     );
     assert!(SharedAdmissionGuard::try_acquire(fixture.scope())
         .unwrap()
@@ -166,8 +159,8 @@ fn confirmed_lock_and_failed_unlock_retain_cross_process_exclusion() {
     child_probe(&fixture, "write");
     fixture.probe.fail_unlock.store(false, Ordering::SeqCst);
     assert_eq!(
-        fixture.storage().try_unlock(&mut StdFs).unwrap(),
-        Some(KeyState::Unlocked { epoch: 1 })
+        poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)),
+        Ok(KeyState::Unlocked { epoch: 1 })
     );
     assert_eq!(fixture.payload(), b"value");
 }
@@ -175,11 +168,8 @@ fn confirmed_lock_and_failed_unlock_retain_cross_process_exclusion() {
 #[test]
 fn retained_epoch_read_distinguishes_absence_from_transient_io() {
     let fixture = Fixture::new();
-    let mut snapshot = fixture
-        .storage()
-        .try_authority_snapshot(&mut StdFs)
-        .unwrap()
-        .unwrap();
+    let mut snapshot =
+        poll_admitted(|| fixture.storage().try_authority_snapshot(&mut StdFs)).unwrap();
     for kind in [
         io::ErrorKind::PermissionDenied,
         io::ErrorKind::Interrupted,
@@ -212,7 +202,7 @@ fn retained_epoch_read_distinguishes_absence_from_transient_io() {
 #[test]
 fn unwound_unlock_clears_keys_and_retains_exclusive_fence() {
     let fixture = Fixture::new();
-    fixture.storage().try_lock(&mut StdFs).unwrap().unwrap();
+    poll_admitted(|| fixture.storage().try_lock(&mut StdFs)).unwrap();
     let before = fixture.probe.lock_calls.load(Ordering::SeqCst);
     let mut filesystem = HookFs(|_: &std::path::Path, event| -> io::Result<()> {
         if event == Event::Read {
@@ -330,7 +320,7 @@ fn pinned_reader_runs_at_both_pointer_before_anchor_windows_without_root_lock() 
     let (result_tx, result_rx) = mpsc::channel();
     let reader = thread::spawn(move || {
         // Acquire admission BEFORE the writer's root event; the signal never acquires admission.
-        let mut snapshot = storage.try_authority_snapshot(&mut StdFs).unwrap().unwrap();
+        let mut snapshot = poll_admitted(|| storage.try_authority_snapshot(&mut StdFs)).unwrap();
         ready_tx.send(()).unwrap();
         for _ in 0..2 {
             read_rx.recv_timeout(Duration::from_secs(10)).unwrap();
@@ -393,7 +383,7 @@ fn cas_is_checked_after_recovery_publishes_completed_pending_generation() {
     assert_eq!(pages, 2);
     assert_eq!(fixture.payload(), b"first");
     assert_eq!(
-        fixture.storage().try_shutdown(&mut StdFs),
+        poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
         Err(OperationError::RecoveryPending)
     );
     assert_eq!(
@@ -430,22 +420,23 @@ fn cancellation_preserves_pending_data_and_releases_all_kernel_ownership() {
     .is_err());
     assert_eq!(fixture.payload(), b"prior");
     assert_eq!(
-        fixture.storage().try_lock(&mut StdFs),
+        poll_admitted(|| fixture.storage().try_lock(&mut StdFs)),
         Err(OperationError::RecoveryPending)
     );
     drop(acquire_exclusive_until_available(fixture.scope()));
-    fixture
-        .storage()
-        .try_reconcile_record(&mut StdFs, &fixture.identity, fixture.location())
-        .unwrap()
-        .unwrap();
+    poll_admitted(|| {
+        fixture
+            .storage()
+            .try_reconcile_record(&mut StdFs, &fixture.identity, fixture.location())
+    })
+    .unwrap();
     assert_eq!(
-        fixture.storage().try_lock(&mut StdFs).unwrap(),
-        Some(KeyState::Locked)
+        poll_admitted(|| fixture.storage().try_lock(&mut StdFs)),
+        Ok(KeyState::Locked)
     );
     assert_eq!(
-        fixture.storage().try_shutdown(&mut StdFs).unwrap(),
-        Some(())
+        poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
+        Ok(())
     );
     assert!(matches!(
         fixture.storage().try_authority_snapshot(&mut StdFs),
@@ -510,12 +501,12 @@ fn location_cannot_escape_installation_or_enter_reserved_writer_scope() {
 fn shutdown_is_local_idempotent_close_and_releases_admission() {
     let fixture = Fixture::new();
     assert_eq!(
-        fixture.storage().try_shutdown(&mut StdFs).unwrap(),
-        Some(())
+        poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
+        Ok(())
     );
     assert_eq!(
-        fixture.storage().try_shutdown(&mut StdFs).unwrap(),
-        Some(())
+        poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
+        Ok(())
     );
     assert_eq!(
         fixture.write(&mut StdFs, None, b"closed"),
@@ -571,8 +562,8 @@ fn snapshot_is_send_and_two_readers_pin_across_three_writer_operations() {
         reader.join().unwrap();
     }
     assert_eq!(
-        fixture.storage().try_lock(&mut StdFs).unwrap(),
-        Some(KeyState::Locked)
+        poll_admitted(|| fixture.storage().try_lock(&mut StdFs)),
+        Ok(KeyState::Locked)
     );
 }
 
@@ -616,11 +607,7 @@ fn current_and_previous_root_remain_retained_after_their_reader_releases() {
     assert_eq!(previous.root_generation(), 4);
     let previous_witness = previous.retention();
     drop(previous);
-    let current = fixture
-        .storage()
-        .try_authority_snapshot(&mut StdFs)
-        .unwrap()
-        .unwrap();
+    let current = poll_admitted(|| fixture.storage().try_authority_snapshot(&mut StdFs)).unwrap();
     let current_witness = current.retention();
     drop(current);
     let held = acquire_exclusive_until_available(fixture.scope());
@@ -669,18 +656,21 @@ fn both_root_contention_windows_preserve_intents_and_refuse_clean_drain() {
             Err(OperationError::Admission(AdmissionError::IdentityChanged))
         );
         assert_eq!(
-            fixture.storage().try_lock(&mut StdFs),
+            poll_admitted(|| fixture.storage().try_lock(&mut StdFs)),
             Err(OperationError::RecoveryPending)
         );
         assert_eq!(
-            fixture.storage().try_shutdown(&mut StdFs),
+            poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
             Err(OperationError::RecoveryPending)
         );
-        fixture
-            .storage()
-            .try_reconcile_record(&mut StdFs, &fixture.identity, fixture.location())
-            .unwrap()
-            .unwrap();
+        poll_admitted(|| {
+            fixture.storage().try_reconcile_record(
+                &mut StdFs,
+                &fixture.identity,
+                fixture.location(),
+            )
+        })
+        .unwrap();
         assert_eq!(
             fixture.payload(),
             if blocked_marker == 1 {
@@ -690,8 +680,8 @@ fn both_root_contention_windows_preserve_intents_and_refuse_clean_drain() {
             }
         );
         assert_eq!(
-            fixture.storage().try_shutdown(&mut StdFs).unwrap(),
-            Some(())
+            poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
+            Ok(())
         );
     }
 }
@@ -732,11 +722,7 @@ fn eligibility_refuses_root_replacement_during_anchor_observation() {
     fixture
         .write_until_admitted(&mut StdFs, None, b"first")
         .unwrap();
-    let pin = fixture
-        .storage()
-        .try_authority_snapshot(&mut StdFs)
-        .unwrap()
-        .unwrap();
+    let pin = poll_admitted(|| fixture.storage().try_authority_snapshot(&mut StdFs)).unwrap();
     let witness = pin.retention();
     drop(pin);
     fixture
