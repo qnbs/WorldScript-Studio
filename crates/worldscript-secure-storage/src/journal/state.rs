@@ -275,6 +275,31 @@ fn assert_promote_authority(
     }
 }
 
+/// Refuses a root binding advance that is not the journal owner's next revision of `prev` (§5.4).
+///
+/// Same operation, same fencing generation, and `journal_revision + 1`: an owner takeover changes
+/// the fence and is a different transition, and a skipped revision would name a manifest the
+/// previous binding never led to.
+pub fn assert_binding_successor(
+    prev: &LiveMigration,
+    next: &LiveMigration,
+) -> Result<(), MigrationExecutionError> {
+    if next.operation_id != prev.operation_id {
+        return Err(MigrationExecutionError::LiveBindingMismatch);
+    }
+    if next.fencing_generation != prev.fencing_generation {
+        return Err(MigrationExecutionError::StaleMigrationOwner);
+    }
+    let Some(expected) = prev.journal_revision.checked_add(1) else {
+        return Err(MigrationExecutionError::LiveBindingMismatch);
+    };
+    match next.journal_revision.cmp(&expected) {
+        std::cmp::Ordering::Less => Err(MigrationExecutionError::StaleJournalRevision),
+        std::cmp::Ordering::Equal => Ok(()),
+        std::cmp::Ordering::Greater => Err(MigrationExecutionError::LiveBindingMismatch),
+    }
+}
+
 /// Resolves the manifest revision the root still names (§10.1.1).
 pub fn authoritative_manifest_revision(
     live: &LiveMigration,
