@@ -22,7 +22,8 @@ use super::manifest::JournalManifest;
 use super::page::JournalPage;
 use super::state::{
     assert_fence, assert_live_binding, assert_manifest_promote_authority,
-    assert_page_promote_authority, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
+    assert_manifest_successor, assert_page_promote_authority, ManifestEnvelopeDigest,
+    MigrationExecutionError, MigrationFence,
 };
 use super::{
     JournalError, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA,
@@ -221,7 +222,9 @@ pub struct PublishedManifest {
 
 /// Fenced publication of the owner's next manifest revision that adopts an identical candidate.
 ///
-/// Authority and fence are checked exactly as [`promote_manifest_fenced`] does. The exact path of
+/// Authority and fence are checked exactly as [`promote_manifest_fenced`] does, then the manifest
+/// must be a valid successor of the committed generation ([`assert_manifest_successor`]), all
+/// before any write. The exact path of
 /// `generation-<journal_revision>` is then read, never the directory. Absent: the manifest is
 /// promoted. Present: it is adopted only if it authenticates under the journal key and decodes to
 /// exactly `manifest`, so a retry after a failed root commit resumes with the bytes the binding
@@ -239,6 +242,7 @@ pub fn publish_manifest_fenced<F: DurableFs>(
     with_fence(manifest, fence, || {
         assert_manifest_promote_authority(manifest, committed)
             .map_err(JournalDurableError::Authority)?;
+        assert_successor_of_committed(ctx, manifest, committed)?;
         match existing_generation(ctx, manifest)? {
             // QNBS-v3: absence is read by exact path under the mutex; link_no_replace still refuses if a writer creates the name between this read and the promotion.
             ExistingGeneration::Absent => {
@@ -253,6 +257,24 @@ pub fn publish_manifest_fenced<F: DurableFs>(
             ExistingGeneration::Oversized => Err(JournalDurableError::Stage(generation_exists())),
         }
     })
+}
+
+/// Refuses a manifest that is not a valid successor of the generation the committed binding names.
+///
+/// The predecessor is loaded by exact path and authenticated against the binding's digest
+/// ([`load_authoritative_manifest`]), so the relation is checked against what the root commits to,
+/// never against a copy the caller carries. Without a committed binding only revision `0` reaches
+/// here, and it has no predecessor.
+fn assert_successor_of_committed<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    committed: Option<&LiveMigration>,
+) -> Result<(), JournalDurableError> {
+    let Some(live) = committed else {
+        return Ok(());
+    };
+    let current = load_authoritative_manifest(ctx, live)?;
+    assert_manifest_successor(&current, manifest).map_err(JournalDurableError::Authority)
 }
 
 /// What the exact generation path holds before a publish.
@@ -354,8 +376,12 @@ pub fn load_authoritative_manifest<F: DurableFs>(
 ) -> Result<JournalManifest, JournalDurableError> {
     let identity = migration_identity(&live.operation_id)?;
     let path = generation_path(ctx.dir, live.journal_revision);
-    let bytes = match ctx.fs.read(&path) {
-        Ok(bytes) => bytes,
+    let bytes = match ctx
+        .fs
+        .read_at_most(&path, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES)
+    {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return Err(oversized_manifest()),
         // QNBS-v3: only NotFound for the root-named generation is RecoveryRequired; every other I/O and open failure keeps its own class, and no sibling generation is read.
         Err(error) if error.kind() == ErrorKind::NotFound => {
             return Err(JournalDurableError::Authority(
@@ -380,14 +406,22 @@ pub fn load_manifest_generation<F: DurableFs>(
     let path = crate::durable::generation_path(ctx.dir, journal_revision);
     let bytes = ctx
         .fs
-        .read(&path)
-        .map_err(|error| JournalDurableError::Stage(stage_io(error)))?;
+        .read_at_most(&path, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES)
+        .map_err(|error| JournalDurableError::Stage(stage_io(error)))?
+        .ok_or_else(oversized_manifest)?;
     Ok(JournalManifest::open(
         ctx.key,
         &identity,
         journal_revision,
         &bytes,
     )?)
+}
+
+/// A manifest generation larger than any valid envelope is corrupt, never loaded.
+fn oversized_manifest() -> JournalDurableError {
+    JournalDurableError::Journal(JournalError::Corrupt(
+        "manifest generation exceeds the envelope bound",
+    ))
 }
 
 fn stage_io(error: std::io::Error) -> StageFailure {

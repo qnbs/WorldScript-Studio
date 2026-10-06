@@ -41,9 +41,9 @@ use crate::envelope::parse_envelope;
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
 use crate::journal::{
-    assert_binding_successor, load_authoritative_manifest, publish_manifest_fenced,
-    JournalDurableContext, JournalDurableError, JournalManifest, MigrationExecutionError,
-    MigrationFence,
+    assert_binding_successor, assert_manifest_successor, load_authoritative_manifest,
+    publish_manifest_fenced, JournalDurableContext, JournalDurableError, JournalManifest,
+    MigrationExecutionError, MigrationFence,
 };
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
@@ -269,7 +269,8 @@ pub struct BindingAdvance<'a> {
 /// The root is re-read under `root_commit_mutex`; the advance must be the CAS successor of the
 /// binding found there ([`assert_binding_successor`]), and the manifest generation it names must be
 /// durable, authenticate under the journal key and hash to the binding's `manifest_digest`
-/// ([`load_authoritative_manifest`]). Only then is a root committed that keeps the catalog, key
+/// ([`load_authoritative_manifest`]), and it must be a valid successor of the manifest the root
+/// names ([`assert_manifest_successor`]). Only then is a root committed that keeps the catalog, key
 /// route and epoch unchanged, swaps in the new binding and records the operation's own positive
 /// fence as its commit evidence. No journal byte is written or deleted, and until step F the prior
 /// root and binding stay authority. A stale owner that still holds an older binding is refused
@@ -470,7 +471,8 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
 }
 
 /// Proves `advance` against the root read under the held lock: it is the CAS successor of the
-/// committed binding, and the manifest generation it names is durable and authenticates. Returns
+/// committed binding, and the manifest generation it names is durable, authenticates and is a valid
+/// successor of the manifest the root names ([`assert_manifest_successor`]). Returns
 /// the durability of the journal directory sync that makes that generation's entry durable.
 fn verify_binding_advance<F: DurableFs>(
     fs: &mut F,
@@ -488,7 +490,13 @@ fn verify_binding_advance<F: DurableFs>(
         advance.journal.dir,
         advance.journal.operation,
     );
-    load_authoritative_manifest(&mut journal, advance.next).map_err(AuthorityError::Journal)?;
+    let next_manifest =
+        load_authoritative_manifest(&mut journal, advance.next).map_err(AuthorityError::Journal)?;
+    // QNBS-v3: the successor relation is enforced where the root starts to trust a generation, so a manifest promoted through the plain fenced promote cannot become authoritative either.
+    let committed_manifest =
+        load_authoritative_manifest(&mut journal, committed).map_err(AuthorityError::Journal)?;
+    assert_manifest_successor(&committed_manifest, &next_manifest)
+        .map_err(AuthorityError::LiveMigration)?;
     // The read takes no journal mutex, so it can see a generation whose directory entry a concurrent
     // promote has linked but not yet synced. Sync it here: the root must never name a manifest that
     // a crash could still lose.

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** the journal checkpoint publishes only a valid successor of the manifest the root
+  names. `publish_manifest_fenced` loads that generation (exact path, bounded, authenticated against
+  the binding digest) and `assert_manifest_successor` refuses, before any read of the candidate or
+  any write, a manifest that skips or repeats a revision, changes the operation, type, epochs or
+  fence, jumps or reverses a phase, leaves a terminal phase, regresses the cursor within a phase,
+  rewrites the target key on or after `ADMIT` or the inventory on or after `CONVERT`, or changes the recovery
+  reason other than by entering recovery, or carries a cursor outside its own inventory.
+  `advance_live_migration` enforces the same relation, so a generation promoted directly cannot
+  become authoritative. The journal manifest loaders now use the bounded read as well. Lease fields and the cursor across a phase change stay unconstrained until their slices.
+  PR #994.
 - **R-15 Gate 4B operations integration harness:** `gate4b_operations_test` no longer assumes a
   nonblocking storage operation resolves immediately after a guard is released. `Ok(None)` is legal
   until a forked probe child execs and closes its inherited `flock` descriptor, so the lock,
