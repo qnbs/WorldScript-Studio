@@ -20,8 +20,8 @@ use crate::seal::{Key, RecordMeta};
 use super::manifest::JournalManifest;
 use super::page::JournalPage;
 use super::state::{
-    assert_fence, assert_live_binding, ManifestEnvelopeDigest, MigrationExecutionError,
-    MigrationFence,
+    assert_fence, assert_live_binding, assert_manifest_promote_authority,
+    assert_page_promote_authority, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
 };
 use super::{JournalError, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA};
 
@@ -33,7 +33,8 @@ pub enum JournalDurableError {
     Journal(JournalError),
     Stage(StageFailure),
     Fence(MigrationExecutionError),
-    /// Root-bound resume refused the generation the committed binding names. Not a fence check.
+    /// Refusal against the committed root binding: root-bound resume of the generation it names,
+    /// or a promote whose caller is not that binding's owner and revision. Not a fence check.
     Authority(MigrationExecutionError),
     LockPoisoned,
 }
@@ -186,22 +187,39 @@ pub(crate) fn promote_manifest<F: DurableFs>(
 }
 
 /// Fenced [`promote_manifest`].
+///
+/// `committed` is the root's live-migration binding. Under the journal mutex and before any I/O,
+/// `manifest` must be that binding's owner and its next revision
+/// ([`assert_manifest_promote_authority`]); otherwise nothing is written. This does not read the
+/// root, advance it, or adopt a newer durable generation.
 pub fn promote_manifest_fenced<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
     fence: &MigrationFence,
+    committed: Option<&LiveMigration>,
 ) -> Result<PromotedGeneration, JournalDurableError> {
-    with_fence(manifest, fence, || promote_manifest(ctx, manifest))
+    with_fence(manifest, fence, || {
+        // QNBS-v3: a stale owner's self-consistent manifest/fence pair is refused against the committed binding under the mutex, before any I/O, with no directory enumeration or sibling-generation read.
+        assert_manifest_promote_authority(manifest, committed)
+            .map_err(JournalDurableError::Authority)?;
+        promote_manifest(ctx, manifest)
+    })
 }
 
 /// Fenced [`promote_page`]: requires the same manifest authority and fence as manifest promotion.
+///
+/// A page is written under the manifest generation the committed root names
+/// ([`assert_page_promote_authority`]); it is a candidate until the successor manifest names it.
 pub fn promote_page_fenced<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
     fence: &MigrationFence,
+    committed: Option<&LiveMigration>,
     page: &JournalPage,
 ) -> Result<PromotedGeneration, JournalDurableError> {
     with_fence(manifest, fence, || {
+        assert_page_promote_authority(manifest, committed)
+            .map_err(JournalDurableError::Authority)?;
         promote_page(ctx, &manifest.operation_id, page)
     })
 }

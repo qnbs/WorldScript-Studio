@@ -63,12 +63,13 @@ load of the newer generation yet).
 | Post-promotion read I/O failure | `StageFailure.promoted == true` + promotion `staging` residue | — |
 | Post-promotion semantic open/verify failure | Documented: `JournalDurableError::Journal` without promoted provenance | Recovery when durable generation exists but open refuses; `GenerationExists` on naive retry |
 | Mutex proof | `try_lock`/`WouldBlock` under guard and inside `with_fence` closure (unit tests) | Cross-process CAS when required |
-| Stale manifest + matching fence | Not in B1 scope | Durable authoritative revision reconciliation |
+| Stale manifest + matching fence | Not in B1 scope | R4 closed it against the caller-supplied committed binding (single-process, before I/O); a stale copy of that binding and the cross-process CAS stay open |
 | `key_epoch: 1` in journal meta | B1 convention unchanged; not normatively proven as final epoch | Root-bound epoch + binding before root advance |
 
 ## Successor slices (not B)
 
-- Slice B2a: a durable manifest ahead of the root resumes the root-named generation and does not adopt the newer file. Root `LiveMigration` advancement, R2B, and R4 stay separate.
+- Slice B2a: a durable manifest ahead of the root resumes the root-named generation and does not adopt the newer file. Root `LiveMigration` advancement and R2B stay separate.
+- Slice R4: a promote whose caller is not the committed binding's owner and revision is refused before I/O. It adds no root read or write.
 - Slice C: record conversion / mixed-key inventory execution as live truth requires
 - Gate 4E: first enable/disable closure
 - Root two-phase commit coupling with step F when journal + root must advance together (after B2)
