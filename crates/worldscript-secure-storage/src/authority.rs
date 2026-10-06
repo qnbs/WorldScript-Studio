@@ -40,6 +40,10 @@ use crate::durable::{
 use crate::envelope::parse_envelope;
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
+use crate::journal::{
+    assert_binding_successor, load_authoritative_manifest, JournalDurableContext,
+    JournalDurableError, MigrationExecutionError,
+};
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
 use crate::root::{
@@ -60,6 +64,8 @@ pub enum CatalogStep {
     ReadPage,
     CreateShardDir,
     RelocatePage,
+    /// Syncing the journal directory a binding advance names a manifest generation in.
+    SyncJournal,
 }
 
 /// Why the persisted catalog cannot be trusted. Ordinary reads and writes stop (§7).
@@ -103,6 +109,13 @@ pub enum AuthorityError {
     /// The next root generation would be `u64::MAX` (§5.4's lifecycle rule).
     GenerationExhausted,
     OperationId(SealError),
+    /// The committed root binds no live migration, so there is no binding to advance.
+    NoLiveMigration,
+    /// The advance is not the journal owner's next revision of the committed binding (§5.4).
+    LiveMigration(MigrationExecutionError),
+    /// The manifest generation the advance names is not durable, or does not authenticate against
+    /// the binding the advance would commit.
+    Journal(JournalDurableError),
 }
 
 impl From<RootStoreError> for AuthorityError {
@@ -231,12 +244,80 @@ pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
     commit_catalog_change_held(fs, provider, layout, commit, &held)
 }
 
+/// Where, and under which key, the journal's manifest generation is read (§10.1.1).
+#[derive(Clone, Copy)]
+pub struct JournalSource<'a> {
+    pub key: &'a Key,
+    pub dir: &'a Path,
+    pub operation: &'a WriteOperationId,
+}
+
+/// One advance of the committed live-migration binding to the journal owner's next revision.
+#[derive(Clone, Copy)]
+pub struct BindingAdvance<'a> {
+    /// The binding to commit: the same operation and fence at `journal_revision + 1`, naming the
+    /// envelope digest of the durable manifest generation.
+    pub next: &'a LiveMigration,
+    pub journal: JournalSource<'a>,
+    pub root_key_ref: &'a RootKeyRefV1,
+    pub active_key_epoch: u64,
+}
+
+/// Commits a root whose live-migration binding is the journal owner's next revision (§5.4).
+///
+/// The root is re-read under `root_commit_mutex`; the advance must be the CAS successor of the
+/// binding found there ([`assert_binding_successor`]), and the manifest generation it names must be
+/// durable, authenticate under the journal key and hash to the binding's `manifest_digest`
+/// ([`load_authoritative_manifest`]). Only then is a root committed that keeps the catalog, key
+/// route and epoch unchanged, swaps in the new binding and records the operation's own positive
+/// fence as its commit evidence. No journal byte is written or deleted, and until step F the prior
+/// root and binding stay authority. A stale owner that still holds an older binding is refused
+/// because the comparison is against the root read under the lock, not against the caller's copy.
+pub fn advance_live_migration<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    advance: BindingAdvance<'_>,
+) -> Result<RootCommitted, AuthorityError> {
+    check_operation_id(&advance.next.operation_id)
+        .map_err(|_| AuthorityError::InvalidOperationId)?;
+    let held = RootCommitGuard::acquire(layout.root_dir).map_err(|error| {
+        AuthorityError::Root(RootStoreError::Io {
+            step: RootStep::LockRootCommit,
+            kind: error.kind(),
+        })
+    })?;
+    let commit = CatalogCommit {
+        change: CatalogChange {
+            upsert: &[],
+            remove: &[],
+        },
+        root_key_ref: advance.root_key_ref,
+        active_key_epoch: advance.active_key_epoch,
+        operation_id: &advance.next.operation_id,
+    };
+    commit_planned(fs, provider, layout, commit, &held, Some(&advance))
+}
+
 pub(crate) fn commit_catalog_change_held<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     layout: RootLayout<'_>,
     commit: CatalogCommit<'_>,
     held: &RootCommitGuard,
+) -> Result<RootCommitted, AuthorityError> {
+    commit_planned(fs, provider, layout, commit, held, None)
+}
+
+/// The commit shared by catalog changes and binding advances: `advance` replaces the binding the
+/// root would otherwise copy forward, after proving it against the root read here.
+fn commit_planned<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    commit: CatalogCommit<'_>,
+    held: &RootCommitGuard,
+    advance: Option<&BindingAdvance<'_>>,
 ) -> Result<RootCommitted, AuthorityError> {
     if !held.guards(layout.root_dir) {
         return Err(AuthorityError::Root(RootStoreError::MutexNotHeld));
@@ -254,6 +335,10 @@ pub(crate) fn commit_catalog_change_held<F: DurableFs, P: KeyProvider>(
             .installation_scope_id
             .ok_or(AuthorityError::NoInstallationScope)?,
     };
+    let mut journal_durability = DirectoryDurability::Confirmed;
+    if let Some(advance) = advance {
+        journal_durability = verify_binding_advance(fs, current.as_ref(), advance)?;
+    }
     let plan = ChangePlan::new(current, commit.change)?;
     let target = RootTarget {
         layout,
@@ -270,7 +355,16 @@ pub(crate) fn commit_catalog_change_held<F: DurableFs, P: KeyProvider>(
         catalog_generation: plan.target_generation,
     };
     let (catalog_shards, pages_durability) = plan.write_pages(fs, &write)?;
-    let root = plan.root_body(commit, &catalog_shards, key_epoch_set_digest)?;
+    let mut root = plan.root_body(commit, &catalog_shards, key_epoch_set_digest)?;
+    if let Some(advance) = advance {
+        root.live_migration = Some(advance.next.clone());
+        // §5.4: a migration-driven commit records that operation's positive fence, not the ordinary 0.
+        root.commit_evidence = RootCommitEvidence {
+            operation_id: advance.next.operation_id.clone(),
+            fencing_generation: advance.next.fencing_generation,
+            state: RootCommitState::Committed,
+        };
+    }
     let request = RootCommitRequest {
         scope: &scope,
         root: &root,
@@ -278,9 +372,43 @@ pub(crate) fn commit_catalog_change_held<F: DurableFs, P: KeyProvider>(
         held,
     };
     let mut committed = commit_root(fs, provider, layout, request)?;
-    // `Confirmed` only if every page directory sync was too, not just the slot and pointer ones.
-    committed.directories = all_confirmed([committed.directories, pages_durability]);
+    // `Confirmed` only if every page and journal directory sync was too, not just the slot and
+    // pointer ones.
+    committed.directories = all_confirmed([
+        all_confirmed([committed.directories, pages_durability]),
+        journal_durability,
+    ]);
     Ok(committed)
+}
+
+/// Proves `advance` against the root read under the held lock: it is the CAS successor of the
+/// committed binding, and the manifest generation it names is durable and authenticates. Returns
+/// the durability of the journal directory sync that makes that generation's entry durable.
+fn verify_binding_advance<F: DurableFs>(
+    fs: &mut F,
+    current: Option<&LoadedCatalog>,
+    advance: &BindingAdvance<'_>,
+) -> Result<DirectoryDurability, AuthorityError> {
+    let committed = current
+        .and_then(|catalog| catalog.root.live_migration.as_ref())
+        .ok_or(AuthorityError::NoLiveMigration)?;
+    // QNBS-v3: the stale-owner comparison runs against the binding read from the root under root_commit_mutex, never against a binding the caller carried in; the journal is read by exact generation, with no directory enumeration.
+    assert_binding_successor(committed, advance.next).map_err(AuthorityError::LiveMigration)?;
+    let mut journal = JournalDurableContext::new(
+        fs,
+        advance.journal.key,
+        advance.journal.dir,
+        advance.journal.operation,
+    );
+    load_authoritative_manifest(&mut journal, advance.next).map_err(AuthorityError::Journal)?;
+    // The read takes no journal mutex, so it can see a generation whose directory entry a concurrent
+    // promote has linked but not yet synced. Sync it here: the root must never name a manifest that
+    // a crash could still lose.
+    fs.sync_dir(advance.journal.dir)
+        .map_err(|error| AuthorityError::Io {
+            step: CatalogStep::SyncJournal,
+            kind: error.kind(),
+        })
 }
 
 /// Whether `commit` keeps the committed root's key route and active epoch.

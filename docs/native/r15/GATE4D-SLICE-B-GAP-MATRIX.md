@@ -17,7 +17,7 @@ checkpoint cursor bounds, terminal `RECOVERY_REQUIRED` / `DONE`, `PREPARE` write
 | Durable journal manifest generations | §10.1.1 immutable republish per `journal_revision` | Seal/open in memory only (`gate4c_journal_test`) | Stage/promote sealed manifest bytes via `durable` (3A), generation-addressed under `migration:<op>` |
 | Durable journal pages | §10.1.1 `migration-page:<op>:<idx>` | Codec only | Same 3A pattern per page generation |
 | `with_fence` boundary | §10.1 preface | `MigrationFence` in-process only | Adapter holds fence through mutation + sync; refuse stale token before I/O |
-| Root `LiveMigration` binding update | §5.4 / §10.1.1 retention | Root types exist; no journal publish hook | **Defer** until a tested restart/reconciliation path loads a durable manifest when root still names an older revision/digest (no same-fence crash window in B PR 1) |
+| Root `LiveMigration` binding update | §5.4 / §10.1.1 retention | Root types exist; no journal publish hook | The advance `r → r+1` is implemented as `advance_live_migration` (B2b-1): CAS against the root read under `root_commit_mutex`, durable manifest verified, no journal write. Bind (bootstrap), clear, owner takeover and the promote-plus-advance coordinator stay open |
 | Cross-process lease CAS | §10.1 lease fields on manifest | Wire validation only | Out of minimal B unless required for single-process durable proof |
 | Inventory execution / mixed-key conversion | §10.2+ | Deferred 4D slices C+ | Not B |
 
@@ -70,6 +70,7 @@ load of the newer generation yet).
 
 - Slice B2a: a durable manifest ahead of the root resumes the root-named generation and does not adopt the newer file. Root `LiveMigration` advancement and R2B stay separate.
 - Slice R4: a promote whose caller is not the committed binding's owner and revision is refused before I/O. It adds no root read or write.
+- Slice B2b-1: the root's live-migration binding advances to the journal owner's next revision only as the CAS successor of the binding read under the root lock, naming a durable, authenticated manifest generation. It writes no journal byte.
 - Slice C: record conversion / mixed-key inventory execution as live truth requires
 - Gate 4E: first enable/disable closure
 - Root two-phase commit coupling with step F when journal + root must advance together (after B2)
