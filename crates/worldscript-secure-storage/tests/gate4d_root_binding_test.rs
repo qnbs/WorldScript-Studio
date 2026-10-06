@@ -13,13 +13,13 @@ use worldscript_secure_storage::{
     advance_live_migration, commit_catalog_change, commit_journal_checkpoint, commit_root,
     content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
     load_authoritative_manifest, load_catalog, operation_type, phase_code, promote_manifest_fenced,
-    write_key_epoch, AuthorityError, BindingAdvance, CatalogChange, CatalogCommit,
-    DirectoryDurability, DurableFs, InstallationScopeId, JournalCheckpoint, JournalDurableContext,
-    JournalDurableError, JournalManifest, JournalSource, KeyEpochCommit, KeyEpochRecord,
-    KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog, MigrationExecutionError,
-    MigrationFence, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
-    RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, StageFailureKind, StdFs,
-    WriteOperationId,
+    transition_phase, write_key_epoch, AuthorityError, BindingAdvance, CatalogChange,
+    CatalogCommit, DirectoryDurability, DurableFs, InstallationScopeId, JournalCheckpoint,
+    JournalDurableContext, JournalDurableError, JournalManifest, JournalSource, KeyEpochCommit,
+    KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
+    MigrationExecutionError, MigrationFence, MigrationPhase, RootBody, RootCommitEvidence,
+    RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout,
+    StageFailureKind, StdFs, WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -37,7 +37,7 @@ fn manifest_at(operation_id: &str, revision: u64, fencing_generation: u64) -> Jo
         phase: if revision == 0 {
             phase_code::BOOTSTRAP_TARGET
         } else {
-            phase_code::PREPARE
+            phase_code::DISCOVER
         },
         source_epoch: 0,
         target_epoch: 1,
@@ -910,4 +910,98 @@ fn checkpoints_chain_and_a_repeated_revision_is_refused_once_the_root_moved_on()
         )))
     );
     assert_eq!(fixture.loaded().root, after);
+}
+
+#[test]
+fn checkpoint_refuses_a_manifest_that_is_not_a_valid_successor_before_any_journal_write() {
+    let (mut fixture, _) = bound_at_zero();
+    let before = fixture.loaded().root;
+    let journal_before = fixture.journal_files();
+    let mut jump = manifest_at(OPERATION, 1, FENCE);
+    jump.phase = phase_code::ADMIT;
+    let mut rewritten = manifest_at(OPERATION, 1, FENCE);
+    rewritten.target_epoch = 2;
+    for (name, manifest, error) in [
+        (
+            "a phase jump",
+            jump,
+            MigrationExecutionError::InvalidPhaseTransition,
+        ),
+        (
+            "a changed epoch",
+            rewritten,
+            MigrationExecutionError::FrozenFieldChanged,
+        ),
+    ] {
+        assert_eq!(
+            fixture.checkpoint(&manifest),
+            Err(AuthorityError::Journal(JournalDurableError::Authority(
+                error
+            ))),
+            "{name}"
+        );
+        assert_eq!(fixture.journal_files(), journal_before, "{name}");
+        assert_eq!(fixture.loaded().root, before, "{name}");
+    }
+}
+
+#[test]
+fn a_candidate_that_is_not_a_valid_successor_is_not_adopted() {
+    let (mut fixture, bound) = bound_at_zero();
+    let dir = fixture.journal_dir.clone();
+    // A phase-jumping revision 1 is already durable, as a failed older attempt could have left it.
+    let mut jump = manifest_at(OPERATION, 1, FENCE);
+    jump.phase = phase_code::ADMIT;
+    promote(&dir, &jump, Some(&bound));
+    let before = fixture.loaded().root;
+    let journal_before = fixture.journal_files();
+    assert_eq!(
+        fixture.checkpoint(&jump),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::InvalidPhaseTransition
+        )))
+    );
+    assert_eq!(fixture.journal_files(), journal_before);
+    assert_eq!(fixture.loaded().root, before);
+    assert_eq!(resumed_revision(&fixture, &bound), 0);
+}
+
+#[test]
+fn a_chain_built_by_the_transition_constructors_is_accepted_to_done_and_no_further() {
+    let (mut fixture, _) = bound_at_zero();
+    let mut current = manifest_at(OPERATION, 0, FENCE);
+    let phases = [
+        phase_code::DISCOVER,
+        phase_code::PREPARE,
+        phase_code::ADMIT,
+        phase_code::CONVERT,
+        phase_code::VERIFY,
+        phase_code::COMMIT,
+        phase_code::RETIRE_OLD_AUTHORITY,
+        phase_code::FINALIZE,
+        phase_code::DONE,
+    ];
+    for target in phases {
+        let fence = MigrationFence::from_manifest(&current);
+        current = transition_phase(&current, &fence, MigrationPhase::from_wire(target)).unwrap();
+        fixture.checkpoint(&current).unwrap();
+        assert_eq!(current.phase, target);
+    }
+    let dir = fixture.journal_dir.clone();
+    assert_eq!(
+        fixture.loaded().root.live_migration,
+        Some(binding_of(
+            &current,
+            digest_of(&dir, current.journal_revision)
+        ))
+    );
+    // DONE is terminal: even the plain next revision is refused.
+    let mut after_done = current.clone();
+    after_done.journal_revision += 1;
+    assert_eq!(
+        fixture.checkpoint(&after_done),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::TerminalPhase
+        )))
+    );
 }
