@@ -16,6 +16,8 @@ blockExoticSubdeps: true
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - nanoid@3.3.18
+  # GHSA-68fv-2mgg-jv7q is already failing OSV on 1.2.1. 1.2.2 was published 2026-09-30, inside the 7-day floor.
+  - source-map-js@1.2.2
 
 # QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
 # Overrides with security justifications:
@@ -98,6 +100,9 @@ overrides:
   postcss: ">=8.5.18" # GHSA — path traversal in previous source map (vite/storybook chain)
   sharp: ">=0.35.4" # GHSA-rgj7-g3m4-5g8c + inherited libvips vulnerabilities (@huggingface/transformers, miniflare)
   body-parser: ">=1.20.6 <2" # GHSA-v422-hmwv-36x6 — DoS via empty urlencoded body (express via @lhci/cli, dev-only)
+  compression: ">=1.8.2 <2" # GHSA-vc2v-76pw-4v95; @lhci/cli, dev-only
+  proxy-addr: ">=2.0.8 <3" # GHSA-jqcg-44mw-7w3h; express via @lhci/cli, dev-only
+  source-map-js: ">=1.2.2 <2" # GHSA-68fv-2mgg-jv7q; postcss/tailwind/css-tree/magicast
   # GHSA-jmr9-qjv8-65gv + GHSA-7pqw-9j4j-h8q3 (extract-zip, no fixed version exists): @lhci/cli
   # hard-pins lighthouse@12.6.1, which pulls puppeteer-core -> @puppeteer/browsers@2.x ->
   # extract-zip. lighthouse 13.4.1's puppeteer-core (^25.x) uses @puppeteer/browsers 3.x, which
