@@ -11,6 +11,7 @@ use crate::durable::{
     generation_path, stage_and_promote_envelope, DurableFs, PromotedGeneration, StageFailure,
     StageRequest, WriteOperationId,
 };
+use crate::envelope::parse_envelope;
 use crate::identity::RecordIdentity;
 use crate::marker::content_digest;
 use crate::record_class::RecordClass;
@@ -23,7 +24,10 @@ use super::state::{
     assert_fence, assert_live_binding, assert_manifest_promote_authority,
     assert_page_promote_authority, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
 };
-use super::{JournalError, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA};
+use super::{
+    JournalError, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA,
+    MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
+};
 
 static JOURNAL_DURABLE_MUTEX: Mutex<()> = Mutex::new(());
 
@@ -204,6 +208,107 @@ pub fn promote_manifest_fenced<F: DurableFs>(
             .map_err(JournalDurableError::Authority)?;
         promote_manifest(ctx, manifest)
     })
+}
+
+/// A manifest generation the committed owner published, or found already published identically.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishedManifest {
+    /// `content_digest` (§5.4) of the generation's envelope bytes, which the root binding names.
+    pub content_digest: [u8; 32],
+    /// `true` when the generation already existed as an identical candidate and nothing was written.
+    pub adopted: bool,
+}
+
+/// Fenced publication of the owner's next manifest revision that adopts an identical candidate.
+///
+/// Authority and fence are checked exactly as [`promote_manifest_fenced`] does. The exact path of
+/// `generation-<journal_revision>` is then read, never the directory. Absent: the manifest is
+/// promoted. Present: it is adopted only if it authenticates under the journal key and decodes to
+/// exactly `manifest`, so a retry after a failed root commit resumes with the bytes the binding
+/// will name and no journal write. Any other content is a different candidate and is refused with
+/// the same `GenerationExists` failure a plain promotion reports, with nothing written or removed
+/// (discarding it needs a relocation primitive that is not part of this slice). The read is
+/// bounded by [`MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES`] through [`DurableFs::read_at_most`], so a file
+/// larger than any valid manifest is refused as a different candidate without being loaded.
+pub fn publish_manifest_fenced<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    fence: &MigrationFence,
+    committed: Option<&LiveMigration>,
+) -> Result<PublishedManifest, JournalDurableError> {
+    with_fence(manifest, fence, || {
+        assert_manifest_promote_authority(manifest, committed)
+            .map_err(JournalDurableError::Authority)?;
+        match existing_generation(ctx, manifest)? {
+            // QNBS-v3: absence is read by exact path under the mutex; link_no_replace still refuses if a writer creates the name between this read and the promotion.
+            ExistingGeneration::Absent => {
+                promote_manifest(ctx, manifest).map(|promoted| PublishedManifest {
+                    content_digest: promoted.content_digest,
+                    adopted: false,
+                })
+            }
+            ExistingGeneration::Candidate(bytes) => {
+                adopt_identical_candidate(ctx, manifest, &bytes)
+            }
+            ExistingGeneration::Oversized => Err(JournalDurableError::Stage(generation_exists())),
+        }
+    })
+}
+
+/// What the exact generation path holds before a publish.
+enum ExistingGeneration {
+    Absent,
+    Candidate(Vec<u8>),
+    /// Larger than any valid manifest envelope; never loaded, so it cannot be adopted.
+    Oversized,
+}
+
+fn existing_generation<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+) -> Result<ExistingGeneration, JournalDurableError> {
+    let path = generation_path(ctx.dir, manifest.journal_revision);
+    // QNBS-v3: the size is enforced while reading, before the allocation and before any envelope parse, so a crafted candidate cannot exhaust memory on a retry.
+    match ctx
+        .fs
+        .read_at_most(&path, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES)
+    {
+        Ok(Some(bytes)) => Ok(ExistingGeneration::Candidate(bytes)),
+        Ok(None) => Ok(ExistingGeneration::Oversized),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(ExistingGeneration::Absent),
+        Err(error) => Err(JournalDurableError::Stage(stage_io(error))),
+    }
+}
+
+fn adopt_identical_candidate<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    bytes: &[u8],
+) -> Result<PublishedManifest, JournalDurableError> {
+    let identity = migration_identity(&manifest.operation_id)?;
+    let identical = JournalManifest::open(ctx.key, &identity, manifest.journal_revision, bytes)
+        .is_ok_and(|opened| opened == *manifest)
+        // QNBS-v3: open authenticates the header and checks schema and generation; the promote also pins key_epoch, so an adopted candidate must carry exactly that epoch.
+        && parse_envelope(bytes)
+            .is_ok_and(|parsed| parsed.header().key_epoch == manifest_meta(manifest).key_epoch);
+    if identical {
+        Ok(PublishedManifest {
+            content_digest: content_digest(bytes),
+            adopted: true,
+        })
+    } else {
+        Err(JournalDurableError::Stage(generation_exists()))
+    }
+}
+
+fn generation_exists() -> StageFailure {
+    use crate::durable::{StageFailureKind, StageStep, StagingResidue};
+    StageFailure {
+        step: StageStep::Promote,
+        kind: StageFailureKind::GenerationExists,
+        promoted: false,
+        staging: StagingResidue::None,
+    }
 }
 
 /// Fenced [`promote_page`]: requires the same manifest authority and fence as manifest promotion.

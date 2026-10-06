@@ -24,6 +24,9 @@ pub const MAX_JOURNAL_PAGE_DESCRIPTORS: usize = 4096;
 pub const MAX_JOURNAL_PAGE_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_JOURNAL_INVENTORY_ENTRIES: u32 = 1_000_000;
 pub const MAX_JOURNAL_ENTRY_BYTES: usize = 1024;
+/// Upper bound for one sealed manifest generation: the manifest carries no inventory, and its
+/// longest fields are two identifiers of at most 128 bytes, so a valid envelope is well below it.
+pub const MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES: usize = 4096;
 
 pub(crate) const JOURNAL_PAGE_SET_DOMAIN: &[u8] = b"worldscript-r15/journal-pages/v1";
 pub(crate) const INVENTORY_DOMAIN: &[u8] = b"worldscript-r15/inventory/v1";
@@ -113,8 +116,8 @@ pub use digest::{
 };
 pub use durable::{
     acquire_journal_durable_guard, load_authoritative_manifest, load_manifest_generation,
-    promote_manifest_fenced, promote_page_fenced, with_fence, JournalDurableContext,
-    JournalDurableError, JournalDurableGuard,
+    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, with_fence,
+    JournalDurableContext, JournalDurableError, JournalDurableGuard, PublishedManifest,
 };
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
 pub use manifest::{JournalManifest, JournalPageRef};
