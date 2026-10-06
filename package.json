@@ -179,7 +179,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@biomejs/biome": "^2.5.8",
+    "@biomejs/biome": "^2.5.14",
     "@codecov/vite-plugin": "2.0.1",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.63.0",
