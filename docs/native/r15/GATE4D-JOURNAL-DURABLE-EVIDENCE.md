@@ -16,9 +16,10 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `durable::stage_and_promote_envelope` | Promote a pre-sealed WSR1 envelope without re-entering `seal_record` |
 | `journal::JournalDurableContext` | Bundles `fs`, `key`, `dir`, and `WriteOperationId` for promote/load entrypoints |
 | `journal::promote_manifest` (crate-private) | Seal, promote, readback via `JournalManifest::open` |
-| `journal::promote_manifest_fenced` | Public mutation: `with_fence` + crate-private `promote_manifest` |
+| `journal::promote_manifest_fenced` | Public mutation: `with_fence` + R4 committed-binding check + crate-private `promote_manifest` |
 | `journal::promote_page` (crate-private) | `JournalPage::seal` + promote + `JournalPage::open` readback |
-| `journal::promote_page_fenced` | Public page mutation: `with_fence` + crate-private `promote_page` |
+| `journal::promote_page_fenced` | Public page mutation: `with_fence` + R4 committed-binding check + crate-private `promote_page` |
+| `journal::assert_manifest_promote_authority` / `assert_page_promote_authority` | Pure R4 predicates: the caller's token against the root's committed `Option<&LiveMigration>` |
 | `journal::load_manifest_generation` | Load one manifest generation from a journal record directory |
 | `journal::load_authoritative_manifest` | Resume the generation the committed root names, then bind its exact envelope digest |
 | `journal::with_fence` / `acquire_journal_durable_guard` | Mutex + `assert_fence` before I/O |
@@ -63,7 +64,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
     promoted flag; retry may observe `GenerationExists`. B2 must define recovery/reconciliation when a
     durable generation exists but journal open refuses (acceptance criterion in gap matrix).
 - **R4 stale caller manifest + matching fence:** B2-owned durable authority/reconciliation only; not
-  expanded in B1 (#960).
+  expanded in B1 (#960). Closed against the committed binding by the R4 slice below.
 - **R5 `key_epoch: 1` in journal `RecordMeta`:** existing B1 implementation convention for migration
   record envelopes in this slice; authoritative epoch alignment with root `active_key_epoch` and root
   binding advancement remain B2-owned (no value change without normative contract proof).
@@ -83,13 +84,49 @@ Other I/O and authenticated-open failures keep their existing classes.
 
 Proof: `gate4d_journal_durable_test` resume cases. B2a does not advance the root.
 
-## Still residual after B2a
+## R4 — promote-time caller authority
+
+`promote_manifest_fenced` and `promote_page_fenced` take the root's committed
+`Option<&LiveMigration>`. Under the journal mutex, after `assert_fence` and before any I/O, the
+caller's token is compared with that binding (`assert_manifest_promote_authority`,
+`assert_page_promote_authority`). A refusal is `JournalDurableError::Authority`, not a `Fence`
+error, and creates no file. `assert_fence` alone only compared the caller's token with the
+caller's own manifest, so a stale owner's self-consistent manifest/fence pair passed it and could
+occupy a free generation slot that the committed owner then found as `GenerationExists`.
+
+| Caller | Committed binding | Admitted / refusal |
+|--------|-------------------|--------------------|
+| manifest or page | none | Only bootstrap revision `0`; otherwise `LiveBindingMismatch` |
+| manifest | names `(op, G, r)` | Only `(op, G, r + 1)` |
+| page | names `(op, G, r)` | Only under manifest `(op, G, r)` |
+| either | other `operation_id` | `LiveBindingMismatch` |
+| either | other fencing generation | `StaleMigrationOwner` |
+| either | revision below the admitted one | `StaleJournalRevision` |
+| either | revision above the admitted one | `LiveBindingMismatch` |
+
+Why only `r + 1`: §10.1.1 treats a durable `r + 1` as a candidate until the root advances, so a
+durable `r + 1` does not make `r + 2` admissible. A root naming `u64::MAX` has no successor.
+
+Boundary, stated so it is not read as more than it is:
+
+- The committed binding is supplied by the caller, as it is for `load_authoritative_manifest`. R4
+  refuses a stale pair against that binding at call time, inside the single-process mutex. It does
+  not make a stale copy of the binding current, and it is not the cross-process lease CAS of §10.1.
+- The binding's `manifest_digest` is not compared here: a caller's in-memory manifest has no
+  envelope bytes. `load_authoritative_manifest` binds that digest on resume.
+- No root read or write, no `r + 1` deletion, no directory enumeration, no sibling-generation read,
+  no `key_epoch` change.
+
+Proof: the R4 cases in `gate4d_journal_durable_test`, each asserting zero `create_new` calls and
+no new generation on disk for a refusal, and `NoListFs` (no `list_dir`) for the admitted path.
+
+## Still residual after R4
 
 - Root `LiveMigration` advancement, under its own proof. Restart does not perform it.
 - R2B: recovery when the root-named envelope exists but semantic open refuses.
-- R4: promote-time stale caller manifest versus durable authority.
+- A stale copy of the committed binding, and the cross-process lease CAS (the same boundary as R4).
 - Root-bound `key_epoch` alignment before any later root advance.
-- Cross-process lease CAS, mixed-key conversion, Gate 4E/5/6/7, production authority switch.
+- Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
 
 ## Explicit non-goals (journal durable promotion)
 
@@ -101,9 +138,10 @@ Proof: `gate4d_journal_durable_test` resume cases. B2a does not advance the root
 
 ## Tests
 
-Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases plus 7 root-bound resume cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, and 9 R4 caller-authority cases).
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
 `with_fence_holds_mutex_during_closure` in `journal::durable::mutex_proof`.
 
-Gate 4D overall status: **IN PROGRESS**. B2a resume selection is in scope above; B2 is not terminal.
+Gate 4D overall status: **IN PROGRESS**. B2a resume selection and R4 promote-time caller authority
+are in scope above; B2 is not terminal.

@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use worldscript_secure_storage::{
-    content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
+    assert_manifest_promote_authority, assert_page_promote_authority, content_digest,
+    empty_inventory_digest, empty_journal_page_set_digest, generation_path,
     load_authoritative_manifest, load_manifest_generation, operation_type, phase_code,
     promote_manifest_fenced, promote_page_fenced, DirectoryDurability, DurableFs,
     JournalDurableContext, JournalDurableError, JournalError, JournalManifest, JournalPage,
@@ -159,7 +160,7 @@ fn bootstrap_manifest_revision_zero_durable_roundtrip() {
     let key = key();
     let mut fs = StdFs;
     let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
-    promote_manifest_fenced(&mut ctx, &manifest, &fence).unwrap();
+    promote_manifest_fenced(&mut ctx, &manifest, &fence, None).unwrap();
     assert!(generation_path(&dir.0, 0).is_file());
     let loaded = load_manifest_generation(&mut ctx, "rev0-durable", 0).unwrap();
     assert_eq!(loaded, manifest);
@@ -176,10 +177,11 @@ fn non_bootstrap_manifest_revision_promotes_and_refuses_overwrite() {
     let key = key();
     let mut fs = StdFs;
     let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
-    promote_manifest_fenced(&mut ctx, &manifest, &fence).unwrap();
+    let committed = predecessor_binding(&manifest);
+    promote_manifest_fenced(&mut ctx, &manifest, &fence, committed.as_ref()).unwrap();
     let loaded = load_manifest_generation(&mut ctx, "rev1-durable", 1).unwrap();
     assert_eq!(loaded.journal_revision, 1);
-    let err = promote_manifest_fenced(&mut ctx, &manifest, &fence).unwrap_err();
+    let err = promote_manifest_fenced(&mut ctx, &manifest, &fence, committed.as_ref()).unwrap_err();
     assert!(matches!(
         err,
         JournalDurableError::Stage(stage)
@@ -197,7 +199,7 @@ fn journal_page_durable_roundtrip() {
     let key = key();
     let mut fs = StdFs;
     let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
-    promote_page_fenced(&mut ctx, &manifest, &fence, &page).unwrap();
+    promote_page_fenced(&mut ctx, &manifest, &fence, None, &page).unwrap();
     let identity =
         RecordIdentity::new(RecordClass::MigrationPage, &["page-durable-op", "0"]).unwrap();
     let bytes = std::fs::read(generation_path(&dir.0, 1)).unwrap();
@@ -217,7 +219,7 @@ fn stale_fence_rejects_before_durable_io() {
     let op = write_op();
     let key = key();
     let mut ctx = durable_ctx_counting(&mut fs, &key, &dir.0, &op);
-    let err = promote_manifest_fenced(&mut ctx, &manifest, &stale).unwrap_err();
+    let err = promote_manifest_fenced(&mut ctx, &manifest, &stale, None).unwrap_err();
     assert_eq!(fs.create_count(), 0);
     assert!(matches!(
         err,
@@ -233,13 +235,28 @@ fn manifest_at(operation_id: &str, revision: u64, fencing_generation: u64) -> Jo
     manifest
 }
 
+/// The committed binding the same owner would hold at `manifest`: its previous revision, or none
+/// for the bootstrap revision.
+fn predecessor_binding(manifest: &JournalManifest) -> Option<LiveMigration> {
+    manifest
+        .journal_revision
+        .checked_sub(1)
+        .map(|previous| LiveMigration {
+            operation_id: manifest.operation_id.clone(),
+            fencing_generation: manifest.fencing_generation,
+            journal_revision: previous,
+            manifest_digest: [0x11; 32],
+        })
+}
+
 fn promote(dir: &Path, manifest: &JournalManifest) {
     let fence = MigrationFence::from_manifest(manifest);
+    let committed = predecessor_binding(manifest);
     let op = write_op();
     let key = key();
     let mut fs = StdFs;
     let mut ctx = durable_ctx(&mut fs, &key, dir, &op);
-    promote_manifest_fenced(&mut ctx, manifest, &fence).unwrap();
+    promote_manifest_fenced(&mut ctx, manifest, &fence, committed.as_ref()).unwrap();
 }
 
 fn file_bytes(dir: &Path, revision: u64) -> Vec<u8> {
@@ -466,4 +483,264 @@ fn permission_denied_stays_a_stage_io_error() {
             if matches!(stage.kind, StageFailureKind::Io(io::ErrorKind::PermissionDenied))
                 && !stage.promoted
     ));
+}
+
+const R4_PAGE_GENERATION: u64 = 7;
+
+fn committed_at(operation_id: &str, revision: u64, fencing_generation: u64) -> LiveMigration {
+    binding(
+        &manifest_at(operation_id, revision, fencing_generation),
+        [0x22; 32],
+    )
+}
+
+fn refused_manifest(
+    dir: &Path,
+    manifest: &JournalManifest,
+    committed: Option<&LiveMigration>,
+) -> (JournalDurableError, usize) {
+    let fence = MigrationFence::from_manifest(manifest);
+    let mut fs = CountingFs::new();
+    let op = write_op();
+    let key = key();
+    let mut ctx = durable_ctx_counting(&mut fs, &key, dir, &op);
+    let err = promote_manifest_fenced(&mut ctx, manifest, &fence, committed).unwrap_err();
+    (err, fs.create_count())
+}
+
+fn refused_page(
+    dir: &Path,
+    manifest: &JournalManifest,
+    committed: Option<&LiveMigration>,
+) -> (JournalDurableError, usize) {
+    let fence = MigrationFence::from_manifest(manifest);
+    let page = JournalPage::new(0, R4_PAGE_GENERATION, vec![]).unwrap();
+    let mut fs = CountingFs::new();
+    let op = write_op();
+    let key = key();
+    let mut ctx = durable_ctx_counting(&mut fs, &key, dir, &op);
+    let err = promote_page_fenced(&mut ctx, manifest, &fence, committed, &page).unwrap_err();
+    (err, fs.create_count())
+}
+
+#[test]
+fn committed_owner_promotes_its_next_manifest_and_current_page_without_listing() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("r4-owner", 1, 4));
+    promote(&dir.0, &manifest_at("r4-owner", 2, 4));
+    let live = committed_at("r4-owner", 2, 4);
+    let op = write_op();
+    let key = key();
+    let mut fs = NoListFs(StdFs);
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, &dir.0, &op);
+    let next = manifest_at("r4-owner", 3, 4);
+    let next_fence = MigrationFence::from_manifest(&next);
+    promote_manifest_fenced(&mut ctx, &next, &next_fence, Some(&live)).unwrap();
+    assert!(generation_path(&dir.0, 3).is_file());
+    let current = manifest_at("r4-owner", 2, 4);
+    let current_fence = MigrationFence::from_manifest(&current);
+    let page = JournalPage::new(0, R4_PAGE_GENERATION, vec![]).unwrap();
+    promote_page_fenced(&mut ctx, &current, &current_fence, Some(&live), &page).unwrap();
+    assert!(generation_path(&dir.0, R4_PAGE_GENERATION).is_file());
+}
+
+#[test]
+fn stale_owner_with_a_matching_stale_fence_is_refused_before_io() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("r4-stale", 1, 4));
+    promote(&dir.0, &manifest_at("r4-stale", 2, 4));
+    let root_named = file_bytes(&dir.0, 2);
+    let live = committed_at("r4-stale", 2, 4);
+    // The stale owner's own manifest and fence agree with each other; only the root disagrees.
+    let stale_manifest = manifest_at("r4-stale", 3, 3);
+    let (err, creates) = refused_manifest(&dir.0, &stale_manifest, Some(&live));
+    assert_eq!(
+        err,
+        JournalDurableError::Authority(MigrationExecutionError::StaleMigrationOwner)
+    );
+    assert_eq!(creates, 0);
+    assert!(!generation_path(&dir.0, 3).exists());
+    let stale_page_owner = manifest_at("r4-stale", 2, 3);
+    let (err, creates) = refused_page(&dir.0, &stale_page_owner, Some(&live));
+    assert_eq!(
+        err,
+        JournalDurableError::Authority(MigrationExecutionError::StaleMigrationOwner)
+    );
+    assert_eq!(creates, 0);
+    assert!(!generation_path(&dir.0, R4_PAGE_GENERATION).exists());
+    assert_eq!(file_bytes(&dir.0, 2), root_named);
+}
+
+#[test]
+fn stale_or_non_successor_revisions_are_refused_before_io() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("r4-rev", 1, 4));
+    promote(&dir.0, &manifest_at("r4-rev", 2, 4));
+    promote(&dir.0, &manifest_at("r4-rev", 3, 4));
+    let ahead_bytes = file_bytes(&dir.0, 3);
+    let live = committed_at("r4-rev", 2, 4);
+    for (revision, expected) in [
+        (1, MigrationExecutionError::StaleJournalRevision),
+        (2, MigrationExecutionError::StaleJournalRevision),
+        (4, MigrationExecutionError::LiveBindingMismatch),
+    ] {
+        let manifest = manifest_at("r4-rev", revision, 4);
+        let (err, creates) = refused_manifest(&dir.0, &manifest, Some(&live));
+        assert_eq!(
+            err,
+            JournalDurableError::Authority(expected),
+            "revision {revision}"
+        );
+        assert_eq!(creates, 0, "revision {revision}");
+    }
+    // A durable r+1 does not make r+2 admissible: the root still names r.
+    assert!(!generation_path(&dir.0, 4).exists());
+    assert_eq!(file_bytes(&dir.0, 3), ahead_bytes);
+}
+
+#[test]
+fn page_promote_requires_the_manifest_generation_the_root_names() {
+    let dir = TempDir::new();
+    let live = committed_at("r4-page", 2, 4);
+    for (revision, expected) in [
+        (1, MigrationExecutionError::StaleJournalRevision),
+        (3, MigrationExecutionError::LiveBindingMismatch),
+    ] {
+        let manifest = manifest_at("r4-page", revision, 4);
+        let (err, creates) = refused_page(&dir.0, &manifest, Some(&live));
+        assert_eq!(
+            err,
+            JournalDurableError::Authority(expected),
+            "revision {revision}"
+        );
+        assert_eq!(creates, 0, "revision {revision}");
+    }
+    assert!(!generation_path(&dir.0, R4_PAGE_GENERATION).exists());
+}
+
+#[test]
+fn another_operation_and_a_missing_binding_are_refused_before_io() {
+    let dir = TempDir::new();
+    let live = committed_at("r4-op", 2, 4);
+    let other = manifest_at("r4-other", 3, 4);
+    let (err, creates) = refused_manifest(&dir.0, &other, Some(&live));
+    assert_eq!(
+        err,
+        JournalDurableError::Authority(MigrationExecutionError::LiveBindingMismatch)
+    );
+    assert_eq!(creates, 0);
+    // No committed binding names nothing, so only the bootstrap revision may be written.
+    let unbound = manifest_at("r4-op", 1, 4);
+    let (err, creates) = refused_manifest(&dir.0, &unbound, None);
+    assert_eq!(
+        err,
+        JournalDurableError::Authority(MigrationExecutionError::LiveBindingMismatch)
+    );
+    assert_eq!(creates, 0);
+    let (err, creates) = refused_page(&dir.0, &unbound, None);
+    assert_eq!(
+        err,
+        JournalDurableError::Authority(MigrationExecutionError::LiveBindingMismatch)
+    );
+    assert_eq!(creates, 0);
+    assert!(!generation_path(&dir.0, 1).exists());
+    assert!(!generation_path(&dir.0, 3).exists());
+}
+
+#[test]
+fn promote_authority_decision_table_including_the_revision_ceiling() {
+    let bootstrap = manifest_at("r4-table", 0, 4);
+    assert_eq!(assert_manifest_promote_authority(&bootstrap, None), Ok(()));
+    assert_eq!(assert_page_promote_authority(&bootstrap, None), Ok(()));
+    // A root that already names the bootstrap revision no longer admits a second bootstrap write.
+    let named_zero = committed_at("r4-table", 0, 4);
+    assert_eq!(
+        assert_manifest_promote_authority(&bootstrap, Some(&named_zero)),
+        Err(MigrationExecutionError::StaleJournalRevision)
+    );
+    assert_eq!(
+        assert_page_promote_authority(&bootstrap, Some(&named_zero)),
+        Ok(())
+    );
+    // A root naming the highest revision has no successor; the current page is still admissible.
+    let ceiling = committed_at("r4-table", u64::MAX, 4);
+    let at_ceiling = manifest_at("r4-table", u64::MAX, 4);
+    assert_eq!(
+        assert_manifest_promote_authority(&at_ceiling, Some(&ceiling)),
+        Err(MigrationExecutionError::LiveBindingMismatch)
+    );
+    assert_eq!(
+        assert_page_promote_authority(&at_ceiling, Some(&ceiling)),
+        Ok(())
+    );
+}
+
+#[test]
+fn a_mismatched_fence_is_reported_before_the_committed_authority_check() {
+    let dir = TempDir::new();
+    let live = committed_at("r4-order", 2, 4);
+    let manifest = manifest_at("r4-order", 3, 3);
+    let tampered = MigrationFence {
+        fencing_generation: 9,
+        journal_revision: manifest.journal_revision,
+    };
+    let mut fs = CountingFs::new();
+    let op = write_op();
+    let key = key();
+    let mut ctx = durable_ctx_counting(&mut fs, &key, &dir.0, &op);
+    let err = promote_manifest_fenced(&mut ctx, &manifest, &tampered, Some(&live)).unwrap_err();
+    assert_eq!(
+        err,
+        JournalDurableError::Fence(MigrationExecutionError::StaleMigrationOwner)
+    );
+    assert_eq!(fs.create_count(), 0);
+}
+
+#[test]
+fn a_candidate_promoted_ahead_of_the_root_is_not_adopted_on_resume() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("r4-crash", 1, 4));
+    promote(&dir.0, &manifest_at("r4-crash", 2, 4));
+    let current = manifest_at("r4-crash", 2, 4);
+    let live = binding(&current, content_digest(&file_bytes(&dir.0, 2)));
+    // The committed owner publishes the next candidate; the root is not advanced (crash window).
+    let next = manifest_at("r4-crash", 3, 4);
+    let next_fence = MigrationFence::from_manifest(&next);
+    let op = write_op();
+    let key = key();
+    let mut fs = StdFs;
+    let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
+    promote_manifest_fenced(&mut ctx, &next, &next_fence, Some(&live)).unwrap();
+    let candidate_bytes = file_bytes(&dir.0, 3);
+    // Restart: the root still names r, so r is resumed and r+1 stays an unadopted candidate.
+    assert_eq!(resume(&dir.0, &live).unwrap(), current);
+    assert_eq!(file_bytes(&dir.0, 3), candidate_bytes);
+}
+
+#[test]
+fn an_old_owner_cannot_publish_after_the_authority_moved_to_a_new_owner() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("r4-moved", 1, 4));
+    promote(&dir.0, &manifest_at("r4-moved", 2, 4));
+    // The committed binding now names owner 5; owner 4 still holds a matching manifest and fence.
+    let moved = committed_at("r4-moved", 3, 5);
+    for revision in [3, 4] {
+        let old_owner = manifest_at("r4-moved", revision, 4);
+        let (err, creates) = refused_manifest(&dir.0, &old_owner, Some(&moved));
+        assert_eq!(
+            err,
+            JournalDurableError::Authority(MigrationExecutionError::StaleMigrationOwner),
+            "revision {revision}"
+        );
+        assert_eq!(creates, 0, "revision {revision}");
+    }
+    let (err, creates) = refused_page(&dir.0, &manifest_at("r4-moved", 3, 4), Some(&moved));
+    assert_eq!(
+        err,
+        JournalDurableError::Authority(MigrationExecutionError::StaleMigrationOwner)
+    );
+    assert_eq!(creates, 0);
+    assert!(!generation_path(&dir.0, 3).exists());
+    assert!(!generation_path(&dir.0, 4).exists());
+    assert!(!generation_path(&dir.0, R4_PAGE_GENERATION).exists());
 }

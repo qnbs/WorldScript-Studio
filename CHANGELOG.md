@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** refuse a stale caller's journal promote before any I/O.
+  `promote_manifest_fenced` and `promote_page_fenced` now take the root's committed
+  `LiveMigration` and admit only that binding's owner at its next manifest revision, or its
+  current manifest for a page. A durable `r+1` does not make `r+2` admissible. No root read or
+  write, no deletion, no `key_epoch` change; a stale copy of the binding and the cross-process
+  CAS stay open. PR #988.
 - **Dependencies:** align `@ai-sdk/google` 4.0.76→4.0.85 and `@ai-sdk/openai` 4.0.53→4.0.80
   on one shared floor, `@ai-sdk/provider` 4.0.19 and `@ai-sdk/provider-utils` 5.0.51.
   `undici` stays 7.29.1, which already satisfies `^7.29.0` and the workspace override
