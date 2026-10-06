@@ -10,10 +10,10 @@ use worldscript_secure_storage::{
     assert_manifest_promote_authority, assert_page_promote_authority, content_digest,
     empty_inventory_digest, empty_journal_page_set_digest, generation_path,
     load_authoritative_manifest, load_manifest_generation, operation_type, phase_code,
-    promote_manifest_fenced, promote_page_fenced, DirectoryDurability, DurableFs,
-    JournalDurableContext, JournalDurableError, JournalError, JournalManifest, JournalPage,
-    LiveMigration, MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity,
-    StageFailureKind, StdFs, WriteOperationId,
+    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, DirectoryDurability,
+    DurableFs, JournalDurableContext, JournalDurableError, JournalError, JournalManifest,
+    JournalPage, LiveMigration, MigrationExecutionError, MigrationFence, OpenError, RecordClass,
+    RecordIdentity, StageFailureKind, StagingResidue, StdFs, WriteOperationId,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -743,4 +743,150 @@ fn an_old_owner_cannot_publish_after_the_authority_moved_to_a_new_owner() {
     assert!(!generation_path(&dir.0, 3).exists());
     assert!(!generation_path(&dir.0, 4).exists());
     assert!(!generation_path(&dir.0, R4_PAGE_GENERATION).exists());
+}
+
+fn dir_listing(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut files: Vec<(String, Vec<u8>)> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| {
+            let path = entry.unwrap().path();
+            (
+                path.file_name().unwrap().to_string_lossy().into_owned(),
+                std::fs::read(&path).unwrap(),
+            )
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+fn published(
+    dir: &Path,
+    manifest: &JournalManifest,
+    committed: Option<&LiveMigration>,
+) -> (
+    Result<worldscript_secure_storage::PublishedManifest, JournalDurableError>,
+    usize,
+) {
+    let fence = MigrationFence::from_manifest(manifest);
+    let mut fs = CountingFs::new();
+    let op = write_op();
+    let key = key();
+    let mut ctx = durable_ctx_counting(&mut fs, &key, dir, &op);
+    let result = publish_manifest_fenced(&mut ctx, manifest, &fence, committed);
+    (result, fs.create_count())
+}
+
+#[test]
+fn publish_writes_an_absent_generation_and_adopts_an_identical_one_without_writing() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("pub-adopt", 1, 4));
+    let live = committed_at("pub-adopt", 1, 4);
+    let next = manifest_at("pub-adopt", 2, 4);
+    let (first, creates) = published(&dir.0, &next, Some(&live));
+    let first = first.unwrap();
+    assert!(!first.adopted);
+    assert_eq!(creates, 1);
+    assert_eq!(first.content_digest, content_digest(&file_bytes(&dir.0, 2)));
+    let listing = dir_listing(&dir.0);
+    // The same candidate again: adopted, same digest, no staging file and no journal byte written.
+    let (second, creates) = published(&dir.0, &next, Some(&live));
+    let second = second.unwrap();
+    assert!(second.adopted);
+    assert_eq!(second.content_digest, first.content_digest);
+    assert_eq!(creates, 0);
+    assert_eq!(dir_listing(&dir.0), listing);
+}
+
+#[test]
+fn publish_refuses_a_different_or_unopenable_candidate_and_changes_nothing() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("pub-differs", 1, 4));
+    let live = committed_at("pub-differs", 1, 4);
+    let next = manifest_at("pub-differs", 2, 4);
+    published(&dir.0, &next, Some(&live)).0.unwrap();
+    let listing = dir_listing(&dir.0);
+    let mut leased = next.clone();
+    leased.has_lease_owner = true;
+    leased.lease_owner_id = Some("owner-b".into());
+    leased.lease_expires_unix_ms = Some(1_000);
+    let (result, creates) = published(&dir.0, &leased, Some(&live));
+    let Err(JournalDurableError::Stage(stage)) = result else {
+        panic!("a different candidate must be refused");
+    };
+    assert!(matches!(stage.kind, StageFailureKind::GenerationExists));
+    assert!(!stage.promoted);
+    assert_eq!(stage.staging, StagingResidue::None);
+    assert_eq!(creates, 0);
+    assert_eq!(dir_listing(&dir.0), listing);
+    // Another revision's bytes under this revision's name do not open as this generation.
+    let wrong = file_bytes(&dir.0, 1);
+    for (case, bytes) in [("garbage", vec![0xAA; 64]), ("wrong generation", wrong)] {
+        let path = generation_path(&dir.0, 2);
+        std::fs::remove_file(&path).unwrap();
+        std::fs::write(&path, &bytes).unwrap();
+        let (result, creates) = published(&dir.0, &next, Some(&live));
+        assert!(
+            matches!(
+                result,
+                Err(JournalDurableError::Stage(ref stage))
+                    if matches!(stage.kind, StageFailureKind::GenerationExists)
+            ),
+            "{case}"
+        );
+        assert_eq!(creates, 0, "{case}");
+        assert_eq!(file_bytes(&dir.0, 2), bytes, "{case}");
+    }
+}
+
+#[test]
+fn publish_refuses_a_stale_owner_before_reading_the_generation() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("pub-stale", 1, 4));
+    let live = committed_at("pub-stale", 1, 4);
+    let next = manifest_at("pub-stale", 2, 4);
+    published(&dir.0, &next, Some(&live)).0.unwrap();
+    let listing = dir_listing(&dir.0);
+    // The stale owner's manifest and fence agree; its candidate generation exists, but the
+    // committed owner is a newer fence, so the existing file is never read or adopted.
+    let moved = committed_at("pub-stale", 1, 5);
+    let (result, creates) = published(&dir.0, &next, Some(&moved));
+    assert_eq!(
+        result,
+        Err(JournalDurableError::Authority(
+            MigrationExecutionError::StaleMigrationOwner
+        ))
+    );
+    assert_eq!(creates, 0);
+    assert_eq!(dir_listing(&dir.0), listing);
+    // With no committed binding only revision 0 is publishable.
+    let (result, _) = published(&dir.0, &next, None);
+    assert_eq!(
+        result,
+        Err(JournalDurableError::Authority(
+            MigrationExecutionError::LiveBindingMismatch
+        ))
+    );
+}
+
+#[test]
+fn publish_reports_a_read_failure_other_than_absence_as_a_stage_io_failure() {
+    let dir = TempDir::new();
+    let live = committed_at("pub-denied", 1, 4);
+    let next = manifest_at("pub-denied", 2, 4);
+    let fence = MigrationFence::from_manifest(&next);
+    let op = write_op();
+    let key = key();
+    let mut fs = DenyRead;
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, &dir.0, &op);
+    let Err(JournalDurableError::Stage(stage)) =
+        publish_manifest_fenced(&mut ctx, &next, &fence, Some(&live))
+    else {
+        panic!("an unreadable generation is neither absent nor adoptable");
+    };
+    assert!(matches!(
+        stage.kind,
+        StageFailureKind::Io(io::ErrorKind::PermissionDenied)
+    ));
+    assert!(!stage.promoted);
 }

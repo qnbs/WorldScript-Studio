@@ -113,8 +113,8 @@ pub use digest::{
 };
 pub use durable::{
     acquire_journal_durable_guard, load_authoritative_manifest, load_manifest_generation,
-    promote_manifest_fenced, promote_page_fenced, with_fence, JournalDurableContext,
-    JournalDurableError, JournalDurableGuard,
+    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, with_fence,
+    JournalDurableContext, JournalDurableError, JournalDurableGuard, PublishedManifest,
 };
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
 pub use manifest::{JournalManifest, JournalPageRef};

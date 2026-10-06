@@ -206,6 +206,87 @@ pub fn promote_manifest_fenced<F: DurableFs>(
     })
 }
 
+/// A manifest generation the committed owner published, or found already published identically.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishedManifest {
+    /// `content_digest` (§5.4) of the generation's envelope bytes, which the root binding names.
+    pub content_digest: [u8; 32],
+    /// `true` when the generation already existed as an identical candidate and nothing was written.
+    pub adopted: bool,
+}
+
+/// Fenced publication of the owner's next manifest revision that adopts an identical candidate.
+///
+/// Authority and fence are checked exactly as [`promote_manifest_fenced`] does. The exact path of
+/// `generation-<journal_revision>` is then read, never the directory. Absent: the manifest is
+/// promoted. Present: it is adopted only if it authenticates under the journal key and decodes to
+/// exactly `manifest`, so a retry after a failed root commit resumes with the bytes the binding
+/// will name and no journal write. Any other content is a different candidate and is refused with
+/// the same `GenerationExists` failure a plain promotion reports, with nothing written or removed
+/// (discarding it needs a relocation primitive that is not part of this slice).
+pub fn publish_manifest_fenced<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    fence: &MigrationFence,
+    committed: Option<&LiveMigration>,
+) -> Result<PublishedManifest, JournalDurableError> {
+    with_fence(manifest, fence, || {
+        assert_manifest_promote_authority(manifest, committed)
+            .map_err(JournalDurableError::Authority)?;
+        let existing = existing_generation(ctx, manifest)?;
+        match existing {
+            // QNBS-v3: absence is read by exact path under the mutex; link_no_replace still refuses if a writer creates the name between this read and the promotion.
+            None => promote_manifest(ctx, manifest).map(|promoted| PublishedManifest {
+                content_digest: promoted.content_digest,
+                adopted: false,
+            }),
+            Some(bytes) => adopt_identical_candidate(ctx, manifest, &bytes),
+        }
+    })
+}
+
+fn existing_generation<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+) -> Result<Option<Vec<u8>>, JournalDurableError> {
+    match ctx
+        .fs
+        .read(&generation_path(ctx.dir, manifest.journal_revision))
+    {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(JournalDurableError::Stage(stage_io(error))),
+    }
+}
+
+fn adopt_identical_candidate<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    bytes: &[u8],
+) -> Result<PublishedManifest, JournalDurableError> {
+    let identity = migration_identity(&manifest.operation_id)?;
+    let identical = JournalManifest::open(ctx.key, &identity, manifest.journal_revision, bytes)
+        .is_ok_and(|opened| opened == *manifest);
+    if identical {
+        Ok(PublishedManifest {
+            content_digest: content_digest(bytes),
+            adopted: true,
+        })
+    } else {
+        Err(JournalDurableError::Stage(generation_exists()))
+    }
+}
+
+fn generation_exists() -> StageFailure {
+    use crate::durable::{StageFailureKind, StageStep, StagingResidue};
+    StageFailure {
+        step: StageStep::Promote,
+        kind: StageFailureKind::GenerationExists,
+        promoted: false,
+        staging: StagingResidue::None,
+    }
+}
+
 /// Fenced [`promote_page`]: requires the same manifest authority and fence as manifest promotion.
 ///
 /// A page is written under the manifest generation the committed root names

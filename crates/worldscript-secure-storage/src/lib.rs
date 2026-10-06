@@ -92,16 +92,16 @@ pub use journal::{
     empty_journal_page_set_digest, inventory_digest, is_terminal_phase, journal_page_set_digest,
     load_authoritative_manifest, load_manifest_generation, mark_done, mark_recovery,
     operation_type, ordinary_mutating_writes_admitted, page_ref_for, phase_code,
-    promote_manifest_fenced, promote_page_fenced, source_authority_kind,
+    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, source_authority_kind,
     source_physical_authority_kind, source_scheme_id, transition_phase, with_fence,
     ForeignInventoryExtension, InventoryDigestVerifier, JournalCheckpointCursor,
     JournalDurableContext, JournalDurableError, JournalDurableGuard, JournalError,
     JournalInventoryEntry, JournalInventoryExtent, JournalInventorySource, JournalManifest,
     JournalPage, JournalPageRef, JournalRevision, ManifestEnvelopeDigest, MigrationExecutionError,
-    MigrationFence, MigrationPhase, RecoveryReasonCode, JOURNAL_MANIFEST_FORMAT_VERSION,
-    JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION, JOURNAL_PAGE_RECORD_SCHEMA,
-    MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_PAGE_BYTES,
-    MAX_JOURNAL_PAGE_DESCRIPTORS,
+    MigrationFence, MigrationPhase, PublishedManifest, RecoveryReasonCode,
+    JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION,
+    JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES,
+    MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
 };
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};
 pub use marker::{

@@ -746,27 +746,147 @@ fn checkpoint_cannot_change_the_key_route_and_writes_no_journal_byte() {
     assert_eq!(fixture.journal_files(), journal_before);
 }
 
+/// Fails the root commit after the journal generation is durable, leaving an unadopted candidate.
+fn fail_root_commit_after_promote(fixture: &mut Fixture, manifest: &JournalManifest) {
+    fixture
+        .provider
+        .inject(Fault::BeforePersist(AnchorOp::Prepare));
+    let error = fixture.checkpoint(manifest).unwrap_err();
+    assert!(matches!(error, AuthorityError::Root(_)), "{error:?}");
+}
+
+fn assert_generation_exists(result: Result<RootCommitted, AuthorityError>, case: &str) {
+    assert!(
+        matches!(
+            result,
+            Err(AuthorityError::Journal(JournalDurableError::Stage(ref stage)))
+                if matches!(stage.kind, StageFailureKind::GenerationExists)
+        ),
+        "{case}: {result:?}"
+    );
+}
+
 #[test]
 fn a_failed_root_commit_leaves_the_published_manifest_as_an_unadopted_candidate() {
     let (mut fixture, bound) = bound_at_zero();
     let one = manifest_at(OPERATION, 1, FENCE);
     let before = fixture.loaded().root;
-    fixture
-        .provider
-        .inject(Fault::BeforePersist(AnchorOp::Prepare));
-    let error = fixture.checkpoint(&one).unwrap_err();
-    assert!(matches!(error, AuthorityError::Root(_)), "{error:?}");
+    fail_root_commit_after_promote(&mut fixture, &one);
     // The crash window: revision 1 is durable, the root still names revision 0 and resumes it.
     let dir = fixture.journal_dir.clone();
     assert!(generation_path(&dir, 1).is_file());
     assert_eq!(fixture.loaded().root, before);
     assert_eq!(resumed_revision(&fixture, &bound), 0);
-    // Adopting or discarding the candidate is R2B, so a retry meets the existing generation.
-    assert!(matches!(
+}
+
+#[test]
+fn a_retry_after_a_failed_root_commit_adopts_the_candidate_without_a_journal_write() {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    let before = fixture.loaded().root;
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let journal_after_failure = fixture.journal_files();
+    let dir = fixture.journal_dir.clone();
+    let candidate_digest = digest_of(&dir, 1);
+    let committed = fixture.checkpoint(&one).unwrap();
+    // No journal byte was written or added: the candidate is adopted as it is.
+    assert_eq!(fixture.journal_files(), journal_after_failure);
+    assert_eq!(committed.root_generation, before.root_generation + 1);
+    let adopted = binding_of(&one, candidate_digest);
+    assert_eq!(fixture.loaded().root.live_migration, Some(adopted.clone()));
+    assert_eq!(resumed_revision(&fixture, &adopted), 1);
+    // The adopted revision is now committed, so it cannot be published a third time.
+    assert_eq!(
         fixture.checkpoint(&one),
-        Err(AuthorityError::Journal(JournalDurableError::Stage(stage)))
-            if matches!(stage.kind, StageFailureKind::GenerationExists)
-    ));
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::StaleJournalRevision
+        )))
+    );
+}
+
+#[test]
+fn repeated_failed_retries_leave_no_journal_residue_and_the_next_retry_still_adopts() {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    let before = fixture.loaded().root;
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let journal_after_failure = fixture.journal_files();
+    // The retry itself fails at the root commit again: still adopting, still no journal write.
+    fail_root_commit_after_promote(&mut fixture, &one);
+    assert_eq!(fixture.journal_files(), journal_after_failure);
+    assert_eq!(fixture.loaded().root, before);
+    fixture.checkpoint(&one).unwrap();
+    assert_eq!(fixture.journal_files(), journal_after_failure);
+    let dir = fixture.journal_dir.clone();
+    assert_eq!(
+        fixture.loaded().root.live_migration,
+        Some(binding_of(&one, digest_of(&dir, 1)))
+    );
+}
+
+#[test]
+fn a_retry_whose_manifest_differs_from_the_candidate_is_refused_and_nothing_moves() {
+    let (mut fixture, bound) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    let before = fixture.loaded().root;
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let journal_after_failure = fixture.journal_files();
+    let mut leased = one.clone();
+    leased.has_lease_owner = true;
+    leased.lease_owner_id = Some("owner-b".into());
+    leased.lease_expires_unix_ms = Some(1_000);
+    assert_generation_exists(fixture.checkpoint(&leased), "different lease");
+    let mut moved_phase = one.clone();
+    moved_phase.phase = phase_code::BOOTSTRAP_TARGET;
+    assert_generation_exists(fixture.checkpoint(&moved_phase), "different phase");
+    // The different candidate is neither adopted nor replaced, and the root is untouched.
+    assert_eq!(fixture.journal_files(), journal_after_failure);
+    assert_eq!(fixture.loaded().root, before);
+    assert_eq!(resumed_revision(&fixture, &bound), 0);
+    // The original candidate can still be adopted afterwards.
+    fixture.checkpoint(&one).unwrap();
+    assert_eq!(fixture.journal_files(), journal_after_failure);
+}
+
+#[test]
+fn a_candidate_that_cannot_be_opened_is_refused_and_left_untouched() {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    let before = fixture.loaded().root;
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let dir = fixture.journal_dir.clone();
+    let zero_bytes = fs::read(generation_path(&dir, 0)).unwrap();
+    for (case, bytes) in [
+        ("garbage", vec![0xAA; 48]),
+        ("wrong generation", zero_bytes),
+    ] {
+        let path = generation_path(&dir, 1);
+        fs::remove_file(&path).unwrap();
+        fs::write(&path, &bytes).unwrap();
+        let journal_before = fixture.journal_files();
+        assert_generation_exists(fixture.checkpoint(&one), case);
+        assert_eq!(fixture.journal_files(), journal_before, "{case}");
+        assert_eq!(fs::read(&path).unwrap(), bytes, "{case}");
+        assert_eq!(fixture.loaded().root, before, "{case}");
+    }
+}
+
+#[test]
+fn a_stale_owner_cannot_adopt_the_candidate_of_the_committed_owner() {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    let before = fixture.loaded().root;
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let journal_after_failure = fixture.journal_files();
+    // An older owner holds a self-consistent manifest for the same revision.
+    let stale = manifest_at(OPERATION, 1, FENCE - 1);
+    assert_eq!(
+        fixture.checkpoint(&stale),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::StaleMigrationOwner
+        )))
+    );
+    assert_eq!(fixture.journal_files(), journal_after_failure);
     assert_eq!(fixture.loaded().root, before);
 }
 
