@@ -59,9 +59,9 @@ pub use admission::{
     SharedAdmissionGuard, OPERATION_ADMISSION_LOCK_FILE,
 };
 pub use authority::{
-    advance_live_migration, commit_catalog_change, AuthorityError, BindingAdvance, CatalogChange,
-    CatalogCommit, CatalogRecoveryReason, CatalogStep, CommittedShard, JournalSource,
-    LoadedCatalog,
+    advance_live_migration, commit_catalog_change, commit_journal_checkpoint, AuthorityError,
+    BindingAdvance, CatalogChange, CatalogCommit, CatalogRecoveryReason, CatalogStep,
+    CommittedShard, JournalCheckpoint, JournalSource, LoadedCatalog,
 };
 #[cfg(feature = "test-support")]
 pub use authority::{list_records, load_catalog};

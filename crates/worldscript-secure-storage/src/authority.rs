@@ -41,8 +41,9 @@ use crate::envelope::parse_envelope;
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
 use crate::journal::{
-    assert_binding_successor, load_authoritative_manifest, JournalDurableContext,
-    JournalDurableError, MigrationExecutionError,
+    assert_binding_successor, load_authoritative_manifest, promote_manifest_fenced,
+    JournalDurableContext, JournalDurableError, JournalManifest, MigrationExecutionError,
+    MigrationFence,
 };
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
@@ -295,6 +296,90 @@ pub fn advance_live_migration<F: DurableFs, P: KeyProvider>(
         root_key_ref: advance.root_key_ref,
         active_key_epoch: advance.active_key_epoch,
         operation_id: &advance.next.operation_id,
+    };
+    commit_planned(fs, provider, layout, commit, &held, Some(&advance))
+}
+
+/// One journal-owner checkpoint: the next manifest revision to publish and where the journal lives.
+#[derive(Clone, Copy)]
+pub struct JournalCheckpoint<'a> {
+    pub manifest: &'a JournalManifest,
+    pub fence: &'a MigrationFence,
+    pub journal: JournalSource<'a>,
+    pub root_key_ref: &'a RootKeyRefV1,
+    pub active_key_epoch: u64,
+}
+
+/// Publishes the journal owner's next manifest revision and advances the root binding to it (§5.4).
+///
+/// Everything runs under one `root_commit_mutex`. The committed binding is read from the root, so
+/// [`promote_manifest_fenced`] checks the manifest against the authenticated binding rather than a
+/// copy the caller carries: only the committed owner's next revision is written, and a stale owner
+/// is refused before any journal write. The binding is then advanced to exactly that generation as
+/// [`advance_live_migration`] does. A refusal before the promote (no bound migration, another key
+/// route or epoch, a stale or wrong manifest or fence) writes nothing. A failure after the promote
+/// leaves revision `r + 1` as an unadopted candidate while the root still names `r`; adopting or
+/// discarding such a candidate on retry is not done here, so a retry meets `GenerationExists`.
+/// Lock order is the root lock, then the journal mutex inside the promote; nothing takes them in
+/// the opposite order.
+pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    checkpoint: JournalCheckpoint<'_>,
+) -> Result<RootCommitted, AuthorityError> {
+    check_operation_id(&checkpoint.manifest.operation_id)
+        .map_err(|_| AuthorityError::InvalidOperationId)?;
+    let held = RootCommitGuard::acquire(layout.root_dir).map_err(|error| {
+        AuthorityError::Root(RootStoreError::Io {
+            step: RootStep::LockRootCommit,
+            kind: error.kind(),
+        })
+    })?;
+    let commit = CatalogCommit {
+        change: CatalogChange {
+            upsert: &[],
+            remove: &[],
+        },
+        root_key_ref: checkpoint.root_key_ref,
+        active_key_epoch: checkpoint.active_key_epoch,
+        operation_id: &checkpoint.manifest.operation_id,
+    };
+    // QNBS-v3: the key route is checked before the promote, because a refusal after the promote would already have left a candidate generation in the journal.
+    let committed = match load_catalog(fs, provider, layout)? {
+        Some(catalog) if !keeps_key_route(&catalog.root, commit) => {
+            return Err(AuthorityError::KeyRotationNotAdmitted)
+        }
+        Some(catalog) => catalog.root.live_migration,
+        None => None,
+    }
+    .ok_or(AuthorityError::NoLiveMigration)?;
+    let promoted = {
+        let mut journal = JournalDurableContext::new(
+            &mut *fs,
+            checkpoint.journal.key,
+            checkpoint.journal.dir,
+            checkpoint.journal.operation,
+        );
+        promote_manifest_fenced(
+            &mut journal,
+            checkpoint.manifest,
+            checkpoint.fence,
+            Some(&committed),
+        )
+        .map_err(AuthorityError::Journal)?
+    };
+    let next = LiveMigration {
+        operation_id: checkpoint.manifest.operation_id.clone(),
+        fencing_generation: checkpoint.manifest.fencing_generation,
+        journal_revision: checkpoint.manifest.journal_revision,
+        manifest_digest: promoted.content_digest,
+    };
+    let advance = BindingAdvance {
+        next: &next,
+        journal: checkpoint.journal,
+        root_key_ref: checkpoint.root_key_ref,
+        active_key_epoch: checkpoint.active_key_epoch,
     };
     commit_planned(fs, provider, layout, commit, &held, Some(&advance))
 }
