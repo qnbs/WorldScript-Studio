@@ -11,8 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failed root commit the new manifest revision stays durable as an unadopted candidate; the retry
   reads that exact generation under the same fence and authority check and, if it authenticates,
   carries the key epoch a promote pins and decodes to the manifest being published, advances the
-  binding to its digest without writing a journal byte or leaving staging residue. A different or
-  unopenable candidate is refused as `GenerationExists` and left untouched. Discarding such a candidate, a successor-relation guard,
+  binding to its digest without writing a journal byte or leaving staging residue. A different,
+  unopenable or oversized candidate is refused as `GenerationExists` and left untouched; the
+  candidate is read through the new bounded `DurableFs::read_at_most`, so a crafted file cannot
+  exhaust memory. Discarding such a candidate, a successor-relation guard,
   bind, clear and takeover stay later slices. PR #992.
 - **R-15 Gate 4D:** add `commit_journal_checkpoint`, the journal owner's checkpoint. Under one root
   lock it reads the committed live-migration binding from the root, publishes the owner's next

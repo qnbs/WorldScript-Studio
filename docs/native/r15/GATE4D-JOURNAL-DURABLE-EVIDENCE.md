@@ -213,6 +213,7 @@ before any write, it reads the exact path of `generation-<r + 1>` (never the dir
 | present, authenticates under the journal key, carries the key epoch a promote pins (1) and decodes to exactly the caller's manifest | adopted: no staging file, no journal byte written, the binding advances to the digest of the existing bytes |
 | present, a different manifest (another lease, phase, cursor or fence) | refused as `GenerationExists` (`promoted = false`, no staging residue); nothing written or removed |
 | present, not openable (garbage, another generation's bytes) or sealed under another key epoch | refused as `GenerationExists`; left untouched |
+| present and larger than `MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES` (4096) | refused as `GenerationExists` without being loaded: the read stops at the bound |
 | any other read failure | `Stage` I/O failure, nothing written |
 
 Reading first (instead of attempting the promote and catching `GenerationExists`) matters: a failed
@@ -220,14 +221,24 @@ promote preserves its staging file for reconciliation, so a retry loop would oth
 residue and could collide with its own staging name. The adopt path is therefore also free of
 residue across repeated failed retries.
 
+The read is bounded. `DurableFs::read_at_most(path, limit)` returns `None` for a larger file and
+`StdFs` never allocates more than `limit + 1` bytes, so a crafted candidate cannot exhaust memory on
+a retry. A valid manifest carries no inventory and its longest fields are two identifiers of at most
+128 bytes, so a sealed manifest is well below the 4096-byte bound (a test seals the longest valid
+manifest and checks it stays under half of it). The trait method defaults to `read` so wrappers and
+test doubles keep working; an adapter that reads real files must override it.
+
 Limit: a retry must pass the same manifest value. A manifest rebuilt with, for example, a new lease
 expiry is a different candidate and is refused, because discarding it needs a relocation primitive
 that is not part of this slice. The R4 authority check runs first, so a stale owner can never adopt
 the committed owner's candidate.
 
-Proof: four cases in `gate4d_journal_durable_test` (absent → written, identical → adopted with zero
-creates and an unchanged directory; a different, garbage, wrong-generation and other-key-epoch candidate refused and
-unchanged; a stale owner or missing binding refused before the read; a non-absence read failure) and
+Proof: seven cases in `gate4d_journal_durable_test` (absent → written, identical → adopted with zero
+creates and an unchanged directory; a different, garbage, wrong-generation and other-key-epoch
+candidate refused and unchanged; a stale owner or missing binding refused before any read, proven with a double that
+panics on a read; an oversized candidate refused with only the bounded read allowed; a non-absence
+read failure; `StdFs::read_at_most` at, over and under the limit; the longest valid manifest under
+the bound) and
 five new cases in `gate4d_root_binding_test` (the retry adopts and the directory is byte-identical,
 repeated failed retries leave no residue and the next retry still adopts, a different candidate is
 refused and the original is still adoptable afterwards, an unopenable candidate is refused and left
@@ -240,11 +251,11 @@ untouched, a stale owner cannot adopt).
 - R2B remainder: discarding a candidate that differs from the retry's manifest or cannot be opened
   (it needs a relocation primitive that preserves the bytes for reconciliation), and recovery when
   the root-named envelope exists but semantic open refuses.
-- Bounded generation reads: `DurableFs::read` returns the whole file, so a retry (like resume and
-  every other generation read in the crate) loads an oversized file before the envelope is
-  parsed. A crate-wide bounded-read primitive (a size limit enforced before the allocation, applied
-  to journal, page, marker and root generation reads) is a separate slice; it is recorded as an
-  acceptance criterion on #359 and not changed here.
+- Bounded generation reads elsewhere: the B2b-3 candidate read is bounded
+  (`DurableFs::read_at_most`), but resume (`load_authoritative_manifest`), `load_manifest_generation`,
+  the Gate 3 post-promotion verify, and the page, marker and root reads still use the whole-file
+  `DurableFs::read`. Applying the same size limits to them is a separate slice, recorded as an
+  acceptance criterion on #359.
 - Successor-relation guard at the checkpoint (immutable fields, allowed phase transition,
   non-regressive cursor) unless the first caller builds manifests only through the transition
   constructors and proves it.
@@ -265,7 +276,7 @@ untouched, a stale owner cannot adopt).
 
 ## Tests
 
-Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, 9 R4 caller-authority cases and 4 B2b-3 publish cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, 9 R4 caller-authority cases and 7 B2b-3 publish and bounded-read cases).
 Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases and 5 B2b-3 candidate-retry cases).
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and

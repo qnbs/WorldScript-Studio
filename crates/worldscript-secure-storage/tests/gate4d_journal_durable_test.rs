@@ -14,7 +14,7 @@ use worldscript_secure_storage::{
     DurableFs, JournalDurableContext, JournalDurableError, JournalError, JournalManifest,
     JournalPage, LiveMigration, MigrationExecutionError, MigrationFence, OpenError, RecordClass,
     RecordIdentity, RecordMeta, StageFailureKind, StagingResidue, StdFs, WriteOperationId,
-    JOURNAL_MANIFEST_RECORD_SCHEMA,
+    JOURNAL_MANIFEST_RECORD_SCHEMA, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -852,34 +852,156 @@ fn publish_refuses_a_different_or_unopenable_candidate_and_changes_nothing() {
     }
 }
 
+/// Real file system whose reads can be forbidden: a full `read` always panics, and the bounded
+/// read panics too unless `bounded_reads` allows it.
+struct ReadGuardFs {
+    inner: StdFs,
+    bounded_reads: bool,
+}
+
+impl DurableFs for ReadGuardFs {
+    type File = File;
+
+    fn create_new(&mut self, path: &Path) -> io::Result<File> {
+        self.inner.create_new(path)
+    }
+
+    fn sync_file(&mut self, file: &mut File) -> io::Result<()> {
+        self.inner.sync_file(file)
+    }
+
+    fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+        panic!("unbounded read of {}", path.display());
+    }
+
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        assert!(self.bounded_reads, "read of {}", path.display());
+        self.inner.read_at_most(path, limit)
+    }
+
+    fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.link_no_replace(from, to)
+    }
+
+    fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        self.inner.remove_file(path)
+    }
+
+    fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+        self.inner.sync_dir(dir)
+    }
+
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> {
+        self.inner.list_dir(dir)
+    }
+
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.rename_replace(from, to)
+    }
+
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        self.inner.create_dir_all(dir)
+    }
+}
+
+fn publish_guarded(
+    dir: &Path,
+    manifest: &JournalManifest,
+    committed: Option<&LiveMigration>,
+    bounded_reads: bool,
+) -> Result<worldscript_secure_storage::PublishedManifest, JournalDurableError> {
+    let fence = MigrationFence::from_manifest(manifest);
+    let mut fs = ReadGuardFs {
+        inner: StdFs,
+        bounded_reads,
+    };
+    let op = write_op();
+    let key = key();
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, dir, &op);
+    publish_manifest_fenced(&mut ctx, manifest, &fence, committed)
+}
+
 #[test]
-fn publish_refuses_a_stale_owner_before_reading_the_generation() {
+fn publish_refuses_a_stale_owner_before_any_read_of_the_generation() {
     let dir = TempDir::new();
     promote(&dir.0, &manifest_at("pub-stale", 1, 4));
     let live = committed_at("pub-stale", 1, 4);
     let next = manifest_at("pub-stale", 2, 4);
     published(&dir.0, &next, Some(&live)).0.unwrap();
     let listing = dir_listing(&dir.0);
-    // The stale owner's manifest and fence agree; its candidate generation exists, but the
-    // committed owner is a newer fence, so the existing file is never read or adopted.
+    // The stale owner's manifest and fence agree and its candidate generation exists, but the
+    // committed owner is a newer fence. The double panics on any read, so reaching the file fails.
     let moved = committed_at("pub-stale", 1, 5);
-    let (result, creates) = published(&dir.0, &next, Some(&moved));
     assert_eq!(
-        result,
+        publish_guarded(&dir.0, &next, Some(&moved), false),
         Err(JournalDurableError::Authority(
             MigrationExecutionError::StaleMigrationOwner
         ))
     );
-    assert_eq!(creates, 0);
-    assert_eq!(dir_listing(&dir.0), listing);
     // With no committed binding only revision 0 is publishable.
-    let (result, _) = published(&dir.0, &next, None);
     assert_eq!(
-        result,
+        publish_guarded(&dir.0, &next, None, false),
         Err(JournalDurableError::Authority(
             MigrationExecutionError::LiveBindingMismatch
         ))
     );
+    assert_eq!(dir_listing(&dir.0), listing);
+}
+
+#[test]
+fn publish_refuses_an_oversized_candidate_without_loading_it() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("pub-big", 1, 4));
+    let live = committed_at("pub-big", 1, 4);
+    let next = manifest_at("pub-big", 2, 4);
+    let path = generation_path(&dir.0, 2);
+    // One byte over the bound: only the bounded read may touch it, and it is refused untouched.
+    let oversized = vec![0xAA; MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES + 1];
+    std::fs::write(&path, &oversized).unwrap();
+    let Err(JournalDurableError::Stage(stage)) = publish_guarded(&dir.0, &next, Some(&live), true)
+    else {
+        panic!("an oversized candidate must be refused");
+    };
+    assert!(matches!(stage.kind, StageFailureKind::GenerationExists));
+    assert!(!stage.promoted);
+    assert_eq!(stage.staging, StagingResidue::None);
+    assert_eq!(std::fs::read(&path).unwrap(), oversized);
+}
+
+#[test]
+fn std_read_at_most_never_loads_more_than_the_limit() {
+    let dir = TempDir::new();
+    let path = dir.0.join("bounded");
+    std::fs::write(&path, [7u8; 10]).unwrap();
+    let mut fs = StdFs;
+    assert_eq!(fs.read_at_most(&path, 10).unwrap(), Some(vec![7u8; 10]));
+    assert_eq!(fs.read_at_most(&path, 11).unwrap(), Some(vec![7u8; 10]));
+    assert_eq!(fs.read_at_most(&path, 9).unwrap(), None);
+    assert_eq!(fs.read_at_most(&path, 0).unwrap(), None);
+    let empty = dir.0.join("empty");
+    std::fs::write(&empty, []).unwrap();
+    assert_eq!(fs.read_at_most(&empty, 0).unwrap(), Some(Vec::new()));
+    let missing = fs.read_at_most(&dir.0.join("missing"), 10).unwrap_err();
+    assert_eq!(missing.kind(), io::ErrorKind::NotFound);
+}
+
+#[test]
+fn the_longest_valid_manifest_fits_the_envelope_bound() {
+    let operation = "o".repeat(128);
+    let mut manifest = manifest_at(&operation, 7, 4);
+    manifest.has_lease_owner = true;
+    manifest.lease_owner_id = Some("w".repeat(128));
+    manifest.lease_expires_unix_ms = Some(u64::MAX);
+    let identity = RecordIdentity::new(RecordClass::Migration, &[&operation]).unwrap();
+    let meta = RecordMeta {
+        key_epoch: 1,
+        record_generation: 7,
+        record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
+    };
+    let envelope = manifest.seal(&key(), &identity, meta).unwrap();
+    assert!(envelope.len() <= MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES);
+    // The bound is a limit on size, not a tight fit that a legitimate manifest could approach.
+    assert!(envelope.len() * 4 <= MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES * 2);
 }
 
 #[test]
