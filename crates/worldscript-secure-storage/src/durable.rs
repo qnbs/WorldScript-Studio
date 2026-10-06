@@ -15,7 +15,7 @@
 
 use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use crate::error::SealError;
@@ -45,6 +45,15 @@ pub trait DurableFs {
     /// Flushes the file's contents and metadata to stable storage.
     fn sync_file(&mut self, file: &mut Self::File) -> io::Result<()>;
     fn read(&mut self, path: &Path) -> io::Result<Vec<u8>>;
+    /// Reads `path` only if it holds at most `limit` bytes; a larger file yields `None`.
+    ///
+    /// [`StdFs`] never allocates more than `limit + 1` bytes. This default reads through
+    /// [`Self::read`] so wrappers and test doubles stay faithful; an adapter that reads real files
+    /// must override it with a bounded read.
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        let bytes = self.read(path)?;
+        Ok((bytes.len() <= limit).then_some(bytes))
+    }
     /// Makes `to` refer to `from`'s contents, failing with `AlreadyExists` if `to` exists; never
     /// replaces an existing file.
     fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()>;
@@ -81,6 +90,14 @@ impl DurableFs for StdFs {
 
     fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
         fs::read(path)
+    }
+
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        let mut bytes = Vec::new();
+        File::open(path)?
+            .take((limit as u64).saturating_add(1))
+            .read_to_end(&mut bytes)?;
+        Ok((bytes.len() <= limit).then_some(bytes))
     }
 
     fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {

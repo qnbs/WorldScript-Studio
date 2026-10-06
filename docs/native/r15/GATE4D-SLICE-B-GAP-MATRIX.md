@@ -17,7 +17,7 @@ checkpoint cursor bounds, terminal `RECOVERY_REQUIRED` / `DONE`, `PREPARE` write
 | Durable journal manifest generations | §10.1.1 immutable republish per `journal_revision` | Seal/open in memory only (`gate4c_journal_test`) | Stage/promote sealed manifest bytes via `durable` (3A), generation-addressed under `migration:<op>` |
 | Durable journal pages | §10.1.1 `migration-page:<op>:<idx>` | Codec only | Same 3A pattern per page generation |
 | `with_fence` boundary | §10.1 preface | `MigrationFence` in-process only | Adapter holds fence through mutation + sync; refuse stale token before I/O |
-| Root `LiveMigration` binding update | §5.4 / §10.1.1 retention | Root types exist; no journal publish hook | The advance `r → r+1` is implemented as `advance_live_migration` (B2b-1): CAS against the root read under `root_commit_mutex`, durable manifest verified, no journal write. Bind (bootstrap), clear, owner takeover and the promote-plus-advance coordinator stay open |
+| Root `LiveMigration` binding update | §5.4 / §10.1.1 retention | Root types exist; no journal publish hook | The advance `r → r+1` is implemented as `advance_live_migration` (B2b-1): CAS against the root read under `root_commit_mutex`, durable manifest verified, no journal write. The promote-plus-advance coordinator is `commit_journal_checkpoint` (B2b-2), which adopts an identical candidate on retry (B2b-3). Bind (bootstrap), clear and owner takeover stay open |
 | Cross-process lease CAS | §10.1 lease fields on manifest | Wire validation only | Out of minimal B unless required for single-process durable proof |
 | Inventory execution / mixed-key conversion | §10.2+ | Deferred 4D slices C+ | Not B |
 
@@ -71,7 +71,8 @@ load of the newer generation yet).
 - Slice B2a: a durable manifest ahead of the root resumes the root-named generation and does not adopt the newer file. Root `LiveMigration` advancement and R2B stay separate.
 - Slice R4: a promote whose caller is not the committed binding's owner and revision is refused before I/O. It adds no root read or write.
 - Slice B2b-1: the root's live-migration binding advances to the journal owner's next revision only as the CAS successor of the binding read under the root lock, naming a durable, authenticated manifest generation. It writes no journal byte.
-- Slice B2b-2: the journal owner's checkpoint publishes the next manifest revision against the binding read from the root and advances the binding to it, under one root lock. Adopting or discarding an existing candidate generation (R2B), bind, clear and owner takeover stay separate.
+- Slice B2b-2: the journal owner's checkpoint publishes the next manifest revision against the binding read from the root and advances the binding to it, under one root lock. Bind, clear and owner takeover stay separate.
+- Slice B2b-3: a checkpoint retry adopts an identical existing candidate of the owner's next revision (exact-path bounded read, no write, no staging residue) and refuses a different or unopenable one untouched. Discarding such a candidate (R2B remainder) and a successor-relation guard stay separate.
 - Slice C: record conversion / mixed-key inventory execution as live truth requires
 - Gate 4E: first enable/disable closure
 - Root two-phase commit coupling with step F when journal + root must advance together (after B2)

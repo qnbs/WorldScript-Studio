@@ -17,12 +17,13 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::JournalDurableContext` | Bundles `fs`, `key`, `dir`, and `WriteOperationId` for promote/load entrypoints |
 | `journal::promote_manifest` (crate-private) | Seal, promote, readback via `JournalManifest::open` |
 | `journal::promote_manifest_fenced` | Public mutation: `with_fence` + R4 committed-binding check + crate-private `promote_manifest` |
+| `journal::publish_manifest_fenced` | B2b-3: the same authority and fence as `promote_manifest_fenced`, then one exact-path read of `generation-<r>`: absent → promote; present and identical (opens under the journal key with the key epoch a promote pins, decodes to the same manifest) → adopt with no write; anything else → `GenerationExists`, nothing written or removed |
 | `journal::promote_page` (crate-private) | `JournalPage::seal` + promote + `JournalPage::open` readback |
 | `journal::promote_page_fenced` | Public page mutation: `with_fence` + R4 committed-binding check + crate-private `promote_page` |
 | `journal::assert_manifest_promote_authority` / `assert_page_promote_authority` | Pure R4 predicates: the caller's token against the root's committed `Option<&LiveMigration>` |
 | `journal::assert_binding_successor` | Pure B2b-1 predicate: a binding advance is the CAS successor (same operation and fence, revision + 1) of the committed binding |
 | `authority::advance_live_migration` | B2b-1: under `root_commit_mutex`, verify the successor and the durable manifest generation, then commit a root carrying the new binding |
-| `authority::commit_journal_checkpoint` | B2b-2: under `root_commit_mutex`, read the committed binding, promote the owner's next manifest against it (R4), then advance the binding to that generation |
+| `authority::commit_journal_checkpoint` | B2b-2/B2b-3: under `root_commit_mutex`, read the committed binding, publish the owner's next manifest against it (R4; an identical candidate from a failed attempt is adopted), then advance the binding to that generation |
 | `journal::load_manifest_generation` | Load one manifest generation from a journal record directory |
 | `journal::load_authoritative_manifest` | Resume the generation the committed root names, then bind its exact envelope digest |
 | `journal::with_fence` / `acquire_journal_durable_guard` | Mutex + `assert_fence` before I/O |
@@ -191,21 +192,73 @@ Lock order is the root lock, then the journal mutex inside the promote. Nothing 
 them the other way round, and the journal read inside the advance takes no journal mutex, so there is
 no cycle; later callers must keep this order.
 
-Boundary: a retry after the middle crash window meets `GenerationExists` for the candidate. Adopting
-or discarding an existing candidate is R2B and is not done here. Nothing calls the checkpoint yet.
+Boundary: a retry after the middle crash window met `GenerationExists` for the candidate; B2b-3
+below adopts an identical candidate. Nothing calls the checkpoint yet.
 
 Proof: six cases in `gate4d_root_binding_test`: the checkpoint publishes and advances; no bound
 migration; stale owner, another operation, the committed revision, a skipped revision and a fence
 mismatch; a different key route or epoch; a failed root commit leaving the manifest as an unadopted
-candidate, with the retry boundary; chained checkpoints and a repeated revision refused afterwards.
+candidate; chained checkpoints and a repeated revision refused afterwards.
 
-## Still residual after B2b-2
+## B2b-3 — adopting an identical candidate on checkpoint retry
+
+After the promote and before step F a failed root commit leaves revision `r + 1` as an unadopted
+candidate (§10.1.1: discardable or retryable). `journal::publish_manifest_fenced` replaces the plain
+promote inside `commit_journal_checkpoint`. Under the same fence, the same R4 authority check and
+before any write, it reads the exact path of `generation-<r + 1>` (never the directory):
+
+| Generation `r + 1` | Result |
+|---|---|
+| absent | promoted as before (`link_no_replace` still refuses a name created in between) |
+| present, authenticates under the journal key, carries the key epoch a promote pins (1) and decodes to exactly the caller's manifest | adopted: no staging file, no journal byte written, the binding advances to the digest of the existing bytes |
+| present, a different manifest (another lease, phase, cursor or fence) | refused as `GenerationExists` (`promoted = false`, no staging residue); nothing written or removed |
+| present, not openable (garbage, another generation's bytes) or sealed under another key epoch | refused as `GenerationExists`; left untouched |
+| present and larger than `MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES` (4096) | refused as `GenerationExists` without being loaded: the read stops at the bound |
+| any other read failure | `Stage` I/O failure, nothing written |
+
+Reading first (instead of attempting the promote and catching `GenerationExists`) matters: a failed
+promote preserves its staging file for reconciliation, so a retry loop would otherwise leave
+residue and could collide with its own staging name. The adopt path is therefore also free of
+residue across repeated failed retries.
+
+The read is bounded. `DurableFs::read_at_most(path, limit)` returns `None` for a larger file and
+`StdFs` never allocates more than `limit + 1` bytes, so a crafted candidate cannot exhaust memory on
+a retry. A valid manifest carries no inventory and its longest fields are two identifiers of at most
+128 bytes, so a sealed manifest is well below the 4096-byte bound (a test seals the longest valid
+manifest and checks it stays under half of it). The trait method defaults to `read` so wrappers and
+test doubles keep working; an adapter that reads real files must override it.
+
+Limit: a retry must pass the same manifest value. A manifest rebuilt with, for example, a new lease
+expiry is a different candidate and is refused, because discarding it needs a relocation primitive
+that is not part of this slice. The R4 authority check runs first, so a stale owner can never adopt
+the committed owner's candidate.
+
+Proof: seven cases in `gate4d_journal_durable_test` (absent → written, identical → adopted with zero
+creates and an unchanged directory; a different, garbage, wrong-generation and other-key-epoch
+candidate refused and unchanged; a stale owner or missing binding refused before any read, proven with a double that
+panics on a read; an oversized candidate refused with only the bounded read allowed; a non-absence
+read failure; `StdFs::read_at_most` at, over and under the limit; the longest valid manifest under
+the bound) and
+five new cases in `gate4d_root_binding_test` (the retry adopts and the directory is byte-identical,
+repeated failed retries leave no residue and the next retry still adopts, a different candidate is
+refused and the original is still adoptable afterwards, an unopenable candidate is refused and left
+untouched, a stale owner cannot adopt).
+
+## Still residual after B2b-3
 
 - Binding transitions other than the advance: bind (bootstrap) and clear (terminal), which belong to
   the Gate 4E/5 enable and commit sequences, and owner takeover with a new fence.
-- R2B: adopting or discarding an existing candidate generation and recovery when the root-named
-  envelope exists but semantic open refuses; it needs root writes and follows the binding
-  transitions.
+- R2B remainder: discarding a candidate that differs from the retry's manifest or cannot be opened
+  (it needs a relocation primitive that preserves the bytes for reconciliation), and recovery when
+  the root-named envelope exists but semantic open refuses.
+- Bounded generation reads elsewhere: the B2b-3 candidate read is bounded
+  (`DurableFs::read_at_most`), but resume (`load_authoritative_manifest`), `load_manifest_generation`,
+  the Gate 3 post-promotion verify, and the page, marker and root reads still use the whole-file
+  `DurableFs::read`. Applying the same size limits to them is a separate slice, recorded as an
+  acceptance criterion on #359.
+- Successor-relation guard at the checkpoint (immutable fields, allowed phase transition,
+  non-regressive cursor) unless the first caller builds manifests only through the transition
+  constructors and proves it.
 - The cross-process lease CAS.
 - Root-bound `key_epoch` alignment: §8.3 fixes first-time enable at epoch 1 (the current constant),
   but the contract does not say which epoch seals the journal during rotation, so that needs a
@@ -215,19 +268,20 @@ candidate, with the retry boundary; chained checkpoints and a repeated revision 
 ## Explicit non-goals (journal durable promotion)
 
 - Root `LiveMigration` binding bootstrap and clear (the advance is covered by B2b-1 above).
-- Adopting a manifest generation ahead of the root.
+- Adopting a manifest generation ahead of the root on resume (B2a); the checkpoint retry adopts only
+  an identical candidate of the committed owner's next revision (B2b-3).
 - Cross-process lease CAS.
 - Mixed-key inventory conversion (Slice C+).
 - TypeScript/Tauri wiring, production authority switch, Gate 4E/5/6.
 
 ## Tests
 
-Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, and 9 R4 caller-authority cases).
-Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases and 6 B2b-2 checkpoint cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, 9 R4 caller-authority cases and 7 B2b-3 publish and bounded-read cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases and 5 B2b-3 candidate-retry cases).
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
 `with_fence_holds_mutex_during_closure` in `journal::durable::mutex_proof`.
 
 Gate 4D overall status: **IN PROGRESS**. B2a resume selection, R4 promote-time caller authority,
-the B2b-1 root binding advance and the B2b-2 journal checkpoint are in scope above; B2 is not
-terminal.
+the B2b-1 root binding advance, the B2b-2 journal checkpoint and the B2b-3 candidate adoption on
+retry are in scope above; B2 is not terminal.

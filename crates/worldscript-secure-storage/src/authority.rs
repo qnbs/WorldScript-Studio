@@ -41,7 +41,7 @@ use crate::envelope::parse_envelope;
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
 use crate::journal::{
-    assert_binding_successor, load_authoritative_manifest, promote_manifest_fenced,
+    assert_binding_successor, load_authoritative_manifest, publish_manifest_fenced,
     JournalDurableContext, JournalDurableError, JournalManifest, MigrationExecutionError,
     MigrationFence,
 };
@@ -313,13 +313,16 @@ pub struct JournalCheckpoint<'a> {
 /// Publishes the journal owner's next manifest revision and advances the root binding to it (§5.4).
 ///
 /// Everything runs under one `root_commit_mutex`. The committed binding is read from the root, so
-/// [`promote_manifest_fenced`] checks the manifest against the authenticated binding rather than a
+/// [`publish_manifest_fenced`] checks the manifest against the authenticated binding rather than a
 /// copy the caller carries: only the committed owner's next revision is written, and a stale owner
 /// is refused before any journal write. The binding is then advanced to exactly that generation as
 /// [`advance_live_migration`] does. A refusal before the promote (no bound migration, another key
 /// route or epoch, a stale or wrong manifest or fence) writes nothing. A failure after the promote
-/// leaves revision `r + 1` as an unadopted candidate while the root still names `r`; adopting or
-/// discarding such a candidate on retry is not done here, so a retry meets `GenerationExists`.
+/// leaves revision `r + 1` as an unadopted candidate while the root still names `r`. A retry with
+/// the same manifest adopts that candidate through [`publish_manifest_fenced`], with no journal
+/// write, and advances the binding to its digest. A candidate that differs from the manifest, or
+/// cannot be opened, is refused as `GenerationExists` and left untouched; discarding it is not done
+/// here.
 /// Lock order is the root lock, then the journal mutex inside the promote; nothing takes them in
 /// the opposite order.
 pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
@@ -354,14 +357,14 @@ pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
         None => None,
     }
     .ok_or(AuthorityError::NoLiveMigration)?;
-    let promoted = {
+    let published = {
         let mut journal = JournalDurableContext::new(
             &mut *fs,
             checkpoint.journal.key,
             checkpoint.journal.dir,
             checkpoint.journal.operation,
         );
-        promote_manifest_fenced(
+        publish_manifest_fenced(
             &mut journal,
             checkpoint.manifest,
             checkpoint.fence,
@@ -373,7 +376,7 @@ pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
         operation_id: checkpoint.manifest.operation_id.clone(),
         fencing_generation: checkpoint.manifest.fencing_generation,
         journal_revision: checkpoint.manifest.journal_revision,
-        manifest_digest: promoted.content_digest,
+        manifest_digest: published.content_digest,
     };
     let advance = BindingAdvance {
         next: &next,
