@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "optionalDependencies": {
-    "@mlc-ai/web-llm": "^0.2.84",
+    "@mlc-ai/web-llm": "^0.2.85",
     "@huggingface/transformers": "^4.2.0",
     "onnxruntime-web": "^1.29.0"
   }
