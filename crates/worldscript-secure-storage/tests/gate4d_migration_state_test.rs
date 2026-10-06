@@ -517,38 +517,65 @@ fn the_target_key_is_frozen_from_admit_and_the_inventory_from_convert() {
         |m| m.page_count += 1,
         |m| m.journal_page_set_digest = [0x22; 32],
     ];
-    // (phase of the predecessor, target key frozen, inventory frozen)
+    let verdict = |frozen: bool| {
+        if frozen {
+            Err(MigrationExecutionError::FrozenFieldChanged)
+        } else {
+            Ok(())
+        }
+    };
+    // (phase of the predecessor, phase of the successor, target key frozen, inventory frozen):
+    // the freezes bind the successor's phase, so entering ADMIT keeps the key and entering CONVERT
+    // keeps the inventory.
     let table = [
-        (phase_code::DISCOVER, false, false),
-        (phase_code::PREPARE, false, false),
-        (phase_code::ADMIT, true, false),
-        (phase_code::CONVERT, true, true),
-        (phase_code::VERIFY, true, true),
-        (phase_code::COMMIT, true, true),
-        (phase_code::RETIRE_OLD_AUTHORITY, true, true),
-        (phase_code::FINALIZE, true, true),
+        (phase_code::DISCOVER, phase_code::DISCOVER, false, false),
+        (phase_code::DISCOVER, phase_code::PREPARE, false, false),
+        (phase_code::PREPARE, phase_code::PREPARE, false, false),
+        (phase_code::PREPARE, phase_code::ADMIT, true, false),
+        (phase_code::ADMIT, phase_code::ADMIT, true, false),
+        (phase_code::ADMIT, phase_code::CONVERT, true, true),
+        (phase_code::CONVERT, phase_code::CONVERT, true, true),
+        (phase_code::CONVERT, phase_code::VERIFY, true, true),
+        (phase_code::VERIFY, phase_code::COMMIT, true, true),
+        (
+            phase_code::COMMIT,
+            phase_code::RETIRE_OLD_AUTHORITY,
+            true,
+            true,
+        ),
+        (
+            phase_code::RETIRE_OLD_AUTHORITY,
+            phase_code::FINALIZE,
+            true,
+            true,
+        ),
+        (
+            phase_code::PREPARE,
+            phase_code::RECOVERY_REQUIRED,
+            true,
+            true,
+        ),
     ];
-    for (at, key_frozen, inventory_frozen) in table {
-        let prev = rotate_at(at, 4);
-        let verdict = |frozen: bool| {
-            if frozen {
-                Err(MigrationExecutionError::FrozenFieldChanged)
-            } else {
-                Ok(())
-            }
-        };
+    for (from, to, key_frozen, inventory_frozen) in table {
+        let prev = rotate_at(from, 4);
         for change in [target_key, has_target_key] {
             assert_eq!(
-                refused(&prev, change),
+                refused(&prev, |next| {
+                    next.phase = to;
+                    change(next);
+                }),
                 verdict(key_frozen),
-                "target key at {at}"
+                "target key {from} -> {to}"
             );
         }
         for change in inventory_changes {
             assert_eq!(
-                refused(&prev, change),
+                refused(&prev, |next| {
+                    next.phase = to;
+                    change(next);
+                }),
                 verdict(inventory_frozen),
-                "inventory at {at}"
+                "inventory {from} -> {to}"
             );
         }
     }

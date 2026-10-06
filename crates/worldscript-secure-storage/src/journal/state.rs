@@ -308,9 +308,10 @@ pub fn assert_binding_successor(
 /// produce, plus the freezes §10.3 states: the successor carries `journal_revision + 1`; the
 /// operation, type, epochs, fencing generation and inventory version never change; the phase is
 /// unchanged, the next one, or `RECOVERY_REQUIRED`, and never leaves a terminal phase; the cursor
-/// lies inside the successor's own inventory and does not regress within a phase; the target key reference is frozen once the predecessor is at
-/// `ADMIT` or later; the inventory fields are frozen once it is at `CONVERT` or later (the final
-/// inventory is captured at `ADMIT`); the recovery reason changes only on entering
+/// lies inside the successor's own inventory and does not regress within a phase; the target key
+/// reference is frozen once the successor is at `ADMIT` or later and the inventory fields once it
+/// is at `CONVERT` or later (the target key is durable in `PREPARE`, the final inventory is
+/// captured in `ADMIT`); the recovery reason changes only on entering
 /// `RECOVERY_REQUIRED`. Lease fields and the cursor across a phase change are not constrained here.
 pub fn assert_manifest_successor(
     prev: &JournalManifest,
@@ -387,7 +388,9 @@ fn assert_frozen_fields_kept(
     prev: &JournalManifest,
     next: &JournalManifest,
 ) -> Result<(), MigrationExecutionError> {
-    let phase = manifest_phase(prev);
+    // The freezes bind the successor's phase: entering `ADMIT` already keeps the key made durable in
+    // `PREPARE`, and entering `CONVERT` already keeps the inventory captured in `ADMIT`.
+    let phase = manifest_phase(next);
     let target_key_kept = next.has_target_root_key_ref == prev.has_target_root_key_ref
         && next.target_root_key_ref_digest == prev.target_root_key_ref_digest;
     let inventory_kept = next.inventory_digest == prev.inventory_digest

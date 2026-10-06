@@ -265,8 +265,8 @@ through the plain `promote_manifest_fenced` can never become authoritative. The 
 | phase unchanged, the next phase, or `RECOVERY_REQUIRED`; no successor of `DONE` or `RECOVERY_REQUIRED` | `InvalidPhaseTransition`, `TerminalPhase` | §10.3 ordering (`allows_phase_transition`) |
 | cursor lies inside the successor's own inventory (an empty inventory takes only the empty cursor) | `Journal(EntryCountMismatch)`, `Journal(InvalidPageIndex)` | `checkpoint_progress` |
 | cursor does not regress while the phase is unchanged | `RegressiveCheckpoint` | `checkpoint_progress` |
-| target key reference (`has_target_root_key_ref`, digest) frozen once the predecessor is at `ADMIT` or later | `FrozenFieldChanged` | §10.3 `PREPARE`: target key durable before admission |
-| inventory fields (`inventory_digest`, `entry_count`, `page_count`, `journal_page_set_digest`) frozen once the predecessor is at `CONVERT` or later | `FrozenFieldChanged` | §10.3 `ADMIT`: the final inventory is captured at `ADMIT` |
+| target key reference (`has_target_root_key_ref`, digest) frozen once the successor is at `ADMIT` or later, so entering `ADMIT` keeps the key made durable in `PREPARE` | `FrozenFieldChanged` | §10.3 `PREPARE`: target key durable before admission |
+| inventory fields (`inventory_digest`, `entry_count`, `page_count`, `journal_page_set_digest`) frozen once the successor is at `CONVERT` or later, so entering `CONVERT` keeps the inventory captured in `ADMIT` | `FrozenFieldChanged` | §10.3 `ADMIT`: the final inventory is captured in `ADMIT` |
 | `recovery_reason_code` changes only when entering `RECOVERY_REQUIRED` | `FrozenFieldChanged` | `mark_recovery` |
 
 Deliberately unconstrained, because no contract text or constructor fixes them: the lease fields
