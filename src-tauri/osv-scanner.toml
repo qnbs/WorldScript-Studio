@@ -98,3 +98,16 @@ reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; 
 # GHSA-vwc7-r8mq-g2x9 at that time. The 2026-09-19 `pnpm audit --json` output
 # reports no vulnerabilities for the resolved graph, so no npm ignore is needed here; the
 # workspace build denial remains defense-in-depth.
+
+# ─── sprintf-js (no patched release) ─────────────────────────────────────────
+# GitHub reviewed GHSA-hp3w-g68c-fv3c on 2026-10-05. OSV's affected range ends at
+# last_affected 1.1.3, and 1.1.3 is still the newest npm release. The finding is
+# a RangeError DoS only when the application passes an attacker-controlled format
+# string. Both lockfile copies are transitive: mammoth → argparse@1.0.10 → 1.0.3,
+# and optional @huggingface/transformers → onnxruntime-node → global-agent →
+# roarr → 1.1.3. argparse's own help/error templates are the format strings.
+
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "sprintf-js <=1.1.3 (CVE-2026-97058): DoS only for an attacker-controlled format string; no release newer than 1.1.3. Transitive via mammoth/argparse and optional onnxruntime-node/roarr. Drop this when a patched release exists."
