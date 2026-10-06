@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   named manifest generation to be durable, authenticated and equal to the binding's digest. It
   writes no journal byte and nothing in the crate calls it yet; bind, clear, takeover and the
   promote-plus-advance coordinator stay later slices. PR #989.
+- **Dependencies:** raise the `sharp` override floor from 0.35.4 to 0.35.5 for GHSA-wq5f-xc86-pv6w
+  (a librsvg memory-safety vulnerability that OSV published on 2026-10-06 and that fails the
+  Security Audit on every PR) and cap it below 1.x. The fix has been on npm since 2026-09-27, so
+  the 7-day release-age floor is already met. The change is the `pnpm-workspace.yaml` override plus
+  the lockfile: `sharp` and its `@img/sharp-*` / libvips binaries move to 0.35.5 / 1.3.4 for
+  `@huggingface/transformers` and `miniflare`; no `package.json` or source change. PR #990.
 - **R-15 Gate 4D:** refuse a stale caller's journal promote before any I/O.
   `promote_manifest_fenced` and `promote_page_fenced` now take the root's committed
   `LiveMigration` and admit only that binding's owner at its next manifest revision, or its
