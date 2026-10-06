@@ -13,7 +13,8 @@ use worldscript_secure_storage::{
     promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, DirectoryDurability,
     DurableFs, JournalDurableContext, JournalDurableError, JournalError, JournalManifest,
     JournalPage, LiveMigration, MigrationExecutionError, MigrationFence, OpenError, RecordClass,
-    RecordIdentity, StageFailureKind, StagingResidue, StdFs, WriteOperationId,
+    RecordIdentity, RecordMeta, StageFailureKind, StagingResidue, StdFs, WriteOperationId,
+    JOURNAL_MANIFEST_RECORD_SCHEMA,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -819,9 +820,21 @@ fn publish_refuses_a_different_or_unopenable_candidate_and_changes_nothing() {
     assert_eq!(stage.staging, StagingResidue::None);
     assert_eq!(creates, 0);
     assert_eq!(dir_listing(&dir.0), listing);
-    // Another revision's bytes under this revision's name do not open as this generation.
+    // Another revision's bytes under this revision's name do not open as this generation, and an
+    // authentic envelope of the same manifest under another key epoch is not what a promote writes.
     let wrong = file_bytes(&dir.0, 1);
-    for (case, bytes) in [("garbage", vec![0xAA; 64]), ("wrong generation", wrong)] {
+    let identity = RecordIdentity::new(RecordClass::Migration, &["pub-differs"]).unwrap();
+    let other_epoch = RecordMeta {
+        key_epoch: 2,
+        record_generation: 2,
+        record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
+    };
+    let epoch_two = next.seal(&key(), &identity, other_epoch).unwrap();
+    for (case, bytes) in [
+        ("garbage", vec![0xAA; 64]),
+        ("wrong generation", wrong),
+        ("another key epoch", epoch_two),
+    ] {
         let path = generation_path(&dir.0, 2);
         std::fs::remove_file(&path).unwrap();
         std::fs::write(&path, &bytes).unwrap();

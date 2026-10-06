@@ -17,7 +17,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::JournalDurableContext` | Bundles `fs`, `key`, `dir`, and `WriteOperationId` for promote/load entrypoints |
 | `journal::promote_manifest` (crate-private) | Seal, promote, readback via `JournalManifest::open` |
 | `journal::promote_manifest_fenced` | Public mutation: `with_fence` + R4 committed-binding check + crate-private `promote_manifest` |
-| `journal::publish_manifest_fenced` | B2b-3: the same authority and fence as `promote_manifest_fenced`, then one exact-path read of `generation-<r>`: absent → promote; present and identical (opens under the journal key, decodes to the same manifest) → adopt with no write; anything else → `GenerationExists`, nothing written or removed |
+| `journal::publish_manifest_fenced` | B2b-3: the same authority and fence as `promote_manifest_fenced`, then one exact-path read of `generation-<r>`: absent → promote; present and identical (opens under the journal key with the key epoch a promote pins, decodes to the same manifest) → adopt with no write; anything else → `GenerationExists`, nothing written or removed |
 | `journal::promote_page` (crate-private) | `JournalPage::seal` + promote + `JournalPage::open` readback |
 | `journal::promote_page_fenced` | Public page mutation: `with_fence` + R4 committed-binding check + crate-private `promote_page` |
 | `journal::assert_manifest_promote_authority` / `assert_page_promote_authority` | Pure R4 predicates: the caller's token against the root's committed `Option<&LiveMigration>` |
@@ -210,9 +210,9 @@ before any write, it reads the exact path of `generation-<r + 1>` (never the dir
 | Generation `r + 1` | Result |
 |---|---|
 | absent | promoted as before (`link_no_replace` still refuses a name created in between) |
-| present, authenticates under the journal key and decodes to exactly the caller's manifest | adopted: no staging file, no journal byte written, the binding advances to the digest of the existing bytes |
+| present, authenticates under the journal key, carries the key epoch a promote pins (1) and decodes to exactly the caller's manifest | adopted: no staging file, no journal byte written, the binding advances to the digest of the existing bytes |
 | present, a different manifest (another lease, phase, cursor or fence) | refused as `GenerationExists` (`promoted = false`, no staging residue); nothing written or removed |
-| present, not openable (garbage, another generation's bytes) | refused as `GenerationExists`; left untouched |
+| present, not openable (garbage, another generation's bytes) or sealed under another key epoch | refused as `GenerationExists`; left untouched |
 | any other read failure | `Stage` I/O failure, nothing written |
 
 Reading first (instead of attempting the promote and catching `GenerationExists`) matters: a failed
@@ -226,7 +226,7 @@ that is not part of this slice. The R4 authority check runs first, so a stale ow
 the committed owner's candidate.
 
 Proof: four cases in `gate4d_journal_durable_test` (absent → written, identical → adopted with zero
-creates and an unchanged directory; a different, garbage and wrong-generation candidate refused and
+creates and an unchanged directory; a different, garbage, wrong-generation and other-key-epoch candidate refused and
 unchanged; a stale owner or missing binding refused before the read; a non-absence read failure) and
 five new cases in `gate4d_root_binding_test` (the retry adopts and the directory is byte-identical,
 repeated failed retries leave no residue and the next retry still adopts, a different candidate is
@@ -240,6 +240,11 @@ untouched, a stale owner cannot adopt).
 - R2B remainder: discarding a candidate that differs from the retry's manifest or cannot be opened
   (it needs a relocation primitive that preserves the bytes for reconciliation), and recovery when
   the root-named envelope exists but semantic open refuses.
+- Bounded generation reads: `DurableFs::read` returns the whole file, so a retry (like resume and
+  every other generation read in the crate) loads an oversized file before the envelope is
+  parsed. A crate-wide bounded-read primitive (a size limit enforced before the allocation, applied
+  to journal, page, marker and root generation reads) is a separate slice; it is recorded as an
+  acceptance criterion on #359 and not changed here.
 - Successor-relation guard at the checkpoint (immutable fields, allowed phase transition,
   non-regressive cursor) unless the first caller builds manifests only through the transition
   constructors and proves it.

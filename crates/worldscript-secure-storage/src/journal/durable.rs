@@ -11,6 +11,7 @@ use crate::durable::{
     generation_path, stage_and_promote_envelope, DurableFs, PromotedGeneration, StageFailure,
     StageRequest, WriteOperationId,
 };
+use crate::envelope::parse_envelope;
 use crate::identity::RecordIdentity;
 use crate::marker::content_digest;
 use crate::record_class::RecordClass;
@@ -266,7 +267,10 @@ fn adopt_identical_candidate<F: DurableFs>(
 ) -> Result<PublishedManifest, JournalDurableError> {
     let identity = migration_identity(&manifest.operation_id)?;
     let identical = JournalManifest::open(ctx.key, &identity, manifest.journal_revision, bytes)
-        .is_ok_and(|opened| opened == *manifest);
+        .is_ok_and(|opened| opened == *manifest)
+        // QNBS-v3: open authenticates the header and checks schema and generation; the promote also pins key_epoch, so an adopted candidate must carry exactly that epoch.
+        && parse_envelope(bytes)
+            .is_ok_and(|parsed| parsed.header().key_epoch == manifest_meta(manifest).key_epoch);
     if identical {
         Ok(PublishedManifest {
             content_digest: content_digest(bytes),
