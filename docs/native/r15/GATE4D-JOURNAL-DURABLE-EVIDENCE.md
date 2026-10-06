@@ -20,6 +20,8 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::promote_page` (crate-private) | `JournalPage::seal` + promote + `JournalPage::open` readback |
 | `journal::promote_page_fenced` | Public page mutation: `with_fence` + R4 committed-binding check + crate-private `promote_page` |
 | `journal::assert_manifest_promote_authority` / `assert_page_promote_authority` | Pure R4 predicates: the caller's token against the root's committed `Option<&LiveMigration>` |
+| `journal::assert_binding_successor` | Pure B2b-1 predicate: a binding advance is the CAS successor (same operation and fence, revision + 1) of the committed binding |
+| `authority::advance_live_migration` | B2b-1: under `root_commit_mutex`, verify the successor and the durable manifest generation, then commit a root carrying the new binding |
 | `journal::load_manifest_generation` | Load one manifest generation from a journal record directory |
 | `journal::load_authoritative_manifest` | Resume the generation the committed root names, then bind its exact envelope digest |
 | `journal::with_fence` / `acquire_journal_durable_guard` | Mutex + `assert_fence` before I/O |
@@ -120,17 +122,58 @@ Boundary, stated so it is not read as more than it is:
 Proof: the R4 cases in `gate4d_journal_durable_test`, each asserting zero `create_new` calls and
 no new generation on disk for a refusal, and `NoListFs` (no `list_dir`) for the admitted path.
 
-## Still residual after R4
+## B2b-1 — authenticated root binding advance (`r → r+1`)
 
-- Root `LiveMigration` advancement, under its own proof. Restart does not perform it.
-- R2B: recovery when the root-named envelope exists but semantic open refuses.
-- A stale copy of the committed binding, and the cross-process lease CAS (the same boundary as R4).
-- Root-bound `key_epoch` alignment before any later root advance.
+`authority::advance_live_migration` commits a root whose live-migration binding is the journal
+owner's next revision (§5.4). Under `root_commit_mutex` it re-reads the committed root and requires
+that root to bind a live migration, that the advance be the CAS successor of that binding
+(`assert_binding_successor`: same `operation_id`, same fencing generation, `journal_revision + 1`),
+and that the manifest generation it names be durable, authenticate under the journal key and hash
+to the binding's `manifest_digest` (`load_authoritative_manifest`: exact path, no `list_dir`, no
+sibling read). Only then does it commit a root that keeps the catalog, key route and active epoch,
+swaps in the new binding and records the operation's own positive fence as `root_commit_evidence`
+(an ordinary commit records fence `0` and keeps copying the binding forward unchanged).
+
+| Advance | Result |
+|---------|--------|
+| root binds no live migration | `NoLiveMigration` |
+| other `operation_id` | `LiveMigration(LiveBindingMismatch)` |
+| other fencing generation | `LiveMigration(StaleMigrationOwner)` |
+| revision at or below the committed one | `LiveMigration(StaleJournalRevision)` |
+| revision beyond `committed + 1`, even if durable | `LiveMigration(LiveBindingMismatch)` |
+| named generation absent | `Journal(Authority(RecoveryRequired))` |
+| digest differs from the durable bytes | `Journal(Authority(LiveBindingMismatch))` |
+
+The comparison is against the binding read from the root under the lock, never against a copy the
+caller carries, so a stale owner that holds an older binding is refused (this carries the CodeAnt
+disposition on #988 for the advance itself). The journal read takes no journal mutex and no journal
+byte is written or deleted, so the root lock is the only lock taken. Before step F the prior root
+and binding stay authority.
+
+Boundary: nothing in the crate yet calls the advance, bind and clear transitions are not
+implemented, and the promote functions still receive their committed binding from the caller. The
+coordinator that holds the root lock across promote and advance is a later slice.
+
+Proof: `gate4d_root_binding_test` (7 cases): the committed advance changes only the binding and
+evidence and leaves every journal byte untouched; no bound migration; another operation, another
+fence, the committed revision and a skipped revision; a wrong digest; an absent generation; a stale
+owner after the root moved on; an ordinary commit keeping the advanced binding.
+
+## Still residual after B2b-1
+
+- Binding transitions other than the advance: bind (bootstrap) and clear (terminal), owner takeover
+  with a new fence, and the coordinator that composes promote and advance under the root lock.
+- R2B: recovery when the root-named envelope exists but semantic open refuses; it needs root writes
+  and therefore follows the binding transitions.
+- A stale copy of the binding passed to the promote functions, and the cross-process lease CAS.
+- Root-bound `key_epoch` alignment: §8.3 fixes first-time enable at epoch 1 (the current constant),
+  but the contract does not say which epoch seals the journal during rotation, so that needs a
+  contract decision with the rotation slice.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
 
 ## Explicit non-goals (journal durable promotion)
 
-- Root `LiveMigration` binding update.
+- Root `LiveMigration` binding bootstrap and clear (the advance is covered by B2b-1 above).
 - Adopting a manifest generation ahead of the root.
 - Cross-process lease CAS.
 - Mixed-key inventory conversion (Slice C+).
@@ -139,9 +182,10 @@ no new generation on disk for a refusal, and `NoListFs` (no `list_dir`) for the 
 ## Tests
 
 Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, and 9 R4 caller-authority cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (7 B2b-1 binding-advance cases).
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
 `with_fence_holds_mutex_during_closure` in `journal::durable::mutex_proof`.
 
-Gate 4D overall status: **IN PROGRESS**. B2a resume selection and R4 promote-time caller authority
-are in scope above; B2 is not terminal.
+Gate 4D overall status: **IN PROGRESS**. B2a resume selection, R4 promote-time caller authority
+and the B2b-1 root binding advance are in scope above; B2 is not terminal.

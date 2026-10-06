@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** add `advance_live_migration`, which commits a root whose live-migration
+  binding is the journal owner's next revision. Under the root lock it requires the advance to be
+  the CAS successor of the committed binding (same operation and fence, revision + 1) and the
+  named manifest generation to be durable, authenticated and equal to the binding's digest. It
+  writes no journal byte and nothing in the crate calls it yet; bind, clear, takeover and the
+  promote-plus-advance coordinator stay later slices. PR #989.
 - **R-15 Gate 4D:** refuse a stale caller's journal promote before any I/O.
   `promote_manifest_fenced` and `promote_page_fenced` now take the root's committed
   `LiveMigration` and admit only that binding's owner at its next manifest revision, or its
