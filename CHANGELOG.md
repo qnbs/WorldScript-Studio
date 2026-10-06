@@ -10,9 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **R-15 Gate 4D:** add `advance_live_migration`, which commits a root whose live-migration
   binding is the journal owner's next revision. Under the root lock it requires the advance to be
   the CAS successor of the committed binding (same operation and fence, revision + 1) and the
-  named manifest generation to be durable, authenticated and equal to the binding's digest. It
-  writes no journal byte and nothing in the crate calls it yet; bind, clear, takeover and the
-  promote-plus-advance coordinator stay later slices. PR #989.
+  named manifest generation to be durable, authenticated and equal to the binding's digest, and it
+  syncs the journal directory before the root is published. It writes no journal byte and nothing
+  in the crate calls it yet; bind, clear, takeover and the promote-plus-advance coordinator stay
+  later slices. PR #989.
 - **Dependencies:** raise the `sharp` override floor from 0.35.4 to 0.35.5 for GHSA-wq5f-xc86-pv6w
   (a librsvg memory-safety vulnerability that OSV published on 2026-10-06 and that fails the
   Security Audit on every PR) and cap it below 1.x. The fix has been on npm since 2026-09-27, so

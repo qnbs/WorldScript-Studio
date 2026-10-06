@@ -64,6 +64,8 @@ pub enum CatalogStep {
     ReadPage,
     CreateShardDir,
     RelocatePage,
+    /// Syncing the journal directory a binding advance names a manifest generation in.
+    SyncJournal,
 }
 
 /// Why the persisted catalog cannot be trusted. Ordinary reads and writes stop (§7).
@@ -333,8 +335,9 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
             .installation_scope_id
             .ok_or(AuthorityError::NoInstallationScope)?,
     };
+    let mut journal_durability = DirectoryDurability::Confirmed;
     if let Some(advance) = advance {
-        verify_binding_advance(fs, current.as_ref(), advance)?;
+        journal_durability = verify_binding_advance(fs, current.as_ref(), advance)?;
     }
     let plan = ChangePlan::new(current, commit.change)?;
     let target = RootTarget {
@@ -369,18 +372,23 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
         held,
     };
     let mut committed = commit_root(fs, provider, layout, request)?;
-    // `Confirmed` only if every page directory sync was too, not just the slot and pointer ones.
-    committed.directories = all_confirmed([committed.directories, pages_durability]);
+    // `Confirmed` only if every page and journal directory sync was too, not just the slot and
+    // pointer ones.
+    committed.directories = all_confirmed([
+        all_confirmed([committed.directories, pages_durability]),
+        journal_durability,
+    ]);
     Ok(committed)
 }
 
 /// Proves `advance` against the root read under the held lock: it is the CAS successor of the
-/// committed binding, and the manifest generation it names is durable and authenticates.
+/// committed binding, and the manifest generation it names is durable and authenticates. Returns
+/// the durability of the journal directory sync that makes that generation's entry durable.
 fn verify_binding_advance<F: DurableFs>(
     fs: &mut F,
     current: Option<&LoadedCatalog>,
     advance: &BindingAdvance<'_>,
-) -> Result<(), AuthorityError> {
+) -> Result<DirectoryDurability, AuthorityError> {
     let committed = current
         .and_then(|catalog| catalog.root.live_migration.as_ref())
         .ok_or(AuthorityError::NoLiveMigration)?;
@@ -393,7 +401,14 @@ fn verify_binding_advance<F: DurableFs>(
         advance.journal.operation,
     );
     load_authoritative_manifest(&mut journal, advance.next).map_err(AuthorityError::Journal)?;
-    Ok(())
+    // The read takes no journal mutex, so it can see a generation whose directory entry a concurrent
+    // promote has linked but not yet synced. Sync it here: the root must never name a manifest that
+    // a crash could still lose.
+    fs.sync_dir(advance.journal.dir)
+        .map_err(|error| AuthorityError::Io {
+            step: CatalogStep::SyncJournal,
+            kind: error.kind(),
+        })
 }
 
 /// Whether `commit` keeps the committed root's key route and active epoch.

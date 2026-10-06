@@ -1,7 +1,10 @@
 //! Gate 4D B2b-1: advancing the root's live-migration binding to the journal owner's next revision
 //! (§5.4, §10.1.1).
 
+use std::ffi::OsString;
 use std::fs;
+use std::fs::File;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -10,11 +13,12 @@ use worldscript_secure_storage::{
     advance_live_migration, commit_catalog_change, commit_root, content_digest,
     empty_inventory_digest, empty_journal_page_set_digest, generation_path, load_catalog,
     operation_type, phase_code, promote_manifest_fenced, write_key_epoch, AuthorityError,
-    BindingAdvance, CatalogChange, CatalogCommit, InstallationScopeId, JournalDurableContext,
-    JournalDurableError, JournalManifest, JournalSource, KeyEpochCommit, KeyEpochRecord,
-    KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog, MigrationExecutionError,
-    MigrationFence, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
-    RootCommitState, RootKeyRefV1, RootLayout, StdFs, WriteOperationId,
+    BindingAdvance, CatalogChange, CatalogCommit, DirectoryDurability, DurableFs,
+    InstallationScopeId, JournalDurableContext, JournalDurableError, JournalManifest,
+    JournalSource, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration,
+    LoadedCatalog, MigrationExecutionError, MigrationFence, RootBody, RootCommitEvidence,
+    RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout,
+    StdFs, WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -210,6 +214,19 @@ impl Fixture {
     }
 
     fn advance(&mut self, next: &LiveMigration) -> Result<u64, AuthorityError> {
+        let key_ref = self.key_ref.clone();
+        self.advance_with(&mut StdFs, next, &key_ref, 1)
+            .map(|committed| committed.root_generation)
+    }
+
+    /// An advance over `fs` under the given key route and epoch.
+    fn advance_with<F: DurableFs>(
+        &mut self,
+        fs: &mut F,
+        next: &LiveMigration,
+        root_key_ref: &RootKeyRefV1,
+        active_key_epoch: u64,
+    ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
         let key = journal_key();
         let op = WriteOperationId::generate().unwrap();
@@ -220,18 +237,17 @@ impl Fixture {
                 dir: &self.journal_dir,
                 operation: &op,
             },
-            root_key_ref: &self.key_ref,
-            active_key_epoch: 1,
+            root_key_ref,
+            active_key_epoch,
         };
         advance_live_migration(
-            &mut StdFs,
+            fs,
             &mut self.provider,
             RootLayout {
                 root_dir: &root_dir,
             },
             advance,
         )
-        .map(|committed| committed.root_generation)
     }
 
     fn journal_files(&self) -> Vec<(String, Vec<u8>)> {
@@ -253,6 +269,63 @@ impl Fixture {
 impl Drop for Fixture {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.base);
+    }
+}
+
+/// Records every directory sync and every atomic rename (the root pointer move), in call order.
+struct RecordingFs {
+    inner: StdFs,
+    log: Vec<String>,
+}
+
+impl RecordingFs {
+    fn new() -> Self {
+        Self {
+            inner: StdFs,
+            log: Vec::new(),
+        }
+    }
+}
+
+impl DurableFs for RecordingFs {
+    type File = File;
+
+    fn create_new(&mut self, path: &Path) -> io::Result<File> {
+        self.inner.create_new(path)
+    }
+
+    fn sync_file(&mut self, file: &mut File) -> io::Result<()> {
+        self.inner.sync_file(file)
+    }
+
+    fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+        self.inner.read(path)
+    }
+
+    fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.link_no_replace(from, to)
+    }
+
+    fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        self.inner.remove_file(path)
+    }
+
+    fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+        self.log.push(format!("sync_dir {}", dir.display()));
+        self.inner.sync_dir(dir)
+    }
+
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> {
+        self.inner.list_dir(dir)
+    }
+
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.log.push(format!("rename_replace {}", to.display()));
+        self.inner.rename_replace(from, to)
+    }
+
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        self.inner.create_dir_all(dir)
     }
 }
 
@@ -424,4 +497,47 @@ fn an_ordinary_catalog_commit_keeps_the_advanced_binding() {
     assert_eq!(after.live_migration, Some(s.next.clone()));
     assert_eq!(after.commit_evidence.operation_id, "ordinary-op");
     assert_eq!(after.commit_evidence.fencing_generation, 0);
+}
+
+#[test]
+fn advance_syncs_the_journal_directory_before_the_root_is_published() {
+    let mut s = scenario();
+    let key_ref = s.fixture.key_ref.clone();
+    let mut fs = RecordingFs::new();
+    s.fixture
+        .advance_with(&mut fs, &s.next, &key_ref, 1)
+        .unwrap();
+    let journal_sync = format!("sync_dir {}", s.fixture.journal_dir.display());
+    let synced = fs
+        .log
+        .iter()
+        .position(|entry| *entry == journal_sync)
+        .unwrap_or_else(|| panic!("journal directory not synced: {:?}", fs.log));
+    let published = fs
+        .log
+        .iter()
+        .position(|entry| entry.starts_with("rename_replace"))
+        .unwrap_or_else(|| panic!("root pointer not published: {:?}", fs.log));
+    assert!(synced < published, "{:?}", fs.log);
+}
+
+#[test]
+fn advance_cannot_change_the_key_route_or_epoch() {
+    let mut s = scenario();
+    let before = s.fixture.loaded().root;
+    let key_ref = s.fixture.key_ref.clone();
+    assert_eq!(
+        s.fixture
+            .advance_with(&mut StdFs, &s.next, &key_ref, 2)
+            .unwrap_err(),
+        AuthorityError::KeyRotationNotAdmitted
+    );
+    let other_route = s.fixture.provider.provision_epoch_key(2).unwrap();
+    assert_eq!(
+        s.fixture
+            .advance_with(&mut StdFs, &s.next, &other_route, 1)
+            .unwrap_err(),
+        AuthorityError::KeyRotationNotAdmitted
+    );
+    assert_eq!(s.fixture.loaded().root, before);
 }

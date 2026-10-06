@@ -147,17 +147,24 @@ swaps in the new binding and records the operation's own positive fence as `root
 The comparison is against the binding read from the root under the lock, never against a copy the
 caller carries, so a stale owner that holds an older binding is refused (this carries the CodeAnt
 disposition on #988 for the advance itself). The journal read takes no journal mutex and no journal
-byte is written or deleted, so the root lock is the only lock taken. Before step F the prior root
-and binding stay authority.
+byte is written or deleted, so the root lock is the only lock taken. Because that read can see a
+generation whose directory entry a concurrent promote has linked but not yet synced, the advance
+syncs the journal directory before the root is published, so the root never names a manifest that a
+crash could lose; the sync's durability is folded into `RootCommitted.directories`, and a failed
+sync is `AuthorityError::Io { step: SyncJournal, .. }` with nothing committed. A caller-supplied key
+route or epoch that differs from the committed root is `KeyRotationNotAdmitted`, as for any
+catalog commit. Before step F the prior root and binding stay authority.
 
 Boundary: nothing in the crate yet calls the advance, bind and clear transitions are not
 implemented, and the promote functions still receive their committed binding from the caller. The
 coordinator that holds the root lock across promote and advance is a later slice.
 
-Proof: `gate4d_root_binding_test` (7 cases): the committed advance changes only the binding and
+Proof: `gate4d_root_binding_test` (9 cases): the committed advance changes only the binding and
 evidence and leaves every journal byte untouched; no bound migration; another operation, another
 fence, the committed revision and a skipped revision; a wrong digest; an absent generation; a stale
-owner after the root moved on; an ordinary commit keeping the advanced binding.
+owner after the root moved on; an ordinary commit keeping the advanced binding; the journal
+directory is synced before the root pointer moves (recorded call order); a different key route or
+epoch is refused.
 
 ## Still residual after B2b-1
 
@@ -182,7 +189,7 @@ owner after the root moved on; an ordinary commit keeping the advanced binding.
 ## Tests
 
 Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, and 9 R4 caller-authority cases).
-Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (7 B2b-1 binding-advance cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases).
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
 `with_fence_holds_mutex_during_closure` in `journal::durable::mutex_proof`.
