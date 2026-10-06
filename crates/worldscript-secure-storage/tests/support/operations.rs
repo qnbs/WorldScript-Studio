@@ -362,6 +362,24 @@ pub fn acquire_shared_until_available(scope: AdmissionScope<'_>) -> SharedAdmiss
     poll_until_admitted("shared admission", scope, SharedAdmissionGuard::try_acquire)
 }
 
+/// Polls a nonblocking storage operation until it resolves to `Ok(_)` or `Err(_)`, retrying `Ok(None)`.
+///
+/// Use it where the test holds no admission, so `Ok(None)` can only be the legal eventual-release
+/// delay described above. A test that asserts `Ok(None)` because it deliberately holds admission
+/// calls the operation directly instead.
+pub fn poll_admitted<T, E>(mut operation: impl FnMut() -> Result<Option<T>, E>) -> Result<T, E> {
+    let deadline = Instant::now() + ADMISSION_RELEASE_DEADLINE;
+    loop {
+        match operation()? {
+            Some(value) => return Ok(value),
+            None if Instant::now() >= deadline => {
+                panic!("nonblocking operation stayed unadmitted after bounded retries")
+            }
+            None => thread::sleep(ADMISSION_RETRY_INTERVAL),
+        }
+    }
+}
+
 fn configured_provider(base: &Path, root: &Path) -> MemoryKeyProvider {
     let mut provider = MemoryKeyProvider::new();
     let scope = provider.read_or_provision_installation_scope().unwrap();
