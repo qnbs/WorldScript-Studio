@@ -746,6 +746,14 @@ fn an_old_owner_cannot_publish_after_the_authority_moved_to_a_new_owner() {
     assert!(!generation_path(&dir.0, R4_PAGE_GENERATION).exists());
 }
 
+/// The committed binding for a generation that really exists in `dir`, digest included.
+fn real_binding(dir: &Path, operation_id: &str, revision: u64, fence: u64) -> LiveMigration {
+    binding(
+        &manifest_at(operation_id, revision, fence),
+        content_digest(&file_bytes(dir, revision)),
+    )
+}
+
 fn dir_listing(dir: &Path) -> Vec<(String, Vec<u8>)> {
     let mut files: Vec<(String, Vec<u8>)> = std::fs::read_dir(dir)
         .unwrap()
@@ -782,7 +790,7 @@ fn published(
 fn publish_writes_an_absent_generation_and_adopts_an_identical_one_without_writing() {
     let dir = TempDir::new();
     promote(&dir.0, &manifest_at("pub-adopt", 1, 4));
-    let live = committed_at("pub-adopt", 1, 4);
+    let live = real_binding(&dir.0, "pub-adopt", 1, 4);
     let next = manifest_at("pub-adopt", 2, 4);
     let (first, creates) = published(&dir.0, &next, Some(&live));
     let first = first.unwrap();
@@ -803,7 +811,7 @@ fn publish_writes_an_absent_generation_and_adopts_an_identical_one_without_writi
 fn publish_refuses_a_different_or_unopenable_candidate_and_changes_nothing() {
     let dir = TempDir::new();
     promote(&dir.0, &manifest_at("pub-differs", 1, 4));
-    let live = committed_at("pub-differs", 1, 4);
+    let live = real_binding(&dir.0, "pub-differs", 1, 4);
     let next = manifest_at("pub-differs", 2, 4);
     published(&dir.0, &next, Some(&live)).0.unwrap();
     let listing = dir_listing(&dir.0);
@@ -925,7 +933,7 @@ fn publish_guarded(
 fn publish_refuses_a_stale_owner_before_any_read_of_the_generation() {
     let dir = TempDir::new();
     promote(&dir.0, &manifest_at("pub-stale", 1, 4));
-    let live = committed_at("pub-stale", 1, 4);
+    let live = real_binding(&dir.0, "pub-stale", 1, 4);
     let next = manifest_at("pub-stale", 2, 4);
     published(&dir.0, &next, Some(&live)).0.unwrap();
     let listing = dir_listing(&dir.0);
@@ -952,7 +960,7 @@ fn publish_refuses_a_stale_owner_before_any_read_of_the_generation() {
 fn publish_refuses_an_oversized_candidate_without_loading_it() {
     let dir = TempDir::new();
     promote(&dir.0, &manifest_at("pub-big", 1, 4));
-    let live = committed_at("pub-big", 1, 4);
+    let live = real_binding(&dir.0, "pub-big", 1, 4);
     let next = manifest_at("pub-big", 2, 4);
     let path = generation_path(&dir.0, 2);
     // One byte over the bound: only the bounded read may touch it, and it is refused untouched.
@@ -1024,4 +1032,63 @@ fn publish_reports_a_read_failure_other_than_absence_as_a_stage_io_failure() {
         StageFailureKind::Io(io::ErrorKind::PermissionDenied)
     ));
     assert!(!stage.promoted);
+}
+
+#[test]
+fn publish_refuses_a_non_successor_even_when_it_already_exists_as_a_candidate() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("pub-succ", 1, 4));
+    let live = real_binding(&dir.0, "pub-succ", 1, 4);
+    let mut jump = manifest_at("pub-succ", 2, 4);
+    jump.phase = phase_code::CONVERT;
+    // The jump is already durable; it authenticates and equals the manifest, so only the
+    // successor relation stops it from being adopted.
+    promote_candidate(&dir.0, &jump, &live);
+    let listing = dir_listing(&dir.0);
+    let (result, creates) = published(&dir.0, &jump, Some(&live));
+    assert_eq!(
+        result,
+        Err(JournalDurableError::Authority(
+            MigrationExecutionError::InvalidPhaseTransition
+        ))
+    );
+    assert_eq!(creates, 0);
+    assert_eq!(dir_listing(&dir.0), listing);
+}
+
+fn promote_candidate(dir: &Path, manifest: &JournalManifest, committed: &LiveMigration) {
+    let fence = MigrationFence::from_manifest(manifest);
+    let op = write_op();
+    let key = key();
+    let mut fs = StdFs;
+    let mut ctx = durable_ctx(&mut fs, &key, dir, &op);
+    promote_manifest_fenced(&mut ctx, manifest, &fence, Some(committed)).unwrap();
+}
+
+#[test]
+fn an_oversized_root_named_generation_is_corrupt_and_never_loaded() {
+    let dir = TempDir::new();
+    promote(&dir.0, &manifest_at("big-load", 1, 4));
+    let live = real_binding(&dir.0, "big-load", 1, 4);
+    let path = generation_path(&dir.0, 1);
+    std::fs::remove_file(&path).unwrap();
+    std::fs::write(&path, vec![0xAA; MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES + 1]).unwrap();
+    let op = write_op();
+    let key = key();
+    let mut fs = ReadGuardFs {
+        inner: StdFs,
+        bounded_reads: true,
+    };
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, &dir.0, &op);
+    let corrupt = JournalDurableError::Journal(JournalError::Corrupt(
+        "manifest generation exceeds the envelope bound",
+    ));
+    assert_eq!(
+        load_authoritative_manifest(&mut ctx, &live),
+        Err(corrupt.clone())
+    );
+    assert_eq!(
+        load_manifest_generation(&mut ctx, "big-load", 1),
+        Err(corrupt)
+    );
 }
