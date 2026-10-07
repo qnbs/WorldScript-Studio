@@ -42,6 +42,7 @@ fn bootstrap_manifest(operation_id: &str) -> JournalManifest {
         page_count: 0,
         entry_count: 0,
         journal_page_set_digest: empty_journal_page_set_digest(),
+        final_inventory_captured: false,
         cursor_page_index: 0,
         cursor_entry_index: 0,
         has_lease_owner: false,
@@ -1042,6 +1043,7 @@ fn publish_refuses_a_non_successor_even_when_it_already_exists_as_a_candidate() 
     let live = real_binding(&dir.0, "pub-succ", 1, 4);
     let mut jump = manifest_at("pub-succ", 2, 4);
     jump.phase = phase_code::CONVERT;
+    jump.final_inventory_captured = true;
     // The jump is already durable; it authenticates and equals the manifest, so only the
     // successor relation stops it from being adopted.
     promote_candidate(&dir.0, &jump, &live);

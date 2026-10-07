@@ -32,6 +32,7 @@ fn bootstrap_manifest(operation_id: &str) -> JournalManifest {
         page_count: 0,
         entry_count: 0,
         journal_page_set_digest: empty_journal_page_set_digest(),
+        final_inventory_captured: false,
         cursor_page_index: 0,
         cursor_entry_index: 0,
         has_lease_owner: false,
@@ -125,6 +126,7 @@ fn manifest_page_set_mismatch_is_refused() {
         page_count: 1,
         entry_count: 0,
         journal_page_set_digest: [0x44; 32],
+        final_inventory_captured: false,
         cursor_page_index: 0,
         cursor_entry_index: 0,
         has_lease_owner: false,
@@ -172,6 +174,7 @@ fn manifest_inventory_digest_must_match_entries() {
         page_count: 0,
         entry_count: 1,
         journal_page_set_digest: empty_journal_page_set_digest(),
+        final_inventory_captured: false,
         cursor_page_index: 0,
         cursor_entry_index: 0,
         has_lease_owner: false,
@@ -227,6 +230,7 @@ fn paged_inventory_verifier_matches_flat_digest() {
         page_count: 1,
         entry_count: 1,
         journal_page_set_digest: empty_journal_page_set_digest(),
+        final_inventory_captured: false,
         cursor_page_index: 0,
         cursor_entry_index: 0,
         has_lease_owner: false,
@@ -442,4 +446,97 @@ fn manifest_decode_rejects_control_characters_in_operation_id() {
         JournalManifest::decode(&bytes),
         Err(JournalError::InvalidOperationId)
     ));
+}
+
+fn manifest_in(phase: u32, final_inventory_captured: bool) -> JournalManifest {
+    let mut manifest = bootstrap_manifest("op-final");
+    manifest.journal_revision = 2;
+    manifest.phase = phase;
+    manifest.final_inventory_captured = final_inventory_captured;
+    manifest
+}
+
+/// The index of the one byte that carries the final-inventory flag.
+fn flag_offset() -> usize {
+    let off = manifest_in(phase_code::ADMIT, false).encode().unwrap();
+    let on = manifest_in(phase_code::ADMIT, true).encode().unwrap();
+    let diff: Vec<usize> = (0..off.len()).filter(|&i| off[i] != on[i]).collect();
+    assert_eq!(diff.len(), 1, "the flag is exactly one byte");
+    diff[0]
+}
+
+#[test]
+fn the_final_inventory_flag_round_trips_and_is_one_strict_byte() {
+    for (phase, flag) in [
+        (phase_code::ADMIT, false),
+        (phase_code::ADMIT, true),
+        (phase_code::CONVERT, true),
+        (phase_code::DONE, true),
+        (phase_code::RECOVERY_REQUIRED, false),
+        (phase_code::RECOVERY_REQUIRED, true),
+    ] {
+        let manifest = manifest_in(phase, flag);
+        let bytes = manifest.encode().unwrap();
+        assert_eq!(JournalManifest::decode(&bytes).unwrap(), manifest);
+    }
+    let mut bytes = manifest_in(phase_code::ADMIT, true).encode().unwrap();
+    bytes[flag_offset()] = 2;
+    assert_eq!(
+        JournalManifest::decode(&bytes),
+        Err(JournalError::Corrupt(
+            "final inventory flag is neither 0 nor 1"
+        ))
+    );
+    let good = manifest_in(phase_code::ADMIT, true).encode().unwrap();
+    assert!(JournalManifest::decode(&good[..good.len() - 1]).is_err());
+    let mut trailing = good;
+    trailing.push(0);
+    assert!(JournalManifest::decode(&trailing).is_err());
+}
+
+#[test]
+fn the_final_inventory_flag_must_agree_with_the_phase() {
+    let disagrees = Err(JournalError::Corrupt(
+        "final inventory flag disagrees with the phase",
+    ));
+    // Before the write barrier only a preliminary inventory can exist.
+    for phase in [
+        phase_code::BOOTSTRAP_TARGET,
+        phase_code::DISCOVER,
+        phase_code::PREPARE,
+    ] {
+        assert_eq!(
+            manifest_in(phase, true).encode(),
+            disagrees,
+            "phase {phase}"
+        );
+    }
+    // From `CONVERT` on the work runs on the final inventory.
+    for phase in [
+        phase_code::CONVERT,
+        phase_code::VERIFY,
+        phase_code::COMMIT,
+        phase_code::RETIRE_OLD_AUTHORITY,
+        phase_code::FINALIZE,
+        phase_code::DONE,
+    ] {
+        assert_eq!(
+            manifest_in(phase, false).encode(),
+            disagrees,
+            "phase {phase}"
+        );
+    }
+    // A manifest whose bytes already break the rule is refused on decode too.
+    let mut bytes = manifest_in(phase_code::ADMIT, false).encode().unwrap();
+    bytes[flag_offset()] = 1;
+    let admitted = JournalManifest::decode(&bytes).unwrap();
+    assert!(admitted.final_inventory_captured);
+    let mut forged = manifest_in(phase_code::DISCOVER, false).encode().unwrap();
+    forged[flag_offset()] = 1;
+    assert_eq!(
+        JournalManifest::decode(&forged),
+        Err(JournalError::Corrupt(
+            "final inventory flag disagrees with the phase"
+        ))
+    );
 }

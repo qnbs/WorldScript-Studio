@@ -31,7 +31,10 @@ pub struct SealedPage<'a> {
 /// barrier, §10.3). Refused: a stale fence, a terminal journal (`TerminalPhase`), `CONVERT` or
 /// later and a journal that already made conversion progress (`FrozenFieldChanged`: the inventory
 /// is frozen), and every other phase (`InvalidPhaseTransition`): `BOOTSTRAP_TARGET` has no inventory
-/// yet and in `PREPARE` ordinary writes are admitted, so a snapshot taken there would go stale. The pages must be indexed
+/// yet and in `PREPARE` ordinary writes are admitted, so a snapshot taken there would go stale.
+/// The capture that runs in `ADMIT` is the final one: it sets `final_inventory_captured` in the same
+/// successor, and once that is set the inventory is immutable, so a further capture is refused
+/// (`FrozenFieldChanged`). The pages must be indexed
 /// `0..n` without gap or duplicate, hold globally ascending valid entries, and each carry a
 /// generation between `1` and the new revision and at least one entry (an empty inventory is no
 /// page at all, its canonical form): a page written for this capture carries the new
@@ -52,6 +55,8 @@ pub fn capture_inventory(
     let ordered = ordered_pages(pages)?;
     let refs = page_refs(&ordered, revision)?;
     let mut next = manifest.clone();
+    // Only the capture that runs behind `ADMIT`'s barrier is the final one (§10.3).
+    next.final_inventory_captured = manifest.phase == phase_code::ADMIT;
     next.journal_revision = revision;
     next.page_count = u32::try_from(ordered.len()).map_err(|_| JournalError::TooManyEntries)?;
     next.entry_count = entry_total(&ordered)?;
@@ -65,7 +70,8 @@ pub fn capture_inventory(
 }
 
 /// The inventory is captured in `DISCOVER` (preliminary) or `ADMIT` (final), before conversion
-/// starts and while nothing has been converted. `PREPARE` is excluded: ordinary writes are admitted
+/// starts, while nothing has been converted and, because the final inventory is immutable once
+/// captured, before the final capture. `PREPARE` is excluded: ordinary writes are admitted
 /// there until `ADMIT`'s barrier, so only the `ADMIT` snapshot can be the commit inventory.
 fn assert_inventory_open(manifest: &JournalManifest) -> Result<(), MigrationExecutionError> {
     let phase = manifest_phase(manifest);
@@ -74,7 +80,11 @@ fn assert_inventory_open(manifest: &JournalManifest) -> Result<(), MigrationExec
     }
     let cursor =
         JournalCheckpointCursor::new(manifest.cursor_page_index, manifest.cursor_entry_index);
-    if phase_reached(phase, phase_code::CONVERT) || cursor != JournalCheckpointCursor::EMPTY {
+    // The final inventory is the commit inventory: once captured it is immutable, so it is captured once.
+    if phase_reached(phase, phase_code::CONVERT)
+        || cursor != JournalCheckpointCursor::EMPTY
+        || manifest.final_inventory_captured
+    {
         return Err(MigrationExecutionError::FrozenFieldChanged);
     }
     if manifest.phase != phase_code::DISCOVER && manifest.phase != phase_code::ADMIT {
@@ -149,6 +159,8 @@ pub fn assert_capture_successor(
     expected.entry_count = next.entry_count;
     expected.inventory_digest = next.inventory_digest;
     expected.journal_page_set_digest = next.journal_page_set_digest;
+    // The capture sets the flag exactly when it runs in `ADMIT`.
+    expected.final_inventory_captured = prev.phase == phase_code::ADMIT;
     if *next == expected {
         Ok(())
     } else {

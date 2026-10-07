@@ -10,6 +10,7 @@ use super::state::{
     allows_phase_transition, is_terminal_phase, manifest_phase, phase_reached,
     validate_checkpoint_cursor, JournalCheckpointCursor, MigrationExecutionError,
 };
+use super::wire::{final_inventory_forbidden, final_inventory_required};
 
 /// Refuses a manifest that is not a valid successor of `prev`, the manifest the root names (§10.3).
 ///
@@ -29,6 +30,7 @@ pub fn assert_manifest_successor(
     assert_successor_revision(prev, next)?;
     assert_operation_kept(prev, next)?;
     assert_phase_successor(prev, next)?;
+    assert_final_inventory_successor(prev, next)?;
     assert_frozen_fields_kept(prev, next)?;
     assert_cursor_successor(prev, next)
 }
@@ -107,6 +109,24 @@ fn assert_phase_successor(
     Ok(())
 }
 
+/// The final-inventory flag (§10.3): reaching `CONVERT` or later needs it
+/// (`FinalInventoryNotCaptured`); it is never cleared and never set before `ADMIT`; and it turns
+/// from false to true only in a capture that runs inside `ADMIT`, never on entering `ADMIT` or any
+/// other transition (`FrozenFieldChanged`).
+fn assert_final_inventory_successor(
+    prev: &JournalManifest,
+    next: &JournalManifest,
+) -> Result<(), MigrationExecutionError> {
+    if final_inventory_required(next.phase) && !next.final_inventory_captured {
+        return Err(MigrationExecutionError::FinalInventoryNotCaptured);
+    }
+    let cleared = prev.final_inventory_captured && !next.final_inventory_captured;
+    let early = next.final_inventory_captured && final_inventory_forbidden(next.phase);
+    let set = next.final_inventory_captured && !prev.final_inventory_captured;
+    let by_capture = prev.phase == phase_code::ADMIT && next.phase == phase_code::ADMIT;
+    frozen_when(true, !(cleared || early || (set && !by_capture)))
+}
+
 fn assert_frozen_fields_kept(
     prev: &JournalManifest,
     next: &JournalManifest,
@@ -136,13 +156,14 @@ fn target_key(manifest: &JournalManifest) -> (bool, Option<[u8; 32]>) {
     )
 }
 
-/// The inventory captured in `ADMIT`: digest, counts and page-set digest.
-fn inventory(manifest: &JournalManifest) -> ([u8; 32], u32, u32, [u8; 32]) {
+/// The inventory captured in `ADMIT`: digest, counts, page-set digest and the final-capture flag.
+fn inventory(manifest: &JournalManifest) -> ([u8; 32], u32, u32, [u8; 32], bool) {
     (
         manifest.inventory_digest,
         manifest.entry_count,
         manifest.page_count,
         manifest.journal_page_set_digest,
+        manifest.final_inventory_captured,
     )
 }
 
