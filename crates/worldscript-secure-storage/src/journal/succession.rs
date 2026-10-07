@@ -57,14 +57,25 @@ fn assert_operation_kept(
     if next.fencing_generation != prev.fencing_generation {
         return Err(MigrationExecutionError::StaleMigrationOwner);
     }
-    let kept = next.operation_type == prev.operation_type
-        && next.source_epoch == prev.source_epoch
-        && next.target_epoch == prev.target_epoch
-        && next.inventory_version == prev.inventory_version;
-    if kept {
-        Ok(())
-    } else {
+    frozen_when(true, identity(prev) == identity(next))
+}
+
+/// Operation type, epochs and inventory version: fixed for the life of the operation.
+fn identity(manifest: &JournalManifest) -> (u32, u64, u64, u32) {
+    (
+        manifest.operation_type,
+        manifest.source_epoch,
+        manifest.target_epoch,
+        manifest.inventory_version,
+    )
+}
+
+/// `Ok` unless the freeze applies (`frozen`) and the field group changed (`!kept`).
+fn frozen_when(frozen: bool, kept: bool) -> Result<(), MigrationExecutionError> {
+    if frozen && !kept {
         Err(MigrationExecutionError::FrozenFieldChanged)
+    } else {
+        Ok(())
     }
 }
 
@@ -100,22 +111,36 @@ fn assert_frozen_fields_kept(
     // The freezes bind the successor's phase: entering `ADMIT` already keeps the key made durable in
     // `PREPARE`, and entering `CONVERT` already keeps the inventory captured in `ADMIT`.
     let phase = manifest_phase(next);
-    let target_key_kept = next.has_target_root_key_ref == prev.has_target_root_key_ref
-        && next.target_root_key_ref_digest == prev.target_root_key_ref_digest;
-    let inventory_kept = next.inventory_digest == prev.inventory_digest
-        && next.entry_count == prev.entry_count
-        && next.page_count == prev.page_count
-        && next.journal_page_set_digest == prev.journal_page_set_digest;
-    let recovery_kept = next.phase == phase_code::RECOVERY_REQUIRED
-        || next.recovery_reason_code == prev.recovery_reason_code;
-    let frozen_ok = (target_key_kept || !phase_reached(phase, phase_code::ADMIT))
-        && (inventory_kept || !phase_reached(phase, phase_code::CONVERT))
-        && recovery_kept;
-    if frozen_ok {
-        Ok(())
-    } else {
-        Err(MigrationExecutionError::FrozenFieldChanged)
-    }
+    frozen_when(
+        phase_reached(phase, phase_code::ADMIT),
+        target_key(prev) == target_key(next),
+    )?;
+    frozen_when(
+        phase_reached(phase, phase_code::CONVERT),
+        inventory(prev) == inventory(next),
+    )?;
+    frozen_when(
+        next.phase != phase_code::RECOVERY_REQUIRED,
+        next.recovery_reason_code == prev.recovery_reason_code,
+    )
+}
+
+/// The target key reference made durable in `PREPARE`.
+fn target_key(manifest: &JournalManifest) -> (bool, Option<[u8; 32]>) {
+    (
+        manifest.has_target_root_key_ref,
+        manifest.target_root_key_ref_digest,
+    )
+}
+
+/// The inventory captured in `ADMIT`: digest, counts and page-set digest.
+fn inventory(manifest: &JournalManifest) -> ([u8; 32], u32, u32, [u8; 32]) {
+    (
+        manifest.inventory_digest,
+        manifest.entry_count,
+        manifest.page_count,
+        manifest.journal_page_set_digest,
+    )
 }
 
 fn assert_cursor_successor(

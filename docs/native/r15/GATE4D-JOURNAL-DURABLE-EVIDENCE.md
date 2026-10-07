@@ -325,6 +325,12 @@ and is refused as `GenerationExists`. Discarding a stale own candidate (the disc
 resolves it; until then the takeover is correct but can be stuck after a crash between the publish
 and the root commit that outlasts the lease.
 
+The ordinary checkpoint does not consult the lease. An owner whose lease has expired but who has not
+been superseded may still checkpoint under its fence: §10.1 makes "the lock/CAS ... the authority that
+prevents an expired owner from resuming", not a clock, and lease expiry "is not by itself permission
+for the old owner" only in the sense that a new owner may now supersede it. Self-fencing on a lease the
+owner itself outlived is a lease-renewal policy for the slice that owns the lease fields.
+
 The clock is an explicit input: Core never reads one, and a lease is expired when `now >=
 lease_expires_unix_ms`. The caller supplies a trusted clock; a manipulated clock can claim early, which
 is the same trust the lease already places in whoever writes its expiry. Nothing calls the takeover

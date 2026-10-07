@@ -113,16 +113,7 @@ pub fn assert_takeover_successor(
             prev.journal_revision,
         ),
     )?;
-    let owned = next.has_lease_owner
-        && next
-            .lease_owner_id
-            .as_deref()
-            .is_some_and(|owner| !owner.is_empty());
-    let claimed = owned
-        && next
-            .lease_expires_unix_ms
-            .is_some_and(|expires| expires > now_unix_ms);
-    if !claimed {
+    if !holds_live_lease(next, now_unix_ms) {
         return Err(MigrationExecutionError::InvalidTakeoverLease);
     }
     if takeover_changes_only_ownership(prev, next) {
@@ -130,6 +121,19 @@ pub fn assert_takeover_successor(
     } else {
         Err(MigrationExecutionError::FrozenFieldChanged)
     }
+}
+
+/// A lease with a named owner that still runs at `now_unix_ms`.
+fn holds_live_lease(manifest: &JournalManifest, now_unix_ms: u64) -> bool {
+    let owner_named = manifest
+        .lease_owner_id
+        .as_deref()
+        .is_some_and(|owner| !owner.is_empty());
+    manifest.has_lease_owner
+        && owner_named
+        && manifest
+            .lease_expires_unix_ms
+            .is_some_and(|expires| expires > now_unix_ms)
 }
 
 /// No lease owner, or a lease that has run out at `now_unix_ms`.
