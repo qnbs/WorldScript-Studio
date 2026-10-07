@@ -343,9 +343,10 @@ fn resolve_conflict<F: DurableFs>(
         return Err(JournalDurableError::Stage(generation_exists()));
     }
     let path = generation_path(ctx.dir, manifest.journal_revision);
-    // QNBS-v3: the bytes are linked to their rejected name and synced before the original name is removed and the file is never loaded, so a crash keeps them under one of the two names.
-    relocate(&mut *ctx.fs, ctx.dir, &path, ctx.operation.as_str())
-        .map_err(JournalDurableError::Relocate)?;
+    // QNBS-v3: a fresh random tag per relocation, never the caller's operation id, so two discards cannot collide and relocate's retry branch, which reads both files whole, is never reached.
+    let tag = WriteOperationId::generate()
+        .map_err(|error| JournalDurableError::Journal(JournalError::Seal(error)))?;
+    relocate(&mut *ctx.fs, ctx.dir, &path, tag.as_str()).map_err(JournalDurableError::Relocate)?;
     promote_manifest(ctx, manifest).map(|promoted| PublishedManifest {
         content_digest: promoted.content_digest,
         adopted: false,

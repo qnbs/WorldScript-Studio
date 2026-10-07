@@ -199,7 +199,7 @@ no cycle; later callers must keep this order.
 Boundary: a retry after the middle crash window met `GenerationExists` for the candidate; B2b-3
 below adopts an identical candidate. Nothing calls the checkpoint yet.
 
-Proof: six cases in `gate4d_root_binding_test`: the checkpoint publishes and advances; no bound
+Proof: seven cases in `gate4d_root_binding_test`: the checkpoint publishes and advances; no bound
 migration; stale owner, another operation, the committed revision, a skipped revision and a fence
 mismatch; a different key route or epoch; a failed root commit leaving the manifest as an unadopted
 candidate; chained checkpoints and a repeated revision refused afterwards.
@@ -363,8 +363,14 @@ manifest is promoted:
 
 Relocation is the Gate 3 primitive used for the catalog pages of an uncommitted change
 (`relocate_leftovers`): the bytes are linked to their rejected name and synced before the original name
-is removed, so a crash leaves them under one of the two names, and the file is never loaded. The tag is
-derived from the per-call `WriteOperationId`, so two discards at one revision keep both candidates.
+is removed, so on a platform that confirms directory syncs a crash leaves them under one of the two
+names. The relocation itself never reads the file; the publish reads it bounded beforehand to decide
+whether it is the manifest. Preserving the bytes is a courtesy, not a requirement: §10.1.1 lets the
+candidate be discarded outright, so where a directory sync cannot be confirmed (the `NotConfirmed`
+result `relocate` does not act on) losing the rejected entry in a crash costs only diagnostic
+evidence, never authority. The tag is a fresh random identity generated for each relocation, never the
+caller's operation id, so two discards at one revision keep both candidates even when a caller reuses
+an operation id, and `relocate`'s retry branch (which reads both files whole) is never reached.
 
 Why this cannot orphan a root. A prepared root would have to name the candidate for the retention rule
 to protect it, and none can: `load_committed_root` and `commit_root` refuse with `PreparationPending`
@@ -382,7 +388,7 @@ Proof: six cases in `gate4d_root_binding_test` (a retry with a different manifes
 and preserves its bytes while the default policy still refuses, a takeover claim after the first claim's
 lease expired succeeds with a new claim, garbage and oversized candidates are preserved exactly, an
 identical candidate is adopted and never discarded, a refused manifest never discards, two discards at
-one revision keep both).
+one revision keep both, a reused operation id still keeps every candidate).
 
 ## Still residual after B2d
 
@@ -412,7 +418,7 @@ one revision keep both).
 ## Tests
 
 Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, 9 R4 caller-authority cases, 7 B2b-3 publish and bounded-read cases, 3 B2b-4 cases and 3 B2c takeover cases).
-Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases, 5 B2b-3 candidate-retry cases, 4 B2b-4 successor cases and 6 B2c takeover cases and 6 B2d discard cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases, 5 B2b-3 candidate-retry cases, 4 B2b-4 successor cases and 6 B2c takeover cases and 7 B2d discard cases).
 Unit: `crates/worldscript-secure-storage/tests/gate4d_migration_state_test.rs` (8 B2b-4 successor-relation cases and 5 B2c takeover cases beside the earlier state-machine cases).
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and

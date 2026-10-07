@@ -103,6 +103,8 @@ struct Fixture {
     key_ref: RootKeyRefV1,
     /// What the next checkpoint or takeover does with a differing durable candidate.
     conflict: CandidateConflict,
+    /// A write operation id every checkpoint and takeover reuses; a fresh one per call when `None`.
+    operation: Option<WriteOperationId>,
 }
 
 impl Fixture {
@@ -145,6 +147,7 @@ impl Fixture {
             scope,
             key_ref,
             conflict: CandidateConflict::Refuse,
+            operation: None,
         }
     }
 
@@ -276,7 +279,10 @@ impl Fixture {
     ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
         let key = journal_key();
-        let op = WriteOperationId::generate().unwrap();
+        let op = self
+            .operation
+            .clone()
+            .unwrap_or_else(|| WriteOperationId::generate().unwrap());
         let checkpoint = JournalCheckpoint {
             manifest,
             fence,
@@ -321,7 +327,10 @@ impl Fixture {
     ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
         let key = journal_key();
-        let op = WriteOperationId::generate().unwrap();
+        let op = self
+            .operation
+            .clone()
+            .unwrap_or_else(|| WriteOperationId::generate().unwrap());
         let fence = MigrationFence::from_manifest(claim);
         let takeover = JournalTakeoverCommit {
             claim: JournalCheckpoint {
@@ -1470,4 +1479,30 @@ fn two_discards_at_one_revision_keep_both_candidates() {
         .map(|(name, _)| name)
         .collect();
     assert_eq!(names.len(), 2);
+}
+
+#[test]
+fn a_reused_operation_id_still_keeps_every_discarded_candidate() {
+    let (mut fixture, _) = bound_at_zero();
+    // Every call below reuses one write operation id; each relocation still gets its own name.
+    fixture.operation = Some(WriteOperationId::generate().unwrap());
+    fixture.conflict = CandidateConflict::Quarantine;
+    let one = manifest_at(OPERATION, 1, FENCE);
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let first = candidate_bytes(&fixture, 1);
+    let second = rival_of(&one);
+    fail_root_commit_after_promote(&mut fixture, &second);
+    let second_bytes = candidate_bytes(&fixture, 1);
+    let mut third = rival_of(&one);
+    third.lease_owner_id = Some("owner-c".into());
+    fixture.checkpoint(&third).unwrap();
+    let mut rejected: Vec<Vec<u8>> = fixture
+        .rejected_files()
+        .into_iter()
+        .map(|(_, bytes)| bytes)
+        .collect();
+    rejected.sort();
+    let mut expected = vec![first, second_bytes];
+    expected.sort();
+    assert_eq!(rejected, expected);
 }
