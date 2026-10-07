@@ -17,15 +17,20 @@ use worldscript_secure_storage::{
 const SOURCE_EPOCH: u64 = 1;
 const TARGET_EPOCH: u64 = 2;
 
+/// A directory this test created: `create_dir` fails when the path already exists, so a leftover of
+/// an earlier process with the same id is skipped, never reused or removed.
 fn temp_base() -> PathBuf {
     static NEXT: AtomicU32 = AtomicU32::new(0);
-    let base = std::env::temp_dir().join(format!(
-        "wss-gate4d-retention-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    let _ = fs::remove_dir_all(&base);
-    base
+    loop {
+        let base = std::env::temp_dir().join(format!(
+            "wss-gate4d-retention-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        if fs::create_dir(&base).is_ok() {
+            return base;
+        }
+    }
 }
 
 fn binding() -> LiveMigration {
@@ -40,6 +45,7 @@ fn binding() -> LiveMigration {
 /// A rotation from epoch 1 (`ACTIVE`) to epoch 2 (`PREPARED`), each with a generation-1 record and
 /// its own key route; the records are sealed under the epoch-1 route, which is also the root's.
 struct Fixture {
+    base: PathBuf,
     root_dir: PathBuf,
     provider: MemoryKeyProvider,
     scope: InstallationScopeId,
@@ -49,7 +55,8 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let root_dir = temp_base().join("authority");
+        let base = temp_base();
+        let root_dir = base.join("authority");
         for slot in ["slot-a", "slot-b"] {
             fs::create_dir_all(root_dir.join(slot)).unwrap();
         }
@@ -59,6 +66,7 @@ impl Fixture {
         let target_ref = provider.provision_epoch_key(TARGET_EPOCH).unwrap();
         provider.unlock().unwrap();
         let fixture = Fixture {
+            base,
             root_dir,
             provider,
             scope,
@@ -167,6 +175,12 @@ impl Fixture {
                 .collect();
         names.sort();
         names
+    }
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.base);
     }
 }
 
