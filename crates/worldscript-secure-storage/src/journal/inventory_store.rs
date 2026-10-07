@@ -16,17 +16,18 @@
 //! streaming capture that seals, hashes and stages page by page is the extension for the very
 //! large inventories §10.1.1 allows, needed before a caller feeds one.
 
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use crate::durable::{
-    stage_and_promote_envelope, DirectoryDurability, DurableFs, PromotedGeneration, StageFailure,
+    generation_path, stage_and_promote_envelope, DirectoryDurability, DurableFs, StageFailure,
     StageFailureKind, StageStep, StagingResidue,
 };
 use crate::envelope::parse_envelope;
 use crate::root::LiveMigration;
 use crate::seal::Key;
 
-use super::capture::{ordered_pages, SealedPage};
+use super::capture::{assert_capture_successor, assert_page_not_empty, ordered_pages, SealedPage};
 use super::digest::{page_ref_for, InventoryDigestVerifier};
 use super::durable::{
     migration_page_identity, page_meta, stage_io, stage_request, with_fence, JournalDurableContext,
@@ -91,12 +92,20 @@ pub struct InventorySetWrite<'a> {
 ///
 /// Under the journal mutex and before any I/O: the caller must be the committed owner writing under
 /// the committed manifest ([`assert_page_promote_authority`]); `successor` must be a valid successor
-/// of it; the pages must be exactly the page set and inventory `successor` names (so the directory
-/// key cannot disagree with the pages); each page generation must lie in `1..=committed revision + 1`;
-/// and each envelope must open under the journal key to exactly its page. A refused store creates
-/// nothing, not even the directory. The pages are candidates until a manifest naming the digest is
-/// committed (§10.1.1), so they are written before it; every directory up to the journal directory is
-/// synced so a page cannot vanish after the manifest that names it is durable.
+/// of it and exactly what [`capture_inventory`](super::capture::capture_inventory) would build
+/// (inventory still open, only the revision and the inventory fields changed) and must encode; the
+/// pages must be indexed `0..n`, non-empty, and exactly the page set and inventory `successor` names
+/// (so the directory key cannot disagree with the pages); each page generation must lie in
+/// `1..=committed revision + 1`; and each envelope must open under the journal key, at its pinned key
+/// epoch, to exactly its page. A store refused by these checks creates nothing, not even the
+/// directory.
+///
+/// The pages are then written one by one, before the manifest that names the digest is committed
+/// (§10.1.1: candidates until then). An I/O failure partway leaves a durable prefix; a retry of the
+/// same set adopts every page whose exact bytes are already on disk (no new staging, its directory
+/// chain synced again) and continues with the first missing one, while a different file at a page
+/// generation is never replaced. Every directory up to the journal directory is synced so a page
+/// cannot vanish after the manifest that names it is durable.
 pub fn promote_inventory_set_fenced<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     set: &InventorySetWrite<'_>,
@@ -106,11 +115,12 @@ pub fn promote_inventory_set_fenced<F: DurableFs>(
             .map_err(JournalDurableError::Authority)?;
         assert_manifest_successor(set.committed_manifest, set.successor)
             .map_err(JournalDurableError::Authority)?;
+        assert_capture_successor(set.committed_manifest, set.successor)
+            .map_err(JournalDurableError::Authority)?;
         let ordered = verify_set(ctx, set)?;
         let mut durability = DirectoryDurability::Confirmed;
         for sealed in ordered {
-            let promoted = store_page(ctx, set, sealed)?;
-            durability = both(durability, promoted.directory);
+            durability = both(durability, store_page(ctx, set, sealed)?);
         }
         Ok(durability)
     })
@@ -129,6 +139,7 @@ fn verify_set<'a, F: DurableFs>(
     let mut verifier =
         InventoryDigestVerifier::new(set.successor.inventory_version, set.successor.entry_count)?;
     for sealed in &ordered {
+        assert_page_not_empty(sealed.page)?;
         assert_page_generation(set.committed_manifest, sealed.page)?;
         assert_envelope_is_page(ctx, set.committed_manifest, sealed)?;
         refs.push(page_ref_for(sealed.page, sealed.envelope)?);
@@ -194,17 +205,23 @@ fn assert_key_epoch(sealed: &SealedPage<'_>) -> Result<(), JournalDurableError> 
     }))
 }
 
-/// Creates the page directory, promotes the envelope into it and syncs the directory chain.
+/// Stores one page: adopts an identical page an earlier attempt already promoted, otherwise
+/// creates the page directory and promotes the envelope into it. Either way the directory chain up
+/// to the journal directory is synced.
 fn store_page<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     set: &InventorySetWrite<'_>,
     sealed: &SealedPage<'_>,
-) -> Result<PromotedGeneration, JournalDurableError> {
+) -> Result<DirectoryDurability, JournalDurableError> {
     let dir = inventory_page_dir(
         ctx.dir,
         &set.successor.journal_page_set_digest,
         sealed.page.page_index(),
     );
+    if is_already_stored(ctx, &dir, sealed)? {
+        // The earlier attempt may have stopped before its directories were durable.
+        return sync_chain(ctx, &dir, StagingResidue::None);
+    }
     ctx.fs
         .create_dir_all(&dir)
         .map_err(|error| JournalDurableError::Stage(stage_io(error)))?;
@@ -213,29 +230,46 @@ fn store_page<F: DurableFs>(
         sealed.page.page_index(),
     )?;
     let request = stage_request(&dir, &identity, page_meta(sealed.page), ctx.operation);
-    let mut promoted =
-        stage_and_promote_envelope(ctx.fs, ctx.key, &request, sealed.envelope.to_vec())?;
-    promoted.directory = both(promoted.directory, sync_parents(ctx, &dir, &promoted)?);
-    Ok(promoted)
+    let promoted = stage_and_promote_envelope(ctx.fs, ctx.key, &request, sealed.envelope.to_vec())?;
+    let above = dir.parent().unwrap_or(ctx.dir);
+    let synced = sync_chain(ctx, above, promoted.staging)?;
+    Ok(both(promoted.directory, synced))
 }
 
-/// Syncs every directory from the page directory's parent up to the journal directory. A failure
-/// here happens after the page was promoted, so it is reported as one (`promoted`, the real
-/// staging residue), never as an absent page.
-fn sync_parents<F: DurableFs>(
+/// Whether the exact bytes of this page generation are already on disk, left by an earlier attempt
+/// at the same set (a failure partway through the pages leaves a prefix). The read is bounded by the
+/// envelope's own length. Any other file at that name is not adopted: the immutable generation then
+/// refuses the promotion and the bytes already there stay untouched.
+fn is_already_stored<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     page_dir: &Path,
-    promoted: &PromotedGeneration,
+    sealed: &SealedPage<'_>,
+) -> Result<bool, JournalDurableError> {
+    let path = generation_path(page_dir, sealed.page.page_generation());
+    match ctx.fs.read_at_most(&path, sealed.envelope.len()) {
+        Ok(found) => Ok(found.is_some_and(|bytes| bytes == sealed.envelope)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(JournalDurableError::Stage(stage_io(error))),
+    }
+}
+
+/// Syncs `start` and every directory above it up to the journal directory. A failure here happens
+/// after the page was promoted, so it is reported as one (`promoted`, with the real staging
+/// residue), never as an absent page.
+fn sync_chain<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    start: &Path,
+    staging: StagingResidue,
 ) -> Result<DirectoryDurability, JournalDurableError> {
     let mut durability = DirectoryDurability::Confirmed;
-    let mut current = page_dir.parent();
+    let mut current = Some(start);
     while let Some(dir) = current {
         let synced = ctx.fs.sync_dir(dir).map_err(|error| {
             JournalDurableError::Stage(StageFailure {
                 step: StageStep::SyncDirectory,
                 kind: StageFailureKind::Io(error.kind()),
                 promoted: true,
-                staging: promoted.staging,
+                staging,
             })
         })?;
         durability = both(durability, synced);

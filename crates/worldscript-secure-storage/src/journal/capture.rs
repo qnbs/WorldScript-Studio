@@ -108,13 +108,46 @@ fn page_refs(
             if generation == 0 || generation > revision {
                 return Err(JournalError::GenerationMismatch.into());
             }
-            // The canonical form of an empty inventory is no page at all; an empty page would give it a second page-set digest.
-            if sealed.page.entries().is_empty() {
-                return Err(JournalError::InvalidDescriptorCount.into());
-            }
+            assert_page_not_empty(sealed.page)?;
             page_ref_for(sealed.page, sealed.envelope).map_err(MigrationExecutionError::from)
         })
         .collect()
+}
+
+/// The canonical form of an empty inventory is no page at all; an empty page would give it a second
+/// page-set digest.
+pub(super) fn assert_page_not_empty(page: &JournalPage) -> Result<(), JournalError> {
+    if page.entries().is_empty() {
+        Err(JournalError::InvalidDescriptorCount)
+    } else {
+        Ok(())
+    }
+}
+
+/// Refuses a successor that is not what [`capture_inventory`] would build from `prev`: the inventory
+/// must still be open ([`assert_inventory_open`]) and the successor may differ only in the revision
+/// and the four inventory fields, never in phase, cursor, lease or any other field. Whoever stores
+/// the pages of a capture applies this, because the generic successor relation alone would accept a
+/// hand-built manifest that changes the inventory outside the capture window.
+pub(super) fn assert_capture_successor(
+    prev: &JournalManifest,
+    next: &JournalManifest,
+) -> Result<(), MigrationExecutionError> {
+    assert_inventory_open(prev)?;
+    if next.phase != prev.phase {
+        return Err(MigrationExecutionError::InvalidPhaseTransition);
+    }
+    let mut expected = prev.clone();
+    expected.journal_revision = next.journal_revision;
+    expected.page_count = next.page_count;
+    expected.entry_count = next.entry_count;
+    expected.inventory_digest = next.inventory_digest;
+    expected.journal_page_set_digest = next.journal_page_set_digest;
+    if *next == expected {
+        Ok(())
+    } else {
+        Err(MigrationExecutionError::FrozenFieldChanged)
+    }
 }
 
 fn entry_total(ordered: &[&SealedPage<'_>]) -> Result<u32, MigrationExecutionError> {

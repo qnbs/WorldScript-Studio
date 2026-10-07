@@ -41,13 +41,14 @@ impl Drop for TempDir {
 }
 
 /// A real file system that counts what a refused store must never do, logs directory syncs and can
-/// fail the sync of one directory.
+/// fail the sync of one directory or the n-th file creation.
 struct ObservedFs {
     inner: StdFs,
     creates: u32,
     dirs_created: u32,
     synced: Vec<PathBuf>,
     fail_sync_of: Option<PathBuf>,
+    fail_create_at: Option<u32>,
 }
 
 impl ObservedFs {
@@ -58,6 +59,7 @@ impl ObservedFs {
             dirs_created: 0,
             synced: Vec::new(),
             fail_sync_of: None,
+            fail_create_at: None,
         }
     }
 
@@ -71,6 +73,9 @@ impl DurableFs for ObservedFs {
 
     fn create_new(&mut self, path: &Path) -> io::Result<File> {
         self.creates += 1;
+        if self.fail_create_at == Some(self.creates) {
+            return Err(io::Error::other("injected file creation failure"));
+        }
         self.inner.create_new(path)
     }
 
@@ -277,12 +282,16 @@ fn a_captured_inventory_is_stored_under_the_directory_its_digest_names() {
     let committed = binding_at(3);
     let durability = store(&mut StdFs, &dir.0, &captured, Some(&committed)).unwrap();
     assert_eq!(durability, DirectoryDurability::Confirmed);
-    // What is on disk is exactly what the capture bound.
+    assert_stored(&dir.0, &captured);
+}
+
+/// What is on disk is exactly the page set the capture bound.
+fn assert_stored(dir: &Path, captured: &Captured) {
     let refs: Vec<_> = captured
         .pages
         .iter()
         .map(|page| {
-            let file = page_file(&dir.0, &captured.digest(), page.page_index());
+            let file = page_file(dir, &captured.digest(), page.page_index());
             page_ref_for(page, &std::fs::read(file).unwrap()).unwrap()
         })
         .collect();
@@ -472,14 +481,15 @@ fn a_successor_that_can_never_be_sealed_is_refused_before_any_write() {
     let dir = TempDir::new();
     let committed = binding_at(3);
     let mut captured = Captured::new(2, 2);
-    // The successor relation leaves the lease fields unconstrained; encoding does not.
-    captured.successor.lease_owner_id = Some("owner".into());
+    // Only inventory fields differ, so the successor relation and the capture window accept it; the
+    // manifest encoding bounds the entry count.
+    captured.successor.entry_count = 1_000_001;
     let mut fs = ObservedFs::new();
     let result = store(&mut fs, &dir.0, &captured, Some(&committed));
-    assert!(matches!(
-        result,
-        Err(JournalDurableError::Journal(JournalError::Corrupt(_)))
-    ));
+    assert_eq!(
+        result.unwrap_err(),
+        JournalDurableError::Journal(JournalError::TooManyEntries)
+    );
     assert!(fs.created_nothing());
 }
 
@@ -533,18 +543,132 @@ fn page_sets_with_different_digests_never_collide() {
 }
 
 #[test]
-fn a_stored_page_generation_is_never_replaced() {
+fn storing_the_same_set_again_adopts_the_identical_pages() {
     let dir = TempDir::new();
     let captured = Captured::new(2, 2);
     let committed = binding_at(3);
     store(&mut StdFs, &dir.0, &captured, Some(&committed)).unwrap();
+    let mut fs = ObservedFs::new();
+    let again = store(&mut fs, &dir.0, &captured, Some(&committed));
+    assert_eq!(again.unwrap(), DirectoryDurability::Confirmed);
+    // Nothing was staged, and the chain was synced again.
+    assert_eq!(fs.creates, 0);
+    assert!(fs
+        .synced
+        .contains(&inventory_page_dir(&dir.0, &captured.digest(), 0)));
+    assert_stored(&dir.0, &captured);
+}
+
+#[test]
+fn a_set_that_failed_partway_is_completed_by_a_retry() {
+    let dir = TempDir::new();
+    let captured = Captured::new(5, 2);
+    let committed = binding_at(3);
+    let mut broken = ObservedFs::new();
+    broken.fail_create_at = Some(3);
+    let first = store(&mut broken, &dir.0, &captured, Some(&committed));
+    let Err(JournalDurableError::Stage(stage)) = first else {
+        panic!("the third page's staging file cannot be created");
+    };
+    assert_eq!(
+        (stage.step, stage.promoted),
+        (StageStep::CreateStaging, false)
+    );
+    // Pages 0 and 1 are durable, page 2 is missing.
+    assert!(page_file(&dir.0, &captured.digest(), 1).is_file());
+    assert!(!page_file(&dir.0, &captured.digest(), 2).exists());
+    let mut healthy = ObservedFs::new();
+    let second = store(&mut healthy, &dir.0, &captured, Some(&committed));
+    assert_eq!(second.unwrap(), DirectoryDurability::Confirmed);
+    assert_eq!(healthy.creates, 1);
+    assert_stored(&dir.0, &captured);
+}
+
+#[test]
+fn a_different_file_at_a_page_generation_is_never_replaced() {
+    let dir = TempDir::new();
+    let captured = Captured::new(2, 2);
+    let committed = binding_at(3);
+    let file = page_file(&dir.0, &captured.digest(), 0);
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, b"not the envelope").unwrap();
     let result = store(&mut StdFs, &dir.0, &captured, Some(&committed));
     let Err(JournalDurableError::Stage(stage)) = result else {
-        panic!("storing the same set twice must fail on the immutable generation");
+        panic!("a different file under the page generation must refuse the promotion");
     };
     assert!(matches!(stage.kind, StageFailureKind::GenerationExists));
-    let file = page_file(&dir.0, &captured.digest(), 0);
-    assert_eq!(std::fs::read(file).unwrap(), captured.envelopes[0]);
+    assert_eq!(std::fs::read(file).unwrap(), b"not the envelope");
+}
+
+/// A hand-built successor naming one empty page, which `capture_inventory` refuses: the counters
+/// and both digests verify, only the canonical form of an empty inventory is violated.
+fn empty_page_inventory() -> Captured {
+    let mut captured = Captured::new(2, 2);
+    let page = JournalPage::new(0, 4, Vec::new()).unwrap();
+    let envelopes = seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&page)).unwrap();
+    let reference = page_ref_for(&page, &envelopes[0]).unwrap();
+    captured.successor.entry_count = 0;
+    captured.successor.inventory_digest = empty_inventory_digest(1);
+    captured.successor.journal_page_set_digest = journal_page_set_digest(&[reference]).unwrap();
+    captured.pages = vec![page];
+    captured.envelopes = envelopes;
+    captured
+}
+
+#[test]
+fn an_empty_page_is_refused_before_any_write() {
+    let dir = TempDir::new();
+    let committed = binding_at(3);
+    let captured = empty_page_inventory();
+    let mut fs = ObservedFs::new();
+    let result = store(&mut fs, &dir.0, &captured, Some(&committed));
+    assert_eq!(
+        result.unwrap_err(),
+        JournalDurableError::Journal(JournalError::InvalidDescriptorCount)
+    );
+    assert!(fs.created_nothing());
+}
+
+#[test]
+fn a_successor_outside_the_capture_window_is_refused_before_any_write() {
+    type Tweak = fn(&mut Captured);
+    let cases: [(&str, Tweak, MigrationExecutionError); 3] = [
+        (
+            "a bootstrap manifest has no inventory yet",
+            |c| {
+                c.committed_manifest.phase = phase_code::BOOTSTRAP_TARGET;
+                c.successor.phase = phase_code::BOOTSTRAP_TARGET;
+            },
+            MigrationExecutionError::InvalidPhaseTransition,
+        ),
+        (
+            "a manifest whose cursor already advanced",
+            |c| {
+                c.committed_manifest.cursor_entry_index = 1;
+                c.successor.cursor_entry_index = 1;
+            },
+            MigrationExecutionError::FrozenFieldChanged,
+        ),
+        (
+            "a capture that also changes the phase",
+            |c| c.successor.phase = phase_code::PREPARE,
+            MigrationExecutionError::InvalidPhaseTransition,
+        ),
+    ];
+    let committed = binding_at(3);
+    for (name, tweak, error) in cases {
+        let dir = TempDir::new();
+        let mut captured = Captured::new(2, 2);
+        tweak(&mut captured);
+        let mut fs = ObservedFs::new();
+        let result = store(&mut fs, &dir.0, &captured, Some(&committed));
+        assert_eq!(
+            result.unwrap_err(),
+            JournalDurableError::Authority(error),
+            "{name}"
+        );
+        assert!(fs.created_nothing(), "{name}");
+    }
 }
 
 #[test]

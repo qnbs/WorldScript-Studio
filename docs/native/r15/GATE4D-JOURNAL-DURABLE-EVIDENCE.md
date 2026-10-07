@@ -460,39 +460,50 @@ authenticates, so the writer proves the set against that successor before it cre
 | fence token is not the manifest's | `Fence(StaleMigrationOwner)` |
 | the committed binding is another operation, a later fence or another revision, or absent | `Authority(...)` per R4's page rule |
 | `successor` is not a valid successor of the committed manifest | `Authority(InvalidPhaseTransition)` and the like, via `assert_manifest_successor` |
-| `successor` does not encode (for example lease fields present while the lease flag is absent, which the successor relation leaves unconstrained) | `Journal(Corrupt(..))`, so a set is never stored for a manifest that can never be sealed |
+| `successor` is not what `capture_inventory` builds from the committed manifest: a `BOOTSTRAP_TARGET` manifest, `CONVERT` or later, an advanced cursor, a simultaneous phase change, or any field other than the revision and the four inventory fields changed (the generic successor relation alone would accept these) | `Authority(InvalidPhaseTransition)` or `Authority(FrozenFieldChanged)` |
+| `successor` does not encode (for example an entry count above the manifest bound) | `Journal(TooManyEntries)` and the like, so a set is never stored for a manifest that can never be sealed |
 | the pages are not indexed exactly `0..n` (neither digest pins the indexes, so a hand-built successor could otherwise verify) | `Journal(PageSetMismatch)`, the same check `capture_inventory` makes |
+| a page holds no entry (an empty inventory is no page at all; an empty page would give it a second page-set digest) | `Journal(InvalidDescriptorCount)`, the same rule `capture_inventory` applies |
 | a page generation is 0 or above the committed revision + 1 | `Journal(GenerationMismatch)` |
 | an envelope sealed for a key epoch other than the journal's pinned epoch (`JournalPage::open` does not compare it, the stage step does, but only once the staging file exists) | `Stage(StagedEnvelopeMismatch)` with `promoted: false` and no residue |
 | an envelope that does not open as the page it is stored for (swapped, other identity or generation) | `Journal(Open(..))` from `JournalPage::open`, or `Journal(InconsistentInventory)` when the opened page differs from the page handed over |
 | the pages are not the set the successor names (envelopes of another capture, a missing or extra page, wrong entries) | `Journal(PageSetMismatch)` (page count or page-set digest), `EntryCountMismatch`, or `InconsistentInventory` (inventory digest) |
-| a refused store | nothing created: no file, no directory |
-| the same generation promoted twice into one directory | `GenerationExists`, the first bytes untouched |
+| a page whose exact bytes are already on disk (an earlier attempt at the same set) | adopted without staging; its directory chain is synced again |
+| a different file already at that page generation | `GenerationExists`, the bytes already there untouched |
 
-All checks run inside `with_fence` before the first byte is written, so a refused store creates nothing.
-The set is verified with the same streaming verifier the reader will use (`InventoryDigestVerifier`
-for the entries and `successor.verify_page_set` for the page-set digest over the exact envelope bytes).
+Every check above the last two runs inside `with_fence` before the first byte is written, so a store
+refused by them creates nothing: no file, no directory. After that the pages are written one by one,
+and an I/O failure partway leaves a durable prefix of pages. That prefix is not a dead end: a retry
+of the same set adopts each identical page that is already on disk (a bounded read of the exact path,
+compared with the envelope, no new staging file), syncs its directory chain again because the
+earlier attempt may have stopped before its directories were durable, and continues with the first
+missing page. The set is verified with the same streaming verifier the reader will use
+(`InventoryDigestVerifier` for the entries and `successor.verify_page_set` for the page-set digest
+over the exact envelope bytes).
 
 Pages are candidates until a manifest naming `D` is committed (§10.1.1: "a new page generation is
 durable but the manifest still names the old generation ... a discardable or retryable candidate"), so
-they are written before that manifest. After each promotion the directory chain up to the journal
+they are written before that manifest. After each page the directory chain up to the journal
 directory is synced (page directory, set directory, `inventory`, journal directory), so a page cannot
 vanish after the manifest that names it is durable. A failure of one of those syncs is reported as
 `StageFailure { step: SyncDirectory, kind: Io, promoted: true }` with the staging residue of the
-promotion: the page is already visible, and a retry meets the immutable generation instead of an
-absent page. A crash between the pages and the manifest leaves an inert directory under an
-unreferenced digest, reclaimable by the retention rule once no root can name it.
+promotion: the page is already visible, and a retry adopts it instead of meeting an absent page. A
+crash between the pages and the manifest leaves an inert directory under an unreferenced digest,
+reclaimable by the retention rule once no root can name it.
 
 Memory: the whole set is held in memory while it is verified, which bounds this slice to inventories
 that fit. That is recorded as an acceptance criterion on #359 (a streaming capture that seals, digests
 and promotes one page at a time must precede very large inventories), not decided here.
 
-Proof: fourteen cases in `gate4d_inventory_store_test` (a stored set whose bytes verify against the
+Proof: eighteen cases in `gate4d_inventory_store_test` (a stored set whose bytes verify against the
 captured page set, the directory chain synced, a post-promotion sync failure reported as promoted,
-three authority refusals that create nothing, an invalid successor, a successor that does not encode,
-a page set not indexed `0..n`, a foreign key epoch, envelopes of another capture, a
-swapped envelope, a future page generation, page sets with different digests never colliding, an
-immutable generation never replaced, sealed pages binding identity and generation).
+three authority refusals that create nothing, an invalid successor, a successor outside the capture
+window (bootstrap manifest, advanced cursor, simultaneous phase change), a successor that does not
+encode, a page set not indexed `0..n`, an empty page, a foreign key epoch, envelopes of another
+capture, a swapped envelope, a future page generation, page sets with different digests never
+colliding, the same set stored again adopting its identical pages, a set that failed partway
+completed by a retry that stages only the missing page, a different file at a page generation never
+replaced, sealed pages binding identity and generation).
 
 ## Still residual after C1b-1
 
