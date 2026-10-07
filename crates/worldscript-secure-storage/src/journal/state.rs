@@ -5,6 +5,7 @@
 use crate::root::LiveMigration;
 
 use super::manifest::JournalManifest;
+use super::wire::final_inventory_required;
 use super::{phase_code, JournalError};
 
 /// Typed migration execution refusal; never conflated with record absence or plaintext fallback.
@@ -23,6 +24,9 @@ pub enum MigrationExecutionError {
     LeaseNotExpired,
     /// A takeover manifest does not carry a lease owned by the new owner that outlives `now`.
     InvalidTakeoverLease,
+    /// `CONVERT` or a later work phase was entered without the final inventory captured in `ADMIT`
+    /// (§10.3).
+    FinalInventoryNotCaptured,
     Journal(JournalError),
 }
 
@@ -405,6 +409,9 @@ pub fn transition_phase(
     if next.phase != to_phase.wire() {
         next.journal_revision = bump_revision(manifest)?.wire();
         next.phase = to_phase.wire();
+    }
+    if final_inventory_required(next.phase) && !next.final_inventory_captured {
+        return Err(MigrationExecutionError::FinalInventoryNotCaptured);
     }
     next.encode()?;
     Ok(next)

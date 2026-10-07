@@ -199,6 +199,42 @@ pub(crate) fn validate_lease_fields(manifest: &JournalManifest) -> Result<(), Jo
     Ok(())
 }
 
+/// Phases that run on the final inventory: `CONVERT` and everything after it except the diagnostic
+/// `RECOVERY_REQUIRED`, which may be entered before or after the final capture.
+pub(crate) fn final_inventory_required(phase: u32) -> bool {
+    matches!(
+        phase,
+        phase_code::CONVERT
+            | phase_code::VERIFY
+            | phase_code::COMMIT
+            | phase_code::RETIRE_OLD_AUTHORITY
+            | phase_code::FINALIZE
+            | phase_code::DONE
+    )
+}
+
+/// Phases before the write barrier, where only a preliminary inventory can exist.
+pub(crate) fn final_inventory_forbidden(phase: u32) -> bool {
+    matches!(
+        phase,
+        phase_code::BOOTSTRAP_TARGET | phase_code::DISCOVER | phase_code::PREPARE
+    )
+}
+
+/// §10.3: the final inventory is captured in `ADMIT`, so the flag is false before it, free in
+/// `ADMIT` (and in `RECOVERY_REQUIRED`, entered from anywhere) and true from `CONVERT` on.
+pub(crate) fn validate_final_inventory(manifest: &JournalManifest) -> Result<(), JournalError> {
+    let flag = manifest.final_inventory_captured;
+    if (flag && final_inventory_forbidden(manifest.phase))
+        || (!flag && final_inventory_required(manifest.phase))
+    {
+        return Err(JournalError::Corrupt(
+            "final inventory flag disagrees with the phase",
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_migration_operation_id(value: &str) -> Result<(), JournalError> {
     if value.is_empty() || value.len() > MAX_OPERATION_ID_LEN {
         return Err(JournalError::InvalidOperationId);
@@ -341,6 +377,15 @@ impl<'a> Reader<'a> {
                 Ok((true, Some(owner), Some(expires)))
             }
             _ => Err(JournalError::Corrupt("lease owner flag is neither 0 nor 1")),
+        }
+    }
+
+    /// A strict one-byte flag: 0 or 1, anything else is `Corrupt(what)`.
+    pub(crate) fn flag(&mut self, what: &'static str) -> Result<bool, JournalError> {
+        match self.take(1)?[0] {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(JournalError::Corrupt(what)),
         }
     }
 
