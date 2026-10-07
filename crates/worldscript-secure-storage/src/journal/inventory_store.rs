@@ -30,12 +30,12 @@ use crate::seal::Key;
 use super::capture::{assert_capture_successor, assert_page_not_empty, ordered_pages, SealedPage};
 use super::digest::{page_ref_for, InventoryDigestVerifier};
 use super::durable::{
-    migration_page_identity, page_meta, stage_io, stage_request, with_fence, JournalDurableContext,
-    JournalDurableError,
+    load_authoritative_manifest, migration_page_identity, page_meta, stage_io, stage_request,
+    with_fence, JournalDurableContext, JournalDurableError,
 };
 use super::manifest::JournalManifest;
 use super::page::JournalPage;
-use super::state::{assert_page_promote_authority, MigrationFence};
+use super::state::{assert_page_promote_authority, MigrationExecutionError, MigrationFence};
 use super::succession::assert_manifest_successor;
 use super::JournalError;
 
@@ -90,8 +90,9 @@ pub struct InventorySetWrite<'a> {
 /// Stores a captured inventory, fenced, under `inventory/<digest>/` and returns whether every
 /// directory sync was confirmed.
 ///
-/// Under the journal mutex and before any I/O: the caller must be the committed owner writing under
-/// the committed manifest ([`assert_page_promote_authority`]); `successor` must be a valid successor
+/// Under the journal mutex and before any write: the caller must be the committed owner writing under
+/// the committed manifest ([`assert_page_promote_authority`]), and that manifest must be the exact
+/// generation the root binding names (read back and compared, bounded); `successor` must be a valid successor
 /// of it and exactly what [`capture_inventory`](super::capture::capture_inventory) would build
 /// (inventory still open, only the revision and the inventory fields changed) and must encode; the
 /// pages must be indexed `0..n`, non-empty, and exactly the page set and inventory `successor` names
@@ -113,6 +114,7 @@ pub fn promote_inventory_set_fenced<F: DurableFs>(
     with_fence(set.committed_manifest, set.fence, || {
         assert_page_promote_authority(set.committed_manifest, set.committed)
             .map_err(JournalDurableError::Authority)?;
+        assert_root_named_predecessor(ctx, set)?;
         assert_manifest_successor(set.committed_manifest, set.successor)
             .map_err(JournalDurableError::Authority)?;
         assert_capture_successor(set.committed_manifest, set.successor)
@@ -124,6 +126,23 @@ pub fn promote_inventory_set_fenced<F: DurableFs>(
         }
         Ok(durability)
     })
+}
+
+/// The committed manifest the caller supplied must be the very generation the root binding names:
+/// the binding carries only the operation, fence, revision and envelope digest, so a manifest at the
+/// same revision with other fields would otherwise pass the capture checks against a predecessor
+/// that does not exist. Reads only the root-named generation, bounded, and never creates anything.
+fn assert_root_named_predecessor<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    set: &InventorySetWrite<'_>,
+) -> Result<(), JournalDurableError> {
+    let mismatch = JournalDurableError::Authority(MigrationExecutionError::LiveBindingMismatch);
+    let live = set.committed.ok_or(mismatch.clone())?;
+    if load_authoritative_manifest(ctx, live)? == *set.committed_manifest {
+        Ok(())
+    } else {
+        Err(mismatch)
+    }
 }
 
 /// Everything that can be refused without touching the disk; returns the pages by index.

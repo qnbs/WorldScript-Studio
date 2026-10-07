@@ -8,16 +8,17 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::{
     capture_inventory, content_digest, empty_inventory_digest, empty_journal_page_set_digest,
-    inventory_page_dir, journal_page_set_digest, operation_type, page_ref_for, parse_envelope,
-    phase_code, promote_inventory_set_fenced, seal_inventory_pages, source_authority_kind,
-    source_physical_authority_kind, DirectoryDurability, DurableFs, InventorySetWrite,
-    JournalDurableContext, JournalDurableError, JournalError, JournalInventoryEntry,
-    JournalInventorySource, JournalManifest, JournalPage, LiveMigration, MigrationExecutionError,
-    MigrationFence, RecordClass, RecordIdentity, RecordMeta, SealedPage, StageFailureKind,
-    StageStep, StdFs, WriteOperationId,
+    generation_path, inventory_page_dir, journal_page_set_digest, operation_type, page_ref_for,
+    parse_envelope, phase_code, promote_inventory_set_fenced, promote_manifest_fenced,
+    seal_inventory_pages, source_authority_kind, source_physical_authority_kind,
+    DirectoryDurability, DurableFs, InventorySetWrite, JournalDurableContext, JournalDurableError,
+    JournalError, JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage,
+    LiveMigration, MigrationExecutionError, MigrationFence, RecordClass, RecordIdentity,
+    RecordMeta, SealedPage, StageFailureKind, StageStep, StdFs, WriteOperationId,
 };
 
 const OPERATION: &str = "store-op";
+const COMMITTED_REVISION: u64 = 3;
 
 struct TempDir(PathBuf);
 
@@ -146,15 +147,6 @@ fn manifest_at(revision: u64) -> JournalManifest {
     }
 }
 
-fn binding_at(revision: u64) -> LiveMigration {
-    LiveMigration {
-        operation_id: OPERATION.into(),
-        fencing_generation: 7,
-        journal_revision: revision,
-        manifest_digest: [0x22; 32],
-    }
-}
-
 fn entry(n: u32) -> JournalInventoryEntry {
     let record = RecordIdentity::new(RecordClass::Codex, &[&format!("p{n:03}")]).unwrap();
     JournalInventoryEntry::new(
@@ -181,7 +173,7 @@ fn pages_of(count: u32, per_page: usize, generation: u64) -> Vec<JournalPage> {
         .collect()
 }
 
-/// A captured inventory over a committed manifest at revision 3, sealed once.
+/// A captured inventory over the committed manifest, sealed once.
 struct Captured {
     committed_manifest: JournalManifest,
     fence: MigrationFence,
@@ -192,11 +184,15 @@ struct Captured {
 
 impl Captured {
     fn new(count: u32, per_page: usize) -> Self {
-        let committed_manifest = manifest_at(3);
-        let pages = pages_of(count, per_page, 4);
+        Self::on(manifest_at(COMMITTED_REVISION), count, per_page)
+    }
+
+    /// Pages at the next revision's generation, captured over `committed_manifest`.
+    fn on(committed_manifest: JournalManifest, count: u32, per_page: usize) -> Self {
+        let pages = pages_of(count, per_page, COMMITTED_REVISION + 1);
         let envelopes = seal_inventory_pages(&key(), OPERATION, &pages).unwrap();
-        let sealed = seal_all(&pages, &envelopes);
         let fence = MigrationFence::from_manifest(&committed_manifest);
+        let sealed = seal_all(&pages, &envelopes);
         let successor = capture_inventory(&committed_manifest, &fence, &sealed).unwrap();
         Captured {
             committed_manifest,
@@ -224,26 +220,60 @@ fn seal_all<'a>(pages: &'a [JournalPage], envelopes: &'a [Vec<u8>]) -> Vec<Seale
         .collect()
 }
 
-/// The committed owner stores `captured` under `dir`.
+/// A journal directory whose root-named generation is a committed manifest.
+struct Journal {
+    dir: TempDir,
+    live: LiveMigration,
+}
+
+impl Journal {
+    fn path(&self) -> &Path {
+        &self.dir.0
+    }
+}
+
+/// Commits `captured`'s committed manifest to a fresh directory and returns the binding naming it.
+fn journal_of(captured: &Captured) -> Journal {
+    let dir = TempDir::new();
+    let manifest = &captured.committed_manifest;
+    let previous = LiveMigration {
+        operation_id: manifest.operation_id.clone(),
+        fencing_generation: manifest.fencing_generation,
+        journal_revision: manifest.journal_revision - 1,
+        manifest_digest: [0x11; 32],
+    };
+    let op = WriteOperationId::generate().unwrap();
+    let key = key();
+    let mut fs = StdFs;
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, &dir.0, &op);
+    promote_manifest_fenced(&mut ctx, manifest, &captured.fence, Some(&previous)).unwrap();
+    let bytes = std::fs::read(generation_path(&dir.0, manifest.journal_revision)).unwrap();
+    let live = LiveMigration {
+        manifest_digest: content_digest(&bytes),
+        journal_revision: manifest.journal_revision,
+        ..previous
+    };
+    Journal { dir, live }
+}
+
+/// The committed owner stores `captured` into `journal`.
 fn store<F: DurableFs>(
     fs: &mut F,
-    dir: &Path,
+    journal: &Journal,
+    captured: &Captured,
+) -> Result<DirectoryDurability, JournalDurableError> {
+    store_as(fs, journal, captured, Some(&journal.live))
+}
+
+/// The same, presenting `committed` as the root's binding.
+fn store_as<F: DurableFs>(
+    fs: &mut F,
+    journal: &Journal,
     captured: &Captured,
     committed: Option<&LiveMigration>,
 ) -> Result<DirectoryDurability, JournalDurableError> {
     let pages = captured.sealed();
-    promote(fs, dir, &set_of(captured, committed, &pages))
-}
-
-/// The committed owner (revision 3) stores `pages` instead of the captured ones.
-fn store_pages<F: DurableFs>(
-    fs: &mut F,
-    dir: &Path,
-    captured: &Captured,
-    pages: &[SealedPage<'_>],
-) -> Result<DirectoryDurability, JournalDurableError> {
-    let committed = binding_at(3);
-    promote(fs, dir, &set_of(captured, Some(&committed), pages))
+    promote(fs, journal.path(), &set_of(captured, committed, &pages))
 }
 
 fn set_of<'a>(
@@ -271,18 +301,16 @@ fn promote<F: DurableFs>(
     promote_inventory_set_fenced(&mut ctx, set)
 }
 
-fn page_file(dir: &Path, digest: &[u8; 32], index: u32) -> PathBuf {
-    inventory_page_dir(dir, digest, index).join("generation-4.wsr1")
+/// Stores `captured` into `journal` and returns the refusal, requiring that nothing was created.
+fn refusal_in(journal: &Journal, captured: &Captured) -> JournalDurableError {
+    let mut fs = ObservedFs::new();
+    let error = store(&mut fs, journal, captured).unwrap_err();
+    assert!(fs.created_nothing(), "{error:?} must leave nothing behind");
+    error
 }
 
-#[test]
-fn a_captured_inventory_is_stored_under_the_directory_its_digest_names() {
-    let dir = TempDir::new();
-    let captured = Captured::new(5, 2);
-    let committed = binding_at(3);
-    let durability = store(&mut StdFs, &dir.0, &captured, Some(&committed)).unwrap();
-    assert_eq!(durability, DirectoryDurability::Confirmed);
-    assert_stored(&dir.0, &captured);
+fn page_file(dir: &Path, digest: &[u8; 32], index: u32) -> PathBuf {
+    inventory_page_dir(dir, digest, index).join("generation-4.wsr1")
 }
 
 /// What is on disk is exactly the page set the capture bound.
@@ -299,16 +327,29 @@ fn assert_stored(dir: &Path, captured: &Captured) {
 }
 
 #[test]
+fn a_captured_inventory_is_stored_under_the_directory_its_digest_names() {
+    let captured = Captured::new(5, 2);
+    let journal = journal_of(&captured);
+    let durability = store(&mut StdFs, &journal, &captured).unwrap();
+    assert_eq!(durability, DirectoryDurability::Confirmed);
+    assert_stored(journal.path(), &captured);
+}
+
+#[test]
 fn the_directory_chain_up_to_the_journal_directory_is_synced() {
-    let dir = TempDir::new();
     let captured = Captured::new(2, 2);
-    let committed = binding_at(3);
+    let journal = journal_of(&captured);
     let mut fs = ObservedFs::new();
-    store(&mut fs, &dir.0, &captured, Some(&committed)).unwrap();
-    let page_dir = inventory_page_dir(&dir.0, &captured.digest(), 0);
+    store(&mut fs, &journal, &captured).unwrap();
+    let page_dir = inventory_page_dir(journal.path(), &captured.digest(), 0);
     let set_dir = page_dir.parent().unwrap().to_path_buf();
     let inventory_dir = set_dir.parent().unwrap().to_path_buf();
-    for synced in [&page_dir, &set_dir, &inventory_dir, &dir.0] {
+    for synced in [
+        &page_dir,
+        &set_dir,
+        &inventory_dir,
+        &journal.path().to_path_buf(),
+    ] {
         assert!(
             fs.synced.contains(synced),
             "{} was not synced",
@@ -319,14 +360,12 @@ fn the_directory_chain_up_to_the_journal_directory_is_synced() {
 
 #[test]
 fn a_directory_sync_failure_after_the_promotion_is_reported_as_promoted() {
-    let dir = TempDir::new();
     let captured = Captured::new(2, 2);
-    let committed = binding_at(3);
+    let journal = journal_of(&captured);
     let mut fs = ObservedFs::new();
-    let page_dir = inventory_page_dir(&dir.0, &captured.digest(), 0);
+    let page_dir = inventory_page_dir(journal.path(), &captured.digest(), 0);
     fs.fail_sync_of = Some(page_dir.parent().unwrap().to_path_buf());
-    let result = store(&mut fs, &dir.0, &captured, Some(&committed));
-    let Err(JournalDurableError::Stage(stage)) = result else {
+    let Err(JournalDurableError::Stage(stage)) = store(&mut fs, &journal, &captured) else {
         panic!("a failed parent sync must be reported");
     };
     assert_eq!(
@@ -334,26 +373,34 @@ fn a_directory_sync_failure_after_the_promotion_is_reported_as_promoted() {
         (StageStep::SyncDirectory, true)
     );
     // The page is there: a retry meets the immutable generation, not an absent page.
-    assert!(page_file(&dir.0, &captured.digest(), 0).is_file());
+    assert!(page_file(journal.path(), &captured.digest(), 0).is_file());
+}
+
+/// The binding the root would hold, changed by `change`.
+fn binding_with(journal: &Journal, change: fn(&mut LiveMigration)) -> Option<LiveMigration> {
+    let mut live = journal.live.clone();
+    change(&mut live);
+    Some(live)
 }
 
 #[test]
 fn a_store_that_the_authority_checks_refuse_creates_nothing() {
-    let dir = TempDir::new();
     let captured = Captured::new(2, 2);
-    let mut other_operation = binding_at(3);
-    other_operation.operation_id = "other-op".into();
-    let mut newer_fence = binding_at(3);
-    newer_fence.fencing_generation = 8;
+    let journal = journal_of(&captured);
     let cases = [
         (
             "a later committed fence",
-            Some(newer_fence),
+            binding_with(&journal, |live| live.fencing_generation = 8),
             MigrationExecutionError::StaleMigrationOwner,
         ),
         (
             "another operation",
-            Some(other_operation),
+            binding_with(&journal, |live| live.operation_id = "other-op".into()),
+            MigrationExecutionError::LiveBindingMismatch,
+        ),
+        (
+            "a digest naming another manifest envelope",
+            binding_with(&journal, |live| live.manifest_digest = [0x99; 32]),
             MigrationExecutionError::LiveBindingMismatch,
         ),
         (
@@ -364,7 +411,7 @@ fn a_store_that_the_authority_checks_refuse_creates_nothing() {
     ];
     for (name, binding, error) in cases {
         let mut fs = ObservedFs::new();
-        let result = store(&mut fs, &dir.0, &captured, binding.as_ref());
+        let result = store_as(&mut fs, &journal, &captured, binding.as_ref());
         assert_eq!(
             result.unwrap_err(),
             JournalDurableError::Authority(error),
@@ -372,202 +419,255 @@ fn a_store_that_the_authority_checks_refuse_creates_nothing() {
         );
         assert!(fs.created_nothing(), "{name}");
     }
-    assert!(!dir.0.join("inventory").exists());
+    assert!(!journal.path().join("inventory").exists());
 }
 
 #[test]
-fn a_successor_that_is_not_valid_is_refused_before_any_write() {
-    let dir = TempDir::new();
-    let committed = binding_at(3);
+fn a_predecessor_that_is_not_the_root_named_manifest_is_refused() {
+    let genuine = Captured::new(2, 2);
+    let journal = journal_of(&genuine);
+    // Same operation, fence and revision as the binding, another target key: a successor built on
+    // it passes every capture check, but it is not the manifest the root names.
+    let mut forged_manifest = genuine.committed_manifest.clone();
+    forged_manifest.target_root_key_ref_digest = Some([0x43; 32]);
+    let forged = Captured::on(forged_manifest, 2, 2);
+    assert_eq!(
+        refusal_in(&journal, &forged),
+        JournalDurableError::Authority(MigrationExecutionError::LiveBindingMismatch)
+    );
+}
+
+/// A captured inventory after `tweak`, which may corrupt any part of it.
+fn tweaked(tweak: impl FnOnce(&mut Captured)) -> Captured {
     let mut captured = Captured::new(2, 2);
-    captured.successor.phase = phase_code::ADMIT;
-    let mut fs = ObservedFs::new();
-    let result = store(&mut fs, &dir.0, &captured, Some(&committed));
-    assert_eq!(
-        result.unwrap_err(),
-        JournalDurableError::Authority(MigrationExecutionError::InvalidPhaseTransition)
-    );
-    assert!(fs.created_nothing());
-}
-
-#[test]
-fn envelopes_of_another_capture_would_key_the_wrong_directory_and_are_refused() {
-    let dir = TempDir::new();
-    let captured = Captured::new(4, 2);
-    // The same entries sealed again: valid pages, but not the bytes the successor's digest binds.
-    let other = Captured::new(4, 2);
-    let mut fs = ObservedFs::new();
-    let result = store_pages(&mut fs, &dir.0, &captured, &other.sealed());
-    assert_eq!(
-        result.unwrap_err(),
-        JournalDurableError::Journal(JournalError::PageSetMismatch)
-    );
-    assert!(fs.created_nothing());
-}
-
-#[test]
-fn an_envelope_that_is_not_the_page_it_is_stored_for_is_refused() {
-    let dir = TempDir::new();
-    let captured = Captured::new(4, 2);
-    let swapped = [
-        SealedPage {
-            page: &captured.pages[0],
-            envelope: &captured.envelopes[1],
-        },
-        SealedPage {
-            page: &captured.pages[1],
-            envelope: &captured.envelopes[0],
-        },
-    ];
-    let mut fs = ObservedFs::new();
-    let result = store_pages(&mut fs, &dir.0, &captured, &swapped);
-    assert!(matches!(
-        result,
-        Err(JournalDurableError::Journal(JournalError::Open(_)))
-    ));
-    assert!(fs.created_nothing());
-}
-
-#[test]
-fn a_page_generation_above_the_next_revision_is_refused() {
-    let dir = TempDir::new();
-    let captured = Captured::new(2, 2);
-    let future = JournalPage::new(0, 5, captured.pages[0].entries().to_vec()).unwrap();
-    let envelope = seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&future))
-        .unwrap()
-        .remove(0);
-    let late = [SealedPage {
-        page: &future,
-        envelope: &envelope,
-    }];
-    let mut fs = ObservedFs::new();
-    let result = store_pages(&mut fs, &dir.0, &captured, &late);
-    assert_eq!(
-        result.unwrap_err(),
-        JournalDurableError::Journal(JournalError::GenerationMismatch)
-    );
-    assert!(fs.created_nothing());
-}
-
-/// A hand-built successor naming a page set whose only page is index 1, which `capture_inventory`
-/// refuses: the page-set digest and the inventory digest both verify, only the index is wrong.
-fn index_one_inventory() -> Captured {
-    let mut captured = Captured::new(2, 2);
-    let page = JournalPage::new(1, 4, captured.pages[0].entries().to_vec()).unwrap();
-    let envelopes = seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&page)).unwrap();
-    let reference = page_ref_for(&page, &envelopes[0]).unwrap();
-    captured.successor.journal_page_set_digest = journal_page_set_digest(&[reference]).unwrap();
-    captured.pages = vec![page];
-    captured.envelopes = envelopes;
+    tweak(&mut captured);
     captured
 }
 
-#[test]
-fn a_page_set_whose_indexes_are_not_zero_to_n_is_refused() {
-    let dir = TempDir::new();
-    let committed = binding_at(3);
-    let captured = index_one_inventory();
-    let mut fs = ObservedFs::new();
-    let result = store(&mut fs, &dir.0, &captured, Some(&committed));
-    assert_eq!(
-        result.unwrap_err(),
-        JournalDurableError::Journal(JournalError::PageSetMismatch)
-    );
-    assert!(fs.created_nothing());
+struct Refusal {
+    name: &'static str,
+    captured: Captured,
+    error: JournalDurableError,
+}
+
+impl Refusal {
+    fn authority(name: &'static str, captured: Captured, error: MigrationExecutionError) -> Self {
+        let error = JournalDurableError::Authority(error);
+        Refusal {
+            name,
+            captured,
+            error,
+        }
+    }
+
+    fn journal(name: &'static str, captured: Captured, error: JournalError) -> Self {
+        let error = JournalDurableError::Journal(error);
+        Refusal {
+            name,
+            captured,
+            error,
+        }
+    }
+}
+
+/// Every refusal must happen before the first byte is written, with exactly the stated error. The
+/// committed manifest is written to disk after the tweak, so the root-named predecessor is the one
+/// the tweaked fixture presents.
+fn assert_all_refused(refusals: Vec<Refusal>) {
+    for refusal in refusals {
+        let journal = journal_of(&refusal.captured);
+        assert_eq!(
+            refusal_in(&journal, &refusal.captured),
+            refusal.error,
+            "{}",
+            refusal.name
+        );
+    }
 }
 
 #[test]
-fn a_successor_that_can_never_be_sealed_is_refused_before_any_write() {
-    let dir = TempDir::new();
-    let committed = binding_at(3);
-    let mut captured = Captured::new(2, 2);
+fn a_successor_the_store_cannot_accept_is_refused_before_any_write() {
+    let skipped_phase = tweaked(|c| c.successor.phase = phase_code::ADMIT);
+    let bootstrap = tweaked(|c| {
+        c.committed_manifest.phase = phase_code::BOOTSTRAP_TARGET;
+        c.successor.phase = phase_code::BOOTSTRAP_TARGET;
+    });
+    let advanced = tweaked(|c| {
+        c.committed_manifest.cursor_entry_index = 1;
+        c.successor.cursor_entry_index = 1;
+    });
+    let phase_change = tweaked(|c| c.successor.phase = phase_code::PREPARE);
     // Only inventory fields differ, so the successor relation and the capture window accept it; the
     // manifest encoding bounds the entry count.
-    captured.successor.entry_count = 1_000_001;
-    let mut fs = ObservedFs::new();
-    let result = store(&mut fs, &dir.0, &captured, Some(&committed));
-    assert_eq!(
-        result.unwrap_err(),
-        JournalDurableError::Journal(JournalError::TooManyEntries)
-    );
-    assert!(fs.created_nothing());
+    let unencodable = tweaked(|c| c.successor.entry_count = 1_000_001);
+    assert_all_refused(vec![
+        Refusal::authority(
+            "a successor that skips ahead in the phase order",
+            skipped_phase,
+            MigrationExecutionError::InvalidPhaseTransition,
+        ),
+        Refusal::authority(
+            "a bootstrap manifest has no inventory yet",
+            bootstrap,
+            MigrationExecutionError::InvalidPhaseTransition,
+        ),
+        Refusal::authority(
+            "a manifest whose cursor already advanced",
+            advanced,
+            MigrationExecutionError::FrozenFieldChanged,
+        ),
+        Refusal::authority(
+            "a capture that also changes the phase",
+            phase_change,
+            MigrationExecutionError::InvalidPhaseTransition,
+        ),
+        Refusal::journal(
+            "a successor that does not encode",
+            unencodable,
+            JournalError::TooManyEntries,
+        ),
+    ]);
+}
+
+/// Replaces the captured pages by `page`, sealed; the successor is left as it was.
+fn reseal(captured: &mut Captured, page: JournalPage) {
+    captured.envelopes =
+        seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&page)).unwrap();
+    captured.pages = vec![page];
+}
+
+/// Binds the successor's page-set digest to the pages as they are now, as a hand-built manifest
+/// would.
+fn rebind(captured: &mut Captured) {
+    let refs: Vec<_> = captured
+        .pages
+        .iter()
+        .zip(&captured.envelopes)
+        .map(|(page, envelope)| page_ref_for(page, envelope).unwrap())
+        .collect();
+    captured.successor.journal_page_set_digest = journal_page_set_digest(&refs).unwrap();
 }
 
 #[test]
-fn an_envelope_sealed_for_another_key_epoch_is_refused_before_any_write() {
-    let dir = TempDir::new();
-    let captured = Captured::new(2, 2);
+fn a_page_set_the_successor_does_not_name_is_refused_before_any_write() {
+    // The same entries sealed again: valid pages, but not the bytes the successor's digest binds.
+    let foreign = tweaked(|c| {
+        let other = Captured::new(2, 2);
+        (c.pages, c.envelopes) = (other.pages, other.envelopes);
+    });
+    // Both digests verify, only the index (or the canonical form) is wrong.
+    let index_one = tweaked(|c| {
+        reseal(
+            c,
+            JournalPage::new(1, 4, c.pages[0].entries().to_vec()).unwrap(),
+        );
+        rebind(c);
+    });
+    let empty = tweaked(|c| {
+        reseal(c, JournalPage::new(0, 4, Vec::new()).unwrap());
+        c.successor.entry_count = 0;
+        c.successor.inventory_digest = empty_inventory_digest(1);
+        rebind(c);
+    });
+    let future = tweaked(|c| {
+        reseal(
+            c,
+            JournalPage::new(0, 5, c.pages[0].entries().to_vec()).unwrap(),
+        );
+    });
+    assert_all_refused(vec![
+        Refusal::journal(
+            "envelopes of another capture",
+            foreign,
+            JournalError::PageSetMismatch,
+        ),
+        Refusal::journal(
+            "pages not indexed 0..n",
+            index_one,
+            JournalError::PageSetMismatch,
+        ),
+        Refusal::journal("an empty page", empty, JournalError::InvalidDescriptorCount),
+        Refusal::journal(
+            "a page generation above the next revision",
+            future,
+            JournalError::GenerationMismatch,
+        ),
+    ]);
+}
+
+/// Page 0's envelope sealed for `epoch`.
+fn sealed_at_epoch(captured: &Captured, epoch: u64) -> Vec<u8> {
     let parsed = parse_envelope(&captured.envelopes[0]).unwrap();
     let meta = RecordMeta {
-        key_epoch: parsed.header().key_epoch + 1,
+        key_epoch: epoch,
         record_generation: parsed.header().record_generation,
         record_schema: parsed.header().record_schema,
     };
     let identity = RecordIdentity::new(RecordClass::MigrationPage, &[OPERATION, "0"]).unwrap();
-    let envelope = captured.pages[0].seal(&key(), &identity, meta).unwrap();
-    let other_epoch = [SealedPage {
-        page: &captured.pages[0],
-        envelope: &envelope,
-    }];
-    let mut fs = ObservedFs::new();
-    let result = store_pages(&mut fs, &dir.0, &captured, &other_epoch);
-    let Err(JournalDurableError::Stage(stage)) = result else {
-        panic!("a foreign key epoch must be refused");
+    captured.pages[0].seal(&key(), &identity, meta).unwrap()
+}
+
+#[test]
+fn an_envelope_that_does_not_belong_to_its_page_is_refused_before_any_write() {
+    let mut swapped = Captured::new(4, 2);
+    swapped.envelopes.swap(0, 1);
+    let error = refusal_in(&journal_of(&swapped), &swapped);
+    assert!(matches!(
+        error,
+        JournalDurableError::Journal(JournalError::Open(_))
+    ));
+    // A foreign key epoch is caught by the preflight, not only once a staging file exists.
+    let mut foreign_epoch = Captured::new(2, 2);
+    foreign_epoch.envelopes[0] = sealed_at_epoch(&foreign_epoch, 2);
+    let error = refusal_in(&journal_of(&foreign_epoch), &foreign_epoch);
+    let JournalDurableError::Stage(stage) = error else {
+        panic!("a foreign key epoch must be refused as a staged-envelope mismatch");
     };
     assert!(matches!(
         stage.kind,
         StageFailureKind::StagedEnvelopeMismatch
     ));
     assert!(!stage.promoted);
-    assert!(fs.created_nothing());
 }
 
 #[test]
 fn page_sets_with_different_digests_never_collide() {
-    let dir = TempDir::new();
-    let committed = binding_at(3);
     // Sealing uses a fresh nonce, so two attempts at the same inventory differ.
     let first = Captured::new(2, 2);
     let second = Captured::new(2, 2);
     assert_ne!(first.digest(), second.digest());
+    let journal = journal_of(&first);
     for captured in [&first, &second] {
-        store(&mut StdFs, &dir.0, captured, Some(&committed)).unwrap();
+        store(&mut StdFs, &journal, captured).unwrap();
     }
     for captured in [&first, &second] {
-        let file = page_file(&dir.0, &captured.digest(), 0);
-        assert_eq!(
-            content_digest(&std::fs::read(file).unwrap()),
-            content_digest(&captured.envelopes[0])
-        );
+        let file = page_file(journal.path(), &captured.digest(), 0);
+        assert_eq!(std::fs::read(file).unwrap(), captured.envelopes[0]);
     }
 }
 
 #[test]
 fn storing_the_same_set_again_adopts_the_identical_pages() {
-    let dir = TempDir::new();
     let captured = Captured::new(2, 2);
-    let committed = binding_at(3);
-    store(&mut StdFs, &dir.0, &captured, Some(&committed)).unwrap();
+    let journal = journal_of(&captured);
+    store(&mut StdFs, &journal, &captured).unwrap();
     let mut fs = ObservedFs::new();
-    let again = store(&mut fs, &dir.0, &captured, Some(&committed));
+    let again = store(&mut fs, &journal, &captured);
     assert_eq!(again.unwrap(), DirectoryDurability::Confirmed);
     // Nothing was staged, and the chain was synced again.
     assert_eq!(fs.creates, 0);
-    assert!(fs
-        .synced
-        .contains(&inventory_page_dir(&dir.0, &captured.digest(), 0)));
-    assert_stored(&dir.0, &captured);
+    let page_dir = inventory_page_dir(journal.path(), &captured.digest(), 0);
+    assert!(fs.synced.contains(&page_dir));
+    assert_stored(journal.path(), &captured);
 }
 
 #[test]
 fn a_set_that_failed_partway_is_completed_by_a_retry() {
-    let dir = TempDir::new();
     let captured = Captured::new(5, 2);
-    let committed = binding_at(3);
+    let journal = journal_of(&captured);
     let mut broken = ObservedFs::new();
     broken.fail_create_at = Some(3);
-    let first = store(&mut broken, &dir.0, &captured, Some(&committed));
-    let Err(JournalDurableError::Stage(stage)) = first else {
+    let Err(JournalDurableError::Stage(stage)) = store(&mut broken, &journal, &captured) else {
         panic!("the third page's staging file cannot be created");
     };
     assert_eq!(
@@ -575,100 +675,28 @@ fn a_set_that_failed_partway_is_completed_by_a_retry() {
         (StageStep::CreateStaging, false)
     );
     // Pages 0 and 1 are durable, page 2 is missing.
-    assert!(page_file(&dir.0, &captured.digest(), 1).is_file());
-    assert!(!page_file(&dir.0, &captured.digest(), 2).exists());
+    assert!(page_file(journal.path(), &captured.digest(), 1).is_file());
+    assert!(!page_file(journal.path(), &captured.digest(), 2).exists());
     let mut healthy = ObservedFs::new();
-    let second = store(&mut healthy, &dir.0, &captured, Some(&committed));
+    let second = store(&mut healthy, &journal, &captured);
     assert_eq!(second.unwrap(), DirectoryDurability::Confirmed);
     assert_eq!(healthy.creates, 1);
-    assert_stored(&dir.0, &captured);
+    assert_stored(journal.path(), &captured);
 }
 
 #[test]
 fn a_different_file_at_a_page_generation_is_never_replaced() {
-    let dir = TempDir::new();
     let captured = Captured::new(2, 2);
-    let committed = binding_at(3);
-    let file = page_file(&dir.0, &captured.digest(), 0);
+    let journal = journal_of(&captured);
+    let file = page_file(journal.path(), &captured.digest(), 0);
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     std::fs::write(&file, b"not the envelope").unwrap();
-    let result = store(&mut StdFs, &dir.0, &captured, Some(&committed));
+    let result = store(&mut StdFs, &journal, &captured);
     let Err(JournalDurableError::Stage(stage)) = result else {
         panic!("a different file under the page generation must refuse the promotion");
     };
     assert!(matches!(stage.kind, StageFailureKind::GenerationExists));
     assert_eq!(std::fs::read(file).unwrap(), b"not the envelope");
-}
-
-/// A hand-built successor naming one empty page, which `capture_inventory` refuses: the counters
-/// and both digests verify, only the canonical form of an empty inventory is violated.
-fn empty_page_inventory() -> Captured {
-    let mut captured = Captured::new(2, 2);
-    let page = JournalPage::new(0, 4, Vec::new()).unwrap();
-    let envelopes = seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&page)).unwrap();
-    let reference = page_ref_for(&page, &envelopes[0]).unwrap();
-    captured.successor.entry_count = 0;
-    captured.successor.inventory_digest = empty_inventory_digest(1);
-    captured.successor.journal_page_set_digest = journal_page_set_digest(&[reference]).unwrap();
-    captured.pages = vec![page];
-    captured.envelopes = envelopes;
-    captured
-}
-
-#[test]
-fn an_empty_page_is_refused_before_any_write() {
-    let dir = TempDir::new();
-    let committed = binding_at(3);
-    let captured = empty_page_inventory();
-    let mut fs = ObservedFs::new();
-    let result = store(&mut fs, &dir.0, &captured, Some(&committed));
-    assert_eq!(
-        result.unwrap_err(),
-        JournalDurableError::Journal(JournalError::InvalidDescriptorCount)
-    );
-    assert!(fs.created_nothing());
-}
-
-#[test]
-fn a_successor_outside_the_capture_window_is_refused_before_any_write() {
-    type Tweak = fn(&mut Captured);
-    let cases: [(&str, Tweak, MigrationExecutionError); 3] = [
-        (
-            "a bootstrap manifest has no inventory yet",
-            |c| {
-                c.committed_manifest.phase = phase_code::BOOTSTRAP_TARGET;
-                c.successor.phase = phase_code::BOOTSTRAP_TARGET;
-            },
-            MigrationExecutionError::InvalidPhaseTransition,
-        ),
-        (
-            "a manifest whose cursor already advanced",
-            |c| {
-                c.committed_manifest.cursor_entry_index = 1;
-                c.successor.cursor_entry_index = 1;
-            },
-            MigrationExecutionError::FrozenFieldChanged,
-        ),
-        (
-            "a capture that also changes the phase",
-            |c| c.successor.phase = phase_code::PREPARE,
-            MigrationExecutionError::InvalidPhaseTransition,
-        ),
-    ];
-    let committed = binding_at(3);
-    for (name, tweak, error) in cases {
-        let dir = TempDir::new();
-        let mut captured = Captured::new(2, 2);
-        tweak(&mut captured);
-        let mut fs = ObservedFs::new();
-        let result = store(&mut fs, &dir.0, &captured, Some(&committed));
-        assert_eq!(
-            result.unwrap_err(),
-            JournalDurableError::Authority(error),
-            "{name}"
-        );
-        assert!(fs.created_nothing(), "{name}");
-    }
 }
 
 #[test]

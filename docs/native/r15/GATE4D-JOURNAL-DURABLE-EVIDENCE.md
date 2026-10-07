@@ -458,14 +458,15 @@ authenticates, so the writer proves the set against that successor before it cre
 | Condition | Result |
 |---|---|
 | fence token is not the manifest's | `Fence(StaleMigrationOwner)` |
-| the committed binding is another operation, a later fence or another revision, or absent | `Authority(...)` per R4's page rule |
+| the committed binding is another operation, a later fence or another revision, or absent (an absent binding is always refused: only a root-named manifest is authority) | `Authority(...)` per R4's page rule |
+| the committed manifest the caller supplied is not the generation the root binding names (the binding carries only operation, fence, revision and the envelope digest, so another manifest at the same revision would pass the capture checks against a predecessor that does not exist): the root-named generation is read back (bounded, `load_authoritative_manifest`, which verifies the binding digest) and compared | `Authority(LiveBindingMismatch)`, or the loader's own refusal (`RecoveryRequired` for an absent generation) |
 | `successor` is not a valid successor of the committed manifest | `Authority(InvalidPhaseTransition)` and the like, via `assert_manifest_successor` |
 | `successor` is not what `capture_inventory` builds from the committed manifest: a `BOOTSTRAP_TARGET` manifest, `CONVERT` or later, an advanced cursor, a simultaneous phase change, or any field other than the revision and the four inventory fields changed (the generic successor relation alone would accept these) | `Authority(InvalidPhaseTransition)` or `Authority(FrozenFieldChanged)` |
 | `successor` does not encode (for example an entry count above the manifest bound) | `Journal(TooManyEntries)` and the like, so a set is never stored for a manifest that can never be sealed |
 | the pages are not indexed exactly `0..n` (neither digest pins the indexes, so a hand-built successor could otherwise verify) | `Journal(PageSetMismatch)`, the same check `capture_inventory` makes |
 | a page holds no entry (an empty inventory is no page at all; an empty page would give it a second page-set digest) | `Journal(InvalidDescriptorCount)`, the same rule `capture_inventory` applies |
 | a page generation is 0 or above the committed revision + 1 | `Journal(GenerationMismatch)` |
-| an envelope sealed for a key epoch other than the journal's pinned epoch (`JournalPage::open` does not compare it, the stage step does, but only once the staging file exists) | `Stage(StagedEnvelopeMismatch)` with `promoted: false` and no residue |
+| an envelope sealed for a key epoch other than the journal's pinned epoch (`JournalPage::open` does not compare the header epoch; the store checks it against the page metadata before writing, and staging validation repeats that check after creating the staging file) | `Stage(StagedEnvelopeMismatch)` with `promoted: false` and no residue |
 | an envelope that does not open as the page it is stored for (swapped, other identity or generation) | `Journal(Open(..))` from `JournalPage::open`, or `Journal(InconsistentInventory)` when the opened page differs from the page handed over |
 | the pages are not the set the successor names (envelopes of another capture, a missing or extra page, wrong entries) | `Journal(PageSetMismatch)` (page count or page-set digest), `EntryCountMismatch`, or `InconsistentInventory` (inventory digest) |
 | a page whose exact bytes are already on disk (an earlier attempt at the same set) | adopted without staging; its directory chain is synced again |
@@ -495,15 +496,17 @@ Memory: the whole set is held in memory while it is verified, which bounds this 
 that fit. That is recorded as an acceptance criterion on #359 (a streaming capture that seals, digests
 and promotes one page at a time must precede very large inventories), not decided here.
 
-Proof: eighteen cases in `gate4d_inventory_store_test` (a stored set whose bytes verify against the
-captured page set, the directory chain synced, a post-promotion sync failure reported as promoted,
-three authority refusals that create nothing, an invalid successor, a successor outside the capture
-window (bootstrap manifest, advanced cursor, simultaneous phase change), a successor that does not
-encode, a page set not indexed `0..n`, an empty page, a foreign key epoch, envelopes of another
-capture, a swapped envelope, a future page generation, page sets with different digests never
-colliding, the same set stored again adopting its identical pages, a set that failed partway
-completed by a retry that stages only the missing page, a different file at a page generation never
-replaced, sealed pages binding identity and generation).
+Proof: thirteen tests in `gate4d_inventory_store_test`, three of them tables that assert the exact
+error and that nothing was created for each case: a stored set whose bytes verify against the
+captured page set, the directory chain synced, a post-promotion sync failure reported as promoted;
+the authority refusals (later fence, another operation, a digest naming another manifest, no
+binding); a predecessor that is not the root-named manifest; successors the store cannot accept
+(phase skipped, bootstrap manifest, advanced cursor, simultaneous phase change, unencodable
+counters); page sets the successor does not name (envelopes of another capture, indexes not `0..n`,
+an empty page, a generation above the next revision); a swapped envelope and a foreign key epoch;
+page sets with different digests never colliding; the same set stored again adopting its identical
+pages; a set that failed partway completed by a retry that stages only the missing page; a different
+file at a page generation never replaced; sealed pages binding identity and generation.
 
 ## Still residual after C1b-1
 
