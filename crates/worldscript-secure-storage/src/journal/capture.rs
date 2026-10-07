@@ -31,7 +31,8 @@ pub struct SealedPage<'a> {
 /// exists yet, `InvalidPhaseTransition`), `CONVERT` or later and a journal that already made
 /// conversion progress (`FrozenFieldChanged`: the inventory is frozen). The pages must be indexed
 /// `0..n` without gap or duplicate, hold globally ascending valid entries, and each carry a
-/// generation between `1` and the new revision: a page written for this capture carries the new
+/// generation between `1` and the new revision and at least one entry (an empty inventory is no
+/// page at all, its canonical form): a page written for this capture carries the new
 /// revision, an unchanged one keeps the earlier generation that still names it. The result is the
 /// predecessor with `journal_revision + 1` and the page count, entry count, `inventory_digest` and
 /// `journal_page_set_digest` replaced, and is itself checked as a valid successor.
@@ -105,6 +106,10 @@ fn page_refs(
             let generation = sealed.page.page_generation();
             if generation == 0 || generation > revision {
                 return Err(JournalError::GenerationMismatch.into());
+            }
+            // The canonical form of an empty inventory is no page at all; an empty page would give it a second page-set digest.
+            if sealed.page.entries().is_empty() {
+                return Err(JournalError::InvalidDescriptorCount.into());
             }
             page_ref_for(sealed.page, sealed.envelope).map_err(MigrationExecutionError::from)
         })

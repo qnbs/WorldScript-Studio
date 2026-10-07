@@ -44,6 +44,21 @@ fn fence(manifest: &JournalManifest) -> MigrationFence {
     MigrationFence::from_manifest(manifest)
 }
 
+/// `(revision, phase, page_count, entry_count)`: the counters a capture sets or keeps.
+fn shape(manifest: &JournalManifest) -> (u64, u32, u32, u32) {
+    (
+        manifest.journal_revision,
+        manifest.phase,
+        manifest.page_count,
+        manifest.entry_count,
+    )
+}
+
+/// `(inventory_digest, journal_page_set_digest)`.
+fn digests(manifest: &JournalManifest) -> ([u8; 32], [u8; 32]) {
+    (manifest.inventory_digest, manifest.journal_page_set_digest)
+}
+
 fn entry(n: u32) -> JournalInventoryEntry {
     let record = RecordIdentity::new(RecordClass::Codex, &[&format!("p{n:03}")]).unwrap();
     JournalInventoryEntry::new(
@@ -118,41 +133,47 @@ fn capture_sealed(
 fn an_empty_inventory_captures_the_canonical_empty_digests() {
     let prev = manifest_at(phase_code::DISCOVER, 3);
     let next = capture(&prev, &[]).unwrap();
-    assert_eq!(next.journal_revision, 4);
-    assert_eq!(next.phase, prev.phase);
-    assert_eq!(next.page_count, 0);
-    assert_eq!(next.entry_count, 0);
-    assert_eq!(next.inventory_digest, empty_inventory_digest(1));
+    assert_eq!(shape(&next), (4, phase_code::DISCOVER, 0, 0));
     assert_eq!(
-        next.journal_page_set_digest,
-        empty_journal_page_set_digest()
+        digests(&next),
+        (empty_inventory_digest(1), empty_journal_page_set_digest())
     );
     assert_eq!(assert_manifest_successor(&prev, &next), Ok(()));
 }
 
 #[test]
-fn captured_pages_match_the_flat_digests_and_verify_against_the_manifest() {
+fn captured_pages_carry_the_flat_digests() {
     let prev = manifest_at(phase_code::DISCOVER, 3);
     let entries = sorted_entries(5);
     let pages = pages_of(&entries, 2, 4);
     let envelopes: Vec<Vec<u8>> = pages.iter().map(envelope_of).collect();
     let next = capture_sealed(&prev, &pages, &envelopes).unwrap();
-    assert_eq!(next.journal_revision, 4);
-    assert_eq!(next.page_count, 3);
-    assert_eq!(next.entry_count, 5);
-    assert_eq!(
-        next.inventory_digest,
-        inventory_digest(1, &entries).unwrap()
-    );
     let refs: Vec<_> = pages
         .iter()
         .zip(&envelopes)
         .map(|(page, envelope)| page_ref_for(page, envelope).unwrap())
         .collect();
+    assert_eq!(shape(&next), (4, phase_code::DISCOVER, 3, 5));
     assert_eq!(
-        next.journal_page_set_digest,
-        journal_page_set_digest(&refs).unwrap()
+        digests(&next),
+        (
+            inventory_digest(1, &entries).unwrap(),
+            journal_page_set_digest(&refs).unwrap()
+        )
     );
+}
+
+#[test]
+fn a_captured_manifest_verifies_against_its_pages_and_is_a_valid_successor() {
+    let prev = manifest_at(phase_code::DISCOVER, 3);
+    let pages = pages_of(&sorted_entries(5), 2, 4);
+    let envelopes: Vec<Vec<u8>> = pages.iter().map(envelope_of).collect();
+    let next = capture_sealed(&prev, &pages, &envelopes).unwrap();
+    let refs: Vec<_> = pages
+        .iter()
+        .zip(&envelopes)
+        .map(|(page, envelope)| page_ref_for(page, envelope).unwrap())
+        .collect();
     next.verify_page_set(&refs).unwrap();
     next.verify_inventory_pages(&pages).unwrap();
     assert_eq!(assert_manifest_successor(&prev, &next), Ok(()));
@@ -282,35 +303,60 @@ fn a_stale_fence_refuses_the_capture() {
 #[test]
 fn the_page_set_must_be_exactly_indexed_zero_to_n_with_valid_generations() {
     let prev = manifest_at(phase_code::DISCOVER, 3);
-    let entries = sorted_entries(6);
-    let pages = pages_of(&entries, 2, 4);
-    let journal = |error: JournalError| Err(MigrationExecutionError::Journal(error));
-    // A gap: pages 0 and 2.
-    assert_eq!(
-        capture(&prev, &[pages[0].clone(), pages[2].clone()]),
-        journal(JournalError::PageSetMismatch)
-    );
-    // A duplicate index.
-    assert_eq!(
-        capture(&prev, &[pages[0].clone(), pages[0].clone()]),
-        journal(JournalError::PageSetMismatch)
-    );
-    // The set must start at page 0.
-    assert_eq!(
-        capture(&prev, &[pages[1].clone()]),
-        journal(JournalError::PageSetMismatch)
-    );
+    let pages = pages_of(&sorted_entries(6), 2, 4);
     // A generation above the new revision names a page that does not exist yet.
     let future = JournalPage::new(0, 5, pages[0].entries().to_vec()).unwrap();
-    assert_eq!(
-        capture(&prev, &[future]),
-        journal(JournalError::GenerationMismatch)
-    );
-    // Generation 0 is not a generation: a page cannot even be built with it.
-    assert!(JournalPage::new(0, 0, pages[0].entries().to_vec()).is_err());
-    // The pages may be supplied in any order.
+    let cases: [(&str, Vec<JournalPage>, JournalError); 4] = [
+        (
+            "a gap",
+            vec![pages[0].clone(), pages[2].clone()],
+            JournalError::PageSetMismatch,
+        ),
+        (
+            "a duplicate index",
+            vec![pages[0].clone(), pages[0].clone()],
+            JournalError::PageSetMismatch,
+        ),
+        (
+            "a set that does not start at page 0",
+            vec![pages[1].clone()],
+            JournalError::PageSetMismatch,
+        ),
+        (
+            "a generation above the new revision",
+            vec![future],
+            JournalError::GenerationMismatch,
+        ),
+    ];
+    for (name, set, error) in cases {
+        assert_eq!(
+            capture(&prev, &set),
+            Err(MigrationExecutionError::Journal(error)),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn the_pages_may_be_supplied_in_any_order() {
+    let prev = manifest_at(phase_code::DISCOVER, 3);
+    let pages = pages_of(&sorted_entries(6), 2, 4);
     let shuffled = [pages[2].clone(), pages[0].clone(), pages[1].clone()];
     assert!(capture(&prev, &shuffled).is_ok());
+    // Generation 0 is not a generation: a page cannot even be built with it.
+    assert!(JournalPage::new(0, 0, pages[0].entries().to_vec()).is_err());
+}
+
+#[test]
+fn an_empty_page_is_refused_because_an_empty_inventory_is_no_page_at_all() {
+    let prev = manifest_at(phase_code::DISCOVER, 3);
+    let empty = JournalPage::new(0, 4, Vec::new()).unwrap();
+    assert_eq!(
+        capture(&prev, &[empty]),
+        Err(MigrationExecutionError::Journal(
+            JournalError::InvalidDescriptorCount
+        ))
+    );
 }
 
 #[test]
@@ -351,8 +397,7 @@ fn a_recapture_replaces_the_inventory_while_no_conversion_has_run() {
     let final_entries = sorted_entries(5);
     let final_pages = pages_of(&final_entries, 3, revision);
     let next = capture(&admit, &final_pages).unwrap();
-    assert_eq!(next.entry_count, 5);
-    assert_eq!(next.page_count, 2);
+    assert_eq!(shape(&next), (3, phase_code::ADMIT, 2, 5));
     assert_eq!(
         next.inventory_digest,
         inventory_digest(1, &final_entries).unwrap()

@@ -408,6 +408,7 @@ fence, pages)` is the manifest-side counterpart. It is pure: no I/O, no adapter,
 | `CONVERT` or later, or a non-empty cursor in an open phase (conversion progress exists) | `FrozenFieldChanged` |
 | pages not exactly indexed `0..n` (gap, duplicate, not starting at 0) | `Journal(PageSetMismatch)` (the pages may be supplied in any order) |
 | a page generation above the new revision | `Journal(GenerationMismatch)` (generation 0 cannot even be built) |
+| a page without entries | `Journal(InvalidDescriptorCount)`: an empty inventory is no page at all, so it keeps one canonical page-set digest |
 | entries not strictly ascending across pages, or one entry on two pages | `Journal(NotStrictlyAscending)` |
 | otherwise | the predecessor with `journal_revision + 1` and `page_count`, `entry_count`, `inventory_digest`, `journal_page_set_digest` replaced |
 
@@ -423,7 +424,7 @@ as a digest, and the contract says the page set, not a directory listing, is aut
 not say how the file of each page is found. C1b decides a physical layout and resolves pages by exact
 path, with a listing used only as a hint that the authenticated digests then confirm or refuse.
 
-Proof: nine cases in `gate4d_capture_test` (empty inventory, flat-digest equivalence and verification
+Proof: twelve cases in `gate4d_capture_test` (empty inventory, flat-digest equivalence and verification
 of one captured set, an unchanged page keeping an older generation, the digest binding the envelope
 bytes, every phase and cursor refusal, a stale fence, the index and generation rules, cross-page
 ordering, a recapture while no conversion has run).
