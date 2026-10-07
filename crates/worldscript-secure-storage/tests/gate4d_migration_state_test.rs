@@ -747,10 +747,14 @@ fn the_new_owner_must_hold_a_lease_that_outlives_now() {
 fn a_takeover_moves_ownership_only_and_never_a_terminal_journal() {
     let prev = leased_until(1_000);
     let now = 2_000;
-    let changes: [(&str, Change); 6] = [
+    let changes: [(&str, Change); 7] = [
         ("the phase", |m| m.phase = phase_code::ADMIT),
         ("the cursor", |m| m.cursor_entry_index = 1),
         ("the inventory", |m| m.entry_count += 1),
+        // A new owner cannot claim a final capture it never stored pages for.
+        ("the final inventory flag", |m| {
+            m.final_inventory_captured = true
+        }),
         ("the target key", |m| {
             m.target_root_key_ref_digest = Some([0x43; 32])
         }),
