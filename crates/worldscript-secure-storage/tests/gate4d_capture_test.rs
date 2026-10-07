@@ -235,6 +235,11 @@ fn a_journal_that_cannot_change_its_inventory_refuses_the_capture() {
             phase_code::BOOTSTRAP_TARGET,
             MigrationExecutionError::InvalidPhaseTransition,
         ),
+        // Ordinary writes are admitted in PREPARE, so a snapshot there would go stale (§10.3).
+        (
+            phase_code::PREPARE,
+            MigrationExecutionError::InvalidPhaseTransition,
+        ),
         (
             phase_code::CONVERT,
             MigrationExecutionError::FrozenFieldChanged,
@@ -264,7 +269,7 @@ fn a_journal_that_cannot_change_its_inventory_refuses_the_capture() {
             "phase {phase}"
         );
     }
-    for open in [phase_code::DISCOVER, phase_code::PREPARE, phase_code::ADMIT] {
+    for open in [phase_code::DISCOVER, phase_code::ADMIT] {
         assert!(
             capture(&manifest_at(open, 3), &pages).is_ok(),
             "phase {open}"

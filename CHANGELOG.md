@@ -43,8 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   large inventories stay later slices. PR #998.
 - **R-15 Gate 4D:** add `capture_inventory`, the manifest-side constructor of the §10.3 inventory
   capture. From sealed pages it builds the successor that carries the page set, the entry count and
-  the inventory digest, while the inventory is still open (before `CONVERT`, with no conversion
-  progress). Pages must be indexed from 0 without gap or duplicate, hold globally ascending valid
+  the inventory digest, in `DISCOVER` (preliminary) or `ADMIT` (final) while no conversion has run
+  (not in `PREPARE`, where ordinary writes are still admitted). Pages must be indexed from 0 without gap or duplicate, hold globally ascending valid
   entries and carry a generation no newer than the new revision, so an unchanged page keeps the
   generation that names it; the result is re-verified and checked as a valid successor. Pure: no
   I/O. The physical page layout, promotion and reading, and the conversion itself, stay later

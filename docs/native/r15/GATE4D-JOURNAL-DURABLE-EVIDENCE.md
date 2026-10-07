@@ -408,7 +408,7 @@ fence, pages)` is the manifest-side counterpart. It is pure: no I/O, no adapter,
 |---|---|
 | stale fence | `StaleMigrationOwner` |
 | terminal journal (`DONE`, `RECOVERY_REQUIRED`) | `TerminalPhase` |
-| `BOOTSTRAP_TARGET` (no inventory exists yet) | `InvalidPhaseTransition` |
+| `BOOTSTRAP_TARGET` (no inventory exists yet) or `PREPARE` (ordinary writes are admitted until `ADMIT`'s barrier, so a snapshot there would go stale; §10.3 captures the preliminary inventory in `DISCOVER` and the final one in `ADMIT`) | `InvalidPhaseTransition` |
 | `CONVERT` or later, or a non-empty cursor in an open phase (conversion progress exists) | `FrozenFieldChanged` |
 | pages not exactly indexed `0..n` (gap, duplicate, not starting at 0) | `Journal(PageSetMismatch)` (the pages may be supplied in any order) |
 | a page generation above the new revision | `Journal(GenerationMismatch)` (generation 0 cannot even be built) |
