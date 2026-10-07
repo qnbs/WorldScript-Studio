@@ -27,9 +27,11 @@ pub struct SealedPage<'a> {
 
 /// Builds the manifest successor that captures `pages` as the journal's inventory.
 ///
-/// Refused: a stale fence, a terminal journal (`TerminalPhase`), `BOOTSTRAP_TARGET` (no inventory
-/// exists yet, `InvalidPhaseTransition`), `CONVERT` or later and a journal that already made
-/// conversion progress (`FrozenFieldChanged`: the inventory is frozen). The pages must be indexed
+/// Allowed only in `DISCOVER` (the preliminary inventory) and `ADMIT` (the final one, behind the write
+/// barrier, §10.3). Refused: a stale fence, a terminal journal (`TerminalPhase`), `CONVERT` or
+/// later and a journal that already made conversion progress (`FrozenFieldChanged`: the inventory
+/// is frozen), and every other phase (`InvalidPhaseTransition`): `BOOTSTRAP_TARGET` has no inventory
+/// yet and in `PREPARE` ordinary writes are admitted, so a snapshot taken there would go stale. The pages must be indexed
 /// `0..n` without gap or duplicate, hold globally ascending valid entries, and each carry a
 /// generation between `1` and the new revision and at least one entry (an empty inventory is no
 /// page at all, its canonical form): a page written for this capture carries the new
@@ -62,19 +64,21 @@ pub fn capture_inventory(
     Ok(next)
 }
 
-/// The inventory may change only before conversion starts and while nothing has been converted.
+/// The inventory is captured in `DISCOVER` (preliminary) or `ADMIT` (final), before conversion
+/// starts and while nothing has been converted. `PREPARE` is excluded: ordinary writes are admitted
+/// there until `ADMIT`'s barrier, so only the `ADMIT` snapshot can be the commit inventory.
 fn assert_inventory_open(manifest: &JournalManifest) -> Result<(), MigrationExecutionError> {
     let phase = manifest_phase(manifest);
     if is_terminal_phase(phase) {
         return Err(MigrationExecutionError::TerminalPhase);
     }
-    if manifest.phase == phase_code::BOOTSTRAP_TARGET {
-        return Err(MigrationExecutionError::InvalidPhaseTransition);
-    }
     let cursor =
         JournalCheckpointCursor::new(manifest.cursor_page_index, manifest.cursor_entry_index);
     if phase_reached(phase, phase_code::CONVERT) || cursor != JournalCheckpointCursor::EMPTY {
         return Err(MigrationExecutionError::FrozenFieldChanged);
+    }
+    if manifest.phase != phase_code::DISCOVER && manifest.phase != phase_code::ADMIT {
+        return Err(MigrationExecutionError::InvalidPhaseTransition);
     }
     Ok(())
 }
@@ -124,15 +128,17 @@ pub(super) fn assert_page_not_empty(page: &JournalPage) -> Result<(), JournalErr
     }
 }
 
-/// Refuses a successor that is not what [`capture_inventory`] would build from `prev`: the inventory
-/// must still be open ([`assert_inventory_open`]) and the successor may differ only in the revision
+/// Refuses a successor that is not what [`capture_inventory`] would build from `prev`: it must be a
+/// valid successor ([`assert_manifest_successor`], so `prev + 1` and the rest of the relation), the
+/// inventory must still be open ([`assert_inventory_open`]) and the successor may differ only in the revision
 /// and the four inventory fields, never in phase, cursor, lease or any other field. Whoever stores
 /// the pages of a capture applies this, because the generic successor relation alone would accept a
 /// hand-built manifest that changes the inventory outside the capture window.
-pub(super) fn assert_capture_successor(
+pub fn assert_capture_successor(
     prev: &JournalManifest,
     next: &JournalManifest,
 ) -> Result<(), MigrationExecutionError> {
+    assert_manifest_successor(prev, next)?;
     assert_inventory_open(prev)?;
     if next.phase != prev.phase {
         return Err(MigrationExecutionError::InvalidPhaseTransition);

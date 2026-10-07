@@ -1,5 +1,6 @@
 //! Gate 4D B2b-1: advancing the root's live-migration binding to the journal owner's next revision
-//! (§5.4, §10.1.1).
+//! (§5.4, §10.1.1), and the composed commits of the journal owner built on it: checkpoint, takeover
+//! and inventory capture.
 
 use std::ffi::OsString;
 use std::fs;
@@ -10,17 +11,20 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::{
-    advance_live_migration, commit_catalog_change, commit_journal_checkpoint,
-    commit_journal_takeover, commit_root, content_digest, empty_inventory_digest,
-    empty_journal_page_set_digest, generation_path, load_authoritative_manifest, load_catalog,
-    operation_type, phase_code, promote_manifest_fenced, transition_phase, write_key_epoch,
-    AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit,
-    DirectoryDurability, DurableFs, InstallationScopeId, JournalCheckpoint, JournalDurableContext,
-    JournalDurableError, JournalManifest, JournalSource, JournalTakeoverCommit, KeyEpochCommit,
-    KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
-    MigrationExecutionError, MigrationFence, MigrationPhase, RootBody, RootCommitEvidence,
-    RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout,
-    StageFailureKind, StdFs, WriteOperationId,
+    advance_live_migration, capture_inventory, commit_catalog_change, commit_inventory_capture,
+    commit_journal_checkpoint, commit_journal_takeover, commit_root, content_digest,
+    empty_inventory_digest, empty_journal_page_set_digest, generation_path, inventory_page_dir,
+    load_authoritative_manifest, load_catalog, operation_type, phase_code, promote_manifest_fenced,
+    seal_inventory_pages, source_authority_kind, source_physical_authority_kind, transition_phase,
+    verify_stored_inventory, write_key_epoch, AuthorityError, BindingAdvance, CandidateConflict,
+    CatalogChange, CatalogCommit, DirectoryDurability, DurableFs, InstallationScopeId,
+    InventoryCapture, JournalCheckpoint, JournalDurableContext, JournalDurableError, JournalError,
+    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, JournalSource,
+    JournalTakeoverCommit, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider,
+    LiveMigration, LoadedCatalog, MigrationExecutionError, MigrationFence, MigrationPhase,
+    RecordClass, RecordIdentity, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
+    RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, SealedPage, StageFailureKind, StdFs,
+    WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -368,8 +372,9 @@ impl Fixture {
     fn journal_files(&self) -> Vec<(String, Vec<u8>)> {
         let mut files: Vec<(String, Vec<u8>)> = fs::read_dir(&self.journal_dir)
             .unwrap()
-            .map(|entry| {
-                let path = entry.unwrap().path();
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.is_file())
+            .map(|path| {
                 (
                     path.file_name().unwrap().to_string_lossy().into_owned(),
                     fs::read(&path).unwrap(),
@@ -378,6 +383,67 @@ impl Fixture {
             .collect();
         files.sort();
         files
+    }
+
+    /// Every file under the journal directory, pages included, with its bytes.
+    fn journal_tree(&self) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut files = Vec::new();
+        collect_files(&self.journal_dir, &mut files);
+        files.sort();
+        files
+    }
+
+    /// A capture of `captured` under its own fence and the committed key route and epoch.
+    fn capture(&mut self, captured: &Capture) -> Result<RootCommitted, AuthorityError> {
+        self.capture_over(&mut StdFs, captured)
+    }
+
+    fn capture_over<F: DurableFs>(
+        &mut self,
+        fs: &mut F,
+        captured: &Capture,
+    ) -> Result<RootCommitted, AuthorityError> {
+        let fence = MigrationFence::from_manifest(&captured.successor);
+        self.capture_fenced(fs, captured, &fence)
+    }
+
+    /// A capture presented under `fence`, which is the successor's own token for an honest caller.
+    fn capture_fenced<F: DurableFs>(
+        &mut self,
+        fs: &mut F,
+        captured: &Capture,
+        fence: &MigrationFence,
+    ) -> Result<RootCommitted, AuthorityError> {
+        let key = journal_key();
+        let op = self
+            .operation
+            .clone()
+            .unwrap_or_else(|| WriteOperationId::generate().unwrap());
+        let sealed = captured.sealed();
+        let capture = InventoryCapture {
+            checkpoint: JournalCheckpoint {
+                manifest: &captured.successor,
+                fence,
+                journal: JournalSource {
+                    key: &key,
+                    dir: &self.journal_dir,
+                    operation: &op,
+                },
+                root_key_ref: &self.key_ref,
+                active_key_epoch: 1,
+                conflict: self.conflict,
+            },
+            committed_manifest: &captured.committed,
+            pages: &sealed,
+        };
+        commit_inventory_capture(
+            fs,
+            &mut self.provider,
+            RootLayout {
+                root_dir: &self.root_dir,
+            },
+            capture,
+        )
     }
 }
 
@@ -1505,4 +1571,387 @@ fn a_reused_operation_id_still_keeps_every_discarded_candidate() {
     let mut expected = vec![first, second_bytes];
     expected.sort();
     assert_eq!(rejected, expected);
+}
+
+// ---- C1c: the composed capture commit (pages, then manifest, then the binding) ----
+
+fn collect_files(dir: &Path, files: &mut Vec<(PathBuf, Vec<u8>)>) {
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            collect_files(&path, files);
+        } else {
+            files.push((path.clone(), fs::read(&path).unwrap()));
+        }
+    }
+}
+
+fn entry(n: u32) -> JournalInventoryEntry {
+    let record = RecordIdentity::new(RecordClass::Codex, &[&format!("p{n:03}")]).unwrap();
+    JournalInventoryEntry::new(
+        record,
+        JournalInventorySource {
+            authority_kind: source_authority_kind::LEGACY_PLAINTEXT,
+            physical_authority_kind: source_physical_authority_kind::TAURI_FILESYSTEM,
+            generation: None,
+            evidence_digest: Some([n as u8; 32]),
+            foreign: None,
+        },
+    )
+    .unwrap()
+}
+
+/// An inventory captured over `committed`: its pages (two entries each) sealed once, and the
+/// manifest successor that names them.
+struct Capture {
+    committed: JournalManifest,
+    successor: JournalManifest,
+    pages: Vec<JournalPage>,
+    envelopes: Vec<Vec<u8>>,
+}
+
+impl Capture {
+    fn over(committed: &JournalManifest, entries: u32) -> Self {
+        let all: Vec<JournalInventoryEntry> = (0..entries).map(entry).collect();
+        let sorted = JournalPage::new(0, 1, all).unwrap().entries().to_vec();
+        let generation = committed.journal_revision + 1;
+        let pages: Vec<JournalPage> = sorted
+            .chunks(2)
+            .enumerate()
+            .map(|(index, chunk)| {
+                JournalPage::new(index as u32, generation, chunk.to_vec()).unwrap()
+            })
+            .collect();
+        let envelopes = seal_inventory_pages(&journal_key(), OPERATION, &pages).unwrap();
+        let fence = MigrationFence::from_manifest(committed);
+        let sealed = seal_all(&pages, &envelopes);
+        let successor = capture_inventory(committed, &fence, &sealed).unwrap();
+        Capture {
+            committed: committed.clone(),
+            successor,
+            pages,
+            envelopes,
+        }
+    }
+
+    fn sealed(&self) -> Vec<SealedPage<'_>> {
+        seal_all(&self.pages, &self.envelopes)
+    }
+}
+
+fn seal_all<'a>(pages: &'a [JournalPage], envelopes: &'a [Vec<u8>]) -> Vec<SealedPage<'a>> {
+    pages
+        .iter()
+        .zip(envelopes)
+        .map(|(page, envelope)| SealedPage { page, envelope })
+        .collect()
+}
+
+/// A root that binds revision 1 (`DISCOVER`, an open inventory) of `OPERATION`.
+fn bound_at_one() -> (Fixture, JournalManifest, LiveMigration) {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    fixture.checkpoint(&one).unwrap();
+    let bound = binding_of(&one, digest_of(&fixture.journal_dir, 1));
+    (fixture, one, bound)
+}
+
+fn verified_refs(fixture: &Fixture, binding: &LiveMigration) -> usize {
+    let op = WriteOperationId::generate().unwrap();
+    let key = journal_key();
+    let mut fs = StdFs;
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, &fixture.journal_dir, &op);
+    verify_stored_inventory(&mut ctx, binding)
+        .unwrap()
+        .page_refs()
+        .len()
+}
+
+#[test]
+fn a_capture_stores_the_pages_publishes_the_manifest_and_advances_the_binding() {
+    let (mut fixture, one, _) = bound_at_one();
+    let captured = Capture::over(&one, 5);
+    let before = fixture.loaded().root;
+    let committed = fixture.capture(&captured).unwrap();
+    let dir = fixture.journal_dir.clone();
+    let advanced = binding_of(&captured.successor, digest_of(&dir, 2));
+    let after = fixture.loaded().root;
+    assert_eq!(committed.root_generation, before.root_generation + 1);
+    assert_eq!(after.live_migration, Some(advanced.clone()));
+    // The root names a manifest whose pages are all there and authenticate against it.
+    assert_eq!(verified_refs(&fixture, &advanced), captured.pages.len());
+    let page_dir = inventory_page_dir(&dir, &captured.successor.journal_page_set_digest, 0);
+    assert!(page_dir.is_dir());
+}
+
+#[test]
+fn a_capture_refuses_without_a_bound_migration_and_writes_nothing() {
+    let mut fixture = Fixture::new();
+    let generation = fixture.ordinary_commit("bootstrap-root");
+    let captured = Capture::over(&manifest_at(OPERATION, 1, FENCE), 3);
+    assert_eq!(
+        fixture.capture(&captured),
+        Err(AuthorityError::NoLiveMigration)
+    );
+    assert!(fixture.journal_tree().is_empty());
+    assert_eq!(fixture.loaded().root.root_generation, generation);
+}
+
+#[test]
+fn a_capture_that_is_refused_before_the_store_writes_no_page_and_no_manifest() {
+    let (mut fixture, one, _) = bound_at_one();
+    let before = fixture.loaded().root;
+    let tree_before = fixture.journal_tree();
+    // The pages of another capture: authentic, but not the page set the successor names.
+    let mut foreign = Capture::over(&one, 3);
+    let other = Capture::over(&one, 3);
+    (foreign.pages, foreign.envelopes) = (other.pages, other.envelopes);
+    // A stale owner: built over a committed manifest of an older fence.
+    let stale = Capture::over(&manifest_at(OPERATION, 1, FENCE - 1), 3);
+    let cases = [
+        (
+            "the pages of another capture",
+            foreign,
+            JournalDurableError::Journal(JournalError::PageSetMismatch),
+        ),
+        (
+            "a stale owner",
+            stale,
+            JournalDurableError::Authority(MigrationExecutionError::StaleMigrationOwner),
+        ),
+    ];
+    for (name, captured, expected) in cases {
+        assert_eq!(
+            fixture.capture(&captured),
+            Err(AuthorityError::Journal(expected)),
+            "{name}"
+        );
+        assert_eq!(fixture.journal_tree(), tree_before, "{name}");
+        assert_eq!(fixture.loaded().root, before, "{name}");
+    }
+}
+
+#[test]
+fn a_failed_root_commit_after_the_capture_is_retried_and_adopts_pages_and_manifest() {
+    let (mut fixture, one, bound) = bound_at_one();
+    let captured = Capture::over(&one, 5);
+    let before = fixture.loaded().root;
+    fixture
+        .provider
+        .inject(Fault::BeforePersist(AnchorOp::Prepare));
+    let error = fixture.capture(&captured).unwrap_err();
+    assert!(matches!(error, AuthorityError::Root(_)), "{error:?}");
+    // The crash window: pages and manifest are durable, the root still names revision 1.
+    assert_eq!(fixture.loaded().root, before);
+    assert_eq!(resumed_revision(&fixture, &bound), 1);
+    let tree_after_failure = fixture.journal_tree();
+    fixture.capture(&captured).unwrap();
+    // The retry wrote nothing: both the pages and the manifest were adopted as they are.
+    assert_eq!(fixture.journal_tree(), tree_after_failure);
+    let dir = fixture.journal_dir.clone();
+    let advanced = binding_of(&captured.successor, digest_of(&dir, 2));
+    assert_eq!(fixture.loaded().root.live_migration, Some(advanced.clone()));
+    assert_eq!(verified_refs(&fixture, &advanced), captured.pages.len());
+}
+
+/// Fails the creation of any file directly in the journal directory, which is where a manifest
+/// generation is staged; the page files are staged in subdirectories.
+struct FailManifestFs {
+    inner: StdFs,
+    journal_dir: PathBuf,
+}
+
+impl DurableFs for FailManifestFs {
+    type File = File;
+
+    fn create_new(&mut self, path: &Path) -> io::Result<File> {
+        if path.parent() == Some(self.journal_dir.as_path()) {
+            return Err(io::Error::other("injected manifest staging failure"));
+        }
+        self.inner.create_new(path)
+    }
+
+    fn sync_file(&mut self, file: &mut File) -> io::Result<()> {
+        self.inner.sync_file(file)
+    }
+
+    fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+        self.inner.read(path)
+    }
+
+    fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.link_no_replace(from, to)
+    }
+
+    fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        self.inner.remove_file(path)
+    }
+
+    fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+        self.inner.sync_dir(dir)
+    }
+
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> {
+        self.inner.list_dir(dir)
+    }
+
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.rename_replace(from, to)
+    }
+
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        self.inner.create_dir_all(dir)
+    }
+}
+
+#[test]
+fn a_failure_between_the_pages_and_the_manifest_is_retried_and_completes() {
+    let (mut fixture, one, bound) = bound_at_one();
+    let captured = Capture::over(&one, 5);
+    let before = fixture.loaded().root;
+    let mut failing = FailManifestFs {
+        inner: StdFs,
+        journal_dir: fixture.journal_dir.clone(),
+    };
+    let error = fixture.capture_over(&mut failing, &captured).unwrap_err();
+    assert!(matches!(error, AuthorityError::Journal(_)), "{error:?}");
+    // The pages are durable before the manifest; the manifest and the binding are not.
+    let dir = fixture.journal_dir.clone();
+    let digest = captured.successor.journal_page_set_digest;
+    assert!(inventory_page_dir(&dir, &digest, 0).is_dir());
+    assert!(!generation_path(&dir, 2).exists());
+    assert_eq!(fixture.loaded().root, before);
+    assert_eq!(resumed_revision(&fixture, &bound), 1);
+    fixture.capture(&captured).unwrap();
+    let advanced = binding_of(&captured.successor, digest_of(&dir, 2));
+    assert_eq!(verified_refs(&fixture, &advanced), captured.pages.len());
+}
+
+#[test]
+fn a_progress_checkpoint_cannot_change_the_inventory() {
+    let (mut fixture, one, bound) = bound_at_one();
+    let tree_before = fixture.journal_tree();
+    let before = fixture.loaded().root;
+    // Naming a page set nobody wrote: the successor relation alone would accept it before CONVERT.
+    let mut claims_pages = manifest_at(OPERATION, 2, FENCE);
+    claims_pages.page_count = 1;
+    claims_pages.entry_count = 2;
+    claims_pages.inventory_digest = [0x77; 32];
+    claims_pages.journal_page_set_digest = [0x88; 32];
+    assert_eq!(
+        fixture.checkpoint(&claims_pages),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::FrozenFieldChanged
+        )))
+    );
+    assert_eq!(fixture.journal_tree(), tree_before);
+    assert_eq!(fixture.loaded().root, before);
+    // The root refuses it too when the manifest got there through the plain fenced promote.
+    promote(&fixture.journal_dir, &claims_pages, Some(&bound));
+    let named = binding_of(&claims_pages, digest_of(&fixture.journal_dir, 2));
+    assert_eq!(
+        fixture.advance(&named),
+        Err(AuthorityError::LiveMigration(
+            MigrationExecutionError::FrozenFieldChanged
+        ))
+    );
+    assert_eq!(fixture.loaded().root, before);
+    assert_eq!(one.page_count, 0);
+}
+
+#[test]
+fn a_capture_cannot_change_the_key_route() {
+    let (mut fixture, one, _) = bound_at_one();
+    let captured = Capture::over(&one, 3);
+    let tree_before = fixture.journal_tree();
+    let other_key_ref = fixture.provider.provision_epoch_key(2).unwrap();
+    fixture.key_ref = other_key_ref;
+    assert_eq!(
+        fixture.capture(&captured),
+        Err(AuthorityError::KeyRotationNotAdmitted)
+    );
+    assert_eq!(fixture.journal_tree(), tree_before);
+}
+
+#[test]
+fn a_capture_under_a_token_that_is_not_the_successors_writes_no_page() {
+    let (mut fixture, one, _) = bound_at_one();
+    let captured = Capture::over(&one, 3);
+    let tree_before = fixture.journal_tree();
+    // The right fencing generation at a journal revision the successor does not have.
+    let wrong_revision = MigrationFence {
+        fencing_generation: FENCE,
+        journal_revision: captured.successor.journal_revision + 3,
+    };
+    let result = fixture.capture_fenced(&mut StdFs, &captured, &wrong_revision);
+    assert_eq!(
+        result,
+        Err(AuthorityError::Journal(JournalDurableError::Fence(
+            MigrationExecutionError::StaleMigrationOwner
+        )))
+    );
+    assert_eq!(fixture.journal_tree(), tree_before);
+}
+
+/// Reports every directory under the page store as unconfirmed, as an adapter that cannot confirm
+/// directory durability would, while the journal and root directories stay confirmed.
+struct UnconfirmedPagesFs {
+    inner: StdFs,
+    inventory_dir: PathBuf,
+}
+
+impl DurableFs for UnconfirmedPagesFs {
+    type File = File;
+
+    fn create_new(&mut self, path: &Path) -> io::Result<File> {
+        self.inner.create_new(path)
+    }
+
+    fn sync_file(&mut self, file: &mut File) -> io::Result<()> {
+        self.inner.sync_file(file)
+    }
+
+    fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+        self.inner.read(path)
+    }
+
+    fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.link_no_replace(from, to)
+    }
+
+    fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        self.inner.remove_file(path)
+    }
+
+    fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+        let confirmed = self.inner.sync_dir(dir)?;
+        if dir.starts_with(&self.inventory_dir) {
+            return Ok(DirectoryDurability::NotConfirmed);
+        }
+        Ok(confirmed)
+    }
+
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> {
+        self.inner.list_dir(dir)
+    }
+
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.rename_replace(from, to)
+    }
+
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        self.inner.create_dir_all(dir)
+    }
+}
+
+#[test]
+fn unconfirmed_page_directories_keep_the_commit_from_reporting_confirmed() {
+    let (mut fixture, one, _) = bound_at_one();
+    let captured = Capture::over(&one, 5);
+    let mut fs = UnconfirmedPagesFs {
+        inner: StdFs,
+        inventory_dir: fixture.journal_dir.join("inventory"),
+    };
+    let committed = fixture.capture_over(&mut fs, &captured).unwrap();
+    assert_eq!(committed.directories, DirectoryDurability::NotConfirmed);
 }

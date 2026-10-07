@@ -33,6 +33,20 @@ pub fn assert_manifest_successor(
     assert_cursor_successor(prev, next)
 }
 
+/// Refuses a manifest that is not a valid successor of `prev` that leaves the inventory alone (§10.3).
+///
+/// A progress checkpoint (phase, cursor, lease, recovery) never changes the inventory fields (page
+/// count, entry count, `inventory_digest`, `journal_page_set_digest`): only a capture does, and a
+/// capture writes its pages first (`commit_inventory_capture`). The root enforces this where it
+/// starts to trust a manifest, so it never names a page set that no capture wrote.
+pub fn assert_progress_successor(
+    prev: &JournalManifest,
+    next: &JournalManifest,
+) -> Result<(), MigrationExecutionError> {
+    assert_manifest_successor(prev, next)?;
+    frozen_when(true, inventory(prev) == inventory(next))
+}
+
 fn assert_successor_revision(
     prev: &JournalManifest,
     next: &JournalManifest,

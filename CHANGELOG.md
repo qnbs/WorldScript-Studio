@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** add the composed capture commit. `commit_inventory_capture` runs under one
+  `root_commit_mutex`: it stores the captured page set, publishes the capture manifest and advances
+  the root binding as a capture, so the manifest is never written before its pages are durable and
+  the root never names a manifest whose pages are missing; a retry after a failure adopts what is
+  durable and writes only what is missing. The root now accepts a change of the inventory fields
+  only through a capture (`assert_capture_successor`) and requires every other checkpoint,
+  including `advance_live_migration`, to leave them alone (`assert_progress_successor`,
+  `FrozenFieldChanged`); before this the successor relation froze them only from `CONVERT`.
+  Inheriting unchanged pages, streaming capture and conversion stay later slices. PR #1000.
 - **R-15 Gate 4D:** add the verified reader of a stored inventory page set. `verify_stored_inventory`
   loads the root-named manifest itself, resolves each page's generation from its digest-keyed
   directory only as a hint, listed with a bound (`DurableFs::list_dir_at_most`; a missing page, a
@@ -34,8 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   large inventories stay later slices. PR #998.
 - **R-15 Gate 4D:** add `capture_inventory`, the manifest-side constructor of the §10.3 inventory
   capture. From sealed pages it builds the successor that carries the page set, the entry count and
-  the inventory digest, while the inventory is still open (before `CONVERT`, with no conversion
-  progress). Pages must be indexed from 0 without gap or duplicate, hold globally ascending valid
+  the inventory digest, in `DISCOVER` (preliminary) or `ADMIT` (final) while no conversion has run
+  (not in `PREPARE`, where ordinary writes are still admitted). Pages must be indexed from 0 without gap or duplicate, hold globally ascending valid
   entries and carry a generation no newer than the new revision, so an unchanged page keeps the
   generation that names it; the result is re-verified and checked as a valid successor. Pure: no
   I/O. The physical page layout, promotion and reading, and the conversion itself, stay later
