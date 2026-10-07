@@ -275,6 +275,7 @@ through the plain `promote_manifest_fenced` can never become authoritative. The 
 | cursor does not regress while the phase is unchanged | `RegressiveCheckpoint` | `checkpoint_progress` |
 | target key reference (`has_target_root_key_ref`, digest) frozen once the successor is at `ADMIT` or later, so entering `ADMIT` keeps the key made durable in `PREPARE` | `FrozenFieldChanged` | §10.3 `PREPARE`: target key durable before admission |
 | inventory fields (`inventory_digest`, `entry_count`, `page_count`, `journal_page_set_digest`) frozen once the successor is at `CONVERT` or later, so entering `CONVERT` keeps the inventory captured in `ADMIT` | `FrozenFieldChanged` | §10.3 `ADMIT`: the final inventory is captured in `ADMIT` |
+| `final_inventory_captured` is never cleared, never set before `ADMIT`, turns true only inside `ADMIT` (never on entering `ADMIT` or any other transition), and is required once the successor reaches `CONVERT` or a later work phase | `FrozenFieldChanged`; `FinalInventoryNotCaptured` for a successor at `CONVERT` or later without it | §10.3 `ADMIT`/`CONVERT` (Gate 4D slice D1) |
 | `recovery_reason_code` changes only when entering `RECOVERY_REQUIRED` | `FrozenFieldChanged` | `mark_recovery` |
 
 Deliberately unconstrained, because no contract text or constructor fixes them: the lease fields
@@ -596,6 +597,36 @@ route; a token that is not the successor's writes no page; unconfirmed page dire
 commit from reporting `Confirmed`; the exported capture predicate rejects a skipped or repeated
 revision).
 
+## Slice D1 — persisted proof of the final inventory capture
+
+§10.3 captures the preliminary inventory in `DISCOVER` and the final one only in `ADMIT`, behind the
+write barrier, yet nothing authenticated said which one a manifest bound: after a crash a journal
+could not tell a preliminary inventory carried forward from a final capture, and `ADMIT → CONVERT`
+was unguarded. Maintainer decision A (recorded on QNB-11 and #359) adds one authenticated manifest
+field, `final_inventory_captured`, and this slice implements it:
+
+| Where | Rule |
+|---|---|
+| codec | one strict byte (0 or 1, anything else is `Corrupt`) directly after `journal_page_set_digest`; encode and decode both refuse a flag that disagrees with the phase: true before `ADMIT`, false from `CONVERT` on (`RECOVERY_REQUIRED` carries either) |
+| capture | `capture_inventory` sets it exactly when the capture runs in `ADMIT`; `assert_capture_successor` requires that value; a capture is refused once it is true (`FrozenFieldChanged`): the final inventory is the commit inventory and is captured once |
+| successor relation | see the table in B2b-4: monotonic, never set early, true only inside `ADMIT`, required at `CONVERT` and later (`FinalInventoryNotCaptured`); it belongs to the inventory tuple, so a progress checkpoint, a phase transition or a takeover cannot change it |
+| transition | `transition_phase` refuses `ADMIT → CONVERT` without it, and the root refuses the same successor through the publish and the binding advance |
+
+**Wire compatibility.** The manifest codec first landed in #956 (2026-10-04). No release tag contains
+it (`git tag --contains` is empty, latest tag `v1.29.1`), `worldscript-secure-storage` is not a
+dependency of `src-tauri`, and the contract states that no TypeScript/Tauri path reads or writes user
+data through the crate. So no supported released artifact can hold the old layout: the unreleased
+format is amended coherently and `JOURNAL_MANIFEST_FORMAT_VERSION` stays 1, with the decoder refusing
+every other version and any layout that is not exactly the new one.
+
+Proof: two codec tests (round trip of every legal phase and flag, flag byte 2, truncation, trailing
+byte, flag against every phase), three successor tests (`CONVERT` refused without the flag at the
+constructor and the relation, the flag set only by a capture inside `ADMIT`, progress cannot change
+it), two capture tests (final only inside `ADMIT`, captured once), and an end-to-end test in
+`gate4d_root_binding_test` (a skipped capture and a flag claimed by a plain checkpoint are refused
+before a journal byte; the capture inside `ADMIT` lets the journal enter `CONVERT` and the reader
+verifies the inventory after the move).
+
 ## Still residual after C1c
 
 - Binding transitions other than the advance and the takeover: bind (bootstrap) and clear
@@ -606,7 +637,7 @@ revision).
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
 - Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4).
-- Conversion (C2+) over the verified page set. Its admission must also require that the inventory was captured under `ADMIT` before `CONVERT` is entered (the manifest has no field that says so; acceptance criterion on #359).
+- Conversion (C2+) over the verified page set: it must require exclusive admission by construction and re-read the root-bound manifest with `final_inventory_captured = 1` (maintainer decision D).
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).

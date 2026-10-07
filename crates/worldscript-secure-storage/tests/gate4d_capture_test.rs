@@ -31,6 +31,15 @@ fn manifest_at(phase: u32, revision: u64) -> JournalManifest {
         page_count: 0,
         entry_count: 0,
         journal_page_set_digest: empty_journal_page_set_digest(),
+        final_inventory_captured: matches!(
+            phase,
+            phase_code::CONVERT
+                | phase_code::VERIFY
+                | phase_code::COMMIT
+                | phase_code::RETIRE_OLD_AUTHORITY
+                | phase_code::FINALIZE
+                | phase_code::DONE
+        ),
         cursor_page_index: 0,
         cursor_entry_index: 0,
         has_lease_owner: false,
@@ -427,5 +436,45 @@ fn the_capture_predicate_is_the_successor_relation_plus_the_capture_window() {
     assert_eq!(
         assert_capture_successor(&prev, &prev),
         Err(MigrationExecutionError::StaleJournalRevision)
+    );
+}
+
+#[test]
+fn only_the_capture_inside_admit_is_the_final_one() {
+    let pages = pages_of(&sorted_entries(2), 1, 4);
+    let envelopes: Vec<Vec<u8>> = pages.iter().map(envelope_of).collect();
+    let preliminary = manifest_at(phase_code::DISCOVER, 3);
+    let early = capture_sealed(&preliminary, &pages, &envelopes).unwrap();
+    assert!(!early.final_inventory_captured);
+    let admit = manifest_at(phase_code::ADMIT, 3);
+    let last = capture_sealed(&admit, &pages, &envelopes).unwrap();
+    assert!(last.final_inventory_captured);
+    assert_eq!(assert_capture_successor(&admit, &last), Ok(()));
+    // A capture that claims the other value for its phase is not a capture.
+    let mut claims_final = early.clone();
+    claims_final.final_inventory_captured = true;
+    assert_eq!(
+        assert_capture_successor(&preliminary, &claims_final),
+        Err(MigrationExecutionError::FrozenFieldChanged)
+    );
+    let mut forgets_final = last.clone();
+    forgets_final.final_inventory_captured = false;
+    assert_eq!(
+        assert_capture_successor(&admit, &forgets_final),
+        Err(MigrationExecutionError::FrozenFieldChanged)
+    );
+}
+
+#[test]
+fn the_final_inventory_is_captured_once() {
+    let pages = pages_of(&sorted_entries(2), 1, 5);
+    let captured = {
+        let mut manifest = manifest_at(phase_code::ADMIT, 4);
+        manifest.final_inventory_captured = true;
+        manifest
+    };
+    assert_eq!(
+        capture(&captured, &pages),
+        Err(MigrationExecutionError::FrozenFieldChanged)
     );
 }

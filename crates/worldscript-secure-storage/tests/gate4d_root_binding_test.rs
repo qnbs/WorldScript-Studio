@@ -54,6 +54,7 @@ fn manifest_at(operation_id: &str, revision: u64, fencing_generation: u64) -> Jo
         page_count: 0,
         entry_count: 0,
         journal_page_set_digest: empty_journal_page_set_digest(),
+        final_inventory_captured: false,
         cursor_page_index: 0,
         cursor_entry_index: 0,
         has_lease_owner: false,
@@ -1123,6 +1124,12 @@ fn a_chain_built_by_the_transition_constructors_is_accepted_to_done_and_no_furth
         current = transition_phase(&current, &fence, MigrationPhase::from_wire(target)).unwrap();
         fixture.checkpoint(&current).unwrap();
         assert_eq!(current.phase, target);
+        if target == phase_code::ADMIT {
+            // `CONVERT` needs the final inventory, here an empty one, captured inside `ADMIT`.
+            let captured = Capture::over(&current, 0);
+            fixture.capture(&captured).unwrap();
+            current = captured.successor;
+        }
     }
     let dir = fixture.journal_dir.clone();
     assert_eq!(
@@ -1954,4 +1961,69 @@ fn unconfirmed_page_directories_keep_the_commit_from_reporting_confirmed() {
     };
     let committed = fixture.capture_over(&mut fs, &captured).unwrap();
     assert_eq!(committed.directories, DirectoryDurability::NotConfirmed);
+}
+
+/// Walks the bound journal from revision 1 (`DISCOVER`) to `ADMIT` by checkpoints.
+fn bound_at_admit() -> (Fixture, JournalManifest) {
+    let (mut fixture, one, _) = bound_at_one();
+    let mut current = one;
+    for next in [phase_code::PREPARE, phase_code::ADMIT] {
+        let fence = MigrationFence::from_manifest(&current);
+        current = transition_phase(&current, &fence, MigrationPhase::from_wire(next)).unwrap();
+        fixture.checkpoint(&current).unwrap();
+    }
+    (fixture, current)
+}
+
+#[test]
+fn the_final_capture_in_admit_is_what_lets_the_journal_enter_convert() {
+    let (mut fixture, admit) = bound_at_admit();
+    let before = fixture.loaded().root;
+    let tree_before = fixture.journal_tree();
+    // `CONVERT` straight from `ADMIT`, with no final capture: refused before a journal byte.
+    let mut skipped = bumped_revision(&admit);
+    skipped.phase = phase_code::CONVERT;
+    assert_eq!(
+        fixture.checkpoint(&skipped),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::FinalInventoryNotCaptured
+        )))
+    );
+    // A progress checkpoint cannot claim the final capture either: no pages were written for it.
+    let mut claims = bumped_revision(&admit);
+    claims.final_inventory_captured = true;
+    assert_eq!(
+        fixture.checkpoint(&claims),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::FrozenFieldChanged
+        )))
+    );
+    assert_eq!(fixture.journal_tree(), tree_before);
+    assert_eq!(fixture.loaded().root, before);
+    // The capture inside `ADMIT` writes the pages and sets the flag in the same successor.
+    let captured = Capture::over(&admit, 5);
+    assert!(captured.successor.final_inventory_captured);
+    fixture.capture(&captured).unwrap();
+    let fence = MigrationFence::from_manifest(&captured.successor);
+    // The final inventory is the commit inventory and immutable from now on: it is captured once.
+    assert_eq!(
+        capture_inventory(&captured.successor, &fence, &captured.sealed()),
+        Err(MigrationExecutionError::FrozenFieldChanged)
+    );
+    let convert = transition_phase(
+        &captured.successor,
+        &fence,
+        MigrationPhase::from_wire(phase_code::CONVERT),
+    )
+    .unwrap();
+    fixture.checkpoint(&convert).unwrap();
+    let dir = fixture.journal_dir.clone();
+    let named = binding_of(&convert, digest_of(&dir, convert.journal_revision));
+    assert_eq!(verified_refs(&fixture, &named), captured.pages.len());
+}
+
+fn bumped_revision(manifest: &JournalManifest) -> JournalManifest {
+    let mut next = manifest.clone();
+    next.journal_revision += 1;
+    next
 }

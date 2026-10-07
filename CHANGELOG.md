@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** persist the proof of the final inventory capture. The journal manifest gains an
+  authenticated `final_inventory_captured` flag (one strict byte after `journal_page_set_digest`):
+  false before `ADMIT`, set only by the capture that runs inside `ADMIT` in the same successor that
+  binds the final inventory digests, never cleared, required from `CONVERT` on. `ADMIT → CONVERT`
+  is refused without it (`FinalInventoryNotCaptured`) by the transition constructor, the successor
+  relation and the root, a capture is refused once the final inventory is captured, and a progress
+  checkpoint, phase transition or takeover cannot change it. After a crash a journal can therefore
+  tell a preliminary inventory carried forward from a final one captured behind the write barrier.
+  The unreleased manifest format is amended in place (no release contains the codec, the crate is
+  not a dependency of the desktop app), so the format version stays 1. The conversion driver, the
+  journal envelope epoch and the lease/cursor phase rules stay later slices. PR #1001.
 - **R-15 Gate 4D:** add the composed capture commit. `commit_inventory_capture` runs under one
   `root_commit_mutex`: it stores the captured page set, publishes the capture manifest and advances
   the root binding as a capture, so the manifest is never written before its pages are durable and

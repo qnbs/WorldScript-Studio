@@ -143,6 +143,7 @@ pub fn manifest_at(revision: u64) -> JournalManifest {
         page_count: 0,
         entry_count: 0,
         journal_page_set_digest: empty_journal_page_set_digest(),
+        final_inventory_captured: false,
         cursor_page_index: 0,
         cursor_entry_index: 0,
         has_lease_owner: false,

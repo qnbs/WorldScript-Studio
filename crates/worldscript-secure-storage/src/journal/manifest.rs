@@ -5,8 +5,9 @@ use crate::seal::{seal_journal_manifest_bootstrap, Key, RecordMeta, SealTarget};
 
 use super::wire::{
     check_counter, push_operation_id, push_optional, push_optional_owner, validate_epoch,
-    validate_inventory_version, validate_journal_revision, validate_lease_fields,
-    validate_operation_type, validate_phase, validate_target_key_ref, Reader,
+    validate_final_inventory, validate_inventory_version, validate_journal_revision,
+    validate_lease_fields, validate_operation_type, validate_phase, validate_target_key_ref,
+    Reader,
 };
 use super::{
     JournalError, JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA,
@@ -39,6 +40,11 @@ pub struct JournalManifest {
     pub page_count: u32,
     pub entry_count: u32,
     pub journal_page_set_digest: [u8; 32],
+    /// Whether the inventory above is the FINAL one, captured behind `ADMIT`'s write barrier (§10.3)
+    /// rather than the preliminary one `DISCOVER` records. Set only by the capture that runs in
+    /// `ADMIT`, in the same successor that binds the final inventory; never cleared; required from
+    /// `CONVERT` on.
+    pub final_inventory_captured: bool,
     pub cursor_page_index: u32,
     pub cursor_entry_index: u32,
     pub has_lease_owner: bool,
@@ -68,6 +74,7 @@ impl JournalManifest {
         out.extend_from_slice(&self.page_count.to_be_bytes());
         out.extend_from_slice(&self.entry_count.to_be_bytes());
         out.extend_from_slice(&self.journal_page_set_digest);
+        out.push(u8::from(self.final_inventory_captured));
         out.extend_from_slice(&self.cursor_page_index.to_be_bytes());
         out.extend_from_slice(&self.cursor_entry_index.to_be_bytes());
         push_optional_owner(&mut out, self)?;
@@ -94,6 +101,7 @@ impl JournalManifest {
         let page_count = reader.u32()?;
         let entry_count = reader.u32()?;
         let journal_page_set_digest = reader.digest()?;
+        let final_inventory_captured = reader.flag("final inventory flag is neither 0 nor 1")?;
         let cursor_page_index = reader.u32()?;
         let cursor_entry_index = reader.u32()?;
         let (has_lease_owner, lease_owner_id, lease_expires_unix_ms) = reader.optional_owner()?;
@@ -118,6 +126,7 @@ impl JournalManifest {
             page_count,
             entry_count,
             journal_page_set_digest,
+            final_inventory_captured,
             cursor_page_index,
             cursor_entry_index,
             has_lease_owner,
@@ -211,6 +220,7 @@ impl JournalManifest {
         }
         validate_target_key_ref(self)?;
         validate_lease_fields(self)?;
+        validate_final_inventory(self)?;
         Ok(())
     }
 }

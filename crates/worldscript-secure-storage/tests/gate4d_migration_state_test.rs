@@ -1,11 +1,12 @@
 use worldscript_secure_storage::{
     allows_phase_transition, assert_binding_takeover, assert_live_binding,
-    assert_manifest_successor, assert_takeover_promote_authority, assert_takeover_successor,
-    authoritative_manifest_revision, checkpoint_progress, empty_inventory_digest,
-    empty_journal_page_set_digest, is_terminal_phase, mark_done, mark_recovery, operation_type,
-    ordinary_mutating_writes_admitted, phase_code, transition_phase, JournalCheckpointCursor,
-    JournalError, JournalManifest, JournalRevision, LiveMigration, ManifestEnvelopeDigest,
-    MigrationExecutionError, MigrationFence, MigrationPhase, RecoveryReasonCode,
+    assert_manifest_successor, assert_progress_successor, assert_takeover_promote_authority,
+    assert_takeover_successor, authoritative_manifest_revision, checkpoint_progress,
+    empty_inventory_digest, empty_journal_page_set_digest, is_terminal_phase, mark_done,
+    mark_recovery, operation_type, ordinary_mutating_writes_admitted, phase_code, transition_phase,
+    JournalCheckpointCursor, JournalError, JournalManifest, JournalRevision, LiveMigration,
+    ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence, MigrationPhase,
+    RecoveryReasonCode,
 };
 
 struct RotateFixture {
@@ -34,6 +35,15 @@ impl RotateFixture {
             page_count: self.page_count,
             entry_count: self.entry_count,
             journal_page_set_digest: empty_journal_page_set_digest(),
+            final_inventory_captured: matches!(
+                self.phase,
+                phase_code::CONVERT
+                    | phase_code::VERIFY
+                    | phase_code::COMMIT
+                    | phase_code::RETIRE_OLD_AUTHORITY
+                    | phase_code::FINALIZE
+                    | phase_code::DONE
+            ),
             cursor_page_index: 0,
             cursor_entry_index: 0,
             has_lease_owner: false,
@@ -340,6 +350,10 @@ fn every_constructor_product_is_a_valid_successor() {
     ];
     let mut current = rotate_at(phase_code::BOOTSTRAP_TARGET, 0);
     for next_phase in &phases[1..] {
+        if current.phase == phase_code::ADMIT {
+            // The final inventory capture that `ADMIT` needs before `CONVERT` (§10.3).
+            current.final_inventory_captured = true;
+        }
         let fence = MigrationFence::from_manifest(&current);
         let next = transition_phase(&current, &fence, phase(*next_phase)).unwrap();
         assert_eq!(assert_manifest_successor(&current, &next), Ok(()));
@@ -558,7 +572,9 @@ fn the_target_key_is_frozen_from_admit_and_the_inventory_from_convert() {
         ),
     ];
     for (from, to, key_frozen, inventory_frozen) in table {
-        let prev = rotate_at(from, 4);
+        let mut prev = rotate_at(from, 4);
+        // An `ADMIT` journal that moves on has captured its final inventory.
+        prev.final_inventory_captured |= from == phase_code::ADMIT;
         for change in [target_key, has_target_key] {
             assert_eq!(
                 refused(&prev, |next| {
@@ -731,10 +747,14 @@ fn the_new_owner_must_hold_a_lease_that_outlives_now() {
 fn a_takeover_moves_ownership_only_and_never_a_terminal_journal() {
     let prev = leased_until(1_000);
     let now = 2_000;
-    let changes: [(&str, Change); 6] = [
+    let changes: [(&str, Change); 7] = [
         ("the phase", |m| m.phase = phase_code::ADMIT),
         ("the cursor", |m| m.cursor_entry_index = 1),
         ("the inventory", |m| m.entry_count += 1),
+        // A new owner cannot claim a final capture it never stored pages for.
+        ("the final inventory flag", |m| {
+            m.final_inventory_captured = true
+        }),
         ("the target key", |m| {
             m.target_root_key_ref_digest = Some([0x43; 32])
         }),
@@ -829,4 +849,80 @@ fn takeover_authority_is_the_committed_binding_plus_one_fence_and_one_revision()
         assert_takeover_promote_authority(&manifest, None),
         Err(MigrationExecutionError::LiveBindingMismatch)
     );
+}
+
+fn final_captured(mut manifest: JournalManifest) -> JournalManifest {
+    manifest.final_inventory_captured = true;
+    manifest
+}
+
+#[test]
+fn convert_cannot_be_entered_without_the_final_inventory() {
+    let admit = rotate_at(phase_code::ADMIT, 4);
+    let fence = MigrationFence::from_manifest(&admit);
+    assert_eq!(
+        transition_phase(&admit, &fence, phase(phase_code::CONVERT)),
+        Err(MigrationExecutionError::FinalInventoryNotCaptured)
+    );
+    // The successor relation refuses it as well, whoever built the manifest.
+    let mut forged = bumped(&admit);
+    forged.phase = phase_code::CONVERT;
+    assert_eq!(
+        assert_manifest_successor(&admit, &forged),
+        Err(MigrationExecutionError::FinalInventoryNotCaptured)
+    );
+    let captured = final_captured(admit);
+    let fence = MigrationFence::from_manifest(&captured);
+    let convert = transition_phase(&captured, &fence, phase(phase_code::CONVERT)).unwrap();
+    assert!(convert.final_inventory_captured);
+    assert_eq!(assert_manifest_successor(&captured, &convert), Ok(()));
+}
+
+#[test]
+fn the_final_inventory_flag_is_set_only_by_a_capture_inside_admit() {
+    let frozen = Err(MigrationExecutionError::FrozenFieldChanged);
+    let set: Change = |m| m.final_inventory_captured = true;
+    // Entering ADMIT, any other transition and plain progress never set it.
+    for (from, to) in [
+        (phase_code::DISCOVER, phase_code::DISCOVER),
+        (phase_code::DISCOVER, phase_code::PREPARE),
+        (phase_code::PREPARE, phase_code::PREPARE),
+        (phase_code::PREPARE, phase_code::ADMIT),
+        (phase_code::ADMIT, phase_code::RECOVERY_REQUIRED),
+    ] {
+        let prev = rotate_at(from, 4);
+        assert_eq!(
+            refused(&prev, |next| {
+                next.phase = to;
+                set(next);
+            }),
+            frozen,
+            "{from} -> {to}"
+        );
+    }
+    // Inside ADMIT it may turn true (the successor relation alone cannot tell a capture from a
+    // checkpoint; the progress and capture rules do), and never back.
+    let admit = rotate_at(phase_code::ADMIT, 4);
+    assert_eq!(refused(&admit, set), Ok(()));
+    let captured = final_captured(admit);
+    assert_eq!(
+        refused(&captured, |m| m.final_inventory_captured = false),
+        frozen
+    );
+    assert_eq!(
+        refused(&captured, |m| m.phase = phase_code::RECOVERY_REQUIRED),
+        Ok(())
+    );
+}
+
+#[test]
+fn a_progress_checkpoint_cannot_change_the_final_inventory_flag() {
+    let admit = rotate_at(phase_code::ADMIT, 4);
+    let mut flagged = bumped(&admit);
+    flagged.final_inventory_captured = true;
+    assert_eq!(
+        assert_progress_successor(&admit, &flagged),
+        Err(MigrationExecutionError::FrozenFieldChanged)
+    );
+    assert_eq!(assert_progress_successor(&admit, &bumped(&admit)), Ok(()));
 }
