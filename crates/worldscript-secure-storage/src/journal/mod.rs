@@ -9,6 +9,7 @@ mod capture;
 mod digest;
 mod durable;
 mod inventory;
+mod inventory_store;
 mod manifest;
 mod manifest_verify;
 mod page;
@@ -125,6 +126,9 @@ pub use durable::{
     JournalTakeover, PublishedManifest,
 };
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
+pub use inventory_store::{
+    inventory_page_dir, promote_inventory_set_fenced, seal_inventory_pages, InventorySetWrite,
+};
 pub use manifest::{JournalManifest, JournalPageRef};
 pub use page::JournalPage;
 pub use state::{

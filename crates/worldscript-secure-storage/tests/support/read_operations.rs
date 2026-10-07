@@ -124,12 +124,10 @@ impl Fixture {
         let mut provider = configured_provider(&base, &root);
         let identity = RecordIdentity::new(RecordClass::Codex, &["p1"]).unwrap();
         // Gate3 test-only seeding completes before provider ownership transfers to the reader.
-        let seed_admission = SharedAdmissionGuard::try_acquire(AdmissionScope {
+        let seed_admission = acquire_shared_until_available(AdmissionScope {
             installation_dir: &base,
             root_dir: &root,
-        })
-        .unwrap()
-        .unwrap();
+        });
         let route = provider
             .read_root_anchor_state()
             .unwrap()
@@ -198,6 +196,25 @@ impl Fixture {
         ProtectedRecord {
             identity: &self.identity,
             location: self.location(),
+        }
+    }
+}
+
+/// Release is observable only eventually: a forked child keeps an inherited `flock` descriptor until exec.
+const ADMISSION_RELEASE_DEADLINE: Duration = Duration::from_secs(5);
+const ADMISSION_RETRY_INTERVAL: Duration = Duration::from_millis(5);
+
+// QNBS-v3: `Ok(None)` right after `configured_provider` dropped its exclusive guard is legal until a forked sibling execs and closes the inherited flock descriptor.
+fn acquire_shared_until_available(scope: AdmissionScope<'_>) -> SharedAdmissionGuard {
+    let deadline = Instant::now() + ADMISSION_RELEASE_DEADLINE;
+    loop {
+        match SharedAdmissionGuard::try_acquire(scope) {
+            Ok(Some(guard)) => return guard,
+            Ok(None) if Instant::now() < deadline => thread::sleep(ADMISSION_RETRY_INTERVAL),
+            Ok(None) => {
+                panic!("seed admission stayed unavailable after bounded nonblocking retries")
+            }
+            Err(error) => panic!("seed admission failed: {error:?}"),
         }
     }
 }
