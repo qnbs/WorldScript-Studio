@@ -1629,7 +1629,7 @@ impl Capture {
                 JournalPage::new(index as u32, generation, chunk.to_vec()).unwrap()
             })
             .collect();
-        let envelopes = seal_inventory_pages(&journal_key(), OPERATION, &pages).unwrap();
+        let envelopes = seal_inventory_pages(&journal_key(), committed, &pages).unwrap();
         let fence = MigrationFence::from_manifest(committed);
         let sealed = seal_all(&pages, &envelopes);
         let successor = capture_inventory(committed, &fence, &sealed).unwrap();

@@ -13,8 +13,9 @@ use worldscript_secure_storage::{
     parse_envelope, phase_code, promote_inventory_set_fenced, promote_manifest_fenced,
     seal_inventory_pages, source_authority_kind, source_physical_authority_kind,
     DirectoryDurability, DurableFs, InventorySetWrite, JournalDurableContext, JournalDurableError,
-    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, LiveMigration,
-    MigrationFence, RecordClass, RecordIdentity, RecordMeta, SealedPage, StdFs, WriteOperationId,
+    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, Key,
+    LiveMigration, MigrationFence, RecordClass, RecordIdentity, RecordMeta, SealedPage, StdFs,
+    WriteOperationId,
 };
 
 pub const OPERATION: &str = "store-op";
@@ -127,6 +128,11 @@ pub fn key() -> worldscript_secure_storage::Key {
     worldscript_secure_storage::Key::from_bytes(&mut [9u8; 32])
 }
 
+/// A key that is not the journal key: what another epoch's pages are sealed under.
+pub fn other_key() -> worldscript_secure_storage::Key {
+    worldscript_secure_storage::Key::from_bytes(&mut [10u8; 32])
+}
+
 pub fn manifest_at(revision: u64) -> JournalManifest {
     JournalManifest {
         operation_id: OPERATION.into(),
@@ -201,7 +207,7 @@ impl Captured {
 
     /// `pages` sealed once and captured over `committed_manifest`.
     pub fn on_pages(committed_manifest: JournalManifest, pages: Vec<JournalPage>) -> Self {
-        let envelopes = seal_inventory_pages(&key(), OPERATION, &pages).unwrap();
+        let envelopes = seal_inventory_pages(&key(), &committed_manifest, &pages).unwrap();
         Self::from_sealed(committed_manifest, pages, envelopes)
     }
 
@@ -339,8 +345,14 @@ pub fn page_file(dir: &Path, digest: &[u8; 32], index: u32) -> PathBuf {
     inventory_page_dir(dir, digest, index).join("generation-4.wsr1")
 }
 
-/// Page 0's envelope sealed for `epoch`.
+/// Page 0's envelope sealed for `epoch` under the journal key.
 pub fn sealed_at_epoch(captured: &Captured, epoch: u64) -> Vec<u8> {
+    sealed_under(captured, &key(), epoch)
+}
+
+/// Page 0's envelope sealed for `epoch` under `key`: with another key it is what a page of another
+/// epoch really looks like, which authenticates only under that epoch's own key.
+pub fn sealed_under(captured: &Captured, key: &Key, epoch: u64) -> Vec<u8> {
     let parsed = parse_envelope(&captured.envelopes[0]).unwrap();
     let meta = RecordMeta {
         key_epoch: epoch,
@@ -348,13 +360,17 @@ pub fn sealed_at_epoch(captured: &Captured, epoch: u64) -> Vec<u8> {
         record_schema: parsed.header().record_schema,
     };
     let identity = RecordIdentity::new(RecordClass::MigrationPage, &[OPERATION, "0"]).unwrap();
-    captured.pages[0].seal(&key(), &identity, meta).unwrap()
+    captured.pages[0].seal(key, &identity, meta).unwrap()
 }
 
 /// Replaces the captured pages by `page`, sealed; the successor is left as it was.
 pub fn reseal(captured: &mut Captured, page: JournalPage) {
-    captured.envelopes =
-        seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&page)).unwrap();
+    captured.envelopes = seal_inventory_pages(
+        &key(),
+        &captured.committed_manifest,
+        std::slice::from_ref(&page),
+    )
+    .unwrap();
     captured.pages = vec![page];
 }
 

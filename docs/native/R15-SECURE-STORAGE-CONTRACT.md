@@ -2335,8 +2335,10 @@ are durable.
 The journal itself, together with the other control-plane records created under
 `BOOTSTRAP_TARGET` (the authority-root manifest, the key-epoch registry, and
 record-commit/record-catalog control records), is excluded from the per-record `CONVERT`/`VERIFY`
-inventory that gates completion. These records are created natively under the target epoch as the
-migration's own control apparatus — never converted from legacy plaintext — so the journal's own
+inventory that gates completion. These records are created natively as the migration's own control
+apparatus (under the target epoch, except the journal and its pages, which are sealed under the
+operation's journal envelope epoch of §10.1.1: the target epoch for `ENABLE`, the source epoch for
+`ROTATE` and `ENVELOPE_MIGRATION`) — never converted from legacy plaintext — so the journal's own
 revision advancing at every checkpoint does not make it a stale inventory entry; §5.3 already
 establishes this same exclusion for control records versus their own `record-commit` marker, and
 this is its migration-inventory counterpart. Gate 5's inventory-complete requirement in §20 applies
@@ -2393,6 +2395,26 @@ the same authenticated successor that binds the final inventory digests, never c
 with. Entering `ADMIT` does not set it, so after a crash or restart a journal can tell a preliminary
 inventory carried forward from a final one actually captured behind the barrier. The final inventory
 is the commit inventory and immutable once captured, so it is captured once.
+
+**Journal envelope epoch.** The manifest and every page of one operation are sealed under a single key
+epoch that is stable for the whole operation and derived from the authenticated manifest alone, never
+from the authority root's `active_key_epoch`, which moves at cutover: `ENABLE` seals under
+`target_epoch` (there is no encrypted source, and §8.3 fixes a first-time enable at exactly
+`0 → 1`, so an `ENABLE` manifest with any other tuple is not encodable), `ROTATE` and
+`ENVELOPE_MIGRATION` seal under `source_epoch`, and a rotation or envelope migration without a source
+epoch is not encodable. The envelope header's `key_epoch` must equal that value in every phase,
+including `RECOVERY_REQUIRED`. A page's writer and reader compare the header epoch with the epoch of
+the authenticated manifest before the key is used (the authority-first routing of §6), and a page
+sealed under any other epoch is refused as `KeyEpochMismatch`. A manifest names its own epoch only in
+its authenticated body, so it is refused at sealing for any other epoch and its header epoch is
+compared after authentication (`KeyEpochMismatch`); comparing a manifest's header before the key is
+used needs an expected epoch from authority (the root binding and the key-epoch registry), which the
+registry resolution of the journal key provides. Until then a manifest sealed under another epoch's
+different key fails authentication and is refused as an open failure; it is never accepted. The source
+epoch therefore has to stay resolvable, at least `RetiredRecoveryOnly`, for as long as a journal is
+bound to the root: it is never revoked or destroyed while a live migration names the journal, and
+after cutover the journal is resolved through the authenticated manifest and the key-epoch registry
+rather than the root's active epoch.
 
 **`journal_page_set_digest`**, analogous to `catalog_set_digest` (§5.4):
 
@@ -2999,7 +3021,8 @@ exactly one of the four groups below; none is left to reader inference, and none
 
 *Native Core control-plane records — no disposition applies.* These classes have no pre-existing
 legacy source on `main` (§3 states "no native record exists" for each) and are created natively
-under the target epoch as R-15's own control apparatus, never converted from a legacy source; §10.1
+as R-15's own control apparatus (under the target epoch, except migration journals and their pages,
+which follow the journal envelope epoch of §10.1.1), never converted from a legacy source; §10.1
 already excludes them from the per-record `CONVERT`/`VERIFY` migration inventory on that basis, so
 "migration disposition" does not apply to them at all — not `MIGRATE_TO_R15`, and not any other
 value:

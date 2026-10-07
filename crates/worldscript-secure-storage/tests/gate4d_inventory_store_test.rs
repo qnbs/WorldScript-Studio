@@ -302,14 +302,10 @@ fn an_envelope_that_does_not_belong_to_its_page_is_refused_before_any_write() {
     let mut foreign_epoch = Captured::new(2, 2);
     foreign_epoch.envelopes[0] = sealed_at_epoch(&foreign_epoch, 2);
     let error = refusal_in(&journal_of(&foreign_epoch), &foreign_epoch);
-    let JournalDurableError::Stage(stage) = error else {
-        panic!("a foreign key epoch must be refused as a staged-envelope mismatch");
-    };
-    assert!(matches!(
-        stage.kind,
-        StageFailureKind::StagedEnvelopeMismatch
-    ));
-    assert!(!stage.promoted);
+    assert_eq!(
+        error,
+        JournalDurableError::Journal(JournalError::KeyEpochMismatch)
+    );
 }
 
 #[test]
@@ -430,7 +426,7 @@ fn recapture(first: &Captured) -> Captured {
     let committed = first.successor.clone();
     let generation = committed.journal_revision + 1;
     let rewritten = JournalPage::new(1, generation, first.pages[1].entries().to_vec()).unwrap();
-    let fresh = seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&rewritten)).unwrap();
+    let fresh = seal_inventory_pages(&key(), &committed, std::slice::from_ref(&rewritten)).unwrap();
     let pages = vec![first.pages[0].clone(), rewritten];
     let envelopes = vec![first.envelopes[0].clone(), fresh[0].clone()];
     Captured::from_sealed(committed, pages, envelopes)
@@ -451,7 +447,7 @@ fn a_page_keeping_an_older_generation_is_refused_until_the_predecessor_set_can_b
 #[test]
 fn sealed_pages_bind_their_identity_and_generation() {
     let pages = pages_of(4, 2, 4);
-    let envelopes = seal_inventory_pages(&key(), OPERATION, &pages).unwrap();
+    let envelopes = seal_inventory_pages(&key(), &manifest_at(COMMITTED_REVISION), &pages).unwrap();
     for (page, envelope) in pages.iter().zip(&envelopes) {
         let identity = RecordIdentity::new(
             RecordClass::MigrationPage,
@@ -466,4 +462,62 @@ fn sealed_pages_bind_their_identity_and_generation() {
     let other = RecordIdentity::new(RecordClass::MigrationPage, &["other-op", "0"]).unwrap();
     assert!(JournalPage::open(&key(), &page_one, 4, &envelopes[0]).is_err());
     assert!(JournalPage::open(&key(), &other, 4, &envelopes[0]).is_err());
+}
+
+/// A committed manifest of a rotation from epoch 2 to 3, whose journal is sealed under epoch 2.
+fn rotation_from_epoch_two() -> JournalManifest {
+    let mut manifest = manifest_at(COMMITTED_REVISION);
+    manifest.operation_type = operation_type::ROTATE;
+    manifest.source_epoch = 2;
+    manifest.target_epoch = 3;
+    manifest
+}
+
+fn header_epoch(file: &Path) -> u64 {
+    parse_envelope(&std::fs::read(file).unwrap())
+        .unwrap()
+        .header()
+        .key_epoch
+}
+
+#[test]
+fn an_operation_stores_its_pages_under_its_own_journal_epoch() {
+    let captured = Captured::on(rotation_from_epoch_two(), 5, 2);
+    let journal = journal_of(&captured);
+    store(&mut StdFs, &journal, &captured).unwrap();
+    assert_stored(journal.path(), &captured);
+    let page = page_file(journal.path(), &captured.digest(), 0);
+    assert_eq!(header_epoch(&page), 2);
+    // The committed manifest of the same operation is sealed under that epoch too.
+    let manifest = generation_path(journal.path(), COMMITTED_REVISION);
+    assert_eq!(header_epoch(&manifest), 2);
+}
+
+#[test]
+fn pages_sealed_for_another_epoch_than_the_operations_are_refused() {
+    // The right key and identity, but the epoch of an ENABLE journal instead of this rotation's.
+    let mut wrong = Captured::on(rotation_from_epoch_two(), 2, 2);
+    wrong.envelopes[0] = sealed_at_epoch(&wrong, 1);
+    let journal = journal_of(&wrong);
+    let mut fs = ObservedFs::new();
+    assert_eq!(
+        store(&mut fs, &journal, &wrong).unwrap_err(),
+        JournalDurableError::Journal(JournalError::KeyEpochMismatch)
+    );
+    assert!(fs.created_nothing());
+}
+
+#[test]
+fn a_page_of_another_epoch_and_key_is_an_epoch_error_not_an_authentication_failure() {
+    // Sealed under the key of another epoch: opening it with the journal key would fail
+    // authentication, so the epoch has to be compared before the key is used.
+    let mut wrong = Captured::on(rotation_from_epoch_two(), 2, 2);
+    wrong.envelopes[0] = sealed_under(&wrong, &other_key(), 1);
+    let journal = journal_of(&wrong);
+    let mut fs = ObservedFs::new();
+    assert_eq!(
+        store(&mut fs, &journal, &wrong).unwrap_err(),
+        JournalDurableError::Journal(JournalError::KeyEpochMismatch)
+    );
+    assert!(fs.created_nothing());
 }

@@ -214,7 +214,7 @@ fn a_page_that_does_not_authenticate_is_refused() {
 fn an_authentic_page_the_manifest_does_not_name_is_refused() {
     // The same page sealed again is authentic but is not the envelope the page set binds.
     let resealed = refusal_after(|j, c| {
-        let fresh = seal_inventory_pages(&key(), OPERATION, &c.pages[1..2]).unwrap();
+        let fresh = seal_inventory_pages(&key(), &c.committed_manifest, &c.pages[1..2]).unwrap();
         std::fs::write(file_of(j, c, 1), &fresh[0]).unwrap();
     });
     assert_eq!(
@@ -228,10 +228,10 @@ fn a_page_sealed_for_another_key_epoch_is_refused() {
     let foreign = refusal_after(|j, c| {
         std::fs::write(file_of(j, c, 0), sealed_at_epoch(c, 2)).unwrap();
     });
-    assert!(matches!(
+    assert_eq!(
         foreign,
-        JournalDurableError::Journal(JournalError::Corrupt(_))
-    ));
+        JournalDurableError::Journal(JournalError::KeyEpochMismatch)
+    );
 }
 
 #[test]
@@ -319,6 +319,41 @@ fn a_page_set_a_canonical_writer_cannot_produce_is_not_certified() {
     assert_eq!(
         verify(&mut StdFs, &plant(&empty)).unwrap_err(),
         JournalDurableError::Journal(JournalError::InvalidDescriptorCount)
+    );
+}
+
+#[test]
+fn a_page_set_of_another_journal_epoch_verifies_and_a_misrouted_page_does_not() {
+    let mut manifest = manifest_at(COMMITTED_REVISION);
+    manifest.operation_type = operation_type::ROTATE;
+    manifest.source_epoch = 2;
+    manifest.target_epoch = 3;
+    let captured = Captured::on(manifest, 5, 2);
+    let mut journal = journal_of(&captured);
+    store(&mut StdFs, &journal, &captured).unwrap();
+    journal.live = commit_into(journal.path(), &captured.successor);
+    let verified = verify(&mut StdFs, &journal).unwrap();
+    assert_eq!(verified.page_refs().len(), captured.pages.len());
+    // A page sealed at epoch 1, as the old convention would, is authentic but misrouted.
+    std::fs::write(
+        file_of(&journal, &captured, 0),
+        sealed_at_epoch(&captured, 1),
+    )
+    .unwrap();
+    assert_eq!(
+        verify(&mut StdFs, &journal).unwrap_err(),
+        JournalDurableError::Journal(JournalError::KeyEpochMismatch)
+    );
+    // Sealed under the key of another epoch it would not even authenticate with the journal key; the
+    // epoch is compared first, so it is still an epoch error.
+    std::fs::write(
+        file_of(&journal, &captured, 0),
+        sealed_under(&captured, &other_key(), 1),
+    )
+    .unwrap();
+    assert_eq!(
+        verify(&mut StdFs, &journal).unwrap_err(),
+        JournalDurableError::Journal(JournalError::KeyEpochMismatch)
     );
 }
 
