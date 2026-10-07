@@ -210,11 +210,18 @@ fn assert_envelope_is_page<F: DurableFs>(
     assert_key_epoch(sealed)
 }
 
-/// `JournalPage::open` does not compare the header's key epoch, but the stage step does, after the
-/// staging file exists. Refuse it here so a refused store leaves no residue.
+/// Whether the envelope's header carries the journal's pinned key epoch. `JournalPage::open` does
+/// not compare it, but the stage step does (after a staging file exists), and a reader must not
+/// accept a page sealed for another epoch.
+pub(super) fn has_pinned_epoch(envelope: &[u8], page: &JournalPage) -> Result<bool, JournalError> {
+    let parsed = parse_envelope(envelope).map_err(JournalError::Open)?;
+    Ok(parsed.header().key_epoch == page_meta(page).key_epoch)
+}
+
+/// Refuses an envelope sealed for another key epoch before any staging file exists, so a refused
+/// store leaves no residue.
 fn assert_key_epoch(sealed: &SealedPage<'_>) -> Result<(), JournalDurableError> {
-    let parsed = parse_envelope(sealed.envelope).map_err(JournalError::Open)?;
-    if parsed.header().key_epoch == page_meta(sealed.page).key_epoch {
+    if has_pinned_epoch(sealed.envelope, sealed.page)? {
         return Ok(());
     }
     Err(JournalDurableError::Stage(StageFailure {
