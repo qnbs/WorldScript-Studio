@@ -201,7 +201,7 @@ impl Captured {
 
     /// `pages` sealed once and captured over `committed_manifest`.
     pub fn on_pages(committed_manifest: JournalManifest, pages: Vec<JournalPage>) -> Self {
-        let envelopes = seal_inventory_pages(&key(), OPERATION, &pages).unwrap();
+        let envelopes = seal_inventory_pages(&key(), &committed_manifest, &pages).unwrap();
         Self::from_sealed(committed_manifest, pages, envelopes)
     }
 
@@ -353,8 +353,12 @@ pub fn sealed_at_epoch(captured: &Captured, epoch: u64) -> Vec<u8> {
 
 /// Replaces the captured pages by `page`, sealed; the successor is left as it was.
 pub fn reseal(captured: &mut Captured, page: JournalPage) {
-    captured.envelopes =
-        seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&page)).unwrap();
+    captured.envelopes = seal_inventory_pages(
+        &key(),
+        &captured.committed_manifest,
+        std::slice::from_ref(&page),
+    )
+    .unwrap();
     captured.pages = vec![page];
 }
 

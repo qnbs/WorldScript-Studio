@@ -33,7 +33,7 @@ use super::durable::{
     load_authoritative_manifest, migration_page_identity, page_meta, stage_io, stage_request,
     with_fence, JournalDurableContext, JournalDurableError,
 };
-use super::manifest::JournalManifest;
+use super::manifest::{journal_envelope_epoch, JournalManifest};
 use super::page::JournalPage;
 use super::state::{assert_page_promote_authority, MigrationExecutionError, MigrationFence};
 use super::JournalError;
@@ -54,20 +54,22 @@ pub fn inventory_page_dir(
         .join(format!("page-{page_index}"))
 }
 
-/// Seals each page once, as `migration-page:<operation-id>:<index>` at its own generation.
+/// Seals each page once, as `migration-page:<operation-id>:<index>` of `manifest`'s operation at its
+/// own generation and under the operation's journal envelope epoch.
 ///
 /// The set digest binds the exact envelope bytes and sealing uses a fresh nonce each time, so the
 /// caller seals first, captures the inventory from these bytes, and stores these same bytes.
 pub fn seal_inventory_pages(
     key: &Key,
-    operation_id: &str,
+    manifest: &JournalManifest,
     pages: &[JournalPage],
 ) -> Result<Vec<Vec<u8>>, JournalError> {
+    let epoch = journal_envelope_epoch(manifest)?;
     pages
         .iter()
         .map(|page| {
-            let identity = migration_page_identity(operation_id, page.page_index())?;
-            page.seal(key, &identity, page_meta(page))
+            let identity = migration_page_identity(&manifest.operation_id, page.page_index())?;
+            page.seal(key, &identity, page_meta(page, epoch))
         })
         .collect()
 }
@@ -204,21 +206,21 @@ fn assert_envelope_is_page<F: DurableFs>(
             JournalError::InconsistentInventory,
         ));
     }
-    assert_key_epoch(sealed)
+    assert_key_epoch(sealed, journal_envelope_epoch(manifest)?)
 }
 
-/// Whether the envelope's header carries the journal's pinned key epoch. `JournalPage::open` does
-/// not compare it, but the stage step does (after a staging file exists), and a reader must not
-/// accept a page sealed for another epoch.
-pub(super) fn has_pinned_epoch(envelope: &[u8], page: &JournalPage) -> Result<bool, JournalError> {
+/// Whether the envelope's header carries `epoch`, the operation's journal envelope epoch.
+/// `JournalPage::open` does not compare it, but the stage step does (after a staging file exists),
+/// and a reader must not accept a page sealed for another epoch.
+pub(super) fn has_epoch(envelope: &[u8], epoch: u64) -> Result<bool, JournalError> {
     let parsed = parse_envelope(envelope).map_err(JournalError::Open)?;
-    Ok(parsed.header().key_epoch == page_meta(page).key_epoch)
+    Ok(parsed.header().key_epoch == epoch)
 }
 
 /// Refuses an envelope sealed for another key epoch before any staging file exists, so a refused
 /// store leaves no residue.
-fn assert_key_epoch(sealed: &SealedPage<'_>) -> Result<(), JournalDurableError> {
-    if has_pinned_epoch(sealed.envelope, sealed.page)? {
+fn assert_key_epoch(sealed: &SealedPage<'_>, epoch: u64) -> Result<(), JournalDurableError> {
+    if has_epoch(sealed.envelope, epoch)? {
         return Ok(());
     }
     Err(JournalDurableError::Stage(StageFailure {
@@ -255,7 +257,13 @@ fn store_page<F: DurableFs>(
         &set.committed_manifest.operation_id,
         sealed.page.page_index(),
     )?;
-    let request = stage_request(&dir, &identity, page_meta(sealed.page), ctx.operation);
+    let epoch = journal_envelope_epoch(set.committed_manifest)?;
+    let request = stage_request(
+        &dir,
+        &identity,
+        page_meta(sealed.page, epoch),
+        ctx.operation,
+    );
     let promoted = stage_and_promote_envelope(ctx.fs, ctx.key, &request, sealed.envelope.to_vec())?;
     let above = dir.parent().unwrap_or(ctx.dir);
     let synced = sync_chain(ctx, above, promoted.staging)?;

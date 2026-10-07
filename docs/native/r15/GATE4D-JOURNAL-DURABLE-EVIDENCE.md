@@ -470,7 +470,7 @@ authenticates, so the writer proves the set against that successor before it cre
 | the pages are not indexed exactly `0..n` (neither digest pins the indexes, so a hand-built successor could otherwise verify) | `Journal(PageSetMismatch)`, the same check `capture_inventory` makes |
 | a page holds no entry (an empty inventory is no page at all; an empty page would give it a second page-set digest) | `Journal(InvalidDescriptorCount)`, the same rule `capture_inventory` applies |
 | a page generation other than the successor's revision (`committed revision + 1`): the store writes only the pages of this capture. `capture_inventory` still lets an unchanged page keep the earlier generation that names it, but proving that the predecessor's page set contains those bytes needs the predecessor's authenticated page references, which only a verified reader of the stored set (C1b-2) can provide; an exact-path byte comparison is not membership, because an orphan envelope can sit in the predecessor's directory. An older generation is therefore refused until then | `Journal(GenerationMismatch)` |
-| an envelope sealed for a key epoch other than the journal's pinned epoch (`JournalPage::open` does not compare the header epoch; the store checks it against the page metadata before writing, and staging validation repeats that check after creating the staging file) | `Stage(StagedEnvelopeMismatch)` with `promoted: false` and no residue |
+| an envelope sealed for a key epoch other than the operation's journal envelope epoch (`journal_envelope_epoch`; `JournalPage::open` does not compare the header epoch; the store checks it against the page metadata before writing, and staging validation repeats that check after creating the staging file) | `Stage(StagedEnvelopeMismatch)` with `promoted: false` and no residue |
 | an envelope that does not open as the page it is stored for (swapped, other identity or generation) | `Journal(Open(..))` from `JournalPage::open`, or `Journal(InconsistentInventory)` when the opened page differs from the page handed over |
 | the pages are not the set the successor names (envelopes of another capture, a missing or extra page, wrong entries) | `Journal(PageSetMismatch)` (page count or page-set digest), `EntryCountMismatch`, or `InconsistentInventory` (inventory digest) |
 | a page whose exact bytes are already on disk (an earlier attempt at the same set) | adopted without staging; its directory chain is synced again |
@@ -533,7 +533,7 @@ manifest, so it can be confirmed, not read.
 | manifest | loaded by the reader itself through `load_authoritative_manifest` (root-named generation, digest-verified); never a caller-supplied manifest |
 | generation | the listing of `inventory/<D>/page-<i>/` is a hint, bounded while it is read (`DurableFs::list_dir_at_most`, at most 64 entries; `StdFs` never collects more than 65 names): exactly one canonical `generation-<n>.wsr1` (staging leftovers and other names ignored); none, several, a directory with more than 64 entries or a missing directory is `Authority(RecoveryRequired)` |
 | read | bounded by the largest valid sealed page (`MAX_JOURNAL_PAGE_BYTES` + envelope header + tag); a larger file is `Journal(Corrupt)` before any parse; a missing file is `Authority(RecoveryRequired)` |
-| open | `migration-page:<op>:<i>` at that generation under the journal key, at the pinned key epoch (`Journal(Open(..))`, `GenerationMismatch`, `WrongPageIndex`, `Corrupt` for another epoch) |
+| open | `migration-page:<op>:<i>` at that generation under the journal key, at the operation's journal envelope epoch (`Journal(Open(..))`, `GenerationMismatch`, `WrongPageIndex`, `KeyEpochMismatch` for another epoch) |
 | canonical | a page generation outside `1..=journal_revision` (`GenerationMismatch`) or a page without entries (`InvalidDescriptorCount`) is refused even when both digests confirm it: `capture_inventory` states these rules, so a set that breaks them was written by something else and is not certified |
 | digests | the inventory digest is streamed one page at a time; only the 48-byte page reference is kept per page; at the end `verify_page_set` and the inventory digest confirm what the listing hinted (`PageSetMismatch`, `EntryCountMismatch`, `InconsistentInventory`) |
 
@@ -627,6 +627,38 @@ it), two capture tests (final only inside `ADMIT`, captured once), and an end-to
 before a journal byte; the capture inside `ADMIT` lets the journal enter `CONVERT` and the reader
 verifies the inventory after the move).
 
+## Slice D2a — operation-stable journal envelope epoch
+
+The journal envelopes carried a hard-coded `key_epoch = 1`, which is right for a first-time enable
+(§8.3) but wrong for a rotation from epoch 2, and which the root's `active_key_epoch` cannot replace
+because that value moves to the target at cutover while the journal is still bound. Maintainer
+decision B fixes the rule and this slice implements it:
+
+| Operation | Journal envelope epoch | Why |
+|---|---|---|
+| `ENABLE` | `target_epoch` | there is no encrypted source; the first protected epoch seals the journal |
+| `ROTATE` | `source_epoch` | the journal is written before and across cutover; the source epoch outlives the root's move to the target |
+| `ENVELOPE_MIGRATION` | `source_epoch` | same |
+
+| Where | Rule |
+|---|---|
+| `journal_envelope_epoch(&JournalManifest)` | the one derivation, a pure function of the authenticated manifest; `ROTATE` and `ENVELOPE_MIGRATION` without a source epoch are `InvalidCounter`, any other operation type `UnsupportedOperationType`; the phase never changes the result |
+| manifest codec | `validate_semantics` calls it, so a manifest that cannot name its epoch does not encode or decode; `JournalManifest::seal` refuses metadata with another epoch and `open` refuses an authentic envelope whose header carries another one (`KeyEpochMismatch`) |
+| durable promotion | the manifest metadata is derived with it (`manifest_meta` is fallible); the identical-candidate adoption no longer carries a second epoch clause because an identical candidate is sealed by the same derivation |
+| page store | `seal_inventory_pages` takes the committed manifest and seals every page at its epoch; `store_page` derives the epoch from the committed manifest and refuses a page sealed for another one before anything is created (`Stage(StagedEnvelopeMismatch)`) |
+| page reader | `open_stored_page` checks the envelope header against the manifest's epoch before opening and reports `KeyEpochMismatch`, no longer `Corrupt` |
+
+Proof: an epoch table over every operation type and phase including the zero-source refusals; manifest
+`seal` with the wrong epoch and `open` of an envelope hand-sealed at the wrong epoch; an operation
+from epoch 2 storing its pages and committed manifest with header epoch 2; pages sealed for the old
+constant epoch refused by the store before any file is created and by the reader as
+`KeyEpochMismatch`; a candidate sealed at another epoch is not adopted by the durable promotion.
+
+Residual, owned by Slice D2b: resolving the journal key through the authenticated key-epoch registry
+(`Prepared`, `Active` and `RetiredRecoveryOnly` allowed, `Revoked` or absent refused), refusing the
+revocation of the source epoch while a live migration binds the journal, and the cutover readability
+test with the root's active epoch already at the target.
+
 ## Still residual after C1c
 
 - Binding transitions other than the advance and the takeover: bind (bootstrap) and clear
@@ -636,15 +668,15 @@ verifies the inventory after the move).
   (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
-- Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4).
+- Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4; Slice D3).
 - Conversion (C2+) over the verified page set: it must require exclusive admission by construction and re-read the root-bound manifest with `final_inventory_captured = 1` (maintainer decision D).
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).
 - The cross-process lease CAS.
-- Root-bound `key_epoch` alignment: §8.3 fixes first-time enable at epoch 1 (the current constant),
-  but the contract does not say which epoch seals the journal during rotation, so that needs a
-  contract decision with the rotation slice.
+- Key-epoch registry resolution of the journal key (Slice D2b): the journal key a caller passes is not
+  yet resolved through the authenticated key-epoch registry, and revoking the source epoch of a bound
+  journal is not yet refused. D2a fixes which epoch seals the journal; D2b makes the registry enforce it.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
 
 ## Explicit non-goals (journal durable promotion)

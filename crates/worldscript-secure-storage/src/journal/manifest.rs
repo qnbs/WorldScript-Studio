@@ -3,6 +3,7 @@ use crate::record::{open_record, seal_record};
 use crate::record_class::RecordClass;
 use crate::seal::{seal_journal_manifest_bootstrap, Key, RecordMeta, SealTarget};
 
+use super::operation_type;
 use super::wire::{
     check_counter, push_operation_id, push_optional, push_optional_owner, validate_epoch,
     validate_final_inventory, validate_inventory_version, validate_journal_revision,
@@ -21,6 +22,30 @@ pub struct JournalPageRef {
     pub page_generation: u64,
     pub page_entry_count: u32,
     pub page_content_digest: [u8; 32],
+}
+
+/// The key epoch that seals every envelope of this operation's journal (manifest and pages) for the
+/// whole operation (§10.1.1, maintainer decision B).
+///
+/// `ENABLE` has no encrypted source, so its journal is sealed under the first protected epoch, the
+/// target. `ROTATE` and `ENVELOPE_MIGRATION` keep the journal under the SOURCE epoch from the first
+/// revision to the last, so recovery never depends on a mid-operation key switch and the journal
+/// stays readable before the target authority is active, during interrupted conversion and after
+/// the cutover while cleanup is still journal-driven. A rotation or envelope migration whose source
+/// epoch is 0 has nothing to be sealed under and is refused.
+pub fn journal_envelope_epoch(manifest: &JournalManifest) -> Result<u64, JournalError> {
+    match manifest.operation_type {
+        operation_type::ENABLE => Ok(manifest.target_epoch),
+        operation_type::ROTATE | operation_type::ENVELOPE_MIGRATION
+            if manifest.source_epoch > 0 =>
+        {
+            Ok(manifest.source_epoch)
+        }
+        operation_type::ROTATE | operation_type::ENVELOPE_MIGRATION => {
+            Err(JournalError::InvalidCounter)
+        }
+        other => Err(JournalError::UnsupportedOperationType(other)),
+    }
 }
 
 /// The authenticated journal manifest body (§10.1.1), excluding the envelope header.
@@ -158,6 +183,9 @@ impl JournalManifest {
         if meta.record_schema != JOURNAL_MANIFEST_RECORD_SCHEMA {
             return Err(JournalError::UnsupportedFormat(meta.record_schema));
         }
+        if meta.key_epoch != journal_envelope_epoch(self)? {
+            return Err(JournalError::KeyEpochMismatch);
+        }
         let payload = self.encode()?;
         if self.journal_revision == 0 {
             if meta.record_generation != 0 {
@@ -193,6 +221,9 @@ impl JournalManifest {
         if manifest.journal_revision != journal_revision {
             return Err(JournalError::GenerationMismatch);
         }
+        if opened.header.key_epoch != journal_envelope_epoch(&manifest)? {
+            return Err(JournalError::KeyEpochMismatch);
+        }
         if record.components().first().map(String::as_str) != Some(manifest.operation_id.as_str()) {
             return Err(JournalError::Corrupt(
                 "migration identity disagrees with manifest",
@@ -221,6 +252,7 @@ impl JournalManifest {
         validate_target_key_ref(self)?;
         validate_lease_fields(self)?;
         validate_final_inventory(self)?;
+        journal_envelope_epoch(self)?;
         Ok(())
     }
 }

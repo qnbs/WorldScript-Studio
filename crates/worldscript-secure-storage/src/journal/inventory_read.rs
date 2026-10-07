@@ -31,8 +31,8 @@ use super::durable::{
     load_authoritative_manifest, migration_page_identity, stage_io, JournalDurableContext,
     JournalDurableError,
 };
-use super::inventory_store::{has_pinned_epoch, inventory_page_dir};
-use super::manifest::{JournalManifest, JournalPageRef};
+use super::inventory_store::{has_epoch, inventory_page_dir};
+use super::manifest::{journal_envelope_epoch, JournalManifest, JournalPageRef};
 use super::page::JournalPage;
 use super::state::MigrationExecutionError;
 use super::{JournalError, MAX_JOURNAL_PAGE_BYTES};
@@ -165,10 +165,10 @@ fn open_stored_page<F: DurableFs>(
 ) -> Result<JournalPage, JournalDurableError> {
     let identity = migration_page_identity(&manifest.operation_id, index)?;
     let page = JournalPage::open(ctx.key, &identity, generation, bytes)?;
-    if has_pinned_epoch(bytes, &page)? {
+    if has_epoch(bytes, journal_envelope_epoch(manifest)?)? {
         Ok(page)
     } else {
-        Err(JournalError::Corrupt("page key epoch is not the journal's pinned epoch").into())
+        Err(JournalError::KeyEpochMismatch.into())
     }
 }
 

@@ -11,10 +11,10 @@ use worldscript_secure_storage::{
     empty_inventory_digest, empty_journal_page_set_digest, generation_path,
     load_authoritative_manifest, load_manifest_generation, operation_type, phase_code,
     promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, publish_takeover_fenced,
-    DirectoryDurability, DurableFs, JournalDurableContext, JournalDurableError, JournalError,
-    JournalManifest, JournalPage, JournalTakeover, LiveMigration, MigrationExecutionError,
-    MigrationFence, OpenError, RecordClass, RecordIdentity, RecordMeta, StageFailureKind,
-    StagingResidue, StdFs, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    seal_record, DirectoryDurability, DurableFs, JournalDurableContext, JournalDurableError,
+    JournalError, JournalManifest, JournalPage, JournalTakeover, LiveMigration,
+    MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity, RecordMeta,
+    StageFailureKind, StagingResidue, StdFs, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
     MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
 };
 
@@ -839,7 +839,8 @@ fn publish_refuses_a_different_or_unopenable_candidate_and_changes_nothing() {
         record_generation: 2,
         record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
     };
-    let epoch_two = next.seal(&key(), &identity, other_epoch).unwrap();
+    // `seal` itself refuses another epoch, so the authentic-but-misrouted candidate is built by hand.
+    let epoch_two = seal_record(&key(), &identity, other_epoch, &next.encode().unwrap()).unwrap();
     for (case, bytes) in [
         ("garbage", vec![0xAA; 64]),
         ("wrong generation", wrong),

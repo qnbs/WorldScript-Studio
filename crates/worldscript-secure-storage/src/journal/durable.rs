@@ -12,7 +12,6 @@ use crate::durable::{
     generation_path, stage_and_promote_envelope, DurableFs, PromotedGeneration, StageFailure,
     StageRequest, WriteOperationId,
 };
-use crate::envelope::parse_envelope;
 use crate::identity::RecordIdentity;
 use crate::marker::content_digest;
 use crate::record_class::RecordClass;
@@ -20,7 +19,7 @@ use crate::root::LiveMigration;
 use crate::seal::{Key, RecordMeta};
 
 use super::capture::assert_capture_successor;
-use super::manifest::JournalManifest;
+use super::manifest::{journal_envelope_epoch, JournalManifest};
 use super::page::JournalPage;
 use super::state::{
     assert_fence, assert_live_binding, assert_manifest_promote_authority,
@@ -163,17 +162,19 @@ pub(super) fn migration_page_identity(
     .map_err(|_| JournalError::InvalidOperationId)
 }
 
-fn manifest_meta(manifest: &JournalManifest) -> RecordMeta {
-    RecordMeta {
-        key_epoch: 1,
+/// The envelope metadata of a manifest generation: its operation's journal envelope epoch.
+fn manifest_meta(manifest: &JournalManifest) -> Result<RecordMeta, JournalError> {
+    Ok(RecordMeta {
+        key_epoch: journal_envelope_epoch(manifest)?,
         record_generation: manifest.journal_revision,
         record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
-    }
+    })
 }
 
-pub(super) fn page_meta(page: &JournalPage) -> RecordMeta {
+/// The envelope metadata of a page generation of the operation whose journal epoch is `epoch`.
+pub(super) fn page_meta(page: &JournalPage, epoch: u64) -> RecordMeta {
     RecordMeta {
-        key_epoch: 1,
+        key_epoch: epoch,
         record_generation: page.page_generation(),
         record_schema: JOURNAL_PAGE_RECORD_SCHEMA,
     }
@@ -223,7 +224,7 @@ pub(crate) fn promote_manifest<F: DurableFs>(
     manifest: &JournalManifest,
 ) -> Result<PromotedGeneration, JournalDurableError> {
     let identity = migration_identity(&manifest.operation_id)?;
-    let meta = manifest_meta(manifest);
+    let meta = manifest_meta(manifest)?;
     let journal_revision = manifest.journal_revision;
     let envelope = manifest.seal(ctx.key, &identity, meta)?;
     promote_sealed_envelope(ctx, identity, meta, envelope, move |key, id, bytes| {
@@ -422,11 +423,10 @@ fn identical_candidate_digest<F: DurableFs>(
     bytes: &[u8],
 ) -> Option<[u8; 32]> {
     let identity = migration_identity(&manifest.operation_id).ok()?;
+    // `open` authenticates the header, the schema, the generation and the operation's journal envelope
+    // epoch, so an adopted candidate carries exactly the metadata the promote would have written.
     let identical = JournalManifest::open(ctx.key, &identity, manifest.journal_revision, bytes)
-        .is_ok_and(|opened| opened == *manifest)
-        // QNBS-v3: open authenticates the header and checks schema and generation; the promote also pins key_epoch, so an adopted candidate must carry exactly that epoch.
-        && parse_envelope(bytes)
-            .is_ok_and(|parsed| parsed.header().key_epoch == manifest_meta(manifest).key_epoch);
+        .is_ok_and(|opened| opened == *manifest);
     identical.then(|| content_digest(bytes))
 }
 
@@ -454,18 +454,18 @@ pub fn promote_page_fenced<F: DurableFs>(
     with_fence(manifest, fence, || {
         assert_page_promote_authority(manifest, committed)
             .map_err(JournalDurableError::Authority)?;
-        promote_page(ctx, &manifest.operation_id, page)
+        promote_page(ctx, manifest, page)
     })
 }
 
 /// Seals and durably promotes one journal page generation.
 pub(crate) fn promote_page<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
-    operation_id: &str,
+    manifest: &JournalManifest,
     page: &JournalPage,
 ) -> Result<PromotedGeneration, JournalDurableError> {
-    let identity = migration_page_identity(operation_id, page.page_index())?;
-    let meta = page_meta(page);
+    let identity = migration_page_identity(&manifest.operation_id, page.page_index())?;
+    let meta = page_meta(page, journal_envelope_epoch(manifest)?);
     let page_generation = page.page_generation();
     let envelope = page.seal(ctx.key, &identity, meta)?;
     promote_sealed_envelope(ctx, identity, meta, envelope, move |key, id, bytes| {
