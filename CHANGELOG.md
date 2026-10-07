@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** add `commit_journal_takeover`, the owner takeover (§10.1). Under one root lock
+  it reads the committed binding, publishes a new owner's claim and advances the binding to the new
+  fencing generation. The committed lease must be expired at the caller-supplied clock (or absent),
+  and the claim carries fence + 1 and revision + 1, holds a lease that outlives `now`, and changes
+  ownership only: the phase, cursor, inventory, target key and recovery reason stay the committed
+  ones. A retry after a failed root commit adopts its own identical claim. The commit evidence
+  records the new fence, so the former owner's checkpoint is refused afterwards. Nothing calls it
+  yet; progress by the new owner is an ordinary checkpoint, and bind, clear and the discard half of
+  R2B stay later slices. PR #995.
 - **R-15 Gate 4D:** the journal checkpoint publishes only a valid successor of the manifest the root
   names. `publish_manifest_fenced` loads that generation (exact path, bounded, authenticated against
   the binding digest) and `assert_manifest_successor` refuses, before any read of the candidate or
