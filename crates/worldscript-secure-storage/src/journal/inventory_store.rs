@@ -210,25 +210,21 @@ fn assert_envelope_is_page<F: DurableFs>(
 }
 
 /// Whether the envelope's header carries `epoch`, the operation's journal envelope epoch.
-/// `JournalPage::open` does not compare it, but the stage step does (after a staging file exists),
-/// and a reader must not accept a page sealed for another epoch.
+/// `JournalPage::open` does not compare it, so every writer and reader checks it itself.
 pub(super) fn has_epoch(envelope: &[u8], epoch: u64) -> Result<bool, JournalError> {
     let parsed = parse_envelope(envelope).map_err(JournalError::Open)?;
     Ok(parsed.header().key_epoch == epoch)
 }
 
 /// Refuses an envelope sealed for another key epoch before any staging file exists, so a refused
-/// store leaves no residue.
+/// store leaves no residue. It is reported as `KeyEpochMismatch`, like the manifest and the reader;
+/// the stage step repeats the comparison as a backstop and would report `StagedEnvelopeMismatch`.
 fn assert_key_epoch(sealed: &SealedPage<'_>, epoch: u64) -> Result<(), JournalDurableError> {
     if has_epoch(sealed.envelope, epoch)? {
-        return Ok(());
+        Ok(())
+    } else {
+        Err(JournalError::KeyEpochMismatch.into())
     }
-    Err(JournalDurableError::Stage(StageFailure {
-        step: StageStep::ValidateStaging,
-        kind: StageFailureKind::StagedEnvelopeMismatch,
-        promoted: false,
-        staging: StagingResidue::None,
-    }))
 }
 
 /// Stores one page: adopts an identical page an earlier attempt already promoted, otherwise

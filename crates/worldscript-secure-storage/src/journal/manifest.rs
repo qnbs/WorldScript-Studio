@@ -24,18 +24,28 @@ pub struct JournalPageRef {
     pub page_content_digest: [u8; 32],
 }
 
+/// The epoch a first-time enable creates (§8.3 item 2: `N = 0`, `M = 1`).
+const FIRST_PROTECTED_EPOCH: u64 = 1;
+
 /// The key epoch that seals every envelope of this operation's journal (manifest and pages) for the
 /// whole operation (§10.1.1, maintainer decision B).
 ///
 /// `ENABLE` has no encrypted source, so its journal is sealed under the first protected epoch, the
-/// target. `ROTATE` and `ENVELOPE_MIGRATION` keep the journal under the SOURCE epoch from the first
+/// target; §8.3 fixes a first-time enable at exactly `0 -> 1`, so any other tuple is refused rather
+/// than sealed under an epoch no implementation may choose. `ROTATE` and `ENVELOPE_MIGRATION` keep
+/// the journal under the SOURCE epoch from the first
 /// revision to the last, so recovery never depends on a mid-operation key switch and the journal
 /// stays readable before the target authority is active, during interrupted conversion and after
 /// the cutover while cleanup is still journal-driven. A rotation or envelope migration whose source
 /// epoch is 0 has nothing to be sealed under and is refused.
 pub fn journal_envelope_epoch(manifest: &JournalManifest) -> Result<u64, JournalError> {
     match manifest.operation_type {
-        operation_type::ENABLE => Ok(manifest.target_epoch),
+        operation_type::ENABLE
+            if manifest.source_epoch == 0 && manifest.target_epoch == FIRST_PROTECTED_EPOCH =>
+        {
+            Ok(FIRST_PROTECTED_EPOCH)
+        }
+        operation_type::ENABLE => Err(JournalError::InvalidCounter),
         operation_type::ROTATE | operation_type::ENVELOPE_MIGRATION
             if manifest.source_epoch > 0 =>
         {

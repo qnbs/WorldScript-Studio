@@ -325,6 +325,7 @@ fn a_page_set_a_canonical_writer_cannot_produce_is_not_certified() {
 #[test]
 fn a_page_set_of_another_journal_epoch_verifies_and_a_misrouted_page_does_not() {
     let mut manifest = manifest_at(COMMITTED_REVISION);
+    manifest.operation_type = operation_type::ROTATE;
     manifest.source_epoch = 2;
     manifest.target_epoch = 3;
     let captured = Captured::on(manifest, 5, 2);

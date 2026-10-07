@@ -470,7 +470,7 @@ authenticates, so the writer proves the set against that successor before it cre
 | the pages are not indexed exactly `0..n` (neither digest pins the indexes, so a hand-built successor could otherwise verify) | `Journal(PageSetMismatch)`, the same check `capture_inventory` makes |
 | a page holds no entry (an empty inventory is no page at all; an empty page would give it a second page-set digest) | `Journal(InvalidDescriptorCount)`, the same rule `capture_inventory` applies |
 | a page generation other than the successor's revision (`committed revision + 1`): the store writes only the pages of this capture. `capture_inventory` still lets an unchanged page keep the earlier generation that names it, but proving that the predecessor's page set contains those bytes needs the predecessor's authenticated page references, which only a verified reader of the stored set (C1b-2) can provide; an exact-path byte comparison is not membership, because an orphan envelope can sit in the predecessor's directory. An older generation is therefore refused until then | `Journal(GenerationMismatch)` |
-| an envelope sealed for a key epoch other than the operation's journal envelope epoch (`journal_envelope_epoch`; `JournalPage::open` does not compare the header epoch; the store checks it against the page metadata before writing, and staging validation repeats that check after creating the staging file) | `Stage(StagedEnvelopeMismatch)` with `promoted: false` and no residue |
+| an envelope sealed for a key epoch other than the operation's journal envelope epoch (`journal_envelope_epoch`; `JournalPage::open` does not compare the header epoch; the store checks it against the manifest's epoch before writing, and staging validation repeats that check after creating the staging file as a backstop) | `Journal(KeyEpochMismatch)` from the preflight, with nothing created; the backstop alone would report `Stage(StagedEnvelopeMismatch)` |
 | an envelope that does not open as the page it is stored for (swapped, other identity or generation) | `Journal(Open(..))` from `JournalPage::open`, or `Journal(InconsistentInventory)` when the opened page differs from the page handed over |
 | the pages are not the set the successor names (envelopes of another capture, a missing or extra page, wrong entries) | `Journal(PageSetMismatch)` (page count or page-set digest), `EntryCountMismatch`, or `InconsistentInventory` (inventory digest) |
 | a page whose exact bytes are already on disk (an earlier attempt at the same set) | adopted without staging; its directory chain is synced again |
@@ -642,17 +642,19 @@ decision B fixes the rule and this slice implements it:
 
 | Where | Rule |
 |---|---|
-| `journal_envelope_epoch(&JournalManifest)` | the one derivation, a pure function of the authenticated manifest; `ROTATE` and `ENVELOPE_MIGRATION` without a source epoch are `InvalidCounter`, any other operation type `UnsupportedOperationType`; the phase never changes the result |
-| manifest codec | `validate_semantics` calls it, so a manifest that cannot name its epoch does not encode or decode; `JournalManifest::seal` refuses metadata with another epoch and `open` refuses an authentic envelope whose header carries another one (`KeyEpochMismatch`) |
+| `journal_envelope_epoch(&JournalManifest)` | the one derivation, a pure function of the authenticated manifest; `ENABLE` other than the first-time `0 → 1` of §8.3 and `ROTATE`/`ENVELOPE_MIGRATION` without a source epoch are `InvalidCounter`, any other operation type `UnsupportedOperationType`; the phase never changes the result |
+| manifest codec | `validate_semantics` calls it, so a manifest that cannot name its epoch (including an `ENABLE` other than `0 → 1`) does not encode or decode; `JournalManifest::seal` refuses metadata with another epoch and `open` refuses an authentic envelope whose header carries another one (`KeyEpochMismatch`) |
 | durable promotion | the manifest metadata is derived with it (`manifest_meta` is fallible); the identical-candidate adoption no longer carries a second epoch clause because an identical candidate is sealed by the same derivation |
-| page store | `seal_inventory_pages` takes the committed manifest and seals every page at its epoch; `store_page` derives the epoch from the committed manifest and refuses a page sealed for another one before anything is created (`Stage(StagedEnvelopeMismatch)`) |
-| page reader | `open_stored_page` checks the envelope header against the manifest's epoch before opening and reports `KeyEpochMismatch`, no longer `Corrupt` |
+| page store | `seal_inventory_pages` takes the committed manifest and seals every page at its epoch; `store_page` derives the epoch from the committed manifest and refuses a page sealed for another one before anything is created (`KeyEpochMismatch`; the stage step repeats the comparison as a backstop and would report `StagedEnvelopeMismatch`) |
+| page reader | `open_stored_page` compares the envelope header with the manifest's epoch before the key is used (§6 authority-first read routing: a misrouted page is never decrypted) and reports `KeyEpochMismatch`, no longer `Corrupt` |
 
-Proof: an epoch table over every operation type and phase including the zero-source refusals; manifest
-`seal` with the wrong epoch and `open` of an envelope hand-sealed at the wrong epoch; an operation
-from epoch 2 storing its pages and committed manifest with header epoch 2; pages sealed for the old
-constant epoch refused by the store before any file is created and by the reader as
-`KeyEpochMismatch`; a candidate sealed at another epoch is not adopted by the durable promotion.
+Proof (`gate4d_journal_epoch_test` plus the store, reader and durable tests): an epoch table over every
+operation type including the zero-source refusals; the epoch is the same in every phase; a first-time
+enable other than `0 → 1` neither derives an epoch nor encodes; manifest `seal` with the wrong epoch and
+`open` of an envelope hand-sealed at the wrong epoch; an operation from epoch 2 storing its pages and
+committed manifest with header epoch 2 and verifying them through the reader; pages sealed for the old
+constant epoch refused by the store before any file is created and by the reader as `KeyEpochMismatch`;
+a candidate sealed at another epoch is not adopted by the durable promotion.
 
 Residual, owned by Slice D2b: resolving the journal key through the authenticated key-epoch registry
 (`Prepared`, `Active` and `RetiredRecoveryOnly` allowed, `Revoked` or absent refused), refusing the

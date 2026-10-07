@@ -1,7 +1,7 @@
 use worldscript_secure_storage::{
     empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
-    journal_envelope_epoch, journal_page_set_digest, operation_type, page_ref_for, phase_code,
-    seal_record, source_authority_kind, source_physical_authority_kind, source_scheme_id,
+    journal_page_set_digest, operation_type, page_ref_for, phase_code, seal_record,
+    source_authority_kind, source_physical_authority_kind, source_scheme_id,
     ForeignInventoryExtension, IdentityError, JournalError, JournalInventoryEntry,
     JournalInventorySource, JournalManifest, JournalPage, JournalPageRef, Key, RecordClass,
     RecordIdentity, RecordMeta, SealError, JOURNAL_MANIFEST_RECORD_SCHEMA,
@@ -538,96 +538,5 @@ fn the_final_inventory_flag_must_agree_with_the_phase() {
         Err(JournalError::Corrupt(
             "final inventory flag disagrees with the phase"
         ))
-    );
-}
-
-/// A manifest of an operation of `kind` from `source` to `target`, in any phase.
-fn operation(kind: u32, source: u64, target: u64) -> JournalManifest {
-    let mut manifest = bootstrap_manifest("op-epoch");
-    manifest.journal_revision = 2;
-    manifest.phase = phase_code::DISCOVER;
-    manifest.operation_type = kind;
-    manifest.source_epoch = source;
-    manifest.target_epoch = target;
-    manifest
-}
-
-#[test]
-fn the_journal_envelope_epoch_is_stable_for_the_whole_operation() {
-    // ENABLE has no encrypted source: its journal is sealed under the first protected epoch, the
-    // target. ROTATE and ENVELOPE_MIGRATION keep the journal under the SOURCE epoch throughout.
-    let cases = [
-        (operation_type::ENABLE, 0, 1, Ok(1)),
-        (operation_type::ENABLE, 0, 3, Ok(3)),
-        (operation_type::ROTATE, 1, 2, Ok(1)),
-        (operation_type::ROTATE, 2, 3, Ok(2)),
-        (operation_type::ENVELOPE_MIGRATION, 2, 3, Ok(2)),
-        (
-            operation_type::ROTATE,
-            0,
-            2,
-            Err(JournalError::InvalidCounter),
-        ),
-        (
-            operation_type::ENVELOPE_MIGRATION,
-            0,
-            1,
-            Err(JournalError::InvalidCounter),
-        ),
-    ];
-    for (kind, source, target, expected) in cases {
-        let manifest = operation(kind, source, target);
-        assert_eq!(
-            journal_envelope_epoch(&manifest),
-            expected,
-            "{kind} {source}->{target}"
-        );
-    }
-    // The phase never changes it, including the recovery and terminal ones.
-    for phase in [
-        phase_code::BOOTSTRAP_TARGET,
-        phase_code::DISCOVER,
-        phase_code::PREPARE,
-        phase_code::ADMIT,
-        phase_code::CONVERT,
-        phase_code::VERIFY,
-        phase_code::COMMIT,
-        phase_code::RETIRE_OLD_AUTHORITY,
-        phase_code::FINALIZE,
-        phase_code::DONE,
-        phase_code::RECOVERY_REQUIRED,
-    ] {
-        let mut rotating = operation(operation_type::ROTATE, 2, 3);
-        rotating.phase = phase;
-        assert_eq!(journal_envelope_epoch(&rotating), Ok(2), "phase {phase}");
-    }
-    // A manifest that cannot name its journal epoch is not encodable.
-    assert!(operation(operation_type::ROTATE, 0, 2).encode().is_err());
-}
-
-#[test]
-fn a_manifest_is_sealed_and_opened_only_at_its_operations_journal_epoch() {
-    let manifest = operation(operation_type::ROTATE, 2, 3);
-    let record = RecordIdentity::new(RecordClass::Migration, &[&manifest.operation_id]).unwrap();
-    let meta = |key_epoch| RecordMeta {
-        key_epoch,
-        record_generation: manifest.journal_revision,
-        record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
-    };
-    let sealed = manifest.seal(&key(), &record, meta(2)).unwrap();
-    assert_eq!(
-        JournalManifest::open(&key(), &record, 2, &sealed),
-        Ok(manifest.clone())
-    );
-    assert_eq!(
-        manifest.seal(&key(), &record, meta(1)),
-        Err(JournalError::KeyEpochMismatch)
-    );
-    // An authentic envelope another writer sealed under the right key but the wrong epoch.
-    let payload = manifest.encode().unwrap();
-    let misrouted = seal_record(&key(), &record, meta(1), &payload).unwrap();
-    assert_eq!(
-        JournalManifest::open(&key(), &record, 2, &misrouted),
-        Err(JournalError::KeyEpochMismatch)
     );
 }

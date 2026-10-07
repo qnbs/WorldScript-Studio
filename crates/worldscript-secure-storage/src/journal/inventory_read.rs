@@ -154,8 +154,9 @@ fn read_envelope<F: DurableFs>(
     }
 }
 
-/// Opens `bytes` as this operation's page `index` at `generation` under the journal key, at the
-/// journal's pinned key epoch.
+/// Opens `bytes` as this operation's page `index` at `generation` under the journal key. Read routing
+/// is authority-first (§6): the header's epoch is compared with the operation's journal envelope
+/// epoch before the key is used, so a misrouted page is never decrypted.
 fn open_stored_page<F: DurableFs>(
     ctx: &JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
@@ -164,12 +165,10 @@ fn open_stored_page<F: DurableFs>(
     bytes: &[u8],
 ) -> Result<JournalPage, JournalDurableError> {
     let identity = migration_page_identity(&manifest.operation_id, index)?;
-    let page = JournalPage::open(ctx.key, &identity, generation, bytes)?;
-    if has_epoch(bytes, journal_envelope_epoch(manifest)?)? {
-        Ok(page)
-    } else {
-        Err(JournalError::KeyEpochMismatch.into())
+    if !has_epoch(bytes, journal_envelope_epoch(manifest)?)? {
+        return Err(JournalError::KeyEpochMismatch.into());
     }
+    Ok(JournalPage::open(ctx.key, &identity, generation, bytes)?)
 }
 
 /// A page only a canonical writer produces: `capture_inventory` gives a page a generation in
