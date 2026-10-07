@@ -319,11 +319,9 @@ root commit adopts its own identical claim with no journal write. The root bindi
 `(operation, fence + 1, revision + 1, digest)` and the commit evidence records the new fence, so the
 former owner's checkpoint is refused by R4 as a stale owner from then on.
 
-Known liveness limit, tracked as the next slice: the claim's own lease is re-checked on a retry, so a
+Known liveness limit, resolved by B2d below: the claim's own lease is re-checked on a retry, so a
 restart after the claim's lease expired builds a new claim, which differs from the durable candidate
-and is refused as `GenerationExists`. Discarding a stale own candidate (the discard half of R2B)
-resolves it; until then the takeover is correct but can be stuck after a crash between the publish
-and the root commit that outlasts the lease.
+and, under the default `Refuse` policy, is refused as `GenerationExists`.
 
 The ordinary checkpoint does not consult the lease. An owner whose lease has expired but who has not
 been superseded may still checkpoint under its fence: §10.1 makes "the lock/CAS ... the authority that
@@ -346,14 +344,51 @@ fence, an unexpired lease refuses and the boundary admits, the former owner is r
 owner continues, a retry after a failed root commit adopts the claim, refused claims write no
 journal byte, no bound migration).
 
-## Still residual after B2c
+## B2d — moving a stale candidate aside
+
+§10.1.1: revision `r + 1` "is a discardable or retryable candidate until the root itself advances", and
+the retention rule covers only generations referenced by the previous committed root, the current
+committed root or a prepared root. B2b-3 adopts an identical candidate and refuses every other one;
+B2d lets the composed commits replace it. `journal::CandidateConflict` (default `Refuse`, the
+behaviour so far) is a field of `JournalCheckpoint`, and so of `JournalTakeoverCommit`. With
+`Quarantine`, after every authority, lease and successor check and before the publish, a candidate that is not identical to the manifest (a
+different manifest, an unopenable file, an oversized file) is relocated with `commit::relocate` and the
+manifest is promoted:
+
+| Candidate at `generation-<r + 1>` | `Refuse` | `Quarantine` |
+|---|---|---|
+| absent | promoted | promoted |
+| identical (authentic, same epoch, same manifest) | adopted | adopted, never discarded |
+| a different manifest, unopenable, or larger than `MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES` | `GenerationExists`, untouched | moved to `generation-<r + 1>.rejected-<tag>`, then the manifest is promoted |
+
+Relocation is the Gate 3 primitive used for the catalog pages of an uncommitted change
+(`relocate_leftovers`): the bytes are linked to their rejected name and synced before the original name
+is removed, so a crash leaves them under one of the two names, and the file is never loaded. The tag is
+derived from the per-call `WriteOperationId`, so two discards at one revision keep both candidates.
+
+Why this cannot orphan a root. A prepared root would have to name the candidate for the retention rule
+to protect it, and none can: `load_committed_root` and `commit_root` refuse with `PreparationPending`
+while the anchor holds a prepared root commit, and both composed commits read the committed binding
+through `load_catalog` under the root lock before the publish, so reaching it proves that no preparation
+is pending. An interrupted preparation is resolved by `recover_root` first, and a root completed
+forward names the recovered revision, not the one below it. The policy is crate-private on
+`JournalDurableContext`, so it cannot run without that proof. Authority, lease and successor checks
+run before the candidate is looked at, so a refused manifest never discards anything.
+
+Residual: a process that writes the journal with the low-level promote API without the root lock can
+still race the relocation and the promote; that is the cross-process lease CAS, still open.
+
+Proof: six cases in `gate4d_root_binding_test` (a retry with a different manifest replaces the candidate
+and preserves its bytes while the default policy still refuses, a takeover claim after the first claim's
+lease expired succeeds with a new claim, garbage and oversized candidates are preserved exactly, an
+identical candidate is adopted and never discarded, a refused manifest never discards, two discards at
+one revision keep both).
+
+## Still residual after B2d
 
 - Binding transitions other than the advance and the takeover: bind (bootstrap) and clear
   (terminal), which belong to the Gate 4E/5 enable and commit sequences.
-- R2B remainder, now the next slice because the takeover depends on it: discarding a candidate that
-  differs from the retry's manifest or cannot be opened (it needs a relocation primitive that
-  preserves the bytes for reconciliation), and recovery when the root-named envelope exists but
-  semantic open refuses.
+- R2B remainder: recovery when the root-named envelope exists but semantic open refuses.
 - Bounded generation reads elsewhere: the journal manifest reads are bounded
   (`DurableFs::read_at_most`), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
@@ -377,7 +412,7 @@ journal byte, no bound migration).
 ## Tests
 
 Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, 9 R4 caller-authority cases, 7 B2b-3 publish and bounded-read cases, 3 B2b-4 cases and 3 B2c takeover cases).
-Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases, 5 B2b-3 candidate-retry cases, 4 B2b-4 successor cases and 6 B2c takeover cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases, 5 B2b-3 candidate-retry cases, 4 B2b-4 successor cases and 6 B2c takeover cases and 6 B2d discard cases).
 Unit: `crates/worldscript-secure-storage/tests/gate4d_migration_state_test.rs` (8 B2b-4 successor-relation cases and 5 B2c takeover cases beside the earlier state-machine cases).
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
@@ -385,5 +420,5 @@ Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
 
 Gate 4D overall status: **IN PROGRESS**. B2a resume selection, R4 promote-time caller authority,
 the B2b-1 root binding advance, the B2b-2 journal checkpoint, the B2b-3 candidate adoption on
-retry, the B2b-4 successor-relation guard and the B2c owner takeover are in scope above; B2 is not
-terminal.
+retry, the B2b-4 successor-relation guard, the B2c owner takeover and the B2d discard of a stale
+candidate are in scope above; B2 is not terminal.

@@ -7,6 +7,7 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
+use crate::commit::{relocate, CommitError};
 use crate::durable::{
     generation_path, stage_and_promote_envelope, DurableFs, PromotedGeneration, StageFailure,
     StageRequest, WriteOperationId,
@@ -42,6 +43,9 @@ pub enum JournalDurableError {
     /// Refusal against the committed root binding: root-bound resume of the generation it names,
     /// or a promote whose caller is not that binding's owner and revision. Not a fence check.
     Authority(MigrationExecutionError),
+    /// Moving a stale candidate aside failed; the candidate's bytes are still on disk under one of
+    /// its two names.
+    Relocate(CommitError),
     LockPoisoned,
 }
 
@@ -62,12 +66,27 @@ pub struct JournalDurableGuard<'a> {
     _lock: MutexGuard<'a, ()>,
 }
 
+/// How a publish treats a durable candidate at the next revision that is not the manifest being
+/// published (§10.1.1: such a revision is "a discardable or retryable candidate until the root
+/// itself advances").
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CandidateConflict {
+    /// Refuse it as `GenerationExists`, untouched.
+    #[default]
+    Refuse,
+    /// Move it aside with its bytes preserved (`<name>.rejected-<tag>`), then publish. Only the
+    /// composed journal commits select this: they hold the root lock and have read the committed
+    /// binding through the root, which proves that no prepared root names the candidate.
+    Quarantine,
+}
+
 /// Shared durable I/O target for journal promotion and load helpers.
 pub struct JournalDurableContext<'a, F: DurableFs> {
     pub fs: &'a mut F,
     pub key: &'a Key,
     pub dir: &'a Path,
     pub operation: &'a WriteOperationId,
+    conflict: CandidateConflict,
 }
 
 impl<'a, F: DurableFs> JournalDurableContext<'a, F> {
@@ -82,7 +101,14 @@ impl<'a, F: DurableFs> JournalDurableContext<'a, F> {
             key,
             dir,
             operation,
+            conflict: CandidateConflict::Refuse,
         }
+    }
+
+    /// Selects how a publish treats a differing candidate. Crate-private: see [`CandidateConflict`].
+    pub(crate) fn with_conflict(mut self, conflict: CandidateConflict) -> Self {
+        self.conflict = conflict;
+        self
     }
 }
 
@@ -295,9 +321,35 @@ fn publish_or_adopt<F: DurableFs>(
                 adopted: false,
             })
         }
-        ExistingGeneration::Candidate(bytes) => adopt_identical_candidate(ctx, manifest, &bytes),
-        ExistingGeneration::Oversized => Err(JournalDurableError::Stage(generation_exists())),
+        ExistingGeneration::Candidate(bytes) => {
+            match identical_candidate_digest(ctx, manifest, &bytes) {
+                Some(content_digest) => Ok(PublishedManifest {
+                    content_digest,
+                    adopted: true,
+                }),
+                None => resolve_conflict(ctx, manifest),
+            }
+        }
+        ExistingGeneration::Oversized => resolve_conflict(ctx, manifest),
     }
+}
+
+/// A candidate that is not the manifest: refused untouched, or moved aside and replaced.
+fn resolve_conflict<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+) -> Result<PublishedManifest, JournalDurableError> {
+    if ctx.conflict == CandidateConflict::Refuse {
+        return Err(JournalDurableError::Stage(generation_exists()));
+    }
+    let path = generation_path(ctx.dir, manifest.journal_revision);
+    // QNBS-v3: the bytes are linked to their rejected name and synced before the original name is removed and the file is never loaded, so a crash keeps them under one of the two names.
+    relocate(&mut *ctx.fs, ctx.dir, &path, ctx.operation.as_str())
+        .map_err(JournalDurableError::Relocate)?;
+    promote_manifest(ctx, manifest).map(|promoted| PublishedManifest {
+        content_digest: promoted.content_digest,
+        adopted: false,
+    })
 }
 
 /// Refuses a manifest that is not a valid successor of the generation the committed binding names.
@@ -343,25 +395,20 @@ fn existing_generation<F: DurableFs>(
     }
 }
 
-fn adopt_identical_candidate<F: DurableFs>(
-    ctx: &mut JournalDurableContext<'_, F>,
+/// The digest of `bytes` if they are exactly the candidate `manifest` would publish: authentic
+/// under the journal key, the same generation and key epoch, and the same decoded manifest.
+fn identical_candidate_digest<F: DurableFs>(
+    ctx: &JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
     bytes: &[u8],
-) -> Result<PublishedManifest, JournalDurableError> {
-    let identity = migration_identity(&manifest.operation_id)?;
+) -> Option<[u8; 32]> {
+    let identity = migration_identity(&manifest.operation_id).ok()?;
     let identical = JournalManifest::open(ctx.key, &identity, manifest.journal_revision, bytes)
         .is_ok_and(|opened| opened == *manifest)
         // QNBS-v3: open authenticates the header and checks schema and generation; the promote also pins key_epoch, so an adopted candidate must carry exactly that epoch.
         && parse_envelope(bytes)
             .is_ok_and(|parsed| parsed.header().key_epoch == manifest_meta(manifest).key_epoch);
-    if identical {
-        Ok(PublishedManifest {
-            content_digest: content_digest(bytes),
-            adopted: true,
-        })
-    } else {
-        Err(JournalDurableError::Stage(generation_exists()))
-    }
+    identical.then(|| content_digest(bytes))
 }
 
 fn generation_exists() -> StageFailure {
