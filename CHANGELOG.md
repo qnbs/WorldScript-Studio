@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** add the verified reader of a stored inventory page set. `verify_stored_inventory`
+  loads the root-named manifest itself, resolves each page's generation from its digest-keyed
+  directory only as a hint, listed with a bound (`DurableFs::list_dir_at_most`; a missing page, a
+  missing directory or mixed generations is `RecoveryRequired`), reads each page bounded, opens it as its own identity at the journal key
+  epoch, streams the inventory digest one page at a time and keeps only the page references, then
+  confirms the page-set and inventory digests against the manifest. `load_inventory_page` reads one
+  page by its authenticated reference and refuses a file that changed after verification. The
+  reader creates nothing and takes no lock. Inheriting unchanged pages in the store, the
+  semantic-open recovery mapping and the composed capture commit stay later slices. PR #999.
 - **R-15 Gate 4D:** add the inventory page store. The pages of a captured inventory live under a
   directory keyed by the manifest's authenticated page-set digest
   (`inventory/<hex digest>/page-<index>/`), so a discarded capture attempt can never be mistaken for

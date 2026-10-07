@@ -26,6 +26,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `authority::advance_live_migration` | B2b-1/B2b-4: under `root_commit_mutex`, verify the binding successor, the durable manifest generation and that it is a valid manifest successor of the committed one, then commit a root carrying the new binding |
 | `journal::capture_inventory` | Slice C1a: pure constructor of the manifest successor that captures a paged inventory (page set, entry count, `inventory_digest`) from sealed pages |
 | `journal::seal_inventory_pages` / `inventory_page_dir` / `promote_inventory_set_fenced` | Slice C1b-1: seal each inventory page once, the directory its authenticated page-set digest names, and the fenced promotion of a whole captured page set into it |
+| `journal::verify_stored_inventory` / `load_inventory_page` / `VerifiedInventory` | Slice C1b-2: verify the stored page set the root binding names (page by page, one page in memory) and read one page back by its authenticated reference |
 | `journal::assert_takeover_successor` / `assert_takeover_promote_authority` / `assert_binding_takeover` | Pure B2c predicates: a takeover is the committed owner's lease-expired successor with fence + 1 and revision + 1 that changes ownership only |
 | `journal::publish_takeover_fenced` | B2c: takeover authority, the committed generation loaded bounded and authenticated, the takeover successor check, then the same publish-or-adopt step as the checkpoint |
 | `authority::commit_journal_takeover` | B2c: under `root_commit_mutex`, read the committed binding, publish the new owner's claim (lease expired at the caller's `now`, fence + 1), advance the binding to the new fence and record it as the commit evidence |
@@ -513,18 +514,56 @@ the same set stored again adopting its identical pages, and an adopted page stil
 staging link an earlier same-operation attempt left behind; a set that failed partway completed by a retry that stages only the missing page; a different
 file at a page generation never replaced; sealed pages binding identity and generation.
 
-## Still residual after C1b-1
+## Slice C1b-2 — reading a stored page set back
+
+The store writes pages under `inventory/<D>/page-<index>/generation-<g>.wsr1`; §10.1.1 says a file
+name or listing is never authoritative for page identity, generation or membership, that a missing
+page is `RECOVERY_REQUIRED`, that mixed generations or an unverifiable digest are
+`RECOVERY_REQUIRED` and never guessed from file names, and that the inventory must not be loaded
+into memory whole. The page generation is bound inside the page-set digest but not stored in the
+manifest, so it can be confirmed, not read.
+
+`verify_stored_inventory(ctx, live)` is pass one:
+
+| Step | Rule |
+|---|---|
+| manifest | loaded by the reader itself through `load_authoritative_manifest` (root-named generation, digest-verified); never a caller-supplied manifest |
+| generation | the listing of `inventory/<D>/page-<i>/` is a hint, bounded while it is read (`DurableFs::list_dir_at_most`, at most 64 entries; `StdFs` never collects more than 65 names): exactly one canonical `generation-<n>.wsr1` (staging leftovers and other names ignored); none, several, a directory with more than 64 entries or a missing directory is `Authority(RecoveryRequired)` |
+| read | bounded by the largest valid sealed page (`MAX_JOURNAL_PAGE_BYTES` + envelope header + tag); a larger file is `Journal(Corrupt)` before any parse; a missing file is `Authority(RecoveryRequired)` |
+| open | `migration-page:<op>:<i>` at that generation under the journal key, at the pinned key epoch (`Journal(Open(..))`, `GenerationMismatch`, `WrongPageIndex`, `Corrupt` for another epoch) |
+| canonical | a page generation outside `1..=journal_revision` (`GenerationMismatch`) or a page without entries (`InvalidDescriptorCount`) is refused even when both digests confirm it: `capture_inventory` states these rules, so a set that breaks them was written by something else and is not certified |
+| digests | the inventory digest is streamed one page at a time; only the 48-byte page reference is kept per page; at the end `verify_page_set` and the inventory digest confirm what the listing hinted (`PageSetMismatch`, `EntryCountMismatch`, `InconsistentInventory`) |
+
+`load_inventory_page(ctx, &verified, index)` is pass two: it reads the exact path of the verified
+reference (no listing), requires `content_digest(bytes)` to equal the reference before opening, and
+checks the entry count, so a file that changed after pass one is refused (`PageSetMismatch`).
+`VerifiedInventory` has private fields: only pass one constructs it, and its page references are the
+authenticated references the store needs to inherit unchanged pages later (acceptance criterion on
+#359). The reader creates nothing, takes no lock and mutates nothing; generations are immutable. It
+returns typed refusals and leaves the mapping to the `RECOVERY_REQUIRED` state to the first semantic
+caller (Gate 4E/5).
+
+Proof: fourteen tests in `gate4d_inventory_read_test` over a really stored set: set verifies and every
+page loads back equal with no file created, an empty inventory, an index outside the set, a table of
+damaged storage (missing file, missing directory, only a staging leftover, a second canonical
+generation, an over-full directory), the bounded listing stopping at its limit, a staging leftover beside the generation ignored, a tampered
+page and a page of another index, an authentic page the manifest does not name, a page set a canonical writer cannot produce (a generation above the revision, an empty page) not certified, a foreign key epoch,
+an oversized file, another digest's directory never read, a page that changed after verification
+refused on load, a binding that does not name the stored manifest. The fixtures are shared with the
+store tests (`tests/support/inventory.rs`).
+
+## Still residual after C1b-2
 
 - Binding transitions other than the advance and the takeover: bind (bootstrap) and clear
   (terminal), which belong to the Gate 4E/5 enable and commit sequences.
 - R2B remainder: recovery when the root-named envelope exists but semantic open refuses.
 - Bounded generation reads elsewhere: the journal manifest reads are bounded
-  (`DurableFs::read_at_most`), but the Gate 3 post-promotion verify and the page, marker and root
+  (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
 - Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4).
-- Slice C1b-2: reading the stored pages back (verify the stored set against the manifest, then read one page at a time against the verified refs); C1c: the composed capture commit under the root lock; then conversion (C2+).
-- Inheriting unchanged pages: once the C1b-2 reader can verify a stored set against its manifest and return the authenticated page references, the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359). Until then every page of a capture is rewritten at the new revision.
+- C1c: the composed capture commit under the root lock (pages, then manifest); then conversion (C2+).
+- Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).
 - The cross-process lease CAS.
 - Root-bound `key_epoch` alignment: §8.3 fixes first-time enable at epoch 1 (the current constant),
