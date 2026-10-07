@@ -564,10 +564,11 @@ then the manifest, then the binding. `commit_inventory_capture` runs it under on
 
 | Step | Rule |
 |---|---|
+| token | the caller's fence must be the successor's own token (`assert_fence`), checked before anything is written, so pages are never stored under a token the publish would then refuse |
 | binding | the committed binding is read from the root (a missing binding, another key route or epoch is refused, nothing written) |
 | pages | `promote_inventory_set_fenced` under the committed manifest and the caller's fencing generation: every check before the first write, directory chain synced, identical pages adopted on a retry |
 | manifest | `publish_manifest_fenced` as for a checkpoint, with the publish marked as the capture: the only publish that may change the inventory fields, and only as the capture-window successor; an identical candidate is adopted |
-| binding | the root advances as `BindingStep::Capture`, accepted only as the CAS successor whose manifest is the capture-window successor |
+| binding | the root advances as `BindingStep::Capture`, accepted only as the CAS successor whose manifest is the capture-window successor; the durability of the page directories counts toward `RootCommitted.directories`, so an adapter that cannot confirm them never yields `Confirmed` |
 
 **Crash windows.** A crash after the pages leaves an inert directory under an unreferenced digest;
 after the manifest, revision `r + 1` as an unadopted candidate while the root still names `r`. The
@@ -582,16 +583,18 @@ naming a page set nobody wrote. Now `BindingStep::Checkpoint` (progress and `adv
 requires `assert_progress_successor` (the inventory kept, else `FrozenFieldChanged`) and
 `commit_journal_checkpoint` refuses an inventory-changing manifest through the same check in the
 publish, before a journal byte is written; only `BindingStep::Capture` accepts a change, and only as
-`assert_capture_successor`. Error classes of the existing checkpoint refusals are unchanged: the
+`assert_capture_successor`, which is the generic successor relation (`prev + 1` and the rest) plus the capture window, so the exported predicate cannot accept a non-successor. Error classes of the existing checkpoint refusals are unchanged: the
 generic successor relation runs first.
 
-Proof: seven tests added to `gate4d_root_binding_test` (a capture stores the pages, publishes the
+Proof: nine tests added to `gate4d_root_binding_test` and one to `gate4d_capture_test` (a capture stores the pages, publishes the
 manifest and advances the binding and the reader verifies the result; no bound migration; refusals
 before the store write no page and no manifest: the pages of another capture and a stale owner; a
 failed root commit retried adopts pages and manifest and writes nothing; a failure between the pages
 and the manifest retried completes; a progress checkpoint cannot change the inventory, neither
 through the checkpoint commit nor through `advance_live_migration`; a capture cannot change the key
-route).
+route; a token that is not the successor's writes no page; unconfirmed page directories keep the
+commit from reporting `Confirmed`; the exported capture predicate rejects a skipped or repeated
+revision).
 
 ## Still residual after C1c
 

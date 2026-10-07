@@ -41,12 +41,11 @@ use crate::envelope::parse_envelope;
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
 use crate::journal::{
-    assert_binding_successor, assert_binding_takeover, assert_capture_successor,
-    assert_manifest_successor, assert_progress_successor, assert_takeover_successor,
-    load_authoritative_manifest, promote_inventory_set_fenced, publish_manifest_fenced,
-    publish_takeover_fenced, CandidateConflict, InventorySetWrite, JournalDurableContext,
-    JournalDurableError, JournalManifest, JournalTakeover, MigrationExecutionError, MigrationFence,
-    SealedPage,
+    assert_binding_successor, assert_binding_takeover, assert_capture_successor, assert_fence,
+    assert_progress_successor, assert_takeover_successor, load_authoritative_manifest,
+    promote_inventory_set_fenced, publish_manifest_fenced, publish_takeover_fenced,
+    CandidateConflict, InventorySetWrite, JournalDurableContext, JournalDurableError,
+    JournalManifest, JournalTakeover, MigrationExecutionError, MigrationFence, SealedPage,
 };
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
@@ -409,6 +408,10 @@ pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
     let checkpoint = capture.checkpoint;
     check_operation_id(&checkpoint.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
+    // The caller's token must be the successor's before anything is written, or the pages could be
+    // stored under a fence the publish then refuses.
+    assert_fence(checkpoint.manifest, checkpoint.fence)
+        .map_err(|error| AuthorityError::Journal(JournalDurableError::Fence(error)))?;
     let held = acquire_root_commit(layout)?;
     let commit = journal_catalog_commit(&checkpoint);
     let committed = committed_binding(fs, provider, layout, commit)?;
@@ -418,10 +421,10 @@ pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
         fencing_generation: checkpoint.fence.fencing_generation,
         journal_revision: capture.committed_manifest.journal_revision,
     };
-    let published = {
+    let (published, pages_durability) = {
         let mut journal =
             journal_context(&mut *fs, checkpoint.journal, checkpoint.conflict).for_capture();
-        promote_inventory_set_fenced(
+        let pages_durability = promote_inventory_set_fenced(
             &mut journal,
             &InventorySetWrite {
                 committed_manifest: capture.committed_manifest,
@@ -432,24 +435,28 @@ pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
             },
         )
         .map_err(AuthorityError::Journal)?;
-        publish_manifest_fenced(
+        let published = publish_manifest_fenced(
             &mut journal,
             checkpoint.manifest,
             checkpoint.fence,
             Some(&committed),
         )
-        .map_err(AuthorityError::Journal)?
+        .map_err(AuthorityError::Journal)?;
+        (published, pages_durability)
     };
     let next = binding_for(checkpoint.manifest, published.content_digest);
     let advance = binding_advance(&next, &checkpoint);
-    commit_planned(
+    let mut committed = commit_planned(
         fs,
         provider,
         layout,
         commit,
         &held,
         Some(BindingStep::Capture(&advance)),
-    )
+    )?;
+    // The root names pages whose directories this commit synced: they count toward the result.
+    committed.directories = all_confirmed([committed.directories, pages_durability]);
+    Ok(committed)
 }
 
 /// One owner takeover (§10.1): the claim to publish and the clock it is judged against.
@@ -732,10 +739,7 @@ fn assert_manifest_step(
 ) -> Result<(), MigrationExecutionError> {
     match step {
         BindingStep::Checkpoint(_) => assert_progress_successor(committed, next),
-        BindingStep::Capture(_) => {
-            assert_manifest_successor(committed, next)?;
-            assert_capture_successor(committed, next)
-        }
+        BindingStep::Capture(_) => assert_capture_successor(committed, next),
         BindingStep::Takeover { now_unix_ms, .. } => {
             assert_takeover_successor(committed, next, now_unix_ms)
         }

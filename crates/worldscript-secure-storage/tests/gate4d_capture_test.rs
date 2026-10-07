@@ -1,7 +1,7 @@
 //! Gate 4D Slice C1a: capturing a paged inventory into the journal manifest (§10.1.1, §10.3).
 
 use worldscript_secure_storage::{
-    assert_manifest_successor, capture_inventory, empty_inventory_digest,
+    assert_capture_successor, assert_manifest_successor, capture_inventory, empty_inventory_digest,
     empty_journal_page_set_digest, inventory_digest, journal_page_set_digest, operation_type,
     page_ref_for, phase_code, source_authority_kind, source_physical_authority_kind, JournalError,
     JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage,
@@ -403,4 +403,24 @@ fn a_recapture_replaces_the_inventory_while_no_conversion_has_run() {
         inventory_digest(1, &final_entries).unwrap()
     );
     assert_eq!(assert_manifest_successor(&admit, &next), Ok(()));
+}
+
+#[test]
+fn the_capture_predicate_is_the_successor_relation_plus_the_capture_window() {
+    let prev = manifest_at(phase_code::DISCOVER, 3);
+    let pages = pages_of(&sorted_entries(2), 1, 4);
+    let envelopes: Vec<Vec<u8>> = pages.iter().map(envelope_of).collect();
+    let next = capture_sealed(&prev, &pages, &envelopes).unwrap();
+    assert_eq!(assert_capture_successor(&prev, &next), Ok(()));
+    // Only the inventory fields may differ, but the revision must still be the next one.
+    let mut skipped = next.clone();
+    skipped.journal_revision += 1;
+    assert_eq!(
+        assert_capture_successor(&prev, &skipped),
+        Err(MigrationExecutionError::LiveBindingMismatch)
+    );
+    assert_eq!(
+        assert_capture_successor(&prev, &prev),
+        Err(MigrationExecutionError::StaleJournalRevision)
+    );
 }

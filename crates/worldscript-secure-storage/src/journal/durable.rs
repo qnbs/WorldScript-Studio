@@ -26,7 +26,7 @@ use super::state::{
     assert_fence, assert_live_binding, assert_manifest_promote_authority,
     assert_page_promote_authority, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
 };
-use super::succession::{assert_manifest_successor, assert_progress_successor};
+use super::succession::assert_progress_successor;
 use super::takeover::{assert_takeover_promote_authority, assert_takeover_successor};
 use super::{
     JournalError, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA,
@@ -263,7 +263,7 @@ pub struct PublishedManifest {
 /// Fenced publication of the owner's next manifest revision that adopts an identical candidate.
 ///
 /// Authority and fence are checked exactly as [`promote_manifest_fenced`] does, then the manifest
-/// must be a valid successor of the committed generation ([`assert_manifest_successor`]), all
+/// must be a valid successor of the committed generation (`assert_manifest_successor`), all
 /// before any write. The exact path of
 /// `generation-<journal_revision>` is then read, never the directory. Absent: the manifest is
 /// promoted. Present: it is adopted only if it authenticates under the journal key and decodes to
@@ -382,8 +382,7 @@ fn assert_successor_of_committed<F: DurableFs>(
     };
     let current = load_authoritative_manifest(ctx, live)?;
     let relation = if ctx.capture {
-        assert_manifest_successor(&current, manifest)
-            .and_then(|()| assert_capture_successor(&current, manifest))
+        assert_capture_successor(&current, manifest)
     } else {
         assert_progress_successor(&current, manifest)
     };

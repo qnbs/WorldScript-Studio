@@ -124,8 +124,9 @@ pub(super) fn assert_page_not_empty(page: &JournalPage) -> Result<(), JournalErr
     }
 }
 
-/// Refuses a successor that is not what [`capture_inventory`] would build from `prev`: the inventory
-/// must still be open ([`assert_inventory_open`]) and the successor may differ only in the revision
+/// Refuses a successor that is not what [`capture_inventory`] would build from `prev`: it must be a
+/// valid successor ([`assert_manifest_successor`], so `prev + 1` and the rest of the relation), the
+/// inventory must still be open ([`assert_inventory_open`]) and the successor may differ only in the revision
 /// and the four inventory fields, never in phase, cursor, lease or any other field. Whoever stores
 /// the pages of a capture applies this, because the generic successor relation alone would accept a
 /// hand-built manifest that changes the inventory outside the capture window.
@@ -133,6 +134,7 @@ pub fn assert_capture_successor(
     prev: &JournalManifest,
     next: &JournalManifest,
 ) -> Result<(), MigrationExecutionError> {
+    assert_manifest_successor(prev, next)?;
     assert_inventory_open(prev)?;
     if next.phase != prev.phase {
         return Err(MigrationExecutionError::InvalidPhaseTransition);

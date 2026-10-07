@@ -403,17 +403,27 @@ impl Fixture {
         fs: &mut F,
         captured: &Capture,
     ) -> Result<RootCommitted, AuthorityError> {
+        let fence = MigrationFence::from_manifest(&captured.successor);
+        self.capture_fenced(fs, captured, &fence)
+    }
+
+    /// A capture presented under `fence`, which is the successor's own token for an honest caller.
+    fn capture_fenced<F: DurableFs>(
+        &mut self,
+        fs: &mut F,
+        captured: &Capture,
+        fence: &MigrationFence,
+    ) -> Result<RootCommitted, AuthorityError> {
         let key = journal_key();
         let op = self
             .operation
             .clone()
             .unwrap_or_else(|| WriteOperationId::generate().unwrap());
-        let fence = MigrationFence::from_manifest(&captured.successor);
         let sealed = captured.sealed();
         let capture = InventoryCapture {
             checkpoint: JournalCheckpoint {
                 manifest: &captured.successor,
-                fence: &fence,
+                fence,
                 journal: JournalSource {
                     key: &key,
                     dir: &self.journal_dir,
@@ -1861,4 +1871,87 @@ fn a_capture_cannot_change_the_key_route() {
         Err(AuthorityError::KeyRotationNotAdmitted)
     );
     assert_eq!(fixture.journal_tree(), tree_before);
+}
+
+#[test]
+fn a_capture_under_a_token_that_is_not_the_successors_writes_no_page() {
+    let (mut fixture, one, _) = bound_at_one();
+    let captured = Capture::over(&one, 3);
+    let tree_before = fixture.journal_tree();
+    // The right fencing generation at a journal revision the successor does not have.
+    let wrong_revision = MigrationFence {
+        fencing_generation: FENCE,
+        journal_revision: captured.successor.journal_revision + 3,
+    };
+    let result = fixture.capture_fenced(&mut StdFs, &captured, &wrong_revision);
+    assert_eq!(
+        result,
+        Err(AuthorityError::Journal(JournalDurableError::Fence(
+            MigrationExecutionError::StaleMigrationOwner
+        )))
+    );
+    assert_eq!(fixture.journal_tree(), tree_before);
+}
+
+/// Reports every directory under the page store as unconfirmed, as an adapter that cannot confirm
+/// directory durability would, while the journal and root directories stay confirmed.
+struct UnconfirmedPagesFs {
+    inner: StdFs,
+    inventory_dir: PathBuf,
+}
+
+impl DurableFs for UnconfirmedPagesFs {
+    type File = File;
+
+    fn create_new(&mut self, path: &Path) -> io::Result<File> {
+        self.inner.create_new(path)
+    }
+
+    fn sync_file(&mut self, file: &mut File) -> io::Result<()> {
+        self.inner.sync_file(file)
+    }
+
+    fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+        self.inner.read(path)
+    }
+
+    fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.link_no_replace(from, to)
+    }
+
+    fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        self.inner.remove_file(path)
+    }
+
+    fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+        let confirmed = self.inner.sync_dir(dir)?;
+        if dir.starts_with(&self.inventory_dir) {
+            return Ok(DirectoryDurability::NotConfirmed);
+        }
+        Ok(confirmed)
+    }
+
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> {
+        self.inner.list_dir(dir)
+    }
+
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.inner.rename_replace(from, to)
+    }
+
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        self.inner.create_dir_all(dir)
+    }
+}
+
+#[test]
+fn unconfirmed_page_directories_keep_the_commit_from_reporting_confirmed() {
+    let (mut fixture, one, _) = bound_at_one();
+    let captured = Capture::over(&one, 5);
+    let mut fs = UnconfirmedPagesFs {
+        inner: StdFs,
+        inventory_dir: fixture.journal_dir.join("inventory"),
+    };
+    let committed = fixture.capture_over(&mut fs, &captured).unwrap();
+    assert_eq!(committed.directories, DirectoryDurability::NotConfirmed);
 }
