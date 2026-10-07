@@ -17,7 +17,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::JournalDurableContext` | Bundles `fs`, `key`, `dir`, and `WriteOperationId` for promote/load entrypoints |
 | `journal::promote_manifest` (crate-private) | Seal, promote, readback via `JournalManifest::open` |
 | `journal::promote_manifest_fenced` | Public mutation: `with_fence` + R4 committed-binding check + crate-private `promote_manifest` |
-| `journal::publish_manifest_fenced` | B2b-3/B2b-4: the same authority and fence as `promote_manifest_fenced`, then the successor check against the committed generation, then one exact-path read of `generation-<r>`: absent → promote; present and identical (opens under the journal key with the key epoch a promote pins, decodes to the same manifest) → adopt with no write; anything else → `GenerationExists`, nothing written or removed |
+| `journal::publish_manifest_fenced` | B2b-3/B2b-4: the same authority and fence as `promote_manifest_fenced`, then the successor check against the committed generation, then one exact-path read of `generation-<r>`: absent → promote; present and identical (opens under the journal key with the manifest's journal envelope epoch, decodes to the same manifest) → adopt with no write; anything else → `GenerationExists`, nothing written or removed |
 | `journal::promote_page` (crate-private) | `JournalPage::seal` + promote + `JournalPage::open` readback |
 | `journal::promote_page_fenced` | Public page mutation: `with_fence` + R4 committed-binding check + crate-private `promote_page` |
 | `journal::assert_manifest_promote_authority` / `assert_page_promote_authority` | Pure R4 predicates: the caller's token against the root's committed `Option<&LiveMigration>` |
@@ -78,9 +78,11 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
     durable generation exists but journal open refuses (acceptance criterion in gap matrix).
 - **R4 stale caller manifest + matching fence:** B2-owned durable authority/reconciliation only; not
   expanded in B1 (#960). Closed against the committed binding by the R4 slice below.
-- **R5 `key_epoch: 1` in journal `RecordMeta`:** existing B1 implementation convention for migration
-  record envelopes in this slice; authoritative epoch alignment with root `active_key_epoch` and root
-  binding advancement remain B2-owned (no value change without normative contract proof).
+- **R5 `key_epoch: 1` in journal `RecordMeta`:** the B1 convention for migration record envelopes.
+  Superseded by Slice D2a: the constant is gone and the epoch is the operation's journal envelope epoch
+  derived from the authenticated manifest (`ENABLE` → target epoch, `ROTATE`/`ENVELOPE_MIGRATION` →
+  source epoch, §10.1.1), never from the root's moving `active_key_epoch`. The registry resolution of the
+  journal key remains with Slice D2b.
 
 ## Fault / refusal evidence
 
@@ -219,7 +221,7 @@ before any write, it reads the exact path of `generation-<r + 1>` (never the dir
 | Generation `r + 1` | Result |
 |---|---|
 | absent | promoted as before (`link_no_replace` still refuses a name created in between) |
-| present, authenticates under the journal key, carries the key epoch a promote pins (1) and decodes to exactly the caller's manifest | adopted: no staging file, no journal byte written, the binding advances to the digest of the existing bytes |
+| present, authenticates under the journal key, carries the manifest's journal envelope epoch (`journal_envelope_epoch`) and decodes to exactly the caller's manifest | adopted: no staging file, no journal byte written, the binding advances to the digest of the existing bytes |
 | present, a different manifest (another lease, phase, cursor or fence) | refused as `GenerationExists` (`promoted = false`, no staging residue); nothing written or removed |
 | present, not openable (garbage, another generation's bytes) or sealed under another key epoch | refused as `GenerationExists`; left untouched |
 | present and larger than `MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES` (4096) | refused as `GenerationExists` without being loaded: the read stops at the bound |

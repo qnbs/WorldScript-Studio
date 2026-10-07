@@ -99,8 +99,8 @@ pub struct InventorySetWrite<'a> {
 /// pages must be indexed `0..n`, non-empty, and exactly the page set and inventory `successor` names
 /// (so the directory key cannot disagree with the pages); each page generation must be exactly the
 /// successor's revision (no page is inherited from the predecessor yet); and each envelope must open
-/// under the journal key, at its pinned key epoch, to exactly its page. A store refused by these checks creates nothing, not even the
-/// directory.
+/// under the journal key, at the operation's journal envelope epoch (checked before the key is used), to
+/// exactly its page. A store refused by these checks creates nothing, not even the directory.
 ///
 /// The pages are then written one by one, before the manifest that names the digest is committed
 /// (§10.1.1: candidates until then). An I/O failure partway leaves a durable prefix; a retry of the
