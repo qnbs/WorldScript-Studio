@@ -125,14 +125,13 @@ fn hinted_generation<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     dir: &Path,
 ) -> Result<u64, JournalDurableError> {
-    let names = match ctx.fs.list_dir(dir) {
-        Ok(names) => names,
+    // The listing is bounded while it is read, so a hostile directory cannot exhaust memory.
+    let names = match ctx.fs.list_dir_at_most(dir, MAX_PAGE_DIRECTORY_ENTRIES) {
+        Ok(Some(names)) => names,
+        Ok(None) => return Err(recovery_required()),
         Err(error) if error.kind() == ErrorKind::NotFound => return Err(recovery_required()),
         Err(error) => return Err(JournalDurableError::Stage(stage_io(error))),
     };
-    if names.len() > MAX_PAGE_DIRECTORY_ENTRIES {
-        return Err(recovery_required());
-    }
     let mut generations = names.iter().filter_map(parse_generation_name);
     match (generations.next(), generations.next()) {
         (Some(generation), None) => Ok(generation),

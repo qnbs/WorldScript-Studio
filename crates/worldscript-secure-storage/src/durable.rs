@@ -62,6 +62,16 @@ pub trait DurableFs {
     fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability>;
     /// The names of the entries directly inside `dir`, in no particular order.
     fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>>;
+    /// The names of the entries directly inside `dir` only if there are at most `limit` of them;
+    /// more yield `None`.
+    ///
+    /// [`StdFs`] never collects more than `limit + 1` names. This default lists through
+    /// [`Self::list_dir`] so wrappers and test doubles stay faithful; an adapter over a real
+    /// directory must override it with a bounded iteration.
+    fn list_dir_at_most(&mut self, dir: &Path, limit: usize) -> io::Result<Option<Vec<OsString>>> {
+        let names = self.list_dir(dir)?;
+        Ok((names.len() <= limit).then_some(names))
+    }
     /// Atomically replaces `to` with `from` within one directory (the §5.3 pointer's
     /// atomic-rename-and-fsync mechanism). Used only for the recoverable root pointer, never for a
     /// generation file.
@@ -123,6 +133,14 @@ impl DurableFs for StdFs {
         fs::read_dir(dir)?
             .map(|entry| entry.map(|entry| entry.file_name()))
             .collect()
+    }
+
+    fn list_dir_at_most(&mut self, dir: &Path, limit: usize) -> io::Result<Option<Vec<OsString>>> {
+        let names = fs::read_dir(dir)?
+            .take(limit.saturating_add(1))
+            .map(|entry| entry.map(|entry| entry.file_name()))
+            .collect::<io::Result<Vec<_>>>()?;
+        Ok((names.len() <= limit).then_some(names))
     }
 
     /// `std::fs::rename`: `rename(2)` on Unix and `MoveFileExW(MOVEFILE_REPLACE_EXISTING)` on

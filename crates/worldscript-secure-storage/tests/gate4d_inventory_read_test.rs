@@ -17,14 +17,29 @@ fn stored(count: u32, per_page: usize) -> (Journal, Captured) {
     (journal, captured)
 }
 
+/// Runs `read` with a reading context over `journal`'s directory.
+fn reading<F: DurableFs, T>(
+    fs: &mut F,
+    journal: &Journal,
+    read: impl FnOnce(&mut JournalDurableContext<'_, F>) -> T,
+) -> T {
+    let op = WriteOperationId::generate().unwrap();
+    let key = key();
+    read(&mut JournalDurableContext::new(
+        fs,
+        &key,
+        journal.path(),
+        &op,
+    ))
+}
+
 fn verify<F: DurableFs>(
     fs: &mut F,
     journal: &Journal,
 ) -> Result<VerifiedInventory, JournalDurableError> {
-    let op = WriteOperationId::generate().unwrap();
-    let key = key();
-    let mut ctx = JournalDurableContext::new(fs, &key, journal.path(), &op);
-    verify_stored_inventory(&mut ctx, &journal.live)
+    reading(fs, journal, |ctx| {
+        verify_stored_inventory(ctx, &journal.live)
+    })
 }
 
 fn load<F: DurableFs>(
@@ -33,10 +48,7 @@ fn load<F: DurableFs>(
     verified: &VerifiedInventory,
     index: u32,
 ) -> Result<JournalPage, JournalDurableError> {
-    let op = WriteOperationId::generate().unwrap();
-    let key = key();
-    let mut ctx = JournalDurableContext::new(fs, &key, journal.path(), &op);
-    load_inventory_page(&mut ctx, verified, index)
+    reading(fs, journal, |ctx| load_inventory_page(ctx, verified, index))
 }
 
 fn file_of(journal: &Journal, captured: &Captured, index: u32) -> PathBuf {
@@ -153,6 +165,17 @@ fn damaged_page_storage_is_refused_with_the_recovery_state() {
     for damage in damages() {
         assert_eq!(refusal_after(damage.apply), damage.error, "{}", damage.name);
     }
+}
+
+#[test]
+fn a_bounded_listing_stops_at_its_limit() {
+    let dir = TempDir::new();
+    for n in 0..5 {
+        std::fs::write(dir.0.join(format!("entry-{n}")), b"x").unwrap();
+    }
+    let within = StdFs.list_dir_at_most(&dir.0, 5).unwrap();
+    assert_eq!(within.map(|names| names.len()), Some(5));
+    assert_eq!(StdFs.list_dir_at_most(&dir.0, 4).unwrap(), None);
 }
 
 #[test]

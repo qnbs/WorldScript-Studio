@@ -528,7 +528,7 @@ manifest, so it can be confirmed, not read.
 | Step | Rule |
 |---|---|
 | manifest | loaded by the reader itself through `load_authoritative_manifest` (root-named generation, digest-verified); never a caller-supplied manifest |
-| generation | the listing of `inventory/<D>/page-<i>/` is a hint: exactly one canonical `generation-<n>.wsr1` (staging leftovers and other names ignored); none, several, a directory with more than 64 entries or a missing directory is `Authority(RecoveryRequired)` |
+| generation | the listing of `inventory/<D>/page-<i>/` is a hint, bounded while it is read (`DurableFs::list_dir_at_most`, at most 64 entries; `StdFs` never collects more than 65 names): exactly one canonical `generation-<n>.wsr1` (staging leftovers and other names ignored); none, several, a directory with more than 64 entries or a missing directory is `Authority(RecoveryRequired)` |
 | read | bounded by the largest valid sealed page (`MAX_JOURNAL_PAGE_BYTES` + envelope header + tag); a larger file is `Journal(Corrupt)` before any parse; a missing file is `Authority(RecoveryRequired)` |
 | open | `migration-page:<op>:<i>` at that generation under the journal key, at the pinned key epoch (`Journal(Open(..))`, `GenerationMismatch`, `WrongPageIndex`, `Corrupt` for another epoch) |
 | digests | the inventory digest is streamed one page at a time; only the 48-byte page reference is kept per page; at the end `verify_page_set` and the inventory digest confirm what the listing hinted (`PageSetMismatch`, `EntryCountMismatch`, `InconsistentInventory`) |
@@ -542,10 +542,10 @@ authenticated references the store needs to inherit unchanged pages later (accep
 returns typed refusals and leaves the mapping to the `RECOVERY_REQUIRED` state to the first semantic
 caller (Gate 4E/5).
 
-Proof: twelve tests in `gate4d_inventory_read_test` over a really stored set: set verifies and every
+Proof: thirteen tests in `gate4d_inventory_read_test` over a really stored set: set verifies and every
 page loads back equal with no file created, an empty inventory, an index outside the set, a table of
 damaged storage (missing file, missing directory, only a staging leftover, a second canonical
-generation, an over-full directory), a staging leftover beside the generation ignored, a tampered
+generation, an over-full directory), the bounded listing stopping at its limit, a staging leftover beside the generation ignored, a tampered
 page and a page of another index, an authentic page the manifest does not name, a foreign key epoch,
 an oversized file, another digest's directory never read, a page that changed after verification
 refused on load, a binding that does not name the stored manifest. The fixtures are shared with the
@@ -557,7 +557,7 @@ store tests (`tests/support/inventory.rs`).
   (terminal), which belong to the Gate 4E/5 enable and commit sequences.
 - R2B remainder: recovery when the root-named envelope exists but semantic open refuses.
 - Bounded generation reads elsewhere: the journal manifest reads are bounded
-  (`DurableFs::read_at_most`), but the Gate 3 post-promotion verify and the page, marker and root
+  (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
 - Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4).
