@@ -26,6 +26,8 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `authority::advance_live_migration` | B2b-1/B2b-4: under `root_commit_mutex`, verify the binding successor, the durable manifest generation and that it is a valid manifest successor of the committed one, then commit a root carrying the new binding |
 | `journal::capture_inventory` | Slice C1a: pure constructor of the manifest successor that captures a paged inventory (page set, entry count, `inventory_digest`) from sealed pages |
 | `journal::seal_inventory_pages` / `inventory_page_dir` / `promote_inventory_set_fenced` | Slice C1b-1: seal each inventory page once, the directory its authenticated page-set digest names, and the fenced promotion of a whole captured page set into it |
+| `authority::commit_inventory_capture` / `InventoryCapture` | Slice C1c: under `root_commit_mutex`, store the captured page set, publish the capture manifest and advance the binding as a capture, so the root only ever names a manifest whose pages are durable |
+| `journal::assert_progress_successor` | Slice C1c: a valid successor that leaves the inventory fields alone; every checkpoint that is not a capture must satisfy it |
 | `journal::verify_stored_inventory` / `load_inventory_page` / `VerifiedInventory` | Slice C1b-2: verify the stored page set the root binding names (page by page, one page in memory) and read one page back by its authenticated reference |
 | `journal::assert_takeover_successor` / `assert_takeover_promote_authority` / `assert_binding_takeover` | Pure B2c predicates: a takeover is the committed owner's lease-expired successor with fence + 1 and revision + 1 that changes ownership only |
 | `journal::publish_takeover_fenced` | B2c: takeover authority, the committed generation loaded bounded and authenticated, the takeover successor check, then the same publish-or-adopt step as the checkpoint |
@@ -552,7 +554,46 @@ an oversized file, another digest's directory never read, a page that changed af
 refused on load, a binding that does not name the stored manifest. The fixtures are shared with the
 store tests (`tests/support/inventory.rs`).
 
-## Still residual after C1b-2
+## Slice C1c — the composed capture commit
+
+After C1a (the capture constructor), C1b-1 (the page store) and C1b-2 (the reader), the capture is
+three separate steps. §10.1.1 makes pages candidates until a manifest naming them is durable, and a
+new manifest revision a candidate until the root advances, so the composition has an order: pages,
+then the manifest, then the binding. `commit_inventory_capture` runs it under one `root_commit_mutex`
+(lock order: root lock, then the journal mutex inside each fenced step):
+
+| Step | Rule |
+|---|---|
+| binding | the committed binding is read from the root (a missing binding, another key route or epoch is refused, nothing written) |
+| pages | `promote_inventory_set_fenced` under the committed manifest and the caller's fencing generation: every check before the first write, directory chain synced, identical pages adopted on a retry |
+| manifest | `publish_manifest_fenced` as for a checkpoint, with the publish marked as the capture: the only publish that may change the inventory fields, and only as the capture-window successor; an identical candidate is adopted |
+| binding | the root advances as `BindingStep::Capture`, accepted only as the CAS successor whose manifest is the capture-window successor |
+
+**Crash windows.** A crash after the pages leaves an inert directory under an unreferenced digest;
+after the manifest, revision `r + 1` as an unadopted candidate while the root still names `r`. The
+same call retried adopts what is durable, writes only what is missing and advances the binding
+(tests: a failed root commit retried writes no byte at all; a failure creating the manifest
+retried completes, with the pages already durable and the manifest and root untouched).
+
+**Who may change the inventory.** The inventory fields (page count, entry count, `inventory_digest`,
+`journal_page_set_digest`) were frozen only from `CONVERT`, so before that a plain checkpoint or
+`advance_live_migration` accepted any generic successor and the root could be advanced to a manifest
+naming a page set nobody wrote. Now `BindingStep::Checkpoint` (progress and `advance_live_migration`)
+requires `assert_progress_successor` (the inventory kept, else `FrozenFieldChanged`) and
+`commit_journal_checkpoint` refuses an inventory-changing manifest through the same check in the
+publish, before a journal byte is written; only `BindingStep::Capture` accepts a change, and only as
+`assert_capture_successor`. Error classes of the existing checkpoint refusals are unchanged: the
+generic successor relation runs first.
+
+Proof: seven tests added to `gate4d_root_binding_test` (a capture stores the pages, publishes the
+manifest and advances the binding and the reader verifies the result; no bound migration; refusals
+before the store write no page and no manifest: the pages of another capture and a stale owner; a
+failed root commit retried adopts pages and manifest and writes nothing; a failure between the pages
+and the manifest retried completes; a progress checkpoint cannot change the inventory, neither
+through the checkpoint commit nor through `advance_live_migration`; a capture cannot change the key
+route).
+
+## Still residual after C1c
 
 - Binding transitions other than the advance and the takeover: bind (bootstrap) and clear
   (terminal), which belong to the Gate 4E/5 enable and commit sequences.
@@ -562,7 +603,7 @@ store tests (`tests/support/inventory.rs`).
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
 - Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4).
-- C1c: the composed capture commit under the root lock (pages, then manifest); then conversion (C2+).
+- Conversion (C2+) over the verified page set.
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).
 - The cross-process lease CAS.

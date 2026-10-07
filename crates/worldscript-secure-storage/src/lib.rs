@@ -59,10 +59,10 @@ pub use admission::{
     SharedAdmissionGuard, OPERATION_ADMISSION_LOCK_FILE,
 };
 pub use authority::{
-    advance_live_migration, commit_catalog_change, commit_journal_checkpoint,
-    commit_journal_takeover, AuthorityError, BindingAdvance, CatalogChange, CatalogCommit,
-    CatalogRecoveryReason, CatalogStep, CommittedShard, JournalCheckpoint, JournalSource,
-    JournalTakeoverCommit, LoadedCatalog,
+    advance_live_migration, commit_catalog_change, commit_inventory_capture,
+    commit_journal_checkpoint, commit_journal_takeover, AuthorityError, BindingAdvance,
+    CatalogChange, CatalogCommit, CatalogRecoveryReason, CatalogStep, CommittedShard,
+    InventoryCapture, JournalCheckpoint, JournalSource, JournalTakeoverCommit, LoadedCatalog,
 };
 #[cfg(feature = "test-support")]
 pub use authority::{list_records, load_catalog};
@@ -88,12 +88,13 @@ pub use error::{AadError, KdfError, KeyProviderError, OpenError, RecoveryError, 
 pub use identity::{IdentityError, RecordIdentity};
 pub use journal::{
     acquire_journal_durable_guard, allows_phase_transition, assert_binding_successor,
-    assert_binding_takeover, assert_fence, assert_live_binding, assert_manifest_promote_authority,
-    assert_manifest_successor, assert_page_promote_authority, assert_takeover_promote_authority,
-    assert_takeover_successor, authoritative_manifest_revision, capture_inventory,
-    checkpoint_progress, empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
-    inventory_page_dir, is_terminal_phase, journal_page_set_digest, load_authoritative_manifest,
-    load_inventory_page, load_manifest_generation, mark_done, mark_recovery, operation_type,
+    assert_binding_takeover, assert_capture_successor, assert_fence, assert_live_binding,
+    assert_manifest_promote_authority, assert_manifest_successor, assert_page_promote_authority,
+    assert_progress_successor, assert_takeover_promote_authority, assert_takeover_successor,
+    authoritative_manifest_revision, capture_inventory, checkpoint_progress,
+    empty_inventory_digest, empty_journal_page_set_digest, inventory_digest, inventory_page_dir,
+    is_terminal_phase, journal_page_set_digest, load_authoritative_manifest, load_inventory_page,
+    load_manifest_generation, mark_done, mark_recovery, operation_type,
     ordinary_mutating_writes_admitted, page_ref_for, phase_code, promote_inventory_set_fenced,
     promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, publish_takeover_fenced,
     seal_inventory_pages, source_authority_kind, source_physical_authority_kind, source_scheme_id,

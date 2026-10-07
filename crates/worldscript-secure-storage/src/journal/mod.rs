@@ -115,7 +115,7 @@ impl From<RootError> for JournalError {
     }
 }
 
-pub use capture::{capture_inventory, SealedPage};
+pub use capture::{assert_capture_successor, capture_inventory, SealedPage};
 pub use digest::{
     empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
     journal_page_set_digest, page_ref_for, InventoryDigestVerifier,
@@ -141,7 +141,7 @@ pub use state::{
     JournalInventoryExtent, JournalRevision, ManifestEnvelopeDigest, MigrationExecutionError,
     MigrationFence, MigrationPhase, RecoveryReasonCode,
 };
-pub use succession::assert_manifest_successor;
+pub use succession::{assert_manifest_successor, assert_progress_successor};
 pub use takeover::{
     assert_binding_takeover, assert_takeover_promote_authority, assert_takeover_successor,
 };

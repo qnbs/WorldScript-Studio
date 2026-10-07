@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** add the composed capture commit. `commit_inventory_capture` runs under one
+  `root_commit_mutex`: it stores the captured page set, publishes the capture manifest and advances
+  the root binding as a capture, so the manifest is never written before its pages are durable and
+  the root never names a manifest whose pages are missing; a retry after a failure adopts what is
+  durable and writes only what is missing. The root now accepts a change of the inventory fields
+  only through a capture (`assert_capture_successor`) and requires every other checkpoint,
+  including `advance_live_migration`, to leave them alone (`assert_progress_successor`,
+  `FrozenFieldChanged`); before this the successor relation froze them only from `CONVERT`.
+  Inheriting unchanged pages, streaming capture and conversion stay later slices. PR #1000.
 - **R-15 Gate 4D:** add the verified reader of a stored inventory page set. `verify_stored_inventory`
   loads the root-named manifest itself, resolves each page's generation from its digest-keyed
   directory only as a hint, listed with a bound (`DurableFs::list_dir_at_most`; a missing page, a

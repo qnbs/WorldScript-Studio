@@ -129,7 +129,7 @@ pub(super) fn assert_page_not_empty(page: &JournalPage) -> Result<(), JournalErr
 /// and the four inventory fields, never in phase, cursor, lease or any other field. Whoever stores
 /// the pages of a capture applies this, because the generic successor relation alone would accept a
 /// hand-built manifest that changes the inventory outside the capture window.
-pub(super) fn assert_capture_successor(
+pub fn assert_capture_successor(
     prev: &JournalManifest,
     next: &JournalManifest,
 ) -> Result<(), MigrationExecutionError> {
