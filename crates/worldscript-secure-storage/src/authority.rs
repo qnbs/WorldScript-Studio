@@ -41,10 +41,11 @@ use crate::envelope::parse_envelope;
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
 use crate::journal::{
-    assert_binding_successor, assert_binding_takeover, assert_manifest_successor,
-    assert_takeover_successor, load_authoritative_manifest, publish_manifest_fenced,
-    publish_takeover_fenced, CandidateConflict, JournalDurableContext, JournalDurableError,
-    JournalManifest, JournalTakeover, MigrationExecutionError, MigrationFence,
+    assert_binding_successor, assert_binding_takeover, assert_capture_successor, assert_fence,
+    assert_progress_successor, assert_takeover_successor, load_authoritative_manifest,
+    promote_inventory_set_fenced, publish_manifest_fenced, publish_takeover_fenced,
+    CandidateConflict, InventorySetWrite, JournalDurableContext, JournalDurableError,
+    JournalManifest, JournalTakeover, MigrationExecutionError, MigrationFence, SealedPage,
 };
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
@@ -271,7 +272,8 @@ pub struct BindingAdvance<'a> {
 /// binding found there ([`assert_binding_successor`]), and the manifest generation it names must be
 /// durable, authenticate under the journal key and hash to the binding's `manifest_digest`
 /// ([`load_authoritative_manifest`]), and it must be a valid successor of the manifest the root
-/// names ([`assert_manifest_successor`]). Only then is a root committed that keeps the catalog, key
+/// names that leaves the inventory fields alone ([`assert_progress_successor`]; only
+/// [`commit_inventory_capture`] may change them). Only then is a root committed that keeps the catalog, key
 /// route and epoch unchanged, swaps in the new binding and records the operation's own positive
 /// fence as its commit evidence. No journal byte is written or deleted, and until step F the prior
 /// root and binding stay authority. A stale owner that still holds an older binding is refused
@@ -335,7 +337,9 @@ pub struct JournalCheckpoint<'a> {
 /// cannot be opened, is refused as `GenerationExists` and left untouched; discarding it is not done
 /// here.
 /// Lock order is the root lock, then the journal mutex inside the promote; nothing takes them in
-/// the opposite order.
+/// the opposite order. A checkpoint never changes the inventory fields (page count, entry count and
+/// the two digests): that is refused as `FrozenFieldChanged` before a journal byte is written, and
+/// only [`commit_inventory_capture`] changes them.
 pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
@@ -367,6 +371,95 @@ pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
         &held,
         Some(BindingStep::Checkpoint(&advance)),
     )
+}
+
+/// One capture of the journal's inventory: the pages and the manifest that names them (§10.3).
+#[derive(Clone, Copy)]
+pub struct InventoryCapture<'a> {
+    /// The capture successor to publish, from [`capture_inventory`](crate::journal::capture_inventory).
+    pub checkpoint: JournalCheckpoint<'a>,
+    /// The manifest the root binding names; the pages are written under it.
+    pub committed_manifest: &'a JournalManifest,
+    /// The pages exactly as [`seal_inventory_pages`](crate::journal::seal_inventory_pages) sealed them.
+    pub pages: &'a [SealedPage<'a>],
+}
+
+/// Captures the inventory: stores its pages, publishes the manifest that names them and advances
+/// the root binding to it (§10.1.1, §10.3).
+///
+/// Everything runs under one `root_commit_mutex`, in the order the contract requires. The committed
+/// binding is read from the root; the page set is stored through [`promote_inventory_set_fenced`]
+/// (the committed owner only, every check before the first write, idempotent); only then is the
+/// manifest published through [`publish_manifest_fenced`], so it is never written before its pages
+/// are durable; and the binding advances as a capture, which the root accepts only as the
+/// capture-window successor ([`assert_capture_successor`]), the one change of the inventory fields
+/// it allows. A refusal before the store (no bound migration, another key route or epoch, a stale
+/// owner, a page set the successor does not name) writes nothing. A failure after the pages leaves
+/// them as an inert directory under an unreferenced digest, after the manifest leaves revision
+/// `r + 1` as an unadopted candidate; the same call retried adopts what is already durable, writes
+/// only what is missing and advances the binding. Lock order is the root lock, then the journal
+/// mutex inside each fenced step. This commit takes no admission guard: the write barrier of the
+/// final (`ADMIT`) capture is the durable phase the orchestrator established by draining writers
+/// before publishing the transition into `ADMIT`, and the write path's refusal by that phase is
+/// wired by the first caller (Gate 4E/5; acceptance criterion on #359).
+pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    capture: InventoryCapture<'_>,
+) -> Result<RootCommitted, AuthorityError> {
+    let checkpoint = capture.checkpoint;
+    check_operation_id(&checkpoint.manifest.operation_id)
+        .map_err(|_| AuthorityError::InvalidOperationId)?;
+    // The caller's token must be the successor's before anything is written, or the pages could be
+    // stored under a fence the publish then refuses.
+    assert_fence(checkpoint.manifest, checkpoint.fence)
+        .map_err(|error| AuthorityError::Journal(JournalDurableError::Fence(error)))?;
+    let held = acquire_root_commit(layout)?;
+    let commit = journal_catalog_commit(&checkpoint);
+    let committed = committed_binding(fs, provider, layout, commit)?;
+    // The pages are written under the committed manifest, whose token carries the caller's fencing
+    // generation at the committed revision; the successor is published under the caller's own fence.
+    let committed_fence = MigrationFence {
+        fencing_generation: checkpoint.fence.fencing_generation,
+        journal_revision: capture.committed_manifest.journal_revision,
+    };
+    let (published, pages_durability) = {
+        let mut journal =
+            journal_context(&mut *fs, checkpoint.journal, checkpoint.conflict).for_capture();
+        let pages_durability = promote_inventory_set_fenced(
+            &mut journal,
+            &InventorySetWrite {
+                committed_manifest: capture.committed_manifest,
+                fence: &committed_fence,
+                committed: Some(&committed),
+                successor: checkpoint.manifest,
+                pages: capture.pages,
+            },
+        )
+        .map_err(AuthorityError::Journal)?;
+        let published = publish_manifest_fenced(
+            &mut journal,
+            checkpoint.manifest,
+            checkpoint.fence,
+            Some(&committed),
+        )
+        .map_err(AuthorityError::Journal)?;
+        (published, pages_durability)
+    };
+    let next = binding_for(checkpoint.manifest, published.content_digest);
+    let advance = binding_advance(&next, &checkpoint);
+    let mut committed = commit_planned(
+        fs,
+        provider,
+        layout,
+        commit,
+        &held,
+        Some(BindingStep::Capture(&advance)),
+    )?;
+    // The root names pages whose directories this commit synced: they count toward the result.
+    committed.directories = all_confirmed([committed.directories, pages_durability]);
+    Ok(committed)
 }
 
 /// One owner takeover (§10.1): the claim to publish and the clock it is judged against.
@@ -498,8 +591,11 @@ fn binding_advance<'a>(
 /// How a binding advance relates to the binding the root names.
 #[derive(Clone, Copy)]
 enum BindingStep<'a> {
-    /// The same owner's next revision (§5.4).
+    /// The same owner's next revision (§5.4), which leaves the inventory alone.
     Checkpoint(&'a BindingAdvance<'a>),
+    /// The same owner's next revision when it is a capture of the inventory (§10.3): the only step
+    /// that may change the inventory fields, and only as the capture-window successor.
+    Capture(&'a BindingAdvance<'a>),
     /// A new owner's claim: the fence plus one after the committed lease expired (§10.1).
     Takeover {
         advance: &'a BindingAdvance<'a>,
@@ -510,7 +606,9 @@ enum BindingStep<'a> {
 impl<'a> BindingStep<'a> {
     fn advance(&self) -> &'a BindingAdvance<'a> {
         match *self {
-            BindingStep::Checkpoint(advance) | BindingStep::Takeover { advance, .. } => advance,
+            BindingStep::Checkpoint(advance)
+            | BindingStep::Capture(advance)
+            | BindingStep::Takeover { advance, .. } => advance,
         }
     }
 }
@@ -612,7 +710,9 @@ fn verify_binding_advance<F: DurableFs>(
         .ok_or(AuthorityError::NoLiveMigration)?;
     // QNBS-v3: the stale-owner comparison runs against the binding read from the root under root_commit_mutex, never against a binding the caller carried in; the journal is read by exact generation, with no directory enumeration.
     match step {
-        BindingStep::Checkpoint(_) => assert_binding_successor(committed, advance.next),
+        BindingStep::Checkpoint(_) | BindingStep::Capture(_) => {
+            assert_binding_successor(committed, advance.next)
+        }
         BindingStep::Takeover { .. } => assert_binding_takeover(committed, advance.next),
     }
     .map_err(AuthorityError::LiveMigration)?;
@@ -622,15 +722,8 @@ fn verify_binding_advance<F: DurableFs>(
     // QNBS-v3: the successor relation is enforced where the root starts to trust a generation, so a manifest promoted through the plain fenced promote cannot become authoritative either.
     let committed_manifest =
         load_authoritative_manifest(&mut journal, committed).map_err(AuthorityError::Journal)?;
-    match step {
-        BindingStep::Checkpoint(_) => {
-            assert_manifest_successor(&committed_manifest, &next_manifest)
-        }
-        BindingStep::Takeover { now_unix_ms, .. } => {
-            assert_takeover_successor(&committed_manifest, &next_manifest, now_unix_ms)
-        }
-    }
-    .map_err(AuthorityError::LiveMigration)?;
+    assert_manifest_step(step, &committed_manifest, &next_manifest)
+        .map_err(AuthorityError::LiveMigration)?;
     // The read takes no journal mutex, so it can see a generation whose directory entry a concurrent
     // promote has linked but not yet synced. Sync it here: the root must never name a manifest that
     // a crash could still lose.
@@ -639,6 +732,21 @@ fn verify_binding_advance<F: DurableFs>(
             step: CatalogStep::SyncJournal,
             kind: error.kind(),
         })
+}
+
+/// The relation the step requires between the manifest the root names and the one it would name.
+fn assert_manifest_step(
+    step: BindingStep<'_>,
+    committed: &JournalManifest,
+    next: &JournalManifest,
+) -> Result<(), MigrationExecutionError> {
+    match step {
+        BindingStep::Checkpoint(_) => assert_progress_successor(committed, next),
+        BindingStep::Capture(_) => assert_capture_successor(committed, next),
+        BindingStep::Takeover { now_unix_ms, .. } => {
+            assert_takeover_successor(committed, next, now_unix_ms)
+        }
+    }
 }
 
 /// Whether `commit` keeps the committed root's key route and active epoch.

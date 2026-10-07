@@ -19,13 +19,14 @@ use crate::record_class::RecordClass;
 use crate::root::LiveMigration;
 use crate::seal::{Key, RecordMeta};
 
+use super::capture::assert_capture_successor;
 use super::manifest::JournalManifest;
 use super::page::JournalPage;
 use super::state::{
     assert_fence, assert_live_binding, assert_manifest_promote_authority,
     assert_page_promote_authority, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
 };
-use super::succession::assert_manifest_successor;
+use super::succession::assert_progress_successor;
 use super::takeover::{assert_takeover_promote_authority, assert_takeover_successor};
 use super::{
     JournalError, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA,
@@ -87,6 +88,8 @@ pub struct JournalDurableContext<'a, F: DurableFs> {
     pub dir: &'a Path,
     pub operation: &'a WriteOperationId,
     conflict: CandidateConflict,
+    /// Whether a publish is the capture of the inventory, the only one that may change it.
+    capture: bool,
 }
 
 impl<'a, F: DurableFs> JournalDurableContext<'a, F> {
@@ -102,12 +105,22 @@ impl<'a, F: DurableFs> JournalDurableContext<'a, F> {
             dir,
             operation,
             conflict: CandidateConflict::Refuse,
+            capture: false,
         }
     }
 
     /// Selects how a publish treats a differing candidate. Crate-private: see [`CandidateConflict`].
     pub(crate) fn with_conflict(mut self, conflict: CandidateConflict) -> Self {
         self.conflict = conflict;
+        self
+    }
+
+    /// Marks the publish as the capture of the inventory (§10.3): the manifest may then change the
+    /// inventory fields, but only as the capture-window successor. Every other publish leaves the
+    /// inventory alone. Crate-private: only the composed capture commit, which stores the pages
+    /// first, may set it.
+    pub(crate) fn for_capture(mut self) -> Self {
+        self.capture = true;
         self
     }
 }
@@ -250,7 +263,7 @@ pub struct PublishedManifest {
 /// Fenced publication of the owner's next manifest revision that adopts an identical candidate.
 ///
 /// Authority and fence are checked exactly as [`promote_manifest_fenced`] does, then the manifest
-/// must be a valid successor of the committed generation ([`assert_manifest_successor`]), all
+/// must be a valid successor of the committed generation (`assert_manifest_successor`), all
 /// before any write. The exact path of
 /// `generation-<journal_revision>` is then read, never the directory. Absent: the manifest is
 /// promoted. Present: it is adopted only if it authenticates under the journal key and decodes to
@@ -368,7 +381,12 @@ fn assert_successor_of_committed<F: DurableFs>(
         return Ok(());
     };
     let current = load_authoritative_manifest(ctx, live)?;
-    assert_manifest_successor(&current, manifest).map_err(JournalDurableError::Authority)
+    let relation = if ctx.capture {
+        assert_capture_successor(&current, manifest)
+    } else {
+        assert_progress_successor(&current, manifest)
+    };
+    relation.map_err(JournalDurableError::Authority)
 }
 
 /// What the exact generation path holds before a publish.

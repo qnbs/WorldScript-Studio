@@ -36,7 +36,6 @@ use super::durable::{
 use super::manifest::JournalManifest;
 use super::page::JournalPage;
 use super::state::{assert_page_promote_authority, MigrationExecutionError, MigrationFence};
-use super::succession::assert_manifest_successor;
 use super::JournalError;
 
 /// The directory of page `page_index` of the page set whose digest is `page_set_digest`.
@@ -115,8 +114,6 @@ pub fn promote_inventory_set_fenced<F: DurableFs>(
         assert_page_promote_authority(set.committed_manifest, set.committed)
             .map_err(JournalDurableError::Authority)?;
         assert_root_named_predecessor(ctx, set)?;
-        assert_manifest_successor(set.committed_manifest, set.successor)
-            .map_err(JournalDurableError::Authority)?;
         assert_capture_successor(set.committed_manifest, set.successor)
             .map_err(JournalDurableError::Authority)?;
         let ordered = verify_set(ctx, set)?;
