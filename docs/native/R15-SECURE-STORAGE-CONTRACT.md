@@ -2399,15 +2399,20 @@ epoch that is stable for the whole operation and derived from the authenticated 
 from the authority root's `active_key_epoch`, which moves at cutover: `ENABLE` seals under
 `target_epoch` (there is no encrypted source, and §8.3 fixes a first-time enable at exactly
 `0 → 1`, so an `ENABLE` manifest with any other tuple is not encodable), `ROTATE` and
-`ENVELOPE_MIGRATION` seal under `source_epoch`. The envelope header's `key_epoch` must equal that value in every phase, including
-`RECOVERY_REQUIRED`: a manifest or page sealed under any other epoch is refused (`KeyEpochMismatch`)
-before a byte is written or accepted, and a writer or reader compares the header epoch with the manifest's
-before the key is used (the authority-first routing of §6), and a manifest whose operation cannot name the epoch (a rotation
-or envelope migration without a source epoch) is not encodable. The source epoch therefore has to stay
-resolvable, at least `RetiredRecoveryOnly`, for as long as a journal is bound to the root: it is never
-revoked or destroyed while a live migration names the journal, and after cutover the journal is
-resolved through the authenticated manifest and the key-epoch registry rather than the root's active
-epoch.
+`ENVELOPE_MIGRATION` seal under `source_epoch`, and a rotation or envelope migration without a source
+epoch is not encodable. The envelope header's `key_epoch` must equal that value in every phase,
+including `RECOVERY_REQUIRED`. A page's writer and reader compare the header epoch with the epoch of
+the authenticated manifest before the key is used (the authority-first routing of §6), and a page
+sealed under any other epoch is refused as `KeyEpochMismatch`. A manifest names its own epoch only in
+its authenticated body, so it is refused at sealing for any other epoch and its header epoch is
+compared after authentication (`KeyEpochMismatch`); comparing a manifest's header before the key is
+used needs an expected epoch from authority (the root binding and the key-epoch registry), which the
+registry resolution of the journal key provides. Until then a manifest sealed under another epoch's
+different key fails authentication and is refused as an open failure; it is never accepted. The source
+epoch therefore has to stay resolvable, at least `RetiredRecoveryOnly`, for as long as a journal is
+bound to the root: it is never revoked or destroyed while a live migration names the journal, and
+after cutover the journal is resolved through the authenticated manifest and the key-epoch registry
+rather than the root's active epoch.
 
 **`journal_page_set_digest`**, analogous to `catalog_set_digest` (§5.4):
 
