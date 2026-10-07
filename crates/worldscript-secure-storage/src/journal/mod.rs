@@ -12,6 +12,8 @@ mod manifest;
 mod manifest_verify;
 mod page;
 mod state;
+mod succession;
+mod takeover;
 mod wire;
 
 use crate::root::RootError;
@@ -116,17 +118,22 @@ pub use digest::{
 };
 pub use durable::{
     acquire_journal_durable_guard, load_authoritative_manifest, load_manifest_generation,
-    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, with_fence,
-    JournalDurableContext, JournalDurableError, JournalDurableGuard, PublishedManifest,
+    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, publish_takeover_fenced,
+    with_fence, JournalDurableContext, JournalDurableError, JournalDurableGuard, JournalTakeover,
+    PublishedManifest,
 };
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
 pub use manifest::{JournalManifest, JournalPageRef};
 pub use page::JournalPage;
 pub use state::{
     allows_phase_transition, assert_binding_successor, assert_fence, assert_live_binding,
-    assert_manifest_promote_authority, assert_manifest_successor, assert_page_promote_authority,
+    assert_manifest_promote_authority, assert_page_promote_authority,
     authoritative_manifest_revision, checkpoint_progress, is_terminal_phase, mark_done,
     mark_recovery, ordinary_mutating_writes_admitted, transition_phase, JournalCheckpointCursor,
     JournalInventoryExtent, JournalRevision, ManifestEnvelopeDigest, MigrationExecutionError,
     MigrationFence, MigrationPhase, RecoveryReasonCode,
+};
+pub use succession::assert_manifest_successor;
+pub use takeover::{
+    assert_binding_takeover, assert_takeover_promote_authority, assert_takeover_successor,
 };

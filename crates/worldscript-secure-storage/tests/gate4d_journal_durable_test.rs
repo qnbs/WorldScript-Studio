@@ -10,11 +10,12 @@ use worldscript_secure_storage::{
     assert_manifest_promote_authority, assert_page_promote_authority, content_digest,
     empty_inventory_digest, empty_journal_page_set_digest, generation_path,
     load_authoritative_manifest, load_manifest_generation, operation_type, phase_code,
-    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, DirectoryDurability,
-    DurableFs, JournalDurableContext, JournalDurableError, JournalError, JournalManifest,
-    JournalPage, LiveMigration, MigrationExecutionError, MigrationFence, OpenError, RecordClass,
-    RecordIdentity, RecordMeta, StageFailureKind, StagingResidue, StdFs, WriteOperationId,
-    JOURNAL_MANIFEST_RECORD_SCHEMA, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
+    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, publish_takeover_fenced,
+    DirectoryDurability, DurableFs, JournalDurableContext, JournalDurableError, JournalError,
+    JournalManifest, JournalPage, JournalTakeover, LiveMigration, MigrationExecutionError,
+    MigrationFence, OpenError, RecordClass, RecordIdentity, RecordMeta, StageFailureKind,
+    StagingResidue, StdFs, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -1091,4 +1092,135 @@ fn an_oversized_root_named_generation_is_corrupt_and_never_loaded() {
         load_manifest_generation(&mut ctx, "big-load", 1),
         Err(corrupt)
     );
+}
+
+/// A committed revision `revision` of `operation` that really exists in `dir`: sealed with a lease
+/// that ran out at `expires`, so a takeover is judged against its real lease.
+fn leased_generation(dir: &Path, operation: &str, revision: u64, expires: u64) -> LiveMigration {
+    let mut manifest = manifest_at(operation, revision, 4);
+    manifest.has_lease_owner = true;
+    manifest.lease_owner_id = Some("old-owner".into());
+    manifest.lease_expires_unix_ms = Some(expires);
+    promote(dir, &manifest);
+    binding(&manifest, content_digest(&file_bytes(dir, revision)))
+}
+
+/// The claim a new owner publishes at `now` over revision `revision` of `operation`.
+fn claim_of(operation: &str, revision: u64, now: u64) -> JournalManifest {
+    let mut manifest = manifest_at(operation, revision + 1, 5);
+    manifest.has_lease_owner = true;
+    manifest.lease_owner_id = Some("new-owner".into());
+    manifest.lease_expires_unix_ms = Some(now + 100);
+    manifest
+}
+
+fn takeover_with<F: DurableFs>(
+    fs: &mut F,
+    dir: &Path,
+    claim: &JournalManifest,
+    committed: &LiveMigration,
+    now_unix_ms: u64,
+) -> Result<worldscript_secure_storage::PublishedManifest, JournalDurableError> {
+    let fence = MigrationFence::from_manifest(claim);
+    let op = write_op();
+    let key = key();
+    let mut ctx = JournalDurableContext::new(fs, &key, dir, &op);
+    publish_takeover_fenced(
+        &mut ctx,
+        &JournalTakeover {
+            manifest: claim,
+            fence: &fence,
+            committed,
+            now_unix_ms,
+        },
+    )
+}
+
+#[test]
+fn a_takeover_publishes_its_claim_and_adopts_an_identical_candidate_without_writing() {
+    let dir = TempDir::new();
+    let committed = leased_generation(&dir.0, "take-adopt", 1, 1_000);
+    let claim = claim_of("take-adopt", 1, 2_000);
+    let mut fs = CountingFs::new();
+    let first = takeover_with(&mut fs, &dir.0, &claim, &committed, 2_000).unwrap();
+    assert!(!first.adopted);
+    assert_eq!(first.content_digest, content_digest(&file_bytes(&dir.0, 2)));
+    let listing = dir_listing(&dir.0);
+    let creates = fs.create_count();
+    // A retry of the same claim adopts its own candidate: no journal byte, no staging file.
+    let second = takeover_with(&mut fs, &dir.0, &claim, &committed, 2_000).unwrap();
+    assert!(second.adopted);
+    assert_eq!(second.content_digest, first.content_digest);
+    assert_eq!(fs.create_count(), creates);
+    assert_eq!(dir_listing(&dir.0), listing);
+}
+
+#[test]
+fn a_takeover_is_refused_before_any_write_unless_it_is_the_committed_owners_successor() {
+    let dir = TempDir::new();
+    let committed = leased_generation(&dir.0, "take-refuse", 1, 1_000);
+    let listing = dir_listing(&dir.0);
+    let mut fs = CountingFs::new();
+    // The lease has not expired.
+    let claim = claim_of("take-refuse", 1, 999);
+    assert_eq!(
+        takeover_with(&mut fs, &dir.0, &claim, &committed, 999),
+        Err(JournalDurableError::Authority(
+            MigrationExecutionError::LeaseNotExpired
+        ))
+    );
+    // The same fence is a checkpoint, not a takeover.
+    let mut same_fence = claim_of("take-refuse", 1, 2_000);
+    same_fence.fencing_generation = 4;
+    assert_eq!(
+        takeover_with(&mut fs, &dir.0, &same_fence, &committed, 2_000),
+        Err(JournalDurableError::Authority(
+            MigrationExecutionError::StaleMigrationOwner
+        ))
+    );
+    // A claim that also moves the phase changes more than ownership.
+    let mut moved = claim_of("take-refuse", 1, 2_000);
+    moved.phase = phase_code::CONVERT;
+    assert_eq!(
+        takeover_with(&mut fs, &dir.0, &moved, &committed, 2_000),
+        Err(JournalDurableError::Authority(
+            MigrationExecutionError::FrozenFieldChanged
+        ))
+    );
+    // A committed binding whose digest is not the generation's is not authority.
+    let mut forged = committed.clone();
+    forged.manifest_digest = [0x77; 32];
+    assert_eq!(
+        takeover_with(
+            &mut fs,
+            &dir.0,
+            &claim_of("take-refuse", 1, 2_000),
+            &forged,
+            2_000
+        ),
+        Err(JournalDurableError::Authority(
+            MigrationExecutionError::LiveBindingMismatch
+        ))
+    );
+    assert_eq!(fs.create_count(), 0);
+    assert_eq!(dir_listing(&dir.0), listing);
+}
+
+#[test]
+fn a_takeover_does_not_adopt_a_different_candidate() {
+    let dir = TempDir::new();
+    let committed = leased_generation(&dir.0, "take-differs", 1, 1_000);
+    let claim = claim_of("take-differs", 1, 2_000);
+    let mut fs = CountingFs::new();
+    takeover_with(&mut fs, &dir.0, &claim, &committed, 2_000).unwrap();
+    let listing = dir_listing(&dir.0);
+    let mut other = claim.clone();
+    other.lease_owner_id = Some("rival-owner".into());
+    let Err(JournalDurableError::Stage(stage)) =
+        takeover_with(&mut fs, &dir.0, &other, &committed, 2_000)
+    else {
+        panic!("a different candidate must be refused");
+    };
+    assert!(matches!(stage.kind, StageFailureKind::GenerationExists));
+    assert_eq!(dir_listing(&dir.0), listing);
 }
