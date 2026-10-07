@@ -128,6 +128,11 @@ pub fn key() -> worldscript_secure_storage::Key {
     worldscript_secure_storage::Key::from_bytes(&mut [9u8; 32])
 }
 
+/// A key that is not the journal key: what another epoch's pages are sealed under.
+pub fn other_key() -> worldscript_secure_storage::Key {
+    worldscript_secure_storage::Key::from_bytes(&mut [10u8; 32])
+}
+
 pub fn manifest_at(revision: u64) -> JournalManifest {
     JournalManifest {
         operation_id: OPERATION.into(),
