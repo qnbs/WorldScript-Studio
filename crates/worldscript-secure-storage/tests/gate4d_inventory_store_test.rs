@@ -178,6 +178,7 @@ fn pages_of(count: u32, per_page: usize, generation: u64) -> Vec<JournalPage> {
 /// A captured inventory over a committed manifest at revision 3, sealed once.
 struct Captured {
     committed_manifest: JournalManifest,
+    fence: MigrationFence,
     successor: JournalManifest,
     pages: Vec<JournalPage>,
     envelopes: Vec<Vec<u8>>,
@@ -193,6 +194,7 @@ impl Captured {
         let successor = capture_inventory(&committed_manifest, &fence, &sealed).unwrap();
         Captured {
             committed_manifest,
+            fence,
             successor,
             pages,
             envelopes,
@@ -223,31 +225,44 @@ fn store<F: DurableFs>(
     captured: &Captured,
     committed: Option<&LiveMigration>,
 ) -> Result<DirectoryDurability, JournalDurableError> {
-    store_pages(fs, dir, captured, committed, &captured.sealed())
+    let pages = captured.sealed();
+    promote(fs, dir, &set_of(captured, committed, &pages))
 }
 
-/// The same, with the pages handed over instead of the captured ones.
+/// The committed owner (revision 3) stores `pages` instead of the captured ones.
 fn store_pages<F: DurableFs>(
     fs: &mut F,
     dir: &Path,
     captured: &Captured,
-    committed: Option<&LiveMigration>,
     pages: &[SealedPage<'_>],
 ) -> Result<DirectoryDurability, JournalDurableError> {
-    let fence = MigrationFence::from_manifest(&captured.committed_manifest);
+    let committed = binding_at(3);
+    promote(fs, dir, &set_of(captured, Some(&committed), pages))
+}
+
+fn set_of<'a>(
+    captured: &'a Captured,
+    committed: Option<&'a LiveMigration>,
+    pages: &'a [SealedPage<'a>],
+) -> InventorySetWrite<'a> {
+    InventorySetWrite {
+        committed_manifest: &captured.committed_manifest,
+        fence: &captured.fence,
+        committed,
+        successor: &captured.successor,
+        pages,
+    }
+}
+
+fn promote<F: DurableFs>(
+    fs: &mut F,
+    dir: &Path,
+    set: &InventorySetWrite<'_>,
+) -> Result<DirectoryDurability, JournalDurableError> {
     let op = WriteOperationId::generate().unwrap();
     let key = key();
     let mut ctx = JournalDurableContext::new(fs, &key, dir, &op);
-    promote_inventory_set_fenced(
-        &mut ctx,
-        &InventorySetWrite {
-            committed_manifest: &captured.committed_manifest,
-            fence: &fence,
-            committed,
-            successor: &captured.successor,
-            pages,
-        },
-    )
+    promote_inventory_set_fenced(&mut ctx, set)
 }
 
 fn page_file(dir: &Path, digest: &[u8; 32], index: u32) -> PathBuf {
@@ -368,18 +383,11 @@ fn a_successor_that_is_not_valid_is_refused_before_any_write() {
 #[test]
 fn envelopes_of_another_capture_would_key_the_wrong_directory_and_are_refused() {
     let dir = TempDir::new();
-    let committed = binding_at(3);
     let captured = Captured::new(4, 2);
     // The same entries sealed again: valid pages, but not the bytes the successor's digest binds.
     let other = Captured::new(4, 2);
     let mut fs = ObservedFs::new();
-    let result = store_pages(
-        &mut fs,
-        &dir.0,
-        &captured,
-        Some(&committed),
-        &other.sealed(),
-    );
+    let result = store_pages(&mut fs, &dir.0, &captured, &other.sealed());
     assert_eq!(
         result.unwrap_err(),
         JournalDurableError::Journal(JournalError::PageSetMismatch)
@@ -390,7 +398,6 @@ fn envelopes_of_another_capture_would_key_the_wrong_directory_and_are_refused() 
 #[test]
 fn an_envelope_that_is_not_the_page_it_is_stored_for_is_refused() {
     let dir = TempDir::new();
-    let committed = binding_at(3);
     let captured = Captured::new(4, 2);
     let swapped = [
         SealedPage {
@@ -403,7 +410,7 @@ fn an_envelope_that_is_not_the_page_it_is_stored_for_is_refused() {
         },
     ];
     let mut fs = ObservedFs::new();
-    let result = store_pages(&mut fs, &dir.0, &captured, Some(&committed), &swapped);
+    let result = store_pages(&mut fs, &dir.0, &captured, &swapped);
     assert!(matches!(
         result,
         Err(JournalDurableError::Journal(JournalError::Open(_)))
@@ -414,7 +421,6 @@ fn an_envelope_that_is_not_the_page_it_is_stored_for_is_refused() {
 #[test]
 fn a_page_generation_above_the_next_revision_is_refused() {
     let dir = TempDir::new();
-    let committed = binding_at(3);
     let captured = Captured::new(2, 2);
     let future = JournalPage::new(0, 5, captured.pages[0].entries().to_vec()).unwrap();
     let envelope = seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&future))
@@ -425,7 +431,7 @@ fn a_page_generation_above_the_next_revision_is_refused() {
         envelope: &envelope,
     }];
     let mut fs = ObservedFs::new();
-    let result = store_pages(&mut fs, &dir.0, &captured, Some(&committed), &late);
+    let result = store_pages(&mut fs, &dir.0, &captured, &late);
     assert_eq!(
         result.unwrap_err(),
         JournalDurableError::Journal(JournalError::GenerationMismatch)
