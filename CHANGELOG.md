@@ -12,16 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`inventory/<hex digest>/page-<index>/`), so a discarded capture attempt can never be mistaken for
   the page set a manifest names and no directory listing is authoritative. `seal_inventory_pages`
   seals each page once, and `promote_inventory_set_fenced` writes the whole captured set for the
-  committed owner only: the committed manifest must be the generation the root binding names (read
-  back and compared), and the set is first proven against the manifest successor (page-set digest,
-  inventory digest, successor relation, a successor that is a capture and encodes, non-empty pages
-  indexed `0..n`, an envelope that opens as its own page under the journal key epoch, generations no
-  newer than the next revision, and a page that keeps an earlier generation only if the predecessor
-  stored exactly those bytes), nothing is created when it is refused, and the directory chain up
-  to the journal directory is synced, a failed sync being reported as already promoted. A retry of a
-  set that failed partway adopts the identical pages already on disk and continues with the first
-  missing one. Reading the pages back, the composed commit under the root lock and a streaming
-  capture for very large inventories stay later slices. PR #998.
+  committed owner only. The committed manifest must be the generation the root binding names (read
+  back and compared), and the set is first proven against the manifest successor: the successor is
+  a valid, encodable capture of the open inventory, the pages are non-empty, indexed `0..n` and
+  carry exactly the new revision as their generation (every page is rewritten until a verified
+  reader can prove an unchanged page against the predecessor's page references), the page-set and
+  inventory digests match, and each envelope opens as its own page under the journal key epoch.
+  Nothing is created when the set is refused. The directory chain up to the journal directory is
+  synced, a failed sync being reported as already promoted, and a retry of a set that failed
+  partway adopts the identical pages already on disk and continues with the first missing one.
+  Reading the pages back, the composed commit under the root lock and a streaming capture for very
+  large inventories stay later slices. PR #998.
 - **R-15 Gate 4D:** add `capture_inventory`, the manifest-side constructor of the §10.3 inventory
   capture. From sealed pages it builds the successor that carries the page set, the entry count and
   the inventory digest, while the inventory is still open (before `CONVERT`, with no conversion

@@ -750,27 +750,15 @@ fn recapture(first: &Captured) -> Captured {
 }
 
 #[test]
-fn an_unchanged_page_keeps_the_generation_the_predecessor_named() {
+fn a_page_keeping_an_older_generation_is_refused_until_the_predecessor_set_can_be_verified() {
+    // Even a page a genuinely stored predecessor holds is not inherited yet: the store has no
+    // authenticated reference to prove the predecessor's set contains those bytes.
     let (journal, first) = after_first_capture();
     let second = recapture(&first);
-    store(&mut StdFs, &journal, &second).unwrap();
-    assert_stored(journal.path(), &second);
-}
-
-#[test]
-fn a_page_claiming_an_older_generation_the_predecessor_never_named_is_refused() {
-    let mismatch = JournalDurableError::Journal(JournalError::GenerationMismatch);
-    // The predecessor stored no pages at all.
-    let early = Captured::on_pages(manifest_at(COMMITTED_REVISION), pages_of(2, 2, 3));
-    assert_eq!(refusal_in(&journal_of(&early), &early), mismatch);
-    // The predecessor's page 0 holds other bytes than the ones claimed as unchanged.
-    let (journal, first) = after_first_capture();
-    let mut forged = recapture(&first);
-    forged.envelopes[0] = seal_inventory_pages(&key(), OPERATION, &forged.pages[..1])
-        .unwrap()
-        .remove(0);
-    rebind(&mut forged);
-    assert_eq!(refusal_in(&journal, &forged), mismatch);
+    assert_eq!(
+        refusal_in(&journal, &second),
+        JournalDurableError::Journal(JournalError::GenerationMismatch)
+    );
 }
 
 #[test]

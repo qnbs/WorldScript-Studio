@@ -465,8 +465,7 @@ authenticates, so the writer proves the set against that successor before it cre
 | `successor` does not encode (for example an entry count above the manifest bound) | `Journal(TooManyEntries)` and the like, so a set is never stored for a manifest that can never be sealed |
 | the pages are not indexed exactly `0..n` (neither digest pins the indexes, so a hand-built successor could otherwise verify) | `Journal(PageSetMismatch)`, the same check `capture_inventory` makes |
 | a page holds no entry (an empty inventory is no page at all; an empty page would give it a second page-set digest) | `Journal(InvalidDescriptorCount)`, the same rule `capture_inventory` applies |
-| a page generation is 0 or above the committed revision + 1 | `Journal(GenerationMismatch)` |
-| a page that keeps an earlier generation (an unchanged page, C1a) whose exact bytes the predecessor's own page directory (`inventory/<predecessor digest>/page-<index>/`) does not hold at that generation: the same page identity and generation would otherwise stand for different content across page sets | `Journal(GenerationMismatch)` |
+| a page generation other than the successor's revision (`committed revision + 1`): the store writes only the pages of this capture. `capture_inventory` still lets an unchanged page keep the earlier generation that names it, but proving that the predecessor's page set contains those bytes needs the predecessor's authenticated page references, which only a verified reader of the stored set (C1b-2) can provide; an exact-path byte comparison is not membership, because an orphan envelope can sit in the predecessor's directory. An older generation is therefore refused until then | `Journal(GenerationMismatch)` |
 | an envelope sealed for a key epoch other than the journal's pinned epoch (`JournalPage::open` does not compare the header epoch; the store checks it against the page metadata before writing, and staging validation repeats that check after creating the staging file) | `Stage(StagedEnvelopeMismatch)` with `promoted: false` and no residue |
 | an envelope that does not open as the page it is stored for (swapped, other identity or generation) | `Journal(Open(..))` from `JournalPage::open`, or `Journal(InconsistentInventory)` when the opened page differs from the page handed over |
 | the pages are not the set the successor names (envelopes of another capture, a missing or extra page, wrong entries) | `Journal(PageSetMismatch)` (page count or page-set digest), `EntryCountMismatch`, or `InconsistentInventory` (inventory digest) |
@@ -497,7 +496,7 @@ Memory: the whole set is held in memory while it is verified, which bounds this 
 that fit. That is recorded as an acceptance criterion on #359 (a streaming capture that seals, digests
 and promotes one page at a time must precede very large inventories), not decided here.
 
-Proof: fifteen tests in `gate4d_inventory_store_test`, three of them tables that assert the exact
+Proof: fourteen tests in `gate4d_inventory_store_test`, three of them tables that assert the exact
 error and that nothing was created for each case: a stored set whose bytes verify against the
 captured page set, the directory chain synced, a post-promotion sync failure reported as promoted;
 the authority refusals (later fence, another operation, a digest naming another manifest, no
@@ -505,8 +504,8 @@ binding); a predecessor that is not the root-named manifest; successors the stor
 (phase skipped, bootstrap manifest, advanced cursor, simultaneous phase change, unencodable
 counters); page sets the successor does not name (envelopes of another capture, indexes not `0..n`,
 an empty page, a generation above the next revision); a swapped envelope and a foreign key epoch;
-an unchanged page keeping the generation the predecessor named, and one claiming an older
-generation the predecessor never named refused; page sets with different digests never colliding;
+a page keeping an older generation refused even when a genuinely stored predecessor holds it; page
+sets with different digests never colliding;
 the same set stored again adopting its identical pages; a set that failed partway completed by a retry that stages only the missing page; a different
 file at a page generation never replaced; sealed pages binding identity and generation.
 
@@ -521,6 +520,7 @@ file at a page generation never replaced; sealed pages binding identity and gene
   separate slice, recorded as an acceptance criterion on #359.
 - Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4).
 - Slice C1b-2: reading the stored pages back (verify the stored set against the manifest, then read one page at a time against the verified refs); C1c: the composed capture commit under the root lock; then conversion (C2+).
+- Inheriting unchanged pages: once the C1b-2 reader can verify a stored set against its manifest and return the authenticated page references, the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).
 - The cross-process lease CAS.
 - Root-bound `key_epoch` alignment: §8.3 fixes first-time enable at epoch 1 (the current constant),
