@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** the composed journal commits can replace a stale candidate. The new
+  `CandidateConflict` policy (default `Refuse`, the behaviour so far) lets `commit_journal_checkpoint`
+  and `commit_journal_takeover` move a durable next-revision candidate that differs from their
+  manifest (a different manifest, an unopenable file or an oversized one) aside with its bytes
+  preserved, then publish their own, after every authority, lease and successor check; an identical
+  candidate is still adopted. This resolves the takeover liveness limit: a new claim after the first
+  claim's lease expired is no longer refused forever. Safe because reaching the publish proves that
+  no prepared root names the candidate. PR #996.
 - **R-15 Gate 4D:** add `commit_journal_takeover`, the owner takeover (§10.1). Under one root lock
   it reads the committed binding, publishes a new owner's claim and advances the binding to the new
   fencing generation. The committed lease must be expired at the caller-supplied clock (or absent),

@@ -43,8 +43,8 @@ use crate::identity::RecordIdentity;
 use crate::journal::{
     assert_binding_successor, assert_binding_takeover, assert_manifest_successor,
     assert_takeover_successor, load_authoritative_manifest, publish_manifest_fenced,
-    publish_takeover_fenced, JournalDurableContext, JournalDurableError, JournalManifest,
-    JournalTakeover, MigrationExecutionError, MigrationFence,
+    publish_takeover_fenced, CandidateConflict, JournalDurableContext, JournalDurableError,
+    JournalManifest, JournalTakeover, MigrationExecutionError, MigrationFence,
 };
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
@@ -317,6 +317,8 @@ pub struct JournalCheckpoint<'a> {
     pub journal: JournalSource<'a>,
     pub root_key_ref: &'a RootKeyRefV1,
     pub active_key_epoch: u64,
+    /// What to do with a durable candidate at the next revision that is not `manifest`.
+    pub conflict: CandidateConflict,
 }
 
 /// Publishes the journal owner's next manifest revision and advances the root binding to it (§5.4).
@@ -346,7 +348,7 @@ pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
     let commit = journal_catalog_commit(&checkpoint);
     let committed = committed_binding(fs, provider, layout, commit)?;
     let published = {
-        let mut journal = journal_context(&mut *fs, checkpoint.journal);
+        let mut journal = journal_context(&mut *fs, checkpoint.journal, checkpoint.conflict);
         publish_manifest_fenced(
             &mut journal,
             checkpoint.manifest,
@@ -400,7 +402,7 @@ pub fn commit_journal_takeover<F: DurableFs, P: KeyProvider>(
     let commit = journal_catalog_commit(&claim);
     let committed = committed_binding(fs, provider, layout, commit)?;
     let published = {
-        let mut journal = journal_context(&mut *fs, claim.journal);
+        let mut journal = journal_context(&mut *fs, claim.journal, claim.conflict);
         publish_takeover_fenced(
             &mut journal,
             &JournalTakeover {
@@ -465,8 +467,10 @@ fn committed_binding<F: DurableFs, P: KeyProvider>(
 fn journal_context<'a, F: DurableFs>(
     fs: &'a mut F,
     journal: JournalSource<'a>,
+    conflict: CandidateConflict,
 ) -> JournalDurableContext<'a, F> {
     JournalDurableContext::new(fs, journal.key, journal.dir, journal.operation)
+        .with_conflict(conflict)
 }
 
 /// The binding that names `manifest` and the digest of its envelope.
@@ -612,7 +616,7 @@ fn verify_binding_advance<F: DurableFs>(
         BindingStep::Takeover { .. } => assert_binding_takeover(committed, advance.next),
     }
     .map_err(AuthorityError::LiveMigration)?;
-    let mut journal = journal_context(&mut *fs, advance.journal);
+    let mut journal = journal_context(&mut *fs, advance.journal, CandidateConflict::Refuse);
     let next_manifest =
         load_authoritative_manifest(&mut journal, advance.next).map_err(AuthorityError::Journal)?;
     // QNBS-v3: the successor relation is enforced where the root starts to trust a generation, so a manifest promoted through the plain fenced promote cannot become authoritative either.

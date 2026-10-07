@@ -14,13 +14,13 @@ use worldscript_secure_storage::{
     commit_journal_takeover, commit_root, content_digest, empty_inventory_digest,
     empty_journal_page_set_digest, generation_path, load_authoritative_manifest, load_catalog,
     operation_type, phase_code, promote_manifest_fenced, transition_phase, write_key_epoch,
-    AuthorityError, BindingAdvance, CatalogChange, CatalogCommit, DirectoryDurability, DurableFs,
-    InstallationScopeId, JournalCheckpoint, JournalDurableContext, JournalDurableError,
-    JournalManifest, JournalSource, JournalTakeoverCommit, KeyEpochCommit, KeyEpochRecord,
-    KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog, MigrationExecutionError,
-    MigrationFence, MigrationPhase, RootBody, RootCommitEvidence, RootCommitGuard,
-    RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, StageFailureKind,
-    StdFs, WriteOperationId,
+    AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit,
+    DirectoryDurability, DurableFs, InstallationScopeId, JournalCheckpoint, JournalDurableContext,
+    JournalDurableError, JournalManifest, JournalSource, JournalTakeoverCommit, KeyEpochCommit,
+    KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
+    MigrationExecutionError, MigrationFence, MigrationPhase, RootBody, RootCommitEvidence,
+    RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout,
+    StageFailureKind, StdFs, WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -101,6 +101,10 @@ struct Fixture {
     provider: MemoryKeyProvider,
     scope: InstallationScopeId,
     key_ref: RootKeyRefV1,
+    /// What the next checkpoint or takeover does with a differing durable candidate.
+    conflict: CandidateConflict,
+    /// A write operation id every checkpoint and takeover reuses; a fresh one per call when `None`.
+    operation: Option<WriteOperationId>,
 }
 
 impl Fixture {
@@ -142,6 +146,8 @@ impl Fixture {
             provider,
             scope,
             key_ref,
+            conflict: CandidateConflict::Refuse,
+            operation: None,
         }
     }
 
@@ -273,7 +279,10 @@ impl Fixture {
     ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
         let key = journal_key();
-        let op = WriteOperationId::generate().unwrap();
+        let op = self
+            .operation
+            .clone()
+            .unwrap_or_else(|| WriteOperationId::generate().unwrap());
         let checkpoint = JournalCheckpoint {
             manifest,
             fence,
@@ -284,6 +293,7 @@ impl Fixture {
             },
             root_key_ref: route.key_ref,
             active_key_epoch: route.epoch,
+            conflict: self.conflict,
         };
         commit_journal_checkpoint(
             &mut StdFs,
@@ -317,7 +327,10 @@ impl Fixture {
     ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
         let key = journal_key();
-        let op = WriteOperationId::generate().unwrap();
+        let op = self
+            .operation
+            .clone()
+            .unwrap_or_else(|| WriteOperationId::generate().unwrap());
         let fence = MigrationFence::from_manifest(claim);
         let takeover = JournalTakeoverCommit {
             claim: JournalCheckpoint {
@@ -330,6 +343,7 @@ impl Fixture {
                 },
                 root_key_ref: route.key_ref,
                 active_key_epoch: route.epoch,
+                conflict: self.conflict,
             },
             now_unix_ms,
         };
@@ -341,6 +355,14 @@ impl Fixture {
             },
             takeover,
         )
+    }
+
+    /// The relocated candidates in the journal directory, with their bytes.
+    fn rejected_files(&self) -> Vec<(String, Vec<u8>)> {
+        self.journal_files()
+            .into_iter()
+            .filter(|(name, _)| name.contains(".rejected-"))
+            .collect()
     }
 
     fn journal_files(&self) -> Vec<(String, Vec<u8>)> {
@@ -1283,4 +1305,204 @@ fn a_takeover_needs_a_bound_migration() {
         Err(AuthorityError::NoLiveMigration)
     );
     assert!(fixture.journal_files().is_empty());
+}
+
+/// A copy of `manifest` that a different attempt would publish: another lease owner.
+fn rival_of(manifest: &JournalManifest) -> JournalManifest {
+    let mut rival = manifest.clone();
+    rival.has_lease_owner = true;
+    rival.lease_owner_id = Some("owner-b".into());
+    rival.lease_expires_unix_ms = Some(1_000);
+    rival
+}
+
+fn candidate_bytes(fixture: &Fixture, revision: u64) -> Vec<u8> {
+    fs::read(generation_path(&fixture.journal_dir, revision)).unwrap()
+}
+
+#[test]
+fn a_retry_with_a_different_manifest_replaces_the_candidate_and_preserves_its_bytes() {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let stale = candidate_bytes(&fixture, 1);
+    let rival = rival_of(&one);
+    // The default policy still refuses and touches nothing.
+    assert_generation_exists(fixture.checkpoint(&rival), "refuse");
+    assert_eq!(candidate_bytes(&fixture, 1), stale);
+    assert!(fixture.rejected_files().is_empty());
+    fixture.conflict = CandidateConflict::Quarantine;
+    fixture.checkpoint(&rival).unwrap();
+    let rejected = fixture.rejected_files();
+    assert_eq!(rejected.len(), 1);
+    assert_eq!(rejected[0].1, stale);
+    assert_ne!(candidate_bytes(&fixture, 1), stale);
+    let dir = fixture.journal_dir.clone();
+    assert_eq!(
+        fixture.loaded().root.live_migration,
+        Some(binding_of(&rival, digest_of(&dir, 1)))
+    );
+}
+
+#[test]
+fn a_takeover_claim_after_the_first_claims_lease_expired_succeeds_with_a_new_claim() {
+    let (mut fixture, _) = bound_at_zero();
+    let zero = manifest_at(OPERATION, 0, FENCE);
+    let first = claim_over(&zero, 1_000);
+    fixture
+        .provider
+        .inject(Fault::BeforePersist(AnchorOp::Prepare));
+    let error = fixture.takeover(&first, 1_000).unwrap_err();
+    assert!(matches!(error, AuthorityError::Root(_)), "{error:?}");
+    let stale = candidate_bytes(&fixture, 1);
+    // The restart comes after the first claim's lease ran out: that claim cannot be retried, and a
+    // new claim differs from the durable one.
+    let later = 5_000;
+    assert_eq!(
+        fixture.takeover(&first, later),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::InvalidTakeoverLease
+        )))
+    );
+    let second = claim_over(&zero, later);
+    assert_generation_exists(fixture.takeover(&second, later), "refuse");
+    fixture.conflict = CandidateConflict::Quarantine;
+    fixture.takeover(&second, later).unwrap();
+    let rejected = fixture.rejected_files();
+    assert_eq!(rejected.len(), 1);
+    assert_eq!(rejected[0].1, stale);
+    let dir = fixture.journal_dir.clone();
+    assert_eq!(
+        fixture.loaded().root.live_migration,
+        Some(binding_of(&second, digest_of(&dir, 1)))
+    );
+}
+
+#[test]
+fn unopenable_and_oversized_candidates_are_preserved_exactly_and_replaced() {
+    let oversized = vec![0xAA; worldscript_secure_storage::MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES + 1];
+    for (case, bytes) in [("garbage", vec![0x5A; 48]), ("oversized", oversized)] {
+        let (mut fixture, _) = bound_at_zero();
+        let one = manifest_at(OPERATION, 1, FENCE);
+        fail_root_commit_after_promote(&mut fixture, &one);
+        let path = generation_path(&fixture.journal_dir, 1);
+        fs::remove_file(&path).unwrap();
+        fs::write(&path, &bytes).unwrap();
+        fixture.conflict = CandidateConflict::Quarantine;
+        fixture.checkpoint(&one).unwrap();
+        let rejected = fixture.rejected_files();
+        assert_eq!(rejected.len(), 1, "{case}");
+        assert_eq!(rejected[0].1, bytes, "{case}");
+        let dir = fixture.journal_dir.clone();
+        assert_eq!(
+            fixture.loaded().root.live_migration,
+            Some(binding_of(&one, digest_of(&dir, 1))),
+            "{case}"
+        );
+    }
+}
+
+#[test]
+fn an_identical_candidate_is_adopted_and_never_discarded() {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let journal_after_failure = fixture.journal_files();
+    fixture.conflict = CandidateConflict::Quarantine;
+    fixture.checkpoint(&one).unwrap();
+    assert_eq!(fixture.journal_files(), journal_after_failure);
+    assert!(fixture.rejected_files().is_empty());
+}
+
+#[test]
+fn a_refused_manifest_never_discards_a_candidate() {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let journal_after_failure = fixture.journal_files();
+    let before = fixture.loaded().root;
+    fixture.conflict = CandidateConflict::Quarantine;
+    // Neither a phase jump nor a stale owner reaches the candidate.
+    let mut jump = manifest_at(OPERATION, 1, FENCE);
+    jump.phase = phase_code::ADMIT;
+    let stale = manifest_at(OPERATION, 1, FENCE - 1);
+    for (name, manifest, error) in [
+        (
+            "a phase jump",
+            jump,
+            MigrationExecutionError::InvalidPhaseTransition,
+        ),
+        (
+            "a stale owner",
+            stale,
+            MigrationExecutionError::StaleMigrationOwner,
+        ),
+    ] {
+        assert_eq!(
+            fixture.checkpoint(&manifest),
+            Err(AuthorityError::Journal(JournalDurableError::Authority(
+                error
+            ))),
+            "{name}"
+        );
+        assert_eq!(fixture.journal_files(), journal_after_failure, "{name}");
+    }
+    assert_eq!(fixture.loaded().root, before);
+}
+
+#[test]
+fn two_discards_at_one_revision_keep_both_candidates() {
+    let (mut fixture, _) = bound_at_zero();
+    let one = manifest_at(OPERATION, 1, FENCE);
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let first = candidate_bytes(&fixture, 1);
+    fixture.conflict = CandidateConflict::Quarantine;
+    // The second attempt replaces the first candidate, and its own root commit fails as well.
+    let second = rival_of(&one);
+    fail_root_commit_after_promote(&mut fixture, &second);
+    let second_bytes = candidate_bytes(&fixture, 1);
+    let mut third = rival_of(&one);
+    third.lease_owner_id = Some("owner-c".into());
+    fixture.checkpoint(&third).unwrap();
+    let mut rejected: Vec<Vec<u8>> = fixture
+        .rejected_files()
+        .into_iter()
+        .map(|(_, bytes)| bytes)
+        .collect();
+    rejected.sort();
+    let mut expected = vec![first, second_bytes];
+    expected.sort();
+    assert_eq!(rejected, expected);
+    let names: std::collections::BTreeSet<String> = fixture
+        .rejected_files()
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+    assert_eq!(names.len(), 2);
+}
+
+#[test]
+fn a_reused_operation_id_still_keeps_every_discarded_candidate() {
+    let (mut fixture, _) = bound_at_zero();
+    // Every call below reuses one write operation id; each relocation still gets its own name.
+    fixture.operation = Some(WriteOperationId::generate().unwrap());
+    fixture.conflict = CandidateConflict::Quarantine;
+    let one = manifest_at(OPERATION, 1, FENCE);
+    fail_root_commit_after_promote(&mut fixture, &one);
+    let first = candidate_bytes(&fixture, 1);
+    let second = rival_of(&one);
+    fail_root_commit_after_promote(&mut fixture, &second);
+    let second_bytes = candidate_bytes(&fixture, 1);
+    let mut third = rival_of(&one);
+    third.lease_owner_id = Some("owner-c".into());
+    fixture.checkpoint(&third).unwrap();
+    let mut rejected: Vec<Vec<u8>> = fixture
+        .rejected_files()
+        .into_iter()
+        .map(|(_, bytes)| bytes)
+        .collect();
+    rejected.sort();
+    let mut expected = vec![first, second_bytes];
+    expected.sort();
+    assert_eq!(rejected, expected);
 }
