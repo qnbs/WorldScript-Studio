@@ -506,3 +506,18 @@ fn pages_sealed_for_another_epoch_than_the_operations_are_refused() {
     );
     assert!(fs.created_nothing());
 }
+
+#[test]
+fn a_page_of_another_epoch_and_key_is_an_epoch_error_not_an_authentication_failure() {
+    // Sealed under the key of another epoch: opening it with the journal key would fail
+    // authentication, so the epoch has to be compared before the key is used.
+    let mut wrong = Captured::on(rotation_from_epoch_two(), 2, 2);
+    wrong.envelopes[0] = sealed_under(&wrong, &Key::from_bytes(&mut [9u8; 32]), 1);
+    let journal = journal_of(&wrong);
+    let mut fs = ObservedFs::new();
+    assert_eq!(
+        store(&mut fs, &journal, &wrong).unwrap_err(),
+        JournalDurableError::Journal(JournalError::KeyEpochMismatch)
+    );
+    assert!(fs.created_nothing());
+}

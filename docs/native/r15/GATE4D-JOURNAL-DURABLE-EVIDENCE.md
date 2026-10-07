@@ -645,7 +645,7 @@ decision B fixes the rule and this slice implements it:
 | `journal_envelope_epoch(&JournalManifest)` | the one derivation, a pure function of the authenticated manifest; `ENABLE` other than the first-time `0 → 1` of §8.3 and `ROTATE`/`ENVELOPE_MIGRATION` without a source epoch are `InvalidCounter`, any other operation type `UnsupportedOperationType`; the phase never changes the result |
 | manifest codec | `validate_semantics` calls it, so a manifest that cannot name its epoch (including an `ENABLE` other than `0 → 1`) does not encode or decode; `JournalManifest::seal` refuses metadata with another epoch and `open` refuses an authentic envelope whose header carries another one (`KeyEpochMismatch`) |
 | durable promotion | the manifest metadata is derived with it (`manifest_meta` is fallible); the identical-candidate adoption no longer carries a second epoch clause because an identical candidate is sealed by the same derivation |
-| page store | `seal_inventory_pages` takes the committed manifest and seals every page at its epoch; `store_page` derives the epoch from the committed manifest and refuses a page sealed for another one before anything is created (`KeyEpochMismatch`; the stage step repeats the comparison as a backstop and would report `StagedEnvelopeMismatch`) |
+| page store | `seal_inventory_pages` takes the committed manifest and seals every page at its epoch; `store_page` derives the epoch from the committed manifest and refuses a page sealed for another one before the key is used and before anything is created (`KeyEpochMismatch`, also for a page genuinely sealed under another epoch's key; the stage step repeats the comparison as a backstop and would report `StagedEnvelopeMismatch`) |
 | page reader | `open_stored_page` compares the envelope header with the manifest's epoch before the key is used (§6 authority-first read routing: a misrouted page is never decrypted) and reports `KeyEpochMismatch`, no longer `Corrupt` |
 
 Proof (`gate4d_journal_epoch_test` plus the store, reader and durable tests): an epoch table over every
@@ -653,7 +653,7 @@ operation type including the zero-source refusals; the epoch is the same in ever
 enable other than `0 → 1` neither derives an epoch nor encodes; manifest `seal` with the wrong epoch and
 `open` of an envelope hand-sealed at the wrong epoch; an operation from epoch 2 storing its pages and
 committed manifest with header epoch 2 and verifying them through the reader; pages sealed for the old
-constant epoch refused by the store before any file is created and by the reader as `KeyEpochMismatch`;
+constant epoch, and pages sealed under another key at another epoch, refused by the store before any file is created and by the reader as `KeyEpochMismatch` rather than as an authentication failure;
 a candidate sealed at another epoch is not adopted by the durable promotion.
 
 Residual, owned by Slice D2b: resolving the journal key through the authenticated key-epoch registry

@@ -2401,8 +2401,8 @@ from the authority root's `active_key_epoch`, which moves at cutover: `ENABLE` s
 `0 → 1`, so an `ENABLE` manifest with any other tuple is not encodable), `ROTATE` and
 `ENVELOPE_MIGRATION` seal under `source_epoch`. The envelope header's `key_epoch` must equal that value in every phase, including
 `RECOVERY_REQUIRED`: a manifest or page sealed under any other epoch is refused (`KeyEpochMismatch`)
-before a byte is written or accepted, and a reader compares the header epoch with the manifest's before
-the key is used (the authority-first read routing of §6), and a manifest whose operation cannot name the epoch (a rotation
+before a byte is written or accepted, and a writer or reader compares the header epoch with the manifest's
+before the key is used (the authority-first routing of §6), and a manifest whose operation cannot name the epoch (a rotation
 or envelope migration without a source epoch) is not encodable. The source epoch therefore has to stay
 resolvable, at least `RetiredRecoveryOnly`, for as long as a journal is bound to the root: it is never
 revoked or destroyed while a live migration names the journal, and after cutover the journal is

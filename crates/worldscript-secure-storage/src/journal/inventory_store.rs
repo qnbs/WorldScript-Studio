@@ -187,13 +187,17 @@ fn assert_page_generation(
     }
 }
 
-/// The envelope must authenticate as this operation's page at this index and generation and decode
-/// to exactly the page it is stored for; the record header alone would accept another payload.
+/// The envelope must carry this operation's journal envelope epoch, authenticate as this operation's
+/// page at this index and generation and decode to exactly the page it is stored for; the record
+/// header alone would accept another payload. The epoch is compared first, before the key is used
+/// (§6 authority-first routing): a page genuinely sealed for another epoch is an epoch violation,
+/// not an authentication failure.
 fn assert_envelope_is_page<F: DurableFs>(
     ctx: &JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
     sealed: &SealedPage<'_>,
 ) -> Result<(), JournalDurableError> {
+    assert_key_epoch(sealed, journal_envelope_epoch(manifest)?)?;
     let identity = migration_page_identity(&manifest.operation_id, sealed.page.page_index())?;
     let opened = JournalPage::open(
         ctx.key,
@@ -206,7 +210,7 @@ fn assert_envelope_is_page<F: DurableFs>(
             JournalError::InconsistentInventory,
         ));
     }
-    assert_key_epoch(sealed, journal_envelope_epoch(manifest)?)
+    Ok(())
 }
 
 /// Whether the envelope's header carries `epoch`, the operation's journal envelope epoch.

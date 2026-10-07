@@ -344,6 +344,18 @@ fn a_page_set_of_another_journal_epoch_verifies_and_a_misrouted_page_does_not() 
         verify(&mut StdFs, &journal).unwrap_err(),
         JournalDurableError::Journal(JournalError::KeyEpochMismatch)
     );
+    // Sealed under the key of another epoch it would not even authenticate with the journal key; the
+    // epoch is compared first, so it is still an epoch error.
+    let other = Key::from_bytes(&mut [9u8; 32]);
+    std::fs::write(
+        file_of(&journal, &captured, 0),
+        sealed_under(&captured, &other, 1),
+    )
+    .unwrap();
+    assert_eq!(
+        verify(&mut StdFs, &journal).unwrap_err(),
+        JournalDurableError::Journal(JournalError::KeyEpochMismatch)
+    );
 }
 
 #[test]
