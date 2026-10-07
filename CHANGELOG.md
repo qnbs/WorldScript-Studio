@@ -11,10 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directory keyed by the manifest's authenticated page-set digest
   (`inventory/<hex digest>/page-<index>/`), so a discarded capture attempt can never be mistaken for
   the page set a manifest names and no directory listing is authoritative. `seal_inventory_pages`
-  seals each page once, and `promote_inventory_page_fenced` writes a sealed page for the committed
-  owner only, with a generation no newer than the next revision, creating nothing when refused and
-  syncing the directory chain up to the journal directory. Reading the pages back and the composed
-  commit under the root lock stay later slices. PR #998.
+  seals each page once, and `promote_inventory_set_fenced` writes the whole captured set for the
+  committed owner only: the set is first proven against the manifest successor (page-set digest,
+  inventory digest, successor relation, an envelope that opens as its own page, generations no newer
+  than the next revision), nothing is created when it is refused, and the directory chain up to the
+  journal directory is synced, a failed sync being reported as already promoted. Reading the pages
+  back, the composed commit under the root lock and a streaming capture for very large inventories
+  stay later slices. PR #998.
 - **R-15 Gate 4D:** add `capture_inventory`, the manifest-side constructor of the §10.3 inventory
   capture. From sealed pages it builds the successor that carries the page set, the entry count and
   the inventory digest, while the inventory is still open (before `CONVERT`, with no conversion

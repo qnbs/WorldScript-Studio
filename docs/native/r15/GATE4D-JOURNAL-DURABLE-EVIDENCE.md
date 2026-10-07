@@ -25,7 +25,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::assert_manifest_successor` | Pure B2b-4 predicate: a manifest is a valid successor of the manifest the root names (revision + 1, kept operation identity, allowed phase step, no cursor regression within a phase, frozen target key and inventory, recovery reason only on entering recovery) |
 | `authority::advance_live_migration` | B2b-1/B2b-4: under `root_commit_mutex`, verify the binding successor, the durable manifest generation and that it is a valid manifest successor of the committed one, then commit a root carrying the new binding |
 | `journal::capture_inventory` | Slice C1a: pure constructor of the manifest successor that captures a paged inventory (page set, entry count, `inventory_digest`) from sealed pages |
-| `journal::seal_inventory_pages` / `inventory_page_dir` / `promote_inventory_page_fenced` | Slice C1b-1: seal each inventory page once, the directory its authenticated page-set digest names, and the fenced promotion of a sealed page into it |
+| `journal::seal_inventory_pages` / `inventory_page_dir` / `promote_inventory_set_fenced` | Slice C1b-1: seal each inventory page once, the directory its authenticated page-set digest names, and the fenced promotion of a whole captured page set into it |
 | `journal::assert_takeover_successor` / `assert_takeover_promote_authority` / `assert_binding_takeover` | Pure B2c predicates: a takeover is the committed owner's lease-expired successor with fence + 1 and revision + 1 that changes ownership only |
 | `journal::publish_takeover_fenced` | B2c: takeover authority, the committed generation loaded bounded and authenticated, the takeover successor check, then the same publish-or-adopt step as the checkpoint |
 | `authority::commit_journal_takeover` | B2c: under `root_commit_mutex`, read the committed binding, publish the new owner's claim (lease expired at the caller's `now`, fence + 1), advance the binding to the new fence and record it as the commit evidence |
@@ -450,28 +450,45 @@ path (§3: the directory is a locator).
 The caller seals every page once with `seal_inventory_pages` (identity `migration-page:<op>:<index>`,
 generation bound in the envelope), because the set digest binds the exact envelope bytes and sealing
 uses a fresh nonce each time. `capture_inventory` (C1a) then yields the manifest successor and its
-digest `D`, and `promote_inventory_page_fenced` writes each sealed page into `inventory/<D>/page-<index>/`
-through the existing immutable stage-and-promote:
+digest `D`, and `promote_inventory_set_fenced` writes the whole captured set into `inventory/<D>/`
+through the existing immutable stage-and-promote. It takes the set, not single pages, because the
+directory is keyed by `D`: a page may only be written under the digest that the manifest successor
+authenticates, so the writer proves the set against that successor before it creates anything.
 
 | Condition | Result |
 |---|---|
 | fence token is not the manifest's | `Fence(StaleMigrationOwner)` |
 | the committed binding is another operation, a later fence or another revision, or absent | `Authority(...)` per R4's page rule |
-| page generation is 0 or above the committed revision + 1 | `Journal(GenerationMismatch)` |
-| a refused write | nothing created: no file, no directory |
+| `successor` is not a valid successor of the committed manifest | `Authority(InvalidPhaseTransition)` and the like, via `assert_manifest_successor` |
+| a page generation is 0 or above the committed revision + 1 | `Journal(GenerationMismatch)` |
+| an envelope that does not open as the page it is stored for (swapped, other identity or generation) | `Journal(Open(..))` from `JournalPage::open`, or `Journal(InconsistentInventory)` when the opened page differs from the page handed over |
+| the pages are not the set the successor names (envelopes of another capture, a missing or extra page, wrong entries) | `Journal(PageSetMismatch)` (page count or page-set digest), `EntryCountMismatch`, or `InconsistentInventory` (inventory digest) |
+| a refused store | nothing created: no file, no directory |
 | the same generation promoted twice into one directory | `GenerationExists`, the first bytes untouched |
+
+All checks run inside `with_fence` before the first byte is written, so a refused store creates nothing.
+The set is verified with the same streaming verifier the reader will use (`InventoryDigestVerifier`
+for the entries and `successor.verify_page_set` for the page-set digest over the exact envelope bytes).
 
 Pages are candidates until a manifest naming `D` is committed (§10.1.1: "a new page generation is
 durable but the manifest still names the old generation ... a discardable or retryable candidate"), so
-they are written before that manifest. After the promotion the directory chain up to the journal directory
-is synced (page directory, set directory, `inventory`, journal directory), so a page cannot vanish after
-the manifest that names it is durable. A crash between the pages and the manifest leaves an inert
-directory under an unreferenced digest, reclaimable by the retention rule once no root can name it.
+they are written before that manifest. After each promotion the directory chain up to the journal
+directory is synced (page directory, set directory, `inventory`, journal directory), so a page cannot
+vanish after the manifest that names it is durable. A failure of one of those syncs is reported as
+`StageFailure { step: SyncDirectory, kind: Io, promoted: true }` with the staging residue of the
+promotion: the page is already visible, and a retry meets the immutable generation instead of an
+absent page. A crash between the pages and the manifest leaves an inert directory under an
+unreferenced digest, reclaimable by the retention rule once no root can name it.
 
-Proof: seven cases in `gate4d_inventory_store_test` (promotion into the keyed directory with the bytes
-the capture bound, the directory chain synced, four refusals that create nothing, no committed binding,
-page sets with different digests never colliding, an immutable generation never replaced, sealed pages
-binding identity and generation).
+Memory: the whole set is held in memory while it is verified, which bounds this slice to inventories
+that fit. That is recorded as an acceptance criterion on #359 (a streaming capture that seals, digests
+and promotes one page at a time must precede very large inventories), not decided here.
+
+Proof: eleven cases in `gate4d_inventory_store_test` (a stored set whose bytes verify against the
+captured page set, the directory chain synced, a post-promotion sync failure reported as promoted,
+three authority refusals that create nothing, an invalid successor, envelopes of another capture, a
+swapped envelope, a future page generation, page sets with different digests never colliding, an
+immutable generation never replaced, sealed pages binding identity and generation).
 
 ## Still residual after C1b-1
 
@@ -484,6 +501,7 @@ binding identity and generation).
   separate slice, recorded as an acceptance criterion on #359.
 - Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4).
 - Slice C1b-2: reading the stored pages back (verify the stored set against the manifest, then read one page at a time against the verified refs); C1c: the composed capture commit under the root lock; then conversion (C2+).
+- Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).
 - The cross-process lease CAS.
 - Root-bound `key_epoch` alignment: §8.3 fixes first-time enable at epoch 1 (the current constant),
   but the contract does not say which epoch seals the journal during rotation, so that needs a
