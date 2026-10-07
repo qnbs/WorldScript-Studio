@@ -20,12 +20,13 @@ use std::path::{Path, PathBuf};
 
 use crate::durable::{
     stage_and_promote_envelope, DirectoryDurability, DurableFs, PromotedGeneration, StageFailure,
-    StageFailureKind, StageStep,
+    StageFailureKind, StageStep, StagingResidue,
 };
+use crate::envelope::parse_envelope;
 use crate::root::LiveMigration;
 use crate::seal::Key;
 
-use super::capture::SealedPage;
+use super::capture::{ordered_pages, SealedPage};
 use super::digest::{page_ref_for, InventoryDigestVerifier};
 use super::durable::{
     migration_page_identity, page_meta, stage_io, stage_request, with_fence, JournalDurableContext,
@@ -120,8 +121,10 @@ fn verify_set<'a, F: DurableFs>(
     ctx: &JournalDurableContext<'_, F>,
     set: &InventorySetWrite<'a>,
 ) -> Result<Vec<&'a SealedPage<'a>>, JournalDurableError> {
-    let mut ordered: Vec<&SealedPage<'_>> = set.pages.iter().collect();
-    ordered.sort_by_key(|sealed| sealed.page.page_index());
+    // The successor must be a manifest that can be sealed: the successor relation leaves the lease
+    // fields unconstrained, so a set could otherwise be stored for a manifest that never encodes.
+    set.successor.encode()?;
+    let ordered = ordered_pages(set.pages)?;
     let mut refs = Vec::with_capacity(ordered.len());
     let mut verifier =
         InventoryDigestVerifier::new(set.successor.inventory_version, set.successor.entry_count)?;
@@ -168,13 +171,27 @@ fn assert_envelope_is_page<F: DurableFs>(
         sealed.page.page_generation(),
         sealed.envelope,
     )?;
-    if opened == *sealed.page {
-        Ok(())
-    } else {
-        Err(JournalDurableError::Journal(
+    if opened != *sealed.page {
+        return Err(JournalDurableError::Journal(
             JournalError::InconsistentInventory,
-        ))
+        ));
     }
+    assert_key_epoch(sealed)
+}
+
+/// `JournalPage::open` does not compare the header's key epoch, but the stage step does, after the
+/// staging file exists. Refuse it here so a refused store leaves no residue.
+fn assert_key_epoch(sealed: &SealedPage<'_>) -> Result<(), JournalDurableError> {
+    let parsed = parse_envelope(sealed.envelope).map_err(JournalError::Open)?;
+    if parsed.header().key_epoch == page_meta(sealed.page).key_epoch {
+        return Ok(());
+    }
+    Err(JournalDurableError::Stage(StageFailure {
+        step: StageStep::ValidateStaging,
+        kind: StageFailureKind::StagedEnvelopeMismatch,
+        promoted: false,
+        staging: StagingResidue::None,
+    }))
 }
 
 /// Creates the page directory, promotes the envelope into it and syncs the directory chain.

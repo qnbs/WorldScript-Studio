@@ -460,7 +460,10 @@ authenticates, so the writer proves the set against that successor before it cre
 | fence token is not the manifest's | `Fence(StaleMigrationOwner)` |
 | the committed binding is another operation, a later fence or another revision, or absent | `Authority(...)` per R4's page rule |
 | `successor` is not a valid successor of the committed manifest | `Authority(InvalidPhaseTransition)` and the like, via `assert_manifest_successor` |
+| `successor` does not encode (for example lease fields present while the lease flag is absent, which the successor relation leaves unconstrained) | `Journal(Corrupt(..))`, so a set is never stored for a manifest that can never be sealed |
+| the pages are not indexed exactly `0..n` (neither digest pins the indexes, so a hand-built successor could otherwise verify) | `Journal(PageSetMismatch)`, the same check `capture_inventory` makes |
 | a page generation is 0 or above the committed revision + 1 | `Journal(GenerationMismatch)` |
+| an envelope sealed for a key epoch other than the journal's pinned epoch (`JournalPage::open` does not compare it, the stage step does, but only once the staging file exists) | `Stage(StagedEnvelopeMismatch)` with `promoted: false` and no residue |
 | an envelope that does not open as the page it is stored for (swapped, other identity or generation) | `Journal(Open(..))` from `JournalPage::open`, or `Journal(InconsistentInventory)` when the opened page differs from the page handed over |
 | the pages are not the set the successor names (envelopes of another capture, a missing or extra page, wrong entries) | `Journal(PageSetMismatch)` (page count or page-set digest), `EntryCountMismatch`, or `InconsistentInventory` (inventory digest) |
 | a refused store | nothing created: no file, no directory |
@@ -484,9 +487,10 @@ Memory: the whole set is held in memory while it is verified, which bounds this 
 that fit. That is recorded as an acceptance criterion on #359 (a streaming capture that seals, digests
 and promotes one page at a time must precede very large inventories), not decided here.
 
-Proof: eleven cases in `gate4d_inventory_store_test` (a stored set whose bytes verify against the
+Proof: fourteen cases in `gate4d_inventory_store_test` (a stored set whose bytes verify against the
 captured page set, the directory chain synced, a post-promotion sync failure reported as promoted,
-three authority refusals that create nothing, an invalid successor, envelopes of another capture, a
+three authority refusals that create nothing, an invalid successor, a successor that does not encode,
+a page set not indexed `0..n`, a foreign key epoch, envelopes of another capture, a
 swapped envelope, a future page generation, page sets with different digests never colliding, an
 immutable generation never replaced, sealed pages binding identity and generation).
 

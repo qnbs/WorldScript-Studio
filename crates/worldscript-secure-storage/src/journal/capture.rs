@@ -79,10 +79,11 @@ fn assert_inventory_open(manifest: &JournalManifest) -> Result<(), MigrationExec
     Ok(())
 }
 
-/// The pages by index, which must be exactly `0..n`.
-fn ordered_pages<'a>(
+/// The pages by index, which must be exactly `0..n`: neither the page-set digest nor the inventory
+/// digest pins the indexes, so every writer of a page set checks this itself.
+pub(super) fn ordered_pages<'a>(
     pages: &'a [SealedPage<'a>],
-) -> Result<Vec<&'a SealedPage<'a>>, MigrationExecutionError> {
+) -> Result<Vec<&'a SealedPage<'a>>, JournalError> {
     let mut ordered: Vec<&SealedPage<'_>> = pages.iter().collect();
     ordered.sort_by_key(|sealed| sealed.page.page_index());
     let contiguous = ordered
@@ -92,7 +93,7 @@ fn ordered_pages<'a>(
     if contiguous {
         Ok(ordered)
     } else {
-        Err(JournalError::PageSetMismatch.into())
+        Err(JournalError::PageSetMismatch)
     }
 }
 

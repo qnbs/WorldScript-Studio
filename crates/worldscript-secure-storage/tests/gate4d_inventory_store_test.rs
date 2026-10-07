@@ -8,12 +8,13 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::{
     capture_inventory, content_digest, empty_inventory_digest, empty_journal_page_set_digest,
-    inventory_page_dir, operation_type, page_ref_for, phase_code, promote_inventory_set_fenced,
-    seal_inventory_pages, source_authority_kind, source_physical_authority_kind,
-    DirectoryDurability, DurableFs, InventorySetWrite, JournalDurableContext, JournalDurableError,
-    JournalError, JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage,
-    LiveMigration, MigrationExecutionError, MigrationFence, RecordClass, RecordIdentity,
-    SealedPage, StageFailureKind, StageStep, StdFs, WriteOperationId,
+    inventory_page_dir, journal_page_set_digest, operation_type, page_ref_for, parse_envelope,
+    phase_code, promote_inventory_set_fenced, seal_inventory_pages, source_authority_kind,
+    source_physical_authority_kind, DirectoryDurability, DurableFs, InventorySetWrite,
+    JournalDurableContext, JournalDurableError, JournalError, JournalInventoryEntry,
+    JournalInventorySource, JournalManifest, JournalPage, LiveMigration, MigrationExecutionError,
+    MigrationFence, RecordClass, RecordIdentity, RecordMeta, SealedPage, StageFailureKind,
+    StageStep, StdFs, WriteOperationId,
 };
 
 const OPERATION: &str = "store-op";
@@ -436,6 +437,78 @@ fn a_page_generation_above_the_next_revision_is_refused() {
         result.unwrap_err(),
         JournalDurableError::Journal(JournalError::GenerationMismatch)
     );
+    assert!(fs.created_nothing());
+}
+
+/// A hand-built successor naming a page set whose only page is index 1, which `capture_inventory`
+/// refuses: the page-set digest and the inventory digest both verify, only the index is wrong.
+fn index_one_inventory() -> Captured {
+    let mut captured = Captured::new(2, 2);
+    let page = JournalPage::new(1, 4, captured.pages[0].entries().to_vec()).unwrap();
+    let envelopes = seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&page)).unwrap();
+    let reference = page_ref_for(&page, &envelopes[0]).unwrap();
+    captured.successor.journal_page_set_digest = journal_page_set_digest(&[reference]).unwrap();
+    captured.pages = vec![page];
+    captured.envelopes = envelopes;
+    captured
+}
+
+#[test]
+fn a_page_set_whose_indexes_are_not_zero_to_n_is_refused() {
+    let dir = TempDir::new();
+    let committed = binding_at(3);
+    let captured = index_one_inventory();
+    let mut fs = ObservedFs::new();
+    let result = store(&mut fs, &dir.0, &captured, Some(&committed));
+    assert_eq!(
+        result.unwrap_err(),
+        JournalDurableError::Journal(JournalError::PageSetMismatch)
+    );
+    assert!(fs.created_nothing());
+}
+
+#[test]
+fn a_successor_that_can_never_be_sealed_is_refused_before_any_write() {
+    let dir = TempDir::new();
+    let committed = binding_at(3);
+    let mut captured = Captured::new(2, 2);
+    // The successor relation leaves the lease fields unconstrained; encoding does not.
+    captured.successor.lease_owner_id = Some("owner".into());
+    let mut fs = ObservedFs::new();
+    let result = store(&mut fs, &dir.0, &captured, Some(&committed));
+    assert!(matches!(
+        result,
+        Err(JournalDurableError::Journal(JournalError::Corrupt(_)))
+    ));
+    assert!(fs.created_nothing());
+}
+
+#[test]
+fn an_envelope_sealed_for_another_key_epoch_is_refused_before_any_write() {
+    let dir = TempDir::new();
+    let captured = Captured::new(2, 2);
+    let parsed = parse_envelope(&captured.envelopes[0]).unwrap();
+    let meta = RecordMeta {
+        key_epoch: parsed.header().key_epoch + 1,
+        record_generation: parsed.header().record_generation,
+        record_schema: parsed.header().record_schema,
+    };
+    let identity = RecordIdentity::new(RecordClass::MigrationPage, &[OPERATION, "0"]).unwrap();
+    let envelope = captured.pages[0].seal(&key(), &identity, meta).unwrap();
+    let other_epoch = [SealedPage {
+        page: &captured.pages[0],
+        envelope: &envelope,
+    }];
+    let mut fs = ObservedFs::new();
+    let result = store_pages(&mut fs, &dir.0, &captured, &other_epoch);
+    let Err(JournalDurableError::Stage(stage)) = result else {
+        panic!("a foreign key epoch must be refused");
+    };
+    assert!(matches!(
+        stage.kind,
+        StageFailureKind::StagedEnvelopeMismatch
+    ));
+    assert!(!stage.promoted);
     assert!(fs.created_nothing());
 }
 
