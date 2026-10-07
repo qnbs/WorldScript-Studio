@@ -7,8 +7,8 @@
 use super::manifest::JournalManifest;
 use super::phase_code;
 use super::state::{
-    allows_phase_transition, is_terminal_phase, manifest_phase, phase_rank,
-    validate_checkpoint_cursor, JournalCheckpointCursor, MigrationExecutionError, MigrationPhase,
+    allows_phase_transition, is_terminal_phase, manifest_phase, phase_reached,
+    validate_checkpoint_cursor, JournalCheckpointCursor, MigrationExecutionError,
 };
 
 /// Refuses a manifest that is not a valid successor of `prev`, the manifest the root names (§10.3).
@@ -91,17 +91,6 @@ fn assert_phase_successor(
         return Err(MigrationExecutionError::InvalidPhaseTransition);
     }
     Ok(())
-}
-
-/// Whether `phase` is at or past `milestone` in the §10.3 order.
-fn phase_reached(phase: MigrationPhase, milestone: u32) -> bool {
-    match (
-        phase_rank(phase),
-        phase_rank(MigrationPhase::from_wire(milestone)),
-    ) {
-        (Ok(rank), Ok(floor)) => rank >= floor,
-        _ => false,
-    }
 }
 
 fn assert_frozen_fields_kept(

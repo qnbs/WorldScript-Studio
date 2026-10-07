@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** add `capture_inventory`, the manifest-side constructor of the §10.3 inventory
+  capture. From sealed pages it builds the successor that carries the page set, the entry count and
+  the inventory digest, while the inventory is still open (before `CONVERT`, with no conversion
+  progress). Pages must be indexed from 0 without gap or duplicate, hold globally ascending valid
+  entries and carry a generation no newer than the new revision, so an unchanged page keeps the
+  generation that names it; the result is re-verified and checked as a valid successor. Pure: no
+  I/O. The physical page layout, promotion and reading, and the conversion itself, stay later
+  slices. PR #997.
 - **R-15 Gate 4D:** the composed journal commits can replace a stale candidate. The new
   `CandidateConflict` policy (default `Refuse`, the behaviour so far) lets `commit_journal_checkpoint`
   and `commit_journal_takeover` move a durable next-revision candidate that differs from their
