@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** add the inventory page store. The pages of a captured inventory live under a
+  directory keyed by the manifest's authenticated page-set digest
+  (`inventory/<hex digest>/page-<index>/`), so a discarded capture attempt can never be mistaken for
+  the page set a manifest names and no directory listing is authoritative. `seal_inventory_pages`
+  seals each page once, and `promote_inventory_page_fenced` writes a sealed page for the committed
+  owner only, with a generation no newer than the next revision, creating nothing when refused and
+  syncing the directory chain up to the journal directory. Reading the pages back and the composed
+  commit under the root lock stay later slices. PR #998.
 - **R-15 Gate 4D:** add `capture_inventory`, the manifest-side constructor of the §10.3 inventory
   capture. From sealed pages it builds the successor that carries the page set, the entry count and
   the inventory digest, while the inventory is still open (before `CONVERT`, with no conversion
