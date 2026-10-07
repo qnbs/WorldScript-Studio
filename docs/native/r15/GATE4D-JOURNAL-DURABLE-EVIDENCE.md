@@ -466,6 +466,7 @@ authenticates, so the writer proves the set against that successor before it cre
 | the pages are not indexed exactly `0..n` (neither digest pins the indexes, so a hand-built successor could otherwise verify) | `Journal(PageSetMismatch)`, the same check `capture_inventory` makes |
 | a page holds no entry (an empty inventory is no page at all; an empty page would give it a second page-set digest) | `Journal(InvalidDescriptorCount)`, the same rule `capture_inventory` applies |
 | a page generation is 0 or above the committed revision + 1 | `Journal(GenerationMismatch)` |
+| a page that keeps an earlier generation (an unchanged page, C1a) whose exact bytes the predecessor's own page directory (`inventory/<predecessor digest>/page-<index>/`) does not hold at that generation: the same page identity and generation would otherwise stand for different content across page sets | `Journal(GenerationMismatch)` |
 | an envelope sealed for a key epoch other than the journal's pinned epoch (`JournalPage::open` does not compare the header epoch; the store checks it against the page metadata before writing, and staging validation repeats that check after creating the staging file) | `Stage(StagedEnvelopeMismatch)` with `promoted: false` and no residue |
 | an envelope that does not open as the page it is stored for (swapped, other identity or generation) | `Journal(Open(..))` from `JournalPage::open`, or `Journal(InconsistentInventory)` when the opened page differs from the page handed over |
 | the pages are not the set the successor names (envelopes of another capture, a missing or extra page, wrong entries) | `Journal(PageSetMismatch)` (page count or page-set digest), `EntryCountMismatch`, or `InconsistentInventory` (inventory digest) |
@@ -496,7 +497,7 @@ Memory: the whole set is held in memory while it is verified, which bounds this 
 that fit. That is recorded as an acceptance criterion on #359 (a streaming capture that seals, digests
 and promotes one page at a time must precede very large inventories), not decided here.
 
-Proof: thirteen tests in `gate4d_inventory_store_test`, three of them tables that assert the exact
+Proof: fifteen tests in `gate4d_inventory_store_test`, three of them tables that assert the exact
 error and that nothing was created for each case: a stored set whose bytes verify against the
 captured page set, the directory chain synced, a post-promotion sync failure reported as promoted;
 the authority refusals (later fence, another operation, a digest naming another manifest, no
@@ -504,8 +505,9 @@ binding); a predecessor that is not the root-named manifest; successors the stor
 (phase skipped, bootstrap manifest, advanced cursor, simultaneous phase change, unencodable
 counters); page sets the successor does not name (envelopes of another capture, indexes not `0..n`,
 an empty page, a generation above the next revision); a swapped envelope and a foreign key epoch;
-page sets with different digests never colliding; the same set stored again adopting its identical
-pages; a set that failed partway completed by a retry that stages only the missing page; a different
+an unchanged page keeping the generation the predecessor named, and one claiming an older
+generation the predecessor never named refused; page sets with different digests never colliding;
+the same set stored again adopting its identical pages; a set that failed partway completed by a retry that stages only the missing page; a different
 file at a page generation never replaced; sealed pages binding identity and generation.
 
 ## Still residual after C1b-1

@@ -189,8 +189,22 @@ impl Captured {
 
     /// Pages at the next revision's generation, captured over `committed_manifest`.
     fn on(committed_manifest: JournalManifest, count: u32, per_page: usize) -> Self {
-        let pages = pages_of(count, per_page, COMMITTED_REVISION + 1);
+        let generation = committed_manifest.journal_revision + 1;
+        Self::on_pages(committed_manifest, pages_of(count, per_page, generation))
+    }
+
+    /// `pages` sealed once and captured over `committed_manifest`.
+    fn on_pages(committed_manifest: JournalManifest, pages: Vec<JournalPage>) -> Self {
         let envelopes = seal_inventory_pages(&key(), OPERATION, &pages).unwrap();
+        Self::from_sealed(committed_manifest, pages, envelopes)
+    }
+
+    /// Already sealed pages captured over `committed_manifest`.
+    fn from_sealed(
+        committed_manifest: JournalManifest,
+        pages: Vec<JournalPage>,
+        envelopes: Vec<Vec<u8>>,
+    ) -> Self {
         let fence = MigrationFence::from_manifest(&committed_manifest);
         let sealed = seal_all(&pages, &envelopes);
         let successor = capture_inventory(&committed_manifest, &fence, &sealed).unwrap();
@@ -235,7 +249,12 @@ impl Journal {
 /// Commits `captured`'s committed manifest to a fresh directory and returns the binding naming it.
 fn journal_of(captured: &Captured) -> Journal {
     let dir = TempDir::new();
-    let manifest = &captured.committed_manifest;
+    let live = commit_into(&dir.0, &captured.committed_manifest);
+    Journal { dir, live }
+}
+
+/// Commits `manifest` as the root-named generation of `dir`; returns the binding that names it.
+fn commit_into(dir: &Path, manifest: &JournalManifest) -> LiveMigration {
     let previous = LiveMigration {
         operation_id: manifest.operation_id.clone(),
         fencing_generation: manifest.fencing_generation,
@@ -245,15 +264,15 @@ fn journal_of(captured: &Captured) -> Journal {
     let op = WriteOperationId::generate().unwrap();
     let key = key();
     let mut fs = StdFs;
-    let mut ctx = JournalDurableContext::new(&mut fs, &key, &dir.0, &op);
-    promote_manifest_fenced(&mut ctx, manifest, &captured.fence, Some(&previous)).unwrap();
-    let bytes = std::fs::read(generation_path(&dir.0, manifest.journal_revision)).unwrap();
-    let live = LiveMigration {
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, dir, &op);
+    let fence = MigrationFence::from_manifest(manifest);
+    promote_manifest_fenced(&mut ctx, manifest, &fence, Some(&previous)).unwrap();
+    let bytes = std::fs::read(generation_path(dir, manifest.journal_revision)).unwrap();
+    LiveMigration {
         manifest_digest: content_digest(&bytes),
         journal_revision: manifest.journal_revision,
         ..previous
-    };
-    Journal { dir, live }
+    }
 }
 
 /// The committed owner stores `captured` into `journal`.
@@ -309,6 +328,15 @@ fn refusal_in(journal: &Journal, captured: &Captured) -> JournalDurableError {
     error
 }
 
+/// What `StdFs` reports for a synced directory chain: only Unix can confirm it.
+fn confirmed_here() -> DirectoryDurability {
+    if cfg!(unix) {
+        DirectoryDurability::Confirmed
+    } else {
+        DirectoryDurability::NotConfirmed
+    }
+}
+
 fn page_file(dir: &Path, digest: &[u8; 32], index: u32) -> PathBuf {
     inventory_page_dir(dir, digest, index).join("generation-4.wsr1")
 }
@@ -319,7 +347,8 @@ fn assert_stored(dir: &Path, captured: &Captured) {
         .pages
         .iter()
         .map(|page| {
-            let file = page_file(dir, &captured.digest(), page.page_index());
+            let page_dir = inventory_page_dir(dir, &captured.digest(), page.page_index());
+            let file = generation_path(&page_dir, page.page_generation());
             page_ref_for(page, &std::fs::read(file).unwrap()).unwrap()
         })
         .collect();
@@ -331,7 +360,7 @@ fn a_captured_inventory_is_stored_under_the_directory_its_digest_names() {
     let captured = Captured::new(5, 2);
     let journal = journal_of(&captured);
     let durability = store(&mut StdFs, &journal, &captured).unwrap();
-    assert_eq!(durability, DirectoryDurability::Confirmed);
+    assert_eq!(durability, confirmed_here());
     assert_stored(journal.path(), &captured);
 }
 
@@ -653,7 +682,7 @@ fn storing_the_same_set_again_adopts_the_identical_pages() {
     store(&mut StdFs, &journal, &captured).unwrap();
     let mut fs = ObservedFs::new();
     let again = store(&mut fs, &journal, &captured);
-    assert_eq!(again.unwrap(), DirectoryDurability::Confirmed);
+    assert_eq!(again.unwrap(), confirmed_here());
     // Nothing was staged, and the chain was synced again.
     assert_eq!(fs.creates, 0);
     let page_dir = inventory_page_dir(journal.path(), &captured.digest(), 0);
@@ -679,7 +708,7 @@ fn a_set_that_failed_partway_is_completed_by_a_retry() {
     assert!(!page_file(journal.path(), &captured.digest(), 2).exists());
     let mut healthy = ObservedFs::new();
     let second = store(&mut healthy, &journal, &captured);
-    assert_eq!(second.unwrap(), DirectoryDurability::Confirmed);
+    assert_eq!(second.unwrap(), confirmed_here());
     assert_eq!(healthy.creates, 1);
     assert_stored(journal.path(), &captured);
 }
@@ -697,6 +726,51 @@ fn a_different_file_at_a_page_generation_is_never_replaced() {
     };
     assert!(matches!(stage.kind, StageFailureKind::GenerationExists));
     assert_eq!(std::fs::read(file).unwrap(), b"not the envelope");
+}
+
+/// A journal whose root names the successor of a first stored capture of four entries (two pages).
+fn after_first_capture() -> (Journal, Captured) {
+    let first = Captured::new(4, 2);
+    let mut journal = journal_of(&first);
+    store(&mut StdFs, &journal, &first).unwrap();
+    journal.live = commit_into(journal.path(), &first.successor);
+    (journal, first)
+}
+
+/// A recapture over `first`: page 0 unchanged (its envelope and older generation kept), page 1
+/// rewritten at the new revision.
+fn recapture(first: &Captured) -> Captured {
+    let committed = first.successor.clone();
+    let generation = committed.journal_revision + 1;
+    let rewritten = JournalPage::new(1, generation, first.pages[1].entries().to_vec()).unwrap();
+    let fresh = seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&rewritten)).unwrap();
+    let pages = vec![first.pages[0].clone(), rewritten];
+    let envelopes = vec![first.envelopes[0].clone(), fresh[0].clone()];
+    Captured::from_sealed(committed, pages, envelopes)
+}
+
+#[test]
+fn an_unchanged_page_keeps_the_generation_the_predecessor_named() {
+    let (journal, first) = after_first_capture();
+    let second = recapture(&first);
+    store(&mut StdFs, &journal, &second).unwrap();
+    assert_stored(journal.path(), &second);
+}
+
+#[test]
+fn a_page_claiming_an_older_generation_the_predecessor_never_named_is_refused() {
+    let mismatch = JournalDurableError::Journal(JournalError::GenerationMismatch);
+    // The predecessor stored no pages at all.
+    let early = Captured::on_pages(manifest_at(COMMITTED_REVISION), pages_of(2, 2, 3));
+    assert_eq!(refusal_in(&journal_of(&early), &early), mismatch);
+    // The predecessor's page 0 holds other bytes than the ones claimed as unchanged.
+    let (journal, first) = after_first_capture();
+    let mut forged = recapture(&first);
+    forged.envelopes[0] = seal_inventory_pages(&key(), OPERATION, &forged.pages[..1])
+        .unwrap()
+        .remove(0);
+    rebind(&mut forged);
+    assert_eq!(refusal_in(&journal, &forged), mismatch);
 }
 
 #[test]

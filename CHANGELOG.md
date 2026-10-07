@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   back and compared), and the set is first proven against the manifest successor (page-set digest,
   inventory digest, successor relation, a successor that is a capture and encodes, non-empty pages
   indexed `0..n`, an envelope that opens as its own page under the journal key epoch, generations no
-  newer than the next revision), nothing is created when it is refused, and the directory chain up
+  newer than the next revision, and a page that keeps an earlier generation only if the predecessor
+  stored exactly those bytes), nothing is created when it is refused, and the directory chain up
   to the journal directory is synced, a failed sync being reported as already promoted. A retry of a
   set that failed partway adopts the identical pages already on disk and continues with the first
   missing one. Reading the pages back, the composed commit under the root lock and a streaming

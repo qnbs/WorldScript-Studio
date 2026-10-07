@@ -97,8 +97,9 @@ pub struct InventorySetWrite<'a> {
 /// (inventory still open, only the revision and the inventory fields changed) and must encode; the
 /// pages must be indexed `0..n`, non-empty, and exactly the page set and inventory `successor` names
 /// (so the directory key cannot disagree with the pages); each page generation must lie in
-/// `1..=committed revision + 1`; and each envelope must open under the journal key, at its pinned key
-/// epoch, to exactly its page. A store refused by these checks creates nothing, not even the
+/// `1..=committed revision + 1`, and a page below the new revision must be byte-identical to the one
+/// the predecessor's page directory holds at that generation; and each envelope must open under the
+/// journal key, at its pinned key epoch, to exactly its page. A store refused by these checks creates nothing, not even the
 /// directory.
 ///
 /// The pages are then written one by one, before the manifest that names the digest is committed
@@ -147,7 +148,7 @@ fn assert_root_named_predecessor<F: DurableFs>(
 
 /// Everything that can be refused without touching the disk; returns the pages by index.
 fn verify_set<'a, F: DurableFs>(
-    ctx: &JournalDurableContext<'_, F>,
+    ctx: &mut JournalDurableContext<'_, F>,
     set: &InventorySetWrite<'a>,
 ) -> Result<Vec<&'a SealedPage<'a>>, JournalDurableError> {
     // The successor must be a manifest that can be sealed: the successor relation leaves the lease
@@ -160,6 +161,7 @@ fn verify_set<'a, F: DurableFs>(
     for sealed in &ordered {
         assert_page_not_empty(sealed.page)?;
         assert_page_generation(set.committed_manifest, sealed.page)?;
+        assert_inherited_page(ctx, set, sealed)?;
         assert_envelope_is_page(ctx, set.committed_manifest, sealed)?;
         refs.push(page_ref_for(sealed.page, sealed.envelope)?);
         verifier.absorb_page(sealed.page)?;
@@ -185,6 +187,32 @@ fn assert_page_generation(
         ));
     }
     Ok(())
+}
+
+/// A page that keeps an earlier generation claims it is unchanged since the predecessor named it, so
+/// the predecessor's own page directory must hold exactly these bytes at that generation. Otherwise
+/// the same page identity and generation would stand for different content across page sets, which
+/// the immutable-generation contract forbids. A page at the successor's revision is new.
+fn assert_inherited_page<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    set: &InventorySetWrite<'_>,
+    sealed: &SealedPage<'_>,
+) -> Result<(), JournalDurableError> {
+    if sealed.page.page_generation() == set.successor.journal_revision {
+        return Ok(());
+    }
+    let predecessor = inventory_page_dir(
+        ctx.dir,
+        &set.committed_manifest.journal_page_set_digest,
+        sealed.page.page_index(),
+    );
+    if holds_envelope(ctx, &predecessor, sealed)? {
+        Ok(())
+    } else {
+        Err(JournalDurableError::Journal(
+            JournalError::GenerationMismatch,
+        ))
+    }
 }
 
 /// The envelope must authenticate as this operation's page at this index and generation and decode
@@ -237,7 +265,7 @@ fn store_page<F: DurableFs>(
         &set.successor.journal_page_set_digest,
         sealed.page.page_index(),
     );
-    if is_already_stored(ctx, &dir, sealed)? {
+    if holds_envelope(ctx, &dir, sealed)? {
         // The earlier attempt may have stopped before its directories were durable.
         return sync_chain(ctx, &dir, StagingResidue::None);
     }
@@ -255,11 +283,12 @@ fn store_page<F: DurableFs>(
     Ok(both(promoted.directory, synced))
 }
 
-/// Whether the exact bytes of this page generation are already on disk, left by an earlier attempt
-/// at the same set (a failure partway through the pages leaves a prefix). The read is bounded by the
-/// envelope's own length. Any other file at that name is not adopted: the immutable generation then
-/// refuses the promotion and the bytes already there stay untouched.
-fn is_already_stored<F: DurableFs>(
+/// Whether `page_dir` already holds this page generation with exactly the envelope's bytes: left by
+/// an earlier attempt at the same set (a failure partway through the pages leaves a prefix), or by
+/// the predecessor for a page that did not change. The read is bounded by the envelope's own length;
+/// an absent or different file is `false`, and a different file is never replaced (the immutable
+/// generation refuses the promotion and the bytes already there stay untouched).
+fn holds_envelope<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     page_dir: &Path,
     sealed: &SealedPage<'_>,
