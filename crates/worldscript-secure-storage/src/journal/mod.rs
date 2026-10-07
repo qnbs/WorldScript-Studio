@@ -5,6 +5,7 @@
 //! `migration:<operation-id>`, and the page bodies sealed under `migration-page:<operation-id>:<page-index>`.
 //! Slice 4D part A adds phase/fence/revision state only; durable I/O and root binding updates follow.
 
+mod capture;
 mod digest;
 mod durable;
 mod inventory;
@@ -112,6 +113,7 @@ impl From<RootError> for JournalError {
     }
 }
 
+pub use capture::{capture_inventory, SealedPage};
 pub use digest::{
     empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
     journal_page_set_digest, page_ref_for, InventoryDigestVerifier,

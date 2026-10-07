@@ -339,6 +339,17 @@ pub(super) fn phase_rank(phase: MigrationPhase) -> Result<u32, MigrationExecutio
     })
 }
 
+/// Whether `phase` is at or past `milestone` in the §10.3 order.
+pub(super) fn phase_reached(phase: MigrationPhase, milestone: u32) -> bool {
+    match (
+        phase_rank(phase),
+        phase_rank(MigrationPhase::from_wire(milestone)),
+    ) {
+        (Ok(rank), Ok(floor)) => rank >= floor,
+        _ => false,
+    }
+}
+
 /// Whether `to` is an allowed idempotent or forward transition from `from` (§10.3 ordering).
 pub fn allows_phase_transition(from: MigrationPhase, to: MigrationPhase) -> bool {
     if from == to {

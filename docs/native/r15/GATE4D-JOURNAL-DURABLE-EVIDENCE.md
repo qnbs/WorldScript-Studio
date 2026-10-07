@@ -24,6 +24,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::assert_binding_successor` | Pure B2b-1 predicate: a binding advance is the CAS successor (same operation and fence, revision + 1) of the committed binding |
 | `journal::assert_manifest_successor` | Pure B2b-4 predicate: a manifest is a valid successor of the manifest the root names (revision + 1, kept operation identity, allowed phase step, no cursor regression within a phase, frozen target key and inventory, recovery reason only on entering recovery) |
 | `authority::advance_live_migration` | B2b-1/B2b-4: under `root_commit_mutex`, verify the binding successor, the durable manifest generation and that it is a valid manifest successor of the committed one, then commit a root carrying the new binding |
+| `journal::capture_inventory` | Slice C1a: pure constructor of the manifest successor that captures a paged inventory (page set, entry count, `inventory_digest`) from sealed pages |
 | `journal::assert_takeover_successor` / `assert_takeover_promote_authority` / `assert_binding_takeover` | Pure B2c predicates: a takeover is the committed owner's lease-expired successor with fence + 1 and revision + 1 that changes ownership only |
 | `journal::publish_takeover_fenced` | B2c: takeover authority, the committed generation loaded bounded and authenticated, the takeover successor check, then the same publish-or-adopt step as the checkpoint |
 | `authority::commit_journal_takeover` | B2c: under `root_commit_mutex`, read the committed binding, publish the new owner's claim (lease expired at the caller's `now`, fence + 1), advance the binding to the new fence and record it as the commit evidence |
@@ -390,7 +391,44 @@ lease expired succeeds with a new claim, garbage and oversized candidates are pr
 identical candidate is adopted and never discarded, a refused manifest never discards, two discards at
 one revision keep both, a reused operation id still keeps every candidate).
 
-## Still residual after B2d
+## Slice C1a — capturing a paged inventory into the manifest
+
+§10.3 freezes the inventory at `ADMIT` (`DISCOVER` records a preliminary one, `ADMIT` the final one) and
+B2b-4's successor relation already lets the inventory fields change until then, but no constructor
+produced them: `transition_phase`, `checkpoint_progress` and `mark_recovery` never touch them, and the
+codec pieces (`JournalPage`, `page_ref_for`, `journal_page_set_digest`, `InventoryDigestVerifier`,
+`verify_page_set`, `verify_inventory_pages`) stood unconnected. `journal::capture_inventory(manifest,
+fence, pages)` is the manifest-side counterpart. It is pure: no I/O, no adapter, no layout decision.
+
+| Input or state | Result |
+|---|---|
+| stale fence | `StaleMigrationOwner` |
+| terminal journal (`DONE`, `RECOVERY_REQUIRED`) | `TerminalPhase` |
+| `BOOTSTRAP_TARGET` (no inventory exists yet) | `InvalidPhaseTransition` |
+| `CONVERT` or later, or a non-empty cursor in an open phase (conversion progress exists) | `FrozenFieldChanged` |
+| pages not exactly indexed `0..n` (gap, duplicate, not starting at 0) | `Journal(PageSetMismatch)` (the pages may be supplied in any order) |
+| a page generation above the new revision | `Journal(GenerationMismatch)` (generation 0 cannot even be built) |
+| entries not strictly ascending across pages, or one entry on two pages | `Journal(NotStrictlyAscending)` |
+| otherwise | the predecessor with `journal_revision + 1` and `page_count`, `entry_count`, `inventory_digest`, `journal_page_set_digest` replaced |
+
+A page written for the capture carries the new revision as its generation; a page that did not change
+keeps the earlier generation that still names it, so an `ADMIT` recapture rewrites only what changed.
+The digests are computed with the same streaming verifier that later verifies the pages, the result is
+re-checked with `verify_page_set` and accepted by `assert_manifest_successor`, and an empty inventory
+captures the canonical empty digests. The page set binds the exact envelope bytes (`page_ref_for` takes
+the `content_digest` of the sealed envelope), which a test shows by flipping one byte.
+
+Not decided here, and the reason C1b is a separate slice: the manifest authenticates the page set only
+as a digest, and the contract says the page set, not a directory listing, is authoritative, but it does
+not say how the file of each page is found. C1b decides a physical layout and resolves pages by exact
+path, with a listing used only as a hint that the authenticated digests then confirm or refuse.
+
+Proof: nine cases in `gate4d_capture_test` (empty inventory, flat-digest equivalence and verification
+of one captured set, an unchanged page keeping an older generation, the digest binding the envelope
+bytes, every phase and cursor refusal, a stale fence, the index and generation rules, cross-page
+ordering, a recapture while no conversion has run).
+
+## Still residual after C1a
 
 - Binding transitions other than the advance and the takeover: bind (bootstrap) and clear
   (terminal), which belong to the Gate 4E/5 enable and commit sequences.
@@ -400,6 +438,7 @@ one revision keep both, a reused operation id still keeps every candidate).
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
 - Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4).
+- Slice C1b: the physical page layout, exact-path page resolution with the digests as the authority, and promoting and reading the pages; then conversion (C2+).
 - The cross-process lease CAS.
 - Root-bound `key_epoch` alignment: §8.3 fixes first-time enable at epoch 1 (the current constant),
   but the contract does not say which epoch seals the journal during rotation, so that needs a

@@ -117,14 +117,18 @@ impl InventoryDigestVerifier {
     }
 
     pub fn finish(self, expected_digest: [u8; 32]) -> Result<(), JournalError> {
-        if self.seen_entry_count != self.expected_entry_count {
-            return Err(JournalError::EntryCountMismatch);
-        }
-        let digest: [u8; 32] = self.hasher.finalize().into();
-        if digest != expected_digest {
+        if self.finish_digest()? != expected_digest {
             return Err(JournalError::InconsistentInventory);
         }
         Ok(())
+    }
+
+    /// The `inventory_digest` of everything absorbed, once exactly the expected entries were seen.
+    pub(crate) fn finish_digest(self) -> Result<[u8; 32], JournalError> {
+        if self.seen_entry_count != self.expected_entry_count {
+            return Err(JournalError::EntryCountMismatch);
+        }
+        Ok(self.hasher.finalize().into())
     }
 }
 
