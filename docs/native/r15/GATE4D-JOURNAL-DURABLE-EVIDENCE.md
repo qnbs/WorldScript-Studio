@@ -606,7 +606,8 @@ revision).
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
 - Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4).
-- Conversion (C2+) over the verified page set.
+- Conversion (C2+) over the verified page set. Its admission must also require that the inventory was captured under `ADMIT` before `CONVERT` is entered (the manifest has no field that says so; acceptance criterion on #359).
+- Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).
 - The cross-process lease CAS.

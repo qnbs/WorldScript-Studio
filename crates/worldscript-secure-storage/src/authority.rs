@@ -398,7 +398,10 @@ pub struct InventoryCapture<'a> {
 /// them as an inert directory under an unreferenced digest, after the manifest leaves revision
 /// `r + 1` as an unadopted candidate; the same call retried adopts what is already durable, writes
 /// only what is missing and advances the binding. Lock order is the root lock, then the journal
-/// mutex inside each fenced step.
+/// mutex inside each fenced step. This commit takes no admission guard: the write barrier of the
+/// final (`ADMIT`) capture is the durable phase the orchestrator established by draining writers
+/// before publishing the transition into `ADMIT`, and the write path's refusal by that phase is
+/// wired by the first caller (Gate 4E/5; acceptance criterion on #359).
 pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
