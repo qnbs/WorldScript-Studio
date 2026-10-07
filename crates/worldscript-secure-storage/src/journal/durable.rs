@@ -22,9 +22,10 @@ use super::manifest::JournalManifest;
 use super::page::JournalPage;
 use super::state::{
     assert_fence, assert_live_binding, assert_manifest_promote_authority,
-    assert_manifest_successor, assert_page_promote_authority, assert_takeover_promote_authority,
-    assert_takeover_successor, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
+    assert_page_promote_authority, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
 };
+use super::succession::assert_manifest_successor;
+use super::takeover::{assert_takeover_promote_authority, assert_takeover_successor};
 use super::{
     JournalError, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA,
     MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,

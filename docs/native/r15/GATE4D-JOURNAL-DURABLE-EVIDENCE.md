@@ -308,7 +308,7 @@ read from the root:
 | the committed lease is expired at the caller's `now_unix_ms` (`now >= lease_expires_unix_ms`) or the committed manifest has no lease owner | `LeaseNotExpired` |
 | the committed manifest is not terminal (`DONE`, `RECOVERY_REQUIRED`) | `TerminalPhase` |
 | the claim carries the same operation, fence + 1 and revision + 1 | `LiveBindingMismatch` (other operation, skipped fence or revision), `StaleMigrationOwner` (not above the committed fence), `StaleJournalRevision` |
-| the claim holds a lease owner whose expiry lies after `now` | `InvalidTakeoverLease` |
+| the claim holds a lease with a non-empty owner id whose expiry lies after `now` | `InvalidTakeoverLease` |
 | the claim is the committed manifest with only the revision, the fence and the lease replaced (phase, cursor, inventory, target key, recovery reason, operation identity unchanged) | `FrozenFieldChanged` |
 
 The claim moves ownership only; the new owner makes progress through ordinary checkpoints under its
@@ -318,6 +318,12 @@ again where the root starts to trust the generation, as for the checkpoint. A re
 root commit adopts its own identical claim with no journal write. The root binding advances to
 `(operation, fence + 1, revision + 1, digest)` and the commit evidence records the new fence, so the
 former owner's checkpoint is refused by R4 as a stale owner from then on.
+
+Known liveness limit, tracked as the next slice: the claim's own lease is re-checked on a retry, so a
+restart after the claim's lease expired builds a new claim, which differs from the durable candidate
+and is refused as `GenerationExists`. Discarding a stale own candidate (the discard half of R2B)
+resolves it; until then the takeover is correct but can be stuck after a crash between the publish
+and the root commit that outlasts the lease.
 
 The clock is an explicit input: Core never reads one, and a lease is expired when `now >=
 lease_expires_unix_ms`. The caller supplies a trusted clock; a manipulated clock can claim early, which
@@ -338,9 +344,10 @@ journal byte, no bound migration).
 
 - Binding transitions other than the advance and the takeover: bind (bootstrap) and clear
   (terminal), which belong to the Gate 4E/5 enable and commit sequences.
-- R2B remainder: discarding a candidate that differs from the retry's manifest or cannot be opened
-  (it needs a relocation primitive that preserves the bytes for reconciliation), and recovery when
-  the root-named envelope exists but semantic open refuses.
+- R2B remainder, now the next slice because the takeover depends on it: discarding a candidate that
+  differs from the retry's manifest or cannot be opened (it needs a relocation primitive that
+  preserves the bytes for reconciliation), and recovery when the root-named envelope exists but
+  semantic open refuses.
 - Bounded generation reads elsewhere: the journal manifest reads are bounded
   (`DurableFs::read_at_most`), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a

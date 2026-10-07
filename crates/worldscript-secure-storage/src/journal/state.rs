@@ -281,145 +281,6 @@ fn assert_promote_authority(
     }
 }
 
-/// Refuses a takeover manifest promotion whose caller is not the next owner of the committed binding.
-///
-/// A takeover is a different transition from a checkpoint (§10.1): the new owner atomically
-/// advances the fencing generation, so the manifest carries the committed fence plus one and the
-/// committed revision plus one. `None` is refused, because a takeover needs a committed journal.
-pub fn assert_takeover_promote_authority(
-    manifest: &JournalManifest,
-    committed: Option<&LiveMigration>,
-) -> Result<(), MigrationExecutionError> {
-    let Some(live) = committed else {
-        return Err(MigrationExecutionError::LiveBindingMismatch);
-    };
-    assert_takeover_step(
-        (
-            &manifest.operation_id,
-            manifest.fencing_generation,
-            manifest.journal_revision,
-        ),
-        (
-            &live.operation_id,
-            live.fencing_generation,
-            live.journal_revision,
-        ),
-    )
-}
-
-/// Refuses a root binding advance that is not the takeover of `prev` (§5.4, §10.1).
-///
-/// Same operation, `fencing_generation + 1` and `journal_revision + 1`: the checkpoint advance
-/// ([`assert_binding_successor`]) keeps the fence, a takeover must advance it.
-pub fn assert_binding_takeover(
-    prev: &LiveMigration,
-    next: &LiveMigration,
-) -> Result<(), MigrationExecutionError> {
-    assert_takeover_step(
-        (
-            &next.operation_id,
-            next.fencing_generation,
-            next.journal_revision,
-        ),
-        (
-            &prev.operation_id,
-            prev.fencing_generation,
-            prev.journal_revision,
-        ),
-    )
-}
-
-/// `(operation id, fencing generation, journal revision)` of one side of a takeover step.
-type TakeoverCoordinates<'a> = (&'a str, u64, u64);
-
-fn assert_takeover_step(
-    next: TakeoverCoordinates<'_>,
-    prev: TakeoverCoordinates<'_>,
-) -> Result<(), MigrationExecutionError> {
-    if next.0 != prev.0 {
-        return Err(MigrationExecutionError::LiveBindingMismatch);
-    }
-    let (Some(fence), Some(revision)) = (prev.1.checked_add(1), prev.2.checked_add(1)) else {
-        return Err(MigrationExecutionError::LiveBindingMismatch);
-    };
-    match next.1.cmp(&fence) {
-        std::cmp::Ordering::Less => return Err(MigrationExecutionError::StaleMigrationOwner),
-        std::cmp::Ordering::Equal => {}
-        std::cmp::Ordering::Greater => return Err(MigrationExecutionError::LiveBindingMismatch),
-    }
-    match next.2.cmp(&revision) {
-        std::cmp::Ordering::Less => Err(MigrationExecutionError::StaleJournalRevision),
-        std::cmp::Ordering::Equal => Ok(()),
-        std::cmp::Ordering::Greater => Err(MigrationExecutionError::LiveBindingMismatch),
-    }
-}
-
-/// Refuses a takeover manifest that is not the next owner's claim of `prev`, the committed one (§10.1).
-///
-/// Lease expiry makes a new owner eligible: `prev` has no lease owner or its lease expired at
-/// `now_unix_ms` (`now >= lease_expires_unix_ms`). The claim carries the fencing generation plus one
-/// and the revision plus one, a lease owner whose expiry lies after `now`, and changes nothing else:
-/// the phase, cursor, inventory, target key and recovery reason are the committed ones, because a
-/// takeover moves ownership only and the new owner makes progress through ordinary checkpoints. A
-/// terminal journal has nothing left to own. The clock is the caller's, never read here.
-pub fn assert_takeover_successor(
-    prev: &JournalManifest,
-    next: &JournalManifest,
-    now_unix_ms: u64,
-) -> Result<(), MigrationExecutionError> {
-    if is_terminal_phase(manifest_phase(prev)) {
-        return Err(MigrationExecutionError::TerminalPhase);
-    }
-    if !lease_expired(prev, now_unix_ms) {
-        return Err(MigrationExecutionError::LeaseNotExpired);
-    }
-    assert_takeover_step(
-        (
-            &next.operation_id,
-            next.fencing_generation,
-            next.journal_revision,
-        ),
-        (
-            &prev.operation_id,
-            prev.fencing_generation,
-            prev.journal_revision,
-        ),
-    )?;
-    let claimed = next.has_lease_owner
-        && next
-            .lease_expires_unix_ms
-            .is_some_and(|expires| expires > now_unix_ms);
-    if !claimed {
-        return Err(MigrationExecutionError::InvalidTakeoverLease);
-    }
-    if takeover_changes_only_ownership(prev, next) {
-        Ok(())
-    } else {
-        Err(MigrationExecutionError::FrozenFieldChanged)
-    }
-}
-
-/// No lease owner, or a lease that has run out at `now_unix_ms`.
-fn lease_expired(manifest: &JournalManifest, now_unix_ms: u64) -> bool {
-    if !manifest.has_lease_owner {
-        return true;
-    }
-    manifest
-        .lease_expires_unix_ms
-        .is_some_and(|expires| now_unix_ms >= expires)
-}
-
-/// Whether `next` is `prev` with only the revision, the fence and the lease replaced.
-fn takeover_changes_only_ownership(prev: &JournalManifest, next: &JournalManifest) -> bool {
-    let mut expected = prev.clone();
-    expected.journal_revision = next.journal_revision;
-    expected.fencing_generation = next.fencing_generation;
-    expected.has_lease_owner = next.has_lease_owner;
-    expected.lease_owner_id = next.lease_owner_id.clone();
-    expected.lease_expires_unix_ms = next.lease_expires_unix_ms;
-    expected == *next
-}
-
 /// Refuses a root binding advance that is not the journal owner's next revision of `prev` (§5.4).
 ///
 /// Same operation, same fencing generation, and `journal_revision + 1`: an owner takeover changes
@@ -445,134 +306,6 @@ pub fn assert_binding_successor(
     }
 }
 
-/// Refuses a manifest that is not a valid successor of `prev`, the manifest the root names (§10.3).
-///
-/// The rules mirror what [`transition_phase`], [`checkpoint_progress`] and [`mark_recovery`]
-/// produce, plus the freezes §10.3 states: the successor carries `journal_revision + 1`; the
-/// operation, type, epochs, fencing generation and inventory version never change; the phase is
-/// unchanged, the next one, or `RECOVERY_REQUIRED`, and never leaves a terminal phase; the cursor
-/// lies inside the successor's own inventory and does not regress within a phase; the target key
-/// reference is frozen once the successor is at `ADMIT` or later and the inventory fields once it
-/// is at `CONVERT` or later (the target key is durable in `PREPARE`, the final inventory is
-/// captured in `ADMIT`); the recovery reason changes only on entering
-/// `RECOVERY_REQUIRED`. Lease fields and the cursor across a phase change are not constrained here.
-pub fn assert_manifest_successor(
-    prev: &JournalManifest,
-    next: &JournalManifest,
-) -> Result<(), MigrationExecutionError> {
-    assert_successor_revision(prev, next)?;
-    assert_operation_kept(prev, next)?;
-    assert_phase_successor(prev, next)?;
-    assert_frozen_fields_kept(prev, next)?;
-    assert_cursor_successor(prev, next)
-}
-
-fn assert_successor_revision(
-    prev: &JournalManifest,
-    next: &JournalManifest,
-) -> Result<(), MigrationExecutionError> {
-    let Some(expected) = prev.journal_revision.checked_add(1) else {
-        return Err(MigrationExecutionError::LiveBindingMismatch);
-    };
-    match next.journal_revision.cmp(&expected) {
-        std::cmp::Ordering::Less => Err(MigrationExecutionError::StaleJournalRevision),
-        std::cmp::Ordering::Equal => Ok(()),
-        std::cmp::Ordering::Greater => Err(MigrationExecutionError::LiveBindingMismatch),
-    }
-}
-
-fn assert_operation_kept(
-    prev: &JournalManifest,
-    next: &JournalManifest,
-) -> Result<(), MigrationExecutionError> {
-    if next.operation_id != prev.operation_id {
-        return Err(MigrationExecutionError::LiveBindingMismatch);
-    }
-    if next.fencing_generation != prev.fencing_generation {
-        return Err(MigrationExecutionError::StaleMigrationOwner);
-    }
-    let kept = next.operation_type == prev.operation_type
-        && next.source_epoch == prev.source_epoch
-        && next.target_epoch == prev.target_epoch
-        && next.inventory_version == prev.inventory_version;
-    if kept {
-        Ok(())
-    } else {
-        Err(MigrationExecutionError::FrozenFieldChanged)
-    }
-}
-
-fn assert_phase_successor(
-    prev: &JournalManifest,
-    next: &JournalManifest,
-) -> Result<(), MigrationExecutionError> {
-    let (from, to) = (manifest_phase(prev), manifest_phase(next));
-    if is_terminal_phase(from) {
-        return Err(MigrationExecutionError::TerminalPhase);
-    }
-    if !allows_phase_transition(from, to) {
-        return Err(MigrationExecutionError::InvalidPhaseTransition);
-    }
-    Ok(())
-}
-
-/// Whether `phase` is at or past `milestone` in the §10.3 order.
-fn phase_reached(phase: MigrationPhase, milestone: u32) -> bool {
-    match (
-        phase_rank(phase),
-        phase_rank(MigrationPhase::from_wire(milestone)),
-    ) {
-        (Ok(rank), Ok(floor)) => rank >= floor,
-        _ => false,
-    }
-}
-
-fn assert_frozen_fields_kept(
-    prev: &JournalManifest,
-    next: &JournalManifest,
-) -> Result<(), MigrationExecutionError> {
-    // The freezes bind the successor's phase: entering `ADMIT` already keeps the key made durable in
-    // `PREPARE`, and entering `CONVERT` already keeps the inventory captured in `ADMIT`.
-    let phase = manifest_phase(next);
-    let target_key_kept = next.has_target_root_key_ref == prev.has_target_root_key_ref
-        && next.target_root_key_ref_digest == prev.target_root_key_ref_digest;
-    let inventory_kept = next.inventory_digest == prev.inventory_digest
-        && next.entry_count == prev.entry_count
-        && next.page_count == prev.page_count
-        && next.journal_page_set_digest == prev.journal_page_set_digest;
-    let recovery_kept = next.phase == phase_code::RECOVERY_REQUIRED
-        || next.recovery_reason_code == prev.recovery_reason_code;
-    let frozen_ok = (target_key_kept || !phase_reached(phase, phase_code::ADMIT))
-        && (inventory_kept || !phase_reached(phase, phase_code::CONVERT))
-        && recovery_kept;
-    if frozen_ok {
-        Ok(())
-    } else {
-        Err(MigrationExecutionError::FrozenFieldChanged)
-    }
-}
-
-fn assert_cursor_successor(
-    prev: &JournalManifest,
-    next: &JournalManifest,
-) -> Result<(), MigrationExecutionError> {
-    // The cursor must lie inside the successor's own inventory, exactly as `checkpoint_progress` requires.
-    validate_checkpoint_cursor(
-        next,
-        JournalCheckpointCursor::new(next.cursor_page_index, next.cursor_entry_index),
-    )?;
-    if next.phase != prev.phase {
-        return Ok(());
-    }
-    let before = JournalCheckpointCursor::new(prev.cursor_page_index, prev.cursor_entry_index);
-    let after = JournalCheckpointCursor::new(next.cursor_page_index, next.cursor_entry_index);
-    if after < before {
-        Err(MigrationExecutionError::RegressiveCheckpoint)
-    } else {
-        Ok(())
-    }
-}
-
 /// Resolves the manifest revision the root still names (§10.1.1).
 pub fn authoritative_manifest_revision(
     live: &LiveMigration,
@@ -589,7 +322,7 @@ pub fn authoritative_manifest_revision(
     }
 }
 
-fn phase_rank(phase: MigrationPhase) -> Result<u32, MigrationExecutionError> {
+pub(super) fn phase_rank(phase: MigrationPhase) -> Result<u32, MigrationExecutionError> {
     Ok(match phase.wire() {
         phase_code::BOOTSTRAP_TARGET => 0,
         phase_code::DISCOVER => 1,
@@ -633,14 +366,14 @@ fn bump_revision(manifest: &JournalManifest) -> Result<JournalRevision, Migratio
         ))
 }
 
-fn validate_checkpoint_cursor(
+pub(super) fn validate_checkpoint_cursor(
     manifest: &JournalManifest,
     cursor: JournalCheckpointCursor,
 ) -> Result<(), MigrationExecutionError> {
     cursor.validate_for_extent(JournalInventoryExtent::from_manifest(manifest))
 }
 
-fn manifest_phase(manifest: &JournalManifest) -> MigrationPhase {
+pub(super) fn manifest_phase(manifest: &JournalManifest) -> MigrationPhase {
     MigrationPhase::from_wire(manifest.phase)
 }
 

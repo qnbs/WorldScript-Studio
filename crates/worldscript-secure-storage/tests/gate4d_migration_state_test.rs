@@ -708,10 +708,14 @@ fn the_new_owner_must_hold_a_lease_that_outlives_now() {
         m.lease_owner_id = None;
         m.lease_expires_unix_ms = None;
     };
+    let ownerless: Change = |m| m.lease_owner_id = None;
+    let empty_owner: Change = |m| m.lease_owner_id = Some(String::new());
     let expiring_now: Change = |m| m.lease_expires_unix_ms = Some(2_000);
     let already_expired: Change = |m| m.lease_expires_unix_ms = Some(1_999);
     for (name, change) in [
         ("no lease owner", no_owner),
+        ("a lease flag without an owner id", ownerless),
+        ("an empty owner id", empty_owner),
         ("a lease that expires at now", expiring_now),
         ("a lease that already expired", already_expired),
     ] {
