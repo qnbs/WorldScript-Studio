@@ -149,6 +149,10 @@ pub enum RootStoreError {
     OperationId(SealError),
     /// The `root_commit_mutex` guard passed in is not the mutex of this root directory (§11.1).
     MutexNotHeld,
+    /// A `Revoked` key-epoch generation was refused because the committed root binds a live
+    /// migration: the journal is sealed under an epoch that must stay resolvable until the binding
+    /// is cleared (§8.3, §10.1.1).
+    RevocationWhileMigrationBound,
 }
 
 /// A root to commit: its body (evidence `COMMITTED`, naming this commit's operation) and the key
@@ -488,6 +492,14 @@ pub struct KeyEpochCommit<'a> {
 /// Persists a key-epoch record generation as `<root_dir>/key-epoch/<epoch>/generation-<n>.wsr1`
 /// (immutable, generation-addressed; `n` must be exactly the next generation of that epoch) and
 /// returns its `key_epoch_set_digest` entry. A root naming it is committed separately.
+///
+/// A `Revoked` generation is refused while the committed root binds a live migration
+/// ([`RootStoreError::RevocationWhileMigrationBound`]), before anything is created: the bound
+/// journal is sealed under the migration's source epoch (the target epoch for an `ENABLE`), which
+/// must stay at least `RetiredRecoveryOnly` until the binding is cleared. The binding does not name
+/// that epoch, so the rule is deliberately broader than it needs to be and refuses every new
+/// revocation during a bound migration; the committed root is read on each call, so the refusal
+/// survives a restart. Every other status stays writable.
 pub fn write_key_epoch<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,
@@ -495,6 +507,9 @@ pub fn write_key_epoch<F: DurableFs, P: KeyProvider>(
     commit: KeyEpochCommit<'_>,
 ) -> Result<KeyEpochEntry, RootStoreError> {
     check_held(commit.held, layout)?;
+    if commit.record.status == KeyEpochStatus::Revoked {
+        assert_no_live_migration(fs, provider, layout)?;
+    }
     let dir = layout.key_epoch_dir(commit.record.epoch);
     // Everything is validated before any directory is created, so a refused write leaves nothing.
     let existing = epoch_generations(fs, &dir)?;
@@ -534,6 +549,21 @@ pub fn write_key_epoch<F: DurableFs, P: KeyProvider>(
         registry_generation: commit.registry_generation,
         content_digest: promoted.content_digest,
     })
+}
+
+/// Refuses when the authenticated committed root binds a live migration. A pending root
+/// preparation is refused as such: the committed root is not decidable until it is recovered.
+fn assert_no_live_migration<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+) -> Result<(), RootStoreError> {
+    match load_committed_root(fs, provider, layout)? {
+        Some(view) if view.root.live_migration.is_some() => {
+            Err(RootStoreError::RevocationWhileMigrationBound)
+        }
+        _ => Ok(()),
+    }
 }
 
 /// The current key-epoch set: for every epoch directory, the newest generation of a gap-free

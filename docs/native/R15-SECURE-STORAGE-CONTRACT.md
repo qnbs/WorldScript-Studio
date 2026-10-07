@@ -2412,8 +2412,10 @@ used needs an expected epoch from authority (the root binding and the key-epoch 
 registry resolution of the journal key provides. Until then a manifest sealed under another epoch's
 different key fails authentication and is refused as an open failure; it is never accepted. The source
 epoch therefore has to stay resolvable, at least `RetiredRecoveryOnly`, for as long as a journal is
-bound to the root: it is never revoked or destroyed while a live migration names the journal, and
-after cutover the journal is resolved through the authenticated manifest and the key-epoch registry
+bound to the root: it is never revoked or destroyed while a live migration names the journal (the key-epoch
+writer refuses a `Revoked` generation while the committed root binds a live migration, and because the
+binding does not name the journal's epoch it refuses every new revocation until the binding is
+cleared), and after cutover the journal is resolved through the authenticated manifest and the key-epoch registry
 rather than the root's active epoch.
 
 **`journal_page_set_digest`**, analogous to `catalog_set_digest` (§5.4):
