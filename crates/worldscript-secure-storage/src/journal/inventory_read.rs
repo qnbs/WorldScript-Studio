@@ -25,6 +25,7 @@ use crate::envelope::{HEADER_LEN, TAG_LEN};
 use crate::marker::content_digest;
 use crate::root::LiveMigration;
 
+use super::capture::assert_page_not_empty;
 use super::digest::{page_ref_for, InventoryDigestVerifier};
 use super::durable::{
     load_authoritative_manifest, migration_page_identity, stage_io, JournalDurableContext,
@@ -82,6 +83,7 @@ pub fn verify_stored_inventory<F: DurableFs>(
         let generation = hinted_generation(ctx, &dir)?;
         let bytes = read_envelope(ctx, &generation_path(&dir, generation))?;
         let page = open_stored_page(ctx, &manifest, index, generation, &bytes)?;
+        assert_canonical_page(&manifest, &page)?;
         verifier.absorb_page(&page)?;
         page_refs.push(page_ref_for(&page, &bytes)?);
     }
@@ -168,6 +170,21 @@ fn open_stored_page<F: DurableFs>(
     } else {
         Err(JournalError::Corrupt("page key epoch is not the journal's pinned epoch").into())
     }
+}
+
+/// A page only a canonical writer produces: `capture_inventory` gives a page a generation in
+/// `1..=journal_revision` and an empty inventory no page at all, so a set that both digests confirm
+/// but that breaks either rule was written by something else and is not certified.
+fn assert_canonical_page(
+    manifest: &JournalManifest,
+    page: &JournalPage,
+) -> Result<(), JournalError> {
+    assert_page_not_empty(page)?;
+    let generation = page.page_generation();
+    if generation == 0 || generation > manifest.journal_revision {
+        return Err(JournalError::GenerationMismatch);
+    }
+    Ok(())
 }
 
 fn recovery_required() -> JournalDurableError {

@@ -281,6 +281,47 @@ fn a_page_that_changed_after_verification_is_refused_on_load() {
     assert!(load(&mut StdFs, &journal, &verified, 0).is_ok());
 }
 
+/// Writes every page of `captured` by hand under its digest at its own generation, which the
+/// store refuses for these pages, and advances the root to the manifest naming them.
+fn plant(captured: &Captured) -> Journal {
+    let mut journal = journal_of(captured);
+    for (page, envelope) in captured.pages.iter().zip(&captured.envelopes) {
+        let dir = inventory_page_dir(journal.path(), &captured.digest(), page.page_index());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(generation_path(&dir, page.page_generation()), envelope).unwrap();
+    }
+    journal.live = commit_into(journal.path(), &captured.successor);
+    journal
+}
+
+#[test]
+fn a_page_set_a_canonical_writer_cannot_produce_is_not_certified() {
+    // Both digests confirm these sets; the rules `capture_inventory` states do not.
+    let newer = {
+        let mut captured = Captured::new(2, 2);
+        let entries = captured.pages[0].entries().to_vec();
+        reseal(&mut captured, JournalPage::new(0, 9, entries).unwrap());
+        rebind(&mut captured);
+        captured
+    };
+    let empty = {
+        let mut captured = Captured::new(2, 2);
+        reseal(&mut captured, JournalPage::new(0, 4, Vec::new()).unwrap());
+        captured.successor.entry_count = 0;
+        captured.successor.inventory_digest = empty_inventory_digest(1);
+        rebind(&mut captured);
+        captured
+    };
+    assert_eq!(
+        verify(&mut StdFs, &plant(&newer)).unwrap_err(),
+        JournalDurableError::Journal(JournalError::GenerationMismatch)
+    );
+    assert_eq!(
+        verify(&mut StdFs, &plant(&empty)).unwrap_err(),
+        JournalDurableError::Journal(JournalError::InvalidDescriptorCount)
+    );
+}
+
 #[test]
 fn a_binding_that_does_not_name_the_stored_manifest_is_refused() {
     let (mut journal, _) = stored(5, 2);

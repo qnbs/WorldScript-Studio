@@ -242,25 +242,6 @@ fn a_successor_the_store_cannot_accept_is_refused_before_any_write() {
     ]);
 }
 
-/// Replaces the captured pages by `page`, sealed; the successor is left as it was.
-fn reseal(captured: &mut Captured, page: JournalPage) {
-    captured.envelopes =
-        seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&page)).unwrap();
-    captured.pages = vec![page];
-}
-
-/// Binds the successor's page-set digest to the pages as they are now, as a hand-built manifest
-/// would.
-fn rebind(captured: &mut Captured) {
-    let refs: Vec<_> = captured
-        .pages
-        .iter()
-        .zip(&captured.envelopes)
-        .map(|(page, envelope)| page_ref_for(page, envelope).unwrap())
-        .collect();
-    captured.successor.journal_page_set_digest = journal_page_set_digest(&refs).unwrap();
-}
-
 #[test]
 fn a_page_set_the_successor_does_not_name_is_refused_before_any_write() {
     // The same entries sealed again: valid pages, but not the bytes the successor's digest binds.

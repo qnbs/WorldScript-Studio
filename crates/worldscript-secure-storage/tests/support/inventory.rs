@@ -9,12 +9,12 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::{
     capture_inventory, content_digest, empty_inventory_digest, empty_journal_page_set_digest,
-    generation_path, inventory_page_dir, operation_type, parse_envelope, phase_code,
-    promote_inventory_set_fenced, promote_manifest_fenced, seal_inventory_pages,
-    source_authority_kind, source_physical_authority_kind, DirectoryDurability, DurableFs,
-    InventorySetWrite, JournalDurableContext, JournalDurableError, JournalInventoryEntry,
-    JournalInventorySource, JournalManifest, JournalPage, LiveMigration, MigrationFence,
-    RecordClass, RecordIdentity, RecordMeta, SealedPage, StdFs, WriteOperationId,
+    generation_path, inventory_page_dir, journal_page_set_digest, operation_type, page_ref_for,
+    parse_envelope, phase_code, promote_inventory_set_fenced, promote_manifest_fenced,
+    seal_inventory_pages, source_authority_kind, source_physical_authority_kind,
+    DirectoryDurability, DurableFs, InventorySetWrite, JournalDurableContext, JournalDurableError,
+    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, LiveMigration,
+    MigrationFence, RecordClass, RecordIdentity, RecordMeta, SealedPage, StdFs, WriteOperationId,
 };
 
 pub const OPERATION: &str = "store-op";
@@ -348,4 +348,23 @@ pub fn sealed_at_epoch(captured: &Captured, epoch: u64) -> Vec<u8> {
     };
     let identity = RecordIdentity::new(RecordClass::MigrationPage, &[OPERATION, "0"]).unwrap();
     captured.pages[0].seal(&key(), &identity, meta).unwrap()
+}
+
+/// Replaces the captured pages by `page`, sealed; the successor is left as it was.
+pub fn reseal(captured: &mut Captured, page: JournalPage) {
+    captured.envelopes =
+        seal_inventory_pages(&key(), OPERATION, std::slice::from_ref(&page)).unwrap();
+    captured.pages = vec![page];
+}
+
+/// Binds the successor's page-set digest to the pages as they are now, as a hand-built manifest
+/// would.
+pub fn rebind(captured: &mut Captured) {
+    let refs: Vec<_> = captured
+        .pages
+        .iter()
+        .zip(&captured.envelopes)
+        .map(|(page, envelope)| page_ref_for(page, envelope).unwrap())
+        .collect();
+    captured.successor.journal_page_set_digest = journal_page_set_digest(&refs).unwrap();
 }

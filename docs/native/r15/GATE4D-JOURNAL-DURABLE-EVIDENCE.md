@@ -531,6 +531,7 @@ manifest, so it can be confirmed, not read.
 | generation | the listing of `inventory/<D>/page-<i>/` is a hint, bounded while it is read (`DurableFs::list_dir_at_most`, at most 64 entries; `StdFs` never collects more than 65 names): exactly one canonical `generation-<n>.wsr1` (staging leftovers and other names ignored); none, several, a directory with more than 64 entries or a missing directory is `Authority(RecoveryRequired)` |
 | read | bounded by the largest valid sealed page (`MAX_JOURNAL_PAGE_BYTES` + envelope header + tag); a larger file is `Journal(Corrupt)` before any parse; a missing file is `Authority(RecoveryRequired)` |
 | open | `migration-page:<op>:<i>` at that generation under the journal key, at the pinned key epoch (`Journal(Open(..))`, `GenerationMismatch`, `WrongPageIndex`, `Corrupt` for another epoch) |
+| canonical | a page generation outside `1..=journal_revision` (`GenerationMismatch`) or a page without entries (`InvalidDescriptorCount`) is refused even when both digests confirm it: `capture_inventory` states these rules, so a set that breaks them was written by something else and is not certified |
 | digests | the inventory digest is streamed one page at a time; only the 48-byte page reference is kept per page; at the end `verify_page_set` and the inventory digest confirm what the listing hinted (`PageSetMismatch`, `EntryCountMismatch`, `InconsistentInventory`) |
 
 `load_inventory_page(ctx, &verified, index)` is pass two: it reads the exact path of the verified
@@ -542,11 +543,11 @@ authenticated references the store needs to inherit unchanged pages later (accep
 returns typed refusals and leaves the mapping to the `RECOVERY_REQUIRED` state to the first semantic
 caller (Gate 4E/5).
 
-Proof: thirteen tests in `gate4d_inventory_read_test` over a really stored set: set verifies and every
+Proof: fourteen tests in `gate4d_inventory_read_test` over a really stored set: set verifies and every
 page loads back equal with no file created, an empty inventory, an index outside the set, a table of
 damaged storage (missing file, missing directory, only a staging leftover, a second canonical
 generation, an over-full directory), the bounded listing stopping at its limit, a staging leftover beside the generation ignored, a tampered
-page and a page of another index, an authentic page the manifest does not name, a foreign key epoch,
+page and a page of another index, an authentic page the manifest does not name, a page set a canonical writer cannot produce (a generation above the revision, an empty page) not certified, a foreign key epoch,
 an oversized file, another digest's directory never read, a page that changed after verification
 refused on load, a binding that does not name the stored manifest. The fixtures are shared with the
 store tests (`tests/support/inventory.rs`).
