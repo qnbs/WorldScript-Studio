@@ -2335,8 +2335,10 @@ are durable.
 The journal itself, together with the other control-plane records created under
 `BOOTSTRAP_TARGET` (the authority-root manifest, the key-epoch registry, and
 record-commit/record-catalog control records), is excluded from the per-record `CONVERT`/`VERIFY`
-inventory that gates completion. These records are created natively under the target epoch as the
-migration's own control apparatus — never converted from legacy plaintext — so the journal's own
+inventory that gates completion. These records are created natively as the migration's own control
+apparatus (under the target epoch, except the journal and its pages, which are sealed under the
+operation's journal envelope epoch of §10.1.1: the target epoch for `ENABLE`, the source epoch for
+`ROTATE` and `ENVELOPE_MIGRATION`) — never converted from legacy plaintext — so the journal's own
 revision advancing at every checkpoint does not make it a stale inventory entry; §5.3 already
 establishes this same exclusion for control records versus their own `record-commit` marker, and
 this is its migration-inventory counterpart. Gate 5's inventory-complete requirement in §20 applies
@@ -3019,7 +3021,8 @@ exactly one of the four groups below; none is left to reader inference, and none
 
 *Native Core control-plane records — no disposition applies.* These classes have no pre-existing
 legacy source on `main` (§3 states "no native record exists" for each) and are created natively
-under the target epoch as R-15's own control apparatus, never converted from a legacy source; §10.1
+as R-15's own control apparatus (under the target epoch, except migration journals and their pages,
+which follow the journal envelope epoch of §10.1.1), never converted from a legacy source; §10.1
 already excludes them from the per-record `CONVERT`/`VERIFY` migration inventory on that basis, so
 "migration disposition" does not apply to them at all — not `MIGRATE_TO_R15`, and not any other
 value:

@@ -64,7 +64,7 @@ load of the newer generation yet).
 | Post-promotion semantic open/verify failure | Documented: `JournalDurableError::Journal` without promoted provenance | Recovery when durable generation exists but open refuses; `GenerationExists` on naive retry |
 | Mutex proof | `try_lock`/`WouldBlock` under guard and inside `with_fence` closure (unit tests) | Cross-process CAS when required |
 | Stale manifest + matching fence | Not in B1 scope | R4 closed it against the caller-supplied committed binding (single-process, before I/O); a stale copy of that binding and the cross-process CAS stay open |
-| `key_epoch: 1` in journal meta | B1 convention unchanged; not normatively proven as final epoch | Root-bound epoch + binding before root advance |
+| `key_epoch: 1` in journal meta | Resolved by Slice D2a: no constant; `journal_envelope_epoch` derives the epoch from the authenticated manifest (§10.1.1) | Registry resolution of the journal key and retention of a bound source epoch (Slice D2b) |
 
 ## Successor slices (not B)
 
