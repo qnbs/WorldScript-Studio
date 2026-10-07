@@ -14,7 +14,7 @@ use worldscript_secure_storage::{
     DirectoryDurability, DurableFs, InventorySetWrite, JournalDurableContext, JournalDurableError,
     JournalError, JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage,
     LiveMigration, MigrationExecutionError, MigrationFence, RecordClass, RecordIdentity,
-    RecordMeta, SealedPage, StageFailureKind, StageStep, StdFs, WriteOperationId,
+    RecordMeta, SealedPage, StageFailureKind, StageStep, StagingResidue, StdFs, WriteOperationId,
 };
 
 const OPERATION: &str = "store-op";
@@ -50,6 +50,7 @@ struct ObservedFs {
     synced: Vec<PathBuf>,
     fail_sync_of: Option<PathBuf>,
     fail_create_at: Option<u32>,
+    fail_remove: bool,
 }
 
 impl ObservedFs {
@@ -61,6 +62,7 @@ impl ObservedFs {
             synced: Vec::new(),
             fail_sync_of: None,
             fail_create_at: None,
+            fail_remove: false,
         }
     }
 
@@ -93,6 +95,9 @@ impl DurableFs for ObservedFs {
     }
 
     fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        if self.fail_remove {
+            return Err(io::Error::other("injected file removal failure"));
+        }
         self.inner.remove_file(path)
     }
 
@@ -314,9 +319,18 @@ fn promote<F: DurableFs>(
     dir: &Path,
     set: &InventorySetWrite<'_>,
 ) -> Result<DirectoryDurability, JournalDurableError> {
-    let op = WriteOperationId::generate().unwrap();
+    promote_as(fs, dir, set, &WriteOperationId::generate().unwrap())
+}
+
+/// The same under a given write operation id, so a retry can reuse the one of an earlier attempt.
+fn promote_as<F: DurableFs>(
+    fs: &mut F,
+    dir: &Path,
+    set: &InventorySetWrite<'_>,
+    op: &WriteOperationId,
+) -> Result<DirectoryDurability, JournalDurableError> {
     let key = key();
-    let mut ctx = JournalDurableContext::new(fs, &key, dir, &op);
+    let mut ctx = JournalDurableContext::new(fs, &key, dir, op);
     promote_inventory_set_fenced(&mut ctx, set)
 }
 
@@ -711,6 +725,40 @@ fn a_set_that_failed_partway_is_completed_by_a_retry() {
     assert_eq!(second.unwrap(), confirmed_here());
     assert_eq!(healthy.creates, 1);
     assert_stored(journal.path(), &captured);
+}
+
+#[test]
+fn an_adopted_page_reports_the_staging_link_an_earlier_attempt_left_behind() {
+    let captured = Captured::new(2, 2);
+    let journal = journal_of(&captured);
+    let page_dir = inventory_page_dir(journal.path(), &captured.digest(), 0);
+    let pages = captured.sealed();
+    let set = set_of(&captured, Some(&journal.live), &pages);
+    let op = WriteOperationId::generate().unwrap();
+    // Attempt one promotes the page, cannot remove its staging link and fails the set directory sync.
+    let mut first = ObservedFs::new();
+    first.fail_remove = true;
+    first.fail_sync_of = Some(page_dir.parent().unwrap().to_path_buf());
+    let Err(JournalDurableError::Stage(left)) = promote_as(&mut first, journal.path(), &set, &op)
+    else {
+        panic!("the set directory sync must fail");
+    };
+    assert_eq!(
+        (left.promoted, left.staging),
+        (true, StagingResidue::Present)
+    );
+    // The retry under the same operation adopts the page and must still report that link.
+    let mut retry = ObservedFs::new();
+    retry.fail_sync_of = first.fail_sync_of.clone();
+    let Err(JournalDurableError::Stage(again)) = promote_as(&mut retry, journal.path(), &set, &op)
+    else {
+        panic!("the set directory sync must fail again");
+    };
+    assert_eq!(retry.creates, 0);
+    assert_eq!(
+        (again.promoted, again.staging),
+        (true, StagingResidue::Present)
+    );
 }
 
 #[test]

@@ -488,7 +488,10 @@ they are written before that manifest. After each page the directory chain up to
 directory is synced (page directory, set directory, `inventory`, journal directory), so a page cannot
 vanish after the manifest that names it is durable. A failure of one of those syncs is reported as
 `StageFailure { step: SyncDirectory, kind: Io, promoted: true }` with the staging residue of the
-promotion: the page is already visible, and a retry adopts it instead of meeting an absent page. A
+promotion: the page is already visible, and a retry adopts it instead of meeting an absent page.
+When a retry adopts a page under the same operation id, the store probes this operation's own
+staging path before reporting, so a staging link an earlier attempt could not remove is never
+reported as absent (an uninspectable path counts as present). A
 crash between the pages and the manifest leaves an inert directory under an unreferenced digest,
 reclaimable by the retention rule once no root can name it.
 
@@ -496,7 +499,7 @@ Memory: the whole set is held in memory while it is verified, which bounds this 
 that fit. That is recorded as an acceptance criterion on #359 (a streaming capture that seals, digests
 and promotes one page at a time must precede very large inventories), not decided here.
 
-Proof: fourteen tests in `gate4d_inventory_store_test`, three of them tables that assert the exact
+Proof: fifteen tests in `gate4d_inventory_store_test`, three of them tables that assert the exact
 error and that nothing was created for each case: a stored set whose bytes verify against the
 captured page set, the directory chain synced, a post-promotion sync failure reported as promoted;
 the authority refusals (later fence, another operation, a digest naming another manifest, no
@@ -506,7 +509,8 @@ counters); page sets the successor does not name (envelopes of another capture, 
 an empty page, a generation above the next revision); a swapped envelope and a foreign key epoch;
 a page keeping an older generation refused even when a genuinely stored predecessor holds it; page
 sets with different digests never colliding;
-the same set stored again adopting its identical pages; a set that failed partway completed by a retry that stages only the missing page; a different
+the same set stored again adopting its identical pages, and an adopted page still reporting the
+staging link an earlier same-operation attempt left behind; a set that failed partway completed by a retry that stages only the missing page; a different
 file at a page generation never replaced; sealed pages binding identity and generation.
 
 ## Still residual after C1b-1

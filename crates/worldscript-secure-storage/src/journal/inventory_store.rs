@@ -20,8 +20,8 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use crate::durable::{
-    generation_path, stage_and_promote_envelope, DirectoryDurability, DurableFs, StageFailure,
-    StageFailureKind, StageStep, StagingResidue,
+    generation_path, stage_and_promote_envelope, staging_path, DirectoryDurability, DurableFs,
+    StageFailure, StageFailureKind, StageStep, StagingResidue,
 };
 use crate::envelope::parse_envelope;
 use crate::root::LiveMigration;
@@ -239,8 +239,10 @@ fn store_page<F: DurableFs>(
         sealed.page.page_index(),
     );
     if holds_envelope(ctx, &dir, sealed)? {
-        // The earlier attempt may have stopped before its directories were durable.
-        return sync_chain(ctx, &dir, StagingResidue::None);
+        // The earlier attempt may have stopped before its directories were durable, and, under the
+        // same operation id, may have left its own staging link behind.
+        let staging = staging_residue(ctx, &dir, sealed.page.page_generation());
+        return sync_chain(ctx, &dir, staging);
     }
     ctx.fs
         .create_dir_all(&dir)
@@ -271,6 +273,21 @@ fn holds_envelope<F: DurableFs>(
         Ok(found) => Ok(found.is_some_and(|bytes| bytes == sealed.envelope)),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
         Err(error) => Err(JournalDurableError::Stage(stage_io(error))),
+    }
+}
+
+/// Whether this operation's own staging link for the page generation is still on disk: an earlier
+/// attempt under the same operation id may have promoted the page and failed to remove it. A path
+/// that cannot be inspected is reported as present, never as absent.
+fn staging_residue<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    page_dir: &Path,
+    generation: u64,
+) -> StagingResidue {
+    let path = staging_path(page_dir, generation, ctx.operation);
+    match ctx.fs.read_at_most(&path, 0) {
+        Err(error) if error.kind() == ErrorKind::NotFound => StagingResidue::None,
+        _ => StagingResidue::Present,
     }
 }
 
