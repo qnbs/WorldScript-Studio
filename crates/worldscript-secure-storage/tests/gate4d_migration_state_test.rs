@@ -1,5 +1,6 @@
 use worldscript_secure_storage::{
-    allows_phase_transition, assert_live_binding, assert_manifest_successor,
+    allows_phase_transition, assert_binding_takeover, assert_live_binding,
+    assert_manifest_successor, assert_takeover_promote_authority, assert_takeover_successor,
     authoritative_manifest_revision, checkpoint_progress, empty_inventory_digest,
     empty_journal_page_set_digest, is_terminal_phase, mark_done, mark_recovery, operation_type,
     ordinary_mutating_writes_admitted, phase_code, transition_phase, JournalCheckpointCursor,
@@ -602,5 +603,226 @@ fn the_recovery_reason_changes_only_when_entering_recovery_and_leases_are_uncons
             next.lease_expires_unix_ms = Some(1_000);
         }),
         Ok(())
+    );
+}
+
+/// A committed manifest whose lease runs out at `expires`.
+fn leased_until(expires: u64) -> JournalManifest {
+    let mut prev = rotate_at(phase_code::PREPARE, 4);
+    prev.has_lease_owner = true;
+    prev.lease_owner_id = Some("old-owner".into());
+    prev.lease_expires_unix_ms = Some(expires);
+    prev
+}
+
+/// The claim a new owner would publish at `now`: fence + 1, revision + 1, its own lease.
+fn claim(prev: &JournalManifest, now: u64) -> JournalManifest {
+    let mut next = bumped(prev);
+    next.fencing_generation += 1;
+    next.has_lease_owner = true;
+    next.lease_owner_id = Some("new-owner".into());
+    next.lease_expires_unix_ms = Some(now + 100);
+    next
+}
+
+fn claim_with(
+    prev: &JournalManifest,
+    now: u64,
+    change: impl FnOnce(&mut JournalManifest),
+) -> Result<(), MigrationExecutionError> {
+    let mut next = claim(prev, now);
+    change(&mut next);
+    assert_takeover_successor(prev, &next, now)
+}
+
+#[test]
+fn a_takeover_needs_an_expired_lease() {
+    let prev = leased_until(1_000);
+    assert_eq!(
+        assert_takeover_successor(&prev, &claim(&prev, 999), 999),
+        Err(MigrationExecutionError::LeaseNotExpired)
+    );
+    // A lease is expired when `now >= expires`, so the boundary itself is eligible.
+    for now in [1_000, 1_001, 5_000] {
+        assert_eq!(
+            assert_takeover_successor(&prev, &claim(&prev, now), now),
+            Ok(()),
+            "now {now}"
+        );
+    }
+    // A manifest without a lease owner has no unexpired lease to wait for.
+    let unowned = rotate_at(phase_code::PREPARE, 4);
+    assert_eq!(
+        assert_takeover_successor(&unowned, &claim(&unowned, 0), 0),
+        Ok(())
+    );
+}
+
+#[test]
+fn a_takeover_advances_the_fence_and_the_revision_by_exactly_one() {
+    let prev = leased_until(1_000);
+    let now = 2_000;
+    let cases: [(&str, Change, MigrationExecutionError); 6] = [
+        (
+            "the same fence",
+            |m| m.fencing_generation -= 1,
+            MigrationExecutionError::StaleMigrationOwner,
+        ),
+        (
+            "an older fence",
+            |m| m.fencing_generation -= 2,
+            MigrationExecutionError::StaleMigrationOwner,
+        ),
+        (
+            "a skipped fence",
+            |m| m.fencing_generation += 1,
+            MigrationExecutionError::LiveBindingMismatch,
+        ),
+        (
+            "the committed revision",
+            |m| m.journal_revision -= 1,
+            MigrationExecutionError::StaleJournalRevision,
+        ),
+        (
+            "a skipped revision",
+            |m| m.journal_revision += 1,
+            MigrationExecutionError::LiveBindingMismatch,
+        ),
+        (
+            "another operation",
+            |m| m.operation_id = "other-op".into(),
+            MigrationExecutionError::LiveBindingMismatch,
+        ),
+    ];
+    for (name, change, expected) in cases {
+        assert_eq!(claim_with(&prev, now, change), Err(expected), "{name}");
+    }
+}
+
+#[test]
+fn the_new_owner_must_hold_a_lease_that_outlives_now() {
+    let prev = leased_until(1_000);
+    let now = 2_000;
+    let no_owner: Change = |m| {
+        m.has_lease_owner = false;
+        m.lease_owner_id = None;
+        m.lease_expires_unix_ms = None;
+    };
+    let expiring_now: Change = |m| m.lease_expires_unix_ms = Some(2_000);
+    let already_expired: Change = |m| m.lease_expires_unix_ms = Some(1_999);
+    for (name, change) in [
+        ("no lease owner", no_owner),
+        ("a lease that expires at now", expiring_now),
+        ("a lease that already expired", already_expired),
+    ] {
+        assert_eq!(
+            claim_with(&prev, now, change),
+            Err(MigrationExecutionError::InvalidTakeoverLease),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn a_takeover_moves_ownership_only_and_never_a_terminal_journal() {
+    let prev = leased_until(1_000);
+    let now = 2_000;
+    let changes: [(&str, Change); 6] = [
+        ("the phase", |m| m.phase = phase_code::ADMIT),
+        ("the cursor", |m| m.cursor_entry_index = 1),
+        ("the inventory", |m| m.entry_count += 1),
+        ("the target key", |m| {
+            m.target_root_key_ref_digest = Some([0x43; 32])
+        }),
+        ("the recovery reason", |m| m.recovery_reason_code = 3),
+        ("the operation type", |m| {
+            m.operation_type = operation_type::ENABLE
+        }),
+    ];
+    for (name, change) in changes {
+        assert_eq!(
+            claim_with(&prev, now, change),
+            Err(MigrationExecutionError::FrozenFieldChanged),
+            "{name}"
+        );
+    }
+    for terminal in [phase_code::DONE, phase_code::RECOVERY_REQUIRED] {
+        let mut ended = leased_until(1_000);
+        ended.phase = terminal;
+        assert_eq!(
+            assert_takeover_successor(&ended, &claim(&ended, now), now),
+            Err(MigrationExecutionError::TerminalPhase),
+            "{terminal}"
+        );
+    }
+}
+
+#[test]
+fn takeover_authority_is_the_committed_binding_plus_one_fence_and_one_revision() {
+    let committed = LiveMigration {
+        operation_id: "successor-op".into(),
+        fencing_generation: 7,
+        journal_revision: 4,
+        manifest_digest: [0x22; 32],
+    };
+    let at = |operation: &str, fence: u64, revision: u64| LiveMigration {
+        operation_id: operation.into(),
+        fencing_generation: fence,
+        journal_revision: revision,
+        manifest_digest: [0x33; 32],
+    };
+    let table = [
+        ("the takeover", at("successor-op", 8, 5), Ok(())),
+        (
+            "the same fence",
+            at("successor-op", 7, 5),
+            Err(MigrationExecutionError::StaleMigrationOwner),
+        ),
+        (
+            "a skipped fence",
+            at("successor-op", 9, 5),
+            Err(MigrationExecutionError::LiveBindingMismatch),
+        ),
+        (
+            "the committed revision",
+            at("successor-op", 8, 4),
+            Err(MigrationExecutionError::StaleJournalRevision),
+        ),
+        (
+            "a skipped revision",
+            at("successor-op", 8, 6),
+            Err(MigrationExecutionError::LiveBindingMismatch),
+        ),
+        (
+            "another operation",
+            at("other-op", 8, 5),
+            Err(MigrationExecutionError::LiveBindingMismatch),
+        ),
+        (
+            "an overflowing fence",
+            at("successor-op", u64::MAX, 5),
+            Err(MigrationExecutionError::LiveBindingMismatch),
+        ),
+    ];
+    for (name, next, expected) in table {
+        assert_eq!(
+            assert_binding_takeover(&committed, &next),
+            expected,
+            "{name}"
+        );
+        let mut manifest = rotate_at(phase_code::PREPARE, next.journal_revision);
+        manifest.operation_id = next.operation_id.clone();
+        manifest.fencing_generation = next.fencing_generation;
+        assert_eq!(
+            assert_takeover_promote_authority(&manifest, Some(&committed)),
+            expected,
+            "{name}"
+        );
+    }
+    // A takeover needs a committed journal.
+    let manifest = rotate_at(phase_code::PREPARE, 1);
+    assert_eq!(
+        assert_takeover_promote_authority(&manifest, None),
+        Err(MigrationExecutionError::LiveBindingMismatch)
     );
 }

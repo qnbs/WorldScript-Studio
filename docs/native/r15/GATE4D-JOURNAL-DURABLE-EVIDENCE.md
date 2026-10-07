@@ -24,6 +24,9 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::assert_binding_successor` | Pure B2b-1 predicate: a binding advance is the CAS successor (same operation and fence, revision + 1) of the committed binding |
 | `journal::assert_manifest_successor` | Pure B2b-4 predicate: a manifest is a valid successor of the manifest the root names (revision + 1, kept operation identity, allowed phase step, no cursor regression within a phase, frozen target key and inventory, recovery reason only on entering recovery) |
 | `authority::advance_live_migration` | B2b-1/B2b-4: under `root_commit_mutex`, verify the binding successor, the durable manifest generation and that it is a valid manifest successor of the committed one, then commit a root carrying the new binding |
+| `journal::assert_takeover_successor` / `assert_takeover_promote_authority` / `assert_binding_takeover` | Pure B2c predicates: a takeover is the committed owner's lease-expired successor with fence + 1 and revision + 1 that changes ownership only |
+| `journal::publish_takeover_fenced` | B2c: takeover authority, the committed generation loaded bounded and authenticated, the takeover successor check, then the same publish-or-adopt step as the checkpoint |
+| `authority::commit_journal_takeover` | B2c: under `root_commit_mutex`, read the committed binding, publish the new owner's claim (lease expired at the caller's `now`, fence + 1), advance the binding to the new fence and record it as the commit evidence |
 | `authority::commit_journal_checkpoint` | B2b-2/B2b-3: under `root_commit_mutex`, read the committed binding, publish the owner's next manifest against it (R4; an identical candidate from a failed attempt is adopted), then advance the binding to that generation |
 | `journal::load_manifest_generation` | Load one manifest generation from a journal record directory |
 | `journal::load_authoritative_manifest` | Resume the generation the committed root names, then bind its exact envelope digest |
@@ -289,10 +292,52 @@ directly promoted non-successor is refused) and three in
 `gate4d_journal_durable_test` (a non-successor candidate is not adopted, an oversized root-named
 generation is corrupt for both loaders).
 
-## Still residual after B2b-4
+## B2c — owner takeover under the root lock
 
-- Binding transitions other than the advance: bind (bootstrap) and clear (terminal), which belong to
-  the Gate 4E/5 enable and commit sequences, and owner takeover with a new fence.
+§10.1: "Lease expiry makes a new owner eligible but is not by itself permission for the old owner to
+continue; a new owner must atomically advance the fencing generation", and §10.3 `ADMIT`: restart
+claims the same journal "only after lease expiry and fencing CAS". R4 already refuses a stale owner;
+this slice is the transition that creates the new one. It is a different transition from a
+checkpoint by design: `assert_binding_successor` keeps the fence, a takeover must advance it.
+
+`authority::commit_journal_takeover` runs under one `root_commit_mutex`, with the committed binding
+read from the root:
+
+| Rule | Refusal |
+|---|---|
+| the committed lease is expired at the caller's `now_unix_ms` (`now >= lease_expires_unix_ms`) or the committed manifest has no lease owner | `LeaseNotExpired` |
+| the committed manifest is not terminal (`DONE`, `RECOVERY_REQUIRED`) | `TerminalPhase` |
+| the claim carries the same operation, fence + 1 and revision + 1 | `LiveBindingMismatch` (other operation, skipped fence or revision), `StaleMigrationOwner` (not above the committed fence), `StaleJournalRevision` |
+| the claim holds a lease owner whose expiry lies after `now` | `InvalidTakeoverLease` |
+| the claim is the committed manifest with only the revision, the fence and the lease replaced (phase, cursor, inventory, target key, recovery reason, operation identity unchanged) | `FrozenFieldChanged` |
+
+The claim moves ownership only; the new owner makes progress through ordinary checkpoints under its
+own fence. The committed manifest is loaded by exact path, bounded and authenticated against the
+binding digest, and the relation is checked at publish (before any candidate read or write) and
+again where the root starts to trust the generation, as for the checkpoint. A retry after a failed
+root commit adopts its own identical claim with no journal write. The root binding advances to
+`(operation, fence + 1, revision + 1, digest)` and the commit evidence records the new fence, so the
+former owner's checkpoint is refused by R4 as a stale owner from then on.
+
+The clock is an explicit input: Core never reads one, and a lease is expired when `now >=
+lease_expires_unix_ms`. The caller supplies a trusted clock; a manipulated clock can claim early, which
+is the same trust the lease already places in whoever writes its expiry. Nothing calls the takeover
+yet. Cross-process exclusion of the root part is the root lock itself.
+
+Proof: five pure cases in `gate4d_migration_state_test` (the lease boundary including `now ==
+expires` and an unowned manifest, the fence and revision table, the new owner's lease, ownership-only
+changes and terminal journals, the takeover authority table), three in `gate4d_journal_durable_test`
+(publish then adopt with an unchanged directory, refusal before any write for an unexpired lease, the
+same fence, a claim that also moves the phase and a forged committed digest, a different candidate
+not adopted) and six in `gate4d_root_binding_test` (the binding and the evidence move to the new
+fence, an unexpired lease refuses and the boundary admits, the former owner is refused and the new
+owner continues, a retry after a failed root commit adopts the claim, refused claims write no
+journal byte, no bound migration).
+
+## Still residual after B2c
+
+- Binding transitions other than the advance and the takeover: bind (bootstrap) and clear
+  (terminal), which belong to the Gate 4E/5 enable and commit sequences.
 - R2B remainder: discarding a candidate that differs from the retry's manifest or cannot be opened
   (it needs a relocation primitive that preserves the bytes for reconciliation), and recovery when
   the root-named envelope exists but semantic open refuses.
@@ -318,13 +363,14 @@ generation is corrupt for both loaders).
 
 ## Tests
 
-Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, 9 R4 caller-authority cases, 7 B2b-3 publish and bounded-read cases and 3 B2b-4 cases).
-Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases, 5 B2b-3 candidate-retry cases and 4 B2b-4 successor cases).
-Unit: `crates/worldscript-secure-storage/tests/gate4d_migration_state_test.rs` (8 B2b-4 successor-relation cases beside the earlier state-machine cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, 9 R4 caller-authority cases, 7 B2b-3 publish and bounded-read cases, 3 B2b-4 cases and 3 B2c takeover cases).
+Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases, 5 B2b-3 candidate-retry cases, 4 B2b-4 successor cases and 6 B2c takeover cases).
+Unit: `crates/worldscript-secure-storage/tests/gate4d_migration_state_test.rs` (8 B2b-4 successor-relation cases and 5 B2c takeover cases beside the earlier state-machine cases).
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
 `with_fence_holds_mutex_during_closure` in `journal::durable::mutex_proof`.
 
 Gate 4D overall status: **IN PROGRESS**. B2a resume selection, R4 promote-time caller authority,
 the B2b-1 root binding advance, the B2b-2 journal checkpoint, the B2b-3 candidate adoption on
-retry and the B2b-4 successor-relation guard are in scope above; B2 is not terminal.
+retry, the B2b-4 successor-relation guard and the B2c owner takeover are in scope above; B2 is not
+terminal.

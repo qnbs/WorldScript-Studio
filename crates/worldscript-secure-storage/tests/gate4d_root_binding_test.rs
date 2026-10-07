@@ -10,16 +10,17 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::{
-    advance_live_migration, commit_catalog_change, commit_journal_checkpoint, commit_root,
-    content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
-    load_authoritative_manifest, load_catalog, operation_type, phase_code, promote_manifest_fenced,
-    transition_phase, write_key_epoch, AuthorityError, BindingAdvance, CatalogChange,
-    CatalogCommit, DirectoryDurability, DurableFs, InstallationScopeId, JournalCheckpoint,
-    JournalDurableContext, JournalDurableError, JournalManifest, JournalSource, KeyEpochCommit,
-    KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
-    MigrationExecutionError, MigrationFence, MigrationPhase, RootBody, RootCommitEvidence,
-    RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout,
-    StageFailureKind, StdFs, WriteOperationId,
+    advance_live_migration, commit_catalog_change, commit_journal_checkpoint,
+    commit_journal_takeover, commit_root, content_digest, empty_inventory_digest,
+    empty_journal_page_set_digest, generation_path, load_authoritative_manifest, load_catalog,
+    operation_type, phase_code, promote_manifest_fenced, transition_phase, write_key_epoch,
+    AuthorityError, BindingAdvance, CatalogChange, CatalogCommit, DirectoryDurability, DurableFs,
+    InstallationScopeId, JournalCheckpoint, JournalDurableContext, JournalDurableError,
+    JournalManifest, JournalSource, JournalTakeoverCommit, KeyEpochCommit, KeyEpochRecord,
+    KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog, MigrationExecutionError,
+    MigrationFence, MigrationPhase, RootBody, RootCommitEvidence, RootCommitGuard,
+    RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, StageFailureKind,
+    StdFs, WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -291,6 +292,54 @@ impl Fixture {
                 root_dir: &root_dir,
             },
             checkpoint,
+        )
+    }
+
+    /// A takeover claim of `claim` under its own fence, the committed key route and `now_unix_ms`.
+    fn takeover(
+        &mut self,
+        claim: &JournalManifest,
+        now_unix_ms: u64,
+    ) -> Result<RootCommitted, AuthorityError> {
+        let key_ref = self.key_ref.clone();
+        let route = Route {
+            key_ref: &key_ref,
+            epoch: 1,
+        };
+        self.takeover_with(claim, now_unix_ms, route)
+    }
+
+    fn takeover_with(
+        &mut self,
+        claim: &JournalManifest,
+        now_unix_ms: u64,
+        route: Route<'_>,
+    ) -> Result<RootCommitted, AuthorityError> {
+        let root_dir = self.root_dir.clone();
+        let key = journal_key();
+        let op = WriteOperationId::generate().unwrap();
+        let fence = MigrationFence::from_manifest(claim);
+        let takeover = JournalTakeoverCommit {
+            claim: JournalCheckpoint {
+                manifest: claim,
+                fence: &fence,
+                journal: JournalSource {
+                    key: &key,
+                    dir: &self.journal_dir,
+                    operation: &op,
+                },
+                root_key_ref: route.key_ref,
+                active_key_epoch: route.epoch,
+            },
+            now_unix_ms,
+        };
+        commit_journal_takeover(
+            &mut StdFs,
+            &mut self.provider,
+            RootLayout {
+                root_dir: &root_dir,
+            },
+            takeover,
         )
     }
 
@@ -1026,4 +1075,212 @@ fn an_advance_to_a_non_successor_generation_is_refused_even_when_it_was_promoted
     assert_eq!(fixture.loaded().root, before);
     assert_eq!(fixture.journal_files(), journal_before);
     assert_eq!(resumed_revision(&fixture, &bound), 0);
+}
+
+/// The claim a new owner publishes over `prev` at `now`: fence + 1, revision + 1, its own lease.
+fn claim_over(prev: &JournalManifest, now: u64) -> JournalManifest {
+    let mut claim = prev.clone();
+    claim.journal_revision += 1;
+    claim.fencing_generation += 1;
+    claim.has_lease_owner = true;
+    claim.lease_owner_id = Some("new-owner".into());
+    claim.lease_expires_unix_ms = Some(now + 100);
+    claim
+}
+
+#[test]
+fn a_takeover_publishes_the_claim_and_binds_the_root_to_the_new_fence() {
+    let (mut fixture, bound) = bound_at_zero();
+    let zero = manifest_at(OPERATION, 0, FENCE);
+    let claim = claim_over(&zero, 1_000);
+    let before = fixture.loaded().root;
+    let committed = fixture.takeover(&claim, 1_000).unwrap();
+    let dir = fixture.journal_dir.clone();
+    let after = fixture.loaded().root;
+    assert_eq!(committed.root_generation, before.root_generation + 1);
+    assert!(generation_path(&dir, 1).is_file());
+    assert_eq!(
+        after.live_migration,
+        Some(binding_of(&claim, digest_of(&dir, 1)))
+    );
+    assert_eq!(
+        after.commit_evidence,
+        RootCommitEvidence {
+            operation_id: OPERATION.to_owned(),
+            fencing_generation: FENCE + 1,
+            state: RootCommitState::Committed,
+        }
+    );
+    // Nothing but the binding and its evidence moved, and the claim is what a restart resumes.
+    assert_eq!(after.catalog_set_digest, before.catalog_set_digest);
+    assert_eq!(after.marker_set_digest, before.marker_set_digest);
+    assert_ne!(Some(bound), after.live_migration);
+    assert_eq!(
+        resumed_revision(&fixture, &after.live_migration.unwrap()),
+        1
+    );
+}
+
+#[test]
+fn a_lease_that_has_not_expired_refuses_the_takeover_before_any_journal_write() {
+    let (mut fixture, _) = bound_at_zero();
+    let mut one = manifest_at(OPERATION, 1, FENCE);
+    one.has_lease_owner = true;
+    one.lease_owner_id = Some("old-owner".into());
+    one.lease_expires_unix_ms = Some(10_000);
+    fixture.checkpoint(&one).unwrap();
+    let before = fixture.loaded().root;
+    let journal_before = fixture.journal_files();
+    let claim = claim_over(&one, 9_999);
+    assert_eq!(
+        fixture.takeover(&claim, 9_999),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::LeaseNotExpired
+        )))
+    );
+    assert_eq!(fixture.journal_files(), journal_before);
+    assert_eq!(fixture.loaded().root, before);
+    // The lease is expired exactly at its expiry.
+    let claim = claim_over(&one, 10_000);
+    fixture.takeover(&claim, 10_000).unwrap();
+    assert_eq!(
+        fixture
+            .loaded()
+            .root
+            .live_migration
+            .map(|binding| binding.fencing_generation),
+        Some(FENCE + 1)
+    );
+}
+
+#[test]
+fn the_former_owner_is_refused_after_a_takeover_and_the_new_owner_continues() {
+    let (mut fixture, _) = bound_at_zero();
+    let zero = manifest_at(OPERATION, 0, FENCE);
+    let claim = claim_over(&zero, 1_000);
+    fixture.takeover(&claim, 1_000).unwrap();
+    let before = fixture.loaded().root;
+    let journal_before = fixture.journal_files();
+    // The former owner still holds a self-consistent manifest and fence for the next revision.
+    let stale = manifest_at(OPERATION, 2, FENCE);
+    assert_eq!(
+        fixture.checkpoint(&stale),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::StaleMigrationOwner
+        )))
+    );
+    assert_eq!(fixture.journal_files(), journal_before);
+    assert_eq!(fixture.loaded().root, before);
+    // The new owner makes progress through the ordinary checkpoint under its own fence.
+    let fence = MigrationFence::from_manifest(&claim);
+    let next = transition_phase(
+        &claim,
+        &fence,
+        MigrationPhase::from_wire(phase_code::DISCOVER),
+    )
+    .unwrap();
+    fixture.checkpoint(&next).unwrap();
+    let dir = fixture.journal_dir.clone();
+    assert_eq!(
+        fixture.loaded().root.live_migration,
+        Some(binding_of(&next, digest_of(&dir, 2)))
+    );
+}
+
+#[test]
+fn a_retry_after_a_failed_root_commit_adopts_the_takeover_candidate() {
+    let (mut fixture, _) = bound_at_zero();
+    let zero = manifest_at(OPERATION, 0, FENCE);
+    let claim = claim_over(&zero, 1_000);
+    let before = fixture.loaded().root;
+    fixture
+        .provider
+        .inject(Fault::BeforePersist(AnchorOp::Prepare));
+    let error = fixture.takeover(&claim, 1_000).unwrap_err();
+    assert!(matches!(error, AuthorityError::Root(_)), "{error:?}");
+    assert_eq!(fixture.loaded().root, before);
+    let journal_after_failure = fixture.journal_files();
+    fixture.takeover(&claim, 1_000).unwrap();
+    assert_eq!(fixture.journal_files(), journal_after_failure);
+    let dir = fixture.journal_dir.clone();
+    assert_eq!(
+        fixture.loaded().root.live_migration,
+        Some(binding_of(&claim, digest_of(&dir, 1)))
+    );
+}
+
+#[test]
+fn a_refused_takeover_writes_no_journal_byte() {
+    let (mut fixture, _) = bound_at_zero();
+    let zero = manifest_at(OPERATION, 0, FENCE);
+    let before = fixture.loaded().root;
+    let journal_before = fixture.journal_files();
+    let mut same_fence = claim_over(&zero, 1_000);
+    same_fence.fencing_generation = FENCE;
+    let mut skipped_fence = claim_over(&zero, 1_000);
+    skipped_fence.fencing_generation = FENCE + 2;
+    let mut moved_phase = claim_over(&zero, 1_000);
+    moved_phase.phase = phase_code::DISCOVER;
+    let mut no_lease = claim_over(&zero, 1_000);
+    no_lease.has_lease_owner = false;
+    no_lease.lease_owner_id = None;
+    no_lease.lease_expires_unix_ms = None;
+    let cases = [
+        (
+            "the same fence",
+            same_fence,
+            MigrationExecutionError::StaleMigrationOwner,
+        ),
+        (
+            "a skipped fence",
+            skipped_fence,
+            MigrationExecutionError::LiveBindingMismatch,
+        ),
+        (
+            "a claim that also moves the phase",
+            moved_phase,
+            MigrationExecutionError::FrozenFieldChanged,
+        ),
+        (
+            "a claim without a lease",
+            no_lease,
+            MigrationExecutionError::InvalidTakeoverLease,
+        ),
+    ];
+    for (name, claim, error) in cases {
+        assert_eq!(
+            fixture.takeover(&claim, 1_000),
+            Err(AuthorityError::Journal(JournalDurableError::Authority(
+                error
+            ))),
+            "{name}"
+        );
+        assert_eq!(fixture.journal_files(), journal_before, "{name}");
+        assert_eq!(fixture.loaded().root, before, "{name}");
+    }
+    // A different key route or epoch is refused before the publish as well.
+    let claim = claim_over(&zero, 1_000);
+    let key_ref = fixture.key_ref.clone();
+    let other_epoch = Route {
+        key_ref: &key_ref,
+        epoch: 2,
+    };
+    assert_eq!(
+        fixture.takeover_with(&claim, 1_000, other_epoch),
+        Err(AuthorityError::KeyRotationNotAdmitted)
+    );
+    assert_eq!(fixture.journal_files(), journal_before);
+}
+
+#[test]
+fn a_takeover_needs_a_bound_migration() {
+    let mut fixture = Fixture::new();
+    fixture.ordinary_commit("bootstrap-root");
+    let zero = manifest_at(OPERATION, 0, FENCE);
+    let claim = claim_over(&zero, 1_000);
+    assert_eq!(
+        fixture.takeover(&claim, 1_000),
+        Err(AuthorityError::NoLiveMigration)
+    );
+    assert!(fixture.journal_files().is_empty());
 }

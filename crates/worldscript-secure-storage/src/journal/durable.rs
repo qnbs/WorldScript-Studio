@@ -22,8 +22,8 @@ use super::manifest::JournalManifest;
 use super::page::JournalPage;
 use super::state::{
     assert_fence, assert_live_binding, assert_manifest_promote_authority,
-    assert_manifest_successor, assert_page_promote_authority, ManifestEnvelopeDigest,
-    MigrationExecutionError, MigrationFence,
+    assert_manifest_successor, assert_page_promote_authority, assert_takeover_promote_authority,
+    assert_takeover_successor, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
 };
 use super::{
     JournalError, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA,
@@ -243,20 +243,60 @@ pub fn publish_manifest_fenced<F: DurableFs>(
         assert_manifest_promote_authority(manifest, committed)
             .map_err(JournalDurableError::Authority)?;
         assert_successor_of_committed(ctx, manifest, committed)?;
-        match existing_generation(ctx, manifest)? {
-            // QNBS-v3: absence is read by exact path under the mutex; link_no_replace still refuses if a writer creates the name between this read and the promotion.
-            ExistingGeneration::Absent => {
-                promote_manifest(ctx, manifest).map(|promoted| PublishedManifest {
-                    content_digest: promoted.content_digest,
-                    adopted: false,
-                })
-            }
-            ExistingGeneration::Candidate(bytes) => {
-                adopt_identical_candidate(ctx, manifest, &bytes)
-            }
-            ExistingGeneration::Oversized => Err(JournalDurableError::Stage(generation_exists())),
-        }
+        publish_or_adopt(ctx, manifest)
     })
+}
+
+/// A new owner's claim of the journal: the takeover manifest, its fence, the committed binding it
+/// takes over from, and the caller's clock.
+#[derive(Clone, Copy)]
+pub struct JournalTakeover<'a> {
+    pub manifest: &'a JournalManifest,
+    pub fence: &'a MigrationFence,
+    pub committed: &'a LiveMigration,
+    /// The caller's clock; Core never reads one. A lease is expired when `now >= lease_expires`.
+    pub now_unix_ms: u64,
+}
+
+/// Fenced publication of a takeover manifest (§10.1): the next owner atomically advances the fence.
+///
+/// `fence` is the new owner's token. Under the journal mutex and before any I/O the manifest must be
+/// the committed binding's takeover ([`assert_takeover_promote_authority`]: fence plus one, revision
+/// plus one); the committed generation is then loaded by exact path, bounded and authenticated
+/// against the binding digest, and the manifest must be its takeover successor
+/// ([`assert_takeover_successor`]: the committed lease expired at `now_unix_ms`, only ownership
+/// changed). The generation itself is published or adopted exactly as
+/// [`publish_manifest_fenced`] does, so a retry after a failed root commit adopts its own claim.
+pub fn publish_takeover_fenced<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    takeover: &JournalTakeover<'_>,
+) -> Result<PublishedManifest, JournalDurableError> {
+    with_fence(takeover.manifest, takeover.fence, || {
+        assert_takeover_promote_authority(takeover.manifest, Some(takeover.committed))
+            .map_err(JournalDurableError::Authority)?;
+        let current = load_authoritative_manifest(ctx, takeover.committed)?;
+        assert_takeover_successor(&current, takeover.manifest, takeover.now_unix_ms)
+            .map_err(JournalDurableError::Authority)?;
+        publish_or_adopt(ctx, takeover.manifest)
+    })
+}
+
+/// Promotes an absent generation or adopts an identical candidate; refuses anything else.
+fn publish_or_adopt<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+) -> Result<PublishedManifest, JournalDurableError> {
+    match existing_generation(ctx, manifest)? {
+        // QNBS-v3: absence is read by exact path under the mutex; link_no_replace still refuses if a writer creates the name between this read and the promotion.
+        ExistingGeneration::Absent => {
+            promote_manifest(ctx, manifest).map(|promoted| PublishedManifest {
+                content_digest: promoted.content_digest,
+                adopted: false,
+            })
+        }
+        ExistingGeneration::Candidate(bytes) => adopt_identical_candidate(ctx, manifest, &bytes),
+        ExistingGeneration::Oversized => Err(JournalDurableError::Stage(generation_exists())),
+    }
 }
 
 /// Refuses a manifest that is not a valid successor of the generation the committed binding names.

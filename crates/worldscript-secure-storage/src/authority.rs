@@ -41,9 +41,10 @@ use crate::envelope::parse_envelope;
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
 use crate::journal::{
-    assert_binding_successor, assert_manifest_successor, load_authoritative_manifest,
-    publish_manifest_fenced, JournalDurableContext, JournalDurableError, JournalManifest,
-    MigrationExecutionError, MigrationFence,
+    assert_binding_successor, assert_binding_takeover, assert_manifest_successor,
+    assert_takeover_successor, load_authoritative_manifest, publish_manifest_fenced,
+    publish_takeover_fenced, JournalDurableContext, JournalDurableError, JournalManifest,
+    JournalTakeover, MigrationExecutionError, MigrationFence,
 };
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
@@ -298,7 +299,14 @@ pub fn advance_live_migration<F: DurableFs, P: KeyProvider>(
         active_key_epoch: advance.active_key_epoch,
         operation_id: &advance.next.operation_id,
     };
-    commit_planned(fs, provider, layout, commit, &held, Some(&advance))
+    commit_planned(
+        fs,
+        provider,
+        layout,
+        commit,
+        &held,
+        Some(BindingStep::Checkpoint(&advance)),
+    )
 }
 
 /// One journal-owner checkpoint: the next manifest revision to publish and where the journal lives.
@@ -334,37 +342,11 @@ pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
 ) -> Result<RootCommitted, AuthorityError> {
     check_operation_id(&checkpoint.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
-    let held = RootCommitGuard::acquire(layout.root_dir).map_err(|error| {
-        AuthorityError::Root(RootStoreError::Io {
-            step: RootStep::LockRootCommit,
-            kind: error.kind(),
-        })
-    })?;
-    let commit = CatalogCommit {
-        change: CatalogChange {
-            upsert: &[],
-            remove: &[],
-        },
-        root_key_ref: checkpoint.root_key_ref,
-        active_key_epoch: checkpoint.active_key_epoch,
-        operation_id: &checkpoint.manifest.operation_id,
-    };
-    // QNBS-v3: the key route is checked before the promote, because a refusal after the promote would already have left a candidate generation in the journal.
-    let committed = match load_catalog(fs, provider, layout)? {
-        Some(catalog) if !keeps_key_route(&catalog.root, commit) => {
-            return Err(AuthorityError::KeyRotationNotAdmitted)
-        }
-        Some(catalog) => catalog.root.live_migration,
-        None => None,
-    }
-    .ok_or(AuthorityError::NoLiveMigration)?;
+    let held = acquire_root_commit(layout)?;
+    let commit = journal_catalog_commit(&checkpoint);
+    let committed = committed_binding(fs, provider, layout, commit)?;
     let published = {
-        let mut journal = JournalDurableContext::new(
-            &mut *fs,
-            checkpoint.journal.key,
-            checkpoint.journal.dir,
-            checkpoint.journal.operation,
-        );
+        let mut journal = journal_context(&mut *fs, checkpoint.journal);
         publish_manifest_fenced(
             &mut journal,
             checkpoint.manifest,
@@ -373,19 +355,160 @@ pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
         )
         .map_err(AuthorityError::Journal)?
     };
-    let next = LiveMigration {
-        operation_id: checkpoint.manifest.operation_id.clone(),
-        fencing_generation: checkpoint.manifest.fencing_generation,
-        journal_revision: checkpoint.manifest.journal_revision,
-        manifest_digest: published.content_digest,
+    let next = binding_for(checkpoint.manifest, published.content_digest);
+    let advance = binding_advance(&next, &checkpoint);
+    commit_planned(
+        fs,
+        provider,
+        layout,
+        commit,
+        &held,
+        Some(BindingStep::Checkpoint(&advance)),
+    )
+}
+
+/// One owner takeover (§10.1): the claim to publish and the clock it is judged against.
+#[derive(Clone, Copy)]
+pub struct JournalTakeoverCommit<'a> {
+    pub claim: JournalCheckpoint<'a>,
+    /// The caller's clock; Core never reads one. A lease is expired when `now >= lease_expires`.
+    pub now_unix_ms: u64,
+}
+
+/// Takes over the journal for a new owner and advances the root binding to the claim (§5.4, §10.1).
+///
+/// Lease expiry makes a new owner eligible, and the new owner must atomically advance the fencing
+/// generation. Under one `root_commit_mutex` the committed binding is read from the root, the claim
+/// is published through [`publish_takeover_fenced`] (the committed lease expired at `now_unix_ms`,
+/// fence plus one, revision plus one, only ownership changed; a retry after a failed root commit
+/// adopts its own identical candidate), and the binding advances to the claim as
+/// [`advance_live_migration`] does, verified again as a takeover. The commit evidence records the
+/// new fence, so the former owner is refused by [`commit_journal_checkpoint`] from then on. A
+/// refusal before the publish (no bound migration, another key route or epoch, a lease that has not
+/// expired, a claim that is not the committed binding's takeover) writes nothing. Lock order is the
+/// root lock, then the journal mutex inside the publish.
+pub fn commit_journal_takeover<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    takeover: JournalTakeoverCommit<'_>,
+) -> Result<RootCommitted, AuthorityError> {
+    let claim = takeover.claim;
+    check_operation_id(&claim.manifest.operation_id)
+        .map_err(|_| AuthorityError::InvalidOperationId)?;
+    let held = acquire_root_commit(layout)?;
+    let commit = journal_catalog_commit(&claim);
+    let committed = committed_binding(fs, provider, layout, commit)?;
+    let published = {
+        let mut journal = journal_context(&mut *fs, claim.journal);
+        publish_takeover_fenced(
+            &mut journal,
+            &JournalTakeover {
+                manifest: claim.manifest,
+                fence: claim.fence,
+                committed: &committed,
+                now_unix_ms: takeover.now_unix_ms,
+            },
+        )
+        .map_err(AuthorityError::Journal)?
     };
-    let advance = BindingAdvance {
-        next: &next,
+    let next = binding_for(claim.manifest, published.content_digest);
+    let advance = binding_advance(&next, &claim);
+    let step = BindingStep::Takeover {
+        advance: &advance,
+        now_unix_ms: takeover.now_unix_ms,
+    };
+    commit_planned(fs, provider, layout, commit, &held, Some(step))
+}
+
+fn acquire_root_commit(layout: RootLayout<'_>) -> Result<RootCommitGuard, AuthorityError> {
+    RootCommitGuard::acquire(layout.root_dir).map_err(|error| {
+        AuthorityError::Root(RootStoreError::Io {
+            step: RootStep::LockRootCommit,
+            kind: error.kind(),
+        })
+    })
+}
+
+/// The empty catalog change that carries a journal-owner commit: only the binding moves.
+fn journal_catalog_commit<'a>(checkpoint: &JournalCheckpoint<'a>) -> CatalogCommit<'a> {
+    CatalogCommit {
+        change: CatalogChange {
+            upsert: &[],
+            remove: &[],
+        },
+        root_key_ref: checkpoint.root_key_ref,
+        active_key_epoch: checkpoint.active_key_epoch,
+        operation_id: &checkpoint.manifest.operation_id,
+    }
+}
+
+/// The binding the root names, read under the held lock after the key route is checked.
+///
+/// QNBS-v3: the key route is checked before any journal write, because a refusal after the publish would already have left a candidate generation in the journal.
+fn committed_binding<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    commit: CatalogCommit<'_>,
+) -> Result<LiveMigration, AuthorityError> {
+    let committed = match load_catalog(fs, provider, layout)? {
+        Some(catalog) if !keeps_key_route(&catalog.root, commit) => {
+            return Err(AuthorityError::KeyRotationNotAdmitted)
+        }
+        Some(catalog) => catalog.root.live_migration,
+        None => None,
+    };
+    committed.ok_or(AuthorityError::NoLiveMigration)
+}
+
+fn journal_context<'a, F: DurableFs>(
+    fs: &'a mut F,
+    journal: JournalSource<'a>,
+) -> JournalDurableContext<'a, F> {
+    JournalDurableContext::new(fs, journal.key, journal.dir, journal.operation)
+}
+
+/// The binding that names `manifest` and the digest of its envelope.
+fn binding_for(manifest: &JournalManifest, digest: [u8; 32]) -> LiveMigration {
+    LiveMigration {
+        operation_id: manifest.operation_id.clone(),
+        fencing_generation: manifest.fencing_generation,
+        journal_revision: manifest.journal_revision,
+        manifest_digest: digest,
+    }
+}
+
+fn binding_advance<'a>(
+    next: &'a LiveMigration,
+    checkpoint: &JournalCheckpoint<'a>,
+) -> BindingAdvance<'a> {
+    BindingAdvance {
+        next,
         journal: checkpoint.journal,
         root_key_ref: checkpoint.root_key_ref,
         active_key_epoch: checkpoint.active_key_epoch,
-    };
-    commit_planned(fs, provider, layout, commit, &held, Some(&advance))
+    }
+}
+
+/// How a binding advance relates to the binding the root names.
+#[derive(Clone, Copy)]
+enum BindingStep<'a> {
+    /// The same owner's next revision (§5.4).
+    Checkpoint(&'a BindingAdvance<'a>),
+    /// A new owner's claim: the fence plus one after the committed lease expired (§10.1).
+    Takeover {
+        advance: &'a BindingAdvance<'a>,
+        now_unix_ms: u64,
+    },
+}
+
+impl<'a> BindingStep<'a> {
+    fn advance(&self) -> &'a BindingAdvance<'a> {
+        match *self {
+            BindingStep::Checkpoint(advance) | BindingStep::Takeover { advance, .. } => advance,
+        }
+    }
 }
 
 pub(crate) fn commit_catalog_change_held<F: DurableFs, P: KeyProvider>(
@@ -406,7 +529,7 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     commit: CatalogCommit<'_>,
     held: &RootCommitGuard,
-    advance: Option<&BindingAdvance<'_>>,
+    step: Option<BindingStep<'_>>,
 ) -> Result<RootCommitted, AuthorityError> {
     if !held.guards(layout.root_dir) {
         return Err(AuthorityError::Root(RootStoreError::MutexNotHeld));
@@ -425,8 +548,8 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
             .ok_or(AuthorityError::NoInstallationScope)?,
     };
     let mut journal_durability = DirectoryDurability::Confirmed;
-    if let Some(advance) = advance {
-        journal_durability = verify_binding_advance(fs, current.as_ref(), advance)?;
+    if let Some(step) = step {
+        journal_durability = verify_binding_advance(fs, current.as_ref(), step)?;
     }
     let plan = ChangePlan::new(current, commit.change)?;
     let target = RootTarget {
@@ -445,7 +568,7 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
     };
     let (catalog_shards, pages_durability) = plan.write_pages(fs, &write)?;
     let mut root = plan.root_body(commit, &catalog_shards, key_epoch_set_digest)?;
-    if let Some(advance) = advance {
+    if let Some(advance) = step.map(|step| step.advance()) {
         root.live_migration = Some(advance.next.clone());
         // §5.4: a migration-driven commit records that operation's positive fence, not the ordinary 0.
         root.commit_evidence = RootCommitEvidence {
@@ -477,26 +600,33 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
 fn verify_binding_advance<F: DurableFs>(
     fs: &mut F,
     current: Option<&LoadedCatalog>,
-    advance: &BindingAdvance<'_>,
+    step: BindingStep<'_>,
 ) -> Result<DirectoryDurability, AuthorityError> {
+    let advance = step.advance();
     let committed = current
         .and_then(|catalog| catalog.root.live_migration.as_ref())
         .ok_or(AuthorityError::NoLiveMigration)?;
     // QNBS-v3: the stale-owner comparison runs against the binding read from the root under root_commit_mutex, never against a binding the caller carried in; the journal is read by exact generation, with no directory enumeration.
-    assert_binding_successor(committed, advance.next).map_err(AuthorityError::LiveMigration)?;
-    let mut journal = JournalDurableContext::new(
-        fs,
-        advance.journal.key,
-        advance.journal.dir,
-        advance.journal.operation,
-    );
+    match step {
+        BindingStep::Checkpoint(_) => assert_binding_successor(committed, advance.next),
+        BindingStep::Takeover { .. } => assert_binding_takeover(committed, advance.next),
+    }
+    .map_err(AuthorityError::LiveMigration)?;
+    let mut journal = journal_context(&mut *fs, advance.journal);
     let next_manifest =
         load_authoritative_manifest(&mut journal, advance.next).map_err(AuthorityError::Journal)?;
     // QNBS-v3: the successor relation is enforced where the root starts to trust a generation, so a manifest promoted through the plain fenced promote cannot become authoritative either.
     let committed_manifest =
         load_authoritative_manifest(&mut journal, committed).map_err(AuthorityError::Journal)?;
-    assert_manifest_successor(&committed_manifest, &next_manifest)
-        .map_err(AuthorityError::LiveMigration)?;
+    match step {
+        BindingStep::Checkpoint(_) => {
+            assert_manifest_successor(&committed_manifest, &next_manifest)
+        }
+        BindingStep::Takeover { now_unix_ms, .. } => {
+            assert_takeover_successor(&committed_manifest, &next_manifest, now_unix_ms)
+        }
+    }
+    .map_err(AuthorityError::LiveMigration)?;
     // The read takes no journal mutex, so it can see a generation whose directory entry a concurrent
     // promote has linked but not yet synced. Sync it here: the root must never name a manifest that
     // a crash could still lose.
