@@ -139,7 +139,7 @@ fn migration_identity(operation_id: &str) -> Result<RecordIdentity, JournalError
         .map_err(|_| JournalError::InvalidOperationId)
 }
 
-fn migration_page_identity(
+pub(super) fn migration_page_identity(
     operation_id: &str,
     page_index: u32,
 ) -> Result<RecordIdentity, JournalError> {
@@ -158,7 +158,7 @@ fn manifest_meta(manifest: &JournalManifest) -> RecordMeta {
     }
 }
 
-fn page_meta(page: &JournalPage) -> RecordMeta {
+pub(super) fn page_meta(page: &JournalPage) -> RecordMeta {
     RecordMeta {
         key_epoch: 1,
         record_generation: page.page_generation(),
@@ -166,7 +166,7 @@ fn page_meta(page: &JournalPage) -> RecordMeta {
     }
 }
 
-fn stage_request<'a>(
+pub(super) fn stage_request<'a>(
     dir: &'a Path,
     identity: &'a RecordIdentity,
     meta: RecordMeta,
@@ -513,7 +513,7 @@ fn oversized_manifest() -> JournalDurableError {
     ))
 }
 
-fn stage_io(error: std::io::Error) -> StageFailure {
+pub(super) fn stage_io(error: std::io::Error) -> StageFailure {
     use crate::durable::{StageFailureKind, StageStep, StagingResidue};
     StageFailure {
         step: StageStep::VerifyPromoted,
