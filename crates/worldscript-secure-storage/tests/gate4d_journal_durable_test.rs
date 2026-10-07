@@ -9,13 +9,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use worldscript_secure_storage::{
     assert_manifest_promote_authority, assert_page_promote_authority, content_digest,
     empty_inventory_digest, empty_journal_page_set_digest, generation_path,
-    load_authoritative_manifest, load_manifest_generation, operation_type, phase_code,
-    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, publish_takeover_fenced,
-    seal_record, DirectoryDurability, DurableFs, JournalDurableContext, JournalDurableError,
-    JournalError, JournalManifest, JournalPage, JournalTakeover, LiveMigration,
-    MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity, RecordMeta,
-    StageFailureKind, StagingResidue, StdFs, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
-    MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
+    load_authoritative_manifest, load_manifest_generation, operation_type, parse_envelope,
+    phase_code, promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced,
+    publish_takeover_fenced, seal_record, DirectoryDurability, DurableFs, JournalDurableContext,
+    JournalDurableError, JournalError, JournalManifest, JournalPage, JournalTakeover,
+    LiveMigration, MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity,
+    RecordMeta, StageFailureKind, StagingResidue, StdFs, WriteOperationId,
+    JOURNAL_MANIFEST_RECORD_SCHEMA, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -543,6 +543,9 @@ fn committed_owner_promotes_its_next_manifest_and_current_page_without_listing()
     let current = manifest_at("r4-owner", 2, 4);
     let current_fence = MigrationFence::from_manifest(&current);
     let page = JournalPage::new(0, R4_PAGE_GENERATION, vec![]).unwrap();
+    // The page is sealed at the epoch of the manifest the root names, so the binding carries the
+    // real digest of that generation.
+    let live = binding(&current, content_digest(&file_bytes(&dir.0, 2)));
     promote_page_fenced(&mut ctx, &current, &current_fence, Some(&live), &page).unwrap();
     assert!(generation_path(&dir.0, R4_PAGE_GENERATION).is_file());
 }
@@ -1226,4 +1229,42 @@ fn a_takeover_does_not_adopt_a_different_candidate() {
     };
     assert!(matches!(stage.kind, StageFailureKind::GenerationExists));
     assert_eq!(dir_listing(&dir.0), listing);
+}
+
+/// The same owner's copy of a rotation from epoch 2 to 3: operation, fence and revision agree.
+fn rotation_copy(manifest: &JournalManifest) -> JournalManifest {
+    let mut copy = manifest.clone();
+    copy.operation_type = operation_type::ROTATE;
+    copy.source_epoch = 2;
+    copy.target_epoch = 3;
+    copy
+}
+
+#[test]
+fn a_page_is_promoted_only_for_the_manifest_the_root_names() {
+    let dir = TempDir::new();
+    promote(&dir.0, &rotation_copy(&manifest_at("page-root", 1, 4)));
+    let named = rotation_copy(&manifest_at("page-root", 2, 4));
+    promote(&dir.0, &named);
+    let live = binding(&named, content_digest(&file_bytes(&dir.0, 2)));
+    // A copy that agrees on operation, fence and revision but claims the epochs of an ENABLE
+    // cannot choose the epoch the page is sealed at: it is refused before anything is created.
+    let altered = manifest_at("page-root", 2, 4);
+    let (err, creates) = refused_page(&dir.0, &altered, Some(&live));
+    assert_eq!(
+        err,
+        JournalDurableError::Authority(MigrationExecutionError::LiveBindingMismatch)
+    );
+    assert_eq!(creates, 0);
+    assert!(!generation_path(&dir.0, R4_PAGE_GENERATION).exists());
+    // The manifest the root names promotes the page, sealed at that manifest's own epoch.
+    let fence = MigrationFence::from_manifest(&named);
+    let page = JournalPage::new(0, R4_PAGE_GENERATION, vec![]).unwrap();
+    let op = write_op();
+    let key = key();
+    let mut fs = StdFs;
+    let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
+    promote_page_fenced(&mut ctx, &named, &fence, Some(&live), &page).unwrap();
+    let sealed = std::fs::read(generation_path(&dir.0, R4_PAGE_GENERATION)).unwrap();
+    assert_eq!(parse_envelope(&sealed).unwrap().header().key_epoch, 2);
 }

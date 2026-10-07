@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   epoch, in every phase, so the epoch no longer depends on the authority root's active epoch that moves at
   cutover. The manifest codec, the durable promotion, the page store and the page reader all use that one
   derivation and refuse a manifest or page sealed under another epoch (`KeyEpochMismatch`) before a byte is
-  written or accepted; the reader compares the epoch before the key is used. Registry resolution of the journal key,
+  written or accepted; the reader and the page store compare the epoch before the key is used, and the single-page
+  promote seals only for the manifest the root names, so a same-owner copy with other epochs cannot choose it. Registry resolution of the journal key,
   the refusal to revoke the source epoch of a bound journal and the lease/cursor phase rules stay later
   slices. PR #1002.
 - **R-15 Gate 4D:** persist the proof of the final inventory capture. The journal manifest gains an

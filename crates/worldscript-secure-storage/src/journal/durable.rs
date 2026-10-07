@@ -443,7 +443,10 @@ fn generation_exists() -> StageFailure {
 /// Fenced [`promote_page`]: requires the same manifest authority and fence as manifest promotion.
 ///
 /// A page is written under the manifest generation the committed root names
-/// ([`assert_page_promote_authority`]); it is a candidate until the successor manifest names it.
+/// ([`assert_page_promote_authority`]); it is a candidate until the successor manifest names it. The
+/// page is sealed at the journal envelope epoch of that manifest, so when the root names a journal
+/// the caller's copy must be that exact authenticated generation ([`assert_root_named_manifest`]):
+/// a copy that merely agrees on operation, fence and revision cannot choose the sealed epoch.
 pub fn promote_page_fenced<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
@@ -454,8 +457,29 @@ pub fn promote_page_fenced<F: DurableFs>(
     with_fence(manifest, fence, || {
         assert_page_promote_authority(manifest, committed)
             .map_err(JournalDurableError::Authority)?;
+        if let Some(live) = committed {
+            assert_root_named_manifest(ctx, manifest, live)?;
+        }
         promote_page(ctx, manifest, page)
     })
+}
+
+/// The manifest the caller supplied must be the very generation the root binding names: the binding
+/// carries only the operation, fence, revision and envelope digest, so a copy at the same revision
+/// with other fields (an altered epoch, say) would otherwise pass the authority checks. Reads only the
+/// root-named generation, bounded, and never creates anything.
+pub(super) fn assert_root_named_manifest<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    live: &LiveMigration,
+) -> Result<(), JournalDurableError> {
+    if load_authoritative_manifest(ctx, live)? == *manifest {
+        Ok(())
+    } else {
+        Err(JournalDurableError::Authority(
+            MigrationExecutionError::LiveBindingMismatch,
+        ))
+    }
 }
 
 /// Seals and durably promotes one journal page generation.

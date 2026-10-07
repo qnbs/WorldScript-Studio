@@ -30,7 +30,7 @@ use crate::seal::Key;
 use super::capture::{assert_capture_successor, assert_page_not_empty, ordered_pages, SealedPage};
 use super::digest::{page_ref_for, InventoryDigestVerifier};
 use super::durable::{
-    load_authoritative_manifest, migration_page_identity, page_meta, stage_io, stage_request,
+    assert_root_named_manifest, migration_page_identity, page_meta, stage_io, stage_request,
     with_fence, JournalDurableContext, JournalDurableError,
 };
 use super::manifest::{journal_envelope_epoch, JournalManifest};
@@ -127,21 +127,17 @@ pub fn promote_inventory_set_fenced<F: DurableFs>(
     })
 }
 
-/// The committed manifest the caller supplied must be the very generation the root binding names:
-/// the binding carries only the operation, fence, revision and envelope digest, so a manifest at the
-/// same revision with other fields would otherwise pass the capture checks against a predecessor
-/// that does not exist. Reads only the root-named generation, bounded, and never creates anything.
+/// The committed manifest the caller supplied must be the very generation the root binding names,
+/// or the capture checks would run against a predecessor that does not exist; a set without a
+/// committed binding has none.
 fn assert_root_named_predecessor<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     set: &InventorySetWrite<'_>,
 ) -> Result<(), JournalDurableError> {
-    let mismatch = JournalDurableError::Authority(MigrationExecutionError::LiveBindingMismatch);
-    let live = set.committed.ok_or(mismatch.clone())?;
-    if load_authoritative_manifest(ctx, live)? == *set.committed_manifest {
-        Ok(())
-    } else {
-        Err(mismatch)
-    }
+    let live = set.committed.ok_or(JournalDurableError::Authority(
+        MigrationExecutionError::LiveBindingMismatch,
+    ))?;
+    assert_root_named_manifest(ctx, set.committed_manifest, live)
 }
 
 /// Everything that can be refused without touching the disk; returns the pages by index.

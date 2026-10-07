@@ -19,7 +19,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::promote_manifest_fenced` | Public mutation: `with_fence` + R4 committed-binding check + crate-private `promote_manifest` |
 | `journal::publish_manifest_fenced` | B2b-3/B2b-4: the same authority and fence as `promote_manifest_fenced`, then the successor check against the committed generation, then one exact-path read of `generation-<r>`: absent → promote; present and identical (opens under the journal key with the manifest's journal envelope epoch, decodes to the same manifest) → adopt with no write; anything else → `GenerationExists`, nothing written or removed |
 | `journal::promote_page` (crate-private) | `JournalPage::seal` + promote + `JournalPage::open` readback |
-| `journal::promote_page_fenced` | Public page mutation: `with_fence` + R4 committed-binding check + crate-private `promote_page` |
+| `journal::promote_page_fenced` | Public page mutation: `with_fence` + R4 committed-binding check + (when the root names a journal) the caller's manifest must equal the root-named generation (`LiveBindingMismatch`), because the page is sealed at that manifest's journal envelope epoch + crate-private `promote_page` |
 | `journal::assert_manifest_promote_authority` / `assert_page_promote_authority` | Pure R4 predicates: the caller's token against the root's committed `Option<&LiveMigration>` |
 | `journal::assert_binding_successor` | Pure B2b-1 predicate: a binding advance is the CAS successor (same operation and fence, revision + 1) of the committed binding |
 | `journal::assert_manifest_successor` | Pure B2b-4 predicate: a manifest is a valid successor of the manifest the root names (revision + 1, kept operation identity, allowed phase step, no cursor regression within a phase, frozen target key and inventory, recovery reason only on entering recovery) |
@@ -647,6 +647,7 @@ decision B fixes the rule and this slice implements it:
 | `journal_envelope_epoch(&JournalManifest)` | the one derivation, a pure function of the authenticated manifest; `ENABLE` other than the first-time `0 → 1` of §8.3 and `ROTATE`/`ENVELOPE_MIGRATION` without a source epoch are `InvalidCounter`, any other operation type `UnsupportedOperationType`; the phase never changes the result |
 | manifest codec | `validate_semantics` calls it, so a manifest that cannot name its epoch (including an `ENABLE` other than `0 → 1`) does not encode or decode; `JournalManifest::seal` refuses metadata with another epoch and `open` refuses an authentic envelope whose header carries another one (`KeyEpochMismatch`) |
 | durable promotion | the manifest metadata is derived with it (`manifest_meta` is fallible); the identical-candidate adoption no longer carries a second epoch clause because an identical candidate is sealed by the same derivation |
+| single-page promote | `promote_page_fenced` reloads the root-named manifest and requires the caller's copy to equal it (`assert_root_named_manifest`, shared with the inventory path) before it seals a page at that manifest's epoch; a same-owner copy that agrees on operation, fence and revision but carries other epochs cannot choose the sealed epoch and is refused before anything is created (`LiveBindingMismatch`); only the bootstrap revision, which no root binds yet, takes the epoch from the caller's manifest |
 | page store | `seal_inventory_pages` takes the committed manifest and seals every page at its epoch; `store_page` derives the epoch from the committed manifest and refuses a page sealed for another one before the key is used and before anything is created (`KeyEpochMismatch`, also for a page genuinely sealed under another epoch's key; the stage step repeats the comparison as a backstop and would report `StagedEnvelopeMismatch`) |
 | page reader | `open_stored_page` compares the envelope header with the manifest's epoch before the key is used (§6 authority-first read routing: a misrouted page is never decrypted) and reports `KeyEpochMismatch`, no longer `Corrupt` |
 
@@ -656,7 +657,7 @@ enable other than `0 → 1` neither derives an epoch nor encodes; manifest `seal
 `open` of an envelope hand-sealed at the wrong epoch; an operation from epoch 2 storing its pages and
 committed manifest with header epoch 2 and verifying them through the reader; pages sealed for the old
 constant epoch, and pages sealed under another key at another epoch, refused by the store before any file is created and by the reader as `KeyEpochMismatch` rather than as an authentication failure;
-a candidate sealed at another epoch is not adopted by the durable promotion.
+a candidate sealed at another epoch is not adopted by the durable promotion; `a_page_is_promoted_only_for_the_manifest_the_root_names` (a same-owner copy with other epochs is refused before any create and the root-named manifest seals the page at its own epoch 2).
 
 Residual, owned by Slice D2b: resolving the journal key through the authenticated key-epoch registry
 (`Prepared`, `Active` and `RetiredRecoveryOnly` allowed, `Revoked` or absent refused), refusing the
