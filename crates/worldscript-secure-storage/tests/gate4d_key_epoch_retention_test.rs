@@ -3,6 +3,7 @@
 //! resolvable until the binding is cleared.
 
 use std::fs;
+use std::io;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -27,8 +28,13 @@ fn temp_base() -> PathBuf {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        if fs::create_dir(&base).is_ok() {
-            return base;
+        match fs::create_dir(&base) {
+            Ok(()) => return base,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => panic!(
+                "cannot create the test directory {}: {error}",
+                base.display()
+            ),
         }
     }
 }
@@ -251,4 +257,34 @@ fn a_revocation_is_written_when_no_migration_was_ever_bound() {
         .write(TARGET_EPOCH, KeyEpochStatus::Revoked, 3)
         .unwrap();
     assert_eq!(fixture.generations(TARGET_EPOCH).len(), 3);
+}
+
+#[test]
+fn a_registry_staged_ahead_of_the_root_does_not_make_an_unbound_revocation_undecidable() {
+    // A transition that stages several generations before its root commits leaves the registry
+    // ahead of the committed root; the binding is still read from the authenticated slot alone.
+    let mut fixture = Fixture::new();
+    fixture.commit_first_root();
+    fixture
+        .write(SOURCE_EPOCH, KeyEpochStatus::RetiredRecoveryOnly, 2)
+        .unwrap();
+    fixture
+        .write(TARGET_EPOCH, KeyEpochStatus::Revoked, 2)
+        .unwrap();
+    assert_eq!(fixture.generations(TARGET_EPOCH).len(), 2);
+}
+
+#[test]
+fn a_registry_staged_ahead_of_the_root_does_not_hide_a_bound_migration() {
+    let mut fixture = Fixture::new();
+    fixture.commit_first_root();
+    fixture.commit_binding(Some(binding()));
+    fixture
+        .write(SOURCE_EPOCH, KeyEpochStatus::RetiredRecoveryOnly, 2)
+        .unwrap();
+    let refused = fixture.write(TARGET_EPOCH, KeyEpochStatus::Revoked, 2);
+    assert_eq!(
+        refused.unwrap_err(),
+        RootStoreError::RevocationWhileMigrationBound
+    );
 }

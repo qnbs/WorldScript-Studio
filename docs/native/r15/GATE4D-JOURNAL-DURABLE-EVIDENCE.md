@@ -676,7 +676,7 @@ key-epoch registry now enforces it:
 
 | Where | Rule |
 |---|---|
-| `write_key_epoch` | a record whose status is `Revoked` is refused with `RootStoreError::RevocationWhileMigrationBound` when the authenticated committed root (`load_committed_root`, read on every call under the `root_commit_mutex` the writer already holds) has a live-migration binding; the check runs before any directory is created, so a refusal leaves the generation chain untouched |
+| `write_key_epoch` | a record whose status is `Revoked` is refused with `RootStoreError::RevocationWhileMigrationBound` when the authenticated committed root has a live-migration binding; the root is read on every call under the `root_commit_mutex` the writer already holds, and only its slot is authenticated (`open_committed_slot`: opens under the anchor's route, hashes to the anchor's digest, `COMMITTED` evidence), not the registry against the root's set digest, so a registry staged ahead of the committed root by a multi-record transition neither blocks an unbound revocation nor hides a bound migration; the check runs before any directory is created, so a refusal leaves the generation chain untouched |
 | scope | deliberately every new revocation, not only the journal's epoch: the binding names the operation, fence, revision and envelope digest but not an epoch, and the journal directory is not derivable from the root layout; strictly stronger than the criterion, and a finer rule can follow with the Gate 4E/5 orchestrator that knows both |
 | unaffected | `Prepared`, `Active` and `RetiredRecoveryOnly` generations while bound; any status when no root exists yet, when the root binds no migration, or after the binding is cleared |
 | restart | nothing is cached: the committed root is authenticated again on each call, so the refusal holds across a restart and a recovered pending root (a pending preparation is refused as `PreparationPending` rather than guessed) |
@@ -684,8 +684,9 @@ key-epoch registry now enforces it:
 Proof (`gate4d_key_epoch_retention_test`): a revocation of the source epoch is refused while bound and the
 epoch's generation chain is unchanged; the refusal covers the target epoch too; a retirement
 (`RetiredRecoveryOnly`) and an activation are still written while bound; a revocation is written once the
-binding is cleared, before any root exists, and under an ordinary root. Mutation-checked: removing the
-guard fails the two refusal tests.
+binding is cleared, before any root exists, and under an ordinary root; a registry staged ahead of the
+committed root neither blocks an unbound revocation nor hides a bound migration. Mutation-checked:
+removing the guard fails the refusal tests.
 
 Residual: a `Revoked` generation placed in the registry by anything other than `write_key_epoch` is outside
 this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or absent epoch regardless.
@@ -705,9 +706,10 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).
 - The cross-process lease CAS.
-- Key-epoch registry resolution of the journal key (Slice D2b): the journal key a caller passes is not
-  yet resolved through the authenticated key-epoch registry, and revoking the source epoch of a bound
-  journal is not yet refused. D2a fixes which epoch seals the journal; D2b makes the registry enforce it.
+- Key-epoch registry resolution of the journal key (Slices D2b-2 and D2b-3): the journal key a caller passes
+  is not yet resolved through the authenticated key-epoch registry, and a manifest's header epoch is not yet
+  compared before the key is used. D2a fixes which epoch seals the journal; D2b-1 refuses revoking it while a
+  migration is bound; D2b-2 and D2b-3 make the registry route enforce it.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
 
 ## Explicit non-goals (journal durable promotion)

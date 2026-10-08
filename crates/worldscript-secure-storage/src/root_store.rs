@@ -359,28 +359,7 @@ pub(crate) fn load_snapshot_root<F: DurableFs>(
     key: &Key,
     retained_epochs: Option<&[KeyEpochEntry]>,
 ) -> Result<(CommittedRootView, Vec<KeyEpochEntry>), RootStoreError> {
-    let path = layout.slot_file(committed.root_slot, committed.root_generation);
-    let envelope = match fs.read(&path) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            return Err(recovery(RootRecoveryReason::CommittedSlotMissing))
-        }
-        Err(error) => return Err(io_error(RootStep::ReadSlot, &error)),
-    };
-    let read = RootSlotRead {
-        scope,
-        root_generation: committed.root_generation,
-        envelope: &envelope,
-    };
-    let (root, digest) = open_root_slot(key, &read)
-        .map_err(|_| recovery(RootRecoveryReason::CommittedSlotMismatch))?;
-    let committed_evidence = root.commit_evidence.state == RootCommitState::Committed;
-    if digest != committed.root_digest || !committed_evidence {
-        return Err(recovery(RootRecoveryReason::CommittedSlotMismatch));
-    }
-    if root.root_key_ref_digest != committed.root_key_ref.digest() {
-        return Err(recovery(RootRecoveryReason::KeyRouteMismatch));
-    }
+    let (root, digest) = open_committed_slot(fs, layout, scope, committed, key)?;
     let key_epochs = match retained_epochs {
         Some(entries) => open_retained_epochs(fs, layout, scope, key, entries)?,
         None => load_snapshot_key_epochs(fs, layout, scope, key)?,
@@ -406,6 +385,42 @@ pub(crate) fn load_snapshot_root<F: DurableFs>(
         },
         entries,
     ))
+}
+
+/// Reads and authenticates exactly the committed slot: it must open under `key`, hash to the
+/// anchor's digest, carry `COMMITTED` evidence and bind the anchor's key route. It looks at nothing
+/// else, in particular not at the key-epoch registry, so the body it returns is decidable while the
+/// registry holds generations a root has not committed yet.
+fn open_committed_slot<F: DurableFs>(
+    fs: &mut F,
+    layout: RootLayout<'_>,
+    scope: &InstallationScopeId,
+    committed: &crate::provider::CommittedRoot,
+    key: &Key,
+) -> Result<(RootBody, [u8; 32]), RootStoreError> {
+    let path = layout.slot_file(committed.root_slot, committed.root_generation);
+    let envelope = match fs.read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Err(recovery(RootRecoveryReason::CommittedSlotMissing))
+        }
+        Err(error) => return Err(io_error(RootStep::ReadSlot, &error)),
+    };
+    let read = RootSlotRead {
+        scope,
+        root_generation: committed.root_generation,
+        envelope: &envelope,
+    };
+    let (root, digest) = open_root_slot(key, &read)
+        .map_err(|_| recovery(RootRecoveryReason::CommittedSlotMismatch))?;
+    let committed_evidence = root.commit_evidence.state == RootCommitState::Committed;
+    if digest != committed.root_digest || !committed_evidence {
+        return Err(recovery(RootRecoveryReason::CommittedSlotMismatch));
+    }
+    if root.root_key_ref_digest != committed.root_key_ref.digest() {
+        return Err(recovery(RootRecoveryReason::KeyRouteMismatch));
+    }
+    Ok((root, digest))
 }
 
 /// A pinned view names exact immutable control generations, not the newest directory heads.
@@ -553,16 +568,32 @@ pub fn write_key_epoch<F: DurableFs, P: KeyProvider>(
 
 /// Refuses when the authenticated committed root binds a live migration. A pending root
 /// preparation is refused as such: the committed root is not decidable until it is recovered.
+///
+/// Only the committed slot is authenticated ([`open_committed_slot`]), not the key-epoch registry
+/// against the root's set digest: a transition that stages several generations before its root
+/// commits leaves the registry ahead of the committed root, and that must not make the binding
+/// undecidable.
 fn assert_no_live_migration<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,
     layout: RootLayout<'_>,
 ) -> Result<(), RootStoreError> {
-    match load_committed_root(fs, provider, layout)? {
-        Some(view) if view.root.live_migration.is_some() => {
-            Err(RootStoreError::RevocationWhileMigrationBound)
-        }
-        _ => Ok(()),
+    let anchor = read_anchor(provider)?;
+    if anchor.prepared_root_commit.is_some() {
+        return Err(RootStoreError::PreparationPending);
+    }
+    let (Some(committed), Some(scope)) = (anchor.committed_root, anchor.installation_scope_id)
+    else {
+        return Ok(());
+    };
+    let key = provider
+        .resolve_ref(&committed.root_key_ref)
+        .map_err(RootStoreError::Anchor)?;
+    let (root, _) = open_committed_slot(fs, layout, &scope, &committed, &key)?;
+    if root.live_migration.is_some() {
+        Err(RootStoreError::RevocationWhileMigrationBound)
+    } else {
+        Ok(())
     }
 }
 
