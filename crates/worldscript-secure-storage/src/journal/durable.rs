@@ -21,6 +21,7 @@ use crate::seal::{Key, RecordMeta};
 use super::capture::assert_capture_successor;
 use super::manifest::{header_key_epoch, journal_envelope_epoch, JournalManifest, ManifestRead};
 use super::page::JournalPage;
+use super::renewal::assert_renewal_successor;
 use super::state::{
     assert_fence, assert_live_binding, assert_manifest_promote_authority,
     assert_page_promote_authority, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
@@ -327,6 +328,31 @@ pub fn publish_takeover_fenced<F: DurableFs>(
         assert_takeover_successor(&current, takeover.manifest, takeover.now_unix_ms)
             .map_err(JournalDurableError::Authority)?;
         publish_or_adopt(ctx, takeover.manifest)
+    })
+}
+
+/// Fenced publication of the owner's renewal of its own lease (§10.1): the expiry moves forward and
+/// nothing else changes.
+///
+/// `fence` is the owner's own token. Authority is checked exactly as [`publish_manifest_fenced`]
+/// does (the committed binding's operation and fence, the next revision), the committed generation is
+/// loaded by exact path and authenticated against the binding digest, and the manifest must be its
+/// renewal ([`assert_renewal_successor`]), all before any write. The generation is then published or
+/// adopted as [`publish_manifest_fenced`] does, so a retry after a failed root commit adopts its own
+/// renewal. This is its own entry point rather than a mode of the ordinary publish: the checkpoint
+/// path stays unable to carry a lease change, whoever calls it.
+pub fn publish_renewal_fenced<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    fence: &MigrationFence,
+    committed: &LiveMigration,
+) -> Result<PublishedManifest, JournalDurableError> {
+    with_fence(manifest, fence, || {
+        assert_manifest_promote_authority(manifest, Some(committed))
+            .map_err(JournalDurableError::Authority)?;
+        let current = load_authoritative_manifest(ctx, committed)?;
+        assert_renewal_successor(&current, manifest).map_err(JournalDurableError::Authority)?;
+        publish_or_adopt(ctx, manifest)
     })
 }
 

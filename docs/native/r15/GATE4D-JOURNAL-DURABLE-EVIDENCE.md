@@ -665,6 +665,39 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Slice D3b — the owner renews its own lease
+
+After D3a every ordinary successor and the plain binding advance refuse a lease change, so a live owner could
+not extend its lease at all and `assert_renewal_successor` had no caller. `commit_lease_renewal` is the
+composed operation, built like the takeover:
+
+| Step | Rule |
+|---|---|
+| 1. before anything | operation id; the root lock; the committed binding (`NoLiveMigration`, `KeyRotationNotAdmitted`); the journal key resolved through the key-epoch registry |
+| 2. publish | `publish_renewal_fenced`: under the journal mutex the manifest must be the committed binding's own next revision at the same fence (`StaleMigrationOwner`, `StaleJournalRevision`, `LiveBindingMismatch`), the committed generation is loaded by exact path against the binding digest, and the manifest must be its renewal (`InvalidLeaseRenewal`, `FrozenFieldChanged`); an identical durable candidate is adopted, a different one is refused or relocated by the caller's `CandidateConflict` exactly as for a checkpoint |
+| 3. bind | `BindingStep::Renewal`: the binding advance is the same-fence next revision, and the root proves `assert_renewal_successor` again against the manifest it names |
+
+The publish is its own entry point rather than a mode of the ordinary one, so `publish_manifest_fenced` and
+`advance_live_migration` keep refusing a lease change by construction. No clock is read; a renewal after expiry
+is accepted while nobody has taken over. The root lock settles a renewal racing a takeover: whichever commits
+first makes the other stale (the former owner's renewal is `StaleMigrationOwner` after a takeover; a takeover
+prepared before a renewal is `StaleJournalRevision`, and against the renewed expiry `LeaseNotExpired`).
+
+Proof (`gate4d_root_binding_test`, ten tests): the renewal commits, changes only the expiry and the revision and
+keeps the fence in the commit evidence; renewals chain and a non-forward one is refused; ordinary progress
+continues under the renewed lease; nine refusals (equal and earlier expiry, a dropped lease, another owner,
+another phase, the committed revision, a skipped revision, another fence, another operation) leave the journal
+directory and the root byte-identical; another key route or no binding refuses before a write; the ordinary
+checkpoint and a directly promoted renewal generation advanced through the plain binding advance are refused;
+the two race orders; a retry after a failed root commit adopts the identical candidate, and a different renewal
+never replaces it. `gate4d_journal_route_test` adds the renewal as a fifth operation to the three key-route
+refusals (a `Revoked` or unregistered epoch and a route to another key). Mutation-checked: dropping the
+renewal predicate or the promote authority in the publish, proving the root step as a progress checkpoint or
+as a takeover, a hard-coded journal key, and dropping the D3a lease rule each fail the test that owns them.
+The root's second proof of the renewal relation is defence in depth: the publish has already judged the same
+relation against the same committed manifest under the same lock, so it has no test that can fail without it
+through the public API.
+
 ## Slice D3a — the cursor and the lease across successors
 
 The generic successor relation said so itself: "lease fields and the cursor across a phase change are not
@@ -829,7 +862,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
-- Wiring of the same-owner lease renewal (Slice D3b): `assert_renewal_successor` exists (D3a) but no journal-owner operation publishes a renewal yet.
+- A caller of the lease renewal: `commit_lease_renewal` exists (D3b) but no orchestrator renews a lease yet.
 - Conversion (C2+) over the verified page set: it must require exclusive admission by construction and re-read the root-bound manifest with `final_inventory_captured = 1` (maintainer decision D).
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.

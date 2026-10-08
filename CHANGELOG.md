@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** the journal owner can renew its own lease (maintainer decision C, the wiring half).
+  `commit_lease_renewal` publishes a manifest that moves the lease expiry strictly forward and changes nothing
+  else (`publish_renewal_fenced`, a publish of its own so the ordinary checkpoint keeps refusing lease changes)
+  and advances the root binding to it as a renewal, under the root lock and the routed journal key, in the
+  takeover's order. It reads no clock: the fence settles whether a lapsed lease may still be renewed. A stale or
+  foreign owner, an expiry that does not move forward and any other changed field are refused before a journal
+  write; a retry after a failed root commit adopts its own identical candidate. PR #1009.
 - **R-15 Gate 4D:** constrain the cursor and the lease across successive journal manifests (maintainer decision C).
   The successor relation now requires a forward phase change to enter the new phase at cursor `(0, 0)`
   (`CursorNotReset`; `transition_phase` produces it), entering `RECOVERY_REQUIRED` to keep the last cursor, and

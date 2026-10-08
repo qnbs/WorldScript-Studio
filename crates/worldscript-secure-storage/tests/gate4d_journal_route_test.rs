@@ -3,7 +3,8 @@
 //! committed root's own binding and the key-epoch registry the root commits to, never through the
 //! root's active epoch and never through anything the caller supplies. Every scenario therefore
 //! commits a real root that binds the journal. Slice D2b-3b: the four composed journal operations
-//! use that route, so an unroutable epoch refuses each of them before a journal write.
+//! use that route, so an unroutable epoch refuses each of them before a journal write. Slice D3b: so
+//! does the renewal of the owner's lease.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -14,9 +15,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
 use worldscript_secure_storage::{
     advance_live_migration, commit_catalog_change, commit_inventory_capture,
-    commit_journal_checkpoint, commit_journal_takeover, commit_root, content_digest,
-    empty_inventory_digest, empty_journal_page_set_digest, generation_path, load_catalog,
-    operation_type, phase_code, resolve_journal_key, write_key_epoch, AuthorityError,
+    commit_journal_checkpoint, commit_journal_takeover, commit_lease_renewal, commit_root,
+    content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
+    load_catalog, operation_type, phase_code, resolve_journal_key, write_key_epoch, AuthorityError,
     BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit, InstallationScopeId,
     InventoryCapture, JournalCheckpoint, JournalDurableError, JournalError, JournalManifest,
     JournalRoute, JournalRouteError, JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit,
@@ -33,6 +34,12 @@ const TARGET_EPOCH: u64 = 2;
 /// The key material of the source epoch: the journal of the rotation is sealed under it.
 const SOURCE_MATERIAL: [u8; 32] = [9; 32];
 const TARGET_MATERIAL: [u8; 32] = [7; 32];
+/// The lease the bound journal's owner holds, the clock a takeover is judged at, and the expiries a
+/// takeover claim and a renewal carry.
+const LEASE_EXPIRY: u64 = 1_000;
+const NOW: u64 = 2_000;
+const CLAIM_EXPIRY: u64 = 3_000;
+const RENEWED_EXPIRY: u64 = 5_000;
 
 fn source_key() -> Key {
     Key::from_bytes(&mut SOURCE_MATERIAL.clone())
@@ -58,9 +65,9 @@ fn rotation() -> JournalManifest {
         final_inventory_captured: false,
         cursor_page_index: 0,
         cursor_entry_index: 0,
-        has_lease_owner: false,
-        lease_owner_id: None,
-        lease_expires_unix_ms: None,
+        has_lease_owner: true,
+        lease_owner_id: Some("owner-a".into()),
+        lease_expires_unix_ms: Some(LEASE_EXPIRY),
         recovery_reason_code: 0,
     }
 }
@@ -487,6 +494,23 @@ fn successor() -> JournalManifest {
     next
 }
 
+/// A new owner's claim over the successor: the fence plus one and a lease of its own.
+fn claim() -> JournalManifest {
+    let mut claim = successor();
+    claim.fencing_generation += 1;
+    claim.has_lease_owner = true;
+    claim.lease_owner_id = Some("new-owner".into());
+    claim.lease_expires_unix_ms = Some(CLAIM_EXPIRY);
+    claim
+}
+
+/// The owner's renewal of its lease: the successor with a later expiry.
+fn renewal() -> JournalManifest {
+    let mut renewal = successor();
+    renewal.lease_expires_unix_ms = Some(RENEWED_EXPIRY);
+    renewal
+}
+
 impl Fixture {
     /// The successor sealed under the source epoch's key and stored as the next generation, with the
     /// binding that names it: the input a binding advance needs.
@@ -511,9 +535,10 @@ impl Fixture {
         }
     }
 
-    /// The four composed journal operations over valid inputs for each (a checkpoint and a capture of
+    /// The five composed journal operations over valid inputs for each (a checkpoint and a capture of
     /// the next revision, a takeover claim by a new owner at fence plus one, an advance to the stored
-    /// successor): each is expected to be refused, and the error of each is returned, in that order.
+    /// successor, a renewal of the owner's lease): each is expected to be refused, and the error of
+    /// each is returned, in that order.
     fn every_operation_is_refused(&mut self, stored: &LiveMigration) -> Vec<AuthorityError> {
         let root_ref = self.root_ref().clone();
         let root_epoch = self.root_epoch;
@@ -525,12 +550,9 @@ impl Fixture {
         let committed = rotation();
         let next = successor();
         let fence = MigrationFence::from_manifest(&next);
-        let mut claim = successor();
-        claim.fencing_generation += 1;
-        claim.has_lease_owner = true;
-        claim.lease_owner_id = Some("new-owner".into());
-        claim.lease_expires_unix_ms = Some(u64::MAX / 2);
+        let claim = claim();
         let claim_fence = MigrationFence::from_manifest(&claim);
+        let renewed = renewal();
         let operation = WriteOperationId::generate().unwrap();
         let journal = JournalSource {
             dir: &journal_dir,
@@ -549,6 +571,10 @@ impl Fixture {
             fence: &claim_fence,
             ..checkpoint
         };
+        let renewal = JournalCheckpoint {
+            manifest: &renewed,
+            ..checkpoint
+        };
         let provider = &mut self.provider;
         vec![
             commit_journal_checkpoint(&mut StdFs, provider, layout, checkpoint).unwrap_err(),
@@ -558,7 +584,7 @@ impl Fixture {
                 layout,
                 JournalTakeoverCommit {
                     claim: takeover,
-                    now_unix_ms: 0,
+                    now_unix_ms: NOW,
                 },
             )
             .unwrap_err(),
@@ -585,6 +611,7 @@ impl Fixture {
                 },
             )
             .unwrap_err(),
+            commit_lease_renewal(&mut StdFs, provider, layout, renewal).unwrap_err(),
         ]
     }
 }
