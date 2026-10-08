@@ -131,7 +131,12 @@ impl StagedCapture {
     /// Abandons the capture: the staged page files are removed, best effort. The empty directories
     /// stay, because the file system abstraction cannot remove a directory.
     pub fn discard<F: DurableFs>(self, ctx: &mut JournalDurableContext<'_, F>) {
-        discard_staged(ctx, &self.pending, &self.refs, &self.tag);
+        self.remove_files(ctx.fs);
+    }
+
+    /// The same removal for a caller that keeps the handle, such as the commit that has just spent it.
+    pub(crate) fn remove_files<F: DurableFs>(&self, fs: &mut F) {
+        discard_staged(fs, &self.pending, &self.refs, &self.tag);
     }
 }
 
@@ -200,7 +205,7 @@ impl StreamedCapture {
         match self.stage_next(ctx, entries) {
             Ok(()) => Ok(self),
             Err(error) => {
-                discard_staged(ctx, &self.pending, &self.refs, &self.tag);
+                discard_staged(ctx.fs, &self.pending, &self.refs, &self.tag);
                 Err(error)
             }
         }
@@ -231,9 +236,13 @@ impl StreamedCapture {
             // The page in flight may be on disk already, or the failure may be that a different file
             // sits in its slot: only a file that holds exactly the bytes staged here is ours to remove.
             let digest = &reference.page_content_digest;
-            remove_if_staged(ctx, &generation_path(&dir, self.revision), digest);
+            remove_if_staged(ctx.fs, &generation_path(&dir, self.revision), digest);
             // The attempt's own staging link, which a failed promotion reports and leaves behind.
-            remove_if_staged(ctx, &staging_path(&dir, self.revision, &self.tag), digest);
+            remove_if_staged(
+                ctx.fs,
+                &staging_path(&dir, self.revision, &self.tag),
+                digest,
+            );
             return Err(error);
         }
         self.refs.push(reference);
@@ -291,7 +300,7 @@ impl StreamedCapture {
                 refs,
             }),
             Err(error) => {
-                discard_staged(ctx, &pending, &refs, &tag);
+                discard_staged(ctx.fs, &pending, &refs, &tag);
                 Err(error)
             }
         }
@@ -304,7 +313,7 @@ impl StreamedCapture {
 /// the one worth reporting, so removal failures are not. A file is removed only if it still holds
 /// exactly the bytes this capture staged (see [`remove_if_staged`]).
 fn discard_staged<F: DurableFs>(
-    ctx: &mut JournalDurableContext<'_, F>,
+    fs: &mut F,
     pending: &Path,
     refs: &[JournalPageRef],
     tag: &WriteOperationId,
@@ -313,22 +322,18 @@ fn discard_staged<F: DurableFs>(
         let dir = pending.join(format!("page-{index}"));
         let digest = &reference.page_content_digest;
         let generation = reference.page_generation;
-        remove_if_staged(ctx, &generation_path(&dir, generation), digest);
-        remove_if_staged(ctx, &staging_path(&dir, generation, tag), digest);
+        remove_if_staged(fs, &generation_path(&dir, generation), digest);
+        remove_if_staged(fs, &staging_path(&dir, generation, tag), digest);
     }
 }
 
 /// Removes the file at `path` only if its bytes hash to `digest`, the digest of what this capture
 /// staged there, so a file that was replaced, or that a failure found already sitting in the slot, is
 /// never deleted. The read is bounded by the largest valid page envelope.
-fn remove_if_staged<F: DurableFs>(
-    ctx: &mut JournalDurableContext<'_, F>,
-    path: &Path,
-    digest: &[u8; 32],
-) {
-    let found = ctx.fs.read_at_most(path, MAX_PAGE_ENVELOPE_BYTES);
+fn remove_if_staged<F: DurableFs>(fs: &mut F, path: &Path, digest: &[u8; 32]) {
+    let found = fs.read_at_most(path, MAX_PAGE_ENVELOPE_BYTES);
     if matches!(found, Ok(Some(bytes)) if content_digest(&bytes) == *digest) {
-        let _ = ctx.fs.remove_file(path);
+        let _ = fs.remove_file(path);
     }
 }
 

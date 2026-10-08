@@ -169,7 +169,7 @@ fn verify_set<'a, F: DurableFs>(
 /// references, which only a verified reader of the stored set can provide (the next slice). Until then
 /// an older generation is refused, so one page identity and generation can never stand for different
 /// content across page sets.
-fn assert_page_generation(
+pub(super) fn assert_page_generation(
     successor: &JournalManifest,
     page: &JournalPage,
 ) -> Result<(), JournalDurableError> {
@@ -329,7 +329,7 @@ fn sync_chain<F: DurableFs>(
     Ok(durability)
 }
 
-fn both(left: DirectoryDurability, right: DirectoryDurability) -> DirectoryDurability {
+pub(super) fn both(left: DirectoryDurability, right: DirectoryDurability) -> DirectoryDurability {
     if left == DirectoryDurability::Confirmed && right == DirectoryDurability::Confirmed {
         DirectoryDurability::Confirmed
     } else {

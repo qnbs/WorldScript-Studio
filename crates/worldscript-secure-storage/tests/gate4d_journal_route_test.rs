@@ -16,15 +16,17 @@ use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
 use worldscript_secure_storage::{
     advance_live_migration, commit_catalog_change, commit_inventory_capture,
     commit_journal_checkpoint, commit_journal_takeover, commit_lease_renewal, commit_root,
-    content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
-    load_catalog, operation_type, phase_code, resolve_journal_key, write_key_epoch, AuthorityError,
-    BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit, InstallationScopeId,
-    InventoryCapture, JournalCheckpoint, JournalDurableError, JournalError, JournalManifest,
+    commit_streamed_inventory_capture, content_digest, empty_inventory_digest,
+    empty_journal_page_set_digest, generation_path, load_catalog, operation_type, phase_code,
+    resolve_journal_key, write_key_epoch, AuthorityError, BindingAdvance, CandidateConflict,
+    CaptureStart, CatalogChange, CatalogCommit, InstallationScopeId, InventoryCapture,
+    JournalCheckpoint, JournalDurableContext, JournalDurableError, JournalError, JournalManifest,
     JournalRoute, JournalRouteError, JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit,
     KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, ManifestRead,
     MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity, RecordMeta,
     RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState,
-    RootKeyRefV1, RootLayout, StdFs, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    RootKeyRefV1, RootLayout, StagedCapture, StdFs, StreamedCapture, StreamedInventoryCapture,
+    WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
 };
 
 const OPERATION: &str = "route-op";
@@ -311,11 +313,12 @@ impl Fixture {
         commit_root(&mut StdFs, &mut self.provider, layout, request).unwrap();
     }
 
-    /// The journal in place and a root that binds it.
-    fn bound(&mut self) {
+    /// The journal in place and a root that binds it; returns the binding.
+    fn bound(&mut self) -> LiveMigration {
         let live = self.store_journal();
         self.commit_first_root();
         self.bind(&live);
+        live
     }
 
     /// Whether `key` opens the stored rotation manifest, which only the source epoch's key does.
@@ -535,6 +538,51 @@ impl Fixture {
         }
     }
 
+    /// A finished stage-one capture of an empty inventory over the bound rotation, staged in the journal
+    /// directory under the journal's own key (staging takes the key from its caller).
+    fn stage_capture(&self, live: &LiveMigration) -> StagedCapture {
+        let (key, op) = (source_key(), WriteOperationId::generate().unwrap());
+        let journal_dir = self.journal_dir();
+        let committed = rotation();
+        let start = CaptureStart {
+            committed_manifest: &committed,
+            fence: &MigrationFence::from_manifest(&committed),
+            live,
+            entry_count: 0,
+        };
+        let mut fs = StdFs;
+        let mut ctx = JournalDurableContext::new(&mut fs, &key, &journal_dir, &op);
+        let capture = StreamedCapture::begin(&mut ctx, &start).unwrap();
+        capture.finish(&mut ctx).unwrap()
+    }
+
+    /// The commit of a staged capture over valid inputs, which is expected to be refused: the key is
+    /// routed from the root, never taken from the caller.
+    fn streamed_capture_is_refused(&mut self, staged: &StagedCapture) -> AuthorityError {
+        let root_ref = self.root_ref().clone();
+        let (root_dir, journal_dir) = (self.root_dir(), self.journal_dir());
+        let committed = rotation();
+        let fence = MigrationFence::from_manifest(staged.successor());
+        let operation = WriteOperationId::generate().unwrap();
+        let capture = StreamedInventoryCapture {
+            staged,
+            committed_manifest: &committed,
+            fence: &fence,
+            journal: JournalSource {
+                dir: &journal_dir,
+                operation: &operation,
+            },
+            root_key_ref: &root_ref,
+            active_key_epoch: self.root_epoch,
+            conflict: CandidateConflict::Refuse,
+        };
+        let layout = RootLayout {
+            root_dir: &root_dir,
+        };
+        commit_streamed_inventory_capture(&mut StdFs, &mut self.provider, layout, capture)
+            .unwrap_err()
+    }
+
     /// The five composed journal operations over valid inputs for each (a checkpoint and a capture of
     /// the next revision, a takeover claim by a new owner at fence plus one, an advance to the stored
     /// successor, a renewal of the owner's lease): each is expected to be refused, and the error of
@@ -622,10 +670,13 @@ fn a_revoked_journal_epoch_refuses_every_journal_operation_before_a_write() {
     fixture.register(SOURCE_EPOCH, KeyEpochStatus::Active, 1);
     fixture.register(SOURCE_EPOCH, KeyEpochStatus::Revoked, 2);
     fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
-    fixture.bound();
+    let live = fixture.bound();
     let stored = fixture.store_successor();
+    let staged = fixture.stage_capture(&live);
     let before = fixture.snapshot();
-    for error in fixture.every_operation_is_refused(&stored) {
+    let mut errors = fixture.every_operation_is_refused(&stored);
+    errors.push(fixture.streamed_capture_is_refused(&staged));
+    for error in errors {
         assert_eq!(
             error,
             AuthorityError::JournalRoute(JournalRouteError::EpochRevoked(SOURCE_EPOCH))
@@ -638,10 +689,13 @@ fn a_revoked_journal_epoch_refuses_every_journal_operation_before_a_write() {
 fn an_unregistered_journal_epoch_refuses_every_journal_operation_before_a_write() {
     let mut fixture = Fixture::new(TARGET_EPOCH);
     fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
-    fixture.bound();
+    let live = fixture.bound();
     let stored = fixture.store_successor();
+    let staged = fixture.stage_capture(&live);
     let before = fixture.snapshot();
-    for error in fixture.every_operation_is_refused(&stored) {
+    let mut errors = fixture.every_operation_is_refused(&stored);
+    errors.push(fixture.streamed_capture_is_refused(&staged));
+    for error in errors {
         assert_eq!(
             error,
             AuthorityError::JournalRoute(JournalRouteError::EpochNotRegistered(SOURCE_EPOCH))
@@ -657,11 +711,14 @@ fn a_route_to_another_key_is_refused_by_the_authenticated_load_before_a_write() 
     let mut fixture = Fixture::with_source_material(TARGET_EPOCH, [0x55; 32]);
     fixture.register(SOURCE_EPOCH, KeyEpochStatus::RetiredRecoveryOnly, 1);
     fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
-    fixture.bound();
+    let live = fixture.bound();
     let stored = fixture.store_successor();
+    let staged = fixture.stage_capture(&live);
     let before = fixture.snapshot();
     // Every operation has valid inputs, so the key is the only thing left to refuse them.
-    for error in fixture.every_operation_is_refused(&stored) {
+    let mut errors = fixture.every_operation_is_refused(&stored);
+    errors.push(fixture.streamed_capture_is_refused(&staged));
+    for error in errors {
         assert_eq!(
             error,
             AuthorityError::Journal(JournalDurableError::Journal(JournalError::Open(

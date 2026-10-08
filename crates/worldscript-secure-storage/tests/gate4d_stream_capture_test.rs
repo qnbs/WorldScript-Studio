@@ -660,3 +660,200 @@ fn a_staged_page_is_trusted_only_after_it_is_confirmed_against_its_reference() {
         ]
     );
 }
+
+// ---- Stage two: promoting a staged capture into the digest directory ----
+
+/// Promotes `staged` as the committed owner of `as_committed` against the binding `as_live`, over `fs`,
+/// in `scenario`'s journal directory.
+fn promote_as<F: DurableFs>(
+    fs: &mut F,
+    scenario: &Scenario,
+    staged: &StagedCapture,
+    as_committed: (&JournalManifest, &LiveMigration),
+) -> Result<DirectoryDurability, JournalDurableError> {
+    let (key, op) = (key(), WriteOperationId::generate().unwrap());
+    let fence = MigrationFence::from_manifest(as_committed.0);
+    let mut ctx = JournalDurableContext::new(fs, &key, scenario.journal.path(), &op);
+    let promotion = StagedPromotion {
+        committed_manifest: as_committed.0,
+        fence: &fence,
+        committed: as_committed.1,
+        staged,
+    };
+    promote_staged_inventory_fenced(&mut ctx, &promotion)
+}
+
+/// The page file `index` of the successor's digest directory.
+fn promoted_page(scenario: &Scenario, staged: &StagedCapture, index: u32) -> std::path::PathBuf {
+    let digest = &staged.successor().journal_page_set_digest;
+    generation_path(
+        &inventory_page_dir(scenario.journal.path(), digest, index),
+        4,
+    )
+}
+
+#[test]
+fn a_promoted_capture_is_a_stored_set_that_verifies_against_its_successor() {
+    let scenario = Scenario::new();
+    let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
+    let live = &scenario.journal.live;
+    let promoted = promote_as(&mut StdFs, &scenario, &staged, (&scenario.committed, live));
+    // Publishing the successor the way the owner would, and binding it, makes the set verifiable.
+    let binding = commit_into(scenario.journal.path(), staged.successor());
+    let (key, op) = (key(), WriteOperationId::generate().unwrap());
+    let mut fs = StdFs;
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, scenario.journal.path(), &op);
+    let verified = verify_stored_inventory(&mut ctx, &binding).unwrap();
+    assert_eq!(
+        (
+            promoted.is_ok(),
+            verified.page_refs() == staged.page_refs(),
+            verified.manifest() == staged.successor()
+        ),
+        (true, true, true)
+    );
+}
+
+#[test]
+fn a_promotion_the_authority_checks_refuse_creates_nothing() {
+    let scenario = Scenario::new();
+    let staged = scenario.stream(&mut StdFs, entries(5), 2).unwrap();
+    let mut stale = scenario.journal.live.clone();
+    stale.fencing_generation += 1;
+    let mut not_named = scenario.committed.clone();
+    not_named.has_lease_owner = true;
+    not_named.lease_owner_id = Some("someone".into());
+    not_named.lease_expires_unix_ms = Some(1);
+    let mut ahead = scenario.committed.clone();
+    ahead.journal_revision += 1;
+    let admitting = Scenario::with(admit);
+    let authority = JournalDurableError::Authority;
+    let live = &scenario.journal.live;
+    let cases = [
+        (
+            "a stale owner",
+            promote_refusal(&scenario, &staged, (&scenario.committed, &stale)),
+            authority(MigrationExecutionError::StaleMigrationOwner),
+        ),
+        (
+            "another revision",
+            promote_refusal(&scenario, &staged, (&ahead, live)),
+            authority(MigrationExecutionError::LiveBindingMismatch),
+        ),
+        (
+            "a manifest the root does not name",
+            promote_refusal(&scenario, &staged, (&not_named, live)),
+            authority(MigrationExecutionError::LiveBindingMismatch),
+        ),
+        (
+            "a capture built over another phase",
+            promote_refusal(
+                &admitting,
+                &staged,
+                (&admitting.committed, &admitting.journal.live),
+            ),
+            authority(MigrationExecutionError::InvalidPhaseTransition),
+        ),
+    ];
+    let wrong: Vec<_> = cases
+        .into_iter()
+        .filter_map(|(name, (refusal, created_nothing), expected)| {
+            (!(refusal == Some(expected) && created_nothing)).then_some(name)
+        })
+        .collect();
+    assert_eq!(wrong, Vec::<&str>::new());
+}
+
+/// The refusal of a promotion, and whether it created nothing.
+fn promote_refusal(
+    scenario: &Scenario,
+    staged: &StagedCapture,
+    as_committed: (&JournalManifest, &LiveMigration),
+) -> (Option<JournalDurableError>, bool) {
+    let mut fs = ObservedFs::new();
+    let refusal = promote_as(&mut fs, scenario, staged, as_committed).err();
+    (refusal, fs.created_nothing())
+}
+
+#[test]
+fn a_caller_that_is_not_the_committed_owner_is_refused_before_anything_is_read() {
+    let scenario = Scenario::new();
+    let staged = scenario.stream(&mut StdFs, entries(5), 2).unwrap();
+    let mut stale = scenario.journal.live.clone();
+    stale.fencing_generation += 1;
+    let mut ahead = scenario.committed.clone();
+    ahead.journal_revision += 1;
+    let reads_before_refusal = |as_committed: (&JournalManifest, &LiveMigration)| {
+        let mut fs = ObservedFs::new();
+        let refusal = promote_as(&mut fs, &scenario, &staged, as_committed).err();
+        (refusal.is_some(), fs.reads.len())
+    };
+    assert_eq!(
+        [
+            reads_before_refusal((&scenario.committed, &stale)),
+            reads_before_refusal((&ahead, &scenario.journal.live)),
+        ],
+        [(true, 0), (true, 0)]
+    );
+}
+
+#[test]
+fn a_staged_page_that_changed_stops_the_promotion_and_leaves_only_a_verified_prefix() {
+    let scenario = Scenario::new();
+    let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
+    let file = generation_path(&staged.pending_dir().join("page-1"), 4);
+    let mut flipped = std::fs::read(&file).unwrap();
+    flipped[20] ^= 1;
+    std::fs::write(&file, flipped).unwrap();
+    let live = &scenario.journal.live;
+    let refused = promote_as(&mut StdFs, &scenario, &staged, (&scenario.committed, live)).err();
+    // The page before the changed one was verified and stored; nothing after it, and no manifest.
+    assert_eq!(
+        (
+            refused,
+            promoted_page(&scenario, &staged, 0).is_file(),
+            promoted_page(&scenario, &staged, 1).exists()
+                || promoted_page(&scenario, &staged, 2).exists(),
+            generation_path(scenario.journal.path(), 4).exists()
+        ),
+        (
+            Some(JournalDurableError::Journal(JournalError::PageSetMismatch)),
+            true,
+            false,
+            false
+        )
+    );
+}
+
+#[test]
+fn a_missing_staged_page_stops_the_promotion_without_a_recovery_state() {
+    let scenario = Scenario::new();
+    let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
+    std::fs::remove_file(generation_path(&staged.pending_dir().join("page-2"), 4)).unwrap();
+    let live = &scenario.journal.live;
+    let refused = promote_as(&mut StdFs, &scenario, &staged, (&scenario.committed, live)).err();
+    assert_eq!(
+        refused,
+        Some(JournalDurableError::Journal(JournalError::Corrupt(
+            "staged page is missing"
+        )))
+    );
+}
+
+#[test]
+fn a_repeated_promotion_adopts_what_is_already_stored() {
+    let scenario = Scenario::new();
+    let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
+    let live = &scenario.journal.live;
+    let first = promote_as(&mut StdFs, &scenario, &staged, (&scenario.committed, live));
+    let after_first = files_under(scenario.journal.path());
+    let second = promote_as(&mut StdFs, &scenario, &staged, (&scenario.committed, live));
+    assert_eq!(
+        (
+            first.is_ok(),
+            second.is_ok(),
+            files_under(scenario.journal.path())
+        ),
+        (true, true, after_first)
+    );
+}
