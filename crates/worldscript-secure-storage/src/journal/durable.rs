@@ -520,11 +520,29 @@ pub fn load_authoritative_manifest<F: DurableFs>(
     live: &LiveMigration,
 ) -> Result<JournalManifest, JournalDurableError> {
     let identity = migration_identity(&live.operation_id)?;
-    let path = generation_path(ctx.dir, live.journal_revision);
-    let bytes = match ctx
-        .fs
-        .read_at_most(&path, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES)
-    {
+    let (bytes, digest) = read_root_named_envelope(ctx.fs, ctx.dir, live)?;
+    let read = ManifestRead {
+        record: &identity,
+        journal_revision: live.journal_revision,
+        key_epoch: header_key_epoch(&bytes)?,
+        envelope: &bytes,
+    };
+    let manifest = JournalManifest::open(ctx.key, &read)?;
+    assert_live_binding(&manifest, live, digest).map_err(JournalDurableError::Authority)?;
+    Ok(manifest)
+}
+
+/// Reads the generation the committed root names, bounded, and proves the bytes are what the root
+/// committed to: authority first (§6), before any key is used. The binding authenticates these exact
+/// bytes, header included, so the epoch in the header is vouched for by the root, never by the
+/// unauthenticated body. Only `generation-<live.journal_revision>` is read, never a sibling.
+fn read_root_named_envelope<F: DurableFs>(
+    fs: &mut F,
+    dir: &Path,
+    live: &LiveMigration,
+) -> Result<(Vec<u8>, ManifestEnvelopeDigest), JournalDurableError> {
+    let path = generation_path(dir, live.journal_revision);
+    let bytes = match fs.read_at_most(&path, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => return Err(oversized_manifest()),
         // QNBS-v3: only NotFound for the root-named generation is RecoveryRequired; every other I/O and open failure keeps its own class, and no sibling generation is read.
@@ -536,23 +554,24 @@ pub fn load_authoritative_manifest<F: DurableFs>(
         Err(error) => return Err(JournalDurableError::Stage(stage_io(error))),
     };
     let digest = ManifestEnvelopeDigest::from_bytes(content_digest(&bytes));
-    // Authority first (§6): the binding authenticates these exact bytes, header included, so they are
-    // judged against the root before the key is used, and the epoch is taken from the header the root
-    // has vouched for, never from the unauthenticated body.
     if digest.as_bytes() != &live.manifest_digest {
         return Err(JournalDurableError::Authority(
             MigrationExecutionError::LiveBindingMismatch,
         ));
     }
-    let read = ManifestRead {
-        record: &identity,
-        journal_revision: live.journal_revision,
-        key_epoch: header_key_epoch(&bytes)?,
-        envelope: &bytes,
-    };
-    let manifest = JournalManifest::open(ctx.key, &read)?;
-    assert_live_binding(&manifest, live, digest).map_err(JournalDurableError::Authority)?;
-    Ok(manifest)
+    Ok((bytes, digest))
+}
+
+/// The journal envelope epoch the committed root vouches for: the header epoch of the root-named
+/// generation, read without any key after its digest matched the binding. This is the pre-authentication
+/// epoch a key route is selected by (§6); the body-derived epoch must still agree once the manifest opens.
+pub fn root_named_journal_epoch<F: DurableFs>(
+    fs: &mut F,
+    dir: &Path,
+    live: &LiveMigration,
+) -> Result<u64, JournalDurableError> {
+    let (bytes, _) = read_root_named_envelope(fs, dir, live)?;
+    Ok(header_key_epoch(&bytes)?)
 }
 
 /// Loads a durably stored manifest generation from `dir`. `expected_epoch` is the journal envelope

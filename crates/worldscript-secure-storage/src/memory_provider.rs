@@ -73,6 +73,43 @@ impl Default for MemoryKeyProvider {
 }
 
 impl MemoryKeyProvider {
+    /// Provisions `epoch` with caller-chosen `material` instead of random bytes, so a fixture can seal
+    /// with a key it knows and a route resolves to exactly that key. The same preconditions as
+    /// [`KeyProvider::provision_epoch_key`]; test support only, like the rest of this module.
+    pub fn import_epoch_key(
+        &mut self,
+        epoch: u64,
+        material: [u8; 32],
+    ) -> Result<RootKeyRefV1, KeyProviderError> {
+        self.ensure_available()?;
+        if !self.epoch_is_provisionable(epoch) {
+            return Err(KeyProviderError::AnchorConflict(
+                "epoch is unassigned or already provisioned",
+            ));
+        }
+        self.store_epoch_key(epoch, Zeroizing::new(material))
+    }
+
+    /// Stores `material` for `epoch` under a fresh opaque route and, in an unlocked session, loads it.
+    fn store_epoch_key(
+        &mut self,
+        epoch: u64,
+        material: Zeroizing<[u8; 32]>,
+    ) -> Result<RootKeyRefV1, KeyProviderError> {
+        let key_ref =
+            RootKeyRefV1::new(format!("memory-key-route-{}", self.next_ref).into_bytes())?;
+        self.next_ref += 1;
+        if self.unlocked {
+            self.runtime.push((key_ref.clone(), material.clone()));
+        }
+        self.store.push(StoredKey {
+            epoch,
+            key_ref: key_ref.clone(),
+            material,
+        });
+        Ok(key_ref)
+    }
+
     pub fn new() -> Self {
         MemoryKeyProvider {
             anchor: AnchorState::empty(),
@@ -304,18 +341,7 @@ impl KeyProvider for MemoryKeyProvider {
         self.random
             .fill(material.as_mut())
             .map_err(|_| KeyProviderError::RandomnessUnavailable)?;
-        let key_ref =
-            RootKeyRefV1::new(format!("memory-key-route-{}", self.next_ref).into_bytes())?;
-        self.next_ref += 1;
-        if self.unlocked {
-            self.runtime.push((key_ref.clone(), material.clone()));
-        }
-        self.store.push(StoredKey {
-            epoch,
-            key_ref: key_ref.clone(),
-            material,
-        });
-        Ok(key_ref)
+        self.store_epoch_key(epoch, material)
     }
 
     fn read_root_anchor_state(&self) -> Result<AnchorState, KeyProviderError> {
