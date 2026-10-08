@@ -280,10 +280,9 @@ through the plain `promote_manifest_fenced` can never become authoritative. The 
 | `final_inventory_captured` is never cleared, never set before `ADMIT`, turns true only inside `ADMIT` (never on entering `ADMIT` or any other transition), and is required once the successor reaches `CONVERT` or a later work phase | `FrozenFieldChanged`; `FinalInventoryNotCaptured` for a successor at `CONVERT` or later without it | §10.3 `ADMIT`/`CONVERT` (Gate 4D slice D1) |
 | `recovery_reason_code` changes only when entering `RECOVERY_REQUIRED` | `FrozenFieldChanged` | `mark_recovery` |
 
-Deliberately unconstrained, because no contract text or constructor fixes them: the lease fields
-(the lease slice owns them) and the cursor across a phase change (`transition_phase` keeps it, the
-contract does not say whether a new phase restarts it). The first production caller or the lease
-slice tightens these. Revision `0` has no predecessor and is not checked.
+The lease fields and the cursor across a phase change were deliberately left unconstrained here, because no
+contract text or constructor fixed them. Maintainer decision C fixed them and Slice D3a (below) adds the rules.
+Revision `0` has no predecessor and is not checked.
 
 The predecessor read is bounded. `load_authoritative_manifest` and `load_manifest_generation` now go
 through `DurableFs::read_at_most` with `MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES`; a larger generation is
@@ -669,7 +668,7 @@ readability proof for a root already at the target epoch (D2b-3a), used by every
 ## Slice D3a — the cursor and the lease across successors
 
 The generic successor relation said so itself: "lease fields and the cursor across a phase change are not
-constrained here". The constructors already kept the lease and `RECOVERY_REQUIRED` already kept the cursor, but
+constrained here" (the paragraph above, now superseded). The constructors already kept the lease and `RECOVERY_REQUIRED` already kept the cursor, but
 nothing forced a hand-built successor to match, and `transition_phase` left the cursor where it was on a forward
 change. Maintainer decision C is now the relation:
 
@@ -830,7 +829,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
-- Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4; Slice D3).
+- Wiring of the same-owner lease renewal (Slice D3b): `assert_renewal_successor` exists (D3a) but no journal-owner operation publishes a renewal yet.
 - Conversion (C2+) over the verified page set: it must require exclusive admission by construction and re-read the root-bound manifest with `final_inventory_captured = 1` (maintainer decision D).
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.

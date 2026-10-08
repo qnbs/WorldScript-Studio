@@ -2,15 +2,17 @@
 //! decision C). Within a phase the cursor only moves forward; a forward phase change enters the new
 //! phase at `(0, 0)`; entering `RECOVERY_REQUIRED` keeps the last cursor. An ordinary successor never
 //! touches the lease: the owner and the fence change only by takeover, the expiry only by renewal.
+//! Every test is a table of named cases with one assertion over all of them.
 
 use worldscript_secure_storage::{
     assert_manifest_successor, assert_renewal_successor, assert_takeover_successor,
-    empty_journal_page_set_digest, mark_recovery, operation_type, phase_code, transition_phase,
-    JournalCheckpointCursor, JournalManifest, MigrationExecutionError, MigrationFence,
-    MigrationPhase, RecoveryReasonCode,
+    checkpoint_progress, empty_journal_page_set_digest, mark_recovery, operation_type, phase_code,
+    transition_phase, JournalCheckpointCursor, JournalManifest, MigrationExecutionError,
+    MigrationFence, MigrationPhase, RecoveryReasonCode,
 };
 
 type Outcome = Result<(), MigrationExecutionError>;
+type Change = fn(&mut JournalManifest);
 
 /// A journal in `CONVERT` owned by "owner-a" until 10 000, two pages and five entries long, with the
 /// cursor at page 1, entry 2.
@@ -40,12 +42,25 @@ fn converting() -> JournalManifest {
     }
 }
 
-/// The relation's verdict on `prev` and its successor after `change`.
-fn verdict(prev: &JournalManifest, change: impl FnOnce(&mut JournalManifest)) -> Outcome {
+/// The same journal without a lease.
+fn unowned() -> JournalManifest {
+    let mut manifest = converting();
+    drop_lease(&mut manifest);
+    manifest
+}
+
+fn drop_lease(manifest: &mut JournalManifest) {
+    manifest.has_lease_owner = false;
+    manifest.lease_owner_id = None;
+    manifest.lease_expires_unix_ms = None;
+}
+
+/// `prev` and its successor after `change`.
+fn successor(prev: &JournalManifest, change: Change) -> JournalManifest {
     let mut next = prev.clone();
     next.journal_revision += 1;
     change(&mut next);
-    assert_manifest_successor(prev, &next)
+    next
 }
 
 fn forward(next: &mut JournalManifest) {
@@ -62,266 +77,333 @@ fn recovery(next: &mut JournalManifest) {
     next.recovery_reason_code = 3;
 }
 
-#[test]
-fn a_forward_phase_change_enters_the_new_phase_at_the_start() {
+fn extend(next: &mut JournalManifest) {
+    next.lease_expires_unix_ms = Some(10_001);
+}
+
+/// Runs every case of a table through `judge` and returns the cases whose verdict is not the expected one.
+fn mismatches(
+    cases: &[(&'static str, Change, Outcome)],
+    judge: impl Fn(&JournalManifest, &JournalManifest) -> Outcome,
+) -> Vec<(&'static str, Outcome)> {
     let prev = converting();
-    assert_eq!(
-        verdict(&prev, forward),
-        Err(MigrationExecutionError::CursorNotReset)
-    );
-    assert_eq!(
-        verdict(&prev, |next| {
-            forward(next);
-            next.cursor_page_index = 0;
-        }),
-        Err(MigrationExecutionError::CursorNotReset)
-    );
-    assert_eq!(
-        verdict(&prev, |next| {
-            forward(next);
-            start(next);
-        }),
-        Ok(())
-    );
+    cases
+        .iter()
+        .filter_map(|(name, change, expected)| {
+            let verdict = judge(&prev, &successor(&prev, *change));
+            (verdict != *expected).then_some((*name, verdict))
+        })
+        .collect()
 }
 
 #[test]
-fn the_constructor_enters_a_forward_phase_at_the_start() {
+fn the_cursor_follows_the_phase_rules() {
+    let cases: [(&str, Change, Outcome); 9] = [
+        (
+            "forward keeping the cursor",
+            forward,
+            Err(MigrationExecutionError::CursorNotReset),
+        ),
+        (
+            "forward resetting only the page",
+            |m| {
+                forward(m);
+                m.cursor_page_index = 0;
+            },
+            Err(MigrationExecutionError::CursorNotReset),
+        ),
+        (
+            "forward resetting both",
+            |m| {
+                forward(m);
+                start(m);
+            },
+            Ok(()),
+        ),
+        ("recovery keeping the cursor", recovery, Ok(())),
+        (
+            "recovery resetting the cursor",
+            |m| {
+                recovery(m);
+                start(m);
+            },
+            Err(MigrationExecutionError::FrozenFieldChanged),
+        ),
+        (
+            "same phase, entry forward",
+            |m| m.cursor_entry_index = 3,
+            Ok(()),
+        ),
+        ("same phase, unchanged", |_| {}, Ok(())),
+        (
+            "same phase, entry back",
+            |m| m.cursor_entry_index = 1,
+            Err(MigrationExecutionError::RegressiveCheckpoint),
+        ),
+        (
+            "same phase, page back",
+            |m| {
+                m.cursor_page_index = 0;
+                m.cursor_entry_index = 4;
+            },
+            Err(MigrationExecutionError::RegressiveCheckpoint),
+        ),
+    ];
+    assert_eq!(mismatches(&cases, assert_manifest_successor), vec![]);
+}
+
+#[test]
+fn the_constructors_agree_with_the_relation() {
     let prev = converting();
     let fence = MigrationFence::from_manifest(&prev);
     let verify = MigrationPhase::from_wire(phase_code::VERIFY);
-    let next = transition_phase(&prev, &fence, verify).unwrap();
-    assert_eq!((next.cursor_page_index, next.cursor_entry_index), (0, 0));
-    // The relation and the constructor agree, and the lease is the committed one.
-    assert_eq!(assert_manifest_successor(&prev, &next), Ok(()));
-    assert_eq!(next.lease_owner_id, prev.lease_owner_id);
-    assert_eq!(next.lease_expires_unix_ms, prev.lease_expires_unix_ms);
-}
-
-#[test]
-fn entering_recovery_keeps_the_last_cursor() {
-    let prev = converting();
-    assert_eq!(verdict(&prev, recovery), Ok(()));
-    assert_eq!(
-        verdict(&prev, |next| {
-            recovery(next);
-            start(next);
-        }),
-        Err(MigrationExecutionError::FrozenFieldChanged)
-    );
-    let fence = MigrationFence::from_manifest(&prev);
-    let marked = mark_recovery(&prev, &fence, RecoveryReasonCode::new(3)).unwrap();
-    assert_eq!(
-        (marked.cursor_page_index, marked.cursor_entry_index),
-        (1, 2)
-    );
-    assert_eq!(assert_manifest_successor(&prev, &marked), Ok(()));
-}
-
-#[test]
-fn within_a_phase_the_cursor_only_moves_forward() {
-    let prev = converting();
-    let at = |page, entry| {
-        verdict(&prev, move |next| {
-            next.cursor_page_index = page;
-            next.cursor_entry_index = entry;
+    let products = [
+        transition_phase(&prev, &fence, verify).unwrap(),
+        mark_recovery(&prev, &fence, RecoveryReasonCode::new(3)).unwrap(),
+        checkpoint_progress(&prev, &fence, JournalCheckpointCursor::new(1, 4)).unwrap(),
+    ];
+    let seen: Vec<_> = products
+        .iter()
+        .map(|next| {
+            let lease_kept = next.lease_owner_id == prev.lease_owner_id
+                && next.lease_expires_unix_ms == prev.lease_expires_unix_ms;
+            (
+                (next.cursor_page_index, next.cursor_entry_index),
+                lease_kept,
+                assert_manifest_successor(&prev, next),
+            )
         })
-    };
-    assert_eq!(at(1, 3), Ok(()));
-    assert_eq!(at(1, 2), Ok(()));
-    assert_eq!(at(1, 1), Err(MigrationExecutionError::RegressiveCheckpoint));
-    assert_eq!(at(0, 4), Err(MigrationExecutionError::RegressiveCheckpoint));
-    // The constructor of a progress checkpoint agrees with the same relation.
-    let fence = MigrationFence::from_manifest(&prev);
-    let moved = worldscript_secure_storage::checkpoint_progress(
-        &prev,
-        &fence,
-        JournalCheckpointCursor::new(1, 4),
-    )
-    .unwrap();
-    assert_eq!(assert_manifest_successor(&prev, &moved), Ok(()));
+        .collect();
+    // A forward change enters at the start, recovery and progress keep or advance the cursor, none
+    // touches the lease, and the relation accepts every product.
+    let expected = vec![
+        ((0, 0), true, Ok(())),
+        ((1, 2), true, Ok(())),
+        ((1, 4), true, Ok(())),
+    ];
+    assert_eq!(seen, expected);
 }
-
-type Change = fn(&mut JournalManifest);
 
 #[test]
 fn an_ordinary_successor_cannot_change_the_lease() {
     // Ownership and expiry move only by takeover and renewal, so none of the ordinary successors (a
     // progress checkpoint, a forward phase change, entering recovery) may carry another lease.
-    let other_owner: Change = |m| m.lease_owner_id = Some("owner-b".into());
-    let longer: Change = |m| m.lease_expires_unix_ms = Some(20_000);
-    let shorter: Change = |m| m.lease_expires_unix_ms = Some(5_000);
-    let dropped: Change = |m| {
-        m.has_lease_owner = false;
-        m.lease_owner_id = None;
-        m.lease_expires_unix_ms = None;
-    };
-    let progress: Change = |m| m.cursor_entry_index = 3;
     let steps: [(&str, Change); 3] = [
-        ("checkpoint", progress),
+        ("checkpoint", |m| m.cursor_entry_index = 3),
         ("forward change", |m| {
             forward(m);
             start(m);
         }),
         ("recovery", recovery),
     ];
+    let leases: [(&str, Change); 4] = [
+        ("another owner", |m| {
+            m.lease_owner_id = Some("owner-b".into())
+        }),
+        ("a longer expiry", |m| {
+            m.lease_expires_unix_ms = Some(20_000)
+        }),
+        ("a shorter expiry", |m| {
+            m.lease_expires_unix_ms = Some(5_000)
+        }),
+        ("a dropped lease", drop_lease),
+    ];
+    let prev = converting();
+    let mut accepted = Vec::new();
     for (step, base) in steps {
-        for (name, lease) in [
-            ("another owner", other_owner),
-            ("a longer expiry", longer),
-            ("a shorter expiry", shorter),
-            ("a dropped lease", dropped),
-        ] {
-            assert_eq!(
-                verdict(&converting(), |next| {
-                    base(next);
-                    lease(next);
-                }),
-                Err(MigrationExecutionError::FrozenFieldChanged),
-                "{step} with {name}"
-            );
+        for (name, lease) in leases {
+            let mut next = successor(&prev, base);
+            lease(&mut next);
+            if assert_manifest_successor(&prev, &next).is_ok() {
+                accepted.push(format!("{step} with {name}"));
+            }
         }
     }
-    // A lease cannot appear from nothing either: its first owner is the bootstrap or a takeover.
-    let mut unowned = converting();
-    unowned.has_lease_owner = false;
-    unowned.lease_owner_id = None;
-    unowned.lease_expires_unix_ms = None;
+    assert_eq!(accepted, Vec::<String>::new());
+}
+
+#[test]
+fn a_lease_cannot_appear_from_nothing_through_a_checkpoint() {
+    // Its first owner is the bootstrap manifest or a takeover.
+    let prev = unowned();
+    let next = successor(&prev, |m| {
+        m.has_lease_owner = true;
+        m.lease_owner_id = Some("owner-a".into());
+        m.lease_expires_unix_ms = Some(10_000);
+    });
     assert_eq!(
-        verdict(&unowned, |next| {
-            next.has_lease_owner = true;
-            next.lease_owner_id = Some("owner-a".into());
-            next.lease_expires_unix_ms = Some(10_000);
-        }),
+        assert_manifest_successor(&prev, &next),
         Err(MigrationExecutionError::FrozenFieldChanged)
     );
 }
 
-/// The renewal of `prev` after `change`.
-fn renewal(prev: &JournalManifest, change: impl FnOnce(&mut JournalManifest)) -> Outcome {
-    let mut next = prev.clone();
-    next.journal_revision += 1;
-    change(&mut next);
-    assert_renewal_successor(prev, &next)
-}
+/// One renewal scenario: the committed manifest, the candidate and the verdict it must get.
+type Renewal = (&'static str, JournalManifest, JournalManifest, Outcome);
 
-fn extend(next: &mut JournalManifest) {
-    next.lease_expires_unix_ms = Some(10_001);
-}
-
-#[test]
-fn a_renewal_moves_only_the_expiry_forward() {
-    let prev = converting();
-    assert_eq!(renewal(&prev, extend), Ok(()));
-    for expiry in [10_000, 9_999, 0] {
-        assert_eq!(
-            renewal(&prev, |next| next.lease_expires_unix_ms = Some(expiry)),
-            Err(MigrationExecutionError::InvalidLeaseRenewal),
-            "expiry {expiry}"
-        );
-    }
-    // Dropping the lease is not a renewal.
-    assert_eq!(
-        renewal(&prev, |next| {
-            next.has_lease_owner = false;
-            next.lease_owner_id = None;
-            next.lease_expires_unix_ms = None;
-        }),
-        Err(MigrationExecutionError::InvalidLeaseRenewal)
-    );
-}
-
-#[test]
-fn a_renewal_needs_a_lease_that_is_held() {
-    let mut unowned = converting();
-    unowned.has_lease_owner = false;
-    unowned.lease_owner_id = None;
-    unowned.lease_expires_unix_ms = None;
-    let claim: Change = |next| {
-        next.has_lease_owner = true;
-        next.lease_owner_id = Some("owner-a".into());
-        next.lease_expires_unix_ms = Some(10_000);
+fn renewals() -> Vec<Renewal> {
+    let held = converting();
+    let nameless = {
+        let mut m = converting();
+        m.lease_owner_id = Some(String::new());
+        m
     };
-    assert_eq!(
-        renewal(&unowned, claim),
-        Err(MigrationExecutionError::InvalidLeaseRenewal)
-    );
-    let mut nameless = converting();
-    nameless.lease_owner_id = Some(String::new());
-    assert_eq!(
-        renewal(&nameless, extend),
-        Err(MigrationExecutionError::InvalidLeaseRenewal)
-    );
-}
-
-#[test]
-fn a_renewal_changes_nothing_else() {
-    let prev = converting();
-    let others: [(&str, Change); 5] = [
-        ("another owner", |m| {
-            m.lease_owner_id = Some("owner-b".into())
-        }),
-        ("another fence", |m| m.fencing_generation += 1),
-        ("a cursor move", |m| m.cursor_entry_index = 3),
-        ("a phase change", forward),
-        ("a recovery reason", recovery),
-    ];
-    for (name, change) in others {
-        assert_eq!(
-            renewal(&prev, |next| {
-                extend(next);
-                change(next);
-            }),
-            Err(MigrationExecutionError::FrozenFieldChanged),
-            "{name}"
-        );
-    }
-}
-
-#[test]
-fn a_renewal_is_the_next_revision_of_a_live_journal() {
-    let prev = converting();
-    let mut same = prev.clone();
-    extend(&mut same);
-    assert_eq!(
-        assert_renewal_successor(&prev, &same),
-        Err(MigrationExecutionError::StaleJournalRevision)
-    );
-    let mut skipped = prev.clone();
-    skipped.journal_revision += 2;
-    extend(&mut skipped);
-    assert_eq!(
-        assert_renewal_successor(&prev, &skipped),
-        Err(MigrationExecutionError::LiveBindingMismatch)
-    );
-    let mut done = prev.clone();
+    let mut done = converting();
     done.phase = phase_code::DONE;
-    assert_eq!(
-        renewal(&done, extend),
-        Err(MigrationExecutionError::TerminalPhase)
-    );
+    let mut same_revision = successor(&held, extend);
+    same_revision.journal_revision = held.journal_revision;
+    let mut skipped = successor(&held, extend);
+    skipped.journal_revision += 1;
+    let invalid = Err(MigrationExecutionError::InvalidLeaseRenewal);
+    let frozen = Err(MigrationExecutionError::FrozenFieldChanged);
+    let claim: Change = |m| {
+        m.has_lease_owner = true;
+        m.lease_owner_id = Some("owner-a".into());
+        m.lease_expires_unix_ms = Some(10_000);
+    };
+    vec![
+        (
+            "expiry forward",
+            held.clone(),
+            successor(&held, extend),
+            Ok(()),
+        ),
+        (
+            "expiry unchanged",
+            held.clone(),
+            successor(&held, |m| m.lease_expires_unix_ms = Some(10_000)),
+            invalid,
+        ),
+        (
+            "expiry earlier",
+            held.clone(),
+            successor(&held, |m| m.lease_expires_unix_ms = Some(9_999)),
+            invalid,
+        ),
+        (
+            "lease dropped",
+            held.clone(),
+            successor(&held, drop_lease),
+            invalid,
+        ),
+        (
+            "no lease to renew",
+            unowned(),
+            successor(&unowned(), claim),
+            invalid,
+        ),
+        (
+            "owner not named",
+            nameless.clone(),
+            successor(&nameless, extend),
+            invalid,
+        ),
+        (
+            "another owner",
+            held.clone(),
+            successor(&held, |m| {
+                extend(m);
+                m.lease_owner_id = Some("owner-b".into());
+            }),
+            frozen,
+        ),
+        (
+            "another fence",
+            held.clone(),
+            successor(&held, |m| {
+                extend(m);
+                m.fencing_generation += 1;
+            }),
+            frozen,
+        ),
+        (
+            "with a cursor move",
+            held.clone(),
+            successor(&held, |m| {
+                extend(m);
+                m.cursor_entry_index = 3;
+            }),
+            frozen,
+        ),
+        (
+            "with a phase change",
+            held.clone(),
+            successor(&held, |m| {
+                extend(m);
+                forward(m);
+            }),
+            frozen,
+        ),
+        (
+            "with a recovery reason",
+            held.clone(),
+            successor(&held, |m| {
+                extend(m);
+                recovery(m);
+            }),
+            frozen,
+        ),
+        (
+            "same revision",
+            held.clone(),
+            same_revision,
+            Err(MigrationExecutionError::StaleJournalRevision),
+        ),
+        (
+            "revision skipped",
+            held.clone(),
+            skipped,
+            Err(MigrationExecutionError::LiveBindingMismatch),
+        ),
+        (
+            "terminal journal",
+            done.clone(),
+            successor(&done, extend),
+            Err(MigrationExecutionError::TerminalPhase),
+        ),
+    ]
+}
+
+#[test]
+fn a_renewal_moves_only_the_expiry_forward_of_a_lease_that_is_held() {
+    let wrong: Vec<_> = renewals()
+        .into_iter()
+        .filter_map(|(name, prev, next, expected)| {
+            let verdict = assert_renewal_successor(&prev, &next);
+            (verdict != expected).then_some((name, verdict))
+        })
+        .collect();
+    assert_eq!(wrong, vec![]);
 }
 
 #[test]
 fn renewal_takeover_and_ordinary_successor_are_three_different_things() {
     let prev = converting();
-    let mut renewed = prev.clone();
-    renewed.journal_revision += 1;
-    extend(&mut renewed);
-    // A renewal is not an ordinary successor ...
+    let renewed = successor(&prev, extend);
+    let claim = successor(&prev, |m| {
+        m.fencing_generation += 1;
+        m.lease_owner_id = Some("owner-b".into());
+        m.lease_expires_unix_ms = Some(30_000);
+    });
+    // Each transition is judged by all three predicates: only its own accepts it.
+    let verdicts = [
+        (
+            "renewal",
+            assert_manifest_successor(&prev, &renewed).is_ok(),
+            assert_renewal_successor(&prev, &renewed).is_ok(),
+            assert_takeover_successor(&prev, &renewed, 10_000).is_ok(),
+        ),
+        (
+            "takeover",
+            assert_manifest_successor(&prev, &claim).is_ok(),
+            assert_renewal_successor(&prev, &claim).is_ok(),
+            assert_takeover_successor(&prev, &claim, 10_000).is_ok(),
+        ),
+    ];
     assert_eq!(
-        assert_manifest_successor(&prev, &renewed),
-        Err(MigrationExecutionError::FrozenFieldChanged)
-    );
-    // ... and a takeover claim is not a renewal.
-    let mut claim = prev.clone();
-    claim.journal_revision += 1;
-    claim.fencing_generation += 1;
-    claim.lease_owner_id = Some("owner-b".into());
-    claim.lease_expires_unix_ms = Some(30_000);
-    assert_eq!(assert_takeover_successor(&prev, &claim, 10_000), Ok(()));
-    assert_eq!(
-        assert_renewal_successor(&prev, &claim),
-        Err(MigrationExecutionError::FrozenFieldChanged)
+        verdicts,
+        [
+            ("renewal", false, true, false),
+            ("takeover", false, false, true)
+        ]
     );
 }
