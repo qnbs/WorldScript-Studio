@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** refuse revoking a key epoch while a live migration is bound. `write_key_epoch` reads the
+  authenticated committed root under the `root_commit_mutex` it already holds and refuses a `Revoked`
+  generation (`RootStoreError::RevocationWhileMigrationBound`) before creating anything when the root binds a
+  live migration, so the epoch the bound journal is sealed under stays resolvable until the binding is cleared.
+  The rule covers every new revocation because the binding does not name the journal's epoch; other statuses,
+  and any status without a bound migration, are unaffected. The registry-resolved journal key route and the
+  manifest pre-key epoch comparison stay later slices. PR #1003.
 - **R-15 Gate 4D:** seal the migration journal under an operation-stable key epoch instead of a hard-coded
   `1`. `journal_envelope_epoch` derives it from the authenticated manifest: `ENABLE` uses the target epoch
   (and must be exactly the first-time `0 → 1` of the contract), `ROTATE` and `ENVELOPE_MIGRATION` the source
