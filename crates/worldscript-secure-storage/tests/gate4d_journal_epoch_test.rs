@@ -3,8 +3,8 @@
 
 use worldscript_secure_storage::{
     empty_inventory_digest, empty_journal_page_set_digest, journal_envelope_epoch, operation_type,
-    phase_code, seal_record, JournalError, JournalManifest, Key, RecordClass, RecordIdentity,
-    RecordMeta, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    phase_code, seal_record, JournalError, JournalManifest, Key, ManifestRead, RecordClass,
+    RecordIdentity, RecordMeta, JOURNAL_MANIFEST_RECORD_SCHEMA,
 };
 
 fn key() -> Key {
@@ -119,8 +119,14 @@ fn a_manifest_is_sealed_and_opened_only_at_its_operations_journal_epoch() {
         record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
     };
     let sealed = manifest.seal(&key(), &record, meta(2)).unwrap();
+    let read = |envelope| ManifestRead {
+        record: &record,
+        journal_revision: 2,
+        key_epoch: 2,
+        envelope,
+    };
     assert_eq!(
-        JournalManifest::open(&key(), &record, 2, &sealed),
+        JournalManifest::open(&key(), &read(&sealed)),
         Ok(manifest.clone())
     );
     assert_eq!(
@@ -131,7 +137,7 @@ fn a_manifest_is_sealed_and_opened_only_at_its_operations_journal_epoch() {
     let payload = manifest.encode().unwrap();
     let misrouted = seal_record(&key(), &record, meta(1), &payload).unwrap();
     assert_eq!(
-        JournalManifest::open(&key(), &record, 2, &misrouted),
+        JournalManifest::open(&key(), &read(&misrouted)),
         Err(JournalError::KeyEpochMismatch)
     );
 }

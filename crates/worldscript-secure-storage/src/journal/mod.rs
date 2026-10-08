@@ -133,7 +133,7 @@ pub use inventory_read::{load_inventory_page, verify_stored_inventory, VerifiedI
 pub use inventory_store::{
     inventory_page_dir, promote_inventory_set_fenced, seal_inventory_pages, InventorySetWrite,
 };
-pub use manifest::{journal_envelope_epoch, JournalManifest, JournalPageRef};
+pub use manifest::{journal_envelope_epoch, JournalManifest, JournalPageRef, ManifestRead};
 pub use page::JournalPage;
 pub use state::{
     allows_phase_transition, assert_binding_successor, assert_fence, assert_live_binding,

@@ -19,7 +19,7 @@ use crate::root::LiveMigration;
 use crate::seal::{Key, RecordMeta};
 
 use super::capture::assert_capture_successor;
-use super::manifest::{journal_envelope_epoch, JournalManifest};
+use super::manifest::{header_key_epoch, journal_envelope_epoch, JournalManifest, ManifestRead};
 use super::page::JournalPage;
 use super::state::{
     assert_fence, assert_live_binding, assert_manifest_promote_authority,
@@ -227,8 +227,16 @@ pub(crate) fn promote_manifest<F: DurableFs>(
     let meta = manifest_meta(manifest)?;
     let journal_revision = manifest.journal_revision;
     let envelope = manifest.seal(ctx.key, &identity, meta)?;
+    // The readback expects the epoch this promote just sealed at.
+    let key_epoch = meta.key_epoch;
     promote_sealed_envelope(ctx, identity, meta, envelope, move |key, id, bytes| {
-        JournalManifest::open(key, id, journal_revision, bytes).map(|_| ())
+        let read = ManifestRead {
+            record: id,
+            journal_revision,
+            key_epoch,
+            envelope: bytes,
+        };
+        JournalManifest::open(key, &read).map(|_| ())
     })
 }
 
@@ -423,10 +431,16 @@ fn identical_candidate_digest<F: DurableFs>(
     bytes: &[u8],
 ) -> Option<[u8; 32]> {
     let identity = migration_identity(&manifest.operation_id).ok()?;
-    // `open` authenticates the header, the schema, the generation and the operation's journal envelope
-    // epoch, so an adopted candidate carries exactly the metadata the promote would have written.
-    let identical = JournalManifest::open(ctx.key, &identity, manifest.journal_revision, bytes)
-        .is_ok_and(|opened| opened == *manifest);
+    // `open` compares the header with the epoch of the manifest being published (frozen across
+    // successors) before the key is used, then authenticates the header, the schema, the generation and
+    // the body's epoch, so an adopted candidate carries exactly the metadata the promote would have written.
+    let read = ManifestRead {
+        record: &identity,
+        journal_revision: manifest.journal_revision,
+        key_epoch: journal_envelope_epoch(manifest).ok()?,
+        envelope: bytes,
+    };
+    let identical = JournalManifest::open(ctx.key, &read).is_ok_and(|opened| opened == *manifest);
     identical.then(|| content_digest(bytes))
 }
 
@@ -522,16 +536,33 @@ pub fn load_authoritative_manifest<F: DurableFs>(
         Err(error) => return Err(JournalDurableError::Stage(stage_io(error))),
     };
     let digest = ManifestEnvelopeDigest::from_bytes(content_digest(&bytes));
-    let manifest = JournalManifest::open(ctx.key, &identity, live.journal_revision, &bytes)?;
+    // Authority first (§6): the binding authenticates these exact bytes, header included, so they are
+    // judged against the root before the key is used, and the epoch is taken from the header the root
+    // has vouched for, never from the unauthenticated body.
+    if digest.as_bytes() != &live.manifest_digest {
+        return Err(JournalDurableError::Authority(
+            MigrationExecutionError::LiveBindingMismatch,
+        ));
+    }
+    let read = ManifestRead {
+        record: &identity,
+        journal_revision: live.journal_revision,
+        key_epoch: header_key_epoch(&bytes)?,
+        envelope: &bytes,
+    };
+    let manifest = JournalManifest::open(ctx.key, &read)?;
     assert_live_binding(&manifest, live, digest).map_err(JournalDurableError::Authority)?;
     Ok(manifest)
 }
 
-/// Loads a durably stored manifest generation from `dir`.
+/// Loads a durably stored manifest generation from `dir`. `expected_epoch` is the journal envelope
+/// epoch the caller already trusts (from the authenticated manifest of the same operation); the
+/// header is compared with it before the key is used, and a different epoch is `KeyEpochMismatch`.
 pub fn load_manifest_generation<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     operation_id: &str,
     journal_revision: u64,
+    expected_epoch: u64,
 ) -> Result<JournalManifest, JournalDurableError> {
     let identity = migration_identity(operation_id)?;
     let path = crate::durable::generation_path(ctx.dir, journal_revision);
@@ -540,12 +571,13 @@ pub fn load_manifest_generation<F: DurableFs>(
         .read_at_most(&path, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES)
         .map_err(|error| JournalDurableError::Stage(stage_io(error)))?
         .ok_or_else(oversized_manifest)?;
-    Ok(JournalManifest::open(
-        ctx.key,
-        &identity,
+    let read = ManifestRead {
+        record: &identity,
         journal_revision,
-        &bytes,
-    )?)
+        key_epoch: expected_epoch,
+        envelope: &bytes,
+    };
+    Ok(JournalManifest::open(ctx.key, &read)?)
 }
 
 /// A manifest generation larger than any valid envelope is corrupt, never loaded.

@@ -2406,11 +2406,14 @@ epoch is not encodable. The envelope header's `key_epoch` must equal that value 
 including `RECOVERY_REQUIRED`. A page's writer and reader compare the header epoch with the epoch of
 the authenticated manifest before the key is used (the authority-first routing of §6), and a page
 sealed under any other epoch is refused as `KeyEpochMismatch`. A manifest names its own epoch only in
-its authenticated body, so it is refused at sealing for any other epoch and its header epoch is
-compared after authentication (`KeyEpochMismatch`); comparing a manifest's header before the key is
-used needs an expected epoch from authority (the root binding and the key-epoch registry), which the
-registry resolution of the journal key provides. Until then a manifest sealed under another epoch's
-different key fails authentication and is refused as an open failure; it is never accepted. The source
+its authenticated body, so the epoch its header is compared against comes from authority outside the
+body: for a readback, a candidate adoption or a generation load, the epoch of the authenticated
+predecessor (epochs are frozen across successors), and for the manifest the root names, the header of
+bytes whose digest the committed live-migration binding vouches for, judged against that digest before
+the key is used. The header is compared with that epoch before the key is used (`KeyEpochMismatch`, never
+an authentication failure), the epoch derived from the authenticated body must agree afterwards, and
+the manifest is refused at sealing for any other epoch; the registry resolution of the journal key
+selects the key by the same epoch. The source
 epoch therefore has to stay resolvable, at least `RetiredRecoveryOnly`, for as long as a journal is
 bound to the root: it is never revoked or destroyed while a live migration names the journal (the key-epoch
 writer refuses a `Revoked` generation while the committed root binds a live migration, and because the

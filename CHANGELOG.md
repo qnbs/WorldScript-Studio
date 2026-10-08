@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** compare a manifest's journal envelope epoch with trusted authority before the journal key is
+  used. `JournalManifest::open` takes the epoch the caller trusts (`ManifestRead`) and refuses a different header
+  epoch as `KeyEpochMismatch` before any key use, instead of as an authentication failure afterwards; the epoch
+  derived from the authenticated body must still agree. The promote readback and candidate adoption pass the epoch
+  of the manifest they hold, `load_manifest_generation` takes an explicit expected epoch, and
+  `load_authoritative_manifest` judges the exact bytes against the root-bound digest before opening them and takes
+  the epoch from the header the root vouches for. A bad root-named file now reports the authority mismatch. The
+  registry-resolved journal key route stays a later slice. PR #1004.
 - **R-15 Gate 4D:** refuse revoking a key epoch while a live migration is bound. `write_key_epoch` reads the
   authenticated committed root under the `root_commit_mutex` it already holds and refuses a `Revoked`
   generation (`RootStoreError::RevocationWhileMigrationBound`) before creating anything when the root binds a
