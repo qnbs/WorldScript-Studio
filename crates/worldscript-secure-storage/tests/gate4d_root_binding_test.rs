@@ -737,11 +737,16 @@ fn advance_cannot_change_the_key_route_or_epoch() {
 
 /// A root that binds revision 0 of `OPERATION`, with no candidate revision published yet.
 fn bound_at_zero() -> (Fixture, LiveMigration) {
+    bound_with(&manifest_at(OPERATION, 0, FENCE))
+}
+
+/// A root that binds the bootstrap revision `zero`, which may already name its owner's lease: an
+/// ordinary successor can never set one, so a lease comes from the bootstrap or from a takeover.
+fn bound_with(zero: &JournalManifest) -> (Fixture, LiveMigration) {
     let mut fixture = Fixture::new();
     let dir = fixture.journal_dir.clone();
-    let zero = manifest_at(OPERATION, 0, FENCE);
-    promote(&dir, &zero, None);
-    let bound = binding_of(&zero, digest_of(&dir, 0));
+    promote(&dir, zero, None);
+    let bound = binding_of(zero, digest_of(&dir, 0));
     fixture.bind(&bound);
     (fixture, bound)
 }
@@ -961,11 +966,7 @@ fn a_retry_whose_manifest_differs_from_the_candidate_is_refused_and_nothing_move
     let before = fixture.loaded().root;
     fail_root_commit_after_promote(&mut fixture, &one);
     let journal_after_failure = fixture.journal_files();
-    let mut leased = one.clone();
-    leased.has_lease_owner = true;
-    leased.lease_owner_id = Some("owner-b".into());
-    leased.lease_expires_unix_ms = Some(1_000);
-    assert_generation_exists(fixture.checkpoint(&leased), "different lease");
+    assert_generation_exists(fixture.checkpoint(&rival_of(&one)), "different attempt");
     let mut moved_phase = one.clone();
     moved_phase.phase = phase_code::BOOTSTRAP_TARGET;
     assert_generation_exists(fixture.checkpoint(&moved_phase), "different phase");
@@ -1210,15 +1211,14 @@ fn a_takeover_publishes_the_claim_and_binds_the_root_to_the_new_fence() {
 
 #[test]
 fn a_lease_that_has_not_expired_refuses_the_takeover_before_any_journal_write() {
-    let (mut fixture, _) = bound_at_zero();
-    let mut one = manifest_at(OPERATION, 1, FENCE);
-    one.has_lease_owner = true;
-    one.lease_owner_id = Some("old-owner".into());
-    one.lease_expires_unix_ms = Some(10_000);
-    fixture.checkpoint(&one).unwrap();
+    let mut zero = manifest_at(OPERATION, 0, FENCE);
+    zero.has_lease_owner = true;
+    zero.lease_owner_id = Some("old-owner".into());
+    zero.lease_expires_unix_ms = Some(10_000);
+    let (mut fixture, _) = bound_with(&zero);
     let before = fixture.loaded().root;
     let journal_before = fixture.journal_files();
-    let claim = claim_over(&one, 9_999);
+    let claim = claim_over(&zero, 9_999);
     assert_eq!(
         fixture.takeover(&claim, 9_999),
         Err(AuthorityError::Journal(JournalDurableError::Authority(
@@ -1228,7 +1228,7 @@ fn a_lease_that_has_not_expired_refuses_the_takeover_before_any_journal_write() 
     assert_eq!(fixture.journal_files(), journal_before);
     assert_eq!(fixture.loaded().root, before);
     // The lease is expired exactly at its expiry.
-    let claim = claim_over(&one, 10_000);
+    let claim = claim_over(&zero, 10_000);
     fixture.takeover(&claim, 10_000).unwrap();
     assert_eq!(
         fixture
@@ -1372,12 +1372,12 @@ fn a_takeover_needs_a_bound_migration() {
     assert!(fixture.journal_files().is_empty());
 }
 
-/// A copy of `manifest` that a different attempt would publish: another lease owner.
+/// A copy of `manifest` that a different attempt would publish: another valid successor of the same
+/// committed revision, here the journal entering recovery for a reason of its own.
 fn rival_of(manifest: &JournalManifest) -> JournalManifest {
     let mut rival = manifest.clone();
-    rival.has_lease_owner = true;
-    rival.lease_owner_id = Some("owner-b".into());
-    rival.lease_expires_unix_ms = Some(1_000);
+    rival.phase = phase_code::RECOVERY_REQUIRED;
+    rival.recovery_reason_code = 3;
     rival
 }
 
@@ -1527,7 +1527,7 @@ fn two_discards_at_one_revision_keep_both_candidates() {
     fail_root_commit_after_promote(&mut fixture, &second);
     let second_bytes = candidate_bytes(&fixture, 1);
     let mut third = rival_of(&one);
-    third.lease_owner_id = Some("owner-c".into());
+    third.recovery_reason_code = 4;
     fixture.checkpoint(&third).unwrap();
     let mut rejected: Vec<Vec<u8>> = fixture
         .rejected_files()
@@ -1559,7 +1559,7 @@ fn a_reused_operation_id_still_keeps_every_discarded_candidate() {
     fail_root_commit_after_promote(&mut fixture, &second);
     let second_bytes = candidate_bytes(&fixture, 1);
     let mut third = rival_of(&one);
-    third.lease_owner_id = Some("owner-c".into());
+    third.recovery_reason_code = 4;
     fixture.checkpoint(&third).unwrap();
     let mut rejected: Vec<Vec<u8>> = fixture
         .rejected_files()

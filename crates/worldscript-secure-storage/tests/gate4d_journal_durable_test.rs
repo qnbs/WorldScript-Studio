@@ -820,11 +820,11 @@ fn publish_refuses_a_different_or_unopenable_candidate_and_changes_nothing() {
     let next = manifest_at("pub-differs", 2, 4);
     published(&dir.0, &next, Some(&live)).0.unwrap();
     let listing = dir_listing(&dir.0);
-    let mut leased = next.clone();
-    leased.has_lease_owner = true;
-    leased.lease_owner_id = Some("owner-b".into());
-    leased.lease_expires_unix_ms = Some(1_000);
-    let (result, creates) = published(&dir.0, &leased, Some(&live));
+    // Another valid successor of the committed revision: the journal enters recovery instead.
+    let mut recovering = next.clone();
+    recovering.phase = phase_code::RECOVERY_REQUIRED;
+    recovering.recovery_reason_code = 3;
+    let (result, creates) = published(&dir.0, &recovering, Some(&live));
     let Err(JournalDurableError::Stage(stage)) = result else {
         panic!("a different candidate must be refused");
     };

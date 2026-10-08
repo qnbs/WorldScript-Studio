@@ -599,7 +599,7 @@ fn the_target_key_is_frozen_from_admit_and_the_inventory_from_convert() {
 }
 
 #[test]
-fn the_recovery_reason_changes_only_when_entering_recovery_and_leases_are_unconstrained() {
+fn the_recovery_reason_changes_only_when_entering_recovery() {
     let prev = rotate_at(phase_code::PREPARE, 4);
     assert_eq!(
         refused(&prev, |next| next.recovery_reason_code = 3),
@@ -609,14 +609,6 @@ fn the_recovery_reason_changes_only_when_entering_recovery_and_leases_are_uncons
         refused(&prev, |next| {
             next.phase = phase_code::RECOVERY_REQUIRED;
             next.recovery_reason_code = 3;
-        }),
-        Ok(())
-    );
-    assert_eq!(
-        refused(&prev, |next| {
-            next.has_lease_owner = true;
-            next.lease_owner_id = Some("owner-b".into());
-            next.lease_expires_unix_ms = Some(1_000);
         }),
         Ok(())
     );

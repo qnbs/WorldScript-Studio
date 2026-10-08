@@ -666,6 +666,36 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Slice D3a — the cursor and the lease across successors
+
+The generic successor relation said so itself: "lease fields and the cursor across a phase change are not
+constrained here". The constructors already kept the lease and `RECOVERY_REQUIRED` already kept the cursor, but
+nothing forced a hand-built successor to match, and `transition_phase` left the cursor where it was on a forward
+change. Maintainer decision C is now the relation:
+
+| Rule | Where | Refusal |
+|---|---|---|
+| within a phase the cursor does not regress | `assert_manifest_successor` (unchanged) | `RegressiveCheckpoint` |
+| a forward phase change enters the new phase at `(0, 0)` | `assert_manifest_successor`, and `transition_phase` produces it | `CursorNotReset` (new) |
+| entering `RECOVERY_REQUIRED` keeps the last cursor | `assert_manifest_successor`; `mark_recovery` already did | `FrozenFieldChanged` |
+| an ordinary successor leaves the lease (owner, expiry, presence) as it was | `assert_manifest_successor`, hence publish, the root binding advance, `assert_progress_successor` and `assert_capture_successor` | `FrozenFieldChanged` |
+| the owner and the fence change only by takeover | `assert_takeover_successor` (unchanged) | |
+| the expiry changes only by a same-owner renewal that moves it strictly forward | `assert_renewal_successor` (new, not yet wired) | `InvalidLeaseRenewal` (no lease, owner not named, expiry not forward), `FrozenFieldChanged` (anything else changed), `StaleJournalRevision`/`LiveBindingMismatch` (revision), `TerminalPhase` |
+
+A lease therefore cannot appear from nothing through a checkpoint: its first owner is the bootstrap manifest or a
+takeover. The renewal takes no clock; the fence arbitrates whether a lapsed lease may still be renewed. The
+wiring of the renewal into a composed operation is D3b.
+
+Proof (`gate4d_cursor_lease_test`): the cursor across a forward change, recovery and a phase (including the
+constructor and the relation agreeing); the lease under every ordinary successor kind and four kinds of change
+(another owner, a longer and a shorter expiry, a dropped lease) plus a lease appearing from none; the renewal
+predicate (strictly forward, no lease to renew, nameless owner, a dropped lease, everything else unchanged, the
+revision, a terminal journal); and renewal, takeover and ordinary successor as three disjoint transitions.
+Mutation-checked: dropping the lease rule, leaving the cursor unconstrained, not resetting it in the constructor
+and allowing an equal expiry each fail their tests. Five existing tests relied on the old behaviour (a lease as
+the easy way to build a different candidate, an ordinary checkpoint acquiring a lease, a test pinning "leases are
+unconstrained") and now use a valid different successor, the bootstrap manifest, and the new rule.
+
 ## Epoch-relation validation — the target epoch follows the operation
 
 D2a derived the journal envelope epoch from the source epoch but validated only that a source exists, so a
