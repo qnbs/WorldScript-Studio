@@ -537,6 +537,45 @@ fn a_failure_after_a_page_was_promoted_removes_that_page_too() {
 }
 
 #[test]
+fn pushing_a_page_does_not_read_the_root_named_manifest_again() {
+    let scenario = Scenario::new();
+    let mut fs = ObservedFs::new();
+    scenario.stream(&mut fs, entries(12), 3).unwrap();
+    let generation = generation_path(scenario.journal.path(), COMMITTED_REVISION);
+    // Four pages were pushed; the key check of each is made over the bytes `begin` kept.
+    assert_eq!(
+        fs.reads.iter().filter(|path| **path == generation).count(),
+        1
+    );
+}
+
+#[test]
+fn a_failure_never_removes_a_file_it_did_not_write() {
+    let scenario = Scenario::new();
+    let (key, op) = (key(), WriteOperationId::generate().unwrap());
+    let mut fs = StdFs;
+    let capture = scenario.begin(&mut fs, 6).unwrap();
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, scenario.journal.path(), &op);
+    let all = entries(6);
+    let capture = capture.push_page(&mut ctx, all[0..3].to_vec()).unwrap();
+    let pending = capture.pending_dir().to_path_buf();
+    // A different file already sits in the slot of the next page: the push fails because of it.
+    let slot = generation_path(&pending.join("page-1"), 4);
+    std::fs::create_dir_all(slot.parent().unwrap()).unwrap();
+    std::fs::write(&slot, b"bytes of someone else").unwrap();
+    let failed = capture.push_page(&mut ctx, all[3..6].to_vec()).err();
+    let first = generation_path(&pending.join("page-0"), 4);
+    assert_eq!(
+        (
+            matches!(failed, Some(JournalDurableError::Stage(_))),
+            std::fs::read(&slot).unwrap(),
+            first.exists()
+        ),
+        (true, b"bytes of someone else".to_vec(), false)
+    );
+}
+
+#[test]
 fn a_missing_staged_page_is_a_broken_attempt_not_a_recovery_state_of_the_journal() {
     let scenario = Scenario::new();
     let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();

@@ -49,6 +49,8 @@ pub struct ObservedFs {
     pub fail_sync_matching: Option<&'static str>,
     pub fail_create_at: Option<u32>,
     pub fail_remove: bool,
+    /// Every path read, in order.
+    pub reads: Vec<PathBuf>,
 }
 
 impl ObservedFs {
@@ -62,6 +64,7 @@ impl ObservedFs {
             fail_sync_matching: None,
             fail_create_at: None,
             fail_remove: false,
+            reads: Vec::new(),
         }
     }
 
@@ -86,6 +89,7 @@ impl DurableFs for ObservedFs {
     }
 
     fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+        self.reads.push(path.to_path_buf());
         self.inner.read(path)
     }
 

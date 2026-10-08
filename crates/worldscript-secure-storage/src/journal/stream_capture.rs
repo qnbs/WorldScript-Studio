@@ -40,7 +40,8 @@ use super::capture::{
 };
 use super::digest::{page_ref_for, InventoryDigestVerifier};
 use super::durable::{
-    assert_root_named_manifest, stage_io, with_fence, JournalDurableContext, JournalDurableError,
+    assert_anchor, root_named_anchor, stage_io, with_fence, JournalDurableContext,
+    JournalDurableError,
 };
 use super::inventory::JournalInventoryEntry;
 use super::inventory_read::{open_stored_page, MAX_PAGE_ENVELOPE_BYTES};
@@ -56,6 +57,9 @@ use super::JournalError;
 pub struct StreamedCapture {
     committed: JournalManifest,
     live: LiveMigration,
+    /// The exact bytes of the root-named generation, which the capture's key must keep opening to
+    /// `committed`: a few kilobytes, kept so that no push reads the journal for it.
+    anchor: Vec<u8>,
     journal_dir: PathBuf,
     revision: u64,
     entry_count: u32,
@@ -144,15 +148,14 @@ impl StreamedCapture {
         start: &CaptureStart<'_>,
     ) -> Result<Self, JournalDurableError> {
         let committed = start.committed_manifest;
-        let verifier = with_fence(committed, start.fence, || {
+        let (verifier, anchor) = with_fence(committed, start.fence, || {
             assert_page_promote_authority(committed, Some(start.live))
                 .map_err(JournalDurableError::Authority)?;
-            assert_root_named_manifest(ctx, committed, start.live)?;
+            let anchor = root_named_anchor(ctx, committed, start.live)?;
             assert_inventory_open(committed).map_err(JournalDurableError::Authority)?;
-            Ok(InventoryDigestVerifier::new(
-                committed.inventory_version,
-                start.entry_count,
-            )?)
+            let verifier =
+                InventoryDigestVerifier::new(committed.inventory_version, start.entry_count)?;
+            Ok((verifier, anchor))
         })?;
         let revision = next_revision(committed).map_err(JournalDurableError::Authority)?;
         // A fresh random tag, never the caller's operation id: two attempts must never share a
@@ -166,6 +169,7 @@ impl StreamedCapture {
         Ok(Self {
             committed: committed.clone(),
             live: start.live.clone(),
+            anchor,
             journal_dir: ctx.dir.to_path_buf(),
             revision,
             entry_count: start.entry_count,
@@ -173,6 +177,11 @@ impl StreamedCapture {
             refs: Vec::new(),
             verifier,
         })
+    }
+
+    /// The private pending directory the pages are being staged in.
+    pub fn pending_dir(&self) -> &Path {
+        &self.pending
     }
 
     /// Stages the next page. The page takes the next index and the capture's generation; its
@@ -190,8 +199,7 @@ impl StreamedCapture {
         match self.stage_next(ctx, entries) {
             Ok(()) => Ok(self),
             Err(error) => {
-                // The page in flight may already be on disk, so its slot is removed as well.
-                discard_staged(ctx, &self.pending, self.refs.len() + 1, self.revision);
+                discard_staged(ctx, &self.pending, self.refs.len(), self.revision);
                 Err(error)
             }
         }
@@ -215,7 +223,12 @@ impl StreamedCapture {
             page: &page,
             envelope: &envelope,
         };
-        store_page_at(ctx, &dir, &self.committed, &sealed)?;
+        if let Err(error) = store_page_at(ctx, &dir, &self.committed, &sealed) {
+            // The page in flight may be on disk already, or the failure may be that a different file
+            // sits in its slot: only a file that holds exactly the bytes staged here is ours to remove.
+            remove_if_identical(ctx, &dir, self.revision, &envelope);
+            return Err(error);
+        }
         self.refs.push(reference);
         Ok(())
     }
@@ -225,14 +238,14 @@ impl StreamedCapture {
     /// sealed or written, so a page can never be staged that the journal key cannot open.
     fn assert_context<F: DurableFs>(
         &self,
-        ctx: &mut JournalDurableContext<'_, F>,
+        ctx: &JournalDurableContext<'_, F>,
     ) -> Result<(), JournalDurableError> {
         if ctx.dir != self.journal_dir.as_path() {
             return Err(JournalDurableError::Authority(
                 MigrationExecutionError::LiveBindingMismatch,
             ));
         }
-        assert_root_named_manifest(ctx, &self.committed, &self.live)
+        assert_anchor(ctx.key, &self.committed, &self.live, &self.anchor)
     }
 
     /// Ends the capture: exactly the announced number of entries must have been staged. Returns the
@@ -289,6 +302,21 @@ fn discard_staged<F: DurableFs>(
     for index in 0..pages {
         let dir = pending.join(format!("page-{index}"));
         let _ = ctx.fs.remove_file(&generation_path(&dir, generation));
+    }
+}
+
+/// Removes the file at `generation` in `dir` only if it holds exactly `envelope`, so a failure that
+/// came from a different file in the slot never deletes that file. Best effort, like
+/// [`discard_staged`].
+fn remove_if_identical<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    dir: &Path,
+    generation: u64,
+    envelope: &[u8],
+) {
+    let path = generation_path(dir, generation);
+    if matches!(ctx.fs.read_at_most(&path, envelope.len()), Ok(Some(found)) if found == envelope) {
+        let _ = ctx.fs.remove_file(&path);
     }
 }
 
