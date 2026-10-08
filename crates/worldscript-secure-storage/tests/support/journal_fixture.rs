@@ -19,15 +19,22 @@ pub const COMMITTED_REVISION: u64 = 3;
 pub struct TempDir(pub PathBuf);
 
 impl TempDir {
+    /// A fresh directory that this call created: a name that already exists (planted, or left by an
+    /// earlier run) is skipped, never reused, so `Drop` only ever removes what was created here.
     pub fn new() -> Self {
         static NEXT: AtomicU32 = AtomicU32::new(0);
-        let path = std::env::temp_dir().join(format!(
-            "wss-gate4d-store-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&path).unwrap();
-        TempDir(path)
+        loop {
+            let path = std::env::temp_dir().join(format!(
+                "wss-gate4d-store-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::create_dir(&path) {
+                Ok(()) => return TempDir(path),
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("cannot create the test directory {path:?}: {error}"),
+            }
+        }
     }
 }
 

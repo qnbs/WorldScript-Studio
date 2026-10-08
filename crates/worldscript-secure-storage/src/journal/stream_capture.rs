@@ -64,6 +64,9 @@ pub struct StreamedCapture {
     revision: u64,
     entry_count: u32,
     pending: PathBuf,
+    /// The attempt's own operation identity: it names the pending directory and every staging link, so
+    /// the names a failed promotion can leave behind are known to a later cleanup.
+    tag: WriteOperationId,
     refs: Vec<JournalPageRef>,
     verifier: InventoryDigestVerifier,
 }
@@ -87,6 +90,7 @@ impl std::fmt::Debug for StreamedCapture {
 pub struct StagedCapture {
     successor: JournalManifest,
     pending: PathBuf,
+    tag: WriteOperationId,
     refs: Vec<JournalPageRef>,
 }
 
@@ -127,7 +131,7 @@ impl StagedCapture {
     /// Abandons the capture: the staged page files are removed, best effort. The empty directories
     /// stay, because the file system abstraction cannot remove a directory.
     pub fn discard<F: DurableFs>(self, ctx: &mut JournalDurableContext<'_, F>) {
-        discard_staged(ctx, &self.pending, &self.refs);
+        discard_staged(ctx, &self.pending, &self.refs, &self.tag);
     }
 }
 
@@ -170,6 +174,7 @@ impl StreamedCapture {
             revision,
             entry_count: start.entry_count,
             pending,
+            tag,
             refs: Vec::new(),
             verifier,
         })
@@ -195,7 +200,7 @@ impl StreamedCapture {
         match self.stage_next(ctx, entries) {
             Ok(()) => Ok(self),
             Err(error) => {
-                discard_staged(ctx, &self.pending, &self.refs);
+                discard_staged(ctx, &self.pending, &self.refs, &self.tag);
                 Err(error)
             }
         }
@@ -219,17 +224,16 @@ impl StreamedCapture {
             page: &page,
             envelope: &envelope,
         };
-        if let Err(error) = store_page_at(ctx, &dir, &self.committed, &sealed) {
+        // Staged under the attempt's own operation identity, not the caller's, so that the name of
+        // a staging link that a promotion leaves behind is known to the cleanup.
+        let mut staging = JournalDurableContext::new(&mut *ctx.fs, ctx.key, ctx.dir, &self.tag);
+        if let Err(error) = store_page_at(&mut staging, &dir, &self.committed, &sealed) {
             // The page in flight may be on disk already, or the failure may be that a different file
             // sits in its slot: only a file that holds exactly the bytes staged here is ours to remove.
             let digest = &reference.page_content_digest;
             remove_if_staged(ctx, &generation_path(&dir, self.revision), digest);
             // The attempt's own staging link, which a failed promotion reports and leaves behind.
-            remove_if_staged(
-                ctx,
-                &staging_path(&dir, self.revision, ctx.operation),
-                digest,
-            );
+            remove_if_staged(ctx, &staging_path(&dir, self.revision, &self.tag), digest);
             return Err(error);
         }
         self.refs.push(reference);
@@ -263,6 +267,7 @@ impl StreamedCapture {
             committed,
             entry_count,
             pending,
+            tag,
             refs,
             verifier,
             ..
@@ -282,29 +287,34 @@ impl StreamedCapture {
             Ok(successor) => Ok(StagedCapture {
                 successor,
                 pending,
+                tag,
                 refs,
             }),
             Err(error) => {
-                discard_staged(ctx, &pending, &refs);
+                discard_staged(ctx, &pending, &refs, &tag);
                 Err(error)
             }
         }
     }
 }
 
-/// Removes the staged page files that `refs` describe. Best effort: a file that cannot be removed
-/// stays as inert residue, and the error that led here is the one worth reporting, so removal
-/// failures are not. A file is removed only if it still holds exactly the bytes this capture staged
-/// (see [`remove_if_staged`]).
+/// Removes the staged page files that `refs` describe, and the staging link a promotion may have left
+/// next to each (named by the attempt's `tag`, whether or not the promotion reported success).
+/// Best effort: a file that cannot be removed stays as inert residue, and the error that led here is
+/// the one worth reporting, so removal failures are not. A file is removed only if it still holds
+/// exactly the bytes this capture staged (see [`remove_if_staged`]).
 fn discard_staged<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     pending: &Path,
     refs: &[JournalPageRef],
+    tag: &WriteOperationId,
 ) {
     for (index, reference) in refs.iter().enumerate() {
         let dir = pending.join(format!("page-{index}"));
-        let path = generation_path(&dir, reference.page_generation);
-        remove_if_staged(ctx, &path, &reference.page_content_digest);
+        let digest = &reference.page_content_digest;
+        let generation = reference.page_generation;
+        remove_if_staged(ctx, &generation_path(&dir, generation), digest);
+        remove_if_staged(ctx, &staging_path(&dir, generation, tag), digest);
     }
 }
 

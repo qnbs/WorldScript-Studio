@@ -695,8 +695,10 @@ or an envelope, and a push drops both before it returns; (4) the tests are a fil
 fixtures; putting them into the store test made that file lose its cohesion.
 
 Cleanup is best effort and removes files only: the file system abstraction cannot remove a directory, so the
-empty page directories stay, and the files of an attempt that was killed stay as well. A failed promotion also
-leaves its staging link, which is removed under the same rule. The check of a file against its digest and its
+empty page directories stay, and the files of an attempt that was killed stay as well. The pages are staged under
+the attempt's own random identity, not the caller's operation id, so the name of a staging link that a
+promotion leaves behind (after a failed promotion, or after a successful one whose link could not be
+unlinked) is known to the cleanup, which removes it under the same rule. The check of a file against its digest and its
 removal are two operations (the abstraction has no unlink by handle), which is acceptable because the pending
 directory is private, named by a fresh random tag and never authority: the check guards against files a
 failure found in place or that were replaced by accident, not against a writer with access to the journal
@@ -715,12 +717,12 @@ total not reached and an empty page are refused; a failure partway removes the p
 the failing page was already promoted, and a new attempt is independent; a capture that ends short and a
 discarded capture leave no page file, and a removal that fails is not an error; a push under another key
 or into a journal directory that holds an identical copy of the root-named generation is refused before
-anything is staged and a push reads the root-named manifest no more than `begin` did; a failure whose cause is a different file in the slot of the page in flight leaves that file alone, and so does the cleanup of a staged page that was replaced, and the staging link of the failed promotion is removed; two attempts under one operation id never share a directory; a staged page that
+anything is staged and a push reads the root-named manifest no more than `begin` did; a failure whose cause is a different file in the slot of the page in flight leaves that file alone, and so does the cleanup of a staged page that was replaced, and the staging link of the failed promotion is removed, as is one that a successful promotion left behind; two attempts under one operation id never share a directory; a staged page that
 changed, was swapped, is missing, is out of range or is read under another key is refused. Mutation-checked:
 no digest absorption, no root-named check, no open-inventory check, no `pending-` prefix, a pending
 directory named by the caller's operation id, a shifted page directory, no digest check on read, no
 context check (the directory and the key each on their own), no cleanup on a failed push, on a failed
-finish or in `discard`, no slot for the page in flight, an unconditional removal of a staged file, no removal of the staging link, a manifest read on every push, and a missing staged page reported as
+finish or in `discard`, no slot for the page in flight, an unconditional removal of a staged file, no removal of the staging link, staging links named by the caller's operation id, a manifest read on every push, and a missing staged page reported as
 `RecoveryRequired` each fail the test that owns them. Existing capture, store, reader and durable tests are unchanged and pass.
 
 ## Slice D3b — the owner renews its own lease

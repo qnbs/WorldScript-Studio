@@ -603,6 +603,22 @@ fn a_cleanup_never_removes_a_staged_page_that_was_replaced() {
 }
 
 #[test]
+fn a_staging_link_left_after_a_successful_promotion_is_found_by_the_cleanup() {
+    let scenario = Scenario::new();
+    let committed_only = files_under(scenario.journal.path());
+    // Promotion succeeds, but the staging link cannot be unlinked: the page is staged, the link stays.
+    let mut failing = ObservedFs::new();
+    failing.fail_remove = true;
+    let staged = scenario.stream(&mut failing, entries(7), 3).unwrap();
+    let with_links = files_under(scenario.journal.path()).len();
+    scenario.discard(staged);
+    assert_eq!(
+        (with_links, files_under(scenario.journal.path())),
+        (1 + 3 * 2, committed_only)
+    );
+}
+
+#[test]
 fn a_missing_staged_page_is_a_broken_attempt_not_a_recovery_state_of_the_journal() {
     let scenario = Scenario::new();
     let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
