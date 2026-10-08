@@ -2432,16 +2432,19 @@ authority: the manifest never names them, no reader looks for them, a staged pag
 it is read back by the exact path of its reference and confirmed against that reference, and a staged
 page that is missing is a broken attempt to abandon, never a recovery state of the journal. A capture
 belongs to one journal directory and to the key that opened the manifest it started from; a page is never
-staged under another context. A failure the caller can still handle removes the pages staged so far, each only if it still
-holds the bytes that were staged, and an attempt that was killed leaves files that nothing trusts. The staged pages are then promoted to the
-digest directory under the root lock and the journal mutex: the caller must be the committed owner of the
+staged under another context. While a capture is being staged, a failure the caller can still handle
+removes the pages staged so far, each only if it still holds the bytes that were staged, and an attempt
+that was killed leaves files that nothing trusts. Once a capture is finished, its staged files are kept
+through the promotion and the commit unless the caller discards the capture. The staged pages are then
+promoted to the digest directory under the root lock and the journal mutex: the caller must be the committed owner of the
 exact root-named manifest and the successor must be its capture successor, all before the first write;
 each staged page is read back, confirmed against its reference and stored where the in-memory store would
 have put the same bytes (an identical page already there is adopted, a different file is never replaced);
 and the inventory digest over the entries read must equal the successor's before the manifest naming the
 set is published. A staged page found wrong midway leaves the verified prefix as an inert directory under
-the digest and publishes nothing. The staged files are removed only after the root has committed to the
-set, so that a retry after a failure before that point still has them. A caller of this path handles no
+the digest and publishes nothing. A failure of the promotion or of the commit does not remove the
+staged files of a finished capture: they are removed only after the root has committed to the set, so that
+a retry after such a failure still has them. A caller of this path handles no
 journal key, no committed manifest and no binding: the key is routed from the authenticated root and
 registry, both the start of the capture and the commit read the committed manifest and the binding from
 the root, and the commit promotes into the journal directory the capture was staged in, so there is one
