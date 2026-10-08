@@ -2,7 +2,8 @@
 //! of a rotation is sealed under its source epoch's key; the route finds that key through the
 //! committed root's own binding and the key-epoch registry the root commits to, never through the
 //! root's active epoch and never through anything the caller supplies. Every scenario therefore
-//! commits a real root (at the target epoch, the shape after cutover) that binds the journal.
+//! commits a real root that binds the journal. Slice D2b-3b: the four composed journal operations
+//! use that route, so an unroutable epoch refuses each of them before a journal write.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -12,14 +13,17 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
 use worldscript_secure_storage::{
-    commit_catalog_change, commit_root, content_digest, empty_inventory_digest,
-    empty_journal_page_set_digest, generation_path, load_catalog, operation_type, phase_code,
-    resolve_journal_key, write_key_epoch, CatalogChange, CatalogCommit, InstallationScopeId,
-    JournalDurableError, JournalManifest, JournalRoute, JournalRouteError, Key, KeyEpochCommit,
+    advance_live_migration, commit_catalog_change, commit_inventory_capture,
+    commit_journal_checkpoint, commit_journal_takeover, commit_root, content_digest,
+    empty_inventory_digest, empty_journal_page_set_digest, generation_path, load_catalog,
+    operation_type, phase_code, resolve_journal_key, write_key_epoch, AuthorityError,
+    BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit, InstallationScopeId,
+    InventoryCapture, JournalCheckpoint, JournalDurableError, JournalError, JournalManifest,
+    JournalRoute, JournalRouteError, JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit,
     KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, ManifestRead,
-    MigrationExecutionError, RecordClass, RecordIdentity, RecordMeta, RootBody, RootCommitEvidence,
-    RootCommitGuard, RootCommitRequest, RootCommitState, RootKeyRefV1, RootLayout, StdFs,
-    JOURNAL_MANIFEST_RECORD_SCHEMA,
+    MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity, RecordMeta,
+    RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState,
+    RootKeyRefV1, RootLayout, StdFs, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
 };
 
 const OPERATION: &str = "route-op";
@@ -106,15 +110,19 @@ struct Fixture {
 
 impl Fixture {
     fn new(root_epoch: u64) -> Self {
+        Self::with_source_material(root_epoch, SOURCE_MATERIAL)
+    }
+
+    /// As [`Fixture::new`], but the provider holds `material` as the source epoch's key: the journal
+    /// is still sealed under [`SOURCE_MATERIAL`], so a different value is a route to the wrong key.
+    fn with_source_material(root_epoch: u64, material: [u8; 32]) -> Self {
         let base = Dir::new();
         for slot in ["authority/slot-a", "authority/slot-b", "journal"] {
             fs::create_dir_all(base.0.join(slot)).unwrap();
         }
         let mut provider = MemoryKeyProvider::new();
         let scope = provider.read_or_provision_installation_scope().unwrap();
-        let source_ref = provider
-            .import_epoch_key(SOURCE_EPOCH, SOURCE_MATERIAL)
-            .unwrap();
+        let source_ref = provider.import_epoch_key(SOURCE_EPOCH, material).unwrap();
         let target_ref = provider
             .import_epoch_key(TARGET_EPOCH, TARGET_MATERIAL)
             .unwrap();
@@ -470,4 +478,169 @@ fn the_route_creates_and_changes_nothing() {
     assert!(fixture.route().is_err());
     assert_eq!(fixture.snapshot(), after_removal);
     assert_ne!(after_removal, before);
+}
+
+/// The next revision of the bound rotation, under the same owner and fence.
+fn successor() -> JournalManifest {
+    let mut next = rotation();
+    next.journal_revision = REVISION + 1;
+    next
+}
+
+impl Fixture {
+    /// The successor sealed under the source epoch's key and stored as the next generation, with the
+    /// binding that names it: the input a binding advance needs.
+    fn store_successor(&self) -> LiveMigration {
+        let next = successor();
+        let meta = RecordMeta {
+            key_epoch: SOURCE_EPOCH,
+            record_generation: next.journal_revision,
+            record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
+        };
+        let sealed = next.seal(&source_key(), &identity(), meta).unwrap();
+        fs::write(
+            generation_path(&self.journal_dir(), next.journal_revision),
+            &sealed,
+        )
+        .unwrap();
+        LiveMigration {
+            operation_id: OPERATION.into(),
+            fencing_generation: next.fencing_generation,
+            journal_revision: next.journal_revision,
+            manifest_digest: content_digest(&sealed),
+        }
+    }
+
+    /// The four composed journal operations over valid inputs for each (a checkpoint and a capture of
+    /// the next revision, a takeover claim by a new owner at fence plus one, an advance to the stored
+    /// successor): each is expected to be refused, and the error of each is returned, in that order.
+    fn every_operation_is_refused(&mut self, stored: &LiveMigration) -> Vec<AuthorityError> {
+        let root_ref = self.root_ref().clone();
+        let root_epoch = self.root_epoch;
+        let root_dir = self.root_dir();
+        let journal_dir = self.journal_dir();
+        let layout = RootLayout {
+            root_dir: &root_dir,
+        };
+        let committed = rotation();
+        let next = successor();
+        let fence = MigrationFence::from_manifest(&next);
+        let mut claim = successor();
+        claim.fencing_generation += 1;
+        claim.has_lease_owner = true;
+        claim.lease_owner_id = Some("new-owner".into());
+        claim.lease_expires_unix_ms = Some(u64::MAX / 2);
+        let claim_fence = MigrationFence::from_manifest(&claim);
+        let operation = WriteOperationId::generate().unwrap();
+        let journal = JournalSource {
+            dir: &journal_dir,
+            operation: &operation,
+        };
+        let checkpoint = JournalCheckpoint {
+            manifest: &next,
+            fence: &fence,
+            journal,
+            root_key_ref: &root_ref,
+            active_key_epoch: root_epoch,
+            conflict: CandidateConflict::Refuse,
+        };
+        let takeover = JournalCheckpoint {
+            manifest: &claim,
+            fence: &claim_fence,
+            ..checkpoint
+        };
+        let provider = &mut self.provider;
+        vec![
+            commit_journal_checkpoint(&mut StdFs, provider, layout, checkpoint).unwrap_err(),
+            commit_journal_takeover(
+                &mut StdFs,
+                provider,
+                layout,
+                JournalTakeoverCommit {
+                    claim: takeover,
+                    now_unix_ms: 0,
+                },
+            )
+            .unwrap_err(),
+            commit_inventory_capture(
+                &mut StdFs,
+                provider,
+                layout,
+                InventoryCapture {
+                    checkpoint,
+                    committed_manifest: &committed,
+                    pages: &[],
+                },
+            )
+            .unwrap_err(),
+            advance_live_migration(
+                &mut StdFs,
+                provider,
+                layout,
+                BindingAdvance {
+                    next: stored,
+                    journal,
+                    root_key_ref: &root_ref,
+                    active_key_epoch: root_epoch,
+                },
+            )
+            .unwrap_err(),
+        ]
+    }
+}
+
+#[test]
+fn a_revoked_journal_epoch_refuses_every_journal_operation_before_a_write() {
+    let mut fixture = Fixture::new(TARGET_EPOCH);
+    fixture.register(SOURCE_EPOCH, KeyEpochStatus::Active, 1);
+    fixture.register(SOURCE_EPOCH, KeyEpochStatus::Revoked, 2);
+    fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
+    fixture.bound();
+    let stored = fixture.store_successor();
+    let before = fixture.snapshot();
+    for error in fixture.every_operation_is_refused(&stored) {
+        assert_eq!(
+            error,
+            AuthorityError::JournalRoute(JournalRouteError::EpochRevoked(SOURCE_EPOCH))
+        );
+    }
+    assert_eq!(fixture.snapshot(), before);
+}
+
+#[test]
+fn an_unregistered_journal_epoch_refuses_every_journal_operation_before_a_write() {
+    let mut fixture = Fixture::new(TARGET_EPOCH);
+    fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
+    fixture.bound();
+    let stored = fixture.store_successor();
+    let before = fixture.snapshot();
+    for error in fixture.every_operation_is_refused(&stored) {
+        assert_eq!(
+            error,
+            AuthorityError::JournalRoute(JournalRouteError::EpochNotRegistered(SOURCE_EPOCH))
+        );
+    }
+    assert_eq!(fixture.snapshot(), before);
+}
+
+#[test]
+fn a_route_to_another_key_is_refused_by_the_authenticated_load_before_a_write() {
+    // The registry routes the source epoch to a key the journal was not sealed under: the route
+    // itself resolves, but the manifest of the bound journal does not authenticate under it.
+    let mut fixture = Fixture::with_source_material(TARGET_EPOCH, [0x55; 32]);
+    fixture.register(SOURCE_EPOCH, KeyEpochStatus::RetiredRecoveryOnly, 1);
+    fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
+    fixture.bound();
+    let stored = fixture.store_successor();
+    let before = fixture.snapshot();
+    // Every operation has valid inputs, so the key is the only thing left to refuse them.
+    for error in fixture.every_operation_is_refused(&stored) {
+        assert_eq!(
+            error,
+            AuthorityError::Journal(JournalDurableError::Journal(JournalError::Open(
+                OpenError::Tampered
+            )))
+        );
+    }
+    assert_eq!(fixture.snapshot(), before);
 }

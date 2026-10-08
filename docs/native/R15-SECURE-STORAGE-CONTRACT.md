@@ -2420,7 +2420,9 @@ record) or promoted without its root commit is refused. The record for the epoch
 `Active` or `RetiredRecoveryOnly` (an `ENABLE` journal is sealed under its still-`Prepared` target),
 `Revoked` or absent fails closed before any mutation, and the record's opaque route resolves to the
 key; the root's `active_key_epoch` is never consulted, so after cutover the source epoch's key still
-resolves. The source
+resolves. The journal-owner operations (checkpoint, takeover, inventory capture, binding advance)
+resolve the journal key this way while they hold the `root_commit_mutex` and before any journal write; the
+key is never a caller input, and an epoch that cannot be routed refuses the whole operation. The source
 epoch therefore has to stay resolvable, at least `RetiredRecoveryOnly`, for as long as a journal is
 bound to the root: it is never revoked or destroyed while a live migration names the journal (the key-epoch
 writer refuses a `Revoked` generation while the committed root binds a live migration, and because the
