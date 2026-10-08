@@ -1,6 +1,8 @@
 //! Gate 4D Slice D2b-3a: the key route of a bound migration journal (§6, §8.3, §10.1.1). The journal
-//! of a rotation is sealed under its source epoch's key; the route finds that key through the root
-//! binding and the authenticated key-epoch registry, never through the root's active epoch.
+//! of a rotation is sealed under its source epoch's key; the route finds that key through the
+//! committed root's own binding and the key-epoch registry the root commits to, never through the
+//! root's active epoch and never through anything the caller supplies. Every scenario therefore
+//! commits a real root (at the target epoch, the shape after cutover) that binds the journal.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -92,17 +94,18 @@ impl Drop for Dir {
 }
 
 /// A root directory, a journal directory and a provider holding the keys of epochs 1 and 2. The
-/// registry records are sealed under the epoch-2 route, which is also the root's.
+/// root's active epoch is `root_epoch`; the registry records are sealed under that epoch's route.
 struct Fixture {
     base: Dir,
     provider: MemoryKeyProvider,
     scope: InstallationScopeId,
+    root_epoch: u64,
     source_ref: RootKeyRefV1,
-    root_ref: RootKeyRefV1,
+    target_ref: RootKeyRefV1,
 }
 
 impl Fixture {
-    fn new() -> Self {
+    fn new(root_epoch: u64) -> Self {
         let base = Dir::new();
         for slot in ["authority/slot-a", "authority/slot-b", "journal"] {
             fs::create_dir_all(base.0.join(slot)).unwrap();
@@ -112,7 +115,7 @@ impl Fixture {
         let source_ref = provider
             .import_epoch_key(SOURCE_EPOCH, SOURCE_MATERIAL)
             .unwrap();
-        let root_ref = provider
+        let target_ref = provider
             .import_epoch_key(TARGET_EPOCH, TARGET_MATERIAL)
             .unwrap();
         provider.unlock().unwrap();
@@ -120,8 +123,36 @@ impl Fixture {
             base,
             provider,
             scope,
+            root_epoch,
             source_ref,
-            root_ref,
+            target_ref,
+        }
+    }
+
+    /// Before cutover: the root is at the source epoch, which is `Active`, and the target is only
+    /// `Prepared`.
+    fn pre_cutover() -> Self {
+        let fixture = Fixture::new(SOURCE_EPOCH);
+        fixture.register(SOURCE_EPOCH, KeyEpochStatus::Active, 1);
+        fixture.register(TARGET_EPOCH, KeyEpochStatus::Prepared, 1);
+        fixture
+    }
+
+    /// After cutover: the root is at the target epoch, which is `Active`, and the source is retained
+    /// with `source_status`.
+    fn post_cutover(source_status: KeyEpochStatus) -> Self {
+        let fixture = Fixture::new(TARGET_EPOCH);
+        fixture.register(SOURCE_EPOCH, source_status, 1);
+        fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
+        fixture
+    }
+
+    /// The root's own route, under which the registry is sealed.
+    fn root_ref(&self) -> &RootKeyRefV1 {
+        if self.root_epoch == SOURCE_EPOCH {
+            &self.source_ref
+        } else {
+            &self.target_ref
         }
     }
 
@@ -137,7 +168,7 @@ impl Fixture {
         let route = if epoch == SOURCE_EPOCH {
             &self.source_ref
         } else {
-            &self.root_ref
+            &self.target_ref
         };
         let record = KeyEpochRecord {
             epoch,
@@ -150,8 +181,8 @@ impl Fixture {
             scope: &self.scope,
             record: &record,
             registry_generation: generation,
-            root_key_ref: &self.root_ref,
-            key_epoch: TARGET_EPOCH,
+            root_key_ref: self.root_ref(),
+            key_epoch: self.root_epoch,
             held: &guard,
         };
         let layout = RootLayout {
@@ -179,7 +210,7 @@ impl Fixture {
         }
     }
 
-    fn route(&self, live: &LiveMigration) -> Result<Key, JournalRouteError> {
+    fn route(&self) -> Result<Key, JournalRouteError> {
         let root_dir = self.root_dir();
         let journal_dir = self.journal_dir();
         resolve_journal_key(
@@ -189,10 +220,7 @@ impl Fixture {
                 layout: RootLayout {
                     root_dir: &root_dir,
                 },
-                scope: &self.scope,
-                root_key_ref: &self.root_ref,
                 journal_dir: &journal_dir,
-                live,
             },
         )
     }
@@ -218,10 +246,9 @@ fn collect(base: &Path, dir: &Path, files: &mut BTreeMap<PathBuf, [u8; 32]>) {
 }
 
 impl Fixture {
-    /// The first root, committed with the target epoch as its active epoch and route, then a root
-    /// that binds `live`. No producer of a bind exists in the crate yet, so the body is committed
-    /// directly.
-    fn commit_root_at_target_epoch(&mut self, live: &LiveMigration) {
+    /// The first root, committed at the fixture's active epoch over the registry as it is now.
+    fn commit_first_root(&mut self) {
+        let root_ref = self.root_ref().clone();
         let root_dir = self.root_dir();
         let layout = RootLayout {
             root_dir: &root_dir,
@@ -231,11 +258,21 @@ impl Fixture {
                 upsert: &[],
                 remove: &[],
             },
-            root_key_ref: &self.root_ref,
-            active_key_epoch: TARGET_EPOCH,
+            root_key_ref: &root_ref,
+            active_key_epoch: self.root_epoch,
             operation_id: "first-root",
         };
         commit_catalog_change(&mut StdFs, &mut self.provider, layout, commit).unwrap();
+    }
+
+    /// The next root, binding `live`. No producer of a bind exists in the crate yet, so the body is
+    /// committed directly.
+    fn bind(&mut self, live: &LiveMigration) {
+        let root_ref = self.root_ref().clone();
+        let root_dir = self.root_dir();
+        let layout = RootLayout {
+            root_dir: &root_dir,
+        };
         let catalog = load_catalog(&mut StdFs, &self.provider, layout)
             .unwrap()
             .unwrap();
@@ -253,10 +290,17 @@ impl Fixture {
         let request = RootCommitRequest {
             scope: &self.scope,
             root: &root,
-            root_key_ref: &self.root_ref,
+            root_key_ref: &root_ref,
             held: &guard,
         };
         commit_root(&mut StdFs, &mut self.provider, layout, request).unwrap();
+    }
+
+    /// The journal in place and a root that binds it.
+    fn bound(&mut self) {
+        let live = self.store_journal();
+        self.commit_first_root();
+        self.bind(&live);
     }
 
     /// Whether `key` opens the stored rotation manifest, which only the source epoch's key does.
@@ -284,51 +328,25 @@ fn every_usable_status_routes_to_the_journals_own_epoch_key() {
         KeyEpochStatus::Active,
         KeyEpochStatus::RetiredRecoveryOnly,
     ] {
-        let fixture = Fixture::new();
-        fixture.register(SOURCE_EPOCH, status, 1);
-        fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
-        let live = fixture.store_journal();
-        let key = fixture
-            .route(&live)
-            .unwrap_or_else(|_| panic!("{status:?}"));
+        // `Active` is the pre-cutover shape (root and registry at the source epoch); the others are
+        // retained beside an `Active` target.
+        let mut fixture = if status == KeyEpochStatus::Active {
+            Fixture::pre_cutover()
+        } else {
+            Fixture::post_cutover(status)
+        };
+        fixture.bound();
+        let key = fixture.route().unwrap_or_else(|_| panic!("{status:?}"));
         assert!(fixture.opens_the_journal(&key), "{status:?}");
     }
 }
 
 #[test]
-fn a_revoked_epoch_is_refused_whatever_older_generations_say() {
-    // The newest generation of the epoch is the registry's word: Active at generation 1, Revoked at 2.
-    let fixture = Fixture::new();
-    fixture.register(SOURCE_EPOCH, KeyEpochStatus::Active, 1);
-    fixture.register(SOURCE_EPOCH, KeyEpochStatus::Revoked, 2);
-    fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
-    let live = fixture.store_journal();
-    assert_eq!(
-        refusal(fixture.route(&live)),
-        JournalRouteError::EpochRevoked(SOURCE_EPOCH)
-    );
-}
-
-#[test]
-fn an_unregistered_epoch_is_refused() {
-    let fixture = Fixture::new();
-    fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
-    let live = fixture.store_journal();
-    assert_eq!(
-        refusal(fixture.route(&live)),
-        JournalRouteError::EpochNotRegistered(SOURCE_EPOCH)
-    );
-}
-
-#[test]
 fn after_cutover_the_bound_journal_resolves_under_its_source_epoch() {
-    // The root already points at the target epoch (route and active epoch 2), the source epoch is
-    // only retained for recovery, and the journal is still bound.
-    let mut fixture = Fixture::new();
-    fixture.register(SOURCE_EPOCH, KeyEpochStatus::RetiredRecoveryOnly, 1);
-    fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
-    let live = fixture.store_journal();
-    fixture.commit_root_at_target_epoch(&live);
+    // The root points at the target epoch (route and active epoch 2), the source epoch is only
+    // retained for recovery, and the journal is still bound.
+    let mut fixture = Fixture::post_cutover(KeyEpochStatus::RetiredRecoveryOnly);
+    fixture.bound();
     let root_dir = fixture.root_dir();
     let layout = RootLayout {
         root_dir: &root_dir,
@@ -338,23 +356,79 @@ fn after_cutover_the_bound_journal_resolves_under_its_source_epoch() {
         .unwrap()
         .root;
     assert_eq!(root.active_key_epoch, TARGET_EPOCH);
-    assert_eq!(root.live_migration.as_ref(), Some(&live));
-    let key = fixture.route(&live).unwrap_or_else(|_| panic!("routed"));
+    let key = fixture.route().unwrap_or_else(|_| panic!("routed"));
     assert!(fixture.opens_the_journal(&key));
 }
 
 #[test]
-fn a_generation_the_root_did_not_name_is_refused_before_the_registry_is_read() {
-    // A record directory that cannot be read would make the registry fail; the digest is judged first.
-    let fixture = Fixture::new();
+fn a_revoked_epoch_is_refused_whatever_older_generations_say() {
+    // The newest generation of the epoch is the registry's word: Active at generation 1, Revoked at 2.
+    let mut fixture = Fixture::new(TARGET_EPOCH);
     fixture.register(SOURCE_EPOCH, KeyEpochStatus::Active, 1);
+    fixture.register(SOURCE_EPOCH, KeyEpochStatus::Revoked, 2);
+    fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
+    fixture.bound();
+    assert_eq!(
+        refusal(fixture.route()),
+        JournalRouteError::EpochRevoked(SOURCE_EPOCH)
+    );
+}
+
+#[test]
+fn an_unregistered_epoch_is_refused() {
+    let mut fixture = Fixture::new(TARGET_EPOCH);
+    fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
+    fixture.bound();
+    assert_eq!(
+        refusal(fixture.route()),
+        JournalRouteError::EpochNotRegistered(SOURCE_EPOCH)
+    );
+}
+
+#[test]
+fn removing_the_newest_generation_does_not_expose_an_older_usable_record() {
+    // The root commits the registry with the epoch Revoked; a storage attacker deleting that newest
+    // generation would leave the older Active one as the newest, so the registry no longer hashes to
+    // the root's set digest and the route refuses instead of returning the key.
+    let mut fixture = Fixture::new(TARGET_EPOCH);
+    fixture.register(SOURCE_EPOCH, KeyEpochStatus::Active, 1);
+    fixture.register(SOURCE_EPOCH, KeyEpochStatus::Revoked, 2);
+    fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
+    fixture.bound();
+    fs::remove_file(generation_path(
+        &fixture.root_dir().join("key-epoch").join("1"),
+        2,
+    ))
+    .unwrap();
+    assert!(matches!(
+        refusal(fixture.route()),
+        JournalRouteError::Registry(_)
+    ));
+}
+
+#[test]
+fn a_generation_promoted_without_its_root_commit_is_not_authority() {
+    // A crash between promoting a registry generation and committing the root that names it leaves the
+    // registry ahead of the root; the route does not follow it.
+    let mut fixture = Fixture::pre_cutover();
+    fixture.bound();
+    fixture.register(SOURCE_EPOCH, KeyEpochStatus::RetiredRecoveryOnly, 2);
+    assert!(matches!(
+        refusal(fixture.route()),
+        JournalRouteError::Registry(_)
+    ));
+}
+
+#[test]
+fn a_journal_the_binding_does_not_name_is_refused() {
+    // The root binds a digest that is not the bytes in the journal directory.
+    let mut fixture = Fixture::post_cutover(KeyEpochStatus::RetiredRecoveryOnly);
     let mut live = fixture.store_journal();
     live.manifest_digest = [0x11; 32];
-    let broken = fixture.root_dir().join("key-epoch").join("9");
-    fs::create_dir_all(&broken).unwrap();
-    fs::write(broken.join("generation-1.wsr1"), b"not a record").unwrap();
+    fixture.commit_first_root();
+    fixture.bind(&live);
     assert_eq!(
-        refusal(fixture.route(&live)),
+        refusal(fixture.route()),
         JournalRouteError::Journal(JournalDurableError::Authority(
             MigrationExecutionError::LiveBindingMismatch
         ))
@@ -363,16 +437,13 @@ fn a_generation_the_root_did_not_name_is_refused_before_the_registry_is_read() {
 
 #[test]
 fn a_missing_root_named_generation_needs_recovery() {
-    let fixture = Fixture::new();
-    fixture.register(SOURCE_EPOCH, KeyEpochStatus::Active, 1);
-    let live = LiveMigration {
-        operation_id: OPERATION.into(),
-        fencing_generation: 4,
-        journal_revision: REVISION,
-        manifest_digest: [0x22; 32],
-    };
+    let mut fixture = Fixture::post_cutover(KeyEpochStatus::RetiredRecoveryOnly);
+    let live = fixture.store_journal();
+    fixture.commit_first_root();
+    fixture.bind(&live);
+    fs::remove_file(generation_path(&fixture.journal_dir(), REVISION)).unwrap();
     assert_eq!(
-        refusal(fixture.route(&live)),
+        refusal(fixture.route()),
         JournalRouteError::Journal(JournalDurableError::Authority(
             MigrationExecutionError::RecoveryRequired
         ))
@@ -380,15 +451,23 @@ fn a_missing_root_named_generation_needs_recovery() {
 }
 
 #[test]
+fn nothing_is_routed_without_a_committed_root_or_a_bound_migration() {
+    let mut fixture = Fixture::post_cutover(KeyEpochStatus::RetiredRecoveryOnly);
+    fixture.store_journal();
+    assert_eq!(refusal(fixture.route()), JournalRouteError::NoCommittedRoot);
+    fixture.commit_first_root();
+    assert_eq!(refusal(fixture.route()), JournalRouteError::NoLiveMigration);
+}
+
+#[test]
 fn the_route_creates_and_changes_nothing() {
-    let fixture = Fixture::new();
-    fixture.register(SOURCE_EPOCH, KeyEpochStatus::Active, 1);
-    fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
-    let live = fixture.store_journal();
+    let mut fixture = Fixture::post_cutover(KeyEpochStatus::RetiredRecoveryOnly);
+    fixture.bound();
     let before = fixture.snapshot();
-    assert!(fixture.route(&live).is_ok());
-    let mut stale = live.clone();
-    stale.manifest_digest = [0x11; 32];
-    assert!(fixture.route(&stale).is_err());
-    assert_eq!(fixture.snapshot(), before);
+    assert!(fixture.route().is_ok());
+    fs::remove_file(generation_path(&fixture.journal_dir(), REVISION)).unwrap();
+    let after_removal = fixture.snapshot();
+    assert!(fixture.route().is_err());
+    assert_eq!(fixture.snapshot(), after_removal);
+    assert_ne!(after_removal, before);
 }

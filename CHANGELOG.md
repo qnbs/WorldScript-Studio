@@ -11,8 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads the root-named manifest generation, requires its digest to match the committed binding, takes the
   header epoch the root vouches for, looks that epoch up in the authenticated key-epoch registry
   (`Prepared`, `Active` and `RetiredRecoveryOnly` are usable; `Revoked` or absent fail closed) and resolves the
-  record's route to the key. It never reads the root's active epoch, so a journal still bound after cutover
-  resolves under its source epoch, and it refuses before any mutation. `MemoryKeyProvider::import_epoch_key`
+  record's route to the key. The binding and the registry are read from the committed root inside the call
+  (the registry must hash to the root's `key_epoch_set_digest`, so a removed or uncommitted generation is
+  refused), never taken from the caller. It never reads the root's active epoch to choose the key, so a
+  journal still bound after cutover resolves under its source epoch, and it refuses before any mutation. `MemoryKeyProvider::import_epoch_key`
   gives test fixtures a key of known material. Nothing calls the route yet; wiring it into the composed
   journal operations and dropping the caller-supplied key is the next slice. PR #1005.
 - **R-15 Gate 4D:** compare a manifest's journal envelope epoch with trusted authority before the journal key is

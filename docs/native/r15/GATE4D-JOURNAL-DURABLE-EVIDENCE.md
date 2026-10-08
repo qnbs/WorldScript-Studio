@@ -669,27 +669,33 @@ authority-first comparison (D2a compared the header only after authentication) i
 
 A bound journal is sealed under its operation's journal envelope epoch, which is not the root's moving
 `active_key_epoch`, so its key has to be found through authority. The route is additive: nothing calls it
-yet (D2b-3b wires it).
+yet (D2b-3b wires it). Everything it trusts is read from the committed root inside the call; the caller
+supplies only where the root and the journal live, so a fabricated binding or scope cannot make it hand out
+a key.
 
 | Step | Rule |
 |---|---|
-| 1. the vouched epoch | `root_named_journal_epoch` reads the root-named manifest generation bounded (the exact bytes `load_authoritative_manifest` reads, now one shared `read_root_named_envelope`), requires its digest to equal the binding's `manifest_digest` (`LiveBindingMismatch`; missing is `RecoveryRequired`), and returns the header epoch the root has vouched for, with no key |
-| 2. the registry | the epoch is looked up in the authenticated key-epoch registry (`load_key_epoch_set`, the newest generation of each epoch, like `preflight_key_epochs`): absent is `EpochNotRegistered`, `Revoked` is `EpochRevoked`; `Prepared`, `Active` and `RetiredRecoveryOnly` are usable (an `ENABLE` journal is sealed under its still-`Prepared` target) |
-| 3. the key | the record's opaque route resolves through the provider (`Provider` error otherwise) |
+| 1. the root and its registry | `load_committed_registry` authenticates the committed root (slot under the anchor's route) and the key-epoch registry in one read, and requires the registry to hash to the root's `key_epoch_set_digest` with its active epoch bound (`verify_key_epochs`, as at cold start): a removed newest generation (which would expose an older, usable record) or a generation promoted without its root commit is `RECOVERY_REQUIRED`; no root is `NoCommittedRoot`, a root without a binding `NoLiveMigration` |
+| 2. the vouched epoch | `root_named_journal_epoch` reads the generation the root's own binding names, bounded (the same exact bytes `load_authoritative_manifest` reads, one shared `read_root_named_envelope`), requires its digest to equal the binding's `manifest_digest` (`LiveBindingMismatch`; missing is `RecoveryRequired`) and returns the header epoch the root vouches for, with no key |
+| 3. the status gate | the epoch is looked up in the registry: absent is `EpochNotRegistered`, `Revoked` is `EpochRevoked`; `Prepared`, `Active` and `RetiredRecoveryOnly` are usable (an `ENABLE` journal is sealed under its still-`Prepared` target) |
+| 4. the key | the record's opaque route resolves through the provider (`Provider` error otherwise) |
 
-`resolve_journal_key(fs, provider, JournalRoute { layout, scope, root_key_ref, journal_dir, live })` is
-read-only: every refusal happens before anything is created or changed. It never reads the root's
-`active_key_epoch`, so after cutover (root already at the target, source `RetiredRecoveryOnly`) the bound
-journal still resolves under its source epoch. A staged-ahead `Revoked` generation is respected (fail
-closed). `MemoryKeyProvider::import_epoch_key` (test support) gives fixtures a key whose material they know.
+`resolve_journal_key(fs, provider, JournalRoute { layout, journal_dir })` is read-only: every refusal
+happens before anything is created or changed. It never reads the root's `active_key_epoch` to choose the
+key, so after cutover (root already at the target, source `RetiredRecoveryOnly`) the bound journal still
+resolves under its source epoch. A caller that needs the answer to hold across a later write holds the
+`root_commit_mutex`, as the composed journal operations do. `MemoryKeyProvider::import_epoch_key` (test
+support) gives fixtures a key whose material they know.
 
-Proof (`gate4d_journal_route_test`): each usable status routes to the key that really opens the journal;
-the newest generation wins (Active then Revoked is refused); an unregistered epoch is refused; the cutover
-state resolves under the source epoch with the root asserted to be at the target; a digest the root did not
-name is `LiveBindingMismatch` before the registry is read (an unreadable record directory is not reached);
-a missing generation needs recovery; and nothing under the fixture changes, whether the route succeeds or
-refuses. Mutation-checked: dropping the status gate, reading the registry first, and routing by the active
-epoch each fail their tests.
+Proof (`gate4d_journal_route_test`, every scenario commits a real root that binds the journal): each usable
+status routes to the key that really opens the journal; the cutover state resolves under the source epoch
+with the root asserted to be at the target; the newest generation wins (Active then Revoked is refused); an
+unregistered epoch is refused; deleting the newest `Revoked` generation does not expose the older usable
+record, and a generation promoted without its root commit is not followed; a digest the binding does not
+name is `LiveBindingMismatch`; a missing generation needs recovery; no root and no binding are their own
+refusals; and nothing under the fixture changes whether the route succeeds or refuses. Mutation-checked:
+skipping the registry's digest verification fails the rollback and promoted-without-commit tests, dropping
+the status gate fails the revoked test, and routing by the active epoch fails four.
 
 ## Slice D2b-2 — manifest authority-first epoch preflight
 
