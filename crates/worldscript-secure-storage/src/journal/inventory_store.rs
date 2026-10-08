@@ -23,7 +23,6 @@ use crate::durable::{
     generation_path, stage_and_promote_envelope, staging_path, DirectoryDurability, DurableFs,
     StageFailure, StageFailureKind, StageStep, StagingResidue,
 };
-use crate::envelope::parse_envelope;
 use crate::root::LiveMigration;
 use crate::seal::Key;
 
@@ -33,7 +32,7 @@ use super::durable::{
     assert_root_named_manifest, migration_page_identity, page_meta, stage_io, stage_request,
     with_fence, JournalDurableContext, JournalDurableError,
 };
-use super::manifest::{journal_envelope_epoch, JournalManifest};
+use super::manifest::{header_key_epoch, journal_envelope_epoch, JournalManifest};
 use super::page::JournalPage;
 use super::state::{assert_page_promote_authority, MigrationExecutionError, MigrationFence};
 use super::JournalError;
@@ -212,8 +211,7 @@ fn assert_envelope_is_page<F: DurableFs>(
 /// Whether the envelope's header carries `epoch`, the operation's journal envelope epoch.
 /// `JournalPage::open` does not compare it, so every writer and reader checks it itself.
 pub(super) fn has_epoch(envelope: &[u8], epoch: u64) -> Result<bool, JournalError> {
-    let parsed = parse_envelope(envelope).map_err(JournalError::Open)?;
-    Ok(parsed.header().key_epoch == epoch)
+    Ok(header_key_epoch(envelope)? == epoch)
 }
 
 /// Refuses an envelope sealed for another key epoch before any staging file exists, so a refused

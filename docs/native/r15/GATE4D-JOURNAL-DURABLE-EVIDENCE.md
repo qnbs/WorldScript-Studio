@@ -662,11 +662,33 @@ a candidate sealed at another epoch is not adopted by the durable promotion; `a_
 Residual, owned by Slice D2b: resolving the journal key through the authenticated key-epoch registry
 (`Prepared`, `Active` and `RetiredRecoveryOnly` allowed, `Revoked` or absent refused; D2b-3), refusing
 the revocation of the source epoch while a live migration binds the journal (done in D2b-1, below), and the
-cutover readability test with the root's active epoch already at the target (D2b-3). The manifest side of the authority-first
-comparison belongs there too: a manifest names its epoch only in its authenticated body, so D2a compares
-its header after authentication (a manifest sealed under another epoch's different key fails
-authentication and is refused, never accepted), and comparing it before the key is used needs a trusted
-expected epoch from the root binding and the registry.
+cutover readability test with the root's active epoch already at the target (D2b-3). The manifest side of the
+authority-first comparison (D2a compared the header only after authentication) is done in D2b-2, below.
+
+## Slice D2b-2 — manifest authority-first epoch preflight
+
+D2a compared a manifest's header epoch with the epoch derived from its body only after authentication, so a
+manifest sealed under another epoch's key surfaced as an open failure and the key had already been used. A
+manifest names its own epoch only in its authenticated body, so the epoch to compare against has to come from
+authority outside it:
+
+| Where | Rule |
+|---|---|
+| `JournalManifest::open(key, &ManifestRead { record, journal_revision, key_epoch, envelope })` | the parsed header's epoch is compared with the caller's trusted `key_epoch` before `open_record` uses the key (`KeyEpochMismatch`); the epoch derived from the authenticated body must still agree afterwards |
+| promote readback, candidate adoption | pass the epoch of the manifest they hold, which the successor relation freezes across revisions; an adopted candidate sealed at another epoch is not identical |
+| `load_manifest_generation(ctx, operation, revision, expected_epoch)` | the caller names the epoch it trusts (from the authenticated manifest of the same operation) |
+| `load_authoritative_manifest` | the exact bytes are judged against the root-bound `manifest_digest` before the key is used (`LiveBindingMismatch` otherwise); the digest authenticates the header, so the epoch is taken from the header the root vouches for, never from the unauthenticated body; the field comparisons of `assert_live_binding` follow the open as before |
+
+No root-format change. A bad root-named file now reports the authority mismatch instead of an open failure,
+because the root's digest is judged first.
+
+Proof (`gate4d_manifest_epoch_preflight_test`, fixtures sealed under a genuinely different key): a manifest of
+another epoch and key is `KeyEpochMismatch` through `open` and through `load_manifest_generation`, while the
+right epoch under a wrong key is still `Open(Tampered)`; a header epoch that matches the caller but not the body is
+refused after authentication; a root-named file that does not hash to the binding is `LiveBindingMismatch`, one the
+root vouches for is opened (and still has to authenticate under the journal key) and a genuine one loads.
+Mutation-checked: comparing the epoch after authentication fails the first and third tests, judging the digest
+after the open fails the fourth.
 
 ## Slice D2b-1 — no key-epoch revocation while a live migration is bound
 
@@ -706,10 +728,10 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).
 - The cross-process lease CAS.
-- Key-epoch registry resolution of the journal key (Slices D2b-2 and D2b-3): the journal key a caller passes
-  is not yet resolved through the authenticated key-epoch registry, and a manifest's header epoch is not yet
-  compared before the key is used. D2a fixes which epoch seals the journal; D2b-1 refuses revoking it while a
-  migration is bound; D2b-2 and D2b-3 make the registry route enforce it.
+- Key-epoch registry resolution of the journal key (Slice D2b-3): the journal key a caller passes is not yet
+  resolved through the authenticated key-epoch registry. D2a fixes which epoch seals the journal; D2b-1
+  refuses revoking it while a migration is bound; D2b-2 compares a manifest's header epoch with trusted
+  authority before the key is used; D2b-3 makes the registry route select the key by that epoch.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
 
 ## Explicit non-goals (journal durable promotion)

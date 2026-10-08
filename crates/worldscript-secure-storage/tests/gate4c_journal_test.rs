@@ -3,8 +3,8 @@ use worldscript_secure_storage::{
     journal_page_set_digest, operation_type, page_ref_for, phase_code, seal_record,
     source_authority_kind, source_physical_authority_kind, source_scheme_id,
     ForeignInventoryExtension, IdentityError, JournalError, JournalInventoryEntry,
-    JournalInventorySource, JournalManifest, JournalPage, JournalPageRef, Key, RecordClass,
-    RecordIdentity, RecordMeta, SealError, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    JournalInventorySource, JournalManifest, JournalPage, JournalPageRef, Key, ManifestRead,
+    RecordClass, RecordIdentity, RecordMeta, SealError, JOURNAL_MANIFEST_RECORD_SCHEMA,
     JOURNAL_PAGE_RECORD_SCHEMA,
 };
 
@@ -254,7 +254,13 @@ fn manifest_and_page_seal_open_roundtrip() {
         record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
     };
     let envelope = manifest.seal(&key(), &migration, meta).unwrap();
-    let opened = JournalManifest::open(&key(), &migration, 1, &envelope).unwrap();
+    let read = ManifestRead {
+        record: &migration,
+        journal_revision: 1,
+        key_epoch: 1,
+        envelope: &envelope,
+    };
+    let opened = JournalManifest::open(&key(), &read).unwrap();
     assert_eq!(opened, manifest);
 
     let record = RecordIdentity::new(RecordClass::MigrationPage, &["seal-op", "0"]).unwrap();
@@ -363,7 +369,13 @@ fn revision_zero_manifest_seal_open_roundtrip() {
         record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
     };
     let envelope = manifest.seal(&key(), &migration, meta).unwrap();
-    let opened = JournalManifest::open(&key(), &migration, 0, &envelope).unwrap();
+    let read = ManifestRead {
+        record: &migration,
+        journal_revision: 0,
+        key_epoch: 1,
+        envelope: &envelope,
+    };
+    let opened = JournalManifest::open(&key(), &read).unwrap();
     assert_eq!(opened, manifest);
 }
 

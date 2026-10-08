@@ -103,7 +103,7 @@ pub use journal::{
     InventorySetWrite, JournalCheckpointCursor, JournalDurableContext, JournalDurableError,
     JournalDurableGuard, JournalError, JournalInventoryEntry, JournalInventoryExtent,
     JournalInventorySource, JournalManifest, JournalPage, JournalPageRef, JournalRevision,
-    JournalTakeover, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
+    JournalTakeover, ManifestEnvelopeDigest, ManifestRead, MigrationExecutionError, MigrationFence,
     MigrationPhase, PublishedManifest, RecoveryReasonCode, SealedPage, VerifiedInventory,
     JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION,
     JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES,
