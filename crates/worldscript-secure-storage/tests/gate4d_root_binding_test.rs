@@ -12,19 +12,19 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::{
     advance_live_migration, capture_inventory, commit_catalog_change, commit_inventory_capture,
-    commit_journal_checkpoint, commit_journal_takeover, commit_root, content_digest,
-    empty_inventory_digest, empty_journal_page_set_digest, generation_path, inventory_page_dir,
-    load_authoritative_manifest, load_catalog, operation_type, phase_code, promote_manifest_fenced,
-    seal_inventory_pages, source_authority_kind, source_physical_authority_kind, transition_phase,
-    verify_stored_inventory, write_key_epoch, AuthorityError, BindingAdvance, CandidateConflict,
-    CatalogChange, CatalogCommit, DirectoryDurability, DurableFs, InstallationScopeId,
-    InventoryCapture, JournalCheckpoint, JournalDurableContext, JournalDurableError, JournalError,
-    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, JournalSource,
-    JournalTakeoverCommit, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider,
-    LiveMigration, LoadedCatalog, MigrationExecutionError, MigrationFence, MigrationPhase,
-    RecordClass, RecordIdentity, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
-    RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, SealedPage, StageFailureKind, StdFs,
-    WriteOperationId,
+    commit_journal_checkpoint, commit_journal_takeover, commit_lease_renewal, commit_root,
+    content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
+    inventory_page_dir, load_authoritative_manifest, load_catalog, operation_type, phase_code,
+    promote_manifest_fenced, seal_inventory_pages, source_authority_kind,
+    source_physical_authority_kind, transition_phase, verify_stored_inventory, write_key_epoch,
+    AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit,
+    DirectoryDurability, DurableFs, InstallationScopeId, InventoryCapture, JournalCheckpoint,
+    JournalDurableContext, JournalDurableError, JournalError, JournalInventoryEntry,
+    JournalInventorySource, JournalManifest, JournalPage, JournalSource, JournalTakeoverCommit,
+    KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
+    MigrationExecutionError, MigrationFence, MigrationPhase, RecordClass, RecordIdentity, RootBody,
+    RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted,
+    RootKeyRefV1, RootLayout, SealedPage, StageFailureKind, StdFs, WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -353,6 +353,48 @@ impl Fixture {
                 root_dir: &root_dir,
             },
             takeover,
+        )
+    }
+
+    /// A renewal of the lease in `renewal` under its own fence and the committed key route and epoch.
+    fn renew(&mut self, renewal: &JournalManifest) -> Result<RootCommitted, AuthorityError> {
+        let key_ref = self.key_ref.clone();
+        let route = Route {
+            key_ref: &key_ref,
+            epoch: 1,
+        };
+        self.renew_with(renewal, route)
+    }
+
+    fn renew_with(
+        &mut self,
+        renewal: &JournalManifest,
+        route: Route<'_>,
+    ) -> Result<RootCommitted, AuthorityError> {
+        let root_dir = self.root_dir.clone();
+        let op = self
+            .operation
+            .clone()
+            .unwrap_or_else(|| WriteOperationId::generate().unwrap());
+        let fence = MigrationFence::from_manifest(renewal);
+        let checkpoint = JournalCheckpoint {
+            manifest: renewal,
+            fence: &fence,
+            journal: JournalSource {
+                dir: &self.journal_dir,
+                operation: &op,
+            },
+            root_key_ref: route.key_ref,
+            active_key_epoch: route.epoch,
+            conflict: self.conflict,
+        };
+        commit_lease_renewal(
+            &mut StdFs,
+            &mut self.provider,
+            RootLayout {
+                root_dir: &root_dir,
+            },
+            checkpoint,
         )
     }
 
@@ -751,14 +793,16 @@ fn bound_with(zero: &JournalManifest) -> (Fixture, LiveMigration) {
     (fixture, bound)
 }
 
-fn resumed_revision(fixture: &Fixture, binding: &LiveMigration) -> u64 {
+fn resumed_manifest(fixture: &Fixture, binding: &LiveMigration) -> JournalManifest {
     let op = WriteOperationId::generate().unwrap();
     let key = journal_key();
     let mut fs = StdFs;
     let mut ctx = JournalDurableContext::new(&mut fs, &key, &fixture.journal_dir, &op);
-    load_authoritative_manifest(&mut ctx, binding)
-        .unwrap()
-        .journal_revision
+    load_authoritative_manifest(&mut ctx, binding).unwrap()
+}
+
+fn resumed_revision(fixture: &Fixture, binding: &LiveMigration) -> u64 {
+    resumed_manifest(fixture, binding).journal_revision
 }
 
 #[test]
@@ -2018,4 +2062,321 @@ fn bumped_revision(manifest: &JournalManifest) -> JournalManifest {
     let mut next = manifest.clone();
     next.journal_revision += 1;
     next
+}
+
+// ---- D3b: the owner renews its own lease (§10.1) ----
+
+/// A bootstrap manifest whose owner holds a lease until `expires`.
+fn leased(expires: u64) -> JournalManifest {
+    let mut zero = manifest_at(OPERATION, 0, FENCE);
+    zero.has_lease_owner = true;
+    zero.lease_owner_id = Some("old-owner".into());
+    zero.lease_expires_unix_ms = Some(expires);
+    zero
+}
+
+/// The renewal the owner of `prev` publishes: revision + 1, the expiry moved to `expires`.
+fn renewal_over(prev: &JournalManifest, expires: u64) -> JournalManifest {
+    let mut renewal = bumped_revision(prev);
+    renewal.lease_expires_unix_ms = Some(expires);
+    renewal
+}
+
+fn journal_refusal(error: MigrationExecutionError) -> AuthorityError {
+    AuthorityError::Journal(JournalDurableError::Authority(error))
+}
+
+#[test]
+fn a_renewal_extends_the_lease_and_changes_nothing_else() {
+    let zero = leased(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let renewal = renewal_over(&zero, 20_000);
+    let before = fixture.loaded().root;
+    let committed = fixture.renew(&renewal).unwrap();
+    let after = fixture.loaded().root;
+    let dir = fixture.journal_dir.clone();
+    let binding = binding_of(&renewal, digest_of(&dir, 1));
+    // The binding names the renewal under the same fence, and the commit records that fence.
+    assert_eq!(
+        (
+            committed.root_generation,
+            after.live_migration.clone(),
+            after.commit_evidence.fencing_generation
+        ),
+        (before.root_generation + 1, Some(binding.clone()), FENCE)
+    );
+    assert_eq!(resumed_manifest(&fixture, &binding), renewal);
+    assert_eq!(
+        (after.catalog_set_digest, after.key_epoch_set_digest),
+        (before.catalog_set_digest, before.key_epoch_set_digest)
+    );
+}
+
+#[test]
+fn renewals_chain_and_each_one_must_move_the_expiry_forward() {
+    let zero = leased(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let first = renewal_over(&zero, 20_000);
+    let second = renewal_over(&first, 30_000);
+    let stuck = renewal_over(&second, 30_000);
+    let outcomes = [first, second, stuck].map(|renewal| fixture.renew(&renewal).is_ok());
+    assert_eq!(outcomes, [true, true, false]);
+    let binding = fixture.loaded().root.live_migration.unwrap();
+    assert_eq!(
+        resumed_manifest(&fixture, &binding).lease_expires_unix_ms,
+        Some(30_000)
+    );
+}
+
+#[test]
+fn ordinary_progress_continues_under_the_renewed_lease() {
+    let zero = leased(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let renewal = renewal_over(&zero, 20_000);
+    fixture.renew(&renewal).unwrap();
+    let fence = MigrationFence::from_manifest(&renewal);
+    let phase = MigrationPhase::from_wire(phase_code::DISCOVER);
+    let next = transition_phase(&renewal, &fence, phase).unwrap();
+    fixture.checkpoint(&next).unwrap();
+    let binding = fixture.loaded().root.live_migration.unwrap();
+    let resumed = resumed_manifest(&fixture, &binding);
+    assert_eq!(
+        (resumed.phase, resumed.lease_expires_unix_ms),
+        (phase_code::DISCOVER, Some(20_000))
+    );
+}
+
+#[test]
+fn a_refused_renewal_writes_no_journal_byte_and_moves_no_root() {
+    let zero = leased(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let before = fixture.loaded().root;
+    let journal_before = fixture.journal_files();
+    let invalid = MigrationExecutionError::InvalidLeaseRenewal;
+    let frozen = MigrationExecutionError::FrozenFieldChanged;
+    let mut dropped = renewal_over(&zero, 20_000);
+    dropped.has_lease_owner = false;
+    dropped.lease_owner_id = None;
+    dropped.lease_expires_unix_ms = None;
+    let cases: [(&str, JournalManifest, MigrationExecutionError); 9] = [
+        (
+            "an expiry that does not move",
+            renewal_over(&zero, 10_000),
+            invalid,
+        ),
+        ("an earlier expiry", renewal_over(&zero, 9_999), invalid),
+        ("a dropped lease", dropped, invalid),
+        (
+            "another owner",
+            JournalManifest {
+                lease_owner_id: Some("other-owner".into()),
+                ..renewal_over(&zero, 20_000)
+            },
+            frozen,
+        ),
+        (
+            "another phase",
+            JournalManifest {
+                phase: phase_code::DISCOVER,
+                ..renewal_over(&zero, 20_000)
+            },
+            frozen,
+        ),
+        (
+            "the revision already committed",
+            JournalManifest {
+                journal_revision: 0,
+                ..renewal_over(&zero, 20_000)
+            },
+            MigrationExecutionError::StaleJournalRevision,
+        ),
+        (
+            "a skipped revision",
+            JournalManifest {
+                journal_revision: 2,
+                ..renewal_over(&zero, 20_000)
+            },
+            MigrationExecutionError::LiveBindingMismatch,
+        ),
+        (
+            "another fence",
+            JournalManifest {
+                fencing_generation: FENCE + 1,
+                ..renewal_over(&zero, 20_000)
+            },
+            MigrationExecutionError::StaleMigrationOwner,
+        ),
+        (
+            "another operation",
+            JournalManifest {
+                operation_id: "other-op".into(),
+                ..renewal_over(&zero, 20_000)
+            },
+            MigrationExecutionError::LiveBindingMismatch,
+        ),
+    ];
+    let wrong: Vec<_> = cases
+        .into_iter()
+        .filter_map(|(name, renewal, error)| {
+            let refused = fixture.renew(&renewal) == Err(journal_refusal(error));
+            let untouched =
+                fixture.journal_files() == journal_before && fixture.loaded().root == before;
+            (!(refused && untouched)).then_some(name)
+        })
+        .collect();
+    assert_eq!(wrong, Vec::<&str>::new());
+}
+
+#[test]
+fn a_renewal_under_another_key_route_or_without_a_binding_is_refused_before_a_write() {
+    let zero = leased(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let journal_before = fixture.journal_files();
+    let key_ref = fixture.key_ref.clone();
+    let other_epoch = Route {
+        key_ref: &key_ref,
+        epoch: 2,
+    };
+    let renewal = renewal_over(&zero, 20_000);
+    let routed = fixture.renew_with(&renewal, other_epoch);
+    let mut unbound = Fixture::new();
+    unbound.ordinary_commit("bootstrap-root");
+    let missing = unbound.renew(&renewal);
+    assert_eq!(
+        (routed, missing),
+        (
+            Err(AuthorityError::KeyRotationNotAdmitted),
+            Err(AuthorityError::NoLiveMigration)
+        )
+    );
+    assert_eq!(
+        (
+            fixture.journal_files() == journal_before,
+            unbound.journal_files().is_empty()
+        ),
+        (true, true)
+    );
+}
+
+#[test]
+fn neither_the_ordinary_checkpoint_nor_the_plain_advance_can_carry_a_lease_change() {
+    let zero = leased(10_000);
+    let (mut fixture, bound) = bound_with(&zero);
+    let renewal = renewal_over(&zero, 20_000);
+    let before = fixture.loaded().root;
+    let journal_before = fixture.journal_files();
+    let checkpointed = fixture.checkpoint(&renewal);
+    let nothing_written = fixture.journal_files() == journal_before;
+    // The plain fenced promote only checks who may publish; the root must still refuse to trust it.
+    let dir = fixture.journal_dir.clone();
+    promote(&dir, &renewal, Some(&bound));
+    let advanced = fixture.advance(&binding_of(&renewal, digest_of(&dir, 1)));
+    let frozen = MigrationExecutionError::FrozenFieldChanged;
+    assert_eq!(
+        (checkpointed, nothing_written, advanced),
+        (
+            Err(journal_refusal(frozen)),
+            true,
+            Err(authority_refusal(frozen))
+        )
+    );
+    assert_eq!(fixture.loaded().root, before);
+}
+
+#[test]
+fn a_former_owner_cannot_renew_once_a_takeover_advanced_the_fence() {
+    let zero = leased(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    fixture
+        .takeover(&claim_over(&zero, 10_000), 10_000)
+        .unwrap();
+    let before = fixture.loaded().root;
+    let journal_before = fixture.journal_files();
+    // The former owner still holds a self-consistent renewal for the next revision.
+    let stale = fixture.renew(&renewal_over(&zero, 20_000));
+    assert_eq!(
+        (
+            stale,
+            fixture.loaded().root == before,
+            fixture.journal_files() == journal_before
+        ),
+        (
+            Err(journal_refusal(
+                MigrationExecutionError::StaleMigrationOwner
+            )),
+            true,
+            true
+        )
+    );
+}
+
+#[test]
+fn a_takeover_prepared_before_a_renewal_is_stale_and_the_renewed_lease_holds() {
+    let zero = leased(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let prepared = claim_over(&zero, 10_000);
+    let renewal = renewal_over(&zero, 20_000);
+    fixture.renew(&renewal).unwrap();
+    let stale = fixture.takeover(&prepared, 10_000);
+    let early = fixture.takeover(&claim_over(&renewal, 10_000), 10_000);
+    let at_expiry = fixture.takeover(&claim_over(&renewal, 20_000), 20_000);
+    assert_eq!(
+        (stale, early, at_expiry.is_ok()),
+        (
+            Err(journal_refusal(
+                MigrationExecutionError::StaleJournalRevision
+            )),
+            Err(journal_refusal(MigrationExecutionError::LeaseNotExpired)),
+            true
+        )
+    );
+}
+
+/// Fails the root commit after the renewal generation is durable, leaving an unadopted candidate.
+fn fail_renewal_root_commit(fixture: &mut Fixture, renewal: &JournalManifest) {
+    fixture
+        .provider
+        .inject(Fault::BeforePersist(AnchorOp::Prepare));
+    let error = fixture.renew(renewal).unwrap_err();
+    assert!(matches!(error, AuthorityError::Root(_)), "{error:?}");
+}
+
+#[test]
+fn a_retry_after_a_failed_root_commit_adopts_the_renewal_candidate() {
+    let zero = leased(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let renewal = renewal_over(&zero, 20_000);
+    let before = fixture.loaded().root;
+    fail_renewal_root_commit(&mut fixture, &renewal);
+    let after_failure = fixture.journal_files();
+    let committed = fixture.renew(&renewal).unwrap();
+    let dir = fixture.journal_dir.clone();
+    assert_eq!(
+        (fixture.journal_files(), committed.root_generation),
+        (after_failure, before.root_generation + 1)
+    );
+    assert_eq!(
+        fixture.loaded().root.live_migration,
+        Some(binding_of(&renewal, digest_of(&dir, 1)))
+    );
+}
+
+#[test]
+fn a_different_renewal_never_replaces_the_candidate_and_the_original_is_still_adopted() {
+    let zero = leased(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let renewal = renewal_over(&zero, 20_000);
+    let before = fixture.loaded().root;
+    fail_renewal_root_commit(&mut fixture, &renewal);
+    let after_failure = fixture.journal_files();
+    assert_generation_exists(
+        fixture.renew(&renewal_over(&zero, 25_000)),
+        "another expiry",
+    );
+    assert_eq!(
+        (fixture.journal_files(), fixture.loaded().root),
+        (after_failure.clone(), before)
+    );
+    fixture.renew(&renewal).unwrap();
+    assert_eq!(fixture.journal_files(), after_failure);
 }
