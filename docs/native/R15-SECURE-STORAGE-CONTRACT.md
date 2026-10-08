@@ -2401,8 +2401,10 @@ epoch that is stable for the whole operation and derived from the authenticated 
 from the authority root's `active_key_epoch`, which moves at cutover: `ENABLE` seals under
 `target_epoch` (there is no encrypted source, and §8.3 fixes a first-time enable at exactly
 `0 → 1`, so an `ENABLE` manifest with any other tuple is not encodable), `ROTATE` and
-`ENVELOPE_MIGRATION` seal under `source_epoch`, and a rotation or envelope migration without a source
-epoch is not encodable. The envelope header's `key_epoch` must equal that value in every phase,
+`ENVELOPE_MIGRATION` seal under `source_epoch`. Such an operation needs a source epoch to be sealed
+under and a target epoch that never moves backwards: a rotation's `target_epoch` is above its
+`source_epoch` (§8.3 item 2) and an envelope or schema migration's is not below it (§10.4); a manifest
+that breaks either is not encodable and a body that does is refused on decode. The envelope header's `key_epoch` must equal that value in every phase,
 including `RECOVERY_REQUIRED`. A page's writer and reader compare the header epoch with the epoch of
 the authenticated manifest before the key is used (the authority-first routing of §6), and a page
 sealed under any other epoch is refused as `KeyEpochMismatch`. A manifest names its own epoch only in
@@ -2971,7 +2973,10 @@ interprets the absence of a target record as permission to write defaults.
   product decision may define an external-export-only disclosure flow, but it must not silently
   become an internal downgrade or delete the protected source.
 - **Envelope/schema migration:** changes format or record schema under an operation ID without
-  changing logical identity. An unknown future version is refused, not migrated by guessing.
+  changing logical identity. An unknown future version is refused, not migrated by guessing. It
+  needs a source epoch and its `target_epoch` is never below its `source_epoch`: equal for a pure
+  format or schema change under the same key epoch, higher when the migration also moves to a newer
+  epoch (a rotation, by contrast, always creates a strictly newer one, §8.3 item 2).
 - **Delete:** creates and durably commits an authenticated `DELETE_PENDING`/`TOMBSTONED` transition
   under the record fence before any physical cleanup. It is idempotently resumed and never writes
   defaults over the deleted record; uncertain cleanup remains recoverable.

@@ -141,3 +141,82 @@ fn a_manifest_is_sealed_and_opened_only_at_its_operations_journal_epoch() {
         Err(JournalError::KeyEpochMismatch)
     );
 }
+
+#[test]
+fn a_target_epoch_never_moves_backwards() {
+    // §8.3 item 2: a rotation creates a newer epoch. §10.4: an envelope or schema migration keeps the
+    // epoch (a pure format change) or moves it forward, never back. The boundary is `target == source`.
+    let cases = [
+        (operation_type::ROTATE, 2, 3, Ok(2)),
+        (operation_type::ROTATE, 1, 9, Ok(1)),
+        (
+            operation_type::ROTATE,
+            2,
+            2,
+            Err(JournalError::InvalidCounter),
+        ),
+        (
+            operation_type::ROTATE,
+            3,
+            2,
+            Err(JournalError::InvalidCounter),
+        ),
+        (
+            operation_type::ROTATE,
+            5,
+            1,
+            Err(JournalError::InvalidCounter),
+        ),
+        (operation_type::ENVELOPE_MIGRATION, 2, 2, Ok(2)),
+        (operation_type::ENVELOPE_MIGRATION, 1, 5, Ok(1)),
+        (
+            operation_type::ENVELOPE_MIGRATION,
+            3,
+            2,
+            Err(JournalError::InvalidCounter),
+        ),
+        (
+            operation_type::ENVELOPE_MIGRATION,
+            5,
+            1,
+            Err(JournalError::InvalidCounter),
+        ),
+    ];
+    for (kind, source, target, expected) in cases {
+        let manifest = operation(kind, source, target);
+        assert_eq!(
+            journal_envelope_epoch(&manifest),
+            expected,
+            "{kind} {source}->{target}"
+        );
+        // The same rule decides whether the manifest can be written at all.
+        assert_eq!(
+            manifest.encode().is_ok(),
+            expected.is_ok(),
+            "{kind} {source}->{target}"
+        );
+    }
+}
+
+#[test]
+fn a_wire_body_with_a_backwards_target_is_refused_on_decode() {
+    // Encode two valid rotations that differ only in the target epoch to find where it is stored,
+    // then write a lower target into a valid body: the decoder refuses what the encoder cannot make.
+    let valid = operation(operation_type::ROTATE, 2, 3).encode().unwrap();
+    let other = operation(operation_type::ROTATE, 2, 4).encode().unwrap();
+    let at = valid
+        .iter()
+        .zip(&other)
+        .position(|(a, b)| a != b)
+        .expect("the target epoch is part of the body");
+    // The target epoch is a big-endian u64 whose last byte is the one that differs.
+    let start = at - 7;
+    assert_eq!(&valid[start..=at], &3u64.to_be_bytes());
+    let mut backwards = valid.clone();
+    backwards[start..=at].copy_from_slice(&1u64.to_be_bytes());
+    assert!(JournalManifest::decode(&valid).is_ok());
+    assert_eq!(
+        JournalManifest::decode(&backwards),
+        Err(JournalError::InvalidCounter)
+    );
+}
