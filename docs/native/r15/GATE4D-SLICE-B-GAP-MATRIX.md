@@ -82,6 +82,7 @@ load of the newer generation yet).
 - Slice C1c: the composed capture commit under the root lock stores the page set, publishes the capture manifest and advances the binding as a capture; the root now accepts a change of the inventory fields only through a capture and requires every other checkpoint to leave them alone.
 - Slice D1: the manifest carries an authenticated `final_inventory_captured` flag; only the capture inside `ADMIT` sets it, and `ADMIT → CONVERT` is refused without it.
 - Slice D2a: the journal envelope epoch is derived from the authenticated manifest (`ENABLE`, exactly the first-time `0 → 1` of §8.3, seals under the target epoch, `ROTATE` and `ENVELOPE_MIGRATION` under the source epoch) instead of a constant; a manifest or page sealed under another epoch is refused (`KeyEpochMismatch`) before a byte is written or accepted. Registry resolution of the journal key and the refusal to revoke a bound source epoch are Slice D2b.
+- Slice D2b-1: the key-epoch writer refuses a `Revoked` generation while the committed root binds a live migration (every new revocation, since the binding does not name the journal's epoch), so the bound journal's source epoch stays resolvable until the binding is cleared; the registry-resolved journal key route and the manifest pre-key epoch comparison are D2b-2 and D2b-3.
 - Slice C: record conversion / mixed-key inventory execution as live truth requires
 - Gate 4E: first enable/disable closure
 - Root two-phase commit coupling with step F when journal + root must advance together (after B2)
