@@ -546,16 +546,61 @@ pub fn load_authoritative_manifest<F: DurableFs>(
     live: &LiveMigration,
 ) -> Result<JournalManifest, JournalDurableError> {
     let identity = migration_identity(&live.operation_id)?;
-    let (bytes, digest) = read_root_named_envelope(ctx.fs, ctx.dir, live)?;
+    let (bytes, _) = read_root_named_envelope(ctx.fs, ctx.dir, live)?;
+    open_root_named(ctx.key, &identity, live, &bytes)
+}
+
+/// Opens the root-named envelope `bytes` under `key` and requires the binding to vouch for it: the
+/// part of [`load_authoritative_manifest`] that needs no read. The epoch of the header is compared
+/// before the key is used.
+fn open_root_named(
+    key: &Key,
+    identity: &RecordIdentity,
+    live: &LiveMigration,
+    bytes: &[u8],
+) -> Result<JournalManifest, JournalDurableError> {
     let read = ManifestRead {
-        record: &identity,
+        record: identity,
         journal_revision: live.journal_revision,
-        key_epoch: header_key_epoch(&bytes)?,
-        envelope: &bytes,
+        key_epoch: header_key_epoch(bytes)?,
+        envelope: bytes,
     };
-    let manifest = JournalManifest::open(ctx.key, &read)?;
+    let manifest = JournalManifest::open(key, &read)?;
+    let digest = ManifestEnvelopeDigest::from_bytes(content_digest(bytes));
     assert_live_binding(&manifest, live, digest).map_err(JournalDurableError::Authority)?;
     Ok(manifest)
+}
+
+/// The exact bytes of the generation the root binding names, after proving that they open under the
+/// context's key to exactly `manifest`. A caller that works for a long time keeps the bytes and
+/// repeats the key check with [`assert_anchor`], which needs no read.
+pub(super) fn root_named_anchor<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    live: &LiveMigration,
+) -> Result<Vec<u8>, JournalDurableError> {
+    let (bytes, _) = read_root_named_envelope(ctx.fs, ctx.dir, live)?;
+    assert_anchor(ctx.key, manifest, live, &bytes)?;
+    Ok(bytes)
+}
+
+/// Requires `bytes`, the root-named generation of `live`, to open under `key` to exactly `manifest`.
+/// Pure computation over a few kilobytes: no read, so it can be repeated for every page of a
+/// capture.
+pub(super) fn assert_anchor(
+    key: &Key,
+    manifest: &JournalManifest,
+    live: &LiveMigration,
+    bytes: &[u8],
+) -> Result<(), JournalDurableError> {
+    let identity = migration_identity(&live.operation_id)?;
+    if open_root_named(key, &identity, live, bytes)? == *manifest {
+        Ok(())
+    } else {
+        Err(JournalDurableError::Authority(
+            MigrationExecutionError::LiveBindingMismatch,
+        ))
+    }
 }
 
 /// Reads the generation the committed root names, bounded, and proves the bytes are what the root

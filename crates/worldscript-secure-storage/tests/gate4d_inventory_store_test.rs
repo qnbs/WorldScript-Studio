@@ -1,10 +1,13 @@
 //! Gate 4D Slice C1b-1: where the pages of a captured inventory live, and writing them (§10.1.1).
 
+#[path = "support/journal_fixture.rs"]
+mod journal_fixture;
 #[path = "support/inventory.rs"]
 mod support;
 
 use std::path::Path;
 
+use journal_fixture::*;
 use support::*;
 use worldscript_secure_storage::*;
 
