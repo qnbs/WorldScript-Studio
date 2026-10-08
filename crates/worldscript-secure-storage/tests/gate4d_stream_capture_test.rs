@@ -565,13 +565,21 @@ fn a_failure_never_removes_a_file_it_did_not_write() {
     std::fs::write(&slot, b"bytes of someone else").unwrap();
     let failed = capture.push_page(&mut ctx, all[3..6].to_vec()).err();
     let first = generation_path(&pending.join("page-0"), 4);
+    // Nothing of the failed attempt is left but the file it did not write: no page, and not the
+    // staging link a failed promotion reports either.
     assert_eq!(
         (
             matches!(failed, Some(JournalDurableError::Stage(_))),
             std::fs::read(&slot).unwrap(),
-            first.exists()
+            first.exists(),
+            files_under(&pending),
         ),
-        (true, b"bytes of someone else".to_vec(), false)
+        (
+            true,
+            b"bytes of someone else".to_vec(),
+            false,
+            BTreeSet::from(["page-1/generation-4.wsr1".to_owned()])
+        )
     );
 }
 

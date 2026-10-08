@@ -30,7 +30,7 @@
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use crate::durable::{generation_path, DurableFs, WriteOperationId};
+use crate::durable::{generation_path, staging_path, DurableFs, WriteOperationId};
 use crate::marker::content_digest;
 use crate::root::LiveMigration;
 
@@ -81,8 +81,9 @@ impl std::fmt::Debug for StreamedCapture {
 }
 
 /// A finished capture: the successor manifest that names the page set, and where the staged pages
-/// are. Nothing is published yet.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// are. Nothing is published yet. It is a handle to files on disk, so it is deliberately not
+/// `Clone`: whoever holds it owns the decision to promote or to [`discard`](Self::discard) them.
+#[derive(Debug, PartialEq, Eq)]
 pub struct StagedCapture {
     successor: JournalManifest,
     pending: PathBuf,
@@ -221,8 +222,14 @@ impl StreamedCapture {
         if let Err(error) = store_page_at(ctx, &dir, &self.committed, &sealed) {
             // The page in flight may be on disk already, or the failure may be that a different file
             // sits in its slot: only a file that holds exactly the bytes staged here is ours to remove.
-            let path = generation_path(&dir, self.revision);
-            remove_if_staged(ctx, &path, &reference.page_content_digest);
+            let digest = &reference.page_content_digest;
+            remove_if_staged(ctx, &generation_path(&dir, self.revision), digest);
+            // The attempt's own staging link, which a failed promotion reports and leaves behind.
+            remove_if_staged(
+                ctx,
+                &staging_path(&dir, self.revision, ctx.operation),
+                digest,
+            );
             return Err(error);
         }
         self.refs.push(reference);
