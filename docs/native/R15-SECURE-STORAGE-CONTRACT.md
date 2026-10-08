@@ -2412,8 +2412,12 @@ predecessor (epochs are frozen across successors), and for the manifest the root
 bytes whose digest the committed live-migration binding vouches for, judged against that digest before
 the key is used. The header is compared with that epoch before the key is used (`KeyEpochMismatch`, never
 an authentication failure), the epoch derived from the authenticated body must agree afterwards, and
-the manifest is refused at sealing for any other epoch; the registry resolution of the journal key
-selects the key by the same epoch. The source
+the manifest is refused at sealing for any other epoch. The key of a bound journal is resolved by that
+vouched epoch through the authenticated key-epoch registry: the record for the epoch must be `Prepared`,
+`Active` or `RetiredRecoveryOnly` (an `ENABLE` journal is sealed under its still-`Prepared` target),
+`Revoked` or absent fails closed before any mutation, and the record's opaque route resolves to the
+key; the root's `active_key_epoch` is never consulted, so after cutover the source epoch's key still
+resolves. The source
 epoch therefore has to stay resolvable, at least `RetiredRecoveryOnly`, for as long as a journal is
 bound to the root: it is never revoked or destroyed while a live migration names the journal (the key-epoch
 writer refuses a `Revoked` generation while the committed root binds a live migration, and because the

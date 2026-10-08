@@ -660,10 +660,36 @@ constant epoch, and pages sealed under another key at another epoch, refused by 
 a candidate sealed at another epoch is not adopted by the durable promotion; `a_page_is_promoted_only_for_the_manifest_the_root_names` (a same-owner copy with other epochs is refused before any create and the root-named manifest seals the page at its own epoch 2).
 
 Residual, owned by Slice D2b: resolving the journal key through the authenticated key-epoch registry
-(`Prepared`, `Active` and `RetiredRecoveryOnly` allowed, `Revoked` or absent refused; D2b-3), refusing
+(`Prepared`, `Active` and `RetiredRecoveryOnly` allowed, `Revoked` or absent refused; the route is D2b-3a, its wiring D2b-3b), refusing
 the revocation of the source epoch while a live migration binds the journal (done in D2b-1, below), and the
 cutover readability test with the root's active epoch already at the target (D2b-3). The manifest side of the
 authority-first comparison (D2a compared the header only after authentication) is done in D2b-2, below.
+
+## Slice D2b-3a — the key route of a bound journal
+
+A bound journal is sealed under its operation's journal envelope epoch, which is not the root's moving
+`active_key_epoch`, so its key has to be found through authority. The route is additive: nothing calls it
+yet (D2b-3b wires it).
+
+| Step | Rule |
+|---|---|
+| 1. the vouched epoch | `root_named_journal_epoch` reads the root-named manifest generation bounded (the exact bytes `load_authoritative_manifest` reads, now one shared `read_root_named_envelope`), requires its digest to equal the binding's `manifest_digest` (`LiveBindingMismatch`; missing is `RecoveryRequired`), and returns the header epoch the root has vouched for, with no key |
+| 2. the registry | the epoch is looked up in the authenticated key-epoch registry (`load_key_epoch_set`, the newest generation of each epoch, like `preflight_key_epochs`): absent is `EpochNotRegistered`, `Revoked` is `EpochRevoked`; `Prepared`, `Active` and `RetiredRecoveryOnly` are usable (an `ENABLE` journal is sealed under its still-`Prepared` target) |
+| 3. the key | the record's opaque route resolves through the provider (`Provider` error otherwise) |
+
+`resolve_journal_key(fs, provider, JournalRoute { layout, scope, root_key_ref, journal_dir, live })` is
+read-only: every refusal happens before anything is created or changed. It never reads the root's
+`active_key_epoch`, so after cutover (root already at the target, source `RetiredRecoveryOnly`) the bound
+journal still resolves under its source epoch. A staged-ahead `Revoked` generation is respected (fail
+closed). `MemoryKeyProvider::import_epoch_key` (test support) gives fixtures a key whose material they know.
+
+Proof (`gate4d_journal_route_test`): each usable status routes to the key that really opens the journal;
+the newest generation wins (Active then Revoked is refused); an unregistered epoch is refused; the cutover
+state resolves under the source epoch with the root asserted to be at the target; a digest the root did not
+name is `LiveBindingMismatch` before the registry is read (an unreadable record directory is not reached);
+a missing generation needs recovery; and nothing under the fixture changes, whether the route succeeds or
+refuses. Mutation-checked: dropping the status gate, reading the registry first, and routing by the active
+epoch each fail their tests.
 
 ## Slice D2b-2 — manifest authority-first epoch preflight
 
@@ -728,10 +754,11 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).
 - The cross-process lease CAS.
-- Key-epoch registry resolution of the journal key (Slice D2b-3): the journal key a caller passes is not yet
-  resolved through the authenticated key-epoch registry. D2a fixes which epoch seals the journal; D2b-1
-  refuses revoking it while a migration is bound; D2b-2 compares a manifest's header epoch with trusted
-  authority before the key is used; D2b-3 makes the registry route select the key by that epoch.
+- Wiring of the key route (Slice D2b-3b): `resolve_journal_key` exists (D2b-3a) but the composed journal-owner
+  operations still take a caller-supplied `JournalSource::key`. D2a fixes which epoch seals the journal;
+  D2b-1 refuses revoking it while a migration is bound; D2b-2 compares a manifest's header epoch with
+  trusted authority before the key is used; D2b-3a resolves the key through the registry; D2b-3b makes the
+  composed operations use it and drops the caller key.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
 
 ## Explicit non-goals (journal durable promotion)
