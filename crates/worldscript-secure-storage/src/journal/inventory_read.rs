@@ -38,7 +38,7 @@ use super::state::MigrationExecutionError;
 use super::{JournalError, MAX_JOURNAL_PAGE_BYTES};
 
 /// The largest valid sealed page: the page encoding bound plus the envelope header and tag.
-const MAX_PAGE_ENVELOPE_BYTES: usize = MAX_JOURNAL_PAGE_BYTES + HEADER_LEN + TAG_LEN;
+pub(super) const MAX_PAGE_ENVELOPE_BYTES: usize = MAX_JOURNAL_PAGE_BYTES + HEADER_LEN + TAG_LEN;
 /// A page directory holds one generation and, at most, a few staging leftovers; a directory with
 /// more entries than this is not read.
 const MAX_PAGE_DIRECTORY_ENTRIES: usize = 64;
@@ -142,7 +142,7 @@ fn hinted_generation<F: DurableFs>(
 }
 
 /// The envelope at `path`, never larger than any valid sealed page.
-fn read_envelope<F: DurableFs>(
+pub(super) fn read_envelope<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     path: &Path,
 ) -> Result<Vec<u8>, JournalDurableError> {
@@ -157,7 +157,7 @@ fn read_envelope<F: DurableFs>(
 /// Opens `bytes` as this operation's page `index` at `generation` under the journal key. Read routing
 /// is authority-first (§6): the header's epoch is compared with the operation's journal envelope
 /// epoch before the key is used, so a misrouted page is never decrypted.
-fn open_stored_page<F: DurableFs>(
+pub(super) fn open_stored_page<F: DurableFs>(
     ctx: &JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
     index: u32,

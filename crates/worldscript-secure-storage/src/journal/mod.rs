@@ -16,6 +16,7 @@ mod manifest_verify;
 mod page;
 mod renewal;
 mod state;
+mod stream_capture;
 mod succession;
 mod takeover;
 mod wire;
@@ -145,6 +146,9 @@ pub use state::{
     mark_recovery, ordinary_mutating_writes_admitted, transition_phase, JournalCheckpointCursor,
     JournalInventoryExtent, JournalRevision, ManifestEnvelopeDigest, MigrationExecutionError,
     MigrationFence, MigrationPhase, RecoveryReasonCode,
+};
+pub use stream_capture::{
+    load_staged_page, CaptureStart, StagedCapture, StagedPage, StreamedCapture,
 };
 pub use succession::{assert_manifest_successor, assert_progress_successor};
 pub use takeover::{

@@ -238,26 +238,30 @@ fn store_page<F: DurableFs>(
         &set.successor.journal_page_set_digest,
         sealed.page.page_index(),
     );
-    if holds_envelope(ctx, &dir, sealed)? {
+    store_page_at(ctx, &dir, set.committed_manifest, sealed)
+}
+
+/// Stores one page of `manifest`'s operation into the page directory `dir`, which sits under the
+/// journal directory: the same adoption, staging, promotion and directory syncs wherever the page set
+/// is being assembled.
+pub(super) fn store_page_at<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    dir: &Path,
+    manifest: &JournalManifest,
+    sealed: &SealedPage<'_>,
+) -> Result<DirectoryDurability, JournalDurableError> {
+    if holds_envelope(ctx, dir, sealed)? {
         // The earlier attempt may have stopped before its directories were durable, and, under the
         // same operation id, may have left its own staging link behind.
-        let staging = staging_residue(ctx, &dir, sealed.page.page_generation());
-        return sync_chain(ctx, &dir, staging);
+        let staging = staging_residue(ctx, dir, sealed.page.page_generation());
+        return sync_chain(ctx, dir, staging);
     }
     ctx.fs
-        .create_dir_all(&dir)
+        .create_dir_all(dir)
         .map_err(|error| JournalDurableError::Stage(stage_io(error)))?;
-    let identity = migration_page_identity(
-        &set.committed_manifest.operation_id,
-        sealed.page.page_index(),
-    )?;
-    let epoch = journal_envelope_epoch(set.committed_manifest)?;
-    let request = stage_request(
-        &dir,
-        &identity,
-        page_meta(sealed.page, epoch),
-        ctx.operation,
-    );
+    let identity = migration_page_identity(&manifest.operation_id, sealed.page.page_index())?;
+    let epoch = journal_envelope_epoch(manifest)?;
+    let request = stage_request(dir, &identity, page_meta(sealed.page, epoch), ctx.operation);
     let promoted = stage_and_promote_envelope(ctx.fs, ctx.key, &request, sealed.envelope.to_vec())?;
     let above = dir.parent().unwrap_or(ctx.dir);
     let synced = sync_chain(ctx, above, promoted.staging)?;

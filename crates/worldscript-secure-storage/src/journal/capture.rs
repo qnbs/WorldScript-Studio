@@ -48,23 +48,52 @@ pub fn capture_inventory(
 ) -> Result<JournalManifest, MigrationExecutionError> {
     assert_fence(manifest, fence)?;
     assert_inventory_open(manifest)?;
-    let revision = manifest
-        .journal_revision
-        .checked_add(1)
-        .ok_or(JournalError::InvalidCounter)?;
+    let revision = next_revision(manifest)?;
     let ordered = ordered_pages(pages)?;
     let refs = page_refs(&ordered, revision)?;
+    let entry_count = entry_total(&ordered)?;
+    let inventory_digest = inventory_digest_of(manifest.inventory_version, &ordered, entry_count)?;
+    let parts = CapturedInventory {
+        refs: &refs,
+        entry_count,
+        inventory_digest,
+    };
+    capture_successor(manifest, &parts)
+}
+
+/// What a capture of the inventory consists of, however its pages were produced: one reference per
+/// page, the entry total and the inventory digest over the entries.
+pub(super) struct CapturedInventory<'a> {
+    pub refs: &'a [JournalPageRef],
+    pub entry_count: u32,
+    pub inventory_digest: [u8; 32],
+}
+
+/// The revision a capture of `manifest` is published at: the next one, and the generation of every
+/// page the capture writes.
+pub(super) fn next_revision(manifest: &JournalManifest) -> Result<u64, MigrationExecutionError> {
+    manifest
+        .journal_revision
+        .checked_add(1)
+        .ok_or_else(|| JournalError::InvalidCounter.into())
+}
+
+/// The successor of `manifest` that carries `parts` as its inventory, checked as a valid successor.
+/// Both the capture from pages in memory and the streamed capture end here.
+pub(super) fn capture_successor(
+    manifest: &JournalManifest,
+    parts: &CapturedInventory<'_>,
+) -> Result<JournalManifest, MigrationExecutionError> {
     let mut next = manifest.clone();
     // Only the capture that runs behind `ADMIT`'s barrier is the final one (§10.3).
     next.final_inventory_captured = manifest.phase == phase_code::ADMIT;
-    next.journal_revision = revision;
-    next.page_count = u32::try_from(ordered.len()).map_err(|_| JournalError::TooManyEntries)?;
-    next.entry_count = entry_total(&ordered)?;
-    next.inventory_digest =
-        inventory_digest_of(manifest.inventory_version, &ordered, next.entry_count)?;
-    next.journal_page_set_digest = journal_page_set_digest(&refs)?;
+    next.journal_revision = next_revision(manifest)?;
+    next.page_count = u32::try_from(parts.refs.len()).map_err(|_| JournalError::TooManyEntries)?;
+    next.entry_count = parts.entry_count;
+    next.inventory_digest = parts.inventory_digest;
+    next.journal_page_set_digest = journal_page_set_digest(parts.refs)?;
     next.encode()?;
-    next.verify_page_set(&refs)?;
+    next.verify_page_set(parts.refs)?;
     assert_manifest_successor(manifest, &next)?;
     Ok(next)
 }
@@ -73,7 +102,9 @@ pub fn capture_inventory(
 /// starts, while nothing has been converted and, because the final inventory is immutable once
 /// captured, before the final capture. `PREPARE` is excluded: ordinary writes are admitted
 /// there until `ADMIT`'s barrier, so only the `ADMIT` snapshot can be the commit inventory.
-fn assert_inventory_open(manifest: &JournalManifest) -> Result<(), MigrationExecutionError> {
+pub(super) fn assert_inventory_open(
+    manifest: &JournalManifest,
+) -> Result<(), MigrationExecutionError> {
     let phase = manifest_phase(manifest);
     if is_terminal_phase(phase) {
         return Err(MigrationExecutionError::TerminalPhase);
