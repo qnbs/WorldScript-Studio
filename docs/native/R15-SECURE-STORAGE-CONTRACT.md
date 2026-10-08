@@ -2367,6 +2367,16 @@ forward phase transition enters the new phase at cursor `(0, 0)` (`ADMIT → CON
 entering `RECOVERY_REQUIRED` keeps the last cursor, which is where the operation stopped. A successor that
 breaks any of these is not a valid successor, whoever built it.
 
+**The renewal operation.** The owner extends its lease through an operation of its own, never through a
+progress checkpoint. It publishes the renewal generation (the committed owner and fence only, the committed
+generation authenticated against the root-bound digest, the renewal relation checked before any write; an
+identical durable candidate is adopted on a retry) and then advances the root binding to it under the root
+lock, which proves the renewal relation again against the manifest the root names, with the journal key
+resolved through the key-epoch registry like every journal-owner operation. Neither the ordinary checkpoint
+nor the plain binding advance can carry a lease change, so this is the only path by which a lease is
+extended. A renewal and a takeover that race for the same revision are settled by the root lock: whichever
+commits first makes the other stale, because a takeover advances the fence and a renewal advances the expiry
+the takeover required to have lapsed.
 A token check performed as a separate preflight is insufficient. Every mutation-capable adapter
 operation therefore exposes the semantic equivalent of
 `with_fence(fencing_generation, mutation_and_durability)`: it acquires the cross-process migration

@@ -125,9 +125,10 @@ pub use digest::{
 };
 pub use durable::{
     acquire_journal_durable_guard, load_authoritative_manifest, load_manifest_generation,
-    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, publish_takeover_fenced,
-    root_named_journal_epoch, with_fence, CandidateConflict, JournalDurableContext,
-    JournalDurableError, JournalDurableGuard, JournalTakeover, PublishedManifest,
+    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, publish_renewal_fenced,
+    publish_takeover_fenced, root_named_journal_epoch, with_fence, CandidateConflict,
+    JournalDurableContext, JournalDurableError, JournalDurableGuard, JournalTakeover,
+    PublishedManifest,
 };
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
 pub use inventory_read::{load_inventory_page, verify_stored_inventory, VerifiedInventory};

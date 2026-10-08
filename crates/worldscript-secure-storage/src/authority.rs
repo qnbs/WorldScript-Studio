@@ -42,10 +42,11 @@ use crate::error::SealError;
 use crate::identity::RecordIdentity;
 use crate::journal::{
     assert_binding_successor, assert_binding_takeover, assert_capture_successor, assert_fence,
-    assert_progress_successor, assert_takeover_successor, load_authoritative_manifest,
-    promote_inventory_set_fenced, publish_manifest_fenced, publish_takeover_fenced,
-    CandidateConflict, InventorySetWrite, JournalDurableContext, JournalDurableError,
-    JournalManifest, JournalTakeover, MigrationExecutionError, MigrationFence, SealedPage,
+    assert_progress_successor, assert_renewal_successor, assert_takeover_successor,
+    load_authoritative_manifest, promote_inventory_set_fenced, publish_manifest_fenced,
+    publish_renewal_fenced, publish_takeover_fenced, CandidateConflict, InventorySetWrite,
+    JournalDurableContext, JournalDurableError, JournalManifest, JournalTakeover,
+    MigrationExecutionError, MigrationFence, SealedPage,
 };
 use crate::journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 use crate::marker::content_digest;
@@ -539,6 +540,47 @@ pub fn commit_journal_takeover<F: DurableFs, P: KeyProvider>(
     commit_planned(fs, provider, layout, commit, &held, Some(step))
 }
 
+/// Renews the owner's lease and advances the root binding to the renewal (§10.1).
+///
+/// The same owner extends the expiry of the lease it holds without a takeover: the fence stays, the
+/// revision advances by one, the expiry moves strictly forward and nothing else changes
+/// ([`assert_renewal_successor`]). Under one `root_commit_mutex` the committed binding is read from
+/// the root, the renewal is published through [`publish_renewal_fenced`] (the committed owner and
+/// fence only, the committed generation authenticated against the binding digest; a retry after a
+/// failed root commit adopts its own identical candidate), and the binding advances to it as
+/// [`advance_live_migration`] does, verified again as a renewal. A refusal before the publish (no
+/// bound migration, another key route or epoch, a stale or foreign owner, an expiry that does not
+/// move forward, any other changed field) writes nothing. The ordinary checkpoint and the plain
+/// binding advance keep refusing a lease change, so this is the only way a lease is extended. No
+/// clock is read: after expiry the owner may still renew while nobody has taken over, because a
+/// takeover advances the fence and the root lock serialises the two. Lock order is the root lock,
+/// then the journal mutex inside the publish.
+pub fn commit_lease_renewal<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    renewal: JournalCheckpoint<'_>,
+) -> Result<RootCommitted, AuthorityError> {
+    check_operation_id(&renewal.manifest.operation_id)
+        .map_err(|_| AuthorityError::InvalidOperationId)?;
+    let held = acquire_root_commit(layout)?;
+    let commit = journal_catalog_commit(&renewal);
+    let committed = committed_binding(fs, provider, layout, commit)?;
+    let key = route_journal_key(fs, provider, layout, renewal.journal)?;
+    let published = {
+        let mut journal = journal_context(&mut *fs, renewal.journal, &key, renewal.conflict);
+        publish_renewal_fenced(&mut journal, renewal.manifest, renewal.fence, &committed)
+            .map_err(AuthorityError::Journal)?
+    };
+    let next = binding_for(renewal.manifest, published.content_digest);
+    let advance = binding_advance(&next, &renewal);
+    let step = JournalStep {
+        binding: BindingStep::Renewal(&advance),
+        key: &key,
+    };
+    commit_planned(fs, provider, layout, commit, &held, Some(step))
+}
+
 fn acquire_root_commit(layout: RootLayout<'_>) -> Result<RootCommitGuard, AuthorityError> {
     RootCommitGuard::acquire(layout.root_dir).map_err(|error| {
         AuthorityError::Root(RootStoreError::Io {
@@ -639,6 +681,8 @@ enum BindingStep<'a> {
     /// The same owner's next revision when it is a capture of the inventory (§10.3): the only step
     /// that may change the inventory fields, and only as the capture-window successor.
     Capture(&'a BindingAdvance<'a>),
+    /// The same owner's next revision when it only moves its lease expiry forward (§10.1).
+    Renewal(&'a BindingAdvance<'a>),
     /// A new owner's claim: the fence plus one after the committed lease expired (§10.1).
     Takeover {
         advance: &'a BindingAdvance<'a>,
@@ -658,6 +702,7 @@ impl<'a> BindingStep<'a> {
         match *self {
             BindingStep::Checkpoint(advance)
             | BindingStep::Capture(advance)
+            | BindingStep::Renewal(advance)
             | BindingStep::Takeover { advance, .. } => advance,
         }
     }
@@ -761,7 +806,7 @@ fn verify_binding_advance<F: DurableFs>(
         .ok_or(AuthorityError::NoLiveMigration)?;
     // QNBS-v3: the stale-owner comparison runs against the binding read from the root under root_commit_mutex, never against a binding the caller carried in; the journal is read by exact generation, with no directory enumeration.
     match step {
-        BindingStep::Checkpoint(_) | BindingStep::Capture(_) => {
+        BindingStep::Checkpoint(_) | BindingStep::Capture(_) | BindingStep::Renewal(_) => {
             assert_binding_successor(committed, advance.next)
         }
         BindingStep::Takeover { .. } => assert_binding_takeover(committed, advance.next),
@@ -794,6 +839,7 @@ fn assert_manifest_step(
     match step {
         BindingStep::Checkpoint(_) => assert_progress_successor(committed, next),
         BindingStep::Capture(_) => assert_capture_successor(committed, next),
+        BindingStep::Renewal(_) => assert_renewal_successor(committed, next),
         BindingStep::Takeover { now_unix_ms, .. } => {
             assert_takeover_successor(committed, next, now_unix_ms)
         }
