@@ -142,7 +142,7 @@ fn hinted_generation<F: DurableFs>(
 }
 
 /// The envelope at `path`, never larger than any valid sealed page.
-fn read_envelope<F: DurableFs>(
+pub(super) fn read_envelope<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     path: &Path,
 ) -> Result<Vec<u8>, JournalDurableError> {
@@ -157,7 +157,7 @@ fn read_envelope<F: DurableFs>(
 /// Opens `bytes` as this operation's page `index` at `generation` under the journal key. Read routing
 /// is authority-first (§6): the header's epoch is compared with the operation's journal envelope
 /// epoch before the key is used, so a misrouted page is never decrypted.
-fn open_stored_page<F: DurableFs>(
+pub(super) fn open_stored_page<F: DurableFs>(
     ctx: &JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
     index: u32,

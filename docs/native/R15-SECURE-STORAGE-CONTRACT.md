@@ -2420,6 +2420,18 @@ with. Entering `ADMIT` does not set it, so after a crash or restart a journal ca
 inventory carried forward from a final one actually captured behind the barrier. The final inventory
 is the commit inventory and immutable once captured, so it is captured once.
 
+**Capturing an inventory too large for memory.** The pages of a capture need not be held at once. A page
+is sealed once (a second sealing would use another nonce and bind a different digest), so its envelope is
+staged on disk in a pending directory of its own, named for what it is and never as a digest directory,
+while the page references and the inventory digest accumulate page by page. The inventory digest commits
+to the total entry count before any entry (§5.4), so the total is announced when the capture starts and
+the capture ends only when exactly that many entries were staged. The builder assigns the consecutive
+page indexes and the capture's generation, entries must be valid and strictly ascending across pages, and
+the successor manifest is built and checked exactly as for pages held in memory. Staged files are not
+authority: the manifest never names them, no reader looks for them, a staged page is trusted only after
+it is read back by the exact path of its reference and confirmed against that reference, and an abandoned
+attempt leaves files that nothing trusts. Promoting the staged pages to the digest directory, under the
+root lock, is a separate step.
 **Journal envelope epoch.** The manifest and every page of one operation are sealed under a single key
 epoch that is stable for the whole operation and derived from the authenticated manifest alone, never
 from the authority root's `active_key_epoch`, which moves at cutover: `ENABLE` seals under
