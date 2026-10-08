@@ -2441,7 +2441,11 @@ have put the same bytes (an identical page already there is adopted, a different
 and the inventory digest over the entries read must equal the successor's before the manifest naming the
 set is published. A staged page found wrong midway leaves the verified prefix as an inert directory under
 the digest and publishes nothing. The staged files are removed only after the root has committed to the
-set, so that a retry after a failure before that point still has them.
+set, so that a retry after a failure before that point still has them. A caller of this path handles no
+journal key, no committed manifest and no binding: the key is routed from the authenticated root and
+registry, both the start of the capture and the commit read the committed manifest and the binding from
+the root, and the commit promotes into the journal directory the capture was staged in, so there is one
+directory value per capture.
 **Journal envelope epoch.** The manifest and every page of one operation are sealed under a single key
 epoch that is stable for the whole operation and derived from the authenticated manifest alone, never
 from the authority root's `active_key_epoch`, which moves at cutover: `ENABLE` seals under

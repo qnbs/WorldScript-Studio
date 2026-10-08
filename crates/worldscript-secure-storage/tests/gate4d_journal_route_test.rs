@@ -14,19 +14,20 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
 use worldscript_secure_storage::{
-    advance_live_migration, commit_catalog_change, commit_inventory_capture,
-    commit_journal_checkpoint, commit_journal_takeover, commit_lease_renewal, commit_root,
-    commit_streamed_inventory_capture, content_digest, empty_inventory_digest,
-    empty_journal_page_set_digest, generation_path, load_catalog, operation_type, phase_code,
-    resolve_journal_key, write_key_epoch, AuthorityError, BindingAdvance, CandidateConflict,
-    CaptureStart, CatalogChange, CatalogCommit, InstallationScopeId, InventoryCapture,
-    JournalCheckpoint, JournalDurableContext, JournalDurableError, JournalError, JournalManifest,
-    JournalRoute, JournalRouteError, JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit,
-    KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, ManifestRead,
-    MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity, RecordMeta,
-    RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState,
-    RootKeyRefV1, RootLayout, StagedCapture, StdFs, StreamedCapture, StreamedInventoryCapture,
-    WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    advance_live_migration, begin_streamed_capture, commit_catalog_change,
+    commit_inventory_capture, commit_journal_checkpoint, commit_journal_takeover,
+    commit_lease_renewal, commit_root, commit_streamed_inventory_capture, content_digest,
+    empty_inventory_digest, empty_journal_page_set_digest, generation_path, load_catalog,
+    operation_type, phase_code, resolve_journal_key, write_key_epoch, AuthorityError,
+    BindingAdvance, CandidateConflict, CaptureStart, CatalogChange, CatalogCommit,
+    InstallationScopeId, InventoryCapture, JournalCheckpoint, JournalDurableContext,
+    JournalDurableError, JournalError, JournalManifest, JournalRoute, JournalRouteError,
+    JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus,
+    KeyProvider, LiveMigration, ManifestRead, MigrationExecutionError, MigrationFence, OpenError,
+    RecordClass, RecordIdentity, RecordMeta, RootBody, RootCommitEvidence, RootCommitGuard,
+    RootCommitRequest, RootCommitState, RootKeyRefV1, RootLayout, SessionBegin, StagedCapture,
+    StdFs, StreamedCapture, StreamedInventoryCapture, WriteOperationId,
+    JOURNAL_MANIFEST_RECORD_SCHEMA,
 };
 
 const OPERATION: &str = "route-op";
@@ -560,18 +561,13 @@ impl Fixture {
     /// routed from the root, never taken from the caller.
     fn streamed_capture_is_refused(&mut self, staged: &StagedCapture) -> AuthorityError {
         let root_ref = self.root_ref().clone();
-        let (root_dir, journal_dir) = (self.root_dir(), self.journal_dir());
-        let committed = rotation();
+        let root_dir = self.root_dir();
         let fence = MigrationFence::from_manifest(staged.successor());
         let operation = WriteOperationId::generate().unwrap();
         let capture = StreamedInventoryCapture {
             staged,
-            committed_manifest: &committed,
             fence: &fence,
-            journal: JournalSource {
-                dir: &journal_dir,
-                operation: &operation,
-            },
+            operation: &operation,
             root_key_ref: &root_ref,
             active_key_epoch: self.root_epoch,
             conflict: CandidateConflict::Refuse,
@@ -581,6 +577,26 @@ impl Fixture {
         };
         commit_streamed_inventory_capture(&mut StdFs, &mut self.provider, layout, capture)
             .unwrap_err()
+    }
+
+    /// The start of a staging session over valid inputs, which is expected to be refused: the key is
+    /// routed from the root before anything is loaded or created.
+    fn session_is_refused(&self) -> AuthorityError {
+        let (root_dir, journal_dir) = (self.root_dir(), self.journal_dir());
+        let fence = MigrationFence::from_manifest(&rotation());
+        let operation = WriteOperationId::generate().unwrap();
+        let begin = SessionBegin {
+            journal: JournalSource {
+                dir: &journal_dir,
+                operation: &operation,
+            },
+            fence: &fence,
+            entry_count: 0,
+        };
+        let layout = RootLayout {
+            root_dir: &root_dir,
+        };
+        begin_streamed_capture(&mut StdFs, &self.provider, layout, begin).unwrap_err()
     }
 
     /// The five composed journal operations over valid inputs for each (a checkpoint and a capture of
@@ -676,6 +692,7 @@ fn a_revoked_journal_epoch_refuses_every_journal_operation_before_a_write() {
     let before = fixture.snapshot();
     let mut errors = fixture.every_operation_is_refused(&stored);
     errors.push(fixture.streamed_capture_is_refused(&staged));
+    errors.push(fixture.session_is_refused());
     for error in errors {
         assert_eq!(
             error,
@@ -695,6 +712,7 @@ fn an_unregistered_journal_epoch_refuses_every_journal_operation_before_a_write(
     let before = fixture.snapshot();
     let mut errors = fixture.every_operation_is_refused(&stored);
     errors.push(fixture.streamed_capture_is_refused(&staged));
+    errors.push(fixture.session_is_refused());
     for error in errors {
         assert_eq!(
             error,
@@ -718,6 +736,7 @@ fn a_route_to_another_key_is_refused_by_the_authenticated_load_before_a_write() 
     // Every operation has valid inputs, so the key is the only thing left to refuse them.
     let mut errors = fixture.every_operation_is_refused(&stored);
     errors.push(fixture.streamed_capture_is_refused(&staged));
+    errors.push(fixture.session_is_refused());
     for error in errors {
         assert_eq!(
             error,
