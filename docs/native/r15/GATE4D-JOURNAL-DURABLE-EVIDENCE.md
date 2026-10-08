@@ -671,7 +671,7 @@ Stage one left a finished inventory in `inventory/pending-*`; this is the step t
 
 | Step | Rule |
 |---|---|
-| `promote_staged_inventory_fenced` | under the journal mutex and before any read or write: the caller is the committed owner writing under the committed manifest (`assert_page_promote_authority`, which refuses before anything is read); then the exact root-named predecessor, the capture successor relation, and the staged references against the page set the successor names; then for each staged page `load_staged_page` (digest first, then open), the entries absorbed into the inventory digest, and `store_page_at` into `inventory/<digest>/page-<i>/` (an identical page is adopted, a different file never replaced); finally the inventory digest must equal the successor's |
+| `promote_staged_inventory_fenced` | before any read or write: the context is for the journal directory the capture was staged in (a finished capture remembers it and refuses any other, because its pages are read by absolute path), and under the journal mutex the caller is the committed owner writing under the committed manifest (`assert_page_promote_authority`, which refuses before anything is read); then the exact root-named predecessor, the capture successor relation, and the staged references against the page set the successor names; then for each staged page `load_staged_page` (digest first, then open), the entries absorbed into the inventory digest, and `store_page_at` into `inventory/<digest>/page-<i>/` (an identical page is adopted, a different file never replaced); finally the inventory digest must equal the successor's |
 | `commit_streamed_inventory_capture` | `commit_inventory_capture`'s order and guarantees: operation id, fence, root lock, committed binding, journal key routed from the root, the promotion above, `publish_manifest_fenced` as the capture, `BindingStep::Capture`; the staged files are removed (best effort) only after the root has committed, so a retry after a failed root commit still has them and adopts the pages and the manifest candidate; after a success the handle is spent |
 
 `commit_inventory_capture` and the new commit now share one core (`commit_capture`), which takes the step that
@@ -688,7 +688,8 @@ depth and have no test that fails without them through the public API.
 Proof: the promotion on the journal alone (a promoted capture publishes and binds as a stored set that
 `verify_stored_inventory` accepts, with the same references and manifest; a repeated promotion adopts what is
 stored; a stale owner and another revision are refused before anything is read; a manifest the root does not
-name and a capture built over another phase are refused with nothing created; a staged page that changed, or
+name, a journal that moved on after the capture began, and a journal directory other than the one the capture
+was staged in (one that holds an identical copy of the root-named manifest) are refused with nothing created; a staged page that changed, or
 one that is missing, stops the promotion with only a verified prefix stored and no manifest published, the
 missing one as `Corrupt`) and the composed commit with a real root (the root names the successor, its pages
 verify and the staged files are gone; a stale token and an unbound migration are refused with the journal tree
@@ -696,7 +697,7 @@ and the root unchanged and the staged files kept; a changed staged page refuses 
 is published; a failed root commit is retried with the same staged capture, which writes nothing new into the
 journal, and removes the staged files); the key route refuses the new commit with a revoked or unregistered
 epoch and with a route to another key, beside the other journal-owner operations. Mutation-checked: the
-root-named, capture-successor and promote-authority checks, the digest directory, the inventory digest
+root-named, capture-successor, promote-authority and journal-binding checks, the digest directory, the inventory digest
 absorption, keeping the staged files after a success, removing them before the root commit, and a fixed
 journal key in the shared core each fail the test that owns them.
 

@@ -27,7 +27,7 @@ use super::durable::{
 };
 use super::inventory_store::{assert_page_generation, both, inventory_page_dir, store_page_at};
 use super::manifest::JournalManifest;
-use super::state::{assert_page_promote_authority, MigrationFence};
+use super::state::{assert_page_promote_authority, MigrationExecutionError, MigrationFence};
 use super::stream_capture::{load_staged_page, StagedCapture};
 
 /// A finished streamed capture to promote: the manifest the root binding names, the owner's token
@@ -50,6 +50,13 @@ pub fn promote_staged_inventory_fenced<F: DurableFs>(
 ) -> Result<DirectoryDurability, JournalDurableError> {
     let committed = promotion.committed_manifest;
     let successor = promotion.staged.successor();
+    // The capture belongs to the journal it was staged in: its pages are read from there by absolute
+    // path, so a context for another directory would copy them across. Refused before anything is read.
+    if ctx.dir != promotion.staged.journal_dir() {
+        return Err(JournalDurableError::Authority(
+            MigrationExecutionError::LiveBindingMismatch,
+        ));
+    }
     with_fence(committed, promotion.fence, || {
         assert_page_promote_authority(committed, Some(promotion.committed))
             .map_err(JournalDurableError::Authority)?;

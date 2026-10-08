@@ -89,6 +89,8 @@ impl std::fmt::Debug for StreamedCapture {
 #[derive(Debug, PartialEq, Eq)]
 pub struct StagedCapture {
     successor: JournalManifest,
+    /// The journal directory the pages were staged in, which they may only be promoted into.
+    journal_dir: PathBuf,
     pending: PathBuf,
     tag: WriteOperationId,
     refs: Vec<JournalPageRef>,
@@ -126,6 +128,11 @@ impl StagedCapture {
     /// The private pending directory the pages are staged in.
     pub fn pending_dir(&self) -> &Path {
         &self.pending
+    }
+
+    /// The journal directory the capture was staged in and belongs to.
+    pub fn journal_dir(&self) -> &Path {
+        &self.journal_dir
     }
 
     /// Abandons the capture: the staged page files are removed, best effort. The empty directories
@@ -274,6 +281,7 @@ impl StreamedCapture {
     ) -> Result<StagedCapture, JournalDurableError> {
         let Self {
             committed,
+            journal_dir,
             entry_count,
             pending,
             tag,
@@ -295,6 +303,7 @@ impl StreamedCapture {
         match successor {
             Ok(successor) => Ok(StagedCapture {
                 successor,
+                journal_dir,
                 pending,
                 tag,
                 refs,

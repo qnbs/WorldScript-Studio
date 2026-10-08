@@ -726,7 +726,11 @@ fn a_promotion_the_authority_checks_refuse_creates_nothing() {
     not_named.lease_expires_unix_ms = Some(1);
     let mut ahead = scenario.committed.clone();
     ahead.journal_revision += 1;
-    let admitting = Scenario::with(admit);
+    // The journal moved on after the capture began: its root-named manifest is now one revision ahead
+    // of the manifest the capture was built over.
+    let mut moved_on = scenario.committed.clone();
+    moved_on.journal_revision += 1;
+    let moved_live = commit_into(scenario.journal.path(), &moved_on);
     let authority = JournalDurableError::Authority;
     let live = &scenario.journal.live;
     let cases = [
@@ -746,13 +750,9 @@ fn a_promotion_the_authority_checks_refuse_creates_nothing() {
             authority(MigrationExecutionError::LiveBindingMismatch),
         ),
         (
-            "a capture built over another phase",
-            promote_refusal(
-                &admitting,
-                &staged,
-                (&admitting.committed, &admitting.journal.live),
-            ),
-            authority(MigrationExecutionError::InvalidPhaseTransition),
+            "a journal that moved on after the capture began",
+            promote_refusal(&scenario, &staged, (&moved_on, &moved_live)),
+            authority(MigrationExecutionError::StaleJournalRevision),
         ),
     ];
     let wrong: Vec<_> = cases
@@ -794,6 +794,41 @@ fn a_caller_that_is_not_the_committed_owner_is_refused_before_anything_is_read()
             reads_before_refusal((&ahead, &scenario.journal.live)),
         ],
         [(true, 0), (true, 0)]
+    );
+}
+
+#[test]
+fn a_staged_capture_is_promoted_only_into_the_journal_it_was_staged_in() {
+    let scenario = Scenario::new();
+    let staged = scenario.stream(&mut StdFs, entries(5), 2).unwrap();
+    // A directory that holds a byte-identical copy of the root-named generation: every check on the
+    // manifest passes there, so only the capture's own binding to its journal refuses it.
+    let copy = TempDir::new();
+    let generation = generation_path(scenario.journal.path(), COMMITTED_REVISION);
+    std::fs::copy(&generation, generation_path(&copy.0, COMMITTED_REVISION)).unwrap();
+    let live = scenario.journal.live.clone();
+    let elsewhere = Scenario {
+        journal: Journal { dir: copy, live },
+        committed: scenario.committed.clone(),
+    };
+    let mut fs = ObservedFs::new();
+    let live = &elsewhere.journal.live;
+    let refused = promote_as(&mut fs, &elsewhere, &staged, (&elsewhere.committed, live)).err();
+    assert_eq!(
+        (
+            refused,
+            fs.created_nothing(),
+            fs.reads.len(),
+            files_under(elsewhere.journal.path()).len()
+        ),
+        (
+            Some(JournalDurableError::Authority(
+                MigrationExecutionError::LiveBindingMismatch
+            )),
+            true,
+            0,
+            1
+        )
     );
 }
 
