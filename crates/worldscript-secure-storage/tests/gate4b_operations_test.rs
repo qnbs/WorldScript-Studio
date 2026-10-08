@@ -649,10 +649,13 @@ fn both_root_contention_windows_preserve_intents_and_refuse_clean_drain() {
         assert_eq!(fixture.payload(), b"prior");
         let mut wrong = fixture.location();
         std::mem::swap(&mut wrong.record_dir, &mut wrong.marker_dir);
+        // No admission is held here, so `Ok(None)` can only be the legal eventual-release delay.
         assert_eq!(
-            fixture
-                .storage()
-                .try_reconcile_record(&mut StdFs, &fixture.identity, wrong),
+            poll_admitted(|| fixture.storage().try_reconcile_record(
+                &mut StdFs,
+                &fixture.identity,
+                wrong
+            )),
             Err(OperationError::Admission(AdmissionError::IdentityChanged))
         );
         assert_eq!(
