@@ -123,7 +123,7 @@ impl Fixture {
         fs::create_dir_all(&journal_dir).unwrap();
         let mut provider = MemoryKeyProvider::new();
         let scope = provider.read_or_provision_installation_scope().unwrap();
-        let key_ref = provider.provision_epoch_key(1).unwrap();
+        let key_ref = provider.import_epoch_key(1, [9u8; 32]).unwrap();
         provider.unlock().unwrap();
         let record = KeyEpochRecord {
             epoch: 1,
@@ -244,12 +244,10 @@ impl Fixture {
         route: Route<'_>,
     ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
-        let key = journal_key();
         let op = WriteOperationId::generate().unwrap();
         let advance = BindingAdvance {
             next,
             journal: JournalSource {
-                key: &key,
                 dir: &self.journal_dir,
                 operation: &op,
             },
@@ -283,7 +281,6 @@ impl Fixture {
         route: Route<'_>,
     ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
-        let key = journal_key();
         let op = self
             .operation
             .clone()
@@ -292,7 +289,6 @@ impl Fixture {
             manifest,
             fence,
             journal: JournalSource {
-                key: &key,
                 dir: &self.journal_dir,
                 operation: &op,
             },
@@ -331,7 +327,6 @@ impl Fixture {
         route: Route<'_>,
     ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
-        let key = journal_key();
         let op = self
             .operation
             .clone()
@@ -342,7 +337,6 @@ impl Fixture {
                 manifest: claim,
                 fence: &fence,
                 journal: JournalSource {
-                    key: &key,
                     dir: &self.journal_dir,
                     operation: &op,
                 },
@@ -415,7 +409,6 @@ impl Fixture {
         captured: &Capture,
         fence: &MigrationFence,
     ) -> Result<RootCommitted, AuthorityError> {
-        let key = journal_key();
         let op = self
             .operation
             .clone()
@@ -426,7 +419,6 @@ impl Fixture {
                 manifest: &captured.successor,
                 fence,
                 journal: JournalSource {
-                    key: &key,
                     dir: &self.journal_dir,
                     operation: &op,
                 },

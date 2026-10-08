@@ -660,16 +660,36 @@ constant epoch, and pages sealed under another key at another epoch, refused by 
 a candidate sealed at another epoch is not adopted by the durable promotion; `a_page_is_promoted_only_for_the_manifest_the_root_names` (a same-owner copy with other epochs is refused before any create and the root-named manifest seals the page at its own epoch 2).
 
 Residual, owned by Slice D2b: resolving the journal key through the authenticated key-epoch registry
-(`Prepared`, `Active` and `RetiredRecoveryOnly` allowed, `Revoked` or absent refused; the route is D2b-3a, its wiring D2b-3b), refusing
+(`Prepared`, `Active` and `RetiredRecoveryOnly` allowed, `Revoked` or absent refused; D2b-3a, wired by D2b-3b), refusing
 the revocation of the source epoch while a live migration binds the journal (done in D2b-1, below), and the
 cutover readability test with the root's active epoch already at the target (D2b-3). The manifest side of the
 authority-first comparison (D2a compared the header only after authentication) is done in D2b-2, below.
 
+## Slice D2b-3b — the composed journal operations use the key route
+
+`commit_journal_checkpoint`, `commit_journal_takeover`, `commit_inventory_capture` and
+`advance_live_migration` no longer take a journal key from the caller.
+
+| Where | Rule |
+|---|---|
+| `JournalSource` | `{ dir, operation }`: the `key` field is gone, so no caller can supply or substitute the key of a bound journal |
+| resolution | each operation calls `resolve_journal_key` while it holds the `root_commit_mutex`, right after `committed_binding`, so the existing refusals (another key route or epoch, no bound migration) keep their order and classes; a route that cannot be resolved is `AuthorityError::JournalRoute(..)` and happens before any journal write |
+| threading | the resolved key is carried into `commit_planned` and `verify_binding_advance` in a `JournalStep { binding, key }`, so the manifest loads that make the root trust a generation use the routed key |
+| `advance_live_migration` | now calls `committed_binding` first, which keeps its error order (key route, then no binding) |
+
+Proof (`gate4d_journal_route_test` and the whole root-binding suite, whose fixture imports the journal's key
+into the provider and now runs every checkpoint, takeover, capture and advance through the route without any
+expectation changing): a `Revoked` journal epoch and an unregistered one each refuse all four operations with
+`JournalRoute(EpochRevoked / EpochNotRegistered)` and leave the root and journal directories byte-identical; a
+registry route that resolves to a key the journal was not sealed under is refused by the authenticated manifest
+load (`Open(Tampered)` for the checkpoint, a journal error for the others) before any write. Mutation-checked:
+making the route return the old fixed key fails these three tests.
+
 ## Slice D2b-3a — the key route of a bound journal
 
 A bound journal is sealed under its operation's journal envelope epoch, which is not the root's moving
-`active_key_epoch`, so its key has to be found through authority. The route is additive: nothing calls it
-yet (D2b-3b wires it). Everything it trusts is read from the committed root inside the call; the caller
+`active_key_epoch`, so its key has to be found through authority. The route was added unwired (D2b-3a)
+and is used by the composed journal operations since D2b-3b (below). Everything it trusts is read from the committed root inside the call; the caller
 supplies only where the root and the journal live, so a fabricated binding or scope cannot make it hand out
 a key.
 
@@ -760,11 +780,6 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture: `promote_inventory_set_fenced` verifies the set in memory; a one-page-at-a-time seal, digest and promote is needed before very large inventories (acceptance criterion on #359).
 - The cross-process lease CAS.
-- Wiring of the key route (Slice D2b-3b): `resolve_journal_key` exists (D2b-3a) but the composed journal-owner
-  operations still take a caller-supplied `JournalSource::key`. D2a fixes which epoch seals the journal;
-  D2b-1 refuses revoking it while a migration is bound; D2b-2 compares a manifest's header epoch with
-  trusted authority before the key is used; D2b-3a resolves the key through the registry; D2b-3b makes the
-  composed operations use it and drops the caller key.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
 
 ## Explicit non-goals (journal durable promotion)
