@@ -678,7 +678,7 @@ reference per page.
 | Step | Rule |
 |---|---|
 | `StreamedCapture::begin` | fence; the caller is the committed owner writing under the committed manifest (`StaleMigrationOwner`); the manifest is the exact root-named generation (`LiveBindingMismatch`); the inventory is open (`DISCOVER` or `ADMIT`, not yet final, nothing converted); the announced total is within the format bound. Nothing is created. These are early refusals: stage two repeats them under the locks |
-| `push_page` | the context is the one the capture started under: the same journal directory (`LiveBindingMismatch`) and a key that opens the manifest the capture started from (`Open(Tampered)`), checked before anything is sealed over the few kilobytes of root-named manifest that `begin` kept, so a push reads nothing for it; the page takes the next index and the capture's generation; it is non-empty, its entries are valid and strictly ascending after every earlier entry, the running total stays within the announced one; it is sealed once under the operation's journal envelope epoch, its reference recorded, its envelope staged and synced, and the bytes dropped. A failure removes the pages staged so far, and the page in flight only if its slot holds exactly the bytes that were being staged, so a file this attempt did not write is never deleted |
+| `push_page` | the context is the one the capture started under: the same journal directory (`LiveBindingMismatch`) and a key that opens the manifest the capture started from (`Open(Tampered)`), checked before anything is sealed over the few kilobytes of root-named manifest that `begin` kept, so a push reads nothing for it; the page takes the next index and the capture's generation; it is non-empty, its entries are valid and strictly ascending after every earlier entry, the running total stays within the announced one; it is sealed once under the operation's journal envelope epoch, its reference recorded, its envelope staged and synced, and the bytes dropped. A failure removes the pages staged so far, each only if it still holds exactly the bytes that were staged (checked against its reference), so a file this attempt did not write, or a staged page that was replaced, is never deleted |
 | `finish` | exactly the announced total was staged; the successor is built by the same function `capture_inventory` ends in, and checked as a valid successor; a failure removes the staged pages |
 | `StagedCapture::discard` | removes the staged page files of a capture that will not be promoted |
 | `load_staged_page` | the exact path of the reference, bounded; a missing file is `Corrupt`, never `RecoveryRequired`, because a staged page is a candidate and not authority; the envelope hashes to the reference before it is opened; it opens only as this operation's page at this index and generation, with the epoch compared before the key is used |
@@ -699,7 +699,7 @@ empty page directories stay, and the files of an attempt that was killed stay as
 are reclaimed by the separate cleanup recorded below. `begin` and `push_page` carry the capture's binding to its
 journal and key because a context is supplied on every call and the key is never compared directly.
 
-Proof (seventeen tests in `gate4d_stream_capture_test`): the streamed successor equals what `capture_inventory`
+Proof (eighteen tests in `gate4d_stream_capture_test`): the streamed successor equals what `capture_inventory`
 builds from the pages that were staged, for one entry, uneven and even splits, one page, the final capture
 in `ADMIT` and a full page plus one (4097 entries); an empty inventory stages nothing and matches the empty
 capture; the staged files are exactly the pending layout under a `pending-` name; the staged pages are
@@ -710,12 +710,12 @@ total not reached and an empty page are refused; a failure partway removes the p
 the failing page was already promoted, and a new attempt is independent; a capture that ends short and a
 discarded capture leave no page file, and a removal that fails is not an error; a push under another key
 or into a journal directory that holds an identical copy of the root-named generation is refused before
-anything is staged and a push reads the root-named manifest no more than `begin` did; a failure whose cause is a different file in the slot of the page in flight leaves that file alone; two attempts under one operation id never share a directory; a staged page that
+anything is staged and a push reads the root-named manifest no more than `begin` did; a failure whose cause is a different file in the slot of the page in flight leaves that file alone, and so does the cleanup of a staged page that was replaced; two attempts under one operation id never share a directory; a staged page that
 changed, was swapped, is missing, is out of range or is read under another key is refused. Mutation-checked:
 no digest absorption, no root-named check, no open-inventory check, no `pending-` prefix, a pending
 directory named by the caller's operation id, a shifted page directory, no digest check on read, no
 context check (the directory and the key each on their own), no cleanup on a failed push, on a failed
-finish or in `discard`, no slot for the page in flight, an unconditional removal of the slot in flight, a manifest read on every push, and a missing staged page reported as
+finish or in `discard`, no slot for the page in flight, an unconditional removal of a staged file, a manifest read on every push, and a missing staged page reported as
 `RecoveryRequired` each fail the test that owns them. Existing capture, store, reader and durable tests are unchanged and pass.
 
 ## Slice D3b — the owner renews its own lease

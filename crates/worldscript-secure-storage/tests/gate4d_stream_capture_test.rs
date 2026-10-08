@@ -576,6 +576,25 @@ fn a_failure_never_removes_a_file_it_did_not_write() {
 }
 
 #[test]
+fn a_cleanup_never_removes_a_staged_page_that_was_replaced() {
+    let scenario = Scenario::new();
+    let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
+    let replaced = generation_path(&staged.pending_dir().join("page-1"), 4);
+    std::fs::write(&replaced, b"a file that is not the staged page").unwrap();
+    scenario.discard(staged);
+    let committed = "generation-3.wsr1".to_owned();
+    let remaining: Vec<_> = files_under(scenario.journal.path()).into_iter().collect();
+    assert_eq!(
+        (
+            remaining.len(),
+            remaining.contains(&committed),
+            std::fs::read(&replaced).unwrap()
+        ),
+        (2, true, b"a file that is not the staged page".to_vec())
+    );
+}
+
+#[test]
 fn a_missing_staged_page_is_a_broken_attempt_not_a_recovery_state_of_the_journal() {
     let scenario = Scenario::new();
     let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();

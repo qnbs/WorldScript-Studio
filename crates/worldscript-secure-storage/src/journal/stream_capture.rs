@@ -126,12 +126,7 @@ impl StagedCapture {
     /// Abandons the capture: the staged page files are removed, best effort. The empty directories
     /// stay, because the file system abstraction cannot remove a directory.
     pub fn discard<F: DurableFs>(self, ctx: &mut JournalDurableContext<'_, F>) {
-        discard_staged(
-            ctx,
-            &self.pending,
-            self.refs.len(),
-            self.successor.journal_revision,
-        );
+        discard_staged(ctx, &self.pending, &self.refs);
     }
 }
 
@@ -199,7 +194,7 @@ impl StreamedCapture {
         match self.stage_next(ctx, entries) {
             Ok(()) => Ok(self),
             Err(error) => {
-                discard_staged(ctx, &self.pending, self.refs.len(), self.revision);
+                discard_staged(ctx, &self.pending, &self.refs);
                 Err(error)
             }
         }
@@ -226,7 +221,8 @@ impl StreamedCapture {
         if let Err(error) = store_page_at(ctx, &dir, &self.committed, &sealed) {
             // The page in flight may be on disk already, or the failure may be that a different file
             // sits in its slot: only a file that holds exactly the bytes staged here is ours to remove.
-            remove_if_identical(ctx, &dir, self.revision, &envelope);
+            let path = generation_path(&dir, self.revision);
+            remove_if_staged(ctx, &path, &reference.page_content_digest);
             return Err(error);
         }
         self.refs.push(reference);
@@ -258,7 +254,6 @@ impl StreamedCapture {
     ) -> Result<StagedCapture, JournalDurableError> {
         let Self {
             committed,
-            revision,
             entry_count,
             pending,
             refs,
@@ -283,40 +278,40 @@ impl StreamedCapture {
                 refs,
             }),
             Err(error) => {
-                discard_staged(ctx, &pending, refs.len(), revision);
+                discard_staged(ctx, &pending, &refs);
                 Err(error)
             }
         }
     }
 }
 
-/// Removes the staged page files of the first `pages` page slots, all at `generation`. Best effort: a
-/// file that cannot be removed stays as inert residue, and the error that led here is the one worth
-/// reporting, so removal failures are not.
+/// Removes the staged page files that `refs` describe. Best effort: a file that cannot be removed
+/// stays as inert residue, and the error that led here is the one worth reporting, so removal
+/// failures are not. A file is removed only if it still holds exactly the bytes this capture staged
+/// (see [`remove_if_staged`]).
 fn discard_staged<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     pending: &Path,
-    pages: usize,
-    generation: u64,
+    refs: &[JournalPageRef],
 ) {
-    for index in 0..pages {
+    for (index, reference) in refs.iter().enumerate() {
         let dir = pending.join(format!("page-{index}"));
-        let _ = ctx.fs.remove_file(&generation_path(&dir, generation));
+        let path = generation_path(&dir, reference.page_generation);
+        remove_if_staged(ctx, &path, &reference.page_content_digest);
     }
 }
 
-/// Removes the file at `generation` in `dir` only if it holds exactly `envelope`, so a failure that
-/// came from a different file in the slot never deletes that file. Best effort, like
-/// [`discard_staged`].
-fn remove_if_identical<F: DurableFs>(
+/// Removes the file at `path` only if its bytes hash to `digest`, the digest of what this capture
+/// staged there, so a file that was replaced, or that a failure found already sitting in the slot, is
+/// never deleted. The read is bounded by the largest valid page envelope.
+fn remove_if_staged<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
-    dir: &Path,
-    generation: u64,
-    envelope: &[u8],
+    path: &Path,
+    digest: &[u8; 32],
 ) {
-    let path = generation_path(dir, generation);
-    if matches!(ctx.fs.read_at_most(&path, envelope.len()), Ok(Some(found)) if found == envelope) {
-        let _ = ctx.fs.remove_file(&path);
+    let found = ctx.fs.read_at_most(path, MAX_PAGE_ENVELOPE_BYTES);
+    if matches!(found, Ok(Some(bytes)) if content_digest(&bytes) == *digest) {
+        let _ = ctx.fs.remove_file(path);
     }
 }
 
