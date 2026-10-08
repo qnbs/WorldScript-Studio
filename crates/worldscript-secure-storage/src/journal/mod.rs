@@ -17,6 +17,7 @@ mod page;
 mod renewal;
 mod state;
 mod stream_capture;
+mod stream_promote;
 mod succession;
 mod takeover;
 mod wire;
@@ -150,6 +151,7 @@ pub use state::{
 pub use stream_capture::{
     load_staged_page, CaptureStart, StagedCapture, StagedPage, StreamedCapture,
 };
+pub use stream_promote::{promote_staged_inventory_fenced, StagedPromotion};
 pub use succession::{assert_manifest_successor, assert_progress_successor};
 pub use takeover::{
     assert_binding_takeover, assert_takeover_promote_authority, assert_takeover_successor,

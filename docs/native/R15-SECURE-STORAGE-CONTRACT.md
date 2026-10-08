@@ -2433,8 +2433,15 @@ it is read back by the exact path of its reference and confirmed against that re
 page that is missing is a broken attempt to abandon, never a recovery state of the journal. A capture
 belongs to one journal directory and to the key that opened the manifest it started from; a page is never
 staged under another context. A failure the caller can still handle removes the pages staged so far, each only if it still
-holds the bytes that were staged, and an attempt that was killed leaves files that nothing trusts. Promoting the staged pages to the digest
-directory, under the root lock, is a separate step.
+holds the bytes that were staged, and an attempt that was killed leaves files that nothing trusts. The staged pages are then promoted to the
+digest directory under the root lock and the journal mutex: the caller must be the committed owner of the
+exact root-named manifest and the successor must be its capture successor, all before the first write;
+each staged page is read back, confirmed against its reference and stored where the in-memory store would
+have put the same bytes (an identical page already there is adopted, a different file is never replaced);
+and the inventory digest over the entries read must equal the successor's before the manifest naming the
+set is published. A staged page found wrong midway leaves the verified prefix as an inert directory under
+the digest and publishes nothing. The staged files are removed only after the root has committed to the
+set, so that a retry after a failure before that point still has them.
 **Journal envelope epoch.** The manifest and every page of one operation are sealed under a single key
 epoch that is stable for the whole operation and derived from the authenticated manifest alone, never
 from the authority root's `active_key_epoch`, which moves at cutover: `ENABLE` seals under
