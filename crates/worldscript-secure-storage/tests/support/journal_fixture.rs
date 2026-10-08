@@ -45,6 +45,8 @@ pub struct ObservedFs {
     pub dirs_created: u32,
     pub synced: Vec<PathBuf>,
     pub fail_sync_of: Option<PathBuf>,
+    /// Fails the sync of every directory whose path contains this fragment.
+    pub fail_sync_matching: Option<&'static str>,
     pub fail_create_at: Option<u32>,
     pub fail_remove: bool,
 }
@@ -57,6 +59,7 @@ impl ObservedFs {
             dirs_created: 0,
             synced: Vec::new(),
             fail_sync_of: None,
+            fail_sync_matching: None,
             fail_create_at: None,
             fail_remove: false,
         }
@@ -99,6 +102,10 @@ impl DurableFs for ObservedFs {
 
     fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
         self.synced.push(dir.to_path_buf());
+        let matching = self.fail_sync_matching;
+        if matching.is_some_and(|fragment| dir.to_string_lossy().contains(fragment)) {
+            return Err(io::Error::other("injected directory sync failure"));
+        }
         if self.fail_sync_of.as_deref() == Some(dir) {
             return Err(io::Error::other("injected directory sync failure"));
         }

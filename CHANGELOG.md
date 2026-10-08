@@ -13,8 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `inventory/pending-*` directory (never authority, never read by a reader), keeping one page and one
   reference per page in memory; the total is announced up front because the inventory digest commits to it
   first. `finish` builds the successor with the same function as `capture_inventory`, and
-  `load_staged_page` confirms a staged page against its reference. Promotion under the root lock and the
-  composed commit are the next stage. PR #1010.
+  `load_staged_page` confirms a staged page against its reference, a missing one being a broken attempt and
+  not a recovery state of the journal. A capture is bound to its journal directory and to the key that opened
+  its manifest, and a failure the caller can handle removes the pages staged so far. Promotion under the root
+  lock and the composed commit are the next stage. PR #1010.
 - **R-15 Gate 4D:** the journal owner can renew its own lease (maintainer decision C, the wiring half).
   `commit_lease_renewal` publishes a manifest that moves the lease expiry strictly forward and changes nothing
   else (`publish_renewal_fenced`, a publish of its own so the ordinary checkpoint keeps refusing lease changes)

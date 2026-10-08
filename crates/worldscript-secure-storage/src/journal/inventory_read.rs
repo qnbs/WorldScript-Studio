@@ -38,7 +38,7 @@ use super::state::MigrationExecutionError;
 use super::{JournalError, MAX_JOURNAL_PAGE_BYTES};
 
 /// The largest valid sealed page: the page encoding bound plus the envelope header and tag.
-const MAX_PAGE_ENVELOPE_BYTES: usize = MAX_JOURNAL_PAGE_BYTES + HEADER_LEN + TAG_LEN;
+pub(super) const MAX_PAGE_ENVELOPE_BYTES: usize = MAX_JOURNAL_PAGE_BYTES + HEADER_LEN + TAG_LEN;
 /// A page directory holds one generation and, at most, a few staging leftovers; a directory with
 /// more entries than this is not read.
 const MAX_PAGE_DIRECTORY_ENTRIES: usize = 64;

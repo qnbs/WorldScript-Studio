@@ -678,9 +678,10 @@ reference per page.
 | Step | Rule |
 |---|---|
 | `StreamedCapture::begin` | fence; the caller is the committed owner writing under the committed manifest (`StaleMigrationOwner`); the manifest is the exact root-named generation (`LiveBindingMismatch`); the inventory is open (`DISCOVER` or `ADMIT`, not yet final, nothing converted); the announced total is within the format bound. Nothing is created. These are early refusals: stage two repeats them under the locks |
-| `push_page` | the page takes the next index and the capture's generation; it is non-empty, its entries are valid and strictly ascending after every earlier entry, the running total stays within the announced one; it is sealed once under the operation's journal envelope epoch, its reference recorded, its envelope staged and synced, and the bytes dropped |
-| `finish` | exactly the announced total was staged; the successor is built by the same function `capture_inventory` ends in, and checked as a valid successor |
-| `load_staged_page` | the exact path of the reference, bounded; the envelope hashes to the reference before it is opened; it opens only as this operation's page at this index and generation, with the epoch compared before the key is used |
+| `push_page` | the context is the one the capture started under: the same journal directory (`LiveBindingMismatch`) and a key that opens the manifest the capture started from (`Open(Tampered)`), checked before anything is sealed; the page takes the next index and the capture's generation; it is non-empty, its entries are valid and strictly ascending after every earlier entry, the running total stays within the announced one; it is sealed once under the operation's journal envelope epoch, its reference recorded, its envelope staged and synced, and the bytes dropped. A failure removes the pages staged so far, including the one in flight |
+| `finish` | exactly the announced total was staged; the successor is built by the same function `capture_inventory` ends in, and checked as a valid successor; a failure removes the staged pages |
+| `StagedCapture::discard` | removes the staged page files of a capture that will not be promoted |
+| `load_staged_page` | the exact path of the reference, bounded; a missing file is `Corrupt`, never `RecoveryRequired`, because a staged page is a candidate and not authority; the envelope hashes to the reference before it is opened; it opens only as this operation's page at this index and generation, with the epoch compared before the key is used |
 
 Differences from the admission, disclosed: (1) the inventory digest commits to the entry total before any
 entry, so `begin` takes the total up front and the caller counts before it streams (the admission did not
@@ -693,19 +694,29 @@ or an envelope, and a push drops both before it returns; (4) the tests are a fil
 (`support/journal_fixture.rs`), so a test that needs only a committed journal does not carry the page
 fixtures; putting them into the store test made that file lose its cohesion.
 
-Proof (ten tests in `gate4d_stream_capture_test`): the streamed successor equals what `capture_inventory`
+Cleanup is best effort and removes files only: the file system abstraction cannot remove a directory, so the
+empty page directories stay, and the files of an attempt that was killed stay as well. Both are inert and
+are reclaimed by the separate cleanup recorded below. `begin` and `push_page` carry the capture's binding to its
+journal and key because a context is supplied on every call and the key is never compared directly.
+
+Proof (fifteen tests in `gate4d_stream_capture_test`): the streamed successor equals what `capture_inventory`
 builds from the pages that were staged, for one entry, uneven and even splits, one page, the final capture
 in `ADMIT` and a full page plus one (4097 entries); an empty inventory stages nothing and matches the empty
 capture; the staged files are exactly the pending layout under a `pending-` name; the staged pages are
 accepted by the existing store; every way a capture cannot start (a capture already final, conversion
 started, a phase without a snapshot, a finished journal, a total above the bound, a stale owner, a manifest
 that is not the root-named one) is refused with nothing created; an out-of-order page, a total exceeded, a
-total not reached and an empty page are refused; a failure partway leaves only inert pending files and a
-new attempt is independent of them; two attempts under one operation id never share a directory; a staged
-page that changed, was swapped, is out of range or is read under another key is refused. Mutation-checked:
+total not reached and an empty page are refused; a failure partway removes the pages it staged, also when
+the failing page was already promoted, and a new attempt is independent; a capture that ends short and a
+discarded capture leave no page file, and a removal that fails is not an error; a push under another key
+or into a journal directory that holds an identical copy of the root-named generation is refused before
+anything is staged; two attempts under one operation id never share a directory; a staged page that
+changed, was swapped, is missing, is out of range or is read under another key is refused. Mutation-checked:
 no digest absorption, no root-named check, no open-inventory check, no `pending-` prefix, a pending
-directory named by the caller's operation id, a shifted page directory and no digest check on read each fail
-the test that owns them. Existing capture, store, reader and durable tests are unchanged and pass.
+directory named by the caller's operation id, a shifted page directory, no digest check on read, no
+context check (the directory and the key each on their own), no cleanup on a failed push, on a failed
+finish or in `discard`, no slot for the page in flight, and a missing staged page reported as
+`RecoveryRequired` each fail the test that owns them. Existing capture, store, reader and durable tests are unchanged and pass.
 
 ## Slice D3b — the owner renews its own lease
 
@@ -909,7 +920,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Streaming capture, stage two: the promotion of the staged pages to the digest directory under the root lock and the journal mutex (re-reading and re-verifying each page, adopting on retry), the authority-level wrapper that routes the key, and the composed commit; until then `commit_inventory_capture` still holds the set in memory (acceptance criterion on #359).
-- Reclaiming abandoned pending directories: an attempt that is abandoned leaves inert files under `inventory/pending-*`, never authority and never read; deleting them needs a relocation or removal primitive, as for the orphaned digest directories of a discarded capture (acceptance criterion on #359).
+- Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read. Reclaiming them needs a directory-removal primitive and a sweep that knows no live attempt owns them, as for the orphaned digest directories of a discarded capture (acceptance criterion on #359).
 - The cross-process lease CAS.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
 

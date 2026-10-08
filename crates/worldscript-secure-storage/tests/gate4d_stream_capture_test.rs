@@ -89,7 +89,15 @@ impl Scenario {
         for chunk in entries.chunks(per_page) {
             capture = capture.push_page(&mut ctx, chunk.to_vec())?;
         }
-        capture.finish()
+        capture.finish(&mut ctx)
+    }
+
+    /// Abandons a finished capture.
+    fn discard(&self, staged: StagedCapture) {
+        let (key, op) = (key(), WriteOperationId::generate().unwrap());
+        let mut fs = ObservedFs::new();
+        let mut ctx = JournalDurableContext::new(&mut fs, &key, self.journal.path(), &op);
+        staged.discard(&mut ctx);
     }
 
     /// Staged page `index`, read back under `key`.
@@ -245,10 +253,8 @@ fn two_attempts_under_one_operation_id_never_share_a_pending_directory() {
         entry_count: 0,
     };
     let mut attempt = || {
-        StreamedCapture::begin(&mut ctx, &start)
-            .unwrap()
-            .finish()
-            .unwrap()
+        let capture = StreamedCapture::begin(&mut ctx, &start).unwrap();
+        capture.finish(&mut ctx).unwrap()
     };
     let (first, second) = (attempt(), attempt());
     assert_ne!(first.pending_dir(), second.pending_dir());
@@ -391,7 +397,7 @@ fn entries_arrive_in_order_and_the_announced_total_is_enforced_at_both_ends() {
                 Err(error) => return Some(error),
             };
         }
-        capture.finish().err()
+        capture.finish(&mut ctx).err()
     };
     let all = entries(6);
     let outcomes = [
@@ -414,36 +420,134 @@ fn entries_arrive_in_order_and_the_announced_total_is_enforced_at_both_ends() {
 }
 
 #[test]
-fn a_failure_partway_leaves_only_inert_pending_files_and_a_new_attempt_is_independent() {
+fn a_failure_partway_removes_the_pages_it_staged_and_a_new_attempt_is_independent() {
     let scenario = Scenario::new();
+    let committed_only = files_under(scenario.journal.path());
     let mut failing = ObservedFs::new();
     failing.fail_create_at = Some(3);
     let failed = scenario.stream(&mut failing, entries(7), 3);
-    let residue = files_under(scenario.journal.path());
+    let after_failure = files_under(scenario.journal.path());
     let second = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
-    let after = files_under(scenario.journal.path());
-    let distinct = !second.pending_dir().starts_with(
-        scenario
-            .journal
-            .path()
-            .join("inventory")
-            .join(residue_dir(&residue)),
-    );
     assert_eq!(
-        (failed.is_err(), residue.is_subset(&after), distinct),
-        (true, true, true)
+        (failed.is_err(), after_failure, second.page_refs().len()),
+        (true, committed_only, 3)
     );
 }
 
-/// The one pending directory name among `files`.
-fn residue_dir(files: &BTreeSet<String>) -> String {
-    let pending: BTreeSet<_> = files
-        .iter()
-        .filter_map(|file| file.strip_prefix("inventory/"))
-        .filter_map(|rest| rest.split('/').next())
-        .collect();
-    assert_eq!(pending.len(), 1, "{pending:?}");
-    pending.into_iter().next().unwrap().to_owned()
+/// The pages a handled failure of any kind takes with it: the capture that ends short of its total
+/// and the finished capture that is discarded, each followed by the files left on disk.
+#[test]
+fn an_abandoned_capture_removes_its_staged_pages() {
+    let scenario = Scenario::new();
+    let committed_only = files_under(scenario.journal.path());
+    let (key, op) = (key(), WriteOperationId::generate().unwrap());
+    let mut fs = StdFs;
+    let capture = scenario.begin(&mut fs, 4).unwrap();
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, scenario.journal.path(), &op);
+    let capture = capture.push_page(&mut ctx, entries(3)).unwrap();
+    let staged_then_short = (
+        files_under(scenario.journal.path()).len(),
+        capture.finish(&mut ctx).err(),
+    );
+    let short = JournalDurableError::Journal(JournalError::EntryCountMismatch);
+    let after_short = files_under(scenario.journal.path());
+    let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
+    let staged_files = files_under(scenario.journal.path()).len();
+    scenario.discard(staged);
+    assert_eq!(
+        (
+            staged_then_short,
+            after_short,
+            staged_files,
+            files_under(scenario.journal.path())
+        ),
+        ((2, Some(short)), committed_only.clone(), 4, committed_only)
+    );
+}
+
+#[test]
+fn a_cleanup_that_cannot_remove_a_file_leaves_inert_residue_and_does_not_fail() {
+    let scenario = Scenario::new();
+    let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
+    let (key, op) = (key(), WriteOperationId::generate().unwrap());
+    let mut fs = ObservedFs::new();
+    fs.fail_remove = true;
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, scenario.journal.path(), &op);
+    staged.discard(&mut ctx);
+    assert_eq!(files_under(scenario.journal.path()).len(), 4);
+}
+
+/// A push under `key` in `dir`, over a capture that began in `scenario`'s journal.
+fn push_under(scenario: &Scenario, key: &Key, dir: &Path) -> Option<JournalDurableError> {
+    let op = WriteOperationId::generate().unwrap();
+    let mut fs = StdFs;
+    let capture = scenario.begin(&mut fs, 3).unwrap();
+    let mut ctx = JournalDurableContext::new(&mut fs, key, dir, &op);
+    capture.push_page(&mut ctx, entries(3)).err()
+}
+
+#[test]
+fn a_push_under_another_key_or_another_journal_is_refused_before_anything_is_staged() {
+    let scenario = Scenario::new();
+    // A directory that holds a byte-identical copy of the root-named generation: the manifest check
+    // alone would accept it, so only the capture's own binding to its journal refuses it.
+    let copy = TempDir::new();
+    let generation = generation_path(scenario.journal.path(), COMMITTED_REVISION);
+    std::fs::copy(&generation, generation_path(&copy.0, COMMITTED_REVISION)).unwrap();
+    let committed_only = files_under(scenario.journal.path());
+    let outcomes = [
+        push_under(&scenario, &other_key(), scenario.journal.path()),
+        push_under(&scenario, &key(), &copy.0),
+    ];
+    assert_eq!(
+        (
+            outcomes,
+            files_under(scenario.journal.path()),
+            files_under(&copy.0)
+        ),
+        (
+            [
+                Some(JournalDurableError::Journal(JournalError::Open(
+                    OpenError::Tampered
+                ))),
+                Some(JournalDurableError::Authority(
+                    MigrationExecutionError::LiveBindingMismatch
+                )),
+            ],
+            committed_only.clone(),
+            committed_only
+        )
+    );
+}
+
+#[test]
+fn a_failure_after_a_page_was_promoted_removes_that_page_too() {
+    let scenario = Scenario::new();
+    let committed_only = files_under(scenario.journal.path());
+    let mut failing = ObservedFs::new();
+    failing.fail_sync_matching = Some("page-1");
+    let failed = scenario.stream(&mut failing, entries(7), 3);
+    assert_eq!(
+        (
+            matches!(failed, Err(JournalDurableError::Stage(_))),
+            files_under(scenario.journal.path())
+        ),
+        (true, committed_only)
+    );
+}
+
+#[test]
+fn a_missing_staged_page_is_a_broken_attempt_not_a_recovery_state_of_the_journal() {
+    let scenario = Scenario::new();
+    let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
+    let file = generation_path(&staged.pending_dir().join("page-1"), 4);
+    std::fs::remove_file(file).unwrap();
+    assert_eq!(
+        scenario.read(&staged, 1).err(),
+        Some(JournalDurableError::Journal(JournalError::Corrupt(
+            "staged page is missing"
+        )))
+    );
 }
 
 #[test]

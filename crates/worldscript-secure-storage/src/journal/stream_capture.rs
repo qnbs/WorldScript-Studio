@@ -14,7 +14,12 @@
 //!
 //! The pending directory has the layout of a digest directory, so the final promotion (stage two) is
 //! the same store of the same bytes. Nothing in it is authority: the manifest never names it, no
-//! reader looks for it, and an attempt that is abandoned leaves inert files that nothing trusts.
+//! reader looks for it, and a staged page is a candidate whose absence is a broken attempt, never a
+//! recovery state of the journal. A failure that the caller can still handle removes the staged page
+//! files on the way out (best effort), and [`StagedCapture::discard`] does the same for a finished
+//! capture that is not going to be promoted. The empty directories stay, because the file system
+//! abstraction has no directory removal, and so do the files of an attempt that was killed: both are
+//! inert and are reclaimed by a separate cleanup (an acceptance criterion on #359).
 //!
 //! The inventory digest commits to the total entry count before any entry (§5.4), so the total is
 //! given up front and checked at the end. Memory is one page and one reference per page; the builder
@@ -22,6 +27,7 @@
 //! authority checks made by [`StreamedCapture::begin`] only refuse early, and stage two repeats them
 //! under the root lock and the journal mutex.
 
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use crate::durable::{generation_path, DurableFs, WriteOperationId};
@@ -34,20 +40,23 @@ use super::capture::{
 };
 use super::digest::{page_ref_for, InventoryDigestVerifier};
 use super::durable::{
-    assert_root_named_manifest, with_fence, JournalDurableContext, JournalDurableError,
+    assert_root_named_manifest, stage_io, with_fence, JournalDurableContext, JournalDurableError,
 };
 use super::inventory::JournalInventoryEntry;
-use super::inventory_read::{open_stored_page, read_envelope};
+use super::inventory_read::{open_stored_page, MAX_PAGE_ENVELOPE_BYTES};
 use super::inventory_store::{seal_inventory_pages, store_page_at};
 use super::manifest::{JournalManifest, JournalPageRef};
 use super::page::JournalPage;
-use super::state::{assert_page_promote_authority, MigrationFence};
+use super::state::{assert_page_promote_authority, MigrationExecutionError, MigrationFence};
 use super::JournalError;
 
 /// A capture whose pages are being staged. Every push consumes the builder and returns it, so a
-/// builder that failed partway cannot be pushed to again.
+/// builder that failed partway cannot be pushed to again. It belongs to one journal directory and to
+/// the key that authenticated the manifest it started from; a push under another context is refused.
 pub struct StreamedCapture {
     committed: JournalManifest,
+    live: LiveMigration,
+    journal_dir: PathBuf,
     revision: u64,
     entry_count: u32,
     pending: PathBuf,
@@ -109,6 +118,17 @@ impl StagedCapture {
     pub fn pending_dir(&self) -> &Path {
         &self.pending
     }
+
+    /// Abandons the capture: the staged page files are removed, best effort. The empty directories
+    /// stay, because the file system abstraction cannot remove a directory.
+    pub fn discard<F: DurableFs>(self, ctx: &mut JournalDurableContext<'_, F>) {
+        discard_staged(
+            ctx,
+            &self.pending,
+            self.refs.len(),
+            self.successor.journal_revision,
+        );
+    }
 }
 
 impl StreamedCapture {
@@ -145,6 +165,8 @@ impl StreamedCapture {
             .join(format!("pending-{revision}-{}", tag.as_str()));
         Ok(Self {
             committed: committed.clone(),
+            live: start.live.clone(),
+            journal_dir: ctx.dir.to_path_buf(),
             revision,
             entry_count: start.entry_count,
             pending,
@@ -156,12 +178,31 @@ impl StreamedCapture {
     /// Stages the next page. The page takes the next index and the capture's generation; its
     /// entries must be valid and strictly ascending after every earlier entry, and the running total
     /// must stay within the count given at the start. The sealed envelope is staged, synced, and
-    /// dropped.
+    /// dropped. The context must be the one the capture started under: the same journal directory,
+    /// and a key that authenticates the manifest the capture started from.
+    ///
+    /// A failure removes the staged pages with the builder, best effort, because nobody else can.
     pub fn push_page<F: DurableFs>(
         mut self,
         ctx: &mut JournalDurableContext<'_, F>,
         entries: Vec<JournalInventoryEntry>,
     ) -> Result<Self, JournalDurableError> {
+        match self.stage_next(ctx, entries) {
+            Ok(()) => Ok(self),
+            Err(error) => {
+                // The page in flight may already be on disk, so its slot is removed as well.
+                discard_staged(ctx, &self.pending, self.refs.len() + 1, self.revision);
+                Err(error)
+            }
+        }
+    }
+
+    fn stage_next<F: DurableFs>(
+        &mut self,
+        ctx: &mut JournalDurableContext<'_, F>,
+        entries: Vec<JournalInventoryEntry>,
+    ) -> Result<(), JournalDurableError> {
+        self.assert_context(ctx)?;
         let index = u32::try_from(self.refs.len()).map_err(|_| JournalError::InvalidPageIndex)?;
         let page = JournalPage::new(index, self.revision, entries)?;
         assert_page_not_empty(&page)?;
@@ -176,26 +217,95 @@ impl StreamedCapture {
         };
         store_page_at(ctx, &dir, &self.committed, &sealed)?;
         self.refs.push(reference);
-        Ok(self)
+        Ok(())
+    }
+
+    /// The capture belongs to one journal directory and one key. A context for another journal, or
+    /// whose key does not open the manifest the capture started from, is refused before anything is
+    /// sealed or written, so a page can never be staged that the journal key cannot open.
+    fn assert_context<F: DurableFs>(
+        &self,
+        ctx: &mut JournalDurableContext<'_, F>,
+    ) -> Result<(), JournalDurableError> {
+        if ctx.dir != self.journal_dir.as_path() {
+            return Err(JournalDurableError::Authority(
+                MigrationExecutionError::LiveBindingMismatch,
+            ));
+        }
+        assert_root_named_manifest(ctx, &self.committed, &self.live)
     }
 
     /// Ends the capture: exactly the announced number of entries must have been staged. Returns the
     /// successor manifest, built and checked exactly as
-    /// [`capture_inventory`](super::capture::capture_inventory) builds it from the same pages.
-    pub fn finish(self) -> Result<StagedCapture, JournalDurableError> {
-        let inventory_digest = self.verifier.finish_digest()?;
-        let parts = CapturedInventory {
-            refs: &self.refs,
-            entry_count: self.entry_count,
-            inventory_digest,
-        };
-        let successor =
-            capture_successor(&self.committed, &parts).map_err(JournalDurableError::Authority)?;
-        Ok(StagedCapture {
-            successor,
-            pending: self.pending,
-            refs: self.refs,
-        })
+    /// [`capture_inventory`](super::capture::capture_inventory) builds it from the same pages. A
+    /// capture that does not end here is abandoned: its staged pages are removed, best effort.
+    pub fn finish<F: DurableFs>(
+        self,
+        ctx: &mut JournalDurableContext<'_, F>,
+    ) -> Result<StagedCapture, JournalDurableError> {
+        let Self {
+            committed,
+            revision,
+            entry_count,
+            pending,
+            refs,
+            verifier,
+            ..
+        } = self;
+        let successor = verifier
+            .finish_digest()
+            .map_err(JournalDurableError::from)
+            .and_then(|inventory_digest| {
+                let parts = CapturedInventory {
+                    refs: &refs,
+                    entry_count,
+                    inventory_digest,
+                };
+                capture_successor(&committed, &parts).map_err(JournalDurableError::Authority)
+            });
+        match successor {
+            Ok(successor) => Ok(StagedCapture {
+                successor,
+                pending,
+                refs,
+            }),
+            Err(error) => {
+                discard_staged(ctx, &pending, refs.len(), revision);
+                Err(error)
+            }
+        }
+    }
+}
+
+/// Removes the staged page files of the first `pages` page slots, all at `generation`. Best effort: a
+/// file that cannot be removed stays as inert residue, and the error that led here is the one worth
+/// reporting, so removal failures are not.
+fn discard_staged<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    pending: &Path,
+    pages: usize,
+    generation: u64,
+) {
+    for index in 0..pages {
+        let dir = pending.join(format!("page-{index}"));
+        let _ = ctx.fs.remove_file(&generation_path(&dir, generation));
+    }
+}
+
+/// The staged envelope at `path`, never larger than any valid sealed page. A staged file is a
+/// candidate, not authority: a missing one is a broken attempt to abandon, never a recovery state of
+/// the journal, so it is not reported as `RecoveryRequired` the way a missing authoritative page is.
+fn read_staged_envelope<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    path: &Path,
+) -> Result<Vec<u8>, JournalDurableError> {
+    match ctx.fs.read_at_most(path, MAX_PAGE_ENVELOPE_BYTES) {
+        Ok(Some(bytes)) => Ok(bytes),
+        Ok(None) => Err(JournalError::Corrupt("staged page exceeds the envelope bound").into()),
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            Err(JournalError::Corrupt("staged page is missing").into())
+        }
+        Err(error) => Err(JournalDurableError::Stage(stage_io(error))),
     }
 }
 
@@ -215,7 +325,7 @@ pub fn load_staged_page<F: DurableFs>(
         .and_then(|index| staged.refs.get(index))
         .ok_or(JournalError::InvalidPageIndex)?;
     let dir = staged.pending.join(format!("page-{page_index}"));
-    let envelope = read_envelope(ctx, &generation_path(&dir, reference.page_generation))?;
+    let envelope = read_staged_envelope(ctx, &generation_path(&dir, reference.page_generation))?;
     if content_digest(&envelope) != reference.page_content_digest {
         return Err(JournalError::PageSetMismatch.into());
     }

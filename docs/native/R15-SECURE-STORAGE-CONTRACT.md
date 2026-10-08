@@ -2429,9 +2429,12 @@ the capture ends only when exactly that many entries were staged. The builder as
 page indexes and the capture's generation, entries must be valid and strictly ascending across pages, and
 the successor manifest is built and checked exactly as for pages held in memory. Staged files are not
 authority: the manifest never names them, no reader looks for them, a staged page is trusted only after
-it is read back by the exact path of its reference and confirmed against that reference, and an abandoned
-attempt leaves files that nothing trusts. Promoting the staged pages to the digest directory, under the
-root lock, is a separate step.
+it is read back by the exact path of its reference and confirmed against that reference, and a staged
+page that is missing is a broken attempt to abandon, never a recovery state of the journal. A capture
+belongs to one journal directory and to the key that opened the manifest it started from; a page is never
+staged under another context. A failure the caller can still handle removes the pages staged so far, and
+an attempt that was killed leaves files that nothing trusts. Promoting the staged pages to the digest
+directory, under the root lock, is a separate step.
 **Journal envelope epoch.** The manifest and every page of one operation are sealed under a single key
 epoch that is stable for the whole operation and derived from the authenticated manifest alone, never
 from the authority root's `active_key_epoch`, which moves at cutover: `ENABLE` seals under
