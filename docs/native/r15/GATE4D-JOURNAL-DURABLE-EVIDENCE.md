@@ -280,10 +280,9 @@ through the plain `promote_manifest_fenced` can never become authoritative. The 
 | `final_inventory_captured` is never cleared, never set before `ADMIT`, turns true only inside `ADMIT` (never on entering `ADMIT` or any other transition), and is required once the successor reaches `CONVERT` or a later work phase | `FrozenFieldChanged`; `FinalInventoryNotCaptured` for a successor at `CONVERT` or later without it | §10.3 `ADMIT`/`CONVERT` (Gate 4D slice D1) |
 | `recovery_reason_code` changes only when entering `RECOVERY_REQUIRED` | `FrozenFieldChanged` | `mark_recovery` |
 
-Deliberately unconstrained, because no contract text or constructor fixes them: the lease fields
-(the lease slice owns them) and the cursor across a phase change (`transition_phase` keeps it, the
-contract does not say whether a new phase restarts it). The first production caller or the lease
-slice tightens these. Revision `0` has no predecessor and is not checked.
+The lease fields and the cursor across a phase change were deliberately left unconstrained here, because no
+contract text or constructor fixed them. Maintainer decision C fixed them and Slice D3a (below) adds the rules.
+Revision `0` has no predecessor and is not checked.
 
 The predecessor read is bounded. `load_authoritative_manifest` and `load_manifest_generation` now go
 through `DurableFs::read_at_most` with `MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES`; a larger generation is
@@ -666,6 +665,36 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Slice D3a — the cursor and the lease across successors
+
+The generic successor relation said so itself: "lease fields and the cursor across a phase change are not
+constrained here" (the paragraph above, now superseded). The constructors already kept the lease and `RECOVERY_REQUIRED` already kept the cursor, but
+nothing forced a hand-built successor to match, and `transition_phase` left the cursor where it was on a forward
+change. Maintainer decision C is now the relation:
+
+| Rule | Where | Refusal |
+|---|---|---|
+| within a phase the cursor does not regress | `assert_manifest_successor` (unchanged) | `RegressiveCheckpoint` |
+| a forward phase change enters the new phase at `(0, 0)` | `assert_manifest_successor`, and `transition_phase` produces it | `CursorNotReset` (new) |
+| entering `RECOVERY_REQUIRED` keeps the last cursor | `assert_manifest_successor`; `mark_recovery` already did | `FrozenFieldChanged` |
+| an ordinary successor leaves the lease (owner, expiry, presence) as it was | `assert_manifest_successor`, hence publish, the root binding advance, `assert_progress_successor` and `assert_capture_successor` | `FrozenFieldChanged` |
+| the owner and the fence change only by takeover | `assert_takeover_successor` (unchanged) | |
+| the expiry changes only by a same-owner renewal that moves it strictly forward | `assert_renewal_successor` (new, not yet wired) | `InvalidLeaseRenewal` (no lease, owner not named, expiry not forward), `FrozenFieldChanged` (anything else changed), `StaleJournalRevision`/`LiveBindingMismatch` (revision), `TerminalPhase` |
+
+A lease therefore cannot appear from nothing through a checkpoint: its first owner is the bootstrap manifest or a
+takeover. The renewal takes no clock; the fence arbitrates whether a lapsed lease may still be renewed. The
+wiring of the renewal into a composed operation is D3b.
+
+Proof (`gate4d_cursor_lease_test`): the cursor across a forward change, recovery and a phase (including the
+constructor and the relation agreeing); the lease under every ordinary successor kind and four kinds of change
+(another owner, a longer and a shorter expiry, a dropped lease) plus a lease appearing from none; the renewal
+predicate (strictly forward, no lease to renew, nameless owner, a dropped lease, everything else unchanged, the
+revision, a terminal journal); and renewal, takeover and ordinary successor as three disjoint transitions.
+Mutation-checked: dropping the lease rule, leaving the cursor unconstrained, not resetting it in the constructor
+and allowing an equal expiry each fail their tests. Five existing tests relied on the old behaviour (a lease as
+the easy way to build a different candidate, an ordinary checkpoint acquiring a lease, a test pinning "leases are
+unconstrained") and now use a valid different successor, the bootstrap manifest, and the new rule.
+
 ## Epoch-relation validation — the target epoch follows the operation
 
 D2a derived the journal envelope epoch from the source epoch but validated only that a source exists, so a
@@ -800,7 +829,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
-- Successor rules still open: the lease fields and the cursor across a phase change (see B2b-4; Slice D3).
+- Wiring of the same-owner lease renewal (Slice D3b): `assert_renewal_successor` exists (D3a) but no journal-owner operation publishes a renewal yet.
 - Conversion (C2+) over the verified page set: it must require exclusive admission by construction and re-read the root-bound manifest with `final_inventory_captured = 1` (maintainer decision D).
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.

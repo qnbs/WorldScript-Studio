@@ -14,6 +14,7 @@ mod inventory_store;
 mod manifest;
 mod manifest_verify;
 mod page;
+mod renewal;
 mod state;
 mod succession;
 mod takeover;
@@ -135,6 +136,7 @@ pub use inventory_store::{
 };
 pub use manifest::{journal_envelope_epoch, JournalManifest, JournalPageRef, ManifestRead};
 pub use page::JournalPage;
+pub use renewal::assert_renewal_successor;
 pub use state::{
     allows_phase_transition, assert_binding_successor, assert_fence, assert_live_binding,
     assert_manifest_promote_authority, assert_page_promote_authority,

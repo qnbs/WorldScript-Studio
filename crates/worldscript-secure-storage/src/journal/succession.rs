@@ -22,13 +22,18 @@ use super::wire::{final_inventory_forbidden, final_inventory_required};
 /// reference is frozen once the successor is at `ADMIT` or later and the inventory fields once it
 /// is at `CONVERT` or later (the target key is durable in `PREPARE`, the final inventory is
 /// captured in `ADMIT`); the recovery reason changes only on entering
-/// `RECOVERY_REQUIRED`. Lease fields and the cursor across a phase change are not constrained here.
+/// `RECOVERY_REQUIRED`. The lease (owner, expiry) never changes in an ordinary successor: the owner and
+/// the fence change only by takeover ([`assert_takeover_successor`](super::takeover::assert_takeover_successor)),
+/// the expiry only by renewal ([`assert_renewal_successor`](super::renewal::assert_renewal_successor)). The
+/// cursor does not regress within a phase, is kept on entering `RECOVERY_REQUIRED` and is `(0, 0)` on every
+/// other phase change (maintainer decision C, §10.3).
 pub fn assert_manifest_successor(
     prev: &JournalManifest,
     next: &JournalManifest,
 ) -> Result<(), MigrationExecutionError> {
     assert_successor_revision(prev, next)?;
     assert_operation_kept(prev, next)?;
+    assert_lease_kept(prev, next)?;
     assert_phase_successor(prev, next)?;
     assert_final_inventory_successor(prev, next)?;
     assert_frozen_fields_kept(prev, next)?;
@@ -49,7 +54,7 @@ pub fn assert_progress_successor(
     frozen_when(true, inventory(prev) == inventory(next))
 }
 
-fn assert_successor_revision(
+pub(super) fn assert_successor_revision(
     prev: &JournalManifest,
     next: &JournalManifest,
 ) -> Result<(), MigrationExecutionError> {
@@ -74,6 +79,24 @@ fn assert_operation_kept(
         return Err(MigrationExecutionError::StaleMigrationOwner);
     }
     frozen_when(true, identity(prev) == identity(next))
+}
+
+/// The lease named in a manifest: whether there is an owner, who, and until when.
+fn lease(manifest: &JournalManifest) -> (bool, Option<&str>, Option<u64>) {
+    (
+        manifest.has_lease_owner,
+        manifest.lease_owner_id.as_deref(),
+        manifest.lease_expires_unix_ms,
+    )
+}
+
+/// An ordinary successor leaves the lease alone: ownership changes only by takeover, the expiry only by
+/// renewal, so a checkpoint, a phase change, a recovery entry or a capture cannot move either.
+fn assert_lease_kept(
+    prev: &JournalManifest,
+    next: &JournalManifest,
+) -> Result<(), MigrationExecutionError> {
+    frozen_when(true, lease(prev) == lease(next))
 }
 
 /// Operation type, epochs and inventory version: fixed for the life of the operation.
@@ -176,14 +199,22 @@ fn assert_cursor_successor(
         next,
         JournalCheckpointCursor::new(next.cursor_page_index, next.cursor_entry_index),
     )?;
-    if next.phase != prev.phase {
-        return Ok(());
-    }
     let before = JournalCheckpointCursor::new(prev.cursor_page_index, prev.cursor_entry_index);
     let after = JournalCheckpointCursor::new(next.cursor_page_index, next.cursor_entry_index);
-    if after < before {
-        Err(MigrationExecutionError::RegressiveCheckpoint)
-    } else {
+    if next.phase == prev.phase {
+        return if after < before {
+            Err(MigrationExecutionError::RegressiveCheckpoint)
+        } else {
+            Ok(())
+        };
+    }
+    // A phase change: recovery keeps the last cursor, which is where the operation stopped; any other
+    // change enters the new phase at the start (§10.3).
+    if next.phase == phase_code::RECOVERY_REQUIRED {
+        frozen_when(true, after == before)
+    } else if after == JournalCheckpointCursor::EMPTY {
         Ok(())
+    } else {
+        Err(MigrationExecutionError::CursorNotReset)
     }
 }
