@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** stage a streamed inventory without handling a journal key (stage two, part b, of the
+  streaming capture). `begin_streamed_capture` routes the journal key from the authenticated root and
+  registry, reads the binding and the committed manifest from the root and returns a `StagingSession` that
+  stages page by page under that key and one journal directory value; `commit_streamed_inventory_capture` no
+  longer takes a committed manifest or a journal directory, promoting into the directory the capture was
+  staged in and loading the manifest from the root under the lock. PR #1012.
 - **R-15 Gate 4D:** commit a staged inventory (stage two, part a, of the streaming capture).
   `commit_streamed_inventory_capture` promotes the pages that `StreamedCapture` staged into the digest
   directory of their successor one page at a time (each page confirmed against its reference, its entries

@@ -45,9 +45,9 @@ use crate::journal::{
     assert_progress_successor, assert_renewal_successor, assert_takeover_successor,
     load_authoritative_manifest, promote_inventory_set_fenced, promote_staged_inventory_fenced,
     publish_manifest_fenced, publish_renewal_fenced, publish_takeover_fenced, CandidateConflict,
-    InventorySetWrite, JournalDurableContext, JournalDurableError, JournalManifest,
-    JournalTakeover, MigrationExecutionError, MigrationFence, SealedPage, StagedCapture,
-    StagedPromotion,
+    CaptureStart, InventorySetWrite, JournalDurableContext, JournalDurableError,
+    JournalInventoryEntry, JournalManifest, JournalTakeover, MigrationExecutionError,
+    MigrationFence, SealedPage, StagedCapture, StagedPromotion, StreamedCapture,
 };
 use crate::journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 use crate::marker::content_digest;
@@ -446,16 +446,16 @@ pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
 }
 
 /// One capture of the journal's inventory whose pages were staged one at a time (§10.3): the staged
-/// capture, the manifest the root binding names, and the owner's token and routes.
+/// capture and the owner's token and routes. The journal directory is the one the capture was staged
+/// in, and the committed manifest is read from the root, so neither is a caller input.
 #[derive(Clone, Copy)]
 pub struct StreamedInventoryCapture<'a> {
     /// The finished stage-one capture; its successor is the manifest that is published.
     pub staged: &'a StagedCapture,
-    /// The manifest the root binding names, which the staged capture was begun over.
-    pub committed_manifest: &'a JournalManifest,
     /// The owner's token for the successor.
     pub fence: &'a MigrationFence,
-    pub journal: JournalSource<'a>,
+    /// The write operation of this commit.
+    pub operation: &'a WriteOperationId,
     pub root_key_ref: &'a RootKeyRefV1,
     pub active_key_epoch: u64,
     /// What to do with a durable candidate at the next revision that is not the successor.
@@ -470,7 +470,9 @@ pub struct StreamedInventoryCapture<'a> {
 /// at a time by [`promote_staged_inventory_fenced`], so memory stays one page. The staged files are
 /// removed only once the root has committed to the set (best effort), so a retry after a failure
 /// before that point still has them and adopts what is already durable; after a success the handle
-/// is spent. The journal key is routed from the root here, as for every journal-owner commit.
+/// is spent. The journal key is routed from the root here, as for every journal-owner commit, the
+/// committed manifest is the one the root names (loaded under that key while the lock is held), and
+/// the journal directory is the one the capture was staged in.
 pub fn commit_streamed_inventory_capture<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
@@ -481,21 +483,26 @@ pub fn commit_streamed_inventory_capture<F: DurableFs, P: KeyProvider>(
     let checkpoint = JournalCheckpoint {
         manifest: staged.successor(),
         fence: capture.fence,
-        journal: capture.journal,
+        journal: JournalSource {
+            dir: staged.journal_dir(),
+            operation: capture.operation,
+        },
         root_key_ref: capture.root_key_ref,
         active_key_epoch: capture.active_key_epoch,
         conflict: capture.conflict,
     };
+    // The successor is the revision after the one the pages are written under.
     let plan = CapturePlan {
         layout,
         checkpoint,
-        committed_revision: capture.committed_manifest.journal_revision,
+        committed_revision: staged.successor().journal_revision.saturating_sub(1),
     };
     let committed = commit_capture(fs, provider, plan, |journal, committed, fence| {
+        let manifest = load_authoritative_manifest(journal, committed)?;
         promote_staged_inventory_fenced(
             journal,
             &StagedPromotion {
-                committed_manifest: capture.committed_manifest,
+                committed_manifest: &manifest,
                 fence,
                 committed,
                 staged,
@@ -504,6 +511,111 @@ pub fn commit_streamed_inventory_capture<F: DurableFs, P: KeyProvider>(
     })?;
     staged.remove_files(fs);
     Ok(committed)
+}
+
+/// What a staging session needs from its caller: where the journal lives and the write operation that
+/// stages it, the owner's token at the committed revision, and the total number of entries the
+/// inventory will have (the inventory digest commits to it first).
+#[derive(Clone, Copy)]
+pub struct SessionBegin<'a> {
+    pub journal: JournalSource<'a>,
+    pub fence: &'a MigrationFence,
+    pub entry_count: u32,
+}
+
+/// A streamed capture in progress together with the journal key and directory it stages under, so a
+/// caller of the staging stage never handles a key and never spells the journal directory twice.
+pub struct StagingSession {
+    capture: StreamedCapture,
+    key: Key,
+    journal_dir: PathBuf,
+    operation: WriteOperationId,
+}
+
+// The key is deliberately left out of the debug output.
+impl std::fmt::Debug for StagingSession {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StagingSession")
+            .field("capture", &self.capture)
+            .field("journal_dir", &self.journal_dir)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Starts staging an inventory one page at a time, with the journal key routed from the root.
+///
+/// The binding is read from the committed root, the journal key is resolved through the key-epoch
+/// registry ([`resolve_journal_key`]), the committed manifest is loaded by the exact root-named path
+/// under that key, and the stage-one capture begins over it; the caller supplies no key, manifest or
+/// binding. Nothing is created and no lock is taken: these are early refusals, and the commit repeats
+/// every authority check under the root lock.
+pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    begin: SessionBegin<'_>,
+) -> Result<StagingSession, AuthorityError> {
+    // The root alone names the binding: the catalog pages are not read, so starting a capture of a
+    // very large inventory does not first materialise a very large catalog.
+    let live = load_committed_root(fs, provider, layout)
+        .map_err(AuthorityError::Root)?
+        .and_then(|view| view.root.live_migration)
+        .ok_or(AuthorityError::NoLiveMigration)?;
+    let key = route_journal_key(fs, provider, layout, begin.journal)?;
+    let capture = {
+        let mut ctx = journal_context(&mut *fs, begin.journal, &key, CandidateConflict::Refuse);
+        let committed =
+            load_authoritative_manifest(&mut ctx, &live).map_err(AuthorityError::Journal)?;
+        let start = CaptureStart {
+            committed_manifest: &committed,
+            fence: begin.fence,
+            live: &live,
+            entry_count: begin.entry_count,
+        };
+        StreamedCapture::begin(&mut ctx, &start).map_err(AuthorityError::Journal)?
+    };
+    Ok(StagingSession {
+        capture,
+        key,
+        journal_dir: begin.journal.dir.to_path_buf(),
+        operation: begin.journal.operation.clone(),
+    })
+}
+
+impl StagingSession {
+    /// Stages the next page under the session's key and directory; see [`StreamedCapture::push_page`].
+    pub fn push_page<F: DurableFs>(
+        self,
+        fs: &mut F,
+        entries: Vec<JournalInventoryEntry>,
+    ) -> Result<Self, AuthorityError> {
+        let Self {
+            capture,
+            key,
+            journal_dir,
+            operation,
+        } = self;
+        let capture = {
+            let mut ctx = JournalDurableContext::new(fs, &key, &journal_dir, &operation);
+            capture
+                .push_page(&mut ctx, entries)
+                .map_err(AuthorityError::Journal)?
+        };
+        Ok(Self {
+            capture,
+            key,
+            journal_dir,
+            operation,
+        })
+    }
+
+    /// Ends the capture; see [`StreamedCapture::finish`].
+    pub fn finish<F: DurableFs>(self, fs: &mut F) -> Result<StagedCapture, AuthorityError> {
+        let mut ctx = JournalDurableContext::new(fs, &self.key, &self.journal_dir, &self.operation);
+        self.capture
+            .finish(&mut ctx)
+            .map_err(AuthorityError::Journal)
+    }
 }
 
 /// What a capture commit needs besides the file system, the provider and the step that stores the

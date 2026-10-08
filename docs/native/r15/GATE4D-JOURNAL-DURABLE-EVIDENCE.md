@@ -665,6 +665,32 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Streaming capture, stage two (b) — the staging session routes the key
+
+After stage two (a) the stage-one builder still took the journal key, the committed manifest and the binding
+from its caller, and the commit took the committed manifest and a journal directory, compared with the staged
+one by spelling (a deferred finding on #1011). The authority-level session removes those inputs.
+
+| Step | Rule |
+|---|---|
+| `begin_streamed_capture` | reads the binding from the committed root alone (`NoLiveMigration` if none; the catalog pages are not read, so starting a capture does not first materialise a catalog that can hold a million records), routes the journal key through the key-epoch registry (`JournalRoute` errors; a route to a key the journal was not sealed under is `Open(Tampered)` from the authenticated load of the root-named manifest), loads the committed manifest by the exact root-named path, and starts the stage-one capture over it (`StreamedCapture::begin`, so the token, the open inventory and the announced total are checked as before). The caller supplies the journal source, the owner's token and the announced total. Nothing is created and no lock is taken |
+| `StagingSession::push_page` / `finish` | the stage-one operations under the key and the directory the session holds, so staging never handles a key and spells the journal directory once |
+| `commit_streamed_inventory_capture` | no longer takes a committed manifest or a journal directory: it promotes into the directory the capture was staged in, and loads the committed manifest from the root under the routed key while the lock is held, inside the shared core |
+
+Decisions, disclosed: (a) the session reads the manifest and the binding itself, which goes beyond the QNB-11
+text (it names only the key); (b) `StreamedInventoryCapture` changes shape (stage two (a) had no caller);
+(c) the session holds the routed key for its lifetime and the commit routes again, so a key that went stale in
+between is refused at promotion; (d) staging stays lock-free, so every check made at the start is repeated by
+the commit under the root lock.
+
+Proof: a whole capture through a session with no key, manifest or binding in the caller's hands is committed,
+verifies, and equals the in-memory capture of the same pages; a session is refused before anything is created
+with a stale token and with no bound migration, and it starts with an unreadable catalog page because it reads the root alone; a finished capture is discarded with no key; a commit after the owner moved the journal on is refused before
+any write with the staged files kept; the route refuses the session with a revoked or unregistered epoch and
+with a route to another key, beside the other journal-owner operations. Mutation-checked: a fixed journal key
+in the session, no binding requirement, the whole catalog loaded at the start, and a wrong committed revision in
+the commit each fail the test that owns them. The pre-existing stage-two (a) cases pass unchanged against the smaller input.
+
 ## Streaming capture, stage two (a) — promoting a staged capture and committing it
 
 Stage one left a finished inventory in `inventory/pending-*`; this is the step that makes it reachable.
@@ -718,7 +744,7 @@ reference per page.
 | `StreamedCapture::begin` | fence; the caller is the committed owner writing under the committed manifest (`StaleMigrationOwner`); the manifest is the exact root-named generation (`LiveBindingMismatch`); the inventory is open (`DISCOVER` or `ADMIT`, not yet final, nothing converted); the announced total is within the format bound. Nothing is created. These are early refusals: stage two repeats them under the locks |
 | `push_page` | the context is the one the capture started under: the same journal directory (`LiveBindingMismatch`) and a key that opens the manifest the capture started from (`Open(Tampered)`), checked before anything is sealed over the few kilobytes of root-named manifest that `begin` kept, so a push reads nothing for it; the page takes the next index and the capture's generation; it is non-empty, its entries are valid and strictly ascending after every earlier entry, the running total stays within the announced one; it is sealed once under the operation's journal envelope epoch, its reference recorded, its envelope staged and synced, and the bytes dropped. A failure removes the pages staged so far and the attempt's own staging link, each only if it still holds exactly the bytes that were staged (checked against its reference), so a file this attempt did not write, or a staged page that was replaced, is never deleted |
 | `finish` | exactly the announced total was staged; the successor is built by the same function `capture_inventory` ends in, and checked as a valid successor; a failure removes the staged pages |
-| `StagedCapture::discard` | removes the staged page files of a capture that will not be promoted |
+| `StagedCapture::discard` | removes the staged page files of a capture that will not be promoted; needs only the file system, no key, because a caller that staged through a session never held one |
 | `load_staged_page` | the exact path of the reference, bounded; a missing file is `Corrupt`, never `RecoveryRequired`, because a staged page is a candidate and not authority; the envelope hashes to the reference before it is opened; it opens only as this operation's page at this index and generation, with the epoch compared before the key is used |
 
 Differences from the admission, disclosed: (1) the inventory digest commits to the entry total before any
@@ -964,7 +990,6 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
 - Conversion (C2+) over the verified page set: it must require exclusive admission by construction and re-read the root-bound manifest with `final_inventory_captured = 1` (maintainer decision D).
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
-- Streaming capture, stage two (b): the authority-level staging session that routes the journal key from the root, so the key is no longer a caller input to staging; until then a caller of `StreamedCapture` supplies the key (acceptance criterion on #359).
 - Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read. Reclaiming them needs a directory-removal primitive and a sweep that knows no live attempt owns them, as for the orphaned digest directories of a discarded capture (acceptance criterion on #359).
 - The cross-process lease CAS.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
