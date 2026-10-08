@@ -240,127 +240,138 @@ fn a_lease_cannot_appear_from_nothing_through_a_checkpoint() {
 /// One renewal scenario: the committed manifest, the candidate and the verdict it must get.
 type Renewal = (&'static str, JournalManifest, JournalManifest, Outcome);
 
-fn renewals() -> Vec<Renewal> {
-    let held = converting();
-    let nameless = {
-        let mut m = converting();
-        m.lease_owner_id = Some(String::new());
-        m
-    };
-    let mut done = converting();
-    done.phase = phase_code::DONE;
-    let mut same_revision = successor(&held, extend);
-    same_revision.journal_revision = held.journal_revision;
-    let mut skipped = successor(&held, extend);
-    skipped.journal_revision += 1;
+/// A renewal candidate for the journal `prev`, built by `change` on top of a valid successor.
+fn renewal(
+    name: &'static str,
+    prev: JournalManifest,
+    change: Change,
+    expected: Outcome,
+) -> Renewal {
+    let next = successor(&prev, change);
+    (name, prev, next, expected)
+}
+
+/// Candidates that are about the shape of the lease itself.
+fn lease_shape_cases() -> Vec<Renewal> {
     let invalid = Err(MigrationExecutionError::InvalidLeaseRenewal);
-    let frozen = Err(MigrationExecutionError::FrozenFieldChanged);
     let claim: Change = |m| {
         m.has_lease_owner = true;
         m.lease_owner_id = Some("owner-a".into());
         m.lease_expires_unix_ms = Some(10_000);
     };
+    let mut nameless = converting();
+    nameless.lease_owner_id = Some(String::new());
     vec![
-        (
-            "expiry forward",
-            held.clone(),
-            successor(&held, extend),
-            Ok(()),
-        ),
-        (
+        renewal("expiry forward", converting(), extend, Ok(())),
+        renewal(
             "expiry unchanged",
-            held.clone(),
-            successor(&held, |m| m.lease_expires_unix_ms = Some(10_000)),
+            converting(),
+            |m| m.lease_expires_unix_ms = Some(10_000),
             invalid,
         ),
-        (
+        renewal(
             "expiry earlier",
-            held.clone(),
-            successor(&held, |m| m.lease_expires_unix_ms = Some(9_999)),
+            converting(),
+            |m| m.lease_expires_unix_ms = Some(9_999),
             invalid,
         ),
-        (
-            "lease dropped",
-            held.clone(),
-            successor(&held, drop_lease),
-            invalid,
-        ),
-        (
-            "no lease to renew",
-            unowned(),
-            successor(&unowned(), claim),
-            invalid,
-        ),
-        (
-            "owner not named",
-            nameless.clone(),
-            successor(&nameless, extend),
-            invalid,
-        ),
-        (
+        renewal("lease dropped", converting(), drop_lease, invalid),
+        renewal("no lease to renew", unowned(), claim, invalid),
+        renewal("owner not named", nameless, extend, invalid),
+    ]
+}
+
+/// Candidates that renew the expiry and change anything else.
+fn frozen_field_cases() -> Vec<Renewal> {
+    let frozen = Err(MigrationExecutionError::FrozenFieldChanged);
+    vec![
+        renewal(
             "another owner",
-            held.clone(),
-            successor(&held, |m| {
+            converting(),
+            |m| {
                 extend(m);
                 m.lease_owner_id = Some("owner-b".into());
-            }),
+            },
             frozen,
         ),
-        (
+        renewal(
             "another fence",
-            held.clone(),
-            successor(&held, |m| {
+            converting(),
+            |m| {
                 extend(m);
                 m.fencing_generation += 1;
-            }),
+            },
             frozen,
         ),
-        (
+        renewal(
             "with a cursor move",
-            held.clone(),
-            successor(&held, |m| {
+            converting(),
+            |m| {
                 extend(m);
                 m.cursor_entry_index = 3;
-            }),
+            },
             frozen,
         ),
-        (
+        renewal(
             "with a phase change",
-            held.clone(),
-            successor(&held, |m| {
+            converting(),
+            |m| {
                 extend(m);
                 forward(m);
-            }),
+            },
             frozen,
         ),
-        (
+        renewal(
             "with a recovery reason",
-            held.clone(),
-            successor(&held, |m| {
+            converting(),
+            |m| {
                 extend(m);
                 recovery(m);
-            }),
+            },
             frozen,
         ),
-        (
+    ]
+}
+
+/// Candidates that are about the revision and the state of the journal they follow.
+fn revision_and_terminal_cases() -> Vec<Renewal> {
+    let mut done = converting();
+    done.phase = phase_code::DONE;
+    vec![
+        renewal(
             "same revision",
-            held.clone(),
-            same_revision,
+            converting(),
+            |m| {
+                extend(m);
+                m.journal_revision -= 1;
+            },
             Err(MigrationExecutionError::StaleJournalRevision),
         ),
-        (
+        renewal(
             "revision skipped",
-            held.clone(),
-            skipped,
+            converting(),
+            |m| {
+                extend(m);
+                m.journal_revision += 1;
+            },
             Err(MigrationExecutionError::LiveBindingMismatch),
         ),
-        (
+        renewal(
             "terminal journal",
-            done.clone(),
-            successor(&done, extend),
+            done,
+            extend,
             Err(MigrationExecutionError::TerminalPhase),
         ),
     ]
+}
+
+fn renewals() -> Vec<Renewal> {
+    [
+        lease_shape_cases(),
+        frozen_field_cases(),
+        revision_and_terminal_cases(),
+    ]
+    .concat()
 }
 
 #[test]
