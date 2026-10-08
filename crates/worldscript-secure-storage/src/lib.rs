@@ -31,6 +31,7 @@ pub mod envelope;
 pub mod error;
 pub mod identity;
 pub mod journal;
+pub mod journal_route;
 pub mod kdf;
 pub mod marker;
 #[cfg(feature = "test-support")]
@@ -97,18 +98,20 @@ pub use journal::{
     load_authoritative_manifest, load_inventory_page, load_manifest_generation, mark_done,
     mark_recovery, operation_type, ordinary_mutating_writes_admitted, page_ref_for, phase_code,
     promote_inventory_set_fenced, promote_manifest_fenced, promote_page_fenced,
-    publish_manifest_fenced, publish_takeover_fenced, seal_inventory_pages, source_authority_kind,
-    source_physical_authority_kind, source_scheme_id, transition_phase, verify_stored_inventory,
-    with_fence, CandidateConflict, ForeignInventoryExtension, InventoryDigestVerifier,
-    InventorySetWrite, JournalCheckpointCursor, JournalDurableContext, JournalDurableError,
-    JournalDurableGuard, JournalError, JournalInventoryEntry, JournalInventoryExtent,
-    JournalInventorySource, JournalManifest, JournalPage, JournalPageRef, JournalRevision,
-    JournalTakeover, ManifestEnvelopeDigest, ManifestRead, MigrationExecutionError, MigrationFence,
-    MigrationPhase, PublishedManifest, RecoveryReasonCode, SealedPage, VerifiedInventory,
-    JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION,
-    JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES,
-    MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES, MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
+    publish_manifest_fenced, publish_takeover_fenced, root_named_journal_epoch,
+    seal_inventory_pages, source_authority_kind, source_physical_authority_kind, source_scheme_id,
+    transition_phase, verify_stored_inventory, with_fence, CandidateConflict,
+    ForeignInventoryExtension, InventoryDigestVerifier, InventorySetWrite, JournalCheckpointCursor,
+    JournalDurableContext, JournalDurableError, JournalDurableGuard, JournalError,
+    JournalInventoryEntry, JournalInventoryExtent, JournalInventorySource, JournalManifest,
+    JournalPage, JournalPageRef, JournalRevision, JournalTakeover, ManifestEnvelopeDigest,
+    ManifestRead, MigrationExecutionError, MigrationFence, MigrationPhase, PublishedManifest,
+    RecoveryReasonCode, SealedPage, VerifiedInventory, JOURNAL_MANIFEST_FORMAT_VERSION,
+    JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION, JOURNAL_PAGE_RECORD_SCHEMA,
+    MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
+    MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
 };
+pub use journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};
 pub use marker::{
     content_digest, CommitMarker, MarkerBody, MarkerError, MarkerOperation, PendingBody,

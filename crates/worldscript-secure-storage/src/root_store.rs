@@ -335,6 +335,30 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
     provider: &P,
     layout: RootLayout<'_>,
 ) -> Result<Option<CommittedRootView>, RootStoreError> {
+    let Some(anchored) = anchored_root(provider)? else {
+        return Ok(None);
+    };
+    load_snapshot_root(
+        fs,
+        layout,
+        &anchored.scope,
+        &anchored.committed,
+        &anchored.key,
+        None,
+    )
+    .map(|(view, _)| Some(view))
+}
+
+/// What the secure anchor says is committed, with the key its route resolves to.
+struct AnchoredRoot {
+    committed: crate::provider::CommittedRoot,
+    scope: InstallationScopeId,
+    key: Key,
+}
+
+/// The trusted cold start's first half (§5.3.1 steps 0-1): the anchor's committed root, scope and key
+/// route, with no pending preparation. `None` before the first root commit.
+fn anchored_root<P: KeyProvider>(provider: &P) -> Result<Option<AnchoredRoot>, RootStoreError> {
     let anchor = read_anchor(provider)?;
     if anchor.prepared_root_commit.is_some() {
         return Err(RootStoreError::PreparationPending);
@@ -346,7 +370,45 @@ pub fn load_committed_root<F: DurableFs, P: KeyProvider>(
     let key = provider
         .resolve_ref(&committed.root_key_ref)
         .map_err(RootStoreError::Anchor)?;
-    load_snapshot_root(fs, layout, &scope, &committed, &key, None).map(|(view, _)| Some(view))
+    Ok(Some(AnchoredRoot {
+        committed,
+        scope,
+        key,
+    }))
+}
+
+/// The committed root together with the key-epoch registry it commits to, authenticated in one read:
+/// the slot opens under the anchor's route and the registry hashes to the root's
+/// `key_epoch_set_digest` with its active epoch bound ([`verify_key_epochs`]). A registry that is
+/// ahead of the root (a promoted generation whose root commit never completed) or behind it (a
+/// generation removed) is `RECOVERY_REQUIRED`, never a different registry. `None` before the first
+/// root commit.
+pub(crate) struct CommittedRegistry {
+    pub root: RootBody,
+    pub records: Vec<KeyEpochRecord>,
+}
+
+pub(crate) fn load_committed_registry<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+) -> Result<Option<CommittedRegistry>, RootStoreError> {
+    let Some(anchored) = anchored_root(provider)? else {
+        return Ok(None);
+    };
+    let (root, _) = open_committed_slot(
+        fs,
+        layout,
+        &anchored.scope,
+        &anchored.committed,
+        &anchored.key,
+    )?;
+    let set = load_snapshot_key_epochs(fs, layout, &anchored.scope, &anchored.key)?;
+    verify_key_epochs(&root, &set)?;
+    Ok(Some(CommittedRegistry {
+        root,
+        records: set.into_iter().map(|(record, _)| record).collect(),
+    }))
 }
 
 /// Authenticates exactly an already-pinned anchor snapshot. A concurrent preparation/pointer
@@ -578,18 +640,16 @@ fn assert_no_live_migration<F: DurableFs, P: KeyProvider>(
     provider: &P,
     layout: RootLayout<'_>,
 ) -> Result<(), RootStoreError> {
-    let anchor = read_anchor(provider)?;
-    if anchor.prepared_root_commit.is_some() {
-        return Err(RootStoreError::PreparationPending);
-    }
-    let (Some(committed), Some(scope)) = (anchor.committed_root, anchor.installation_scope_id)
-    else {
+    let Some(anchored) = anchored_root(provider)? else {
         return Ok(());
     };
-    let key = provider
-        .resolve_ref(&committed.root_key_ref)
-        .map_err(RootStoreError::Anchor)?;
-    let (root, _) = open_committed_slot(fs, layout, &scope, &committed, &key)?;
+    let (root, _) = open_committed_slot(
+        fs,
+        layout,
+        &anchored.scope,
+        &anchored.committed,
+        &anchored.key,
+    )?;
     if root.live_migration.is_some() {
         Err(RootStoreError::RevocationWhileMigrationBound)
     } else {
