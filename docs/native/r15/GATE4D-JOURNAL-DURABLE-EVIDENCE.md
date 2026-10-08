@@ -688,10 +688,12 @@ say so); (2) `begin` takes a journal context that carries the key, and the autho
 routes the key from the root arrives with stage two, because the routed key has to be resolved again at
 promotion anyway; (3) the admission planned a counting file system to bound the page size, but peak memory is
 not measured: it is bounded by construction, because `StreamedCapture` has no field that can hold a page
-or an envelope, and a push drops both before it returns; (4) the tests live in
-`gate4d_inventory_store_test`, where the page store they feed is tested.
+or an envelope, and a push drops both before it returns; (4) the tests are a file of their own,
+`gate4d_stream_capture_test`, over the journal fixtures that were split out of the inventory fixtures
+(`support/journal_fixture.rs`), so a test that needs only a committed journal does not carry the page
+fixtures; putting them into the store test made that file lose its cohesion.
 
-Proof (ten tests in `gate4d_inventory_store_test`): the streamed successor equals what `capture_inventory`
+Proof (ten tests in `gate4d_stream_capture_test`): the streamed successor equals what `capture_inventory`
 builds from the pages that were staged, for one entry, uneven and even splits, one page, the final capture
 in `ADMIT` and a full page plus one (4097 entries); an empty inventory stages nothing and matches the empty
 capture; the staged files are exactly the pending layout under a `pending-` name; the staged pages are

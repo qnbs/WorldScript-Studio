@@ -84,6 +84,16 @@ pub struct StagedPage {
     pub envelope: Vec<u8>,
 }
 
+/// What a streamed capture starts from: the manifest the root binding names, the owner's fence, that
+/// binding, and the announced total of entries.
+#[derive(Clone, Copy)]
+pub struct CaptureStart<'a> {
+    pub committed_manifest: &'a JournalManifest,
+    pub fence: &'a MigrationFence,
+    pub live: &'a LiveMigration,
+    pub entry_count: u32,
+}
+
 impl StagedCapture {
     /// The successor manifest that captures the staged inventory.
     pub fn successor(&self) -> &JournalManifest {
@@ -102,8 +112,7 @@ impl StagedCapture {
 }
 
 impl StreamedCapture {
-    /// Starts a capture of `entry_count` entries over `committed`, the manifest the root binding
-    /// `live` names.
+    /// Starts a capture of `start.entry_count` entries over the manifest the root binding names.
     ///
     /// Refused before anything is created: a stale fence, a caller that is not the committed owner
     /// writing under the committed manifest, a manifest that is not the exact root-named generation,
@@ -112,19 +121,17 @@ impl StreamedCapture {
     /// promotes the staged pages repeats them under the locks.
     pub fn begin<F: DurableFs>(
         ctx: &mut JournalDurableContext<'_, F>,
-        committed: &JournalManifest,
-        fence: &MigrationFence,
-        live: &LiveMigration,
-        entry_count: u32,
+        start: &CaptureStart<'_>,
     ) -> Result<Self, JournalDurableError> {
-        let verifier = with_fence(committed, fence, || {
-            assert_page_promote_authority(committed, Some(live))
+        let committed = start.committed_manifest;
+        let verifier = with_fence(committed, start.fence, || {
+            assert_page_promote_authority(committed, Some(start.live))
                 .map_err(JournalDurableError::Authority)?;
-            assert_root_named_manifest(ctx, committed, live)?;
+            assert_root_named_manifest(ctx, committed, start.live)?;
             assert_inventory_open(committed).map_err(JournalDurableError::Authority)?;
             Ok(InventoryDigestVerifier::new(
                 committed.inventory_version,
-                entry_count,
+                start.entry_count,
             )?)
         })?;
         let revision = next_revision(committed).map_err(JournalDurableError::Authority)?;
@@ -139,7 +146,7 @@ impl StreamedCapture {
         Ok(Self {
             committed: committed.clone(),
             revision,
-            entry_count,
+            entry_count: start.entry_count,
             pending,
             refs: Vec::new(),
             verifier,
