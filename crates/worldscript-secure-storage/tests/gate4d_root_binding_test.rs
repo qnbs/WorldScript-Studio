@@ -15,18 +15,18 @@ use worldscript_secure_storage::{
     commit_journal_checkpoint, commit_journal_takeover, commit_lease_renewal, commit_root,
     commit_streamed_inventory_capture, content_digest, empty_inventory_digest,
     empty_journal_page_set_digest, generation_path, inventory_page_dir,
-    load_authoritative_manifest, load_catalog, operation_type, phase_code, promote_manifest_fenced,
-    seal_inventory_pages, source_authority_kind, source_physical_authority_kind, transition_phase,
-    verify_stored_inventory, write_key_epoch, AuthorityError, BindingAdvance, CandidateConflict,
-    CaptureStart, CatalogChange, CatalogCommit, DirectoryDurability, DurableFs,
-    InstallationScopeId, InventoryCapture, JournalCheckpoint, JournalDurableContext,
-    JournalDurableError, JournalError, JournalInventoryEntry, JournalInventorySource,
-    JournalManifest, JournalPage, JournalSource, JournalTakeoverCommit, KeyEpochCommit,
-    KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
+    load_authoritative_manifest, load_catalog, load_staged_page, operation_type, phase_code,
+    promote_manifest_fenced, seal_inventory_pages, source_authority_kind,
+    source_physical_authority_kind, transition_phase, verify_stored_inventory, write_key_epoch,
+    AuthorityError, BindingAdvance, CandidateConflict, CaptureStart, CatalogChange, CatalogCommit,
+    DirectoryDurability, DurableFs, InstallationScopeId, InventoryCapture, JournalCheckpoint,
+    JournalDurableContext, JournalDurableError, JournalError, JournalInventoryEntry,
+    JournalInventorySource, JournalManifest, JournalPage, JournalSource, JournalTakeoverCommit,
+    KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
     MigrationExecutionError, MigrationFence, MigrationPhase, RecordClass, RecordIdentity, RootBody,
     RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted,
-    RootKeyRefV1, RootLayout, SealedPage, StageFailureKind, StagedCapture, StdFs, StreamedCapture,
-    StreamedInventoryCapture, WriteOperationId,
+    RootKeyRefV1, RootLayout, SealedPage, StageFailureKind, StagedCapture, StagedPage, StdFs,
+    StreamedCapture, StreamedInventoryCapture, WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -408,14 +408,15 @@ impl Fixture {
         committed: &JournalManifest,
     ) -> Result<RootCommitted, AuthorityError> {
         let fence = MigrationFence::from_manifest(staged.successor());
-        self.capture_streamed_fenced(staged, committed, &fence)
+        self.capture_streamed_with(&mut StdFs, (staged, committed), &fence)
     }
 
-    /// The same presenting `fence`, which is the successor's own token for an honest caller.
-    fn capture_streamed_fenced(
+    /// The same over `fs` and presenting `fence`, which is the successor's own token for an honest
+    /// caller. `capture` is the staged capture and the manifest the root binds.
+    fn capture_streamed_with<F: DurableFs>(
         &mut self,
-        staged: &StagedCapture,
-        committed: &JournalManifest,
+        fs: &mut F,
+        capture: (&StagedCapture, &JournalManifest),
         fence: &MigrationFence,
     ) -> Result<RootCommitted, AuthorityError> {
         let op = self
@@ -423,8 +424,8 @@ impl Fixture {
             .clone()
             .unwrap_or_else(|| WriteOperationId::generate().unwrap());
         let capture = StreamedInventoryCapture {
-            staged,
-            committed_manifest: committed,
+            staged: capture.0,
+            committed_manifest: capture.1,
             fence,
             journal: JournalSource {
                 dir: &self.journal_dir,
@@ -435,7 +436,7 @@ impl Fixture {
             conflict: self.conflict,
         };
         commit_streamed_inventory_capture(
-            &mut StdFs,
+            fs,
             &mut self.provider,
             RootLayout {
                 root_dir: &self.root_dir,
@@ -2461,6 +2462,16 @@ fn staged_files(staged: &StagedCapture) -> usize {
     files.len()
 }
 
+/// The staged pages read back and confirmed, in page order.
+fn staged_pages(fixture: &Fixture, staged: &StagedCapture) -> Vec<StagedPage> {
+    let (key, op) = (journal_key(), WriteOperationId::generate().unwrap());
+    let mut fs = StdFs;
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, &fixture.journal_dir, &op);
+    (0..staged.page_refs().len() as u32)
+        .map(|index| load_staged_page(&mut ctx, staged, index).unwrap())
+        .collect()
+}
+
 /// The journal tree without the staged files, which a retry is allowed to leave alone or remove.
 fn durable_tree(fixture: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
     let mut tree = fixture.journal_tree();
@@ -2473,6 +2484,16 @@ fn a_streamed_capture_promotes_the_pages_publishes_the_manifest_and_advances_the
     let (mut fixture, one, bound) = bound_at_one();
     let staged = stage_over(&fixture, &one, &bound, 5);
     let staged_before = staged_files(&staged);
+    // What the in-memory capture builds from the very same sealed pages.
+    let pages = staged_pages(&fixture, &staged);
+    let sealed: Vec<_> = pages
+        .iter()
+        .map(|p| SealedPage {
+            page: &p.page,
+            envelope: &p.envelope,
+        })
+        .collect();
+    let in_memory = capture_inventory(&one, &MigrationFence::from_manifest(&one), &sealed).unwrap();
     let before = fixture.loaded().root;
     let committed = fixture.capture_streamed(&staged, &one).unwrap();
     let advanced = binding_of(staged.successor(), digest_of(&fixture.journal_dir, 2));
@@ -2491,6 +2512,23 @@ fn a_streamed_capture_promotes_the_pages_publishes_the_manifest_and_advances_the
         ),
         (staged.page_refs().len(), 3, 0)
     );
+    // Exact parity with the in-memory capture: the committed manifest is the one it would build, and
+    // every page of the digest directory holds the bytes the staged page held.
+    let digest = &staged.successor().journal_page_set_digest;
+    let stored: Vec<Vec<u8>> = (0..pages.len() as u32)
+        .map(|index| {
+            let dir = inventory_page_dir(&fixture.journal_dir, digest, index);
+            fs::read(generation_path(&dir, 2)).unwrap()
+        })
+        .collect();
+    let staged_bytes: Vec<Vec<u8>> = pages.iter().map(|p| p.envelope.clone()).collect();
+    assert_eq!(
+        (
+            resumed_manifest(&fixture, &advanced) == in_memory,
+            stored == staged_bytes
+        ),
+        (true, true)
+    );
 }
 
 #[test]
@@ -2504,7 +2542,7 @@ fn a_streamed_capture_that_is_refused_changes_nothing_and_keeps_the_staged_files
         fencing_generation: FENCE,
         journal_revision: staged.successor().journal_revision + 3,
     };
-    let refused = fixture.capture_streamed_fenced(&staged, &one, &wrong_revision);
+    let refused = fixture.capture_streamed_with(&mut StdFs, (&staged, &one), &wrong_revision);
     let mut unbound = Fixture::new();
     unbound.ordinary_commit("bootstrap-root");
     let no_binding = unbound.capture_streamed(&staged, &one);
@@ -2552,6 +2590,41 @@ fn a_staged_page_that_changed_refuses_the_commit_before_any_manifest_is_publishe
             false,
             3
         )
+    );
+}
+
+#[test]
+fn a_failure_between_the_staged_pages_and_the_manifest_is_retried_and_completes() {
+    let (mut fixture, one, bound) = bound_at_one();
+    let staged = stage_over(&fixture, &one, &bound, 5);
+    let before = fixture.loaded().root;
+    let mut failing = FailManifestFs {
+        inner: StdFs,
+        journal_dir: fixture.journal_dir.clone(),
+    };
+    let fence = MigrationFence::from_manifest(staged.successor());
+    let error = fixture
+        .capture_streamed_with(&mut failing, (&staged, &one), &fence)
+        .unwrap_err();
+    // The pages are durable before the manifest; the manifest and the binding are not, and the staged
+    // files are still there for the retry.
+    let dir = fixture.journal_dir.clone();
+    let digest = staged.successor().journal_page_set_digest;
+    assert_eq!(
+        (
+            matches!(error, AuthorityError::Journal(_)),
+            inventory_page_dir(&dir, &digest, 0).is_dir(),
+            generation_path(&dir, 2).exists(),
+            fixture.loaded().root == before,
+            staged_files(&staged)
+        ),
+        (true, true, false, true, 3)
+    );
+    fixture.capture_streamed(&staged, &one).unwrap();
+    let advanced = binding_of(staged.successor(), digest_of(&dir, 2));
+    assert_eq!(
+        (verified_refs(&fixture, &advanced), staged_files(&staged)),
+        (staged.page_refs().len(), 0)
     );
 }
 

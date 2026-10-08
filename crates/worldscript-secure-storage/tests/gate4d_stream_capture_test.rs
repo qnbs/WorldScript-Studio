@@ -832,46 +832,113 @@ fn a_staged_capture_is_promoted_only_into_the_journal_it_was_staged_in() {
     );
 }
 
+/// A staged page of generation 4, by index.
+fn staged_file(staged: &StagedCapture, index: u32) -> std::path::PathBuf {
+    generation_path(&staged.pending_dir().join(format!("page-{index}")), 4)
+}
+
+fn change_page_1(staged: &StagedCapture) {
+    let file = staged_file(staged, 1);
+    let mut bytes = std::fs::read(&file).unwrap();
+    bytes[20] ^= 1;
+    std::fs::write(file, bytes).unwrap();
+}
+
+fn swap_page_0_for_page_1(staged: &StagedCapture) {
+    std::fs::write(
+        staged_file(staged, 0),
+        std::fs::read(staged_file(staged, 1)).unwrap(),
+    )
+    .unwrap();
+}
+
+fn remove_page_2(staged: &StagedCapture) {
+    std::fs::remove_file(staged_file(staged, 2)).unwrap();
+}
+
+/// A way to make a staged page wrong, the refusal it must meet, and which pages may have been stored.
+type WrongPage = (
+    &'static str,
+    fn(&StagedCapture),
+    JournalDurableError,
+    [bool; 3],
+);
+
 #[test]
-fn a_staged_page_that_changed_stops_the_promotion_and_leaves_only_a_verified_prefix() {
-    let scenario = Scenario::new();
-    let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
-    let file = generation_path(&staged.pending_dir().join("page-1"), 4);
-    let mut flipped = std::fs::read(&file).unwrap();
-    flipped[20] ^= 1;
-    std::fs::write(&file, flipped).unwrap();
-    let live = &scenario.journal.live;
-    let refused = promote_as(&mut StdFs, &scenario, &staged, (&scenario.committed, live)).err();
-    // The page before the changed one was verified and stored; nothing after it, and no manifest.
-    assert_eq!(
+fn a_staged_page_that_is_wrong_stops_the_promotion_and_leaves_only_a_verified_prefix() {
+    let mismatch = JournalDurableError::Journal(JournalError::PageSetMismatch);
+    let missing = JournalDurableError::Journal(JournalError::Corrupt("staged page is missing"));
+    let cases: [WrongPage; 3] = [
         (
-            refused,
-            promoted_page(&scenario, &staged, 0).is_file(),
-            promoted_page(&scenario, &staged, 1).exists()
-                || promoted_page(&scenario, &staged, 2).exists(),
-            generation_path(scenario.journal.path(), 4).exists()
+            "a changed page",
+            change_page_1,
+            mismatch.clone(),
+            [true, false, false],
         ),
         (
-            Some(JournalDurableError::Journal(JournalError::PageSetMismatch)),
-            true,
-            false,
-            false
-        )
-    );
+            "a swapped page",
+            swap_page_0_for_page_1,
+            mismatch,
+            [false, false, false],
+        ),
+        (
+            "a missing page",
+            remove_page_2,
+            missing,
+            [true, true, false],
+        ),
+    ];
+    let wrong: Vec<_> = cases
+        .into_iter()
+        .filter_map(|(name, tamper, expected, stored)| {
+            let scenario = Scenario::new();
+            let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
+            tamper(&staged);
+            let live = &scenario.journal.live;
+            let refused =
+                promote_as(&mut StdFs, &scenario, &staged, (&scenario.committed, live)).err();
+            // Only the pages before the wrong one were stored, and no manifest follows them.
+            let prefix = [0, 1, 2].map(|index| promoted_page(&scenario, &staged, index).is_file());
+            let published = generation_path(scenario.journal.path(), 4).exists();
+            (!(refused == Some(expected) && prefix == stored && !published)).then_some(name)
+        })
+        .collect();
+    assert_eq!(wrong, Vec::<&str>::new());
+}
+
+/// Promotes `staged` as the scenario's committed owner, but under `key`.
+fn promote_under<F: DurableFs>(
+    fs: &mut F,
+    scenario: &Scenario,
+    staged: &StagedCapture,
+    key: &Key,
+) -> Result<DirectoryDurability, JournalDurableError> {
+    let op = WriteOperationId::generate().unwrap();
+    let fence = scenario.fence();
+    let mut ctx = JournalDurableContext::new(fs, key, scenario.journal.path(), &op);
+    let promotion = StagedPromotion {
+        committed_manifest: &scenario.committed,
+        fence: &fence,
+        committed: &scenario.journal.live,
+        staged,
+    };
+    promote_staged_inventory_fenced(&mut ctx, &promotion)
 }
 
 #[test]
-fn a_missing_staged_page_stops_the_promotion_without_a_recovery_state() {
+fn a_promotion_under_another_key_is_refused_before_anything_is_created() {
     let scenario = Scenario::new();
-    let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
-    std::fs::remove_file(generation_path(&staged.pending_dir().join("page-2"), 4)).unwrap();
-    let live = &scenario.journal.live;
-    let refused = promote_as(&mut StdFs, &scenario, &staged, (&scenario.committed, live)).err();
+    let staged = scenario.stream(&mut StdFs, entries(5), 2).unwrap();
+    let mut fs = ObservedFs::new();
+    let refused = promote_under(&mut fs, &scenario, &staged, &other_key()).err();
     assert_eq!(
-        refused,
-        Some(JournalDurableError::Journal(JournalError::Corrupt(
-            "staged page is missing"
-        )))
+        (refused, fs.created_nothing()),
+        (
+            Some(JournalDurableError::Journal(JournalError::Open(
+                OpenError::Tampered
+            ))),
+            true
+        )
     );
 }
 

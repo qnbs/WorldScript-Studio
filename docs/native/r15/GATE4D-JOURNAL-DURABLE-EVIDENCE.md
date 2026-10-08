@@ -688,14 +688,16 @@ depth and have no test that fails without them through the public API.
 Proof: the promotion on the journal alone (a promoted capture publishes and binds as a stored set that
 `verify_stored_inventory` accepts, with the same references and manifest; a repeated promotion adopts what is
 stored; a stale owner and another revision are refused before anything is read; a manifest the root does not
-name, a journal that moved on after the capture began, and a journal directory other than the one the capture
-was staged in (one that holds an identical copy of the root-named manifest) are refused with nothing created; a staged page that changed, or
-one that is missing, stops the promotion with only a verified prefix stored and no manifest published, the
-missing one as `Corrupt`) and the composed commit with a real root (the root names the successor, its pages
-verify and the staged files are gone; a stale token and an unbound migration are refused with the journal tree
+name, a journal that moved on after the capture began, a journal directory other than the one the capture
+was staged in (one that holds an identical copy of the root-named manifest) and another key are refused with
+nothing created; a staged page that changed, was swapped for another or is missing stops the promotion with
+only a verified prefix stored and no manifest published, the missing one as `Corrupt`) and the composed commit with a real root (the root names the successor, which is exactly the manifest the
+in-memory capture builds from the same sealed pages, its pages verify and hold the bytes the staged pages
+held, and the staged files are gone; a stale token and an unbound migration are refused with the journal tree
 and the root unchanged and the staged files kept; a changed staged page refuses the commit before any manifest
-is published; a failed root commit is retried with the same staged capture, which writes nothing new into the
-journal, and removes the staged files); the key route refuses the new commit with a revoked or unregistered
+is published; a failure between the promoted pages and the manifest, and a failed root commit after it, are each retried
+with the same staged capture, which writes nothing new into the journal that is already durable, and then
+removes the staged files); the key route refuses the new commit with a revoked or unregistered
 epoch and with a route to another key, beside the other journal-owner operations. Mutation-checked: the
 root-named, capture-successor, promote-authority and journal-binding checks, the digest directory, the inventory digest
 absorption, keeping the staged files after a success, removing them before the root commit, and a fixed
