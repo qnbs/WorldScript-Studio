@@ -43,10 +43,11 @@ use crate::identity::RecordIdentity;
 use crate::journal::{
     assert_binding_successor, assert_binding_takeover, assert_capture_successor, assert_fence,
     assert_progress_successor, assert_renewal_successor, assert_takeover_successor,
-    load_authoritative_manifest, promote_inventory_set_fenced, publish_manifest_fenced,
-    publish_renewal_fenced, publish_takeover_fenced, CandidateConflict, InventorySetWrite,
-    JournalDurableContext, JournalDurableError, JournalManifest, JournalTakeover,
-    MigrationExecutionError, MigrationFence, SealedPage,
+    load_authoritative_manifest, promote_inventory_set_fenced, promote_staged_inventory_fenced,
+    publish_manifest_fenced, publish_renewal_fenced, publish_takeover_fenced, CandidateConflict,
+    InventorySetWrite, JournalDurableContext, JournalDurableError, JournalManifest,
+    JournalTakeover, MigrationExecutionError, MigrationFence, SealedPage, StagedCapture,
+    StagedPromotion,
 };
 use crate::journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 use crate::marker::content_digest;
@@ -425,6 +426,121 @@ pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
     capture: InventoryCapture<'_>,
 ) -> Result<RootCommitted, AuthorityError> {
     let checkpoint = capture.checkpoint;
+    let plan = CapturePlan {
+        layout,
+        checkpoint,
+        committed_revision: capture.committed_manifest.journal_revision,
+    };
+    commit_capture(fs, provider, plan, |journal, committed, fence| {
+        promote_inventory_set_fenced(
+            journal,
+            &InventorySetWrite {
+                committed_manifest: capture.committed_manifest,
+                fence,
+                committed: Some(committed),
+                successor: checkpoint.manifest,
+                pages: capture.pages,
+            },
+        )
+    })
+}
+
+/// One capture of the journal's inventory whose pages were staged one at a time (§10.3): the staged
+/// capture, the manifest the root binding names, and the owner's token and routes.
+#[derive(Clone, Copy)]
+pub struct StreamedInventoryCapture<'a> {
+    /// The finished stage-one capture; its successor is the manifest that is published.
+    pub staged: &'a StagedCapture,
+    /// The manifest the root binding names, which the staged capture was begun over.
+    pub committed_manifest: &'a JournalManifest,
+    /// The owner's token for the successor.
+    pub fence: &'a MigrationFence,
+    pub journal: JournalSource<'a>,
+    pub root_key_ref: &'a RootKeyRefV1,
+    pub active_key_epoch: u64,
+    /// What to do with a durable candidate at the next revision that is not the successor.
+    pub conflict: CandidateConflict,
+}
+
+/// Captures a staged inventory: promotes its pages into the digest directory, publishes the manifest
+/// that names them and advances the root binding to it, in the order and under the guarantees of
+/// [`commit_inventory_capture`] (§10.1.1, §10.3).
+///
+/// The pages are read back from the staged capture, confirmed against their references and stored one
+/// at a time by [`promote_staged_inventory_fenced`], so memory stays one page. The staged files are
+/// removed only once the root has committed to the set (best effort), so a retry after a failure
+/// before that point still has them and adopts what is already durable; after a success the handle
+/// is spent. The journal key is routed from the root here, as for every journal-owner commit.
+pub fn commit_streamed_inventory_capture<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    capture: StreamedInventoryCapture<'_>,
+) -> Result<RootCommitted, AuthorityError> {
+    let staged = capture.staged;
+    let checkpoint = JournalCheckpoint {
+        manifest: staged.successor(),
+        fence: capture.fence,
+        journal: capture.journal,
+        root_key_ref: capture.root_key_ref,
+        active_key_epoch: capture.active_key_epoch,
+        conflict: capture.conflict,
+    };
+    let plan = CapturePlan {
+        layout,
+        checkpoint,
+        committed_revision: capture.committed_manifest.journal_revision,
+    };
+    let committed = commit_capture(fs, provider, plan, |journal, committed, fence| {
+        promote_staged_inventory_fenced(
+            journal,
+            &StagedPromotion {
+                committed_manifest: capture.committed_manifest,
+                fence,
+                committed,
+                staged,
+            },
+        )
+    })?;
+    staged.remove_files(fs);
+    Ok(committed)
+}
+
+/// What a capture commit needs besides the file system, the provider and the step that stores the
+/// pages: where the root lives, the checkpoint to publish, and the revision of the committed manifest
+/// the pages are written under.
+struct CapturePlan<'a> {
+    layout: RootLayout<'a>,
+    checkpoint: JournalCheckpoint<'a>,
+    committed_revision: u64,
+}
+
+/// The commit shared by the capture from pages in memory and the capture of a staged inventory.
+///
+/// Everything runs under one `root_commit_mutex`. The committed binding is read from the root and the
+/// journal key is routed before any journal write; the pages are stored by `store_pages` before the
+/// manifest that names them is published, so the manifest is never written before its pages are
+/// durable; and the binding advances as a capture, the one change of the inventory fields it allows.
+fn commit_capture<F, P, S>(
+    fs: &mut F,
+    provider: &mut P,
+    plan: CapturePlan<'_>,
+    store_pages: S,
+) -> Result<RootCommitted, AuthorityError>
+where
+    F: DurableFs,
+    P: KeyProvider,
+    S: FnOnce(
+        &mut JournalDurableContext<'_, F>,
+        &LiveMigration,
+        &MigrationFence,
+    ) -> Result<DirectoryDurability, JournalDurableError>,
+{
+    let CapturePlan {
+        layout,
+        checkpoint,
+        committed_revision,
+    } = plan;
     check_operation_id(&checkpoint.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
     // The caller's token must be the successor's before anything is written, or the pages could be
@@ -439,22 +555,13 @@ pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
     // generation at the committed revision; the successor is published under the caller's own fence.
     let committed_fence = MigrationFence {
         fencing_generation: checkpoint.fence.fencing_generation,
-        journal_revision: capture.committed_manifest.journal_revision,
+        journal_revision: committed_revision,
     };
     let (published, pages_durability) = {
         let mut journal =
             journal_context(&mut *fs, checkpoint.journal, &key, checkpoint.conflict).for_capture();
-        let pages_durability = promote_inventory_set_fenced(
-            &mut journal,
-            &InventorySetWrite {
-                committed_manifest: capture.committed_manifest,
-                fence: &committed_fence,
-                committed: Some(&committed),
-                successor: checkpoint.manifest,
-                pages: capture.pages,
-            },
-        )
-        .map_err(AuthorityError::Journal)?;
+        let pages_durability = store_pages(&mut journal, &committed, &committed_fence)
+            .map_err(AuthorityError::Journal)?;
         let published = publish_manifest_fenced(
             &mut journal,
             checkpoint.manifest,

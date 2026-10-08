@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** commit a staged inventory (stage two, part a, of the streaming capture).
+  `commit_streamed_inventory_capture` promotes the pages that `StreamedCapture` staged into the digest
+  directory of their successor one page at a time (each page confirmed against its reference, its entries
+  absorbed into the inventory digest, an identical page already there adopted), publishes the successor and
+  advances the root binding, in the order and under the guarantees of `commit_inventory_capture`, which now
+  shares one core with it. The staged files are removed only after the root has committed, so a retry after a
+  failure still has them; a staged page found wrong stops the commit before any manifest is published. The
+  key-routing staging session is the next part. PR #1011.
 - **R-15 Gate 4D:** stage a captured inventory one page at a time (stage one of the streaming capture).
   `StreamedCapture` takes the entries page by page, assigns the page index and generation, checks that they
   are valid and strictly ascending across pages, seals each page once and stages its envelope in a private
