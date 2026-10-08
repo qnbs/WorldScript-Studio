@@ -165,7 +165,7 @@ fn bootstrap_manifest_revision_zero_durable_roundtrip() {
     let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
     promote_manifest_fenced(&mut ctx, &manifest, &fence, None).unwrap();
     assert!(generation_path(&dir.0, 0).is_file());
-    let loaded = load_manifest_generation(&mut ctx, "rev0-durable", 0).unwrap();
+    let loaded = load_manifest_generation(&mut ctx, "rev0-durable", 0, 1).unwrap();
     assert_eq!(loaded, manifest);
 }
 
@@ -182,7 +182,7 @@ fn non_bootstrap_manifest_revision_promotes_and_refuses_overwrite() {
     let mut ctx = durable_ctx(&mut fs, &key, &dir.0, &op);
     let committed = predecessor_binding(&manifest);
     promote_manifest_fenced(&mut ctx, &manifest, &fence, committed.as_ref()).unwrap();
-    let loaded = load_manifest_generation(&mut ctx, "rev1-durable", 1).unwrap();
+    let loaded = load_manifest_generation(&mut ctx, "rev1-durable", 1, 1).unwrap();
     assert_eq!(loaded.journal_revision, 1);
     let err = promote_manifest_fenced(&mut ctx, &manifest, &fence, committed.as_ref()).unwrap_err();
     assert!(matches!(
@@ -1095,7 +1095,7 @@ fn an_oversized_root_named_generation_is_corrupt_and_never_loaded() {
         Err(corrupt.clone())
     );
     assert_eq!(
-        load_manifest_generation(&mut ctx, "big-load", 1),
+        load_manifest_generation(&mut ctx, "big-load", 1, 1),
         Err(corrupt)
     );
 }

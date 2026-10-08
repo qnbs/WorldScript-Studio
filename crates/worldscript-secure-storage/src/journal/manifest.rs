@@ -1,3 +1,4 @@
+use crate::envelope::parse_envelope;
 use crate::identity::RecordIdentity;
 use crate::record::{open_record, seal_record};
 use crate::record_class::RecordClass;
@@ -56,6 +57,28 @@ pub fn journal_envelope_epoch(manifest: &JournalManifest) -> Result<u64, Journal
         }
         other => Err(JournalError::UnsupportedOperationType(other)),
     }
+}
+
+/// A manifest generation to open: the identity it is stored under, the revision its generation must
+/// be, the journal envelope epoch the caller already trusts, and the envelope bytes.
+///
+/// A manifest names its own epoch only in its authenticated body, so `key_epoch` must come from
+/// authority outside the body: the epoch of the authenticated predecessor (epochs are frozen across
+/// successors), or the header of bytes whose digest the committed root binding names.
+#[derive(Debug, Clone, Copy)]
+pub struct ManifestRead<'a> {
+    pub record: &'a RecordIdentity,
+    pub journal_revision: u64,
+    pub key_epoch: u64,
+    pub envelope: &'a [u8],
+}
+
+/// The key epoch an envelope's header claims, read without any key. It is a hint until some authority
+/// vouches for these exact bytes.
+pub(crate) fn header_key_epoch(envelope: &[u8]) -> Result<u64, JournalError> {
+    parse_envelope(envelope)
+        .map(|parsed| parsed.header().key_epoch)
+        .map_err(JournalError::Open)
 }
 
 /// The authenticated journal manifest body (§10.1.1), excluding the envelope header.
@@ -211,16 +234,19 @@ impl JournalManifest {
         seal_record(key, record, meta, &payload).map_err(JournalError::Seal)
     }
 
-    pub fn open(
-        key: &Key,
-        record: &RecordIdentity,
-        journal_revision: u64,
-        envelope: &[u8],
-    ) -> Result<Self, JournalError> {
+    /// Opens a manifest generation. Routing is authority-first (§6): the header's epoch is compared
+    /// with `read.key_epoch` before the key is used, so a manifest sealed under another epoch is
+    /// `KeyEpochMismatch` and never an authentication failure; after authentication the epoch derived
+    /// from the body must agree as well.
+    pub fn open(key: &Key, read: &ManifestRead<'_>) -> Result<Self, JournalError> {
+        let (record, journal_revision) = (read.record, read.journal_revision);
         if record.class() != RecordClass::Migration {
             return Err(JournalError::Corrupt("journal manifest identity required"));
         }
-        let opened = open_record(key, record, envelope).map_err(JournalError::Open)?;
+        if header_key_epoch(read.envelope)? != read.key_epoch {
+            return Err(JournalError::KeyEpochMismatch);
+        }
+        let opened = open_record(key, record, read.envelope).map_err(JournalError::Open)?;
         if opened.header.record_schema != JOURNAL_MANIFEST_RECORD_SCHEMA {
             return Err(JournalError::UnsupportedFormat(opened.header.record_schema));
         }
