@@ -94,10 +94,7 @@ impl Scenario {
 
     /// Abandons a finished capture.
     fn discard(&self, staged: StagedCapture) {
-        let (key, op) = (key(), WriteOperationId::generate().unwrap());
-        let mut fs = ObservedFs::new();
-        let mut ctx = JournalDurableContext::new(&mut fs, &key, self.journal.path(), &op);
-        staged.discard(&mut ctx);
+        staged.discard(&mut ObservedFs::new());
     }
 
     /// Staged page `index`, read back under `key`.
@@ -469,11 +466,9 @@ fn an_abandoned_capture_removes_its_staged_pages() {
 fn a_cleanup_that_cannot_remove_a_file_leaves_inert_residue_and_does_not_fail() {
     let scenario = Scenario::new();
     let staged = scenario.stream(&mut StdFs, entries(7), 3).unwrap();
-    let (key, op) = (key(), WriteOperationId::generate().unwrap());
     let mut fs = ObservedFs::new();
     fs.fail_remove = true;
-    let mut ctx = JournalDurableContext::new(&mut fs, &key, scenario.journal.path(), &op);
-    staged.discard(&mut ctx);
+    staged.discard(&mut fs);
     assert_eq!(files_under(scenario.journal.path()).len(), 4);
 }
 

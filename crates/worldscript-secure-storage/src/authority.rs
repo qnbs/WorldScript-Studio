@@ -555,8 +555,11 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     begin: SessionBegin<'_>,
 ) -> Result<StagingSession, AuthorityError> {
-    let live = load_catalog(fs, provider, layout)?
-        .and_then(|catalog| catalog.root.live_migration)
+    // The root alone names the binding: the catalog pages are not read, so starting a capture of a
+    // very large inventory does not first materialise a very large catalog.
+    let live = load_committed_root(fs, provider, layout)
+        .map_err(AuthorityError::Root)?
+        .and_then(|view| view.root.live_migration)
         .ok_or(AuthorityError::NoLiveMigration)?;
     let key = route_journal_key(fs, provider, layout, begin.journal)?;
     let capture = {

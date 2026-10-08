@@ -136,9 +136,11 @@ impl StagedCapture {
     }
 
     /// Abandons the capture: the staged page files are removed, best effort. The empty directories
-    /// stay, because the file system abstraction cannot remove a directory.
-    pub fn discard<F: DurableFs>(self, ctx: &mut JournalDurableContext<'_, F>) {
-        self.remove_files(ctx.fs);
+    /// stay, because the file system abstraction cannot remove a directory. Needs no key: a caller
+    /// that staged through a session never held one, and removing a file the capture recorded by
+    /// its digest authenticates nothing.
+    pub fn discard<F: DurableFs>(self, fs: &mut F) {
+        self.remove_files(fs);
     }
 
     /// The same removal for a caller that keeps the handle, such as the commit that has just spent it.

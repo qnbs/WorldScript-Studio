@@ -19,10 +19,11 @@ use worldscript_secure_storage::{
     promote_manifest_fenced, seal_inventory_pages, source_authority_kind,
     source_physical_authority_kind, transition_phase, verify_stored_inventory, write_key_epoch,
     AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit,
-    DirectoryDurability, DurableFs, InstallationScopeId, InventoryCapture, JournalCheckpoint,
-    JournalDurableContext, JournalDurableError, JournalError, JournalInventoryEntry,
-    JournalInventorySource, JournalManifest, JournalPage, JournalSource, JournalTakeoverCommit,
-    KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
+    CatalogDescriptor, CommitMarker, CommittedGeneration, DirectoryDurability, DurableFs,
+    InstallationScopeId, InventoryCapture, JournalCheckpoint, JournalDurableContext,
+    JournalDurableError, JournalError, JournalInventoryEntry, JournalInventorySource,
+    JournalManifest, JournalPage, JournalSource, JournalTakeoverCommit, KeyEpochCommit,
+    KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog, MarkerBody,
     MigrationExecutionError, MigrationFence, MigrationPhase, RecordClass, RecordIdentity, RootBody,
     RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted,
     RootKeyRefV1, RootLayout, SealedPage, SessionBegin, StageFailureKind, StagedCapture,
@@ -192,6 +193,38 @@ impl Fixture {
         )
         .unwrap()
         .root_generation
+    }
+
+    /// An ordinary catalog commit that adds one descriptor, so that the catalog has a page.
+    fn commit_descriptor(&mut self, operation_id: &str) {
+        let record = RecordIdentity::new(RecordClass::Codex, &["a-record"]).unwrap();
+        let body = MarkerBody::Active {
+            committed_generation: 1,
+            committed_epoch: 1,
+            content_digest: [0xab; 32],
+        };
+        let marker = CommitMarker::new(&record, 1, body).unwrap();
+        let readable = CommittedGeneration {
+            generation: 1,
+            epoch: 1,
+            content_digest: [0xab; 32],
+        };
+        let descriptor =
+            CatalogDescriptor::new_unverified(&record, &marker, Some(readable)).unwrap();
+        let root_dir = self.root_dir.clone();
+        let commit = CatalogCommit {
+            change: CatalogChange {
+                upsert: &[descriptor],
+                remove: &[],
+            },
+            root_key_ref: &self.key_ref,
+            active_key_epoch: 1,
+            operation_id,
+        };
+        let layout = RootLayout {
+            root_dir: &root_dir,
+        };
+        commit_catalog_change(&mut StdFs, &mut self.provider, layout, commit).unwrap();
     }
 
     /// Commits the first ordinary root, then a root that binds `binding` (no producer exists in
@@ -2728,4 +2761,35 @@ fn a_commit_after_the_journal_moved_on_is_refused_before_any_write_and_keeps_the
             3
         )
     );
+}
+
+#[test]
+fn a_session_starts_from_the_root_alone_and_does_not_read_the_catalog_pages() {
+    let (mut fixture, one, _) = bound_at_one();
+    fixture.commit_descriptor("add-a-record");
+    // A catalog page that no longer verifies: the catalog cannot be loaded, the committed root can.
+    let mut pages = Vec::new();
+    collect_files(&fixture.root_dir.join("catalog"), &mut pages);
+    let (page, mut bytes) = pages.into_iter().next().unwrap();
+    bytes[20] ^= 1;
+    fs::write(&page, bytes).unwrap();
+    let layout = RootLayout {
+        root_dir: &fixture.root_dir,
+    };
+    let catalog_loads = load_catalog(&mut StdFs, &fixture.provider, layout).is_ok();
+    let staged = stage_over(&mut fixture, &one, 3);
+    assert_eq!((catalog_loads, staged.page_refs().len()), (false, 2));
+}
+
+#[test]
+fn a_finished_session_capture_is_discarded_without_a_key() {
+    let (mut fixture, one, _) = bound_at_one();
+    let staged = stage_over(&mut fixture, &one, 5);
+    let before = staged_files(&staged);
+    let pending = staged.pending_dir().to_path_buf();
+    // The caller of a session never held the journal key, and discarding needs only the file system.
+    staged.discard(&mut StdFs);
+    let mut left = Vec::new();
+    collect_files(&pending, &mut left);
+    assert_eq!((before, left.len()), (3, 0));
 }
