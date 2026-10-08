@@ -666,6 +666,31 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Epoch-relation validation — the target epoch follows the operation
+
+D2a derived the journal envelope epoch from the source epoch but validated only that a source exists, so a
+`ROTATE` from epoch 5 to 3 or from 2 to 2 still encoded (raised by CodeAnt on #1002, recorded as a pre-caller
+criterion on #359). The contract now states the relation and the codec enforces it before any caller writes a
+rotation journal:
+
+| Operation | Relation | Source |
+|---|---|---|
+| `ENABLE` | exactly `0 -> 1` | §8.3 item 2 (D2a) |
+| `ROTATE` | `source > 0` and `target > source` | §8.3 item 2: a rotation creates a newer epoch |
+| `ENVELOPE_MIGRATION` | `source > 0` and `target == source` | §10.4 (stated by this slice): a format or schema change keeps the key epoch; creating a newer epoch, with the durable target verifier that needs (§8.3 item 2), is a rotation |
+
+The rule lives in `journal_envelope_epoch`, which `validate_semantics` already calls, so encode, decode, seal
+and open all refuse a violating manifest (`InvalidCounter`). The `ENVELOPE_MIGRATION` choice of `==` rather than
+`>=` follows review: allowing an epoch-advancing migration would create a new epoch without the target key
+reference a rotation must make durable in `PREPARE` (`validate_target_key_ref` requires it for `ENABLE` and
+`ROTATE` only), so the contract keeps epoch creation in the rotation.
+
+Proof (`gate4d_journal_epoch_test`): `the_target_epoch_relation_follows_the_operation` is a boundary table (equal,
+lower and higher targets for both operations, with `encode` agreeing with the derivation), and
+`a_wire_body_that_breaks_the_relation_is_refused_on_decode` writes a target that breaks the relation into a valid wire body and
+requires the decoder to refuse what the encoder cannot produce. Mutation-checked in both directions: dropping the
+rotation relation fails both tests, and `>=` instead of `==` for the migration fails the table.
+
 ## Slice D2b-3b — the composed journal operations use the key route
 
 `commit_journal_checkpoint`, `commit_journal_takeover`, `commit_inventory_capture` and

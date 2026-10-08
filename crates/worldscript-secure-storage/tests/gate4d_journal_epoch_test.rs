@@ -46,7 +46,7 @@ fn the_journal_envelope_epoch_is_stable_for_the_whole_operation() {
         (operation_type::ENABLE, 0, 1, Ok(1)),
         (operation_type::ROTATE, 1, 2, Ok(1)),
         (operation_type::ROTATE, 2, 3, Ok(2)),
-        (operation_type::ENVELOPE_MIGRATION, 2, 3, Ok(2)),
+        (operation_type::ENVELOPE_MIGRATION, 2, 2, Ok(2)),
         (
             operation_type::ROTATE,
             0,
@@ -140,4 +140,101 @@ fn a_manifest_is_sealed_and_opened_only_at_its_operations_journal_epoch() {
         JournalManifest::open(&key(), &read(&misrouted)),
         Err(JournalError::KeyEpochMismatch)
     );
+}
+
+#[test]
+fn the_target_epoch_relation_follows_the_operation() {
+    // §8.3 item 2: a rotation creates a newer epoch. §10.4: an envelope or schema migration keeps the
+    // key epoch; creating a newer one, with the durable target verifier that needs, is a rotation.
+    let cases = [
+        (operation_type::ROTATE, 2, 3, Ok(2)),
+        (operation_type::ROTATE, 1, 9, Ok(1)),
+        (
+            operation_type::ROTATE,
+            2,
+            2,
+            Err(JournalError::InvalidCounter),
+        ),
+        (
+            operation_type::ROTATE,
+            3,
+            2,
+            Err(JournalError::InvalidCounter),
+        ),
+        (
+            operation_type::ROTATE,
+            5,
+            1,
+            Err(JournalError::InvalidCounter),
+        ),
+        (operation_type::ENVELOPE_MIGRATION, 2, 2, Ok(2)),
+        (
+            operation_type::ENVELOPE_MIGRATION,
+            2,
+            3,
+            Err(JournalError::InvalidCounter),
+        ),
+        (
+            operation_type::ENVELOPE_MIGRATION,
+            1,
+            5,
+            Err(JournalError::InvalidCounter),
+        ),
+        (
+            operation_type::ENVELOPE_MIGRATION,
+            3,
+            2,
+            Err(JournalError::InvalidCounter),
+        ),
+    ];
+    for (kind, source, target, expected) in cases {
+        let manifest = operation(kind, source, target);
+        assert_eq!(
+            journal_envelope_epoch(&manifest),
+            expected,
+            "{kind} {source}->{target}"
+        );
+        // The same rule decides whether the manifest can be written at all.
+        assert_eq!(
+            manifest.encode().is_ok(),
+            expected.is_ok(),
+            "{kind} {source}->{target}"
+        );
+    }
+}
+
+#[test]
+fn a_wire_body_that_breaks_the_relation_is_refused_on_decode() {
+    // Encode two valid rotations that differ only in the target epoch to find where it is stored; the
+    // offset depends only on the operation id, so it holds for every operation type. Then write a
+    // target that breaks the relation into a valid body: the decoder refuses what the encoder cannot
+    // produce, backwards for a rotation and any move at all for an envelope migration.
+    let rotation = operation(operation_type::ROTATE, 2, 3).encode().unwrap();
+    let other = operation(operation_type::ROTATE, 2, 4).encode().unwrap();
+    let at = rotation
+        .iter()
+        .zip(&other)
+        .position(|(a, b)| a != b)
+        .expect("the target epoch is part of the body");
+    // The target epoch is a big-endian u64 whose last byte is the one that differs.
+    let start = at - 7;
+    assert_eq!(&rotation[start..=at], &3u64.to_be_bytes());
+    let migration = operation(operation_type::ENVELOPE_MIGRATION, 2, 2)
+        .encode()
+        .unwrap();
+    for (valid, target) in [
+        (&rotation, 1u64),
+        (&rotation, 2),
+        (&migration, 3),
+        (&migration, 1),
+    ] {
+        let mut broken = valid.clone();
+        broken[start..=at].copy_from_slice(&target.to_be_bytes());
+        assert!(JournalManifest::decode(valid).is_ok());
+        assert_eq!(
+            JournalManifest::decode(&broken),
+            Err(JournalError::InvalidCounter),
+            "target {target}"
+        );
+    }
 }
