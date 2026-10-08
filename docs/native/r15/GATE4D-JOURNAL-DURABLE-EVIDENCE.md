@@ -659,11 +659,12 @@ committed manifest with header epoch 2 and verifying them through the reader; pa
 constant epoch, and pages sealed under another key at another epoch, refused by the store before any file is created and by the reader as `KeyEpochMismatch` rather than as an authentication failure;
 a candidate sealed at another epoch is not adopted by the durable promotion; `a_page_is_promoted_only_for_the_manifest_the_root_names` (a same-owner copy with other epochs is refused before any create and the root-named manifest seals the page at its own epoch 2).
 
-Residual, owned by Slice D2b: resolving the journal key through the authenticated key-epoch registry
-(`Prepared`, `Active` and `RetiredRecoveryOnly` allowed, `Revoked` or absent refused; D2b-3a, wired by D2b-3b), refusing
-the revocation of the source epoch while a live migration binds the journal (done in D2b-1, below), and the
-cutover readability test with the root's active epoch already at the target (D2b-3). The manifest side of the
-authority-first comparison (D2a compared the header only after authentication) is done in D2b-2, below.
+What D2a left to Slice D2b is closed by it: refusing the revocation of the source epoch while a live
+migration binds the journal (D2b-1), the manifest side of the authority-first comparison, which D2a made only
+after authentication (D2b-2), and resolving the journal key through the authenticated key-epoch registry
+(`Prepared`, `Active` and `RetiredRecoveryOnly` allowed, `Revoked` or absent refused) with the cutover
+readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
+(D2b-3b). Each is described in its own section below.
 
 ## Slice D2b-3b — the composed journal operations use the key route
 
@@ -675,14 +676,14 @@ authority-first comparison (D2a compared the header only after authentication) i
 | `JournalSource` | `{ dir, operation }`: the `key` field is gone, so no caller can supply or substitute the key of a bound journal |
 | resolution | each operation calls `resolve_journal_key` while it holds the `root_commit_mutex`, right after `committed_binding`, so the existing refusals (another key route or epoch, no bound migration) keep their order and classes; a route that cannot be resolved is `AuthorityError::JournalRoute(..)` and happens before any journal write |
 | threading | the resolved key is carried into `commit_planned` and `verify_binding_advance` in a `JournalStep { binding, key }`, so the manifest loads that make the root trust a generation use the routed key |
-| `advance_live_migration` | now calls `committed_binding` first, which keeps its error order (key route, then no binding) |
+| `advance_live_migration` | now calls `committed_binding` first, which keeps its error order: the root's key route and epoch check (`KeyRotationNotAdmitted`), then no bound migration (`NoLiveMigration`), and only then the journal key route |
 
 Proof (`gate4d_journal_route_test` and the whole root-binding suite, whose fixture imports the journal's key
 into the provider and now runs every checkpoint, takeover, capture and advance through the route without any
 expectation changing): a `Revoked` journal epoch and an unregistered one each refuse all four operations with
 `JournalRoute(EpochRevoked / EpochNotRegistered)` and leave the root and journal directories byte-identical; a
 registry route that resolves to a key the journal was not sealed under is refused by the authenticated manifest
-load (`Open(Tampered)` for the checkpoint, a journal error for the others) before any write. Mutation-checked:
+load (`Open(Tampered)` for all four, each with valid inputs — a takeover claim at fence plus one, a stored successor for the advance — so the key is the only thing left to refuse) before any write. Mutation-checked:
 making the route return the old fixed key fails these three tests.
 
 ## Slice D2b-3a — the key route of a bound journal

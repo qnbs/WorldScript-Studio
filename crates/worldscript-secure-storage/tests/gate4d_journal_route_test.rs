@@ -480,10 +480,41 @@ fn the_route_creates_and_changes_nothing() {
     assert_ne!(after_removal, before);
 }
 
+/// The next revision of the bound rotation, under the same owner and fence.
+fn successor() -> JournalManifest {
+    let mut next = rotation();
+    next.journal_revision = REVISION + 1;
+    next
+}
+
 impl Fixture {
-    /// The four composed journal operations over the same plausible inputs (the next revision of the
-    /// bound rotation): each is expected to be refused, and the error of each is returned.
-    fn every_operation_is_refused(&mut self) -> Vec<AuthorityError> {
+    /// The successor sealed under the source epoch's key and stored as the next generation, with the
+    /// binding that names it: the input a binding advance needs.
+    fn store_successor(&self) -> LiveMigration {
+        let next = successor();
+        let meta = RecordMeta {
+            key_epoch: SOURCE_EPOCH,
+            record_generation: next.journal_revision,
+            record_schema: JOURNAL_MANIFEST_RECORD_SCHEMA,
+        };
+        let sealed = next.seal(&source_key(), &identity(), meta).unwrap();
+        fs::write(
+            generation_path(&self.journal_dir(), next.journal_revision),
+            &sealed,
+        )
+        .unwrap();
+        LiveMigration {
+            operation_id: OPERATION.into(),
+            fencing_generation: next.fencing_generation,
+            journal_revision: next.journal_revision,
+            manifest_digest: content_digest(&sealed),
+        }
+    }
+
+    /// The four composed journal operations over valid inputs for each (a checkpoint and a capture of
+    /// the next revision, a takeover claim by a new owner at fence plus one, an advance to the stored
+    /// successor): each is expected to be refused, and the error of each is returned, in that order.
+    fn every_operation_is_refused(&mut self, stored: &LiveMigration) -> Vec<AuthorityError> {
         let root_ref = self.root_ref().clone();
         let root_epoch = self.root_epoch;
         let root_dir = self.root_dir();
@@ -492,9 +523,14 @@ impl Fixture {
             root_dir: &root_dir,
         };
         let committed = rotation();
-        let mut next = rotation();
-        next.journal_revision = REVISION + 1;
+        let next = successor();
         let fence = MigrationFence::from_manifest(&next);
+        let mut claim = successor();
+        claim.fencing_generation += 1;
+        claim.has_lease_owner = true;
+        claim.lease_owner_id = Some("new-owner".into());
+        claim.lease_expires_unix_ms = Some(u64::MAX / 2);
+        let claim_fence = MigrationFence::from_manifest(&claim);
         let operation = WriteOperationId::generate().unwrap();
         let journal = JournalSource {
             dir: &journal_dir,
@@ -508,11 +544,10 @@ impl Fixture {
             active_key_epoch: root_epoch,
             conflict: CandidateConflict::Refuse,
         };
-        let next_binding = LiveMigration {
-            operation_id: OPERATION.into(),
-            fencing_generation: next.fencing_generation,
-            journal_revision: next.journal_revision,
-            manifest_digest: [0x33; 32],
+        let takeover = JournalCheckpoint {
+            manifest: &claim,
+            fence: &claim_fence,
+            ..checkpoint
         };
         let provider = &mut self.provider;
         vec![
@@ -522,7 +557,7 @@ impl Fixture {
                 provider,
                 layout,
                 JournalTakeoverCommit {
-                    claim: checkpoint,
+                    claim: takeover,
                     now_unix_ms: 0,
                 },
             )
@@ -543,7 +578,7 @@ impl Fixture {
                 provider,
                 layout,
                 BindingAdvance {
-                    next: &next_binding,
+                    next: stored,
                     journal,
                     root_key_ref: &root_ref,
                     active_key_epoch: root_epoch,
@@ -561,8 +596,9 @@ fn a_revoked_journal_epoch_refuses_every_journal_operation_before_a_write() {
     fixture.register(SOURCE_EPOCH, KeyEpochStatus::Revoked, 2);
     fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
     fixture.bound();
+    let stored = fixture.store_successor();
     let before = fixture.snapshot();
-    for error in fixture.every_operation_is_refused() {
+    for error in fixture.every_operation_is_refused(&stored) {
         assert_eq!(
             error,
             AuthorityError::JournalRoute(JournalRouteError::EpochRevoked(SOURCE_EPOCH))
@@ -576,8 +612,9 @@ fn an_unregistered_journal_epoch_refuses_every_journal_operation_before_a_write(
     let mut fixture = Fixture::new(TARGET_EPOCH);
     fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
     fixture.bound();
+    let stored = fixture.store_successor();
     let before = fixture.snapshot();
-    for error in fixture.every_operation_is_refused() {
+    for error in fixture.every_operation_is_refused(&stored) {
         assert_eq!(
             error,
             AuthorityError::JournalRoute(JournalRouteError::EpochNotRegistered(SOURCE_EPOCH))
@@ -594,16 +631,16 @@ fn a_route_to_another_key_is_refused_by_the_authenticated_load_before_a_write() 
     fixture.register(SOURCE_EPOCH, KeyEpochStatus::RetiredRecoveryOnly, 1);
     fixture.register(TARGET_EPOCH, KeyEpochStatus::Active, 1);
     fixture.bound();
+    let stored = fixture.store_successor();
     let before = fixture.snapshot();
-    let errors = fixture.every_operation_is_refused();
-    assert_eq!(
-        errors[0],
-        AuthorityError::Journal(JournalDurableError::Journal(JournalError::Open(
-            OpenError::Tampered
-        )))
-    );
-    assert!(errors
-        .iter()
-        .all(|error| matches!(error, AuthorityError::Journal(_))));
+    // Every operation has valid inputs, so the key is the only thing left to refuse them.
+    for error in fixture.every_operation_is_refused(&stored) {
+        assert_eq!(
+            error,
+            AuthorityError::Journal(JournalDurableError::Journal(JournalError::Open(
+                OpenError::Tampered
+            )))
+        );
+    }
     assert_eq!(fixture.snapshot(), before);
 }
