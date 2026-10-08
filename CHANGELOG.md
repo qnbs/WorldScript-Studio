@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** constrain the cursor and the lease across successive journal manifests (maintainer decision C).
+  The successor relation now requires a forward phase change to enter the new phase at cursor `(0, 0)`
+  (`CursorNotReset`; `transition_phase` produces it), entering `RECOVERY_REQUIRED` to keep the last cursor, and
+  every ordinary successor (checkpoint, phase change, recovery entry, inventory capture) to leave the lease
+  untouched, so the owner and the fence change only by takeover. `assert_renewal_successor` is the predicate of
+  the separate same-owner renewal (the expiry moves strictly forward, nothing else changes); wiring it into a
+  journal-owner operation is the next slice. A lease can no longer appear through a checkpoint: its first owner
+  is the bootstrap manifest or a takeover. PR #1008.
 - **R-15 Gate 4D:** state and enforce how a journal's target epoch relates to its source. The contract
   (§10.1.1, §10.4): a rotation's `target_epoch` is above its `source_epoch` (§8.3 item 2), and an envelope or
   schema migration keeps the key epoch (`target_epoch == source_epoch`; creating a newer epoch, with the durable

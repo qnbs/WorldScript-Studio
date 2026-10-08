@@ -27,6 +27,11 @@ pub enum MigrationExecutionError {
     /// `CONVERT` or a later work phase was entered without the final inventory captured in `ADMIT`
     /// (§10.3).
     FinalInventoryNotCaptured,
+    /// A forward phase change did not enter the new phase at cursor `(0, 0)` (§10.3).
+    CursorNotReset,
+    /// A lease renewal that is not the same owner extending a lease it holds: no lease to renew, or an
+    /// expiry that does not move strictly forward (§10.1).
+    InvalidLeaseRenewal,
     Journal(JournalError),
 }
 
@@ -409,6 +414,12 @@ pub fn transition_phase(
     if next.phase != to_phase.wire() {
         next.journal_revision = bump_revision(manifest)?.wire();
         next.phase = to_phase.wire();
+        // §10.3: an ordinary forward change enters the new phase at the start of the inventory; only
+        // `RECOVERY_REQUIRED` keeps the last cursor, which is where the operation stopped.
+        if next.phase != phase_code::RECOVERY_REQUIRED {
+            next.cursor_page_index = 0;
+            next.cursor_entry_index = 0;
+        }
     }
     if final_inventory_required(next.phase) && !next.final_inventory_captured {
         return Err(MigrationExecutionError::FinalInventoryNotCaptured);

@@ -2353,6 +2353,20 @@ itself permission for the old owner to continue; a new owner must atomically adv
 generation. This prevents a stalled process that resumes after lease expiry from overwriting a
 new owner's checkpoint or promoted record.
 
+**The lease and the cursor across successive manifests.** The lease (its owner and its expiry) and the
+fencing generation change only through the two operations that exist for them, never as a side effect of
+progress. A *takeover* by a new owner is the only change of the owner and of the fence: the committed lease
+has expired (or none is held), the claim carries the fence plus one, and nothing else changes. A *renewal*
+by the owner that holds the lease is the only change of the expiry: the same owner under the same fence
+moves the expiry strictly forward, requires a lease to renew, is refused in a terminal phase, and nothing
+else changes; it takes no clock, because a takeover by another owner advances the fence and so settles
+whether a lapsed lease may still be renewed. A progress checkpoint, a phase transition, entering
+`RECOVERY_REQUIRED` and an inventory capture leave the lease as it was, so a lease can only appear from
+nothing at the bootstrap manifest or in a takeover. The cursor never regresses within a phase; an ordinary
+forward phase transition enters the new phase at cursor `(0, 0)` (`ADMIT → CONVERT` at `(0, 0)`); and
+entering `RECOVERY_REQUIRED` keeps the last cursor, which is where the operation stopped. A successor that
+breaks any of these is not a valid successor, whoever built it.
+
 A token check performed as a separate preflight is insufficient. Every mutation-capable adapter
 operation therefore exposes the semantic equivalent of
 `with_fence(fencing_generation, mutation_and_durability)`: it acquires the cross-process migration
