@@ -47,6 +47,7 @@ use crate::journal::{
     CandidateConflict, InventorySetWrite, JournalDurableContext, JournalDurableError,
     JournalManifest, JournalTakeover, MigrationExecutionError, MigrationFence, SealedPage,
 };
+use crate::journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
 use crate::root::{
@@ -119,6 +120,10 @@ pub enum AuthorityError {
     /// The manifest generation the advance names is not durable, or does not authenticate against
     /// the binding the advance would commit.
     Journal(JournalDurableError),
+    /// The key of the bound journal could not be routed through the committed root and its key-epoch
+    /// registry (absent or `Revoked` epoch, a registry that is not the committed one, a route that
+    /// does not resolve). Returned before any journal write.
+    JournalRoute(JournalRouteError),
 }
 
 impl From<RootStoreError> for AuthorityError {
@@ -247,10 +252,11 @@ pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
     commit_catalog_change_held(fs, provider, layout, commit, &held)
 }
 
-/// Where, and under which key, the journal's manifest generation is read (§10.1.1).
+/// Where the journal's manifest generations live (§10.1.1). The key is never a caller input: it is
+/// resolved by the crate through the committed root and its key-epoch registry
+/// ([`resolve_journal_key`]) while the root lock is held.
 #[derive(Clone, Copy)]
 pub struct JournalSource<'a> {
-    pub key: &'a Key,
     pub dir: &'a Path,
     pub operation: &'a WriteOperationId,
 }
@@ -301,13 +307,18 @@ pub fn advance_live_migration<F: DurableFs, P: KeyProvider>(
         active_key_epoch: advance.active_key_epoch,
         operation_id: &advance.next.operation_id,
     };
+    committed_binding(fs, provider, layout, commit)?;
+    let key = route_journal_key(fs, provider, layout, advance.journal)?;
     commit_planned(
         fs,
         provider,
         layout,
         commit,
         &held,
-        Some(BindingStep::Checkpoint(&advance)),
+        Some(JournalStep {
+            binding: BindingStep::Checkpoint(&advance),
+            key: &key,
+        }),
     )
 }
 
@@ -351,8 +362,9 @@ pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
     let held = acquire_root_commit(layout)?;
     let commit = journal_catalog_commit(&checkpoint);
     let committed = committed_binding(fs, provider, layout, commit)?;
+    let key = route_journal_key(fs, provider, layout, checkpoint.journal)?;
     let published = {
-        let mut journal = journal_context(&mut *fs, checkpoint.journal, checkpoint.conflict);
+        let mut journal = journal_context(&mut *fs, checkpoint.journal, &key, checkpoint.conflict);
         publish_manifest_fenced(
             &mut journal,
             checkpoint.manifest,
@@ -369,7 +381,10 @@ pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
         layout,
         commit,
         &held,
-        Some(BindingStep::Checkpoint(&advance)),
+        Some(JournalStep {
+            binding: BindingStep::Checkpoint(&advance),
+            key: &key,
+        }),
     )
 }
 
@@ -418,6 +433,7 @@ pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
     let held = acquire_root_commit(layout)?;
     let commit = journal_catalog_commit(&checkpoint);
     let committed = committed_binding(fs, provider, layout, commit)?;
+    let key = route_journal_key(fs, provider, layout, checkpoint.journal)?;
     // The pages are written under the committed manifest, whose token carries the caller's fencing
     // generation at the committed revision; the successor is published under the caller's own fence.
     let committed_fence = MigrationFence {
@@ -426,7 +442,7 @@ pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
     };
     let (published, pages_durability) = {
         let mut journal =
-            journal_context(&mut *fs, checkpoint.journal, checkpoint.conflict).for_capture();
+            journal_context(&mut *fs, checkpoint.journal, &key, checkpoint.conflict).for_capture();
         let pages_durability = promote_inventory_set_fenced(
             &mut journal,
             &InventorySetWrite {
@@ -455,7 +471,10 @@ pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
         layout,
         commit,
         &held,
-        Some(BindingStep::Capture(&advance)),
+        Some(JournalStep {
+            binding: BindingStep::Capture(&advance),
+            key: &key,
+        }),
     )?;
     // The root names pages whose directories this commit synced: they count toward the result.
     committed.directories = all_confirmed([committed.directories, pages_durability]);
@@ -494,8 +513,9 @@ pub fn commit_journal_takeover<F: DurableFs, P: KeyProvider>(
     let held = acquire_root_commit(layout)?;
     let commit = journal_catalog_commit(&claim);
     let committed = committed_binding(fs, provider, layout, commit)?;
+    let key = route_journal_key(fs, provider, layout, claim.journal)?;
     let published = {
-        let mut journal = journal_context(&mut *fs, claim.journal, claim.conflict);
+        let mut journal = journal_context(&mut *fs, claim.journal, &key, claim.conflict);
         publish_takeover_fenced(
             &mut journal,
             &JournalTakeover {
@@ -509,9 +529,12 @@ pub fn commit_journal_takeover<F: DurableFs, P: KeyProvider>(
     };
     let next = binding_for(claim.manifest, published.content_digest);
     let advance = binding_advance(&next, &claim);
-    let step = BindingStep::Takeover {
-        advance: &advance,
-        now_unix_ms: takeover.now_unix_ms,
+    let step = JournalStep {
+        binding: BindingStep::Takeover {
+            advance: &advance,
+            now_unix_ms: takeover.now_unix_ms,
+        },
+        key: &key,
     };
     commit_planned(fs, provider, layout, commit, &held, Some(step))
 }
@@ -560,10 +583,30 @@ fn committed_binding<F: DurableFs, P: KeyProvider>(
 fn journal_context<'a, F: DurableFs>(
     fs: &'a mut F,
     journal: JournalSource<'a>,
+    key: &'a Key,
     conflict: CandidateConflict,
 ) -> JournalDurableContext<'a, F> {
-    JournalDurableContext::new(fs, journal.key, journal.dir, journal.operation)
-        .with_conflict(conflict)
+    JournalDurableContext::new(fs, key, journal.dir, journal.operation).with_conflict(conflict)
+}
+
+/// The key of the journal the committed root binds, resolved through authority while the root lock is
+/// held ([`resolve_journal_key`]). Called right after [`committed_binding`], so the key-route and
+/// no-binding refusals keep their order and classes, and before any journal write.
+fn route_journal_key<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    journal: JournalSource<'_>,
+) -> Result<Key, AuthorityError> {
+    resolve_journal_key(
+        fs,
+        provider,
+        JournalRoute {
+            layout,
+            journal_dir: journal.dir,
+        },
+    )
+    .map_err(AuthorityError::JournalRoute)
 }
 
 /// The binding that names `manifest` and the digest of its envelope.
@@ -603,6 +646,13 @@ enum BindingStep<'a> {
     },
 }
 
+/// A binding step together with the journal key the crate routed for it.
+#[derive(Clone, Copy)]
+struct JournalStep<'a> {
+    binding: BindingStep<'a>,
+    key: &'a Key,
+}
+
 impl<'a> BindingStep<'a> {
     fn advance(&self) -> &'a BindingAdvance<'a> {
         match *self {
@@ -631,7 +681,7 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     commit: CatalogCommit<'_>,
     held: &RootCommitGuard,
-    step: Option<BindingStep<'_>>,
+    step: Option<JournalStep<'_>>,
 ) -> Result<RootCommitted, AuthorityError> {
     if !held.guards(layout.root_dir) {
         return Err(AuthorityError::Root(RootStoreError::MutexNotHeld));
@@ -651,7 +701,7 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
     };
     let mut journal_durability = DirectoryDurability::Confirmed;
     if let Some(step) = step {
-        journal_durability = verify_binding_advance(fs, current.as_ref(), step)?;
+        journal_durability = verify_binding_advance(fs, current.as_ref(), step.binding, step.key)?;
     }
     let plan = ChangePlan::new(current, commit.change)?;
     let target = RootTarget {
@@ -670,7 +720,7 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
     };
     let (catalog_shards, pages_durability) = plan.write_pages(fs, &write)?;
     let mut root = plan.root_body(commit, &catalog_shards, key_epoch_set_digest)?;
-    if let Some(advance) = step.map(|step| step.advance()) {
+    if let Some(advance) = step.map(|step| step.binding.advance()) {
         root.live_migration = Some(advance.next.clone());
         // §5.4: a migration-driven commit records that operation's positive fence, not the ordinary 0.
         root.commit_evidence = RootCommitEvidence {
@@ -703,6 +753,7 @@ fn verify_binding_advance<F: DurableFs>(
     fs: &mut F,
     current: Option<&LoadedCatalog>,
     step: BindingStep<'_>,
+    key: &Key,
 ) -> Result<DirectoryDurability, AuthorityError> {
     let advance = step.advance();
     let committed = current
@@ -716,7 +767,7 @@ fn verify_binding_advance<F: DurableFs>(
         BindingStep::Takeover { .. } => assert_binding_takeover(committed, advance.next),
     }
     .map_err(AuthorityError::LiveMigration)?;
-    let mut journal = journal_context(&mut *fs, advance.journal, CandidateConflict::Refuse);
+    let mut journal = journal_context(&mut *fs, advance.journal, key, CandidateConflict::Refuse);
     let next_manifest =
         load_authoritative_manifest(&mut journal, advance.next).map_err(AuthorityError::Journal)?;
     // QNBS-v3: the successor relation is enforced where the root starts to trust a generation, so a manifest promoted through the plain fenced promote cannot become authoritative either.

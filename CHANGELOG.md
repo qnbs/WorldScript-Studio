@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** use the key route in the journal-owner operations and drop the caller-supplied journal key.
+  `commit_journal_checkpoint`, `commit_journal_takeover`, `commit_inventory_capture` and `advance_live_migration`
+  resolve the journal key through `resolve_journal_key` while they hold the root lock, right after the committed
+  binding is read and before any journal write; `JournalSource` is now `{ dir, operation }`. An epoch that cannot
+  be routed (`Revoked`, unregistered, not the committed registry) refuses all four operations
+  (`AuthorityError::JournalRoute`) with nothing written, and a route to a key the journal was not sealed under is
+  refused by the authenticated manifest load. This closes the D2b criteria (source-key retention, manifest
+  preflight, registry route and its wiring). PR #1006.
 - **R-15 Gate 4D:** add the registry-resolved key route of a bound migration journal. `resolve_journal_key`
   reads the root-named manifest generation, requires its digest to match the committed binding, takes the
   header epoch the root vouches for, looks that epoch up in the authenticated key-epoch registry
