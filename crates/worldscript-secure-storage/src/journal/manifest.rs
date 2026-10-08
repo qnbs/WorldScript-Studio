@@ -37,10 +37,11 @@ const FIRST_PROTECTED_EPOCH: u64 = 1;
 /// the journal under the SOURCE epoch from the first revision to the last, so recovery never depends
 /// on a mid-operation key switch and the journal stays readable before the target authority is
 /// active, during interrupted conversion and after the cutover while cleanup is still
-/// journal-driven. Such an operation needs a source to be sealed under (non-zero) and a target that
-/// never moves the epoch backwards: a rotation creates a newer epoch (`target > source`, §8.3 item 2),
-/// an envelope or schema migration keeps the epoch or moves it forward (`target >= source`, §10.4).
-/// Anything else is refused, so the manifest neither encodes nor decodes.
+/// journal-driven. Such an operation needs a source to be sealed under (non-zero) and a target related
+/// to it as the contract says: a rotation creates a newer epoch (`target > source`, §8.3 item 2), while
+/// an envelope or schema migration keeps the key epoch (`target == source`, §10.4): creating a newer
+/// epoch, with the durable target verifier that needs, is a rotation. Anything else is refused, so the
+/// manifest neither encodes nor decodes.
 pub fn journal_envelope_epoch(manifest: &JournalManifest) -> Result<u64, JournalError> {
     let (source, target) = (manifest.source_epoch, manifest.target_epoch);
     match manifest.operation_type {
@@ -48,7 +49,7 @@ pub fn journal_envelope_epoch(manifest: &JournalManifest) -> Result<u64, Journal
             Ok(FIRST_PROTECTED_EPOCH)
         }
         operation_type::ROTATE if source > 0 && target > source => Ok(source),
-        operation_type::ENVELOPE_MIGRATION if source > 0 && target >= source => Ok(source),
+        operation_type::ENVELOPE_MIGRATION if source > 0 && target == source => Ok(source),
         operation_type::ENABLE | operation_type::ROTATE | operation_type::ENVELOPE_MIGRATION => {
             Err(JournalError::InvalidCounter)
         }

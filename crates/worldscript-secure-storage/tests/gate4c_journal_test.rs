@@ -221,7 +221,7 @@ fn paged_inventory_verifier_matches_flat_digest() {
         operation_type: operation_type::ENVELOPE_MIGRATION,
         phase: phase_code::ADMIT,
         source_epoch: 1,
-        target_epoch: 2,
+        target_epoch: 1,
         has_target_root_key_ref: false,
         target_root_key_ref_digest: None,
         fencing_generation: 3,

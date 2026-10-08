@@ -7,11 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **R-15 Gate 4D:** refuse a target epoch that moves backwards. The contract states the relation (§10.1.1, §10.4):
-  a rotation's `target_epoch` is above its `source_epoch` (§8.3 item 2) and an envelope or schema migration's is not
-  below it (equal for a pure format or schema change under the same key epoch). `journal_envelope_epoch`, which the
-  manifest validation already calls, enforces it, so a `ROTATE` from 5 to 3 or from 2 to 2 and an
-  `ENVELOPE_MIGRATION` from 3 to 2 neither encode nor decode (`InvalidCounter`). This closes the pre-caller
+- **R-15 Gate 4D:** state and enforce how a journal's target epoch relates to its source. The contract
+  (§10.1.1, §10.4): a rotation's `target_epoch` is above its `source_epoch` (§8.3 item 2), and an envelope or
+  schema migration keeps the key epoch (`target_epoch == source_epoch`; creating a newer epoch, with the durable
+  target verifier that needs, is a rotation). `journal_envelope_epoch`, which the manifest validation already
+  calls, enforces it, so a `ROTATE` from 5 to 3 or from 2 to 2 and an `ENVELOPE_MIGRATION` from 2 to 3 or
+  from 3 to 2 neither encode nor decode (`InvalidCounter`). This closes the pre-caller
   validation criterion before any caller writes a rotation journal. PR #1007.
 - **R-15 Gate 4D:** use the key route in the journal-owner operations and drop the caller-supplied journal key.
   `commit_journal_checkpoint`, `commit_journal_takeover`, `commit_inventory_capture` and `advance_live_migration`
