@@ -34,25 +34,23 @@ const FIRST_PROTECTED_EPOCH: u64 = 1;
 /// `ENABLE` has no encrypted source, so its journal is sealed under the first protected epoch, the
 /// target; §8.3 fixes a first-time enable at exactly `0 -> 1`, so any other tuple is refused rather
 /// than sealed under an epoch no implementation may choose. `ROTATE` and `ENVELOPE_MIGRATION` keep
-/// the journal under the SOURCE epoch from the first
-/// revision to the last, so recovery never depends on a mid-operation key switch and the journal
-/// stays readable before the target authority is active, during interrupted conversion and after
-/// the cutover while cleanup is still journal-driven. A rotation or envelope migration whose source
-/// epoch is 0 has nothing to be sealed under and is refused.
+/// the journal under the SOURCE epoch from the first revision to the last, so recovery never depends
+/// on a mid-operation key switch and the journal stays readable before the target authority is
+/// active, during interrupted conversion and after the cutover while cleanup is still
+/// journal-driven. Such an operation needs a source to be sealed under (non-zero) and a target related
+/// to it as the contract says: a rotation creates a newer epoch (`target > source`, §8.3 item 2), while
+/// an envelope or schema migration keeps the key epoch (`target == source`, §10.4): creating a newer
+/// epoch, with the durable target verifier that needs, is a rotation. Anything else is refused, so the
+/// manifest neither encodes nor decodes.
 pub fn journal_envelope_epoch(manifest: &JournalManifest) -> Result<u64, JournalError> {
+    let (source, target) = (manifest.source_epoch, manifest.target_epoch);
     match manifest.operation_type {
-        operation_type::ENABLE
-            if manifest.source_epoch == 0 && manifest.target_epoch == FIRST_PROTECTED_EPOCH =>
-        {
+        operation_type::ENABLE if source == 0 && target == FIRST_PROTECTED_EPOCH => {
             Ok(FIRST_PROTECTED_EPOCH)
         }
-        operation_type::ENABLE => Err(JournalError::InvalidCounter),
-        operation_type::ROTATE | operation_type::ENVELOPE_MIGRATION
-            if manifest.source_epoch > 0 =>
-        {
-            Ok(manifest.source_epoch)
-        }
-        operation_type::ROTATE | operation_type::ENVELOPE_MIGRATION => {
+        operation_type::ROTATE if source > 0 && target > source => Ok(source),
+        operation_type::ENVELOPE_MIGRATION if source > 0 && target == source => Ok(source),
+        operation_type::ENABLE | operation_type::ROTATE | operation_type::ENVELOPE_MIGRATION => {
             Err(JournalError::InvalidCounter)
         }
         other => Err(JournalError::UnsupportedOperationType(other)),
