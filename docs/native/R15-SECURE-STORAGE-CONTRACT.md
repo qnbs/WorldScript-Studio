@@ -2418,7 +2418,25 @@ must be the inventory its snapshot names) and reads the pages one at a time thro
 (`page`; the envelope must hash to its reference before it is opened), keylessly like every read of the
 session; in `CONVERT` the cursor only moves forward, stays inside the manifest's extent and inside the
 authenticated entry count of the selected page, and is refused before any write without the verified
-page set. After the
+page set. The conversion itself is a loop the caller drives, one bounded unit per call: the session
+converts up to a batch of entries of the page the cursor points into (never across a page boundary)
+through a caller-supplied step, which must be idempotent because it may run again for an entry after a
+crash, a failed checkpoint or a step failure, and which receives the owner's fence so that a mutation can
+be fenced under the cross-process lock (the session confirms against the committed root that its snapshot
+is still the journal immediately before it hands out a batch, which narrows the window of an owner that
+was taken over, but only the fenced mutation closes it), then records the cursor and reports whether
+entries remain; a persisted cursor that lies outside its page is refused, not sliced past;
+a step failure records no checkpoint (what the step had already converted in the batch is not rolled back and is handed to it again), a batch of one checkpoints after every entry, and between calls the caller
+renews the lease with its own clock. The cursor after a batch is the next entry to process, and at the end
+of the last page the last entry itself, which a session lost before the exit converts again. The session
+leaves `CONVERT` for `VERIFY` (the cursor back to `(0, 0)`) only after it has itself seen the end of the
+last page, so that no entry can be skipped. Only the iteration moves the cursor: the session offers
+production code no way to write a cursor it did not itself reach by converting, so that a persisted
+cursor is what every later session takes it for, the record of the entries a session converted (a
+test-only checkpoint exists behind the `test-support` feature; using it ends the proof that the session
+walked the inventory from its start, so the iteration and the exit are refused). The authority's lower
+level checkpoint operation can still write any cursor inside the manifest's extent; it is for the
+orchestrator of Gate 4E and 5 not to use it to claim progress. After the
 commit call every outcome is followed by the admission check, and a lost admission is reported first: the
 step may have committed or left a candidate, and the caller begins again to learn the state.
 A token check performed as a separate preflight is insufficient. Every mutation-capable adapter
