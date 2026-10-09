@@ -3075,6 +3075,36 @@ interprets the absence of a target record as permission to write defaults.
 | `FINALIZE` | Journal says commit, verification, and permitted cleanup are complete; no key material is stored in the journal. | Remove only fully finalized operational debris. A stale journal is reconciled, not ignored. Ordinary operations resume after finalization. |
 | `DONE` / `RECOVERY_REQUIRED` | `DONE` is durable terminal success. `RECOVERY_REQUIRED` is durable terminal refusal with a reason code. | `DONE` permits normal policy. `RECOVERY_REQUIRED` blocks ordinary writes and destructive cleanup until explicit recovery; never resets to defaults. |
 
+
+**The ordinary-operation barrier of a bound root (Gate 4E E1).** With an unlocked provider, a loadable
+catalog and no interrupted root commit pending, a committed root that carries a live-migration binding
+makes `ProtectedStorage` refuse every ordinary operation, in every phase. A provider that starts locked,
+an unusable catalog and an interrupted root commit are described separately below, and a refusal code is
+named only where a test pins it. The ordinary data operations (write, reconcile, list, read) decide in
+`catalog()` from the committed root, before any catalog page is read, and refuse with
+`MigrationRequired`; that holds when a required catalog page is missing too. A write or reconcile first
+lets the root recover an interrupted root commit (`recover_prepared_root_admitted`), which completes or
+discards a preparation that root commit already made durable and is not an ordinary write; when the
+interrupted commit is an ordinary catalog commit, which copies the binding forward, the refusal that
+follows is the same whether the recovery completed or discarded it. The transitions that claim something about the catalog
+(lock from an unlocked key, unlock, shutdown) load and verify the catalog first and then refuse with
+`RecoveryPending`; when the bound root's catalog cannot be used they fail with the error of that load
+instead (a missing required page is `RecoveryRequired(CatalogSetMismatch)`; other load failures, such
+as a tampered page, an unresolvable key or an I/O error, fail with their own error and are not pinned).
+`load_catalog` returns `None`, and the transitions `MigrationRequired`, only when no root is committed at
+all, which is not a bound root. A provider that starts locked fails before the root is consulted (a write
+with the provider's `Locked`); locking it again is idempotent, since nothing is admitted, and unlocking it
+is refused and leaves its runtime keys cleared. Apart from the root's recovery of an interrupted commit, a
+refused operation writes no record, marker, journal, catalog or root content; its only filesystem effect
+is the admission and writer coordination resources directly under the installation, which hold no data.
+The barrier is durable across a crash and needs no journal read. It is intentionally **stricter than the table above**, which admits ordinary
+reads and writes while `PREPARE` lasts and after `DONE`: that window is not implemented, because it needs
+the root-named manifest (`read_committed_journal`), a journal location as writer configuration and a
+policy for reconciliation under the barrier, and no producer of a binding exists yet to need it
+(`ordinary_mutating_writes_admitted` is the specification of that later relaxation, not a gate in use).
+It also relies on a phase transition out of `PREPARE` happening under exclusive admission, which the
+conversion gate holds by type; making the lower-level transition require it is a separate step.
+
 ### 10.4 Operations
 
 - **Enable:** discover known healthy legacy plaintext while unlocked, convert every admitted

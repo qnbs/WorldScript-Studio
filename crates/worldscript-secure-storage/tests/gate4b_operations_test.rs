@@ -5,7 +5,7 @@ mod support;
 
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -13,7 +13,8 @@ use std::time::Duration;
 
 use support::{
     acquire_exclusive_until_available, acquire_shared_until_available, child_probe, payload,
-    poll_admitted, Event, Fixture, HookFs, ObservedProvider, Probe, CHILD_MODE, CHILD_SCOPE,
+    poll_admitted, Event, Fixture, HookFs, Interruption, ObservedProvider, Probe, Setup,
+    CHILD_MODE, CHILD_SCOPE,
 };
 use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
 use worldscript_secure_storage::*;
@@ -793,4 +794,529 @@ fn operation_child() {
         _ => panic!("unknown child mode"),
     }
     assert_eq!(probe.observations.load(Ordering::SeqCst), 0);
+}
+
+// Gate 4E E1: a committed root that binds a live migration makes the storage refuse ordinary
+// operations, under the conditions stated here.
+//
+// With an unlocked provider, a loadable catalog and no interrupted root commit pending, every ordinary
+// operation is refused in every phase: the data operations in `catalog()` from the committed root,
+// before any catalog page is read, and the lifecycle transitions in `verify_transition` after the
+// catalog is loaded. The refusal is durable across a crash, needs no journal read and does not depend
+// on the migration phase. The cases below also pin a provider that starts locked, a lost catalog page
+// and an interrupted root commit; the codes for other catalog load failures are not pinned. It is
+// stricter than contract §10.3, which admits ordinary reads and writes while `PREPARE` lasts (the
+// relaxation is a later slice). Every storage below is built after the binding was committed: a cold
+// start that never observed an unbound tree.
+
+fn barrier_binding(operation: &str, fence: u64, revision: u64, digest: u8) -> LiveMigration {
+    LiveMigration {
+        operation_id: operation.into(),
+        fencing_generation: fence,
+        journal_revision: revision,
+        manifest_digest: [digest; 32],
+    }
+}
+
+/// A binding that names no journal at all: the storage never reads one.
+fn barrier_bound() -> Fixture {
+    Fixture::new_bound(barrier_binding("barrier-operation", 1, 1, 0xAB))
+}
+
+/// The writer's coordination directory inside the installation (a private constant of the crate): a
+/// refused write creates it before the catalog is read. It is a lock, not state.
+const BARRIER_WRITER_RESOURCE: &str = "ordinary-writers";
+
+fn barrier_is_coordination(name: &std::ffi::OsStr) -> bool {
+    name == OPERATION_ADMISSION_LOCK_FILE || name == BARRIER_WRITER_RESOURCE
+}
+
+/// What an entry of the installation tree is, recorded without following links: a symlink is its
+/// target, never the directory or the bytes behind it.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum BarrierNode {
+    Directory,
+    File(Vec<u8>),
+    Link(PathBuf),
+}
+
+/// Every entry under `dir`, with its path relative to `base`. The two coordination resources are
+/// skipped only where they live, directly under the installation (`dir == base`); a same-named entry
+/// anywhere deeper is part of the comparison.
+fn barrier_collect(base: &Path, dir: &Path, out: &mut Vec<(PathBuf, BarrierNode)>) {
+    for entry in fs::read_dir(dir).unwrap() {
+        let entry = entry.unwrap();
+        if dir == base && barrier_is_coordination(&entry.file_name()) {
+            continue;
+        }
+        let path = entry.path();
+        let relative = path.strip_prefix(base).unwrap().to_owned();
+        let kind = entry.file_type().unwrap();
+        if kind.is_symlink() {
+            out.push((relative, BarrierNode::Link(fs::read_link(&path).unwrap())));
+        } else if kind.is_dir() {
+            out.push((relative, BarrierNode::Directory));
+            barrier_collect(base, &path, out);
+        } else {
+            out.push((relative, BarrierNode::File(fs::read(&path).unwrap())));
+        }
+    }
+}
+
+/// The installation tree, sorted: the authority root, the records, the markers and anything else a
+/// write could create, apart from the two top-level coordination resources, which are compared by
+/// `barrier_coordination_holds_no_data` instead.
+fn barrier_tree(fixture: &Fixture) -> Vec<(PathBuf, BarrierNode)> {
+    let mut nodes = Vec::new();
+    barrier_collect(&fixture.base, &fixture.base, &mut nodes);
+    nodes.sort();
+    nodes
+}
+
+/// Whether the coordination resources hold no data: the writer directory, when it exists, contains
+/// nothing but empty files (a lock file on Windows).
+fn barrier_coordination_holds_no_data(fixture: &Fixture) -> bool {
+    fn empty(dir: &Path) -> bool {
+        fs::read_dir(dir).unwrap().all(|entry| {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                empty(&path)
+            } else {
+                fs::metadata(&path).unwrap().len() == 0
+            }
+        })
+    }
+    let writer = fixture.base.join(BARRIER_WRITER_RESOURCE);
+    let lock = fixture.base.join(OPERATION_ADMISSION_LOCK_FILE);
+    (!writer.exists() || empty(&writer))
+        && (!lock.exists() || fs::metadata(&lock).unwrap().len() == 0)
+}
+
+#[test]
+fn a_bound_root_refuses_a_write_and_writes_nothing() {
+    let fixture = barrier_bound();
+    let before = barrier_tree(&fixture);
+    assert!(!before.is_empty(), "the root itself is part of the tree");
+    let first = fixture.write_poll(&mut StdFs, None, b"first");
+    let second = fixture.write_poll(&mut StdFs, Some(1), b"second");
+    // The refusal came after the writer's coordination directory was created: a lock, holding no data.
+    assert!(barrier_coordination_holds_no_data(&fixture));
+    assert_eq!(
+        (first, second, barrier_tree(&fixture) == before),
+        (
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired),
+            true
+        )
+    );
+}
+
+#[test]
+fn a_bound_root_refuses_a_read_a_list_and_a_reconcile_and_writes_nothing() {
+    let fixture = barrier_bound();
+    let before = barrier_tree(&fixture);
+    let read = poll_admitted(|| {
+        fixture
+            .storage()
+            .try_read_record(&mut StdFs, fixture.record(), payload)
+    });
+    let list = poll_admitted(|| fixture.storage().try_list_records(&mut StdFs));
+    let reconcile = poll_admitted(|| {
+        fixture
+            .storage()
+            .try_reconcile_record(&mut StdFs, &fixture.identity, fixture.location())
+    });
+    assert!(barrier_coordination_holds_no_data(&fixture));
+    assert_eq!(
+        (
+            read,
+            list.map(|_| ()),
+            reconcile.map(|_| ()),
+            barrier_tree(&fixture) == before
+        ),
+        (
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired),
+            true
+        )
+    );
+}
+
+#[test]
+fn a_snapshot_over_a_bound_root_reads_nothing() {
+    let fixture = barrier_bound();
+    let before = barrier_tree(&fixture);
+    let mut guard = poll_admitted(|| fixture.storage().try_authority_snapshot(&mut StdFs))
+        .expect("the snapshot itself is not what the binding refuses");
+    let list = guard.list_records(&mut StdFs).map(|_| ());
+    let read = guard.read_record(&mut StdFs, fixture.record(), payload);
+    drop(guard);
+    assert_eq!(
+        (list, read, barrier_tree(&fixture) == before),
+        (
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired),
+            true
+        )
+    );
+}
+
+#[test]
+fn a_bound_root_refuses_to_lock_and_the_storage_stays_usable_for_refusals() {
+    let fixture = barrier_bound();
+    let lock = poll_admitted(|| fixture.storage().try_lock(&mut StdFs)).map(|_| ());
+    assert_eq!(lock, Err(OperationError::RecoveryPending));
+    // The refusal changed nothing the next operation depends on.
+    assert_eq!(
+        fixture.write_poll(&mut StdFs, None, b"later"),
+        Err(OperationError::MigrationRequired)
+    );
+}
+
+#[test]
+fn a_bound_root_refuses_to_unlock() {
+    let fixture = barrier_bound();
+    let unlock = poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ());
+    assert_eq!(unlock, Err(OperationError::RecoveryPending));
+}
+
+#[test]
+fn a_bound_root_refuses_to_shut_down() {
+    let fixture = barrier_bound();
+    let shutdown = poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs));
+    assert_eq!(shutdown, Err(OperationError::RecoveryPending));
+}
+
+#[test]
+fn a_provider_that_starts_locked_stays_locked_over_a_bound_root() {
+    let fixture = Fixture::new_bound_locked(barrier_binding("barrier-operation", 1, 1, 0xAB));
+    let before = barrier_tree(&fixture);
+    // Locking a locked provider is idempotent: nothing is unlocked and nothing is admitted, so the
+    // root is not consulted; the barrier shows where a key would be needed.
+    let lock = poll_admitted(|| fixture.storage().try_lock(&mut StdFs));
+    let unlock = poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ());
+    let write = fixture.write_poll(&mut StdFs, None, b"v");
+    assert_eq!(
+        (lock, unlock, write, barrier_tree(&fixture) == before),
+        (
+            Ok(KeyState::Locked),
+            Err(OperationError::RecoveryPending),
+            Err(OperationError::Provider(KeyProviderError::Locked)),
+            true
+        )
+    );
+}
+
+#[test]
+fn a_restart_that_starts_locked_cannot_unlock_over_a_bound_root() {
+    let fixture = Fixture::new_bound_locked(barrier_binding("barrier-operation", 1, 1, 0xAB));
+    let before = barrier_tree(&fixture);
+    let unlock = poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ());
+    // The failed unlock cleared the runtime keys again and kept its exclusive fence.
+    let keys_cleared = fixture.probe.lock_calls.load(Ordering::SeqCst) > 0;
+    let write = fixture.write_poll(&mut StdFs, None, b"v");
+    assert_eq!(
+        (
+            unlock,
+            keys_cleared,
+            write,
+            barrier_tree(&fixture) == before
+        ),
+        (
+            Err(OperationError::RecoveryPending),
+            true,
+            Err(OperationError::Provider(KeyProviderError::Locked)),
+            true
+        )
+    );
+}
+
+#[test]
+fn the_barrier_snapshot_sees_every_change_but_the_two_coordination_resources_at_the_top() {
+    let fixture = barrier_bound();
+    let baseline = barrier_tree(&fixture);
+    // Skipped where they live: the comparison ignores the top-level writer directory, and what it
+    // holds is watched by the separate data check.
+    let writer = fixture.base.join(BARRIER_WRITER_RESOURCE);
+    fs::create_dir_all(&writer).unwrap();
+    fs::write(writer.join("lock"), b"x").unwrap();
+    let skipped = (
+        barrier_tree(&fixture) == baseline,
+        barrier_coordination_holds_no_data(&fixture),
+    );
+    fs::remove_dir_all(&writer).unwrap();
+    // Seen everywhere else, a same-named entry deeper down included.
+    let mut seen = Vec::new();
+    for (path, is_dir) in [
+        (fixture.base.join("stray"), false),
+        (fixture.markers.join("new-directory"), true),
+        (fixture.markers.join(BARRIER_WRITER_RESOURCE), true),
+        (fixture.root.join(OPERATION_ADMISSION_LOCK_FILE), false),
+    ] {
+        if is_dir {
+            fs::create_dir(&path).unwrap();
+        } else {
+            fs::write(&path, b"x").unwrap();
+        }
+        seen.push(barrier_tree(&fixture) != baseline);
+        if is_dir {
+            fs::remove_dir(&path).unwrap();
+        } else {
+            fs::remove_file(&path).unwrap();
+        }
+    }
+    // Changed bytes of an existing file.
+    let file = baseline
+        .iter()
+        .find(|(path, node)| matches!(node, BarrierNode::File(_)) && path.starts_with("authority"))
+        .map(|(path, _)| fixture.base.join(path))
+        .unwrap();
+    let original = fs::read(&file).unwrap();
+    let mut changed = original.clone();
+    changed.push(0);
+    fs::write(&file, &changed).unwrap();
+    seen.push(barrier_tree(&fixture) != baseline);
+    fs::write(&file, &original).unwrap();
+    #[cfg(unix)]
+    let links = barrier_symlinks_are_seen(&fixture, &baseline, &file);
+    #[cfg(not(unix))]
+    let links = (true, true);
+    assert_eq!(
+        (skipped, seen, links, barrier_tree(&fixture) == baseline),
+        ((true, false), vec![true; 5], (true, true), true)
+    );
+}
+
+/// A file replaced by a symlink to an outside copy with the same bytes, and an empty directory
+/// replaced by a symlink to another empty directory, must both change the snapshot. Unix only:
+/// creating a symlink needs no privilege there.
+#[cfg(unix)]
+fn barrier_symlinks_are_seen(
+    fixture: &Fixture,
+    baseline: &[(PathBuf, BarrierNode)],
+    file: &Path,
+) -> (bool, bool) {
+    use std::os::unix::fs::symlink;
+    let outside = fixture.base.with_extension("outside");
+    fs::create_dir_all(&outside).unwrap();
+    let original = fs::read(file).unwrap();
+    let copy = outside.join("copy");
+    fs::write(&copy, &original).unwrap();
+    fs::remove_file(file).unwrap();
+    symlink(&copy, file).unwrap();
+    let file_seen = barrier_tree(fixture) != baseline;
+    fs::remove_file(file).unwrap();
+    fs::write(file, &original).unwrap();
+    let empty = outside.join("empty");
+    fs::create_dir(&empty).unwrap();
+    fs::remove_dir(&fixture.markers).unwrap();
+    symlink(&empty, &fixture.markers).unwrap();
+    let directory_seen = barrier_tree(fixture) != baseline;
+    fs::remove_file(&fixture.markers).unwrap();
+    fs::create_dir(&fixture.markers).unwrap();
+    fs::remove_dir_all(&outside).unwrap();
+    (file_seen, directory_seen)
+}
+
+fn barrier_paged() -> Setup {
+    Setup {
+        bound: Some(barrier_binding("barrier-operation", 1, 1, 0xAB)),
+        page: true,
+        ..Setup::default()
+    }
+}
+
+/// The catalog pages on disk under the authority root, all removed; how many there were.
+fn barrier_remove_catalog_pages(fixture: &Fixture) -> usize {
+    fn remove(dir: &Path) -> usize {
+        let mut removed = 0;
+        for entry in fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                removed += remove(&path);
+            } else {
+                fs::remove_file(&path).unwrap();
+                removed += 1;
+            }
+        }
+        removed
+    }
+    remove(&fixture.root.join("catalog"))
+}
+
+/// Lock (0), unlock (1) or shutdown (2) on a fresh storage built from `setup`, as its outcome.
+fn barrier_transition(
+    setup: Setup,
+    which: usize,
+    damage: impl FnOnce(&Fixture),
+) -> Result<(), OperationError> {
+    let fixture = Fixture::with_setup(setup);
+    damage(&fixture);
+    match which {
+        0 => poll_admitted(|| fixture.storage().try_lock(&mut StdFs)).map(|_| ()),
+        1 => poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ()),
+        _ => poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
+    }
+}
+
+#[test]
+fn a_bound_root_with_an_intact_catalog_page_refuses_the_transitions_with_recovery_pending() {
+    let outcomes: Vec<_> = (0..3)
+        .map(|which| barrier_transition(barrier_paged(), which, |_| {}))
+        .collect();
+    assert_eq!(outcomes, vec![Err(OperationError::RecoveryPending); 3]);
+}
+
+#[test]
+fn a_bound_root_that_lost_a_catalog_page_fails_the_transitions_with_the_set_mismatch() {
+    let mismatch = OperationError::Catalog(AuthorityError::RecoveryRequired(
+        CatalogRecoveryReason::CatalogSetMismatch,
+    ));
+    let outcomes: Vec<_> = (0..3)
+        .map(|which| {
+            barrier_transition(barrier_paged(), which, |fixture| {
+                assert!(
+                    barrier_remove_catalog_pages(fixture) > 0,
+                    "the catalog has a page"
+                );
+            })
+        })
+        .collect();
+    // `load_catalog` returns `None` only when no root is committed: this is a committed, bound
+    // root, so a missing page is a set mismatch, never `MigrationRequired` and never `RecoveryPending`.
+    assert_eq!(outcomes, vec![Err(mismatch); 3]);
+}
+
+#[test]
+fn a_bound_root_that_lost_a_catalog_page_is_still_refused_before_any_page_is_read() {
+    let fixture = Fixture::with_setup(barrier_paged());
+    assert!(
+        barrier_remove_catalog_pages(&fixture) > 0,
+        "the catalog has a page"
+    );
+    let write = fixture.write_poll(&mut StdFs, None, b"v");
+    let list = poll_admitted(|| fixture.storage().try_list_records(&mut StdFs)).map(|_| ());
+    let read = poll_admitted(|| {
+        fixture
+            .storage()
+            .try_read_record(&mut StdFs, fixture.record(), payload)
+    });
+    let reconcile = poll_admitted(|| {
+        fixture
+            .storage()
+            .try_reconcile_record(&mut StdFs, &fixture.identity, fixture.location())
+    })
+    .map(|_| ());
+    // The data operations check the binding in `catalog()` before the pages are read.
+    assert_eq!(
+        (write, list, read, reconcile),
+        (
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired)
+        )
+    );
+}
+
+/// A bound root followed by an ordinary root commit that stopped as `how` says, on a fresh storage.
+fn barrier_interrupted(how: Interruption) -> Fixture {
+    Fixture::with_setup(Setup {
+        bound: Some(barrier_binding("barrier-operation", 1, 1, 0xAB)),
+        interrupted: Some(how),
+        ..Setup::default()
+    })
+}
+
+// The root recovers the durable preparation first (not an ordinary write). Two outcomes exist: the
+// commit is completed, or it is discarded. Either way the committed root carries the binding, because
+// the interrupted commit is an ordinary catalog commit that copies it forward. Each operation gets its
+// own fixture, so neither runs against a root that the other already recovered.
+const BARRIER_RECOVERY_OUTCOMES: [Interruption; 2] =
+    [Interruption::AtAnchorCommit, Interruption::AfterPrepare];
+
+#[test]
+fn a_write_over_an_interrupted_root_commit_is_refused_whatever_the_root_recovery_decides() {
+    let outcomes: Vec<_> = BARRIER_RECOVERY_OUTCOMES
+        .into_iter()
+        .map(|how| barrier_interrupted(how).write_poll(&mut StdFs, None, b"v"))
+        .collect();
+    assert_eq!(outcomes, vec![Err(OperationError::MigrationRequired); 2]);
+}
+
+#[test]
+fn a_reconcile_over_an_interrupted_root_commit_is_refused_whatever_the_root_recovery_decides() {
+    let outcomes: Vec<_> = BARRIER_RECOVERY_OUTCOMES
+        .into_iter()
+        .map(|how| {
+            let fixture = barrier_interrupted(how);
+            poll_admitted(|| {
+                fixture.storage().try_reconcile_record(
+                    &mut StdFs,
+                    &fixture.identity,
+                    fixture.location(),
+                )
+            })
+            .map(|_| ())
+        })
+        .collect();
+    assert_eq!(outcomes, vec![Err(OperationError::MigrationRequired); 2]);
+}
+
+#[test]
+fn a_provider_that_starts_locked_unlocks_over_an_unbound_root() {
+    let fixture = Fixture::new_locked();
+    let unlocked = poll_admitted(|| fixture.storage().try_unlock(&mut StdFs))
+        .map(|state| matches!(state, KeyState::Unlocked { .. }));
+    assert_eq!(unlocked, Ok(true));
+    let committed = fixture
+        .write_until_admitted(&mut StdFs, None, b"first")
+        .unwrap();
+    assert_eq!(committed.generation, 1);
+}
+
+#[test]
+fn the_refusal_is_the_roots_alone_whatever_the_binding_names() {
+    // Different operations, fences, revisions and digests; none names a journal that exists.
+    let bindings = [
+        barrier_binding("barrier-operation", 1, 1, 0xAB),
+        barrier_binding("another-operation", 7, 9, 0x01),
+        barrier_binding("x", 2, 100, 0xFF),
+    ];
+    let outcomes: Vec<_> = bindings
+        .into_iter()
+        .map(|binding| {
+            let fixture = Fixture::new_bound(binding);
+            fixture.write_poll(&mut StdFs, None, b"v")
+        })
+        .collect();
+    assert_eq!(outcomes, vec![Err(OperationError::MigrationRequired); 3]);
+}
+
+#[test]
+fn the_same_tree_without_the_binding_admits_the_operations() {
+    let fixture = Fixture::new();
+    let committed = fixture
+        .write_until_admitted(&mut StdFs, None, b"first")
+        .unwrap();
+    assert_eq!(committed.generation, 1);
+    assert_eq!(fixture.payload(), b"first");
+    let list = poll_admitted(|| fixture.storage().try_list_records(&mut StdFs)).unwrap();
+    assert_eq!(list.len(), 1);
+    let lock = poll_admitted(|| fixture.storage().try_lock(&mut StdFs)).unwrap();
+    assert_eq!(lock, KeyState::Locked);
+}
+
+#[test]
+fn a_storage_built_over_a_bound_root_observed_nothing_before_it_refuses() {
+    let fixture = barrier_bound();
+    // Construction performs no observation, so the refusal below comes from what the first
+    // operation reads from the tree, not from anything the storage remembered.
+    assert_eq!(fixture.probe.observations.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        fixture.write_poll(&mut StdFs, None, b"v"),
+        Err(OperationError::MigrationRequired)
+    );
+    assert!(fixture.probe.observations.load(Ordering::SeqCst) > 0);
 }

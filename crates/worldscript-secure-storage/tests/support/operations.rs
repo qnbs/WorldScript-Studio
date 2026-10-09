@@ -13,6 +13,11 @@ use std::time::{Duration, Instant};
 use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
 use worldscript_secure_storage::*;
 
+#[path = "preconfigured.rs"]
+mod preconfigured;
+use preconfigured::configured_provider;
+pub use preconfigured::{Interruption, Setup};
+
 #[derive(Default)]
 pub struct Probe {
     pub observations: AtomicUsize,
@@ -186,6 +191,42 @@ impl Fixture {
     }
 
     pub fn new_in(parent: &Path) -> Self {
+        Self::build(parent, Setup::default())
+    }
+
+    /// A storage over a tree whose committed root already binds `live`, built after the binding
+    /// was committed: it is a cold start, and it never observed an unbound tree.
+    pub fn new_bound(live: LiveMigration) -> Self {
+        Self::with_setup(Setup {
+            bound: Some(live),
+            ..Setup::default()
+        })
+    }
+
+    /// Like [`Self::new_bound`], with the key provider locked when the storage is built: what a
+    /// restarted process sees before anything has been unlocked.
+    pub fn new_bound_locked(live: LiveMigration) -> Self {
+        Self::with_setup(Setup {
+            bound: Some(live),
+            locked: true,
+            ..Setup::default()
+        })
+    }
+
+    /// Like [`Self::new`], with the key provider locked when the storage is built.
+    pub fn new_locked() -> Self {
+        Self::with_setup(Setup {
+            locked: true,
+            ..Setup::default()
+        })
+    }
+
+    /// A storage built over the tree and provider that `setup` describes.
+    pub fn with_setup(setup: Setup) -> Self {
+        Self::build(&std::env::temp_dir(), setup)
+    }
+
+    fn build(parent: &Path, setup: Setup) -> Self {
         static NEXT: AtomicU32 = AtomicU32::new(0);
         let base = parent.join(format!(
             "wss-gate4b-ops-{}-{}",
@@ -214,7 +255,10 @@ impl Fixture {
             fs::canonicalize(records).unwrap(),
             fs::canonicalize(markers).unwrap(),
         );
-        let provider = configured_provider(&base, &root);
+        let mut provider = configured_provider(&base, &root, &setup);
+        if setup.locked {
+            provider.lock();
+        }
         let probe = Arc::new(Probe::default());
         let storage = Arc::new(ProtectedStorage::new(
             AdmissionScope {
@@ -378,57 +422,6 @@ pub fn poll_admitted<T, E>(mut operation: impl FnMut() -> Result<Option<T>, E>) 
             None => thread::sleep(ADMISSION_RETRY_INTERVAL),
         }
     }
-}
-
-fn configured_provider(base: &Path, root: &Path) -> MemoryKeyProvider {
-    let mut provider = MemoryKeyProvider::new();
-    let scope = provider.read_or_provision_installation_scope().unwrap();
-    let route = provider.provision_epoch_key(1).unwrap();
-    provider.unlock().unwrap();
-    // Test-only preconfigured authority, not first enable (which remains Gate 4E).
-    let mut exclusive = ExclusiveAdmissionGuard::try_acquire(AdmissionScope {
-        installation_dir: base,
-        root_dir: root,
-    })
-    .unwrap()
-    .unwrap();
-    let event = exclusive.try_root_commit().unwrap().unwrap();
-    write_key_epoch(
-        &mut StdFs,
-        &provider,
-        RootLayout { root_dir: root },
-        KeyEpochCommit {
-            scope: &scope,
-            record: &KeyEpochRecord {
-                epoch: 1,
-                status: KeyEpochStatus::Active,
-                root_key_ref: route.clone(),
-            },
-            registry_generation: 1,
-            root_key_ref: &route,
-            key_epoch: 1,
-            held: event.root_guard().unwrap(),
-        },
-    )
-    .unwrap();
-    drop(event);
-    commit_catalog_change(
-        &mut StdFs,
-        &mut provider,
-        RootLayout { root_dir: root },
-        CatalogCommit {
-            change: CatalogChange {
-                upsert: &[],
-                remove: &[],
-            },
-            root_key_ref: &route,
-            active_key_epoch: 1,
-            operation_id: "fixture-bootstrap",
-        },
-    )
-    .unwrap();
-    drop(exclusive);
-    provider
 }
 
 impl Drop for Fixture {

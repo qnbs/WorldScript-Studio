@@ -665,6 +665,53 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Slice E1 — the ordinary-operation barrier of a bound root, pinned with evidence (Gate 4E)
+
+The write barrier of the final capture was recorded as a missing phase-aware refusal in the write path. The audit found
+the barrier already present, and blunter than the contract: with an unlocked provider, a loadable catalog and no interrupted
+root commit pending, a committed root that carries a live-migration binding makes `ProtectedStorage` refuse every ordinary
+operation, in every phase. The data operations (write, reconcile, list, read) decide in `catalog()` from the committed root,
+before any catalog page is read, and refuse with `MigrationRequired`. A write or reconcile first lets the root recover an
+interrupted root commit (`recover_prepared_root_admitted`), which completes or discards a preparation that root commit already
+made durable. The lifecycle transitions (lock from an unlocked key, unlock, shutdown) go through `verify_transition`, which
+loads and verifies the catalog first and then refuses with `RecoveryPending`. The barrier is durable across a crash and needs
+no journal read and no journal location. What was missing was evidence: no test combined `ProtectedStorage` with a bound root.
+
+| Piece | Rule |
+|---|---|
+| barrier | with an unlocked provider, a loadable catalog and no interrupted root commit: write, reconcile, list and read are refused with `MigrationRequired`, lock (from an unlocked key), unlock and shutdown with `RecoveryPending`, in every phase; the snapshot guard can be obtained but reads nothing |
+| independence | the refusal does not depend on what the binding names: three bindings whose operation, fence, revision and digest name no journal at all are refused identically (the binding's contents are irrelevant to the refusal) |
+| nothing written | after a refused write, read, list or reconcile the installation tree is identical, every directory, file (with its bytes) and symlink (as its target, never followed), **apart from the two coordination resources directly under the installation** (the writer directory, which a refused write or reconcile creates before the catalog is read, and the admission lock file); those two are compared separately and must hold no data. The exclusion is by name at the installation's top level only: a same-named entry anywhere deeper is part of the comparison, and a negative-proof case shows the snapshot sees a new file, a new directory, a nested writer directory, a nested lock-named file, changed bytes and, on Unix, a file or an empty directory replaced by a symlink to an identical copy. The refusal itself writes no record, marker, journal, catalog or root content |
+| lost catalog page | over a bound root a missing required catalog page makes lock, unlock and shutdown fail with `RecoveryRequired(CatalogSetMismatch)`, not `RecoveryPending` (the catalog is loaded and verified first); the data operations (write, list, read and reconcile) are still refused with `MigrationRequired` because they check the binding before any page is read. With the page intact the transitions give `RecoveryPending` (control). `load_catalog` returns `None` only when no root is committed, which is not a bound root |
+| interrupted root commit | a bound root followed by an ordinary catalog commit that was interrupted, either at the anchor commit (the root's recovery completes it) or right after its preparation was persisted (the recovery discards it); the fixture asserts a durable preparation. Write and reconcile each run on a fresh fixture, so neither meets a root the other already recovered, and both are refused with `MigrationRequired` in both outcomes: the root's recovery runs first and, because the interrupted commit copies the binding forward, the refusal is the same |
+| starts locked | over a bound root a provider that starts locked stays locked: `try_lock` is idempotent, `try_unlock` is refused with `RecoveryPending`, the runtime keys are cleared again and the exclusive fence is kept, so a later write fails with the provider's `Locked`; the same locked provider over an unbound root unlocks and writes (control) |
+| cold start | the storage is built after the binding was committed and observes nothing before its first operation, so the refusal is what the first operation reads from the tree |
+| not pinned | other catalog load failures over a bound root (a tampered page, an unresolvable key, an I/O error), and shutdown over a locked provider: read from the code, not exercised; in each the operation fails and none succeeds over a bound root |
+| control | the same fixture without a binding admits write, read, list and lock |
+
+This is **stricter than contract §10.3**, which admits ordinary reads and writes during `PREPARE` and after `DONE`. The
+window is not implemented, deliberately: it needs the root-named manifest (`read_committed_journal`), a journal location
+as writer configuration (the location is caller-supplied everywhere and is not in the root), a fail-closed rule for a
+binding without a location, and a policy for reconciling a pending ordinary write under the barrier. No producer of a
+binding exists yet to need it. `ordinary_mutating_writes_admitted` remains the specification of that relaxation.
+
+Proof (`gate4b_operations_test`, eighteen new cases): write refused twice with the installation tree unchanged; read, list
+and reconcile refused with the tree unchanged; the snapshot guard's list and read refused; lock, unlock and shutdown refused;
+three different bindings refused identically; the unbound control admits; a cold storage observes nothing before it refuses;
+a provider that starts locked stays locked, and a restart that starts locked cannot unlock, over a bound root, with the
+unbound locked control unlocking; the snapshot negative proof; an intact catalog page (transitions `RecoveryPending`), a lost
+page (transitions `CatalogSetMismatch`, data operations including reconcile `MigrationRequired`) and an interrupted root commit
+(write and reconcile each `MigrationRequired`, after a completed and after a discarded recovery). Mutation-checked: removing the live-binding refusal in `catalog()` fails the write,
+read/list/reconcile, snapshot, lock-then-write, cold-start, independence, lost-page and interrupted-commit cases; removing it
+in `verify_transition` fails the lock, unlock, shutdown, intact-page and both locked-provider cases; skipping the coordination
+names at any depth instead of at the top level, or following symlinks instead of recording them, fails the negative-proof case.
+
+Residual (Gate 4E, unchanged by this slice): the refusal codes in the "not pinned" row; checking the binding before the
+catalog is loaded in `verify_transition` (so that a bound root with an unusable catalog gives `RecoveryPending`) would be a
+behaviour change and belongs to E2; the phase-aware relaxation (E2); the `ADMIT` transition and the final capture's entry
+requiring exclusive admission at the type level (E3); one read of a phase is only sufficient if every transition out of
+`PREPARE` happens under exclusive admission.
+
 ## Slice F1 — bounded reads are required of every `DurableFs` adapter
 
 `DurableFs::read_at_most` and `list_dir_at_most` had default bodies that loaded the whole file or directory through
@@ -1210,7 +1257,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
 - Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) and the authenticated page access with the page-local cursor (C2c-1: `verify_inventory`, `page`) and the iteration with a caller-supplied idempotent step, the crash/resume evidence and the exit to `VERIFY` (C2c-2: `convert_next`, `finish_convert`) exist, but nothing converts a real record: the `EntryStep` that moves a source record to the target epoch (Gate 5), the `VERIFY` work that reads every record under the target policy and the phases after it.
-- Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
+- Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers. The ordinary write path already refuses every operation while the root binds a live migration, in every phase (E1, with evidence); what remains is the phase-aware relaxation (`PREPARE`/`DONE` through `ordinary_mutating_writes_admitted`, E2) and the `ADMIT` transition requiring exclusive admission before the final capture has a caller (E3; Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read. Reclaiming them needs a directory-removal primitive and a sweep that knows no live attempt owns them, as for the orphaned digest directories of a discarded capture (acceptance criterion on #359).
 - The cross-process lease CAS.
