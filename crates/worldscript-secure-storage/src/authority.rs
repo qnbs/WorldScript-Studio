@@ -555,12 +555,7 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     begin: SessionBegin<'_>,
 ) -> Result<StagingSession, AuthorityError> {
-    // The root alone names the binding: the catalog pages are not read, so starting a capture of a
-    // very large inventory does not first materialise a very large catalog.
-    let live = load_committed_root(fs, provider, layout)
-        .map_err(AuthorityError::Root)?
-        .and_then(|view| view.root.live_migration)
-        .ok_or(AuthorityError::NoLiveMigration)?;
+    let live = committed_live_migration(fs, provider, layout)?;
     let key = route_journal_key(fs, provider, layout, begin.journal)?;
     let capture = {
         let mut ctx = journal_context(&mut *fs, begin.journal, &key, CandidateConflict::Refuse);
@@ -580,6 +575,50 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
         journal_dir: begin.journal.dir.to_path_buf(),
         operation: begin.journal.operation.clone(),
     })
+}
+
+/// The binding the committed root names, or [`AuthorityError::NoLiveMigration`].
+///
+/// The root alone names the binding: the catalog pages are not read, so starting a capture of a very
+/// large inventory does not first materialise a very large catalog.
+fn committed_live_migration<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+) -> Result<LiveMigration, AuthorityError> {
+    load_committed_root(fs, provider, layout)
+        .map_err(AuthorityError::Root)?
+        .and_then(|view| view.root.live_migration)
+        .ok_or(AuthorityError::NoLiveMigration)
+}
+
+/// The journal state the committed root vouches for: its binding and the manifest it names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CommittedJournal {
+    pub(crate) live: LiveMigration,
+    pub(crate) manifest: JournalManifest,
+}
+
+/// Reads the committed journal state without a key in the caller's hands.
+///
+/// The binding comes from the committed root, the journal key is resolved through the key-epoch
+/// registry ([`resolve_journal_key`]) and the manifest is loaded by the exact root-named path, so the
+/// binding's digest authenticates the bytes before they are trusted. Nothing is written and no lock is
+/// taken: the result is a snapshot, and every later mutation repeats its authority checks under the
+/// root lock.
+pub(crate) fn read_committed_journal<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    journal: JournalSource<'_>,
+) -> Result<CommittedJournal, AuthorityError> {
+    let live = committed_live_migration(fs, provider, layout)?;
+    let key = route_journal_key(fs, provider, layout, journal)?;
+    let manifest = {
+        let mut ctx = journal_context(&mut *fs, journal, &key, CandidateConflict::Refuse);
+        load_authoritative_manifest(&mut ctx, &live).map_err(AuthorityError::Journal)?
+    };
+    Ok(CommittedJournal { live, manifest })
 }
 
 impl StagingSession {
