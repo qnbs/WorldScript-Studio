@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
+use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::*;
 
 #[derive(Default)]
@@ -180,33 +180,62 @@ pub struct Fixture {
     storage: Option<Arc<ProtectedStorage<ObservedProvider>>>,
 }
 
+/// What the preconfigured tree and provider look like when the storage is built.
+#[derive(Default)]
+pub struct Setup {
+    /// The committed root binds this live migration (committed before the storage exists).
+    pub bound: Option<LiveMigration>,
+    /// The key provider is locked when the storage is built.
+    pub locked: bool,
+    /// The catalog holds one record, so that it has a page on disk.
+    pub page: bool,
+    /// After the (bound) root, a further root commit is interrupted at the anchor commit, leaving a
+    /// durable preparation for the next operation's root recovery to resolve.
+    pub interrupted: bool,
+}
+
 impl Fixture {
     pub fn new() -> Self {
         Self::new_in(&std::env::temp_dir())
     }
 
     pub fn new_in(parent: &Path) -> Self {
-        Self::build(parent, None, false)
+        Self::build(parent, Setup::default())
     }
 
     /// A storage over a tree whose committed root already binds `live`, built after the binding
     /// was committed: it is a cold start, and it never observed an unbound tree.
     pub fn new_bound(live: LiveMigration) -> Self {
-        Self::build(&std::env::temp_dir(), Some(live), false)
+        Self::with_setup(Setup {
+            bound: Some(live),
+            ..Setup::default()
+        })
     }
 
     /// Like [`Self::new_bound`], with the key provider locked when the storage is built: what a
     /// restarted process sees before anything has been unlocked.
     pub fn new_bound_locked(live: LiveMigration) -> Self {
-        Self::build(&std::env::temp_dir(), Some(live), true)
+        Self::with_setup(Setup {
+            bound: Some(live),
+            locked: true,
+            ..Setup::default()
+        })
     }
 
     /// Like [`Self::new`], with the key provider locked when the storage is built.
     pub fn new_locked() -> Self {
-        Self::build(&std::env::temp_dir(), None, true)
+        Self::with_setup(Setup {
+            locked: true,
+            ..Setup::default()
+        })
     }
 
-    fn build(parent: &Path, bound: Option<LiveMigration>, locked: bool) -> Self {
+    /// A storage built over the tree and provider that `setup` describes.
+    pub fn with_setup(setup: Setup) -> Self {
+        Self::build(&std::env::temp_dir(), setup)
+    }
+
+    fn build(parent: &Path, setup: Setup) -> Self {
         static NEXT: AtomicU32 = AtomicU32::new(0);
         let base = parent.join(format!(
             "wss-gate4b-ops-{}-{}",
@@ -235,8 +264,8 @@ impl Fixture {
             fs::canonicalize(records).unwrap(),
             fs::canonicalize(markers).unwrap(),
         );
-        let mut provider = configured_provider(&base, &root, bound.as_ref());
-        if locked {
+        let mut provider = configured_provider(&base, &root, &setup);
+        if setup.locked {
             provider.lock();
         }
         let probe = Arc::new(Probe::default());
@@ -404,11 +433,24 @@ pub fn poll_admitted<T, E>(mut operation: impl FnMut() -> Result<Option<T>, E>) 
     }
 }
 
-fn configured_provider(
-    base: &Path,
-    root: &Path,
-    bound: Option<&LiveMigration>,
-) -> MemoryKeyProvider {
+/// The catalog descriptor of one record that is committed and readable, so that it has a page.
+fn one_record_descriptor() -> CatalogDescriptor {
+    let record = RecordIdentity::new(RecordClass::Codex, &["a-record"]).unwrap();
+    let body = MarkerBody::Active {
+        committed_generation: 1,
+        committed_epoch: 1,
+        content_digest: [0xab; 32],
+    };
+    let marker = CommitMarker::new(&record, 1, body).unwrap();
+    let readable = CommittedGeneration {
+        generation: 1,
+        epoch: 1,
+        content_digest: [0xab; 32],
+    };
+    CatalogDescriptor::new_unverified(&record, &marker, Some(readable)).unwrap()
+}
+
+fn configured_provider(base: &Path, root: &Path, setup: &Setup) -> MemoryKeyProvider {
     let mut provider = MemoryKeyProvider::new();
     let scope = provider.read_or_provision_installation_scope().unwrap();
     let route = provider.provision_epoch_key(1).unwrap();
@@ -440,13 +482,18 @@ fn configured_provider(
     )
     .unwrap();
     drop(event);
+    let descriptors = if setup.page {
+        vec![one_record_descriptor()]
+    } else {
+        Vec::new()
+    };
     commit_catalog_change(
         &mut StdFs,
         &mut provider,
         RootLayout { root_dir: root },
         CatalogCommit {
             change: CatalogChange {
-                upsert: &[],
+                upsert: &descriptors,
                 remove: &[],
             },
             root_key_ref: &route,
@@ -455,7 +502,7 @@ fn configured_provider(
         },
     )
     .unwrap();
-    if let Some(live) = bound {
+    if let Some(live) = &setup.bound {
         // No producer of a bind exists in the crate yet, so the next root is committed directly.
         let layout = RootLayout { root_dir: root };
         let catalog = load_catalog(&mut StdFs, &provider, layout)
@@ -485,6 +532,34 @@ fn configured_provider(
         )
         .unwrap();
         drop(event);
+    }
+    if setup.interrupted {
+        // A further ordinary root commit that stops at the anchor commit: the preparation is durable,
+        // the committed root is still the previous one.
+        provider.inject(Fault::BeforePersist(AnchorOp::Commit));
+        let interrupted = commit_catalog_change(
+            &mut StdFs,
+            &mut provider,
+            RootLayout { root_dir: root },
+            CatalogCommit {
+                change: CatalogChange {
+                    upsert: &[],
+                    remove: &[],
+                },
+                root_key_ref: &route,
+                active_key_epoch: 1,
+                operation_id: "fixture-interrupted",
+            },
+        );
+        assert!(interrupted.is_err(), "the commit must stop at the anchor");
+        assert!(
+            provider
+                .read_root_anchor_state()
+                .unwrap()
+                .prepared_root_commit
+                .is_some(),
+            "the interrupted commit leaves a durable preparation"
+        );
     }
     drop(exclusive);
     provider
