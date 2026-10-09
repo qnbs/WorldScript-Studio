@@ -875,7 +875,9 @@ fn barrier_tree(fixture: &Fixture) -> Vec<(PathBuf, BarrierNode)> {
 
 /// Whether the coordination resources hold no data. A missing path is empty. A symlink, including a
 /// dangling one or one whose target is empty, is not: `symlink_metadata` does not follow it, so the
-/// link itself is the entry. A directory is empty only when every child is.
+/// link itself is the entry. A directory is empty only when every child is. Only a regular file may
+/// be data-free, and only at length zero. A FIFO, socket, or device is not, even when its length is
+/// zero.
 fn barrier_coordination_holds_no_data(fixture: &Fixture) -> bool {
     fn holds_no_data(path: &Path) -> bool {
         let meta = match fs::symlink_metadata(path) {
@@ -891,7 +893,7 @@ fn barrier_coordination_holds_no_data(fixture: &Fixture) -> bool {
                 .unwrap()
                 .all(|entry| holds_no_data(&entry.unwrap().path()));
         }
-        meta.len() == 0
+        meta.file_type().is_file() && meta.len() == 0
     }
     holds_no_data(&fixture.base.join(BARRIER_WRITER_RESOURCE))
         && holds_no_data(&fixture.base.join(OPERATION_ADMISSION_LOCK_FILE))
@@ -1176,6 +1178,48 @@ fn a_symlink_at_a_coordination_resource_is_not_data_free() {
         (writer_link, nested_link, lock_link, dangling, empty_file),
         (false, false, false, false, true)
     );
+}
+
+/// A zero-length FIFO or Unix socket at a coordination resource is not data-free.
+#[cfg(unix)]
+#[test]
+fn a_fifo_or_socket_at_a_coordination_resource_is_not_data_free() {
+    use std::os::unix::net::UnixListener;
+    use std::process::Command;
+
+    fn remove_path(path: &Path) {
+        if let Ok(meta) = fs::symlink_metadata(path) {
+            if meta.is_dir() && !meta.file_type().is_symlink() {
+                fs::remove_dir_all(path).unwrap();
+            } else {
+                fs::remove_file(path).unwrap();
+            }
+        }
+    }
+
+    let fixture = barrier_bound();
+    let writer = fixture.base.join(BARRIER_WRITER_RESOURCE);
+    let lock = fixture.base.join(OPERATION_ADMISSION_LOCK_FILE);
+
+    remove_path(&lock);
+    let created = Command::new("mkfifo").arg(&lock).status().unwrap();
+    assert!(created.success(), "mkfifo must create the lock-path FIFO");
+    let fifo = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&lock).unwrap();
+
+    remove_path(&writer);
+    fs::create_dir(&writer).unwrap();
+    let socket_path = writer.join("admission.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let socket = barrier_coordination_holds_no_data(&fixture);
+    drop(listener);
+    fs::remove_dir_all(&writer).unwrap();
+
+    fs::write(&lock, b"").unwrap();
+    let empty_file = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&lock).unwrap();
+
+    assert_eq!((fifo, socket, empty_file), (false, false, true));
 }
 
 fn barrier_paged() -> Setup {
