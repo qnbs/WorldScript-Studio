@@ -4,7 +4,7 @@
 //! root's active epoch and never through anything the caller supplies. Every scenario therefore
 //! commits a real root that binds the journal. Slice D2b-3b: the four composed journal operations
 //! use that route, so an unroutable epoch refuses each of them before a journal write. Slice D3b: so
-//! does the renewal of the owner's lease.
+//! does the renewal of the owner's lease. Slice C2a: so does the entry gate of the conversion driver.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -14,20 +14,20 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
 use worldscript_secure_storage::{
-    advance_live_migration, begin_streamed_capture, commit_catalog_change,
+    advance_live_migration, begin_conversion, begin_streamed_capture, commit_catalog_change,
     commit_inventory_capture, commit_journal_checkpoint, commit_journal_takeover,
     commit_lease_renewal, commit_root, commit_streamed_inventory_capture, content_digest,
     empty_inventory_digest, empty_journal_page_set_digest, generation_path, load_catalog,
-    operation_type, phase_code, resolve_journal_key, write_key_epoch, AuthorityError,
-    BindingAdvance, CandidateConflict, CaptureStart, CatalogChange, CatalogCommit,
-    InstallationScopeId, InventoryCapture, JournalCheckpoint, JournalDurableContext,
-    JournalDurableError, JournalError, JournalManifest, JournalRoute, JournalRouteError,
-    JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus,
-    KeyProvider, LiveMigration, ManifestRead, MigrationExecutionError, MigrationFence, OpenError,
-    RecordClass, RecordIdentity, RecordMeta, RootBody, RootCommitEvidence, RootCommitGuard,
-    RootCommitRequest, RootCommitState, RootKeyRefV1, RootLayout, SessionBegin, StagedCapture,
-    StdFs, StreamedCapture, StreamedInventoryCapture, WriteOperationId,
-    JOURNAL_MANIFEST_RECORD_SCHEMA,
+    operation_type, phase_code, resolve_journal_key, write_key_epoch, AdmissionScope,
+    AuthorityError, BindingAdvance, CandidateConflict, CaptureStart, CatalogChange, CatalogCommit,
+    ConversionBegin, ConversionError, ExclusiveAdmissionGuard, InstallationScopeId,
+    InventoryCapture, JournalCheckpoint, JournalDurableContext, JournalDurableError, JournalError,
+    JournalManifest, JournalRoute, JournalRouteError, JournalSource, JournalTakeoverCommit, Key,
+    KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, ManifestRead,
+    MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity, RecordMeta,
+    RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState,
+    RootKeyRefV1, RootLayout, SessionBegin, StagedCapture, StdFs, StreamedCapture,
+    StreamedInventoryCapture, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
 };
 
 const OPERATION: &str = "route-op";
@@ -599,6 +599,32 @@ impl Fixture {
         begin_streamed_capture(&mut StdFs, &self.provider, layout, begin).unwrap_err()
     }
 
+    /// The entry gate of the conversion driver over a valid scope and owner, which is expected to be
+    /// refused: the key is routed from the root before the manifest is loaded.
+    fn conversion_is_refused(&self) -> AuthorityError {
+        let (root_dir, journal_dir) = (self.root_dir(), self.journal_dir());
+        let scope = AdmissionScope {
+            installation_dir: &self.base.0,
+            root_dir: &root_dir,
+        };
+        let mut held = ExclusiveAdmissionGuard::try_acquire(scope)
+            .unwrap()
+            .expect("nothing else holds this installation");
+        let operation = WriteOperationId::generate().unwrap();
+        let begin = ConversionBegin {
+            scope,
+            journal: JournalSource {
+                dir: &journal_dir,
+                operation: &operation,
+            },
+            owner_id: "owner-a",
+        };
+        match begin_conversion(&mut held, &mut StdFs, &self.provider, begin).unwrap_err() {
+            ConversionError::Authority(error) => error,
+            other => panic!("the route must refuse first, not {other:?}"),
+        }
+    }
+
     /// The five composed journal operations over valid inputs for each (a checkpoint and a capture of
     /// the next revision, a takeover claim by a new owner at fence plus one, an advance to the stored
     /// successor, a renewal of the owner's lease): each is expected to be refused, and the error of
@@ -693,6 +719,7 @@ fn a_revoked_journal_epoch_refuses_every_journal_operation_before_a_write() {
     let mut errors = fixture.every_operation_is_refused(&stored);
     errors.push(fixture.streamed_capture_is_refused(&staged));
     errors.push(fixture.session_is_refused());
+    errors.push(fixture.conversion_is_refused());
     for error in errors {
         assert_eq!(
             error,
@@ -713,6 +740,7 @@ fn an_unregistered_journal_epoch_refuses_every_journal_operation_before_a_write(
     let mut errors = fixture.every_operation_is_refused(&stored);
     errors.push(fixture.streamed_capture_is_refused(&staged));
     errors.push(fixture.session_is_refused());
+    errors.push(fixture.conversion_is_refused());
     for error in errors {
         assert_eq!(
             error,
@@ -737,6 +765,7 @@ fn a_route_to_another_key_is_refused_by_the_authenticated_load_before_a_write() 
     let mut errors = fixture.every_operation_is_refused(&stored);
     errors.push(fixture.streamed_capture_is_refused(&staged));
     errors.push(fixture.session_is_refused());
+    errors.push(fixture.conversion_is_refused());
     for error in errors {
         assert_eq!(
             error,
