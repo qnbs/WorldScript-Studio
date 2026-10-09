@@ -1145,7 +1145,12 @@ fn a_symlink_at_a_coordination_resource_is_not_data_free() {
     }
 
     let fixture = barrier_bound();
-    let outside = fixture.base.with_extension("coord-outside");
+    // Inside the fixture root: Drop removes only `base`, including when this test fails early.
+    let outside = fixture.base.join("coord-outside");
+    assert!(
+        outside.starts_with(&fixture.base) && outside != fixture.base,
+        "the symlink target directory must stay inside the fixture root"
+    );
     fs::create_dir_all(&outside).unwrap();
     let empty = outside.join("empty");
     fs::write(&empty, b"").unwrap();
@@ -1173,6 +1178,10 @@ fn a_symlink_at_a_coordination_resource_is_not_data_free() {
     let empty_file = barrier_coordination_holds_no_data(&fixture);
     fs::remove_file(&lock).unwrap();
     fs::remove_dir_all(&outside).unwrap();
+    assert!(
+        !outside.exists(),
+        "cleanup must remove only the owned target directory"
+    );
 
     assert_eq!(
         (writer_link, nested_link, lock_link, dangling, empty_file),
