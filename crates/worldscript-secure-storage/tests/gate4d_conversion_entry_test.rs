@@ -21,7 +21,7 @@ use worldscript_secure_storage::{
     KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, MigrationExecutionError,
     MigrationFence, RecordClass, RecordIdentity, RecordMeta, RootBody, RootCommitEvidence,
     RootCommitGuard, RootCommitRequest, RootCommitState, RootKeyRefV1, RootLayout, StdFs,
-    WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA, OPERATION_ADMISSION_LOCK_FILE,
 };
 
 const OPERATION: &str = "conversion-op";
@@ -342,12 +342,17 @@ impl<H: FnMut(&Path)> DurableFs for WatchedFs<H> {
     }
 }
 
+/// Collects every file below `dir` except the admission coordination file, which Windows creates when
+/// an admission is acquired and whose bytes have no authority: the gate must not change anything else.
 fn collect(base: &Path, dir: &Path, files: &mut BTreeMap<PathBuf, [u8; 32]>) {
     for entry in fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
         if path.is_dir() {
             collect(base, &path, files);
-        } else {
+        } else if path
+            .file_name()
+            .is_some_and(|name| name != OPERATION_ADMISSION_LOCK_FILE)
+        {
             let relative = path.strip_prefix(base).unwrap().to_path_buf();
             files.insert(relative, content_digest(&fs::read(&path).unwrap()));
         }
