@@ -817,27 +817,59 @@ fn barrier_bound() -> Fixture {
     Fixture::new_bound(barrier_binding("barrier-operation", 1, 1, 0xAB))
 }
 
-/// Every file under `dir`, with its path relative to `base` and its bytes.
-fn barrier_collect(base: &Path, dir: &Path, out: &mut Vec<(PathBuf, Vec<u8>)>) {
+/// The writer's coordination directory inside the installation (a private constant of the crate): a
+/// refused write creates it before the catalog is read. It is a lock, not state.
+const BARRIER_WRITER_RESOURCE: &str = "ordinary-writers";
+
+fn barrier_is_coordination(name: &std::ffi::OsStr) -> bool {
+    name == OPERATION_ADMISSION_LOCK_FILE || name == BARRIER_WRITER_RESOURCE
+}
+
+/// Every directory and file under `dir` except the two coordination resources, with its path
+/// relative to `base` and, for a file, its bytes.
+fn barrier_collect(base: &Path, dir: &Path, out: &mut Vec<(PathBuf, Option<Vec<u8>>)>) {
     for entry in fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
+        let entry = entry.unwrap();
+        if barrier_is_coordination(&entry.file_name()) {
+            continue;
+        }
+        let path = entry.path();
+        let relative = path.strip_prefix(base).unwrap().to_owned();
         if path.is_dir() {
+            out.push((relative, None));
             barrier_collect(base, &path, out);
         } else {
-            let relative = path.strip_prefix(base).unwrap().to_owned();
-            out.push((relative, fs::read(&path).unwrap()));
+            out.push((relative, Some(fs::read(&path).unwrap())));
         }
     }
 }
 
-/// The authority root, the records and the markers, sorted: what an ordinary write would change.
-fn barrier_tree(fixture: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
+/// The whole installation, sorted: the authority root, the records, the markers and anything else a
+/// write could create, apart from the two coordination resources (see `barrier_coordination_holds_no_data`).
+fn barrier_tree(fixture: &Fixture) -> Vec<(PathBuf, Option<Vec<u8>>)> {
     let mut files = Vec::new();
-    for dir in [&fixture.root, &fixture.records, &fixture.markers] {
-        barrier_collect(&fixture.base, dir, &mut files);
-    }
+    barrier_collect(&fixture.base, &fixture.base, &mut files);
     files.sort();
     files
+}
+
+/// Whether the coordination resources hold no data: the writer directory, when it exists, contains
+/// nothing but empty files (a lock file on Windows).
+fn barrier_coordination_holds_no_data(fixture: &Fixture) -> bool {
+    fn empty(dir: &Path) -> bool {
+        fs::read_dir(dir).unwrap().all(|entry| {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                empty(&path)
+            } else {
+                fs::metadata(&path).unwrap().len() == 0
+            }
+        })
+    }
+    let writer = fixture.base.join(BARRIER_WRITER_RESOURCE);
+    let lock = fixture.base.join(OPERATION_ADMISSION_LOCK_FILE);
+    (!writer.exists() || empty(&writer))
+        && (!lock.exists() || fs::metadata(&lock).unwrap().len() == 0)
 }
 
 #[test]
@@ -847,6 +879,8 @@ fn a_bound_root_refuses_a_write_and_writes_nothing() {
     assert!(!before.is_empty(), "the root itself is part of the tree");
     let first = fixture.write_poll(&mut StdFs, None, b"first");
     let second = fixture.write_poll(&mut StdFs, Some(1), b"second");
+    // The refusal came after the writer's coordination directory was created: a lock, holding no data.
+    assert!(barrier_coordination_holds_no_data(&fixture));
     assert_eq!(
         (first, second, barrier_tree(&fixture) == before),
         (
@@ -872,6 +906,7 @@ fn a_bound_root_refuses_a_read_a_list_and_a_reconcile_and_writes_nothing() {
             .storage()
             .try_reconcile_record(&mut StdFs, &fixture.identity, fixture.location())
     });
+    assert!(barrier_coordination_holds_no_data(&fixture));
     assert_eq!(
         (
             read,
@@ -931,6 +966,62 @@ fn a_bound_root_refuses_to_shut_down() {
     let fixture = barrier_bound();
     let shutdown = poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs));
     assert_eq!(shutdown, Err(OperationError::RecoveryPending));
+}
+
+#[test]
+fn a_provider_that_starts_locked_stays_locked_over_a_bound_root() {
+    let fixture = Fixture::new_bound_locked(barrier_binding("barrier-operation", 1, 1, 0xAB));
+    let before = barrier_tree(&fixture);
+    // Locking a locked provider is idempotent: nothing is unlocked and nothing is admitted, so the
+    // root is not consulted; the barrier shows where a key would be needed.
+    let lock = poll_admitted(|| fixture.storage().try_lock(&mut StdFs));
+    let unlock = poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ());
+    let write = fixture.write_poll(&mut StdFs, None, b"v");
+    assert_eq!(
+        (lock, unlock, write, barrier_tree(&fixture) == before),
+        (
+            Ok(KeyState::Locked),
+            Err(OperationError::RecoveryPending),
+            Err(OperationError::Provider(KeyProviderError::Locked)),
+            true
+        )
+    );
+}
+
+#[test]
+fn a_restart_that_starts_locked_cannot_unlock_over_a_bound_root() {
+    let fixture = Fixture::new_bound_locked(barrier_binding("barrier-operation", 1, 1, 0xAB));
+    let before = barrier_tree(&fixture);
+    let unlock = poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ());
+    // The failed unlock cleared the runtime keys again and kept its exclusive fence.
+    let keys_cleared = fixture.probe.lock_calls.load(Ordering::SeqCst) > 0;
+    let write = fixture.write_poll(&mut StdFs, None, b"v");
+    assert_eq!(
+        (
+            unlock,
+            keys_cleared,
+            write,
+            barrier_tree(&fixture) == before
+        ),
+        (
+            Err(OperationError::RecoveryPending),
+            true,
+            Err(OperationError::Provider(KeyProviderError::Locked)),
+            true
+        )
+    );
+}
+
+#[test]
+fn a_provider_that_starts_locked_unlocks_over_an_unbound_root() {
+    let fixture = Fixture::new_locked();
+    let unlocked = poll_admitted(|| fixture.storage().try_unlock(&mut StdFs))
+        .map(|state| matches!(state, KeyState::Unlocked { .. }));
+    assert_eq!(unlocked, Ok(true));
+    let committed = fixture
+        .write_until_admitted(&mut StdFs, None, b"first")
+        .unwrap();
+    assert_eq!(committed.generation, 1);
 }
 
 #[test]

@@ -3078,8 +3078,12 @@ interprets the absence of a target record as permission to write defaults.
 
 **The ordinary-operation barrier of a bound root (Gate 4E E1).** `ProtectedStorage` decides from the
 authenticated committed root alone: as soon as the root carries a live-migration binding, every
-ordinary operation (write, reconcile, list, read, and the lock, unlock and shutdown transitions) is
-refused, in every phase, with nothing written. The barrier is therefore durable across a crash and
+ordinary operation that needs the catalog (write, reconcile, list, read) is refused with
+`MigrationRequired`, and the transitions that claim something about it (lock from an unlocked key,
+unlock, shutdown) with `RecoveryPending`, in every phase. No authority, record, marker or journal
+state is written; the admission and writer coordination resources, which hold no data, may be
+created. A provider that starts locked stays locked: locking it again is idempotent, and unlocking it
+is refused and leaves its runtime keys cleared. The barrier is therefore durable across a crash and
 needs no journal read. It is intentionally **stricter than the table above**, which admits ordinary
 reads and writes while `PREPARE` lasts and after `DONE`: that window is not implemented, because it needs
 the root-named manifest (`read_committed_journal`), a journal location as writer configuration and a

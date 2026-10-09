@@ -670,15 +670,17 @@ readability proof for a root already at the target epoch (D2b-3a), used by every
 The write barrier of the final capture was recorded as a missing phase-aware refusal in the write path. The audit found
 the barrier already present, and blunter than the contract: every ordinary operation of `ProtectedStorage` loads the
 catalog through `catalog()`, which returns `MigrationRequired` as soon as the committed root carries a live-migration
-binding, and the lock, unlock and shutdown transitions refuse with `RecoveryPending` through `verify_transition` for the
-same reason. The input is the authenticated root alone, so the barrier is durable across a crash and needs no journal
+binding, and the lock (from an unlocked key), unlock and shutdown transitions refuse with `RecoveryPending` through
+`verify_transition` for the same reason; a provider that starts locked cannot be unlocked over a bound root, and locking
+it again is idempotent (nothing is admitted, so the root is not consulted). The input is the authenticated root alone, so the barrier is durable across a crash and needs no journal
 read and no journal location. What was missing was evidence: no test combined `ProtectedStorage` with a bound root.
 
 | Piece | Rule |
 |---|---|
-| barrier | a root with a live-migration binding refuses write, reconcile, list and read (`MigrationRequired`) and lock, unlock and shutdown (`RecoveryPending`), in every phase; the snapshot guard can be obtained but reads nothing |
+| barrier | a root with a live-migration binding refuses write, reconcile, list and read (`MigrationRequired`) and lock (from an unlocked key), unlock and shutdown (`RecoveryPending`), in every phase; the snapshot guard can be obtained but reads nothing |
 | independence | the refusal does not depend on what the binding names: three bindings whose operation, fence, revision and digest name no journal at all are refused identically (the root alone decides) |
-| nothing written | after a refused write, read, list or reconcile the authority root, the record directory and the marker directory are byte-identical |
+| nothing written | after a refused write, read, list or reconcile the whole installation tree (every directory and file, with bytes) is identical; the only thing a refused write or reconcile creates is the writer coordination directory, a lock created before the catalog is read, and the test asserts that it and the admission lock hold no data (no authority, record, marker or journal state is written) |
+| starts locked | over a bound root a provider that starts locked stays locked: `try_lock` is idempotent, `try_unlock` is refused with `RecoveryPending`, the runtime keys are cleared again and the exclusive fence is kept, so a later write fails with the provider's `Locked`; the same locked provider over an unbound root unlocks and writes (control) |
 | cold start | the storage is built after the binding was committed and observes nothing before its first operation, so the refusal is what the first operation reads from the tree |
 | control | the same fixture without a binding admits write, read, list and lock |
 
@@ -688,11 +690,13 @@ as writer configuration (the location is caller-supplied everywhere and is not i
 binding without a location, and a policy for reconciling a pending ordinary write under the barrier. No producer of a
 binding exists yet to need it. `ordinary_mutating_writes_admitted` remains the specification of that relaxation.
 
-Proof (`gate4b_operations_test`, nine new cases): write refused twice with the tree unchanged; read, list and reconcile
-refused with the tree unchanged; the snapshot guard's list and read refused; lock, unlock and shutdown refused; three
-different bindings refused identically; the unbound control admits; a cold storage observes nothing before it refuses.
-Mutation-checked: removing the live-binding refusal in `catalog()` fails the write, read/list/reconcile, snapshot, lock-then-write,
-cold-start and independence cases; removing it in `verify_transition` fails the lock, unlock and shutdown cases.
+Proof (`gate4b_operations_test`, twelve new cases): write refused twice with the installation tree unchanged; read, list and
+reconcile refused with the tree unchanged; the snapshot guard's list and read refused; lock, unlock and shutdown refused;
+three different bindings refused identically; the unbound control admits; a cold storage observes nothing before it
+refuses; a provider that starts locked stays locked, and a restart that starts locked cannot unlock, over a bound root, with
+the unbound locked control unlocking. Mutation-checked: removing the live-binding refusal in `catalog()` fails the write,
+read/list/reconcile, snapshot, lock-then-write, cold-start and independence cases; removing it in `verify_transition` fails
+the lock, unlock, shutdown and both locked-provider cases.
 
 Residual (Gate 4E, unchanged by this slice): the phase-aware relaxation (E2); the `ADMIT` transition and the final capture's
 entry requiring exclusive admission at the type level (E3); one read of a phase is only sufficient if every transition out

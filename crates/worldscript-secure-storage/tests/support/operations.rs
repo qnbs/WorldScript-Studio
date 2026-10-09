@@ -186,16 +186,27 @@ impl Fixture {
     }
 
     pub fn new_in(parent: &Path) -> Self {
-        Self::build(parent, None)
+        Self::build(parent, None, false)
     }
 
     /// A storage over a tree whose committed root already binds `live`, built after the binding
     /// was committed: it is a cold start, and it never observed an unbound tree.
     pub fn new_bound(live: LiveMigration) -> Self {
-        Self::build(&std::env::temp_dir(), Some(live))
+        Self::build(&std::env::temp_dir(), Some(live), false)
     }
 
-    fn build(parent: &Path, bound: Option<LiveMigration>) -> Self {
+    /// Like [`Self::new_bound`], with the key provider locked when the storage is built: what a
+    /// restarted process sees before anything has been unlocked.
+    pub fn new_bound_locked(live: LiveMigration) -> Self {
+        Self::build(&std::env::temp_dir(), Some(live), true)
+    }
+
+    /// Like [`Self::new`], with the key provider locked when the storage is built.
+    pub fn new_locked() -> Self {
+        Self::build(&std::env::temp_dir(), None, true)
+    }
+
+    fn build(parent: &Path, bound: Option<LiveMigration>, locked: bool) -> Self {
         static NEXT: AtomicU32 = AtomicU32::new(0);
         let base = parent.join(format!(
             "wss-gate4b-ops-{}-{}",
@@ -224,7 +235,10 @@ impl Fixture {
             fs::canonicalize(records).unwrap(),
             fs::canonicalize(markers).unwrap(),
         );
-        let provider = configured_provider(&base, &root, bound.as_ref());
+        let mut provider = configured_provider(&base, &root, bound.as_ref());
+        if locked {
+            provider.lock();
+        }
         let probe = Arc::new(Probe::default());
         let storage = Arc::new(ProtectedStorage::new(
             AdmissionScope {
