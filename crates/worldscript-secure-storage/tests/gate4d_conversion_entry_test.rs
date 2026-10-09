@@ -472,6 +472,13 @@ impl<H: FnMut(&Path) -> io::Result<()>> DurableFs for WatchedFs<H> {
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
         StdFs.create_dir_all(dir)
     }
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        worldscript_secure_storage::durable::list_dir_at_most_via_list_dir(self, dir, limit)
+    }
 }
 
 /// Collects every file below `dir` except the admission coordination file, which Windows creates when

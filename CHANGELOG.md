@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** every `DurableFs` adapter must now bound its reads. `read_at_most` and `list_dir_at_most`
+  lose their default bodies (which loaded the whole file or directory before applying the limit) and become
+  required trait methods, so an adapter cannot compile without stating how it bounds the allocation; a doctest
+  triple pins the rule. Test doubles use two `test-support`-only helpers that keep their former behaviour.
+  Behaviour of `StdFs` and of every journal read is unchanged. PR #1018.
 - **R-15 Gate 4D:** the conversion session iterates the inventory and leaves `CONVERT` (part c-2 of the
   conversion driver). `ConversionSession::convert_next` converts up to a batch of entries of the page the
   cursor points into through a caller-supplied, idempotent `EntryStep`, records the page-local cursor and

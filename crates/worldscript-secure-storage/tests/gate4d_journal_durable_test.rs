@@ -143,6 +143,17 @@ impl DurableFs for CountingFs {
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
         self.inner.create_dir_all(dir)
     }
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        worldscript_secure_storage::durable::read_at_most_via_read(self, path, limit)
+    }
+
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        worldscript_secure_storage::durable::list_dir_at_most_via_list_dir(self, dir, limit)
+    }
 }
 
 fn durable_ctx_counting<'a>(
@@ -315,6 +326,17 @@ impl DurableFs for NoListFs {
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
         self.0.create_dir_all(dir)
     }
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        worldscript_secure_storage::durable::read_at_most_via_read(self, path, limit)
+    }
+
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        worldscript_secure_storage::durable::list_dir_at_most_via_list_dir(self, dir, limit)
+    }
 }
 
 struct DenyRead;
@@ -356,6 +378,17 @@ impl DurableFs for DenyRead {
 
     fn create_dir_all(&mut self, _dir: &Path) -> io::Result<()> {
         Err(io::Error::other("unused"))
+    }
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        worldscript_secure_storage::durable::read_at_most_via_read(self, path, limit)
+    }
+
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        worldscript_secure_storage::durable::list_dir_at_most_via_list_dir(self, dir, limit)
     }
 }
 
@@ -915,6 +948,13 @@ impl DurableFs for ReadGuardFs {
 
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
         self.inner.create_dir_all(dir)
+    }
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        worldscript_secure_storage::durable::list_dir_at_most_via_list_dir(self, dir, limit)
     }
 }
 
