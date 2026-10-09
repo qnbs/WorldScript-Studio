@@ -2,7 +2,8 @@
 //! needs the installation's exclusive admission, re-reads the journal the committed root vouches for
 //! and refuses anything but the owner's conversion; it writes nothing. Every scenario therefore
 //! commits a real root that binds a real journal. C2b-1: the session renews its lease through the
-//! fenced journal-owner operation and follows the root.
+//! fenced journal-owner operation and follows the root. C2b-2: it enters `CONVERT` and moves the
+//! checkpoint cursor through the same step.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -20,12 +21,12 @@ use worldscript_secure_storage::{
     operation_type, phase_code, write_key_epoch, AdmissionScope, AuthorityError, CandidateConflict,
     CatalogChange, CatalogCommit, ConversionBegin, ConversionError, ConversionSession,
     DirectoryDurability, DurableFs, ExclusiveAdmissionGuard, InstallationScopeId,
-    JournalCheckpoint, JournalDurableError, JournalManifest, JournalRouteError, JournalSource,
-    JournalTakeoverCommit, Key, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider,
-    LiveMigration, MigrationExecutionError, MigrationFence, RecordClass, RecordIdentity,
-    RecordMeta, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState,
-    RootKeyRefV1, RootLayout, StdFs, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
-    OPERATION_ADMISSION_LOCK_FILE,
+    JournalCheckpoint, JournalCheckpointCursor, JournalDurableError, JournalError, JournalManifest,
+    JournalRouteError, JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit, KeyEpochRecord,
+    KeyEpochStatus, KeyProvider, LiveMigration, MigrationExecutionError, MigrationFence,
+    RecordClass, RecordIdentity, RecordMeta, RootBody, RootCommitEvidence, RootCommitGuard,
+    RootCommitRequest, RootCommitState, RootKeyRefV1, RootLayout, StdFs, WriteOperationId,
+    JOURNAL_MANIFEST_RECORD_SCHEMA, OPERATION_ADMISSION_LOCK_FILE,
 };
 
 const OPERATION: &str = "conversion-op";
@@ -1089,5 +1090,281 @@ fn an_admission_lost_after_a_commit_that_reported_an_error_is_still_reported() {
     assert_eq!(
         (outcome, renewed),
         (Err(ConversionError::NotAdmitted), Ok(Some(RENEWED_EXPIRY)))
+    );
+}
+
+/// A manifest of `phase` over an inventory of two pages and ten entries, so that a cursor can move.
+fn with_extent(phase: u32) -> JournalManifest {
+    let mut manifest = manifest(phase);
+    (manifest.page_count, manifest.entry_count) = (2, 10);
+    manifest
+}
+
+/// The manifest the committed `from` becomes after a step that advances its revision.
+fn next_revision(from: &JournalManifest) -> JournalManifest {
+    let mut next = from.clone();
+    next.journal_revision += 1;
+    next
+}
+
+#[test]
+fn entering_convert_moves_only_the_phase_and_the_revision_and_a_second_call_writes_nothing() {
+    let committed = with_extent(phase_code::ADMIT);
+    let mut expected = next_revision(&committed);
+    expected.phase = phase_code::CONVERT;
+    let mut fixture = Fixture::bound(&committed);
+    let generation = fixture.root_generation();
+    let (entered, again, snapshot) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&fixture, &paths, &mut held);
+        let entered = session
+            .enter_convert(&mut StdFs, &mut fixture.provider)
+            .map(|commit| commit.map(|c| c.root_generation == generation + 1));
+        let before = fixture.snapshot();
+        let again = session.enter_convert(&mut StdFs, &mut fixture.provider);
+        let unchanged = fixture.snapshot() == before;
+        let token = MigrationFence::from_manifest(&expected);
+        (
+            entered,
+            (again, unchanged),
+            (session.manifest() == &expected, session.fence() == token),
+        )
+    };
+    assert_eq!(
+        (entered, again, snapshot),
+        (Ok(Some(true)), (Ok(None), true), (true, true))
+    );
+    // A fresh gate reads what the root now names: a resumed conversion.
+    assert_eq!(fixture.committed(OWNER), Ok(expected));
+}
+
+#[test]
+fn a_resumed_session_in_convert_has_nothing_to_enter() {
+    let mut fixture = Fixture::bound(&with_extent(phase_code::CONVERT));
+    let before = fixture.snapshot();
+    let outcome = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&fixture, &paths, &mut held);
+        session.enter_convert(&mut StdFs, &mut fixture.provider)
+    };
+    assert_eq!((outcome, fixture.snapshot() == before), (Ok(None), true));
+}
+
+#[test]
+fn the_cursor_moves_forward_in_convert_and_never_backwards_or_outside_the_inventory() {
+    let mut fixture = Fixture::bound(&with_extent(phase_code::CONVERT));
+    let cursors = [(0, 3), (1, 2), (1, 2), (0, 5), (2, 0), (1, 10)];
+    let (outcomes, snapshot) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&fixture, &paths, &mut held);
+        let outcomes: Vec<_> = cursors
+            .iter()
+            .map(|&(page, entry)| {
+                let cursor = JournalCheckpointCursor::new(page, entry);
+                let step = session.advance_cursor(&mut StdFs, &mut fixture.provider, cursor);
+                step.map(|_| ())
+            })
+            .collect();
+        let manifest = session.manifest();
+        (
+            outcomes,
+            (
+                manifest.cursor_page_index,
+                manifest.cursor_entry_index,
+                manifest.journal_revision,
+            ),
+        )
+    };
+    let refused = |error| Err(ConversionError::Migration(error));
+    let expected = vec![
+        Ok(()),
+        Ok(()),
+        Ok(()),
+        refused(MigrationExecutionError::RegressiveCheckpoint),
+        refused(MigrationExecutionError::Journal(
+            JournalError::InvalidPageIndex,
+        )),
+        refused(MigrationExecutionError::Journal(
+            JournalError::EntryCountMismatch,
+        )),
+    ];
+    // Three accepted checkpoints, the last at the same cursor as the one before; nothing else moved.
+    assert_eq!((outcomes, snapshot), (expected, (1, 2, REVISION + 3)));
+    let committed = fixture.committed(OWNER).unwrap();
+    assert_eq!(
+        (committed.cursor_page_index, committed.cursor_entry_index),
+        (1, 2)
+    );
+}
+
+#[test]
+fn the_cursor_does_not_move_outside_convert() {
+    let mut fixture = Fixture::bound(&with_extent(phase_code::ADMIT));
+    let before = fixture.snapshot();
+    let outcome = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&fixture, &paths, &mut held);
+        let cursor = JournalCheckpointCursor::new(0, 1);
+        session
+            .advance_cursor(&mut StdFs, &mut fixture.provider, cursor)
+            .map(|_| ())
+    };
+    assert_eq!(
+        (outcome, fixture.snapshot() == before),
+        (Err(ConversionError::WrongPhase), true)
+    );
+}
+
+#[test]
+fn a_session_that_another_owner_took_over_from_cannot_move_the_cursor() {
+    let committed = with_extent(phase_code::CONVERT);
+    let mut fixture = Fixture::bound(&committed);
+    let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+    let mut session = open(&fixture, &paths, &mut held);
+    fixture.take_over(&committed);
+    let before = fixture.snapshot();
+    let cursor = JournalCheckpointCursor::new(0, 1);
+    let outcome = session
+        .advance_cursor(&mut StdFs, &mut fixture.provider, cursor)
+        .map(|_| ());
+    let stale = AuthorityError::Journal(JournalDurableError::Authority(
+        MigrationExecutionError::StaleMigrationOwner,
+    ));
+    assert_eq!(outcome, Err(ConversionError::Authority(stale)));
+    assert_eq!(fixture.snapshot(), before);
+}
+
+#[test]
+fn the_lease_is_renewed_after_entering_convert() {
+    let committed = with_extent(phase_code::ADMIT);
+    let mut expected = next_revision(&next_revision(&committed));
+    expected.phase = phase_code::CONVERT;
+    expected.lease_expires_unix_ms = Some(RENEWED_EXPIRY);
+    let mut fixture = Fixture::bound(&committed);
+    let outcome = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&fixture, &paths, &mut held);
+        session
+            .enter_convert(&mut StdFs, &mut fixture.provider)
+            .unwrap();
+        session
+            .renew_lease(&mut StdFs, &mut fixture.provider, RENEWED_EXPIRY)
+            .map(|_| ())
+    };
+    assert_eq!((outcome, fixture.committed(OWNER)), (Ok(()), Ok(expected)));
+}
+
+/// A hook that fails the `total`-th read and, at the same moment, moves the installation away.
+#[cfg(unix)]
+fn failing_and_moving(
+    total: usize,
+    installation: PathBuf,
+    moved: PathBuf,
+) -> impl FnMut(&Path) -> io::Result<()> {
+    let mut seen = 0;
+    move |_: &Path| {
+        seen += 1;
+        if seen == total {
+            fs::rename(&installation, &moved).unwrap();
+            Err(io::Error::other("injected"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn an_admission_lost_after_an_unreadable_or_unsettled_step_is_reported_first() {
+    // The step committed (or may have) and the read-back fails while the installation is moved away:
+    // the caller is told the admission is gone, not only that the session is spent.
+    let faults = [None, Some(Fault::AfterPersist(AnchorOp::Commit))];
+    let mut outcomes = Vec::new();
+    let mut committed = Vec::new();
+    for fault in faults {
+        let total = renewal_reads(fault);
+        let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
+        if let Some(fault) = fault {
+            fixture.provider.inject(fault);
+        }
+        let installation = fixture.base.0.clone();
+        let moved = installation.with_extension("moved");
+        let hook = failing_and_moving(total, installation.clone(), moved.clone());
+        outcomes.push(renewal_watched(&mut fixture, hook));
+        fs::rename(&moved, &installation).unwrap();
+        committed.push(fixture.committed(OWNER).map(|m| m.lease_expires_unix_ms));
+    }
+    assert_eq!(
+        (outcomes, committed),
+        (
+            vec![Err(ConversionError::NotAdmitted); 2],
+            vec![Ok(Some(RENEWED_EXPIRY)); 2]
+        )
+    );
+}
+
+#[test]
+fn a_spent_session_in_convert_does_not_claim_there_is_nothing_to_enter() {
+    let total = renewal_reads(None);
+    let mut fixture = Fixture::bound(&with_extent(phase_code::CONVERT));
+    let mut watched = WatchedFs {
+        on_read: failing_nth_read(total),
+    };
+    let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+    let mut session = open(&fixture, &paths, &mut held);
+    let spent = session.renew_lease(&mut watched, &mut fixture.provider, RENEWED_EXPIRY);
+    let entered = session.enter_convert(&mut StdFs, &mut fixture.provider);
+    let is_unreadable = matches!(spent, Err(ConversionError::Unreadable(_)));
+    assert_eq!(
+        (is_unreadable, entered),
+        (true, Err(ConversionError::Spent))
+    );
+}
+
+#[test]
+fn a_no_op_enter_convert_is_not_answered_from_a_snapshot_another_owner_overtook() {
+    let committed = with_extent(phase_code::CONVERT);
+    let mut fixture = Fixture::bound(&committed);
+    let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+    let mut session = open(&fixture, &paths, &mut held);
+    fixture.take_over(&committed);
+    let before = fixture.snapshot();
+    let first = session.enter_convert(&mut StdFs, &mut fixture.provider);
+    let later = session.enter_convert(&mut StdFs, &mut fixture.provider);
+    assert_eq!(
+        (first, later, fixture.snapshot() == before),
+        (
+            Err(ConversionError::Superseded),
+            Err(ConversionError::Spent),
+            true
+        )
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_admission_lost_after_a_refusal_that_left_a_candidate_is_reported_first() {
+    // The anchor refuses the root's preparation: the renewal is already in the journal as revision
+    // `r + 1`, the root still names `r`, and the step reports a refusal. The installation is moved away
+    // right after the last read, so the loss is reported instead of the refusal.
+    let refusal = Fault::BeforePersist(AnchorOp::Prepare);
+    let total = renewal_reads(Some(refusal));
+    let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
+    fixture.provider.inject(refusal);
+    let installation = fixture.base.0.clone();
+    let moved = installation.with_extension("moved");
+    let mut seen = 0;
+    let outcome = renewal_watched(&mut fixture, |_| {
+        seen += 1;
+        if seen == total {
+            fs::rename(&installation, &moved).unwrap();
+        }
+        Ok(())
+    });
+    fs::rename(&moved, &installation).unwrap();
+    let candidate = generation_path(&fixture.journal_dir(), REVISION + 1).exists();
+    assert_eq!(
+        (outcome, candidate),
+        (Err(ConversionError::NotAdmitted), true)
     );
 }
