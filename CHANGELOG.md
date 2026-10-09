@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** the entry gate of the exclusive conversion driver (part a). `begin_conversion` takes the
+  installation's exclusive admission by mutable borrow, derives the root layout from the scope that admission
+  was acquired for, re-reads the committed binding, the registry-routed journal key and the root-named
+  manifest, and returns a `ConversionSession` only for the owner of the lease while the operation is in `ADMIT`
+  or `CONVERT` with the final inventory captured. It reads no clock, holds no key and writes nothing; moving
+  the journal under the gate is the next part. PR #1013.
 - **R-15 Gate 4D:** stage a streamed inventory without handling a journal key (stage two, part b, of the
   streaming capture). `begin_streamed_capture` routes the journal key from the authenticated root and
   registry, reads the binding and the committed manifest from the root and returns a `StagingSession` that
