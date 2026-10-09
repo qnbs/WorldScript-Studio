@@ -29,8 +29,11 @@ has advanced, stop the retention wave and establish the new exact-main gate
 before continuing.
 
 This lifecycle is **NORMAL MODE**. Dependent repository mutation waits for the
-full reconciliation above. The only opt-in exception is the bounded
-dependency/toolchain maintenance train in the next section.
+full reconciliation above. Opt-in exceptions are only the bounded
+dependency/toolchain maintenance train in the next section and the
+release-batched Preview retention after it. Silence, a green head, or a READY
+Production deployment is neither exception. Until a named exception is on
+`main`, this normal lifecycle still applies.
 
 ## Bounded dependency/toolchain maintenance train
 
@@ -148,6 +151,76 @@ After the final train merge, prove exact-main CI/CD, CodeQL, Production
 `READY`, and canonical Production HTTP, then run exactly one ordinary full
 reconciliation. Non-train mutation, including later feature work, resumes only
 after `TRAIN_FINAL_RETENTION_COMPLETE = YES`.
+
+## Release-batched Preview retention
+
+A second fail-closed exception may defer destructive Preview housekeeping
+until the next sanctioned `v*` release reconciliation. It does not relax
+per-merge Production correctness, Gate 7, or the production
+storage-authority switch. Silence is not a declaration.
+
+The mode is valid only when every field below is recorded before the
+introducing pull request merges, and no ancestor of its base already contains
+this exception. That pull request may be the first merge under the mode. A
+later pull request cannot reuse this bootstrap. A missing field, or a baseline
+SHA other than the introducing pull request's exact base, leaves that pull
+request in normal mode.
+
+```text
+RETENTION_MODE = release-batched preview retention
+DESTRUCTIVE_WRITER = Codex CLI, local VS Code / Ubuntu
+CURSOR_CLOUD_DESTRUCTIVE_ACCESS = NO
+RETENTION_DEFERRED_UNTIL = the next sanctioned v* release reconciliation
+BASELINE_MAIN = 8424a7c640074dedac8de24a98fd6932c80c8230
+BASELINE_RETENTION = TERMINAL
+FIRST_BATCH_PR = the introducing pull request, written here before merge
+GATE_7 = maintainer only
+PRODUCTION_AUTHORITY_SWITCH = forbidden
+TAG_AND_PUBLISH = Codex CLI local only, after GH #911 and this reconciliation
+```
+
+`BASELINE_MAIN` is that pull request's exact base SHA. `BASELINE_RETENTION`
+is already terminal on that SHA: Production `dpl_BXtcjwQKG8XC8uS8kZziTyNb2SZz`
+is `READY` on that SHA, with the three canonical aliases bound and rollback
+candidate `dpl_9T9o3RvF7LkaFmToPnaUX5VqMMgb` protected. This introducing
+record does not authorize a deletion.
+
+After every merge under the mode, and before the next source mutation, these
+gates stay mandatory:
+
+1. capture the exact resulting `main` SHA;
+2. the push-triggered `CI / CD` run for that SHA succeeds;
+3. CodeQL for that SHA succeeds;
+4. Vercel Production is `READY` on that exact SHA;
+5. canonical Production HTTP succeeds;
+6. Production and `main` aliases show no contradictory drift;
+7. no unexpected promotion or rollback mutation is observed.
+
+If any item fails, stop and complete ordinary reconciliation before further
+repository mutation. Cursor Cloud must not delete a deployment or alias to
+satisfy this mode.
+
+The only deferred work is the same Preview artifact housekeeping listed for a
+train: full authenticated inventory, dry-run `SAFE`/`PROTECTED`/`UNKNOWN`
+classification, stale Preview deletion, retired Preview branch-alias cleanup,
+the newest-three-per-open-PR snapshot, and retention-specific rollback-history
+re-enumeration. Production deployments, Production and `main` aliases,
+rollback-eligible history, active-PR previews, and every `UNKNOWN` stay
+protected. A read-only census may be recorded; it is not the reconciliation.
+
+The destructive pass runs once, immediately before the next sanctioned `v*`
+tag, and only by Codex CLI in the local VS Code/Ubuntu environment. That pass
+uses the ordinary protected-state rules in this document, on the exact release
+SHA, after [GH #911](https://github.com/qnbs/WorldScript-Studio/issues/911)
+is terminal for that SHA. Cursor Cloud does not tag, publish, or receive
+release secrets. The mode does not authorize Gate 7 or the production
+storage-authority switch.
+
+Abort into ordinary reconciliation before further mutation or any tag when
+exact-main CI/CD or CodeQL fails, Production is not `READY` on the exact SHA,
+canonical Production HTTP fails, alias/promotion/rollback state contradicts
+the proof, the destructive writer is not the named local Codex CLI operator,
+or a maintainer revokes the mode.
 
 ## Expected provider scope and identity
 
@@ -346,7 +419,11 @@ Inside a valid bounded dependency/toolchain maintenance train, including the
 one-time introducing transition after its resulting-main gates pass, the
 per-merge Production-correctness gates above replace this full reconciliation
 until the mandatory final pass. A failed introducing-merge gate aborts that
-train into ordinary reconciliation.
+train into ordinary reconciliation. Inside a valid release-batched Preview
+retention mode, including its one-time introducing transition after its
+resulting-main gates pass, those same per-merge Production-correctness gates
+replace destructive Preview reconciliation until the release-time pass. A
+failed introducing-merge gate aborts that mode into ordinary reconciliation.
 
 Any unexpected loss of protected state is an immediate hard stop. Do not
 auto-promote or rollback to compensate.

@@ -82,7 +82,16 @@ before non-train mutation resumes. The introducing transition in that policy
 may make the pull request that first admits the exception the train's first
 merge when its record is complete before merge. A later pull request cannot
 reuse that transition. A failed resulting-main gate aborts the train into
-ordinary reconciliation. This is a Vercel artifact procedure; the
+ordinary reconciliation. A separately declared release-batched Preview
+retention mode in that policy may defer the same Preview housekeeping until
+the next sanctioned `v*` release reconciliation. Its destructive writer is
+Codex CLI in the local VS Code/Ubuntu environment. Cursor Cloud does not
+delete Vercel deployments, publish a release, or receive release secrets.
+Per-merge CI/CD, CodeQL, Production READY, canonical HTTP, and
+alias/promotion/rollback checks stay mandatory. Gate 7 and the production
+storage-authority switch stay maintainer-gated. The introducing transition is
+one-time; a later pull request cannot reuse that transition. Until that mode
+is on `main`, ordinary mode still requires the full reconciliation. This is a Vercel artifact procedure; the
 existing GitHub deployment-record workflow does not satisfy it. Never print
 tokens, environment values, or creator emails.
 

@@ -132,7 +132,17 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   reconciliation is required before non-train mutation resumes. Use a dry-run
   manifest, protect Production/main, rollback history,
   active-PR previews, and uncertain metadata; redact provider secrets and
-  creator emails. Do not use project-wide Vercel removal.
+  creator emails. Do not use project-wide Vercel removal. A separately
+  declared release-batched Preview retention mode in that policy may defer the
+  same Preview housekeeping until the next sanctioned `v*` release
+  reconciliation. Its destructive writer is Codex CLI in the local VS Code/Ubuntu
+  environment. Cursor Cloud does not delete Vercel deployments, publish a
+  release, or receive release secrets. Per-merge CI/CD, CodeQL, Production
+  READY, canonical HTTP, and alias/promotion/rollback checks stay mandatory.
+  Gate 7 and the production storage-authority switch stay maintainer-gated.
+  The introducing transition is one-time; a later pull request cannot reuse
+  that transition. Until that mode is on `main`, ordinary mode still requires
+  the full reconciliation.
 
 ## Cursor Cloud Agent
 

@@ -97,6 +97,32 @@ describe('Vercel retention train deferral', () => {
       expect(source, relativePath).toContain('introducing transition');
       expect(source, relativePath).toContain('cannot reuse that transition');
       expect(source, relativePath).toContain('VERCEL-PREVIEW-RETENTION-POLICY.md');
+      expect(source, relativePath).toContain('release-batched Preview retention');
+      expect(source, relativePath).toContain('Codex CLI');
+      expect(source, relativePath).toContain('Cursor Cloud does not delete Vercel deployments');
+      expect(source, relativePath).toContain('cannot reuse that transition');
     }
+  });
+});
+
+describe('release-batched Preview retention', () => {
+  it('defers only destructive preview housekeeping until the release pass', () => {
+    expect(policy).toContain('RETENTION_MODE = release-batched preview retention');
+    expect(policy).toContain('DESTRUCTIVE_WRITER = Codex CLI, local VS Code / Ubuntu');
+    expect(policy).toContain('CURSOR_CLOUD_DESTRUCTIVE_ACCESS = NO');
+    expect(policy).toContain(
+      'RETENTION_DEFERRED_UNTIL = the next sanctioned v* release reconciliation',
+    );
+    expect(policy).toContain('BASELINE_MAIN = 8424a7c640074dedac8de24a98fd6932c80c8230');
+    expect(policy).toContain('BASELINE_RETENTION = TERMINAL');
+    expect(policy).toContain('GATE_7 = maintainer only');
+    expect(policy).toContain('PRODUCTION_AUTHORITY_SWITCH = forbidden');
+    expect(policy).toContain(
+      'TAG_AND_PUBLISH = Codex CLI local only, after GH #911 and this reconciliation',
+    );
+    expect(policy).toContain('does not authorize a deletion');
+    expect(policy).toContain('does not authorize Gate 7 or the production');
+    expect(policy).toContain('A later pull request cannot reuse this bootstrap');
+    expect(policy).toContain('Cursor Cloud must not delete a deployment or alias');
   });
 });

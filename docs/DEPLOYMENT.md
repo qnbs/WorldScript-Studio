@@ -60,6 +60,16 @@ mutation resumes. The introducing transition may make the pull request that
 first admits the exception the train's first merge when its record is complete
 before merge. A later pull request cannot reuse that transition. A failed
 resulting-main gate aborts the train into ordinary reconciliation.
+A separately declared release-batched Preview retention mode in that policy
+may defer the same Preview housekeeping until the next sanctioned `v*` release
+reconciliation. Its destructive writer is Codex CLI in the local VS Code/Ubuntu
+environment. Cursor Cloud does not delete Vercel deployments, publish a
+release, or receive release secrets. Per-merge CI/CD, CodeQL, Production
+READY, canonical HTTP, and alias/promotion/rollback checks stay mandatory.
+Gate 7 and the production storage-authority switch stay maintainer-gated.
+The introducing transition is one-time; a later pull request cannot reuse
+that transition. Until that mode is on `main`, ordinary mode still requires
+the full reconciliation.
 The GitHub workflow [`prune-deployments.yml`](../.github/workflows/prune-deployments.yml)
 prunes GitHub Deployment records only; it does not delete Vercel deployment
 artifacts.
