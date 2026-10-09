@@ -665,6 +665,35 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Slice C2b-1 — the session renews its lease
+
+The conversion session of C2a could only be read, and the D3b renewal had no caller. `ConversionSession::renew_lease`
+is the first step that moves the journal through the gate, and the first real caller of `commit_lease_renewal`.
+
+| Step | Rule |
+|---|---|
+| builder | `renewed_lease(manifest, fence, expires)`: the fence checked, the next revision, the expiry replaced, the renewal relation proved (`assert_renewal_successor`: a named lease, an expiry strictly after the held one, not terminal) and the manifest encodable; the expiry is the caller's, Core reads no clock |
+| key route | `read_committed_journal` also returns the root key reference and active epoch the committed root names; the step carries those, so no key, route or epoch comes from the caller and the commit cannot meet `KeyRotationNotAdmitted` |
+| step | admission checked; successor built from the session's snapshot; fresh write-operation identifier; `commit_lease_renewal` under the session's journal directory; the session re-reads the committed journal and replaces its snapshot; admission checked again |
+| failure | the snapshot is kept; a retry rebuilds the identical successor and the journal adopts it if the first attempt had written it (a failed root commit that leaves a pending preparation is the root's own recovery, not the session's) |
+
+Decisions, disclosed: (a) renewal alone first, the smallest slice that gives D3b a caller; entering `CONVERT` and
+the cursor follow; (b) a lost admission after a step is reported as `NotAdmitted` even though the step may have
+committed, because a check after the commit can report but not undo it; (c) no internal retry; (d) the key
+reference and epoch come from the committed root; (e) the tests live in the conversion test file, whose
+fixture they share.
+
+Proof (`gate4d_conversion_entry_test`): the owner renews in `ADMIT` and in `CONVERT`, the session equals the
+expected renewal (revision plus one, expiry replaced, nothing else) and a fresh gate reads the same from the
+root, with the original lease long past its expiry; an expiry equal to or before the held one is refused with
+nothing written; a session whose journal another owner took over is refused as a stale owner before any write;
+with the anchor refusing the root's preparation the session keeps its snapshot, the journal holds the renewal
+as an unadopted candidate and the retry adopts it without rewriting the generation; an installation moved away
+before the step is refused before any write and one moved away right after the last read of the step is
+reported while the step stays committed; the builder refuses another token, a missing lease and a terminal
+journal. Mutation-checked: the admission check before and after the step, the refresh of the snapshot, the
+carried epoch and fence, and each of the builder's three checks removed one at a time fail the test that owns them.
+
 ## Slice C2a — the entry gate of the exclusive conversion driver
 
 The journal-owner operations take no admission guard, and nothing read the committed journal state without a
@@ -1020,7 +1049,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
-- A caller of the lease renewal: `commit_lease_renewal` exists (D3b) but no orchestrator renews a lease yet.
+- A caller of the lease renewal: `ConversionSession::renew_lease` (C2b-1) is the first; no orchestrator calls it yet, and entering `CONVERT` and moving the cursor through the session are the next slice (C2b-2).
 - Conversion over the verified page set: the entry gate exists (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D), but nothing yet moves the journal under it: entering `CONVERT`, advancing the cursor and renewing the lease through the gate (C2b), the cursor-driven iteration with a per-entry step and the crash/resume evidence (C2c).
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.

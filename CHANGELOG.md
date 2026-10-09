@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** the conversion session renews its lease (part b-1 of the owner's steps through the
+  gate). `ConversionSession::renew_lease` builds the renewal from the session's own snapshot (`renewed_lease`),
+  commits it through `commit_lease_renewal` with the key route and active epoch the committed root names,
+  re-reads the committed journal and checks the admission again; it is the first caller of the D3b renewal.
+  A failed step keeps the snapshot and a retry adopts what was written. Entering `CONVERT` and moving the
+  cursor are the next part. PR #1014.
 - **R-15 Gate 4D:** the entry gate of the exclusive conversion driver (part a). `begin_conversion` takes the
   installation's exclusive admission by mutable borrow, derives the root layout from the scope that admission
   was acquired for, re-reads the committed binding, the registry-routed journal key and the root-named

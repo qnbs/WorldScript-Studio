@@ -2388,6 +2388,15 @@ can be entered) or `CONVERT` (a resumed conversion), the final inventory was cap
 lease belongs to the caller. A lease owned by another owner, or by none, is refused: the gate takes nothing
 over, and a restart is the takeover followed by a fresh begin. The gate reads no clock, writes nothing and
 holds no key, and the identity of the admitted directories is checked before the reads and again after them.
+The session then moves the journal only through the fenced journal-owner operations, one step at a time,
+each built from the session's own snapshot: the admission is checked, the successor is built and proved
+against the snapshot, it is committed with the key route and active epoch the committed root itself names
+(never a caller's), the session re-reads the committed journal (authenticated against the binding) and
+the admission is checked again. A step that fails leaves the snapshot as it was and a retry rebuilds the
+identical successor, which the journal adopts if the failed attempt had already written it. The first step
+is the owner's lease renewal at an expiry the caller chooses: strictly after the held one, accepted after
+the held one has lapsed while nobody has taken over, and refused as a stale owner once another owner has.
+A lost admission is reported even when it was lost after the commit, and the caller then begins again.
 A token check performed as a separate preflight is insufficient. Every mutation-capable adapter
 operation therefore exposes the semantic equivalent of
 `with_fence(fencing_generation, mutation_and_durability)`: it acquires the cross-process migration
