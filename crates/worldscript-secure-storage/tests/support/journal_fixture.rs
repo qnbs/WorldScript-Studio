@@ -135,6 +135,17 @@ impl DurableFs for ObservedFs {
         self.dirs_created += 1;
         self.inner.create_dir_all(dir)
     }
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        worldscript_secure_storage::durable::read_at_most_via_read(self, path, limit)
+    }
+
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        worldscript_secure_storage::durable::list_dir_at_most_via_list_dir(self, dir, limit)
+    }
 }
 
 pub fn key() -> worldscript_secure_storage::Key {

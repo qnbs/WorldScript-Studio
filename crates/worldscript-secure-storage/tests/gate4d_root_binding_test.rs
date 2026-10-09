@@ -625,6 +625,17 @@ impl DurableFs for RecordingFs {
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
         self.inner.create_dir_all(dir)
     }
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        worldscript_secure_storage::durable::read_at_most_via_read(self, path, limit)
+    }
+
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        worldscript_secure_storage::durable::list_dir_at_most_via_list_dir(self, dir, limit)
+    }
 }
 
 /// A root that binds revision 0 of `OPERATION`, with revision 1 durable as the next candidate.
@@ -1920,6 +1931,17 @@ impl DurableFs for FailManifestFs {
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
         self.inner.create_dir_all(dir)
     }
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        worldscript_secure_storage::durable::read_at_most_via_read(self, path, limit)
+    }
+
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        worldscript_secure_storage::durable::list_dir_at_most_via_list_dir(self, dir, limit)
+    }
 }
 
 #[test]
@@ -2059,6 +2081,17 @@ impl DurableFs for UnconfirmedPagesFs {
 
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
         self.inner.create_dir_all(dir)
+    }
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        worldscript_secure_storage::durable::read_at_most_via_read(self, path, limit)
+    }
+
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        worldscript_secure_storage::durable::list_dir_at_most_via_list_dir(self, dir, limit)
     }
 }
 
