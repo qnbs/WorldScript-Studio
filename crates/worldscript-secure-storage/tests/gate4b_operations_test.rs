@@ -797,11 +797,14 @@ fn operation_child() {
 
 // Gate 4E E1: a committed root that binds a live migration refuses every ordinary operation.
 //
-// The barrier is the authenticated root alone (`catalog()` and `verify_transition`), so it is durable
-// across a crash, needs no journal read and does not depend on the migration phase. It is stricter
-// than contract §10.3, which admits ordinary reads and writes while `PREPARE` lasts (the relaxation
-// is a later slice). Every storage below is built after the binding was committed: a cold start
-// that never observed an unbound tree.
+// The barrier is decided from the committed root (`catalog()` for the data operations, `verify_transition`
+// after loading the catalog for the lifecycle transitions), so it is durable across a crash, needs no
+// journal read and does not depend on the migration phase. The cases below pin the refusals for an
+// unlocked provider, a loadable catalog and no interrupted root commit, plus a provider that starts
+// locked; the codes under an unreadable catalog or an interrupted root commit are not pinned. It is
+// stricter than contract §10.3, which admits ordinary reads and writes while `PREPARE` lasts (the
+// relaxation is a later slice). Every storage below is built after the binding was committed: a cold
+// start that never observed an unbound tree.
 
 fn barrier_binding(operation: &str, fence: u64, revision: u64, digest: u8) -> LiveMigration {
     LiveMigration {

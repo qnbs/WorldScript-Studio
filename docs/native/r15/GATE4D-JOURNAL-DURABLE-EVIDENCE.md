@@ -668,18 +668,22 @@ readability proof for a root already at the target epoch (D2b-3a), used by every
 ## Slice E1 — the ordinary-operation barrier of a bound root, pinned with evidence (Gate 4E)
 
 The write barrier of the final capture was recorded as a missing phase-aware refusal in the write path. The audit found
-the barrier already present, and blunter than the contract: every ordinary operation of `ProtectedStorage` loads the
-catalog through `catalog()`, which returns `MigrationRequired` as soon as the committed root carries a live-migration
-binding, and the lock (from an unlocked key), unlock and shutdown transitions refuse with `RecoveryPending` through
-`verify_transition` for the same reason; a provider that starts locked cannot be unlocked over a bound root, and locking
-it again is idempotent (nothing is admitted, so the root is not consulted). The input is the authenticated root alone, so the barrier is durable across a crash and needs no journal
-read and no journal location. What was missing was evidence: no test combined `ProtectedStorage` with a bound root.
+the barrier already present, and blunter than the contract: the ordinary data operations of `ProtectedStorage` (write,
+reconcile, list, read) decide in `catalog()`, which returns `MigrationRequired` as soon as the committed root carries a
+live-migration binding and does so before any catalog page is read. A write or reconcile first lets the root recover an
+interrupted root commit (`recover_prepared_root_admitted`), which completes or discards a preparation that root commit
+already made durable. The lifecycle transitions (lock from an unlocked key, unlock, shutdown) go through
+`verify_transition`, which loads and verifies the catalog first and then refuses with `RecoveryPending`; a bound root
+whose catalog cannot be loaded fails with the load error (or `MigrationRequired` when there is no catalog). The input is the committed root, so the barrier is durable
+across a crash and needs no journal read and no journal location. What was missing was evidence: no test combined
+`ProtectedStorage` with a bound root.
 
 | Piece | Rule |
 |---|---|
-| barrier | a root with a live-migration binding refuses write, reconcile, list and read (`MigrationRequired`) and lock (from an unlocked key), unlock and shutdown (`RecoveryPending`), in every phase; the snapshot guard can be obtained but reads nothing |
-| independence | the refusal does not depend on what the binding names: three bindings whose operation, fence, revision and digest name no journal at all are refused identically (the root alone decides) |
-| nothing written | after a refused write, read, list or reconcile the whole installation tree (every directory and file, with bytes) is identical; the only thing a refused write or reconcile creates is the writer coordination directory, a lock created before the catalog is read, and the test asserts that it and the admission lock hold no data (no authority, record, marker or journal state is written) |
+| barrier | with an unlocked provider, a loadable catalog and no interrupted root commit, a root with a live-migration binding refuses write, reconcile, list and read (`MigrationRequired`) and lock (from an unlocked key), unlock and shutdown (`RecoveryPending`), in every phase; the snapshot guard can be obtained but reads nothing |
+| not pinned | the refusal codes under a locked provider (other than the cases below), an unreadable catalog and an interrupted root commit: read from the code, not exercised. In each the operation fails, none succeeds over a bound root. The root recovery of an interrupted root commit is covered by the root recovery suites, not by E1 |
+| independence | the refusal does not depend on what the binding names: three bindings whose operation, fence, revision and digest name no journal at all are refused identically (the binding's contents are irrelevant to the refusal) |
+| nothing written | after a refused write, read, list or reconcile the whole installation tree (every directory and file, with bytes) is identical; the only thing a refused write or reconcile creates is the writer coordination directory, a lock created before the catalog is read, and the test asserts that it and the admission lock hold no data (the refusal writes no record, marker, journal, catalog or root content of its own; a write or reconcile over an interrupted root commit would first let the root recover it, which this fixture does not exercise) |
 | starts locked | over a bound root a provider that starts locked stays locked: `try_lock` is idempotent, `try_unlock` is refused with `RecoveryPending`, the runtime keys are cleared again and the exclusive fence is kept, so a later write fails with the provider's `Locked`; the same locked provider over an unbound root unlocks and writes (control) |
 | cold start | the storage is built after the binding was committed and observes nothing before its first operation, so the refusal is what the first operation reads from the tree |
 | control | the same fixture without a binding admits write, read, list and lock |
@@ -698,7 +702,11 @@ the unbound locked control unlocking. Mutation-checked: removing the live-bindin
 read/list/reconcile, snapshot, lock-then-write, cold-start and independence cases; removing it in `verify_transition` fails
 the lock, unlock, shutdown and both locked-provider cases.
 
-Residual (Gate 4E, unchanged by this slice): the phase-aware relaxation (E2); the `ADMIT` transition and the final capture's
+Residual (Gate 4E, unchanged by this slice): the refusal codes under a locked provider (beyond the unlock and write cases above),
+an unreadable catalog (`verify_transition` loads the catalog before it looks at the binding, so a bound root with a missing or
+malformed catalog fails with the load error (a missing one with `MigrationRequired`), not `RecoveryPending`; checking the binding first would be a behaviour change and
+belongs to E2) and an interrupted root commit over a bound root (the root's recovery precedes the refusal for a write or
+reconcile); the phase-aware relaxation (E2); the `ADMIT` transition and the final capture's
 entry requiring exclusive admission at the type level (E3); one read of a phase is only sufficient if every transition out
 of `PREPARE` happens under exclusive admission.
 

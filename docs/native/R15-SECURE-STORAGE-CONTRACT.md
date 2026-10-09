@@ -3076,15 +3076,22 @@ interprets the absence of a target record as permission to write defaults.
 | `DONE` / `RECOVERY_REQUIRED` | `DONE` is durable terminal success. `RECOVERY_REQUIRED` is durable terminal refusal with a reason code. | `DONE` permits normal policy. `RECOVERY_REQUIRED` blocks ordinary writes and destructive cleanup until explicit recovery; never resets to defaults. |
 
 
-**The ordinary-operation barrier of a bound root (Gate 4E E1).** `ProtectedStorage` decides from the
-authenticated committed root alone: as soon as the root carries a live-migration binding, every
-ordinary operation that needs the catalog (write, reconcile, list, read) is refused with
-`MigrationRequired`, and the transitions that claim something about it (lock from an unlocked key,
-unlock, shutdown) with `RecoveryPending`, in every phase. No authority, record, marker or journal
-state is written; the admission and writer coordination resources, which hold no data, may be
-created. A provider that starts locked stays locked: locking it again is idempotent, and unlocking it
-is refused and leaves its runtime keys cleared. The barrier is therefore durable across a crash and
-needs no journal read. It is intentionally **stricter than the table above**, which admits ordinary
+**The ordinary-operation barrier of a bound root (Gate 4E E1).** As soon as the committed root carries a
+live-migration binding, `ProtectedStorage` refuses every ordinary operation, in every phase, and the
+tests pin the refusals for an unlocked provider, a loadable catalog and no interrupted root commit.
+The ordinary data operations (write, reconcile, list, read) decide in `catalog()` from the committed
+root, before any catalog page is read, and refuse with `MigrationRequired`; a write or reconcile first
+lets the root recover an interrupted root commit (`recover_prepared_root_admitted`), which completes or
+discards a preparation that root commit already made durable and is not an ordinary write. The
+transitions that claim something about the catalog (lock from an unlocked key, unlock, shutdown) load
+and verify the catalog first and then refuse with `RecoveryPending`; a bound root whose catalog cannot
+be loaded fails with the load error (or `MigrationRequired` when there is no catalog) instead. A provider that starts locked fails before the root is
+consulted (a write with the provider's `Locked`); locking it again is idempotent and unlocking it is
+refused and leaves its runtime keys cleared. The refusal codes under a locked provider, an unreadable
+catalog and an interrupted root commit are therefore not pinned by E1; in each of them the operation
+fails, and none succeeds over a bound root. A refused operation writes no record, marker, journal,
+catalog or root content of its own; it may create the admission and writer coordination resources,
+which hold no data. The barrier is durable across a crash and needs no journal read. It is intentionally **stricter than the table above**, which admits ordinary
 reads and writes while `PREPARE` lasts and after `DONE`: that window is not implemented, because it needs
 the root-named manifest (`read_committed_journal`), a journal location as writer configuration and a
 policy for reconciliation under the barrier, and no producer of a binding exists yet to need it
