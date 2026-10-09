@@ -2430,9 +2430,13 @@ a step failure writes nothing, a batch of one checkpoints after every entry, and
 renews the lease with its own clock. The cursor after a batch is the next entry to process, and at the end
 of the last page the last entry itself, which a session lost before the exit converts again. The session
 leaves `CONVERT` for `VERIFY` (the cursor back to `(0, 0)`) only after it has itself seen the end of the
-last page, so that no entry can be skipped; moving the cursor by hand takes away the proof that the session
-walked the inventory from its start, so the iteration and the exit are refused until the caller begins
-again. After the
+last page, so that no entry can be skipped. Only the iteration moves the cursor: the session offers
+production code no way to write a cursor it did not itself reach by converting, so that a persisted
+cursor is what every later session takes it for, the record of the entries a session converted (a
+test-only checkpoint exists behind the `test-support` feature; using it ends the proof that the session
+walked the inventory from its start, so the iteration and the exit are refused). The authority's lower
+level checkpoint operation can still write any cursor inside the manifest's extent; it is for the
+orchestrator of Gate 4E and 5 not to use it to claim progress. After the
 commit call every outcome is followed by the admission check, and a lost admission is reported first: the
 step may have committed or left a candidate, and the caller begins again to learn the state.
 A token check performed as a separate preflight is insufficient. Every mutation-capable adapter

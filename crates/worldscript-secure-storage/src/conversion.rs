@@ -32,7 +32,7 @@
 //!
 //! Beginning writes nothing and holds no key. The session then moves the journal only through the
 //! fenced journal-owner operations, one step at a time ([`ConversionSession::renew_lease`],
-//! [`ConversionSession::enter_convert`] and [`ConversionSession::advance_cursor`], which share one
+//! [`ConversionSession::enter_convert`] and the cursor checkpoint of the iteration, which share one
 //! private step). A step checks the admission and the journal directory, builds the successor from the
 //! session's own snapshot, takes the root event through the held admission (so the identity check and
 //! the root lock are coupled), commits with the key route and active epoch the committed root itself
@@ -41,8 +41,10 @@
 //! The pages the conversion walks are read through the session too, keylessly: [`ConversionSession::verify_inventory`]
 //! authenticates the whole page set once against the committed root, and [`ConversionSession::page`] reads
 //! one authenticated page. The checkpoint cursor is page-local: `cursor_entry_index` is the index, from
-//! zero, within page `cursor_page_index` of the next entry to process, so [`ConversionSession::advance_cursor`]
-//! needs the verified set and refuses an index outside the selected page.
+//! zero, within page `cursor_page_index` of the next entry to process, so a checkpoint needs the verified
+//! set and refuses an index outside the selected page. Only the iteration moves the cursor: production
+//! code has no way to write a cursor the session did not itself reach by converting, which keeps a
+//! persisted cursor what the next session takes it for, the record of the entries a session converted.
 //!
 //! The conversion itself is a loop the caller drives, one bounded unit at a time:
 //! [`ConversionSession::convert_next`] converts up to a batch of entries of the page the cursor points
@@ -137,7 +139,7 @@ pub enum ConversionError {
     WrongPhase,
     /// The inventory pages were not authenticated yet: [`ConversionSession::verify_inventory`] first.
     InventoryNotVerified,
-    /// The cursor was moved by hand ([`ConversionSession::advance_cursor`]), so this session no longer
+    /// The cursor was moved by hand (`advance_cursor`, with the test-only feature), so this session no longer
     /// proves that it walked the inventory from its start: begin again.
     CursorMoved,
     /// This session has not seen the end of the last page: [`ConversionSession::convert_next`] has not
@@ -277,7 +279,7 @@ pub struct ConversionSession<'a> {
     inventory: Option<VerifiedInventory>,
     /// Whether [`ConversionSession::convert_next`] returned [`Progress::Done`] in this session.
     converted_all: bool,
-    /// Whether the cursor was moved by [`ConversionSession::advance_cursor`] rather than by the
+    /// Whether the cursor was moved by hand (`advance_cursor`, test-only) rather than by the
     /// iteration: the session then no longer proves that it walked the inventory from its start.
     cursor_moved: bool,
     spent: bool,
@@ -506,17 +508,22 @@ impl<'a> ConversionSession<'a> {
         Ok(read?)
     }
 
-    /// Records durable progress in `CONVERT`: moves the checkpoint cursor to `cursor` and returns the
-    /// root commit. The cursor is page-local: `cursor.entry_index` is the index, from zero, within page
+    /// Test support (the `test-support` feature, which production never enables): records durable
+    /// progress in `CONVERT` by moving the checkpoint cursor to `cursor`, wherever the caller says, and
+    /// returns the root commit. Production code cannot do this, because a cursor written by hand would
+    /// be taken for converted entries by every later session; it moves the cursor only through the
+    /// iteration.
+    ///
+    /// The cursor The cursor is page-local: `cursor.entry_index` is the index, from zero, within page
     /// `cursor.page_index` of the next entry to process. It never moves backwards and stays inside the
     /// manifest's extent and inside the selected page, whose entry count is the authenticated
     /// reference's (`Migration(RegressiveCheckpoint)` and the extent refusals, before any write); an
     /// equal cursor is accepted and records a revision with the same cursor. The end of the last page
     /// has no cursor value: completion is the transition to `VERIFY`. In any other phase the step is
-    /// `WrongPhase`, and without [`ConversionSession::verify_inventory`] it is `InventoryNotVerified`. The
-    /// iteration moves the cursor itself; moving it by hand forfeits the exit, because the session can no longer prove
-    /// that it walked the inventory from its start (`convert_next` is then `CursorMoved` and `finish_convert`
-    /// `NotConverted`): begin again.
+    /// `WrongPhase`, and without [`ConversionSession::verify_inventory`] it is `InventoryNotVerified`.
+    /// Moving the cursor by hand forfeits the exit in this session (`convert_next` is then `CursorMoved`
+    /// and `finish_convert` `NotConverted`).
+    #[cfg(feature = "test-support")]
     pub fn advance_cursor<F: DurableFs, P: KeyProvider>(
         &mut self,
         fs: &mut F,
@@ -542,7 +549,7 @@ impl<'a> ConversionSession<'a> {
         result
     }
 
-    /// The cursor step shared by [`ConversionSession::advance_cursor`] and the iteration.
+    /// The cursor step of the iteration (and of the test-only `advance_cursor`).
     fn checkpoint_cursor<F: DurableFs, P: KeyProvider>(
         &mut self,
         fs: &mut F,
