@@ -137,6 +137,9 @@ pub enum ConversionError {
     WrongPhase,
     /// The inventory pages were not authenticated yet: [`ConversionSession::verify_inventory`] first.
     InventoryNotVerified,
+    /// The cursor was moved by hand ([`ConversionSession::advance_cursor`]), so this session no longer
+    /// proves that it walked the inventory from its start: begin again.
+    CursorMoved,
     /// This session has not seen the end of the last page: [`ConversionSession::convert_next`] has not
     /// returned [`Progress::Done`], so leaving `CONVERT` could skip entries.
     NotConverted,
@@ -202,12 +205,22 @@ impl PinnedDirectory {
 ///
 /// It must be idempotent: after a crash, a failed checkpoint or a step failure the same entry can be
 /// handed to it again, so it may never rely on running exactly once.
+///
+/// `fence` is the owner's token at the revision the session holds. A step that mutates anything must
+/// carry it into the mutation (the adapter's fenced operation compares it under the cross-process lock
+/// and refuses a stale owner, §10.1): the session confirms its snapshot against the committed root just
+/// before it hands out a batch, which narrows the window in which an owner that was taken over could
+/// still be called, but only the fenced mutation closes it.
 pub trait EntryStep {
     /// What a failed conversion reports.
     type Error;
 
     /// Converts `entry`.
-    fn convert(&mut self, entry: &JournalInventoryEntry) -> Result<(), Self::Error>;
+    fn convert(
+        &mut self,
+        entry: &JournalInventoryEntry,
+        fence: &MigrationFence,
+    ) -> Result<(), Self::Error>;
 }
 
 /// What one [`ConversionSession::convert_next`] call converts and with which step.
@@ -264,6 +277,9 @@ pub struct ConversionSession<'a> {
     inventory: Option<VerifiedInventory>,
     /// Whether [`ConversionSession::convert_next`] returned [`Progress::Done`] in this session.
     converted_all: bool,
+    /// Whether the cursor was moved by [`ConversionSession::advance_cursor`] rather than by the
+    /// iteration: the session then no longer proves that it walked the inventory from its start.
+    cursor_moved: bool,
     spent: bool,
 }
 
@@ -298,6 +314,7 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
         journal,
         inventory: None,
         converted_all: false,
+        cursor_moved: false,
         spent: false,
     })
 }
@@ -496,8 +513,37 @@ impl<'a> ConversionSession<'a> {
     /// reference's (`Migration(RegressiveCheckpoint)` and the extent refusals, before any write); an
     /// equal cursor is accepted and records a revision with the same cursor. The end of the last page
     /// has no cursor value: completion is the transition to `VERIFY`. In any other phase the step is
-    /// `WrongPhase`, and without [`ConversionSession::verify_inventory`] it is `InventoryNotVerified`.
+    /// `WrongPhase`, and without [`ConversionSession::verify_inventory`] it is `InventoryNotVerified`. The
+    /// iteration moves the cursor itself; moving it by hand forfeits the exit, because the session can no longer prove
+    /// that it walked the inventory from its start (`convert_next` is then `CursorMoved` and `finish_convert`
+    /// `NotConverted`): begin again.
     pub fn advance_cursor<F: DurableFs, P: KeyProvider>(
+        &mut self,
+        fs: &mut F,
+        provider: &mut P,
+        cursor: JournalCheckpointCursor,
+    ) -> Result<RootCommitted, ConversionError> {
+        let result = self.checkpoint_cursor(fs, provider, cursor);
+        // A cursor moved by hand, whatever came of it unless it was refused before any write, takes
+        // away the proof that this session walked the inventory from its start.
+        let reached_a_write = matches!(
+            result,
+            Ok(_)
+                | Err(ConversionError::Committed(_)
+                    | ConversionError::Unreadable(_)
+                    | ConversionError::Superseded
+                    | ConversionError::Unsettled(_)
+                    | ConversionError::Authority(_))
+        );
+        if reached_a_write {
+            self.cursor_moved = true;
+            self.converted_all = false;
+        }
+        result
+    }
+
+    /// The cursor step shared by [`ConversionSession::advance_cursor`] and the iteration.
+    fn checkpoint_cursor<F: DurableFs, P: KeyProvider>(
         &mut self,
         fs: &mut F,
         provider: &mut P,
@@ -557,6 +603,9 @@ impl<'a> ConversionSession<'a> {
             .ok_or(ConversionError::InventoryNotVerified)?
             .manifest()
             .page_count;
+        if self.cursor_moved {
+            return Err(ConversionError::CursorMoved.into());
+        }
         if self.converted_all || page_count == 0 {
             self.converted_all = true;
             return Ok(Progress::Done);
@@ -568,16 +617,27 @@ impl<'a> ConversionSession<'a> {
         let page = self.page(fs, &*provider, at.0)?;
         let entries = page.entries();
         let start = at.1 as usize;
+        // A persisted cursor that passed the manifest-wide check can still lie outside its page: refuse
+        // the state instead of slicing past the page.
+        if start >= entries.len() {
+            return Err(page_refusal(JournalError::EntryCountMismatch).into());
+        }
         let end = entries
             .len()
             .min(start.saturating_add(batch.entries.get() as usize));
+        // No entry is handed out for a snapshot that another owner has overtaken.
+        self.confirm_snapshot(fs, &*provider)?;
+        let fence = self.fence();
         for entry in &entries[start..end] {
-            batch.step.convert(entry).map_err(ConvertError::Step)?;
+            batch
+                .step
+                .convert(entry, &fence)
+                .map_err(ConvertError::Step)?;
         }
         let (next, done) = cursor_after(at.0, end, entries.len(), page_count);
         if next != at {
             let cursor = JournalCheckpointCursor::new(next.0, next.1);
-            self.advance_cursor(fs, provider, cursor)?;
+            self.checkpoint_cursor(fs, provider, cursor)?;
         }
         self.converted_all = done;
         Ok(if done { Progress::Done } else { Progress::More })

@@ -175,6 +175,16 @@ impl Fixture {
     /// The journal of an `ADMIT` manifest that captured `count` entries in pages of `per_page`, the
     /// pages stored where the page-set digest names them, and a root that binds it.
     fn bound_with_inventory(count: u32, per_page: usize) -> Self {
+        Self::bound_with_inventory_and(count, per_page, |_| {})
+    }
+
+    /// As [`Fixture::bound_with_inventory`], with `adjust` applied to the stored manifest (its inventory
+    /// fields and the stored pages stay those of the capture).
+    fn bound_with_inventory_and(
+        count: u32,
+        per_page: usize,
+        adjust: impl FnOnce(&mut JournalManifest),
+    ) -> Self {
         let mut open = manifest(phase_code::ADMIT);
         (open.journal_revision, open.final_inventory_captured) = (REVISION - 1, false);
         let pages = pages_of(count, per_page, REVISION);
@@ -186,7 +196,9 @@ impl Fixture {
             .collect();
         let fence = MigrationFence::from_manifest(&open);
         let captured = capture_inventory(&open, &fence, &sealed).unwrap();
-        let (mut fixture, live) = Fixture::unbound(&captured);
+        let mut stored = captured.clone();
+        adjust(&mut stored);
+        let (mut fixture, live) = Fixture::unbound(&stored);
         for (page, envelope) in pages.iter().zip(&envelopes) {
             let digest = &captured.journal_page_set_digest;
             let dir = inventory_page_dir(&fixture.journal_dir(), digest, page.page_index());
@@ -1689,6 +1701,7 @@ fn a_failed_inventory_read_under_a_lost_admission_reports_the_loss() {
 /// A conversion step that records the entries it is handed, and fails once on demand.
 struct Recorder {
     seen: Vec<JournalInventoryEntry>,
+    fences: Vec<MigrationFence>,
     calls: usize,
     fail_on_call: Option<usize>,
 }
@@ -1697,6 +1710,7 @@ impl Recorder {
     fn new() -> Self {
         Recorder {
             seen: Vec::new(),
+            fences: Vec::new(),
             calls: 0,
             fail_on_call: None,
         }
@@ -1713,13 +1727,18 @@ impl Recorder {
 impl EntryStep for Recorder {
     type Error = &'static str;
 
-    fn convert(&mut self, entry: &JournalInventoryEntry) -> Result<(), &'static str> {
+    fn convert(
+        &mut self,
+        entry: &JournalInventoryEntry,
+        fence: &MigrationFence,
+    ) -> Result<(), &'static str> {
         let call = self.calls;
         self.calls += 1;
         if self.fail_on_call == Some(call) {
             return Err("injected");
         }
         self.seen.push(entry.clone());
+        self.fences.push(*fence);
         Ok(())
     }
 }
@@ -1996,4 +2015,138 @@ fn the_last_entry_is_converted_again_after_a_crash_that_followed_it() {
     // The cursor rests on the last entry, which is all the new session converts.
     assert!(recorder.seen == all_entries(10, 6)[9..]);
     assert_eq!((progress, phase), (Ok(Progress::Done), phase_code::VERIFY));
+}
+
+#[test]
+fn moving_the_cursor_by_hand_forfeits_the_exit() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let mut recorder = Recorder::new();
+    let (converted, finished_early, after_done) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        // Jumping to the last entry would make one `convert_next` look like the end of a whole walk.
+        let last = JournalCheckpointCursor::new(1, 3);
+        session
+            .advance_cursor(&mut StdFs, &mut fixture.provider, last)
+            .unwrap();
+        let converted = convert_once(&mut session, &mut fixture, &mut recorder, 4);
+        let finished_early = session.finish_convert(&mut StdFs, &mut fixture.provider);
+        (converted, finished_early.map(|_| ()), recorder.calls)
+    };
+    assert_eq!(
+        (converted, finished_early, after_done),
+        (
+            Err(ConvertError::Session(ConversionError::CursorMoved)),
+            Err(ConversionError::NotConverted),
+            0
+        )
+    );
+}
+
+#[test]
+fn moving_the_cursor_by_hand_after_the_end_takes_the_exit_away_again() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let mut recorder = Recorder::new();
+    let finished = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        run_to_done(&mut session, &mut fixture, &mut recorder, 4);
+        // Even a checkpoint at the cursor it already has counts as moving it by hand.
+        let same = JournalCheckpointCursor::new(1, 3);
+        session
+            .advance_cursor(&mut StdFs, &mut fixture.provider, same)
+            .unwrap();
+        session
+            .finish_convert(&mut StdFs, &mut fixture.provider)
+            .map(|_| ())
+    };
+    assert_eq!(finished, Err(ConversionError::NotConverted));
+}
+
+#[test]
+fn a_persisted_cursor_outside_its_page_is_refused_instead_of_slicing_past_it() {
+    // `(0, 9)` is inside the manifest's ten entries but outside page 0, which holds six.
+    let mut fixture = Fixture::bound_with_inventory_and(10, 6, |manifest| {
+        manifest.phase = phase_code::CONVERT;
+        (manifest.cursor_page_index, manifest.cursor_entry_index) = (0, 9);
+    });
+    let mut recorder = Recorder::new();
+    let (outcome, before, after) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        let before = fixture.snapshot();
+        let outcome = convert_once(&mut session, &mut fixture, &mut recorder, 4);
+        (outcome, before, fixture.snapshot())
+    };
+    let refusal = ConversionError::Migration(MigrationExecutionError::Journal(
+        JournalError::EntryCountMismatch,
+    ));
+    assert_eq!(
+        (outcome, recorder.calls, before == after),
+        (Err(ConvertError::Session(refusal)), 0, true)
+    );
+}
+
+#[test]
+fn no_entry_is_handed_out_for_a_snapshot_another_owner_overtook() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let mut recorder = Recorder::new();
+    let (first, later) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        let converting = session.manifest().clone();
+        fixture.take_over(&converting);
+        let first = convert_once(&mut session, &mut fixture, &mut recorder, 4);
+        let later = convert_once(&mut session, &mut fixture, &mut recorder, 4);
+        (first, later)
+    };
+    // The step never ran, and the session is spent.
+    assert_eq!(
+        (first, later, recorder.calls),
+        (
+            Err(ConvertError::Session(ConversionError::Superseded)),
+            Err(ConvertError::Session(ConversionError::Spent)),
+            0
+        )
+    );
+}
+
+#[test]
+fn the_step_is_handed_the_fence_the_session_holds() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let mut recorder = Recorder::new();
+    {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        run_to_done(&mut session, &mut fixture, &mut recorder, 4);
+    }
+    // One token per entry: the batches of 0..4, 4..6 and 6..10 ran at the revisions after entering
+    // `CONVERT` and after each checkpoint, all under the owner's fencing generation.
+    let revisions: Vec<u64> = recorder
+        .fences
+        .iter()
+        .map(|fence| fence.journal_revision)
+        .collect();
+    let generations: Vec<u64> = recorder
+        .fences
+        .iter()
+        .map(|fence| fence.fencing_generation)
+        .collect();
+    let base = REVISION + 1;
+    let expected_revisions = vec![
+        base,
+        base,
+        base,
+        base,
+        base + 1,
+        base + 1,
+        base + 2,
+        base + 2,
+        base + 2,
+        base + 2,
+    ];
+    assert_eq!(
+        (revisions, generations),
+        (expected_revisions, vec![FENCE; 10])
+    );
 }
