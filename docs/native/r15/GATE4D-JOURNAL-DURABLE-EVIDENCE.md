@@ -674,7 +674,7 @@ is the first step that moves the journal through the gate, and the first real ca
 |---|---|
 | builder | `renewed_lease(manifest, fence, expires)`: the fence checked, the next revision, the expiry replaced, the renewal relation proved (`assert_renewal_successor`: a named lease, an expiry strictly after the held one, not terminal) and the manifest encodable; the expiry is the caller's, Core reads no clock |
 | key route | `read_committed_journal` also returns the root key reference and active epoch the committed root names; the step carries those, so no key, route or epoch comes from the caller and the commit cannot meet `KeyRotationNotAdmitted` |
-| journal directory | pinned at begin (opened before it is canonicalised, as the admission does) and required to lie strictly below the admitted installation directory (`JournalOutsideInstallation` otherwise, before any read); every step and `is_admitted` look at the pin again, so a directory replaced after begin is `NotAdmitted` before any write |
+| journal directory | pinned at begin (opened before it is canonicalised, as the admission does) and required to lie strictly below the admitted installation directory and outside the authority root (`JournalMisplaced` otherwise, before any read; inside the root a journal generation could collide with a root slot); every step and `is_admitted` look at the pin again, so a directory replaced after begin is `NotAdmitted` before any write |
 | canonical paths | the session canonicalises the installation, the root and the journal directory once at begin, checks the admission against the canonical scope and does every read and write through those paths, so a symlink retargeted after begin cannot redirect a step to a directory that was never pinned |
 | root event | `try_root_commit` on the held admission (`RootBusy` when another root commit holds the lock, nothing written), `root_guard` while the lock is held, and `commit_lease_renewal_held`, the commit of `commit_lease_renewal` under a root event the caller holds, so the identity check and the root lock are coupled |
 | settle | whatever the commit reported, the committed journal is read back under that same root event, where no other root commit can come between, and the root settles the outcome: success and the renewal named (installed); success and another journal (`Superseded`, spent) or an unreadable root (`Unreadable`, spent); an error and the renewal named (`Committed`: the step landed although the commit reported an error, such as `AfterPersist(Commit)` at the anchor, and the session follows the root); an error and another journal (`Authority`: not committed, snapshot kept, a stale session is refused as before); an error and an unreadable root (`Unsettled`, spent). A spent session answers every later step with `Spent` |
@@ -686,7 +686,7 @@ the cursor follow; (b) a lost admission after a step is reported as `NotAdmitted
 committed, because a check after the commit can report but not undo it, and the snapshot then is the committed
 journal; (c) no internal retry, and a session spent by a failed read-back is replaced by a new begin rather than
 resynchronised, while a commit error that the root shows to have landed is reported as `Committed` and followed; (d) the key reference and epoch come from the committed root; (e) the journal directory must lie
-below the admitted installation directory: the contract does not place the journal, but an exclusive admission
+below the admitted installation directory and outside the authority root: the contract does not place the journal, but an exclusive admission
 guards nothing outside the installation, so a journal outside it would be written without the admission's
 protection; (f) the path-based file operations cannot be made atomic with an identity check, so the checks bracket
 every step (before it, under the root lock at the root event, and after it) and fail closed.
@@ -703,7 +703,7 @@ any write and one moved away right after the last read of the step is reported w
 failed read-back is `Unreadable`, the renewal is committed and the next step is `Spent`; with the anchor reporting
 an error after it committed the root the step is `Committed` and the session follows it, and when the read-back also
 fails it is `Unsettled` and the next step is `Spent`; a symlink to the journal directory retargeted after begin does
-not redirect the step; a journal directory outside the installation, or the installation itself, is refused before any read, and one replaced after begin is refused
+not redirect the step; a journal directory outside the installation, the installation itself, the root or a slot inside it is refused before any read, and one replaced after begin is refused
 before any write; the builder refuses another token, a missing lease and a terminal journal. Mutation-checked: the
 admission check before and after the step, the snapshot refresh, the carried epoch and fence, the conflict policy, the
 spent states, the settle arms for a commit error, the root-busy mapping, the journal pin, the canonical journal path,
@@ -712,7 +712,11 @@ owns them. Two checks have no failing test: the comparison of the read-back with
 commit reported success (`Superseded`, and installing the read-back unchecked) is defence in depth, because the read
 happens under the root event and is authenticated against the digest the commit just bound, so it can only differ
 through a defect. Residual: the root directory is canonicalised once at begin like the journal directory, but only
-the journal directory's retargeting is tested; the file operations remain path-based, so no check is atomic with them.
+the journal directory's retargeting is tested; the file operations remain path-based, so no check is atomic with them: a local
+attacker who can rename directories inside the installation can still race a step, at worst misplacing a generation that the
+root then does not find (`RECOVERY_REQUIRED`, never a forged one: the bytes are sealed and bound by the root's digest).
+Handle-relative (openat-style) journal and root I/O is an adapter capability and an acceptance criterion on #359 for the
+platform adapter work, shared by every journal-owner operation.
 
 ## Slice C2a — the entry gate of the exclusive conversion driver
 

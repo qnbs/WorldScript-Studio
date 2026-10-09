@@ -967,11 +967,19 @@ fn a_commit_error_whose_outcome_cannot_be_read_back_spends_the_session() {
 }
 
 #[test]
-fn a_journal_directory_that_is_not_below_the_installation_is_refused_before_anything_is_read() {
+fn a_journal_directory_outside_the_installation_or_inside_the_root_is_refused_before_anything_is_read(
+) {
     let fixture = Fixture::bound(&manifest(phase_code::ADMIT));
     let outside = Dir::new();
     let mut outcomes = Vec::new();
-    for journal in [outside.0.clone(), fixture.base.0.clone()] {
+    let root = fixture.root_dir();
+    let slot = root.join("slot-a");
+    for journal in [
+        outside.0.clone(),
+        fixture.base.0.clone(),
+        root.clone(),
+        slot,
+    ] {
         let mut paths = fixture.paths();
         paths.journal = journal;
         let mut held = paths.admission();
@@ -990,8 +998,8 @@ fn a_journal_directory_that_is_not_below_the_installation_is_refused_before_anyt
         );
         outcomes.push((outcome.map(|_| ()), reads));
     }
-    let refused = (Err(ConversionError::JournalOutsideInstallation), 0);
-    assert_eq!(outcomes, vec![refused; 2]);
+    let refused = (Err(ConversionError::JournalMisplaced), 0);
+    assert_eq!(outcomes, vec![refused; 4]);
 }
 
 #[cfg(unix)]

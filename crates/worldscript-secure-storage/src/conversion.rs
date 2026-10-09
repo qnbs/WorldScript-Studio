@@ -90,8 +90,9 @@ pub enum ConversionError {
     Admission(AdmissionError),
     /// Another root commit holds the root lock; nothing was written, try again.
     RootBusy,
-    /// The journal directory is not below the admitted installation directory.
-    JournalOutsideInstallation,
+    /// The journal directory is not below the admitted installation directory, or lies within the
+    /// authority root (a journal generation could then collide with a root slot).
+    JournalMisplaced,
     /// Reading the committed journal, or committing a step, failed (no bound migration, key route,
     /// authentication, I/O, a stale token).
     Authority(AuthorityError),
@@ -145,12 +146,13 @@ struct PinnedDirectory {
 
 impl PinnedDirectory {
     /// Pins `dir` (before canonicalising it, as the admission does) and requires it to lie strictly
-    /// below the canonical installation directory.
-    fn below(installation: &Path, dir: &Path) -> Result<Self, ConversionError> {
+    /// below the canonical installation directory and outside the canonical authority root.
+    fn placed(installation: &Path, root: &Path, dir: &Path) -> Result<Self, ConversionError> {
         let pin = sys::open_directory(dir).map_err(io_error)?;
         let canonical = std::fs::canonicalize(dir).map_err(io_error)?;
-        if canonical == installation || !canonical.starts_with(installation) {
-            return Err(ConversionError::JournalOutsideInstallation);
+        let below = canonical != installation && canonical.starts_with(installation);
+        if !below || canonical.starts_with(root) {
+            return Err(ConversionError::JournalMisplaced);
         }
         let pinned = Self { pin, canonical };
         if pinned.is_current() {
@@ -189,7 +191,7 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
     let installation = std::fs::canonicalize(begin.scope.installation_dir).map_err(io_error)?;
     let root = std::fs::canonicalize(begin.scope.root_dir).map_err(io_error)?;
     ensure_admitted(held, canonical(&installation, &root))?;
-    let journal_pin = PinnedDirectory::below(&installation, begin.journal.dir)?;
+    let journal_pin = PinnedDirectory::placed(&installation, &root, begin.journal.dir)?;
     let layout = RootLayout { root_dir: &root };
     let source = JournalSource {
         dir: &journal_pin.canonical,

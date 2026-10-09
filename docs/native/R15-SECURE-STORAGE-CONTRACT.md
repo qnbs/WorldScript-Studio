@@ -2390,7 +2390,7 @@ over, and a restart is the takeover followed by a fresh begin. The gate reads no
 holds no key, and the identity of the admitted directories is checked before the reads and again after them.
 The session then moves the journal only through the fenced journal-owner operations, one step at a time,
 each built from the session's own snapshot. The journal directory must lie strictly below the admitted
-installation directory and is pinned for the session, and every file operation goes through the canonical
+installation directory, outside the authority root, and is pinned for the session, and every file operation goes through the canonical
 paths of the root, the installation and the journal directory validated at begin, never through the
 caller's spelling, so a symlink retargeted later cannot redirect a step. A step checks the admission and
 that pin, builds the successor and proves it against the snapshot, takes the root event through the held
