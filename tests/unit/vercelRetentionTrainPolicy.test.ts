@@ -115,6 +115,7 @@ describe('release-batched Preview retention', () => {
     );
     expect(policy).toContain('BASELINE_MAIN = 8424a7c640074dedac8de24a98fd6932c80c8230');
     expect(policy).toContain('BASELINE_RETENTION = TERMINAL');
+    expect(policy).toContain('FIRST_BATCH_PR = #1020');
     expect(policy).toContain('GATE_7 = maintainer only');
     expect(policy).toContain('PRODUCTION_AUTHORITY_SWITCH = forbidden');
     expect(policy).toContain(
