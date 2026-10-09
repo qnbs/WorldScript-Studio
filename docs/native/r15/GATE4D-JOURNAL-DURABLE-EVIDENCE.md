@@ -665,6 +665,47 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Slice C2c-2 — the cursor-driven iteration and the exit to `VERIFY`
+
+The session had every part of the loop but not the loop: no per-entry step, no notion of "done" (the end of the last
+page has no cursor value) and nothing that leaves `CONVERT`. Core reads no clock, so the lease policy stays with the
+caller; the iteration is therefore one bounded, testable unit per call.
+
+| Step | Rule |
+|---|---|
+| `EntryStep` | the caller's conversion of one entry (real record conversion is Gate 5); **idempotent by contract**: it may run again for an entry after a crash, a failed checkpoint or a step failure; its error type is the caller's; it receives the owner's fence (`MigrationFence`) so that a Gate 5 mutation can be fenced under the cross-process lock |
+| `convert_next` | needs `CONVERT` (`WrongPhase`) and the verified inventory (`InventoryNotVerified`); converts up to `entries` entries of the page the cursor points into, never across a page boundary (one page in memory, one checkpoint per call); then `advance_cursor` with the next entry to process: `(page, next)`, `(page + 1, 0)` at a page end, or the last entry itself at the end of the last page; no checkpoint when the cursor would not move; `Progress::More` or `Done` |
+| before the step | a persisted cursor outside its page (it passed the manifest-wide check, e.g. `(0, 9)` over pages of six and four) is refused as `EntryCountMismatch` instead of slicing past the page; the session reads the committed journal and requires it to equal its snapshot (otherwise `Superseded`, spent), so no entry is handed out for a snapshot another owner overtook; this narrows the window, and only the fenced mutation of the step closes it |
+| continuity | only the iteration moves the cursor: `advance_cursor` exists only with the test-only `test-support` feature (production never enables it), so production code cannot write a cursor the session did not reach by converting, and a persisted cursor is what the next session takes it for. With the feature, moving the cursor by hand ends the proof that this session walked the inventory from its start: `convert_next` is then `CursorMoved`, and `finish_convert` is `NotConverted` (the exit flag is cleared). Residual: the authority's lower level `commit_journal_checkpoint` can still write any cursor inside the manifest's extent; it is for the Gate 4E/5 orchestrator not to use it to claim progress |
+| failures | a step error is `Step(error)` and the session records no checkpoint: nothing rolls back what the step had already converted in the batch, and the whole batch is handed to the step again from the same cursor, which is why the step must be idempotent; a failed checkpoint after the steps is the session error and the batch is converted again on retry or resume; the session is not spent by either |
+| done | a session that returned `Done` converts nothing more; an empty inventory is `Done` at once; `Done` is a property of this session, not of the journal |
+| `finish_convert` | `CONVERT` only (`WrongPhase`), and only after this session saw the end (`NotConverted`): `transition_phase` to `VERIFY` through the shared step, the cursor back to `(0, 0)`, the commit returned |
+| lease | between calls the caller renews with its own clock (`renew_lease`); the loop is shown in the module documentation |
+
+Decisions, disclosed: (a) a stepper rather than a monolithic loop, so each call is a bounded unit and the clock policy is
+not Core's; (b) a batch never crosses a page boundary; (c) the last entry of the last page is converted again after a crash
+that followed it, because the cursor cannot point past the end, harmless under the idempotent contract; (d) no checkpoint
+after a step failure: the prefix is converted again; the contract's per-record checkpoint is a batch of one, and a larger
+batch is a caller's performance choice that relies on the same idempotence; (e) `VERIFY` only after the session saw the end,
+so a premature exit cannot skip entries.
+
+Proof (`gate4d_conversion_entry_test`, over the stored inventory of pages of six and four): a whole run in batches of four
+converts every entry once, in order, with the cursor `(0, 4)`, `(1, 0)`, `(1, 3)` and `Done`, converts nothing more when
+called again and leaves `CONVERT` (the root names `VERIFY`, which the gate does not admit); a batch of one checkpoints after
+every entry and writes nothing for the last one, whose cursor stays; a step failing on its eighth call records no checkpoint, and a
+restart (session and guard dropped, a new begin, the inventory verified again) resumes at the persisted cursor and converts
+only entries 6 to 9; the anchor refusing a checkpoint leaves the cursor, and the retry converts the first batch a second
+time; the iteration in `ADMIT` or without the verified inventory, and the exit before the end or in `ADMIT`, are refused;
+an empty inventory is `Done` without a step and leaves `CONVERT`; after a crash that followed the last entry the new
+session converts that last entry only; a cursor jumped by hand to the last entry cannot be completed with one call (the
+iteration is `CursorMoved`, the exit `NotConverted`, and a checkpoint at the cursor it already has after the end takes
+the exit away again); a persisted cursor `(0, 9)` over pages of six and four is refused and no step runs; after a takeover
+no entry is handed out (`Superseded`, then `Spent`); every entry of a whole run is handed the session's fence, at the
+revisions after entering `CONVERT` and after each checkpoint. Mutation-checked: the end requirement of the exit, a swallowed step error, the
+unchanged-cursor rule, the done flag in both directions, the empty inventory, the page-end cursor, the last-page cursor and
+the phase check, the continuity flags, the validation of a persisted cursor, the snapshot confirmation and the fence handed
+to the step, removed or altered one at a time, fail the test that owns them.
+
 ## Slice C2c-1 — authenticated page access and the page-local cursor
 
 The session could not read the inventory it is to convert (the readers need a key-carrying context, the key route is
@@ -1140,7 +1181,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
-- Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) and the authenticated page access with the page-local cursor (C2c-1: `verify_inventory`, `page`) exist, but nothing yet iterates the verified page set: the cursor-driven iteration with a per-entry step and the crash/resume evidence (C2c-2), then `CONVERT` -> `VERIFY`.
+- Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) and the authenticated page access with the page-local cursor (C2c-1: `verify_inventory`, `page`) and the iteration with a caller-supplied idempotent step, the crash/resume evidence and the exit to `VERIFY` (C2c-2: `convert_next`, `finish_convert`) exist, but nothing converts a real record: the `EntryStep` that moves a source record to the target epoch (Gate 5), the `VERIFY` work that reads every record under the target policy and the phases after it.
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read. Reclaiming them needs a directory-removal primitive and a sweep that knows no live attempt owns them, as for the orphaned digest directories of a discarded capture (acceptance criterion on #359).
