@@ -362,6 +362,20 @@ pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
     check_operation_id(&checkpoint.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
     let held = acquire_root_commit(layout)?;
+    commit_journal_checkpoint_held(fs, provider, layout, checkpoint, &held)
+}
+
+/// As [`commit_journal_checkpoint`], under a root event the caller already holds, as
+/// [`commit_lease_renewal_held`] is for the renewal. `held` must guard the root of `layout`.
+pub(crate) fn commit_journal_checkpoint_held<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    checkpoint: JournalCheckpoint<'_>,
+    held: &RootCommitGuard,
+) -> Result<RootCommitted, AuthorityError> {
+    check_operation_id(&checkpoint.manifest.operation_id)
+        .map_err(|_| AuthorityError::InvalidOperationId)?;
     let commit = journal_catalog_commit(&checkpoint);
     let committed = committed_binding(fs, provider, layout, commit)?;
     let key = route_journal_key(fs, provider, layout, checkpoint.journal)?;
@@ -382,7 +396,7 @@ pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
         provider,
         layout,
         commit,
-        &held,
+        held,
         Some(JournalStep {
             binding: BindingStep::Checkpoint(&advance),
             key: &key,
