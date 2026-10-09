@@ -200,11 +200,17 @@ gates stay mandatory:
 4. Vercel Production is `READY` on that exact SHA;
 5. canonical Production HTTP succeeds;
 6. Production and `main` aliases show no contradictory drift;
-7. no unexpected promotion or rollback mutation is observed.
+7. no unexpected promotion or rollback mutation is observed;
+8. a read-only count of non-protected Preview deployments is recorded for this
+   project. An unavailable or contradictory count stops dependent repository
+   mutation. It is not evidence that the count is zero, and it is not the
+   destructive reconciliation.
 
-If any item fails, stop and complete ordinary reconciliation before further
-repository mutation. Cursor Cloud must not delete a deployment or alias to
-satisfy this mode.
+If any of items 1–7 fails, stop and complete ordinary reconciliation before
+further repository mutation. If the read-only count is unavailable or
+contradictory, stop dependent repository mutation and do not invent a zero
+count. Cursor Cloud must not delete a deployment or alias to satisfy this
+mode.
 
 The only deferred work is the same Preview artifact housekeeping listed for a
 train: full authenticated inventory, dry-run `SAFE`/`PROTECTED`/`UNKNOWN`
@@ -212,7 +218,8 @@ classification, stale Preview deletion, retired Preview branch-alias cleanup,
 the newest-three-per-open-PR snapshot, and retention-specific rollback-history
 re-enumeration. Production deployments, Production and `main` aliases,
 rollback-eligible history, active-PR previews, and every `UNKNOWN` stay
-protected. A read-only census may be recorded; it is not the reconciliation.
+protected. The read-only count in gate 8 is mandatory before the next
+dependent repository mutation. It is not the reconciliation.
 
 The release pass runs once per cycle, immediately before the next sanctioned
 `v*` tag, and only by Codex CLI in the local VS Code/Ubuntu environment. That
@@ -232,7 +239,7 @@ every Preview deployment whose target is not production, that is outside the
 protected Production and rollback ID set, and that is not held by a
 Production, `main`, or active-branch alias or by the newest-three open-PR
 set. An unclassified Preview deployment counts. Protected Production and
-rollback deployments do not. A count above 24 reaches the cap.
+rollback deployments do not. A count of 24 or more reaches the cap.
 
 Reaching either cap, or a provider report of resource pressure or unsafe
 provider state, stops dependent repository mutation and requires one
@@ -242,8 +249,8 @@ Cursor Cloud must not delete a deployment or alias to perform it. The handoff
 does not restore per-merge destructive cleanup, does not complete the cycle,
 and does not authorize a tag or publish. Resume dependent repository mutation
 only after the pass records `EXCEPTIONAL_PASS_SHA`, `EXCEPTIONAL_PASS_AT`, a
-post-pass stale-preview count of at most 24, and resource pressure cleared.
-If that record is missing, the count stays above 24, or pressure remains,
+post-pass stale-preview count below 24, and resource pressure cleared.
+If that record is missing, the count is 24 or more, or pressure remains,
 dependent repository mutation stays stopped.
 
 Abort into ordinary reconciliation before further mutation or any tag when

@@ -139,7 +139,10 @@ describe('release-batched Preview retention', () => {
     expect(policy).toContain('dependent repository mutation');
     expect(policy).toContain('does not restore per-merge destructive cleanup');
     expect(policy).toContain('BATCH_COMPLETE = YES');
-    expect(policy).toContain('A count above 24 reaches the cap');
+    expect(policy).toContain('A count of 24 or more reaches the cap');
+    expect(policy).toContain('read-only count of non-protected Preview deployments');
+    expect(policy).toContain('not evidence that the count is zero');
+    expect(policy).toContain('do not invent a zero count');
     expect(policy).toContain('Resource pressure uses the exceptional');
   });
 });
