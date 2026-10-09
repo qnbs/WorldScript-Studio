@@ -30,12 +30,26 @@
 //! the existing takeover followed by a fresh begin. No clock is read, so a lease past its expiry is
 //! still the caller's while nobody has taken over (the fence arbitrates).
 //!
-//! This slice writes nothing and holds no key; the steps that move the journal are the next slice.
+//! Beginning writes nothing and holds no key. The session then moves the journal only through the
+//! fenced journal-owner operations, one step at a time ([`ConversionSession::renew_lease`] is the first):
+//! each step checks the admission, builds the successor from the session's own snapshot, commits it
+//! with the key route and active epoch the committed root itself names, re-reads the committed journal
+//! and checks the admission again. A step that fails leaves the snapshot as it was; a retry rebuilds
+//! the identical successor, which the journal adopts if the first attempt had already written it.
 
 use crate::admission::{AdmissionScope, ExclusiveAdmissionGuard};
-use crate::authority::{read_committed_journal, AuthorityError, CommittedJournal, JournalSource};
-use crate::durable::DurableFs;
-use crate::journal::{phase_code, JournalManifest, MigrationFence};
+use std::path::Path;
+
+use crate::authority::{
+    commit_lease_renewal, read_committed_journal, AuthorityError, CommittedJournal,
+    JournalCheckpoint, JournalSource,
+};
+use crate::durable::{DurableFs, WriteOperationId};
+use crate::error::SealError;
+use crate::journal::{
+    phase_code, renewed_lease, CandidateConflict, JournalManifest, MigrationExecutionError,
+    MigrationFence,
+};
 use crate::provider::KeyProvider;
 use crate::root::LiveMigration;
 use crate::root_store::RootLayout;
@@ -49,7 +63,8 @@ pub struct ConversionBegin<'a> {
     pub owner_id: &'a str,
 }
 
-/// Why the gate refused. Every refusal is returned before anything is written.
+/// Why the gate or a step refused. A refusal by the gate, and by a step before its commit, leaves the
+/// tree unchanged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConversionError {
     /// The guard does not hold the scope: other directories, or directories replaced since acquisition.
@@ -66,6 +81,11 @@ pub enum ConversionError {
     FinalInventoryNotCaptured,
     /// The committed lease is owned by another owner, or by none.
     ForeignLeaseOwner,
+    /// A step's successor is not a valid one (a renewal with no lease to renew, or an expiry that does
+    /// not move strictly forward).
+    Migration(MigrationExecutionError),
+    /// No write-operation identifier could be drawn from the operating system.
+    OperationId(SealError),
 }
 
 impl From<AuthorityError> for ConversionError {
@@ -80,6 +100,7 @@ impl From<AuthorityError> for ConversionError {
 pub struct ConversionSession<'a> {
     held: &'a mut ExclusiveAdmissionGuard,
     scope: AdmissionScope<'a>,
+    journal_dir: &'a Path,
     journal: CommittedJournal,
 }
 
@@ -101,6 +122,7 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
     Ok(ConversionSession {
         held,
         scope: begin.scope,
+        journal_dir: begin.journal.dir,
         journal,
     })
 }
@@ -132,7 +154,7 @@ fn check_convertible(manifest: &JournalManifest, owner_id: &str) -> Result<(), C
     Ok(())
 }
 
-impl ConversionSession<'_> {
+impl<'a> ConversionSession<'a> {
     /// The manifest the committed root names.
     pub fn manifest(&self) -> &JournalManifest {
         &self.journal.manifest
@@ -151,5 +173,53 @@ impl ConversionSession<'_> {
     /// Whether the admission still holds the scope the session began under.
     pub fn is_admitted(&self) -> bool {
         self.held.guards(self.scope)
+    }
+
+    /// Renews the owner's lease to `expires_unix_ms`, a time the caller chose (Core reads no clock).
+    ///
+    /// The expiry must move strictly forward (`Migration(InvalidLeaseRenewal)`); a lease long past its
+    /// expiry is still renewed while nobody has taken over, because a takeover advances the fence and
+    /// the committed manifest then names another owner. The renewal is committed by
+    /// [`commit_lease_renewal`] under the root lock, so a snapshot that went stale is refused before any
+    /// write. On success the session holds the committed journal as the root now names it. On failure it
+    /// holds the snapshot it had, and a retry adopts a renewal the journal already wrote. A lost
+    /// admission is reported as `NotAdmitted` even when it was lost after the commit: begin again to
+    /// learn the state.
+    pub fn renew_lease<F: DurableFs, P: KeyProvider>(
+        &mut self,
+        fs: &mut F,
+        provider: &mut P,
+        expires_unix_ms: u64,
+    ) -> Result<(), ConversionError> {
+        self.check_admitted()?;
+        let renewed = renewed_lease(&self.journal.manifest, &self.fence(), expires_unix_ms)
+            .map_err(ConversionError::Migration)?;
+        let operation = WriteOperationId::generate().map_err(ConversionError::OperationId)?;
+        let journal = JournalSource {
+            dir: self.journal_dir,
+            operation: &operation,
+        };
+        let fence = MigrationFence::from_manifest(&renewed);
+        let step = JournalCheckpoint {
+            manifest: &renewed,
+            fence: &fence,
+            journal,
+            root_key_ref: &self.journal.root_key_ref,
+            active_key_epoch: self.journal.active_key_epoch,
+            conflict: CandidateConflict::Refuse,
+        };
+        commit_lease_renewal(fs, provider, self.layout(), step)?;
+        self.journal = read_committed_journal(fs, &*provider, self.layout(), journal)?;
+        self.check_admitted()
+    }
+
+    fn layout(&self) -> RootLayout<'a> {
+        RootLayout {
+            root_dir: self.scope.root_dir,
+        }
+    }
+
+    fn check_admitted(&self) -> Result<(), ConversionError> {
+        ensure_admitted(self.held, self.scope)
     }
 }

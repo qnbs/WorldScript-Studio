@@ -5,6 +5,7 @@
 use crate::root::LiveMigration;
 
 use super::manifest::JournalManifest;
+use super::renewal::assert_renewal_successor;
 use super::wire::final_inventory_required;
 use super::{phase_code, JournalError};
 
@@ -451,6 +452,25 @@ pub fn checkpoint_progress(
     next.journal_revision = bump_revision(manifest)?.wire();
     next.cursor_page_index = cursor.page_index;
     next.cursor_entry_index = cursor.entry_index;
+    next.encode()?;
+    Ok(next)
+}
+
+/// The owner's renewal of its lease: the next revision with the expiry moved to `expires_unix_ms`.
+///
+/// Only the revision and the expiry change, and the result is proved a valid renewal of `manifest`
+/// ([`assert_renewal_successor`]) before it is returned: a named lease to renew, an expiry strictly
+/// after the held one, a journal that is not terminal. The expiry is the caller's; Core reads no clock.
+pub fn renewed_lease(
+    manifest: &JournalManifest,
+    fence: &MigrationFence,
+    expires_unix_ms: u64,
+) -> Result<JournalManifest, MigrationExecutionError> {
+    assert_fence(manifest, fence)?;
+    let mut next = manifest.clone();
+    next.journal_revision = bump_revision(manifest)?.wire();
+    next.lease_expires_unix_ms = Some(expires_unix_ms);
+    assert_renewal_successor(manifest, &next)?;
     next.encode()?;
     Ok(next)
 }
