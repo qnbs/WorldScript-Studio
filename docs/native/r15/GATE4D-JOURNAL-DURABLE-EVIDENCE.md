@@ -665,6 +665,34 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Slice F1 — bounded reads are required of every `DurableFs` adapter
+
+`DurableFs::read_at_most` and `list_dir_at_most` had default bodies that loaded the whole file or directory through
+`read` / `list_dir` and compared the length afterwards; only a doc sentence asked an adapter over real files to
+override them. Every Gate 4D journal read (the manifest envelope, the page envelope, the page-directory listing, the
+staged-capture reads) goes through these two methods so that a corrupted or hostile size cannot exhaust memory, so an
+adapter that kept a default would have lost the bound without any failure.
+
+| Piece | Rule |
+|---|---|
+| trait | both methods are **required**, with no default body: an adapter states how it bounds the allocation, holding at most `limit + 1` bytes or names, answering `None` above the limit and returning the underlying error otherwise. `StdFs` is unchanged (`take(limit + 1)`) |
+| test doubles | the 15 doubles under `tests/` implement the two methods with `read_at_most_via_read` and `list_dir_at_most_via_list_dir`, public helpers compiled **only with the `test-support` feature**: the whole read or listing through the double's own `read` / `list_dir`, then the limit, which is what the defaults did. No test changed its behaviour. The helpers load everything first and are documented as never for an adapter over real files |
+| the rule | a doctest triple on the trait: an adapter implementing every method compiles; the same adapter without `read_at_most`, and without `list_dir_at_most`, each fails with `E0046` |
+
+Proof: the three doctests (`cargo test --doc`); the `StdFs` bound tests are unchanged (`std_read_at_most_never_loads_more_than_the_limit`
+and the listing test in `gate4d_inventory_read_test`); every suite that uses a double passes unchanged
+(`gate3_durable`, `gate3b_commit`, `gate3c_root_commit`, `gate3c_protected`, `gate4b_operations`,
+`gate4b_read_snapshot`, `gate4d_journal_durable`, `gate4d_inventory_store`, `gate4d_inventory_read`,
+`gate4d_stream_capture`, `gate4d_journal_route`, `gate4d_root_binding`, `gate4d_conversion_entry`). The rule is a
+compile-time one, so there is no runtime behaviour to mutate; the mutation is the rule itself: re-adding the default
+body of `read_at_most`, or of `list_dir_at_most`, makes exactly its own compile-fail doctest fail ("compiled
+successfully, but it's marked `compile_fail`"). The library builds without the feature (the helpers are absent).
+
+Residual: the Gate 3 post-promotion verify and the page, marker, root, record and catalog reads (`commit.rs`,
+`root_store.rs`, `authority.rs`) still use the whole-file `DurableFs::read` and `list_dir`; applying size limits to
+them needs a limit per file kind and stays the separate slice recorded as an acceptance criterion on #359. Neither
+this slice nor a bounded method by itself adds a limit to a caller that does not call it.
+
 ## Slice C2c-2 — the cursor-driven iteration and the exit to `VERIFY`
 
 The session had every part of the loop but not the loop: no per-entry step, no notion of "done" (the end of the last
@@ -1178,7 +1206,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   (terminal), which belong to the Gate 4E/5 enable and commit sequences.
 - R2B remainder: recovery when the root-named envelope exists but semantic open refuses.
 - Bounded generation reads elsewhere: the journal manifest reads are bounded
-  (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
+  (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; since F1 both are required trait methods, so an adapter cannot compile without stating its bound, which `StdFs` does with `take(limit + 1)`), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
 - Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) and the authenticated page access with the page-local cursor (C2c-1: `verify_inventory`, `page`) and the iteration with a caller-supplied idempotent step, the crash/resume evidence and the exit to `VERIFY` (C2c-2: `convert_next`, `finish_convert`) exist, but nothing converts a real record: the `EntryStep` that moves a source record to the target epoch (Gate 5), the `VERIFY` work that reads every record under the target policy and the phases after it.
