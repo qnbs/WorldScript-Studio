@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4E:** the ordinary-operation barrier of a bound root is now proven. A committed root that binds a
+  live migration already refused every ordinary operation (write, reconcile, list, read, lock, unlock, shutdown)
+  in every phase, from the root alone and so across a crash; nine new cases show it with the tree unchanged, with
+  a binding that names no journal, from a cold start and against an unbound control. No behaviour changed. The
+  barrier is stricter than the contract's `PREPARE` window, which stays a later step. PR #1019.
 - **R-15 Gate 4D:** every `DurableFs` adapter must now bound its reads. `read_at_most` and `list_dir_at_most`
   lose their default bodies (which loaded the whole file or directory before applying the limit) and become
   required trait methods, so an adapter cannot compile without stating how it bounds the allocation; a doctest

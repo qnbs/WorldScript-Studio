@@ -3075,6 +3075,19 @@ interprets the absence of a target record as permission to write defaults.
 | `FINALIZE` | Journal says commit, verification, and permitted cleanup are complete; no key material is stored in the journal. | Remove only fully finalized operational debris. A stale journal is reconciled, not ignored. Ordinary operations resume after finalization. |
 | `DONE` / `RECOVERY_REQUIRED` | `DONE` is durable terminal success. `RECOVERY_REQUIRED` is durable terminal refusal with a reason code. | `DONE` permits normal policy. `RECOVERY_REQUIRED` blocks ordinary writes and destructive cleanup until explicit recovery; never resets to defaults. |
 
+
+**The ordinary-operation barrier of a bound root (Gate 4E E1).** `ProtectedStorage` decides from the
+authenticated committed root alone: as soon as the root carries a live-migration binding, every
+ordinary operation (write, reconcile, list, read, and the lock, unlock and shutdown transitions) is
+refused, in every phase, with nothing written. The barrier is therefore durable across a crash and
+needs no journal read. It is intentionally **stricter than the table above**, which admits ordinary
+reads and writes while `PREPARE` lasts and after `DONE`: that window is not implemented, because it needs
+the root-named manifest (`read_committed_journal`), a journal location as writer configuration and a
+policy for reconciliation under the barrier, and no producer of a binding exists yet to need it
+(`ordinary_mutating_writes_admitted` is the specification of that later relaxation, not a gate in use).
+It also relies on a phase transition out of `PREPARE` happening under exclusive admission, which the
+conversion gate holds by type; making the lower-level transition require it is a separate step.
+
 ### 10.4 Operations
 
 - **Enable:** discover known healthy legacy plaintext while unlocked, convert every admitted
