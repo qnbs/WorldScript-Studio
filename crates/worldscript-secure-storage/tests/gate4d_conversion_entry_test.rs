@@ -722,8 +722,7 @@ fn a_step_after_the_installation_moved_is_refused_before_any_write() {
     assert_eq!(fixture.snapshot(), before);
 }
 
-/// A renewal over a fresh fixture, with `on_read` told of every read it makes.
-#[cfg(unix)]
+/// A renewal over a fixture, with `on_read` told of every read it makes.
 fn renewal_watched<H: FnMut(&Path) -> io::Result<()>>(
     fixture: &mut Fixture,
     on_read: H,
@@ -864,45 +863,106 @@ fn a_renewal_is_busy_while_another_root_commit_holds_the_lock_and_writes_nothing
     );
 }
 
-#[test]
-fn a_read_back_that_fails_spends_the_session_though_the_step_committed() {
-    // The step is deterministic, so a first run counts its reads and a second run fails the last one,
-    // which is the read-back of the committed journal under the root event.
-    let committed = manifest(phase_code::ADMIT);
+/// A hook that fails the `total`-th read it is told of and lets every other one through.
+fn failing_nth_read(total: usize) -> impl FnMut(&Path) -> io::Result<()> {
+    let mut seen = 0;
+    move |_: &Path| {
+        seen += 1;
+        if seen == total {
+            Err(io::Error::other("injected"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+/// How many reads a renewal over a fresh fixture makes, with `fault` injected into the anchor if given.
+/// The step is deterministic, so the last of them is the read-back of the committed journal.
+fn renewal_reads(fault: Option<Fault>) -> usize {
+    let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
+    if let Some(fault) = fault {
+        fixture.provider.inject(fault);
+    }
     let mut total = 0;
-    renewal_watched(&mut Fixture::bound(&committed), |_| {
+    let _ = renewal_watched(&mut fixture, |_| {
         total += 1;
         Ok(())
-    })
-    .unwrap();
-    let mut fixture = Fixture::bound(&committed);
-    let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
-    let mut seen = 0;
+    });
+    total
+}
+
+#[test]
+fn a_read_back_that_fails_spends_the_session_though_the_step_committed() {
+    let total = renewal_reads(None);
+    let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
     let mut watched = WatchedFs {
-        on_read: |_: &Path| {
-            seen += 1;
-            if seen == total {
-                Err(io::Error::other("injected"))
-            } else {
-                Ok(())
-            }
-        },
+        on_read: failing_nth_read(total),
     };
-    let first = session.renew_lease(&mut watched, &mut fixture.provider, RENEWED_EXPIRY);
-    let later = session.renew_lease(&mut StdFs, &mut fixture.provider, RENEWED_EXPIRY + 1);
+    let (first, later, snapshot) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&fixture, &paths, &mut held);
+        let first = session.renew_lease(&mut watched, &mut fixture.provider, RENEWED_EXPIRY);
+        let later = session.renew_lease(&mut StdFs, &mut fixture.provider, RENEWED_EXPIRY + 1);
+        (
+            first,
+            later.map(|_| ()),
+            session.manifest().journal_revision,
+        )
+    };
     let first_is_unreadable = matches!(first, Err(ConversionError::Unreadable(_)));
-    let (later, snapshot) = (later.map(|_| ()), session.manifest().journal_revision);
     assert_eq!(
         (first_is_unreadable, later, snapshot),
         (true, Err(ConversionError::Spent), REVISION)
     );
     // The renewal itself was committed: a new gate reads it.
-    drop(session);
-    drop(held);
     assert_eq!(
         fixture.committed(OWNER).map(|m| m.lease_expires_unix_ms),
         Ok(Some(RENEWED_EXPIRY))
+    );
+}
+
+#[test]
+fn a_commit_that_reports_an_error_after_it_landed_is_settled_by_the_root() {
+    let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
+    let first = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&fixture, &paths, &mut held);
+        // The anchor commits the root but reports the outcome as unavailable.
+        fixture
+            .provider
+            .inject(Fault::AfterPersist(AnchorOp::Commit));
+        let first = session.renew_lease(&mut StdFs, &mut fixture.provider, RENEWED_EXPIRY);
+        (first, session.manifest().journal_revision)
+    };
+    let is_committed = matches!(first.0, Err(ConversionError::Committed(_)));
+    assert_eq!((is_committed, first.1), (true, REVISION + 1));
+    // The root names the renewal, which the session followed.
+    assert_eq!(
+        fixture.committed(OWNER).map(|m| m.lease_expires_unix_ms),
+        Ok(Some(RENEWED_EXPIRY))
+    );
+}
+
+#[test]
+fn a_commit_error_whose_outcome_cannot_be_read_back_spends_the_session() {
+    let anchor_fault = Fault::AfterPersist(AnchorOp::Commit);
+    let total = renewal_reads(Some(anchor_fault));
+    let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
+    let mut watched = WatchedFs {
+        on_read: failing_nth_read(total),
+    };
+    let (first, later) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&fixture, &paths, &mut held);
+        fixture.provider.inject(anchor_fault);
+        let first = session.renew_lease(&mut watched, &mut fixture.provider, RENEWED_EXPIRY);
+        let later = session.renew_lease(&mut StdFs, &mut fixture.provider, RENEWED_EXPIRY + 1);
+        (first, later.map(|_| ()))
+    };
+    let first_is_unsettled = matches!(first, Err(ConversionError::Unsettled(_)));
+    assert_eq!(
+        (first_is_unsettled, later),
+        (true, Err(ConversionError::Spent))
     );
 }
 
@@ -960,5 +1020,39 @@ fn a_journal_directory_replaced_after_begin_is_refused_before_any_write() {
     assert_eq!(
         (outcome, admitted, fixture.snapshot() == before),
         (Err(ConversionError::NotAdmitted), false, true)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_journal_directory_retargeted_after_begin_does_not_redirect_the_step() {
+    let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
+    let (journal, link) = (fixture.journal_dir(), fixture.base.0.join("journal-link"));
+    let other = fixture.base.0.join("journal-other");
+    std::os::unix::fs::symlink(&journal, &link).unwrap();
+    // A copy of the journal sits where the link will point later.
+    fs::create_dir(&other).unwrap();
+    fs::copy(
+        generation_path(&journal, REVISION),
+        generation_path(&other, REVISION),
+    )
+    .unwrap();
+    let mut paths = fixture.paths();
+    paths.journal = link.clone();
+    let mut held = paths.admission();
+    let mut session =
+        begin_conversion(&mut held, &mut StdFs, &fixture.provider, paths.begin(OWNER)).unwrap();
+    fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink(&other, &link).unwrap();
+    let outcome = session
+        .renew_lease(&mut StdFs, &mut fixture.provider, RENEWED_EXPIRY)
+        .map(|_| ());
+    let (renewed_in_pinned, untouched_copy) = (
+        generation_path(&journal, REVISION + 1).exists(),
+        !generation_path(&other, REVISION + 1).exists(),
+    );
+    assert_eq!(
+        (outcome, renewed_in_pinned, untouched_copy),
+        (Ok(()), true, true)
     );
 }
