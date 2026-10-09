@@ -873,23 +873,28 @@ fn barrier_tree(fixture: &Fixture) -> Vec<(PathBuf, BarrierNode)> {
     nodes
 }
 
-/// Whether the coordination resources hold no data: the writer directory, when it exists, contains
-/// nothing but empty files (a lock file on Windows).
+/// Whether the coordination resources hold no data. A missing path is empty. A symlink, including a
+/// dangling one or one whose target is empty, is not: `symlink_metadata` does not follow it, so the
+/// link itself is the entry. A directory is empty only when every child is.
 fn barrier_coordination_holds_no_data(fixture: &Fixture) -> bool {
-    fn empty(dir: &Path) -> bool {
-        fs::read_dir(dir).unwrap().all(|entry| {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                empty(&path)
-            } else {
-                fs::metadata(&path).unwrap().len() == 0
-            }
-        })
+    fn holds_no_data(path: &Path) -> bool {
+        let meta = match fs::symlink_metadata(path) {
+            Ok(meta) => meta,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return true,
+            Err(_) => return false,
+        };
+        if meta.file_type().is_symlink() {
+            return false;
+        }
+        if meta.is_dir() {
+            return fs::read_dir(path)
+                .unwrap()
+                .all(|entry| holds_no_data(&entry.unwrap().path()));
+        }
+        meta.len() == 0
     }
-    let writer = fixture.base.join(BARRIER_WRITER_RESOURCE);
-    let lock = fixture.base.join(OPERATION_ADMISSION_LOCK_FILE);
-    (!writer.exists() || empty(&writer))
-        && (!lock.exists() || fs::metadata(&lock).unwrap().len() == 0)
+    holds_no_data(&fixture.base.join(BARRIER_WRITER_RESOURCE))
+        && holds_no_data(&fixture.base.join(OPERATION_ADMISSION_LOCK_FILE))
 }
 
 #[test]
@@ -1117,6 +1122,60 @@ fn barrier_symlinks_are_seen(
     fs::create_dir(&fixture.markers).unwrap();
     fs::remove_dir_all(&outside).unwrap();
     (file_seen, directory_seen)
+}
+
+/// A symlink at either coordination resource, or inside the writer directory, is not data-free,
+/// even when the target is missing or empty.
+#[cfg(unix)]
+#[test]
+fn a_symlink_at_a_coordination_resource_is_not_data_free() {
+    use std::os::unix::fs::symlink;
+
+    fn replace_with_link(path: &Path, target: &Path) {
+        if let Ok(meta) = fs::symlink_metadata(path) {
+            if meta.is_dir() && !meta.file_type().is_symlink() {
+                fs::remove_dir_all(path).unwrap();
+            } else {
+                fs::remove_file(path).unwrap();
+            }
+        }
+        symlink(target, path).unwrap();
+    }
+
+    let fixture = barrier_bound();
+    let outside = fixture.base.with_extension("coord-outside");
+    fs::create_dir_all(&outside).unwrap();
+    let empty = outside.join("empty");
+    fs::write(&empty, b"").unwrap();
+    let writer = fixture.base.join(BARRIER_WRITER_RESOURCE);
+    let lock = fixture.base.join(OPERATION_ADMISSION_LOCK_FILE);
+
+    replace_with_link(&writer, &empty);
+    let writer_link = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&writer).unwrap();
+
+    fs::create_dir(&writer).unwrap();
+    symlink(&empty, writer.join("lock")).unwrap();
+    let nested_link = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_dir_all(&writer).unwrap();
+
+    replace_with_link(&lock, &empty);
+    let lock_link = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&lock).unwrap();
+
+    replace_with_link(&writer, &outside.join("missing"));
+    let dangling = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&writer).unwrap();
+
+    fs::write(&lock, b"").unwrap();
+    let empty_file = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&lock).unwrap();
+    fs::remove_dir_all(&outside).unwrap();
+
+    assert_eq!(
+        (writer_link, nested_link, lock_link, dangling, empty_file),
+        (false, false, false, false, true)
+    );
 }
 
 fn barrier_paged() -> Setup {
