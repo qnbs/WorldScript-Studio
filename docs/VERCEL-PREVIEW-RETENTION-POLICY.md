@@ -174,6 +174,11 @@ RETENTION_DEFERRED_UNTIL = the next sanctioned v* release reconciliation
 BASELINE_MAIN = 8424a7c640074dedac8de24a98fd6932c80c8230
 BASELINE_RETENTION = TERMINAL
 FIRST_BATCH_PR = #1020
+BATCH_CLOCK_ORIGIN = UTC instant FIRST_BATCH_PR merges
+MAX_BATCH_AGE = 14d
+MAX_STALE_PREVIEWS = 24
+EXCEPTIONAL_HANDOFF = one local Codex CLI pass, then this batch continues
+BATCH_COMPLETE = recorded only after the sanctioned release pass
 GATE_7 = maintainer only
 PRODUCTION_AUTHORITY_SWITCH = forbidden
 TAG_AND_PUBLISH = Codex CLI local only, after GH #911 and this reconciliation
@@ -185,7 +190,8 @@ is `READY` on that SHA, with the three canonical aliases bound and rollback
 candidate `dpl_9T9o3RvF7LkaFmToPnaUX5VqMMgb` protected. This introducing
 record does not authorize a deletion.
 
-After every merge under the mode, and before the next source mutation, these
+After every merge under the mode, and before the next dependent repository
+mutation, including documentation, configuration, and workflow changes, these
 gates stay mandatory:
 
 1. capture the exact resulting `main` SHA;
@@ -208,19 +214,44 @@ re-enumeration. Production deployments, Production and `main` aliases,
 rollback-eligible history, active-PR previews, and every `UNKNOWN` stay
 protected. A read-only census may be recorded; it is not the reconciliation.
 
-The destructive pass runs once, immediately before the next sanctioned `v*`
-tag, and only by Codex CLI in the local VS Code/Ubuntu environment. That pass
-uses the ordinary protected-state rules in this document, on the exact release
-SHA, after [GH #911](https://github.com/qnbs/WorldScript-Studio/issues/911)
+The release pass runs once per cycle, immediately before the next sanctioned
+`v*` tag, and only by Codex CLI in the local VS Code/Ubuntu environment. That
+pass uses the ordinary protected-state rules in this document, on the exact
+release SHA, after [GH #911](https://github.com/qnbs/WorldScript-Studio/issues/911)
 is terminal for that SHA. Cursor Cloud does not tag, publish, or receive
 release secrets. The mode does not authorize Gate 7 or the production
-storage-authority switch.
+storage-authority switch. After that pass, record `BATCH_COMPLETE = YES` and
+`BATCH_COMPLETE_SHA` as that exact release SHA. The cycle then ends. Later
+merges use ordinary reconciliation until a new cycle is declared. A later
+pull request cannot reuse this bootstrap.
+
+`MAX_BATCH_AGE` is 14 days of 24 hours, measured from `BATCH_CLOCK_ORIGIN`,
+or from the UTC instant of the latest recorded exceptional pass when one
+exists. The age reaches its cap at exactly 14 days. `MAX_STALE_PREVIEWS` counts
+every Preview deployment whose target is not production, that is outside the
+protected Production and rollback ID set, and that is not held by a
+Production, `main`, or active-branch alias or by the newest-three open-PR
+set. An unclassified Preview deployment counts. Protected Production and
+rollback deployments do not. A count above 24 reaches the cap.
+
+Reaching either cap, or a provider report of resource pressure or unsafe
+provider state, stops dependent repository mutation and requires one
+exceptional handoff. That handoff is a single retention pass by Codex CLI in
+the local VS Code/Ubuntu environment, under the same protected-state rules.
+Cursor Cloud must not delete a deployment or alias to perform it. The handoff
+does not restore per-merge destructive cleanup, does not complete the cycle,
+and does not authorize a tag or publish. Resume dependent repository mutation
+only after the pass records `EXCEPTIONAL_PASS_SHA`, `EXCEPTIONAL_PASS_AT`, a
+post-pass stale-preview count of at most 24, and resource pressure cleared.
+If that record is missing, the count stays above 24, or pressure remains,
+dependent repository mutation stays stopped.
 
 Abort into ordinary reconciliation before further mutation or any tag when
 exact-main CI/CD or CodeQL fails, Production is not `READY` on the exact SHA,
 canonical Production HTTP fails, alias/promotion/rollback state contradicts
 the proof, the destructive writer is not the named local Codex CLI operator,
-or a maintainer revokes the mode.
+or a maintainer revokes the mode. Resource pressure uses the exceptional
+handoff above. It does not by itself restore per-merge destructive cleanup.
 
 ## Expected provider scope and identity
 
@@ -422,8 +453,10 @@ until the mandatory final pass. A failed introducing-merge gate aborts that
 train into ordinary reconciliation. Inside a valid release-batched Preview
 retention mode, including its one-time introducing transition after its
 resulting-main gates pass, those same per-merge Production-correctness gates
-replace destructive Preview reconciliation until the release-time pass. A
-failed introducing-merge gate aborts that mode into ordinary reconciliation.
+replace destructive Preview reconciliation until the release-time pass or an
+exceptional handoff required by the age, preview-count, or resource-pressure
+bound. A failed introducing-merge gate aborts that mode into ordinary
+reconciliation.
 
 Any unexpected loss of protected state is an immediate hard stop. Do not
 auto-promote or rollback to compensate.

@@ -101,6 +101,10 @@ describe('Vercel retention train deferral', () => {
       expect(source, relativePath).toContain('Codex CLI');
       expect(source, relativePath).toContain('Cursor Cloud does not delete Vercel deployments');
       expect(source, relativePath).toContain('cannot reuse that transition');
+      expect(source, relativePath).toContain(
+        '14 days or 24 non-protected Preview deployments, or provider resource pressure, requires one exceptional Codex CLI pass',
+      );
+      expect(source, relativePath).toContain('does not restore per-merge destructive cleanup');
     }
   });
 });
@@ -116,6 +120,13 @@ describe('release-batched Preview retention', () => {
     expect(policy).toContain('BASELINE_MAIN = 8424a7c640074dedac8de24a98fd6932c80c8230');
     expect(policy).toContain('BASELINE_RETENTION = TERMINAL');
     expect(policy).toContain('FIRST_BATCH_PR = #1020');
+    expect(policy).toContain('BATCH_CLOCK_ORIGIN = UTC instant FIRST_BATCH_PR merges');
+    expect(policy).toContain('MAX_BATCH_AGE = 14d');
+    expect(policy).toContain('MAX_STALE_PREVIEWS = 24');
+    expect(policy).toContain(
+      'EXCEPTIONAL_HANDOFF = one local Codex CLI pass, then this batch continues',
+    );
+    expect(policy).toContain('BATCH_COMPLETE = recorded only after the sanctioned release pass');
     expect(policy).toContain('GATE_7 = maintainer only');
     expect(policy).toContain('PRODUCTION_AUTHORITY_SWITCH = forbidden');
     expect(policy).toContain(
@@ -125,5 +136,10 @@ describe('release-batched Preview retention', () => {
     expect(policy).toContain('does not authorize Gate 7 or the production');
     expect(policy).toContain('A later pull request cannot reuse this bootstrap');
     expect(policy).toContain('Cursor Cloud must not delete a deployment or alias');
+    expect(policy).toContain('dependent repository mutation');
+    expect(policy).toContain('does not restore per-merge destructive cleanup');
+    expect(policy).toContain('BATCH_COMPLETE = YES');
+    expect(policy).toContain('A count above 24 reaches the cap');
+    expect(policy).toContain('Resource pressure uses the exceptional');
   });
 });

@@ -141,7 +141,11 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   READY, canonical HTTP, and alias/promotion/rollback checks stay mandatory.
   Gate 7 and the production storage-authority switch stay maintainer-gated.
   The introducing transition is one-time; a later pull request cannot reuse
-  that transition. Until that mode is on `main`, ordinary mode still requires
+  that transition. Reaching 14 days or 24 non-protected Preview deployments,
+  or provider resource pressure, requires one exceptional Codex CLI pass and
+  stops dependent repository mutation until that pass is recorded. That pass
+  does not restore per-merge destructive cleanup. Until that mode is on `main`,
+  ordinary mode still requires
   the full reconciliation.
 
 ## Cursor Cloud Agent
