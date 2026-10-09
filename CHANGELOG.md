@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** the conversion session iterates the inventory and leaves `CONVERT` (part c-2 of the
+  conversion driver). `ConversionSession::convert_next` converts up to a batch of entries of the page the
+  cursor points into through a caller-supplied, idempotent `EntryStep`, records the page-local cursor and
+  reports `More` or `Done`; a step failure writes nothing and a restart resumes at the persisted cursor.
+  `finish_convert` moves `CONVERT` to `VERIFY` only after the session saw the end of the last page. The
+  caller owns the loop and the lease clock. PR #1017.
 - **R-15 Gate 4D:** the conversion session reads the inventory it converts and the cursor becomes page-local
   (part c-1 of the conversion driver). `ConversionSession::verify_inventory` authenticates the whole page set
   once against the committed root (keylessly, one page in memory at a time) and `page` reads one authenticated
