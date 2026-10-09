@@ -2408,10 +2408,17 @@ is refused until the caller begins again. The steps are the owner's lease renewa
 caller chooses (strictly after the held one, accepted after the held one has lapsed while nobody has taken
 over, and refused as a stale owner once another owner has), entering `CONVERT` from `ADMIT` at cursor
 `(0, 0)` (a session that already is in `CONVERT` has nothing to write, but it confirms against the root
-that its snapshot is still the committed journal before it says so), and the checkpoint cursor, which in
-`CONVERT` only moves forward and stays inside the manifest's extent (its page count and total entry count;
-the manifest does not carry the entry count of a page, so what an entry index means within a page is fixed
-by the page iteration, the next slice); each returns the root commit with its durability result. After the
+that its snapshot is still the committed journal before it says so), and the checkpoint cursor; each
+returns the root commit with its durability result. The cursor is page-local: `cursor_entry_index` is the
+index, from zero, within page `cursor_page_index` of the next entry to process, finishing a page moves it
+to `(page + 1, 0)`, and the end of the last page has no cursor value, so completion is the transition to
+`VERIFY`. The session learns the entry count of a page by authenticating the whole page set once against
+the committed root (`verify_inventory`, one page in memory at a time, only the references kept; the set
+must be the inventory its snapshot names) and reads the pages one at a time through the same references
+(`page`; the envelope must hash to its reference before it is opened), keylessly like every read of the
+session; in `CONVERT` the cursor only moves forward, stays inside the manifest's extent and inside the
+authenticated entry count of the selected page, and is refused before any write without the verified
+page set. After the
 commit call every outcome is followed by the admission check, and a lost admission is reported first: the
 step may have committed or left a candidate, and the caller begins again to learn the state.
 A token check performed as a separate preflight is insufficient. Every mutation-capable adapter
