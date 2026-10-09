@@ -16,17 +16,20 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use worldscript_secure_storage::journal::renewed_lease;
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::{
-    begin_conversion, commit_catalog_change, commit_journal_takeover, commit_root, content_digest,
-    empty_inventory_digest, empty_journal_page_set_digest, generation_path, load_catalog,
-    operation_type, phase_code, write_key_epoch, AdmissionScope, AuthorityError, CandidateConflict,
-    CatalogChange, CatalogCommit, ConversionBegin, ConversionError, ConversionSession,
-    DirectoryDurability, DurableFs, ExclusiveAdmissionGuard, InstallationScopeId,
-    JournalCheckpoint, JournalCheckpointCursor, JournalDurableError, JournalError, JournalManifest,
-    JournalRouteError, JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit, KeyEpochRecord,
-    KeyEpochStatus, KeyProvider, LiveMigration, MigrationExecutionError, MigrationFence,
-    RecordClass, RecordIdentity, RecordMeta, RootBody, RootCommitEvidence, RootCommitGuard,
-    RootCommitRequest, RootCommitState, RootKeyRefV1, RootLayout, StdFs, WriteOperationId,
-    JOURNAL_MANIFEST_RECORD_SCHEMA, OPERATION_ADMISSION_LOCK_FILE,
+    begin_conversion, capture_inventory, commit_catalog_change, commit_journal_takeover,
+    commit_root, content_digest, empty_inventory_digest, empty_journal_page_set_digest,
+    generation_path, inventory_page_dir, load_catalog, operation_type, phase_code,
+    seal_inventory_pages, source_authority_kind, source_physical_authority_kind, write_key_epoch,
+    AdmissionScope, AuthorityError, CandidateConflict, CatalogChange, CatalogCommit,
+    ConversionBegin, ConversionError, ConversionSession, DirectoryDurability, DurableFs,
+    ExclusiveAdmissionGuard, InstallationScopeId, JournalCheckpoint, JournalCheckpointCursor,
+    JournalDurableError, JournalError, JournalInventoryEntry, JournalInventorySource,
+    JournalManifest, JournalPage, JournalRouteError, JournalSource, JournalTakeoverCommit, Key,
+    KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration,
+    MigrationExecutionError, MigrationFence, RecordClass, RecordIdentity, RecordMeta, RootBody,
+    RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState, RootKeyRefV1,
+    RootLayout, SealedPage, StdFs, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    OPERATION_ADMISSION_LOCK_FILE,
 };
 
 const OPERATION: &str = "conversion-op";
@@ -72,6 +75,28 @@ fn manifest(phase: u32) -> JournalManifest {
 
 fn journal_key() -> Key {
     Key::from_bytes(&mut MATERIAL.clone())
+}
+
+fn entry(n: u32) -> JournalInventoryEntry {
+    let record = RecordIdentity::new(RecordClass::Codex, &[&format!("p{n:03}")]).unwrap();
+    let source = JournalInventorySource {
+        authority_kind: source_authority_kind::LEGACY_PLAINTEXT,
+        physical_authority_kind: source_physical_authority_kind::TAURI_FILESYSTEM,
+        generation: None,
+        evidence_digest: Some([n as u8; 32]),
+        foreign: None,
+    };
+    JournalInventoryEntry::new(record, source).unwrap()
+}
+
+/// `count` entries in ascending pages of `per_page` (the last one shorter), every page at `generation`.
+fn pages_of(count: u32, per_page: usize, generation: u64) -> Vec<JournalPage> {
+    let all: Vec<_> = (0..count).map(entry).collect();
+    let sorted = JournalPage::new(0, 1, all).unwrap().entries().to_vec();
+    let chunks = sorted.chunks(per_page).enumerate();
+    chunks
+        .map(|(index, chunk)| JournalPage::new(index as u32, generation, chunk.to_vec()).unwrap())
+        .collect()
 }
 
 /// A directory this test created; removed when dropped (`create_dir` fails on an existing path, so a
@@ -140,6 +165,38 @@ impl Fixture {
         let (mut fixture, live) = Fixture::unbound(manifest);
         fixture.bind(&live);
         fixture
+    }
+
+    /// The journal of an `ADMIT` manifest that captured `count` entries in pages of `per_page`, the
+    /// pages stored where the page-set digest names them, and a root that binds it.
+    fn bound_with_inventory(count: u32, per_page: usize) -> Self {
+        let mut open = manifest(phase_code::ADMIT);
+        (open.journal_revision, open.final_inventory_captured) = (REVISION - 1, false);
+        let pages = pages_of(count, per_page, REVISION);
+        let envelopes = seal_inventory_pages(&journal_key(), &open, &pages).unwrap();
+        let sealed: Vec<_> = pages
+            .iter()
+            .zip(&envelopes)
+            .map(|(page, envelope)| SealedPage { page, envelope })
+            .collect();
+        let fence = MigrationFence::from_manifest(&open);
+        let captured = capture_inventory(&open, &fence, &sealed).unwrap();
+        let (mut fixture, live) = Fixture::unbound(&captured);
+        for (page, envelope) in pages.iter().zip(&envelopes) {
+            let digest = &captured.journal_page_set_digest;
+            let dir = inventory_page_dir(&fixture.journal_dir(), digest, page.page_index());
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(generation_path(&dir, REVISION), envelope).unwrap();
+        }
+        fixture.bind(&live);
+        fixture
+    }
+
+    /// The stored envelope of page `index` of the captured inventory.
+    fn page_file(&self, index: u32) -> PathBuf {
+        let digest = self.committed(OWNER).unwrap().journal_page_set_digest;
+        let dir = inventory_page_dir(&self.journal_dir(), &digest, index);
+        generation_path(&dir, REVISION)
     }
 
     fn root_dir(&self) -> PathBuf {
@@ -1151,12 +1208,29 @@ fn a_resumed_session_in_convert_has_nothing_to_enter() {
 }
 
 #[test]
-fn the_cursor_moves_forward_in_convert_and_never_backwards_or_outside_the_inventory() {
-    let mut fixture = Fixture::bound(&with_extent(phase_code::CONVERT));
-    let cursors = [(0, 3), (1, 2), (1, 2), (0, 5), (2, 0), (1, 10)];
+fn the_cursor_is_page_local_and_never_moves_backwards_or_outside_the_selected_page() {
+    // Ten entries in pages of six and four: the index `9` is inside the manifest's total but not
+    // inside page 1.
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let cursors = [
+        (1, 9),
+        (0, 3),
+        (1, 2),
+        (1, 2),
+        (0, 5),
+        (1, 4),
+        (2, 0),
+        (1, 10),
+    ];
     let (outcomes, snapshot) = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
         let mut session = open(&fixture, &paths, &mut held);
+        session
+            .verify_inventory(&mut StdFs, &fixture.provider)
+            .unwrap();
+        session
+            .enter_convert(&mut StdFs, &mut fixture.provider)
+            .unwrap();
         let outcomes: Vec<_> = cursors
             .iter()
             .map(|&(page, entry)| {
@@ -1176,24 +1250,174 @@ fn the_cursor_moves_forward_in_convert_and_never_backwards_or_outside_the_invent
         )
     };
     let refused = |error| Err(ConversionError::Migration(error));
+    let beyond_the_page = refused(MigrationExecutionError::Journal(
+        JournalError::EntryCountMismatch,
+    ));
     let expected = vec![
+        beyond_the_page.clone(),
         Ok(()),
         Ok(()),
         Ok(()),
         refused(MigrationExecutionError::RegressiveCheckpoint),
+        beyond_the_page.clone(),
         refused(MigrationExecutionError::Journal(
             JournalError::InvalidPageIndex,
         )),
-        refused(MigrationExecutionError::Journal(
-            JournalError::EntryCountMismatch,
-        )),
+        beyond_the_page,
     ];
-    // Three accepted checkpoints, the last at the same cursor as the one before; nothing else moved.
-    assert_eq!((outcomes, snapshot), (expected, (1, 2, REVISION + 3)));
+    // Entering CONVERT and three accepted checkpoints, the last at the cursor of the one before.
+    assert_eq!((outcomes, snapshot), (expected, (1, 2, REVISION + 4)));
     let committed = fixture.committed(OWNER).unwrap();
     assert_eq!(
         (committed.cursor_page_index, committed.cursor_entry_index),
         (1, 2)
+    );
+}
+
+#[test]
+fn the_cursor_needs_the_verified_inventory() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let before_enter = fixture.snapshot();
+    let outcome = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&fixture, &paths, &mut held);
+        session
+            .enter_convert(&mut StdFs, &mut fixture.provider)
+            .unwrap();
+        let before = fixture.snapshot();
+        let cursor = JournalCheckpointCursor::new(0, 1);
+        let outcome = session
+            .advance_cursor(&mut StdFs, &mut fixture.provider, cursor)
+            .map(|_| ());
+        (outcome, fixture.snapshot() == before)
+    };
+    assert_eq!(outcome, (Err(ConversionError::InventoryNotVerified), true));
+    assert_ne!(fixture.snapshot(), before_enter);
+}
+
+#[test]
+fn a_session_authenticates_the_inventory_and_reads_every_page() {
+    let fixture = Fixture::bound_with_inventory(10, 6);
+    let before = fixture.snapshot();
+    let expected = pages_of(10, 6, REVISION);
+    let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+    let mut session = open(&fixture, &paths, &mut held);
+    let unverified = session.page(&mut StdFs, &fixture.provider, 0).map(|_| ());
+    session
+        .verify_inventory(&mut StdFs, &fixture.provider)
+        .unwrap();
+    let counts: Vec<u32> = session
+        .inventory()
+        .unwrap()
+        .page_refs()
+        .iter()
+        .map(|reference| reference.page_entry_count)
+        .collect();
+    let read: Vec<_> = (0..2)
+        .map(|index| session.page(&mut StdFs, &fixture.provider, index).unwrap())
+        .collect();
+    let beyond = session.page(&mut StdFs, &fixture.provider, 2).map(|_| ());
+    let same_entries = read
+        .iter()
+        .zip(&expected)
+        .all(|(page, wanted)| page.entries() == wanted.entries());
+    assert_eq!(
+        (
+            unverified,
+            counts,
+            same_entries,
+            fixture.snapshot() == before
+        ),
+        (
+            Err(ConversionError::InventoryNotVerified),
+            vec![6, 4],
+            true,
+            true
+        )
+    );
+    assert!(matches!(
+        beyond,
+        Err(ConversionError::Authority(AuthorityError::Journal(_)))
+    ));
+}
+
+/// How the stored envelope of a page is damaged.
+#[derive(Clone, Copy)]
+enum Damage {
+    Tampered,
+    Missing,
+    Swapped,
+}
+
+impl Damage {
+    /// Damages the files of pages 0 and 1, whose undamaged bytes are `originals`.
+    fn apply(self, files: (&Path, &Path), originals: (&[u8], &[u8])) {
+        match self {
+            Damage::Tampered => {
+                let mut bytes = originals.0.to_vec();
+                *bytes.last_mut().unwrap() ^= 1;
+                fs::write(files.0, bytes).unwrap();
+            }
+            Damage::Missing => fs::remove_file(files.0).unwrap(),
+            Damage::Swapped => {
+                fs::write(files.0, originals.1).unwrap();
+                fs::write(files.1, originals.0).unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn a_tampered_missing_or_swapped_page_is_refused_by_the_verification_and_nothing_is_written() {
+    let fixture = Fixture::bound_with_inventory(10, 6);
+    let files = (fixture.page_file(0), fixture.page_file(1));
+    let originals = (fs::read(&files.0).unwrap(), fs::read(&files.1).unwrap());
+    let before = fixture.snapshot();
+    let mut refused = Vec::new();
+    for damage in [Damage::Tampered, Damage::Missing, Damage::Swapped] {
+        damage.apply((&files.0, &files.1), (&originals.0, &originals.1));
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&fixture, &paths, &mut held);
+        let outcome = session.verify_inventory(&mut StdFs, &fixture.provider);
+        refused.push((
+            matches!(outcome, Err(ConversionError::Authority(_))),
+            session.inventory().is_none(),
+        ));
+        fs::write(&files.0, &originals.0).unwrap();
+        fs::write(&files.1, &originals.1).unwrap();
+    }
+    assert_eq!(refused, vec![(true, true); 3]);
+    // Nothing was written, and after the damage is undone the same installation verifies.
+    assert_eq!(fixture.snapshot(), before);
+    let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+    let mut session = open(&fixture, &paths, &mut held);
+    assert_eq!(
+        session.verify_inventory(&mut StdFs, &fixture.provider),
+        Ok(())
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn reading_the_inventory_under_a_lost_admission_is_refused() {
+    let fixture = Fixture::bound_with_inventory(10, 6);
+    let installation = fixture.base.0.clone();
+    let moved = installation.with_extension("moved");
+    let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+    let mut session = open(&fixture, &paths, &mut held);
+    session
+        .verify_inventory(&mut StdFs, &fixture.provider)
+        .unwrap();
+    fs::rename(&installation, &moved).unwrap();
+    let verify = session.verify_inventory(&mut StdFs, &fixture.provider);
+    let page = session.page(&mut StdFs, &fixture.provider, 0).map(|_| ());
+    fs::rename(&moved, &installation).unwrap();
+    assert_eq!(
+        (verify, page),
+        (
+            Err(ConversionError::NotAdmitted),
+            Err(ConversionError::NotAdmitted)
+        )
     );
 }
 
@@ -1217,11 +1441,17 @@ fn the_cursor_does_not_move_outside_convert() {
 
 #[test]
 fn a_session_that_another_owner_took_over_from_cannot_move_the_cursor() {
-    let committed = with_extent(phase_code::CONVERT);
-    let mut fixture = Fixture::bound(&committed);
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
     let mut session = open(&fixture, &paths, &mut held);
-    fixture.take_over(&committed);
+    session
+        .verify_inventory(&mut StdFs, &fixture.provider)
+        .unwrap();
+    session
+        .enter_convert(&mut StdFs, &mut fixture.provider)
+        .unwrap();
+    let converting = session.manifest().clone();
+    fixture.take_over(&converting);
     let before = fixture.snapshot();
     let cursor = JournalCheckpointCursor::new(0, 1);
     let outcome = session
@@ -1367,4 +1597,63 @@ fn an_admission_lost_after_a_refusal_that_left_a_candidate_is_reported_first() {
         (outcome, candidate),
         (Err(ConversionError::NotAdmitted), true)
     );
+}
+
+/// Which authenticated read of the inventory a test performs.
+#[cfg(unix)]
+#[derive(Clone, Copy)]
+enum InventoryRead {
+    Verify,
+    Page,
+}
+
+/// One authenticated read over `fixture`, with `on_read` told of every read it makes.
+#[cfg(unix)]
+fn inventory_read_watched<H: FnMut(&Path) -> io::Result<()>>(
+    fixture: &Fixture,
+    read: InventoryRead,
+    on_read: H,
+) -> Result<(), ConversionError> {
+    let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+    let mut session = open(fixture, &paths, &mut held);
+    let mut watched = WatchedFs { on_read };
+    match read {
+        InventoryRead::Verify => session.verify_inventory(&mut watched, &fixture.provider),
+        InventoryRead::Page => {
+            session
+                .verify_inventory(&mut StdFs, &fixture.provider)
+                .unwrap();
+            session.page(&mut watched, &fixture.provider, 0).map(|_| ())
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn an_inventory_read_that_loses_the_admission_is_not_returned() {
+    // The read is deterministic, so a first run counts its reads and a second run moves the installation
+    // away right after the last one: only the check after the read sees it.
+    let mut outcomes = Vec::new();
+    for read in [InventoryRead::Verify, InventoryRead::Page] {
+        let mut total = 0;
+        inventory_read_watched(&Fixture::bound_with_inventory(10, 6), read, |_| {
+            total += 1;
+            Ok(())
+        })
+        .unwrap();
+        let fixture = Fixture::bound_with_inventory(10, 6);
+        let installation = fixture.base.0.clone();
+        let moved = installation.with_extension("moved");
+        let mut seen = 0;
+        let outcome = inventory_read_watched(&fixture, read, |_| {
+            seen += 1;
+            if seen == total {
+                fs::rename(&installation, &moved).unwrap();
+            }
+            Ok(())
+        });
+        fs::rename(&moved, &installation).unwrap();
+        outcomes.push(outcome);
+    }
+    assert_eq!(outcomes, vec![Err(ConversionError::NotAdmitted); 2]);
 }
