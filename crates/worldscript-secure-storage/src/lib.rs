@@ -81,7 +81,10 @@ pub use commit::{
     CommittedGeneration, Debris, DebrisKind, MarkerCommitted, Reconciled, RecordLocation,
     RecordStore, RecoveryReason, Resolution, WriteRequest,
 };
-pub use conversion::{begin_conversion, ConversionBegin, ConversionError, ConversionSession};
+pub use conversion::{
+    begin_conversion, ConversionBegin, ConversionError, ConversionSession, ConvertBatch,
+    ConvertError, EntryStep, Progress,
+};
 pub use disposition::{disposition, is_r15_record_class, Disposition};
 pub use durable::{
     generation_path, stage_and_promote, stage_and_promote_envelope, staging_path,

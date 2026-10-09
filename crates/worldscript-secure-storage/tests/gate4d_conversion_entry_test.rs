@@ -3,13 +3,15 @@
 //! and refuses anything but the owner's conversion; it writes nothing. Every scenario therefore
 //! commits a real root that binds a real journal. C2b-1: the session renews its lease through the
 //! fenced journal-owner operation and follows the root. C2b-2: it enters `CONVERT` and moves the
-//! checkpoint cursor through the same step.
+//! checkpoint cursor through the same step. C2c-2: it converts the entries of the verified inventory
+//! batch by batch with a caller-supplied step, resumes from the persisted cursor and leaves `CONVERT`.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
 use std::fs::File;
 use std::io;
+use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -21,15 +23,15 @@ use worldscript_secure_storage::{
     generation_path, inventory_page_dir, load_catalog, operation_type, phase_code,
     seal_inventory_pages, source_authority_kind, source_physical_authority_kind, write_key_epoch,
     AdmissionScope, AuthorityError, CandidateConflict, CatalogChange, CatalogCommit,
-    ConversionBegin, ConversionError, ConversionSession, DirectoryDurability, DurableFs,
-    ExclusiveAdmissionGuard, InstallationScopeId, JournalCheckpoint, JournalCheckpointCursor,
-    JournalDurableError, JournalError, JournalInventoryEntry, JournalInventorySource,
-    JournalManifest, JournalPage, JournalRouteError, JournalSource, JournalTakeoverCommit, Key,
-    KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration,
-    MigrationExecutionError, MigrationFence, RecordClass, RecordIdentity, RecordMeta, RootBody,
-    RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState, RootKeyRefV1,
-    RootLayout, SealedPage, StdFs, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
-    OPERATION_ADMISSION_LOCK_FILE,
+    ConversionBegin, ConversionError, ConversionSession, ConvertBatch, ConvertError,
+    DirectoryDurability, DurableFs, EntryStep, ExclusiveAdmissionGuard, InstallationScopeId,
+    JournalCheckpoint, JournalCheckpointCursor, JournalDurableError, JournalError,
+    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, JournalRouteError,
+    JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus,
+    KeyProvider, LiveMigration, MigrationExecutionError, MigrationFence, Progress, RecordClass,
+    RecordIdentity, RecordMeta, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
+    RootCommitState, RootKeyRefV1, RootLayout, SealedPage, StdFs, WriteOperationId,
+    JOURNAL_MANIFEST_RECORD_SCHEMA, OPERATION_ADMISSION_LOCK_FILE,
 };
 
 const OPERATION: &str = "conversion-op";
@@ -91,6 +93,9 @@ fn entry(n: u32) -> JournalInventoryEntry {
 
 /// `count` entries in ascending pages of `per_page` (the last one shorter), every page at `generation`.
 fn pages_of(count: u32, per_page: usize, generation: u64) -> Vec<JournalPage> {
+    if count == 0 {
+        return Vec::new();
+    }
     let all: Vec<_> = (0..count).map(entry).collect();
     let sorted = JournalPage::new(0, 1, all).unwrap().entries().to_vec();
     let chunks = sorted.chunks(per_page).enumerate();
@@ -1679,4 +1684,316 @@ fn a_failed_inventory_read_under_a_lost_admission_reports_the_loss() {
         fs::rename(&moved, &installation).unwrap();
     }
     assert_eq!(outcomes, vec![Err(ConversionError::NotAdmitted); 2]);
+}
+
+/// A conversion step that records the entries it is handed, and fails once on demand.
+struct Recorder {
+    seen: Vec<JournalInventoryEntry>,
+    calls: usize,
+    fail_on_call: Option<usize>,
+}
+
+impl Recorder {
+    fn new() -> Self {
+        Recorder {
+            seen: Vec::new(),
+            calls: 0,
+            fail_on_call: None,
+        }
+    }
+
+    fn failing_on_call(call: usize) -> Self {
+        Recorder {
+            fail_on_call: Some(call),
+            ..Recorder::new()
+        }
+    }
+}
+
+impl EntryStep for Recorder {
+    type Error = &'static str;
+
+    fn convert(&mut self, entry: &JournalInventoryEntry) -> Result<(), &'static str> {
+        let call = self.calls;
+        self.calls += 1;
+        if self.fail_on_call == Some(call) {
+            return Err("injected");
+        }
+        self.seen.push(entry.clone());
+        Ok(())
+    }
+}
+
+/// Every entry of the stored inventory, in order.
+fn all_entries(count: u32, per_page: usize) -> Vec<JournalInventoryEntry> {
+    let pages = pages_of(count, per_page, REVISION);
+    pages
+        .iter()
+        .flat_map(|page| page.entries().to_vec())
+        .collect()
+}
+
+/// A session over `fixture`'s installation that has authenticated the inventory and is in `CONVERT`.
+fn converting<'a>(
+    fixture: &mut Fixture,
+    paths: &'a Paths,
+    held: &'a mut ExclusiveAdmissionGuard,
+) -> ConversionSession<'a> {
+    let mut session = open(fixture, paths, held);
+    session
+        .verify_inventory(&mut StdFs, &fixture.provider)
+        .unwrap();
+    session
+        .enter_convert(&mut StdFs, &mut fixture.provider)
+        .unwrap();
+    session
+}
+
+/// One `convert_next` call of `entries` entries over the real file system.
+fn convert_once(
+    session: &mut ConversionSession<'_>,
+    fixture: &mut Fixture,
+    recorder: &mut Recorder,
+    entries: u32,
+) -> Result<Progress, ConvertError<&'static str>> {
+    let batch = ConvertBatch {
+        step: recorder,
+        entries: NonZeroU32::new(entries).unwrap(),
+    };
+    session.convert_next(&mut StdFs, &mut fixture.provider, batch)
+}
+
+/// The progress and the cursor after each call, until `Done`.
+fn run_to_done(
+    session: &mut ConversionSession<'_>,
+    fixture: &mut Fixture,
+    recorder: &mut Recorder,
+    entries: u32,
+) -> Vec<(Progress, (u32, u32))> {
+    let mut rounds = Vec::new();
+    loop {
+        let progress = convert_once(session, fixture, recorder, entries).unwrap();
+        let manifest = session.manifest();
+        rounds.push((
+            progress,
+            (manifest.cursor_page_index, manifest.cursor_entry_index),
+        ));
+        if progress == Progress::Done {
+            return rounds;
+        }
+    }
+}
+
+#[test]
+fn a_whole_run_converts_every_entry_once_in_order_and_leaves_convert() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let mut recorder = Recorder::new();
+    let (rounds, again, phase) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        let rounds = run_to_done(&mut session, &mut fixture, &mut recorder, 4);
+        // A session that has seen the end converts nothing more.
+        let again = convert_once(&mut session, &mut fixture, &mut recorder, 4);
+        session
+            .finish_convert(&mut StdFs, &mut fixture.provider)
+            .unwrap();
+        let manifest = session.manifest();
+        let phase = (
+            manifest.phase,
+            manifest.cursor_page_index,
+            manifest.cursor_entry_index,
+        );
+        (rounds, again, phase)
+    };
+    // Batches of four over pages of six and four never cross a page boundary: 0..4, 4..6, 6..10.
+    let expected_rounds = vec![
+        (Progress::More, (0, 4)),
+        (Progress::More, (1, 0)),
+        (Progress::Done, (1, 3)),
+    ];
+    assert_eq!((rounds, again), (expected_rounds, Ok(Progress::Done)));
+    assert!(recorder.seen == all_entries(10, 6));
+    assert_eq!(phase, (phase_code::VERIFY, 0, 0));
+    // The root names `VERIFY`, which the conversion gate does not admit.
+    assert_eq!(
+        fixture.committed(OWNER),
+        Err(ConversionError::PhaseNotConvertible)
+    );
+}
+
+#[test]
+fn a_batch_of_one_checkpoints_after_every_entry_and_writes_nothing_when_the_cursor_stays() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let mut recorder = Recorder::new();
+    let (cursors, revision) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        let rounds = run_to_done(&mut session, &mut fixture, &mut recorder, 1);
+        let cursors: Vec<_> = rounds.iter().map(|round| round.1).collect();
+        (cursors, session.manifest().journal_revision)
+    };
+    let expected = vec![
+        (0, 1),
+        (0, 2),
+        (0, 3),
+        (0, 4),
+        (0, 5),
+        (1, 0),
+        (1, 1),
+        (1, 2),
+        (1, 3),
+        // The last entry leaves the cursor on itself: no checkpoint is written for it.
+        (1, 3),
+    ];
+    assert_eq!(cursors, expected);
+    // `CONVERT` entered, then nine checkpoints.
+    assert_eq!(revision, REVISION + 1 + 9);
+    assert!(recorder.seen == all_entries(10, 6));
+}
+
+#[test]
+fn a_failing_step_writes_nothing_and_a_restart_resumes_at_the_persisted_cursor() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let mut first = Recorder::failing_on_call(7);
+    let (failure, before, after) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        // 0..4 and 4..6 are converted and checkpointed; the batch 6..10 fails on its second entry.
+        convert_once(&mut session, &mut fixture, &mut first, 4).unwrap();
+        convert_once(&mut session, &mut fixture, &mut first, 4).unwrap();
+        let before = fixture.snapshot();
+        let failure = convert_once(&mut session, &mut fixture, &mut first, 4);
+        (failure, before, fixture.snapshot())
+    };
+    assert_eq!(
+        (failure, before == after),
+        (Err(ConvertError::Step("injected")), true)
+    );
+    // The process dies here; a new session resumes from the cursor the root holds, `(1, 0)`.
+    let mut second = Recorder::new();
+    let phase = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        let rounds = run_to_done(&mut session, &mut fixture, &mut second, 4);
+        assert_eq!(rounds, vec![(Progress::Done, (1, 3))]);
+        session
+            .finish_convert(&mut StdFs, &mut fixture.provider)
+            .unwrap();
+        session.manifest().phase
+    };
+    let all = all_entries(10, 6);
+    // Entries 0..6 were converted once before the crash and not again; 6 (done before the failure) again.
+    assert!(first.seen == all[..7]);
+    assert!(second.seen == all[6..]);
+    assert_eq!(phase, phase_code::VERIFY);
+}
+
+#[test]
+fn a_failed_checkpoint_leaves_the_batch_to_be_converted_again_on_retry() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let mut recorder = Recorder::new();
+    let (failed, kept, rounds) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        // The anchor refuses the root's preparation: the first batch is converted but not recorded.
+        fixture
+            .provider
+            .inject(Fault::BeforePersist(AnchorOp::Prepare));
+        let failed = convert_once(&mut session, &mut fixture, &mut recorder, 4);
+        let kept = session.manifest().cursor_entry_index;
+        let rounds = run_to_done(&mut session, &mut fixture, &mut recorder, 4);
+        session
+            .finish_convert(&mut StdFs, &mut fixture.provider)
+            .unwrap();
+        (failed, kept, rounds.len())
+    };
+    assert!(matches!(
+        failed,
+        Err(ConvertError::Session(ConversionError::Authority(_)))
+    ));
+    // The cursor stayed where it was, and the retry converted entries 0..4 a second time.
+    let all = all_entries(10, 6);
+    let mut expected = all[..4].to_vec();
+    expected.extend(all.iter().cloned());
+    assert_eq!((kept, rounds), (0, 3));
+    assert!(recorder.seen == expected);
+}
+
+#[test]
+fn leaving_convert_early_or_converting_in_the_wrong_phase_is_refused() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    let mut recorder = Recorder::new();
+    let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+    let mut session = open(&fixture, &paths, &mut held);
+    // `ADMIT`: neither the iteration nor the exit exists yet.
+    let converted = convert_once(&mut session, &mut fixture, &mut recorder, 4);
+    let finished = session.finish_convert(&mut StdFs, &mut fixture.provider);
+    session
+        .enter_convert(&mut StdFs, &mut fixture.provider)
+        .unwrap();
+    // `CONVERT` without the verified inventory.
+    let unverified = convert_once(&mut session, &mut fixture, &mut recorder, 4);
+    session
+        .verify_inventory(&mut StdFs, &fixture.provider)
+        .unwrap();
+    convert_once(&mut session, &mut fixture, &mut recorder, 4).unwrap();
+    // Not at the end yet.
+    let early = session.finish_convert(&mut StdFs, &mut fixture.provider);
+    assert_eq!(
+        (
+            converted,
+            finished.map(|_| ()),
+            unverified,
+            early.map(|_| ())
+        ),
+        (
+            Err(ConvertError::Session(ConversionError::WrongPhase)),
+            Err(ConversionError::WrongPhase),
+            Err(ConvertError::Session(ConversionError::InventoryNotVerified)),
+            Err(ConversionError::NotConverted)
+        )
+    );
+}
+
+#[test]
+fn an_empty_inventory_is_done_at_once_and_leaves_convert() {
+    let mut fixture = Fixture::bound_with_inventory(0, 6);
+    let mut recorder = Recorder::new();
+    let (progress, phase) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        let progress = convert_once(&mut session, &mut fixture, &mut recorder, 4);
+        session
+            .finish_convert(&mut StdFs, &mut fixture.provider)
+            .unwrap();
+        (progress, session.manifest().phase)
+    };
+    assert_eq!(
+        (progress, recorder.calls, phase),
+        (Ok(Progress::Done), 0, phase_code::VERIFY)
+    );
+}
+
+#[test]
+fn the_last_entry_is_converted_again_after_a_crash_that_followed_it() {
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
+    {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        run_to_done(&mut session, &mut fixture, &mut Recorder::new(), 4);
+        // The process dies before `finish_convert`.
+    }
+    let mut recorder = Recorder::new();
+    let (progress, phase) = {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = converting(&mut fixture, &paths, &mut held);
+        let progress = convert_once(&mut session, &mut fixture, &mut recorder, 4);
+        session
+            .finish_convert(&mut StdFs, &mut fixture.provider)
+            .unwrap();
+        (progress, session.manifest().phase)
+    };
+    // The cursor rests on the last entry, which is all the new session converts.
+    assert!(recorder.seen == all_entries(10, 6)[9..]);
+    assert_eq!((progress, phase), (Ok(Progress::Done), phase_code::VERIFY));
 }

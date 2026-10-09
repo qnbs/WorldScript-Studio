@@ -44,6 +44,19 @@
 //! zero, within page `cursor_page_index` of the next entry to process, so [`ConversionSession::advance_cursor`]
 //! needs the verified set and refuses an index outside the selected page.
 //!
+//! The conversion itself is a loop the caller drives, one bounded unit at a time:
+//! [`ConversionSession::convert_next`] converts up to a batch of entries of the page the cursor points
+//! into through a caller-supplied, idempotent [`EntryStep`], records the new cursor and says whether more
+//! remain; between calls the caller renews the lease with its own clock (Core reads none):
+//!
+//! ```text
+//! session.verify_inventory(..)?; session.enter_convert(..)?;
+//! while session.convert_next(.., batch)? == Progress::More {
+//!     if lease_is_short(now()) { session.renew_lease(.., now() + EXTENSION)?; }
+//! }
+//! session.finish_convert(..)?; // CONVERT -> VERIFY
+//! ```
+//!
 //! What a step leaves behind. All file operations of a session go through the canonical paths of the
 //! root, the installation and the journal directory that were validated and pinned at begin, never
 //! through the caller's spelling (a symlink retargeted later cannot redirect them). Before the commit
@@ -59,6 +72,7 @@
 //! the caller begins again to learn the state.
 
 use std::fs::File;
+use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 
 use crate::admission::{AdmissionError, AdmissionScope, ExclusiveAdmissionGuard};
@@ -71,8 +85,8 @@ use crate::durable::{DurableFs, WriteOperationId};
 use crate::error::SealError;
 use crate::journal::{
     checkpoint_progress, phase_code, renewed_lease, transition_phase, CandidateConflict,
-    JournalCheckpointCursor, JournalError, JournalManifest, JournalPage, MigrationExecutionError,
-    MigrationFence, MigrationPhase, VerifiedInventory,
+    JournalCheckpointCursor, JournalError, JournalInventoryEntry, JournalManifest, JournalPage,
+    MigrationExecutionError, MigrationFence, MigrationPhase, VerifiedInventory,
 };
 use crate::provider::KeyProvider;
 use crate::root::LiveMigration;
@@ -123,6 +137,9 @@ pub enum ConversionError {
     WrongPhase,
     /// The inventory pages were not authenticated yet: [`ConversionSession::verify_inventory`] first.
     InventoryNotVerified,
+    /// This session has not seen the end of the last page: [`ConversionSession::convert_next`] has not
+    /// returned [`Progress::Done`], so leaving `CONVERT` could skip entries.
+    NotConverted,
     /// No write-operation identifier could be drawn from the operating system.
     OperationId(SealError),
     /// The committed journal is not the one this session holds (a step's read-back named another
@@ -181,6 +198,48 @@ impl PinnedDirectory {
     }
 }
 
+/// The conversion of one inventory entry, supplied by the caller (real record conversion is Gate 5).
+///
+/// It must be idempotent: after a crash, a failed checkpoint or a step failure the same entry can be
+/// handed to it again, so it may never rely on running exactly once.
+pub trait EntryStep {
+    /// What a failed conversion reports.
+    type Error;
+
+    /// Converts `entry`.
+    fn convert(&mut self, entry: &JournalInventoryEntry) -> Result<(), Self::Error>;
+}
+
+/// What one [`ConversionSession::convert_next`] call converts and with which step.
+pub struct ConvertBatch<'a, S: EntryStep> {
+    pub step: &'a mut S,
+    /// The most entries to convert before the cursor is recorded: `1` checkpoints after every entry.
+    pub entries: NonZeroU32,
+}
+
+/// Whether [`ConversionSession::convert_next`] left entries to convert.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Progress {
+    More,
+    /// The end of the last page was reached; [`ConversionSession::finish_convert`] may follow.
+    Done,
+}
+
+/// Why a [`ConversionSession::convert_next`] call stopped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConvertError<E> {
+    /// The session refused or failed to record the cursor.
+    Session(ConversionError),
+    /// The step failed; nothing was written for this batch.
+    Step(E),
+}
+
+impl<E> From<ConversionError> for ConvertError<E> {
+    fn from(error: ConversionError) -> Self {
+        Self::Session(error)
+    }
+}
+
 /// Which journal-owner operation commits a step's successor: the lease renewal and the ordinary
 /// checkpoint are different operations over the same root event.
 #[derive(Debug, Clone, Copy)]
@@ -203,6 +262,8 @@ pub struct ConversionSession<'a> {
     /// The page set authenticated by [`ConversionSession::verify_inventory`]; it is immutable once
     /// captured, so it stays valid for the snapshot it was verified against.
     inventory: Option<VerifiedInventory>,
+    /// Whether [`ConversionSession::convert_next`] returned [`Progress::Done`] in this session.
+    converted_all: bool,
     spent: bool,
 }
 
@@ -236,6 +297,7 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
         journal_pin,
         journal,
         inventory: None,
+        converted_all: false,
         spent: false,
     })
 }
@@ -281,6 +343,19 @@ fn same_inventory(left: &JournalManifest, right: &JournalManifest) -> bool {
         && left.entry_count == right.entry_count
         && left.inventory_digest == right.inventory_digest
         && left.journal_page_set_digest == right.journal_page_set_digest
+}
+
+/// The cursor after converting entries up to `end` of page `page` (which has `len` entries) and whether
+/// that was the end of the last page: `(page, end)` inside a page, `(page + 1, 0)` at a page end, and the
+/// last entry itself at the end of the last page.
+fn cursor_after(page: u32, end: usize, len: usize, page_count: u32) -> ((u32, u32), bool) {
+    if end < len {
+        return ((page, end as u32), false);
+    }
+    if page + 1 < page_count {
+        return ((page + 1, 0), false);
+    }
+    ((page, (len - 1) as u32), true)
 }
 
 fn page_refusal(error: JournalError) -> ConversionError {
@@ -448,6 +523,84 @@ impl<'a> ConversionSession<'a> {
                 Some(_) => Err(page_refusal(JournalError::EntryCountMismatch)),
                 None => Err(page_refusal(JournalError::InvalidPageIndex)),
             }
+        })
+    }
+
+    /// Converts up to `batch.entries` entries of the page the cursor points into with `batch.step`,
+    /// records the new cursor and says whether entries remain. A batch never crosses a page boundary.
+    ///
+    /// The cursor after a batch is the next entry to process: `(page, next)`, or `(page + 1, 0)` at a
+    /// page end, or, at the end of the last page, that last entry itself (the cursor cannot point past
+    /// the end), which is then converted again if the session is lost before [`ConversionSession::finish_convert`].
+    /// A step failure writes nothing and the batch is converted again from the same cursor; a failed
+    /// checkpoint after the steps leaves the batch to be converted again on retry or resume, which is
+    /// why the step must be idempotent. Needs `CONVERT` (`WrongPhase`) and the verified inventory
+    /// (`InventoryNotVerified`); an empty inventory, and a session that has seen the end, are `Done`.
+    pub fn convert_next<F, P, S>(
+        &mut self,
+        fs: &mut F,
+        provider: &mut P,
+        batch: ConvertBatch<'_, S>,
+    ) -> Result<Progress, ConvertError<S::Error>>
+    where
+        F: DurableFs,
+        P: KeyProvider,
+        S: EntryStep,
+    {
+        self.ready()?;
+        if self.journal.manifest.phase != phase_code::CONVERT {
+            return Err(ConversionError::WrongPhase.into());
+        }
+        let page_count = self
+            .inventory
+            .as_ref()
+            .ok_or(ConversionError::InventoryNotVerified)?
+            .manifest()
+            .page_count;
+        if self.converted_all || page_count == 0 {
+            self.converted_all = true;
+            return Ok(Progress::Done);
+        }
+        let at = (
+            self.journal.manifest.cursor_page_index,
+            self.journal.manifest.cursor_entry_index,
+        );
+        let page = self.page(fs, &*provider, at.0)?;
+        let entries = page.entries();
+        let start = at.1 as usize;
+        let end = entries
+            .len()
+            .min(start.saturating_add(batch.entries.get() as usize));
+        for entry in &entries[start..end] {
+            batch.step.convert(entry).map_err(ConvertError::Step)?;
+        }
+        let (next, done) = cursor_after(at.0, end, entries.len(), page_count);
+        if next != at {
+            let cursor = JournalCheckpointCursor::new(next.0, next.1);
+            self.advance_cursor(fs, provider, cursor)?;
+        }
+        self.converted_all = done;
+        Ok(if done { Progress::Done } else { Progress::More })
+    }
+
+    /// Leaves `CONVERT` for `VERIFY` (the cursor goes back to `(0, 0)`) and returns the root commit. The
+    /// session must have seen the end of the last page (`NotConverted` otherwise), so that no entry can be
+    /// skipped; in any other phase the step is `WrongPhase`.
+    pub fn finish_convert<F: DurableFs, P: KeyProvider>(
+        &mut self,
+        fs: &mut F,
+        provider: &mut P,
+    ) -> Result<RootCommitted, ConversionError> {
+        self.ready()?;
+        if self.journal.manifest.phase != phase_code::CONVERT {
+            return Err(ConversionError::WrongPhase);
+        }
+        if !self.converted_all {
+            return Err(ConversionError::NotConverted);
+        }
+        let verify = MigrationPhase::from_wire(phase_code::VERIFY);
+        self.step(fs, provider, StepKind::Checkpoint, |manifest, fence| {
+            transition_phase(manifest, fence, verify).map_err(ConversionError::Migration)
         })
     }
 
