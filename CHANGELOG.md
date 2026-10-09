@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Operations:** destructive Vercel Preview retention for source merges may now
+  wait until the next sanctioned release reconciliation, owned by Codex CLI in
+  the local VS Code/Ubuntu environment. Cursor Cloud still proves exact-main
+  CI/CD, CodeQL, Production READY, canonical HTTP, and alias sanity after every
+  merge, and it does not delete deployments or publish a release. Production,
+  rollback, active-PR previews, and unknown metadata stay protected. Gate 7
+  and the storage-authority switch stay maintainer-gated. Deferral is capped
+  at 14 days and 24 non-protected Preview deployments; either cap, or provider
+  resource pressure, requires one exceptional local Codex CLI pass and stops
+  dependent repository mutation until that pass is recorded. That pass does
+  not restore per-merge destructive cleanup. The cycle ends only after the
+  sanctioned release pass. The mode is inert until this policy is on `main`.
+  Introducing record: #1020.
 - **R-15 Gate 4E:** the ordinary-operation barrier of a bound root is now pinned with evidence. With an unlocked
   provider, a loadable catalog and no interrupted root commit, a committed root that binds a live migration already
   made `ProtectedStorage` refuse every ordinary operation (write, reconcile, list, read, lock, unlock, shutdown) in
