@@ -144,9 +144,9 @@ pub use state::{
     allows_phase_transition, assert_binding_successor, assert_fence, assert_live_binding,
     assert_manifest_promote_authority, assert_page_promote_authority,
     authoritative_manifest_revision, checkpoint_progress, is_terminal_phase, mark_done,
-    mark_recovery, ordinary_mutating_writes_admitted, transition_phase, JournalCheckpointCursor,
-    JournalInventoryExtent, JournalRevision, ManifestEnvelopeDigest, MigrationExecutionError,
-    MigrationFence, MigrationPhase, RecoveryReasonCode,
+    mark_recovery, ordinary_mutating_writes_admitted, renewed_lease, transition_phase,
+    JournalCheckpointCursor, JournalInventoryExtent, JournalRevision, ManifestEnvelopeDigest,
+    MigrationExecutionError, MigrationFence, MigrationPhase, RecoveryReasonCode,
 };
 pub use stream_capture::{
     load_staged_page, CaptureStart, StagedCapture, StagedPage, StreamedCapture,
