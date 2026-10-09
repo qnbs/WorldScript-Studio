@@ -245,7 +245,9 @@ pub enum Progress {
 pub enum ConvertError<E> {
     /// The session refused or failed to record the cursor.
     Session(ConversionError),
-    /// The step failed; nothing was written for this batch.
+    /// The step failed. The session recorded nothing for this batch: no checkpoint was written and
+    /// nothing rolls back what the step had already converted, so the entries of the batch before the
+    /// failing one stay converted and are handed to the step again by the next call or after a resume.
     Step(E),
 }
 
@@ -585,9 +587,10 @@ impl<'a> ConversionSession<'a> {
     /// The cursor after a batch is the next entry to process: `(page, next)`, or `(page + 1, 0)` at a
     /// page end, or, at the end of the last page, that last entry itself (the cursor cannot point past
     /// the end), which is then converted again if the session is lost before [`ConversionSession::finish_convert`].
-    /// A step failure writes nothing and the batch is converted again from the same cursor; a failed
-    /// checkpoint after the steps leaves the batch to be converted again on retry or resume, which is
-    /// why the step must be idempotent. Needs `CONVERT` (`WrongPhase`) and the verified inventory
+    /// A step failure records no checkpoint: entries the step had already converted in the batch stay
+    /// converted (nothing rolls them back) and the whole batch is handed to the step again from the same
+    /// cursor; a failed checkpoint after the steps leaves the batch to be converted again on retry or
+    /// resume, which is why the step must be idempotent. Needs `CONVERT` (`WrongPhase`) and the verified inventory
     /// (`InventoryNotVerified`); an empty inventory, and a session that has seen the end, are `Done`.
     pub fn convert_next<F, P, S>(
         &mut self,

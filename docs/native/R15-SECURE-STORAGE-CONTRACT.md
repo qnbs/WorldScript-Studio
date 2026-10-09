@@ -2426,7 +2426,7 @@ be fenced under the cross-process lock (the session confirms against the committ
 is still the journal immediately before it hands out a batch, which narrows the window of an owner that
 was taken over, but only the fenced mutation closes it), then records the cursor and reports whether
 entries remain; a persisted cursor that lies outside its page is refused, not sliced past;
-a step failure writes nothing, a batch of one checkpoints after every entry, and between calls the caller
+a step failure records no checkpoint (what the step had already converted in the batch is not rolled back and is handed to it again), a batch of one checkpoints after every entry, and between calls the caller
 renews the lease with its own clock. The cursor after a batch is the next entry to process, and at the end
 of the last page the last entry itself, which a session lost before the exit converts again. The session
 leaves `CONVERT` for `VERIFY` (the cursor back to `(0, 0)`) only after it has itself seen the end of the
