@@ -43,11 +43,12 @@ use crate::identity::RecordIdentity;
 use crate::journal::{
     assert_binding_successor, assert_binding_takeover, assert_capture_successor, assert_fence,
     assert_progress_successor, assert_renewal_successor, assert_takeover_successor,
-    load_authoritative_manifest, promote_inventory_set_fenced, promote_staged_inventory_fenced,
-    publish_manifest_fenced, publish_renewal_fenced, publish_takeover_fenced, CandidateConflict,
-    CaptureStart, InventorySetWrite, JournalDurableContext, JournalDurableError,
-    JournalInventoryEntry, JournalManifest, JournalTakeover, MigrationExecutionError,
-    MigrationFence, SealedPage, StagedCapture, StagedPromotion, StreamedCapture,
+    load_authoritative_manifest, load_inventory_page, promote_inventory_set_fenced,
+    promote_staged_inventory_fenced, publish_manifest_fenced, publish_renewal_fenced,
+    publish_takeover_fenced, verify_stored_inventory, CandidateConflict, CaptureStart,
+    InventorySetWrite, JournalDurableContext, JournalDurableError, JournalInventoryEntry,
+    JournalManifest, JournalPage, JournalTakeover, MigrationExecutionError, MigrationFence,
+    SealedPage, StagedCapture, StagedPromotion, StreamedCapture, VerifiedInventory,
 };
 use crate::journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 use crate::marker::content_digest;
@@ -654,6 +655,40 @@ pub(crate) fn read_committed_journal<F: DurableFs, P: KeyProvider>(
         root_key_ref: route.root_key_ref,
         active_key_epoch: route.active_key_epoch,
     })
+}
+
+/// Authenticates the page set the committed root names, without a key in the caller's hands.
+///
+/// The binding comes from the committed root, the journal key is resolved through the key-epoch
+/// registry, and [`verify_stored_inventory`] loads the manifest by the exact root-named path and
+/// confirms every page and both digests against it, one page in memory at a time. Nothing is written
+/// and no lock is taken; the page set is immutable once captured, so the result stays valid for the
+/// manifest it was verified against.
+pub(crate) fn verify_committed_inventory<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    journal: JournalSource<'_>,
+) -> Result<VerifiedInventory, AuthorityError> {
+    let route = committed_route(fs, provider, layout)?;
+    let key = route_journal_key(fs, provider, layout, journal)?;
+    let mut ctx = journal_context(&mut *fs, journal, &key, CandidateConflict::Refuse);
+    verify_stored_inventory(&mut ctx, &route.live).map_err(AuthorityError::Journal)
+}
+
+/// Reads page `page_index` of a verified page set by the exact path of its authenticated reference,
+/// without a key in the caller's hands; the envelope must hash to the reference before it is opened.
+pub(crate) fn load_committed_page<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    journal: JournalSource<'_>,
+    verified: &VerifiedInventory,
+    page_index: u32,
+) -> Result<JournalPage, AuthorityError> {
+    let key = route_journal_key(fs, provider, layout, journal)?;
+    let mut ctx = journal_context(&mut *fs, journal, &key, CandidateConflict::Refuse);
+    load_inventory_page(&mut ctx, verified, page_index).map_err(AuthorityError::Journal)
 }
 
 impl StagingSession {

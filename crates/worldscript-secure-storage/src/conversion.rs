@@ -38,6 +38,12 @@
 //! the root lock are coupled), commits with the key route and active epoch the committed root itself
 //! names, reads the committed journal back under that same root event and checks the admission again.
 //!
+//! The pages the conversion walks are read through the session too, keylessly: [`ConversionSession::verify_inventory`]
+//! authenticates the whole page set once against the committed root, and [`ConversionSession::page`] reads
+//! one authenticated page. The checkpoint cursor is page-local: `cursor_entry_index` is the index, from
+//! zero, within page `cursor_page_index` of the next entry to process, so [`ConversionSession::advance_cursor`]
+//! needs the verified set and refuses an index outside the selected page.
+//!
 //! What a step leaves behind. All file operations of a session go through the canonical paths of the
 //! root, the installation and the journal directory that were validated and pinned at begin, never
 //! through the caller's spelling (a symlink retargeted later cannot redirect them). Before the commit
@@ -57,15 +63,16 @@ use std::path::{Path, PathBuf};
 
 use crate::admission::{AdmissionError, AdmissionScope, ExclusiveAdmissionGuard};
 use crate::authority::{
-    commit_journal_checkpoint_held, commit_lease_renewal_held, read_committed_journal,
-    AuthorityError, CommittedJournal, JournalCheckpoint, JournalSource,
+    commit_journal_checkpoint_held, commit_lease_renewal_held, load_committed_page,
+    read_committed_journal, verify_committed_inventory, AuthorityError, CommittedJournal,
+    JournalCheckpoint, JournalSource,
 };
 use crate::durable::{DurableFs, WriteOperationId};
 use crate::error::SealError;
 use crate::journal::{
     checkpoint_progress, phase_code, renewed_lease, transition_phase, CandidateConflict,
-    JournalCheckpointCursor, JournalManifest, MigrationExecutionError, MigrationFence,
-    MigrationPhase,
+    JournalCheckpointCursor, JournalError, JournalManifest, JournalPage, MigrationExecutionError,
+    MigrationFence, MigrationPhase, VerifiedInventory,
 };
 use crate::provider::KeyProvider;
 use crate::root::LiveMigration;
@@ -114,6 +121,8 @@ pub enum ConversionError {
     Migration(MigrationExecutionError),
     /// The step belongs to another phase: the cursor moves in `CONVERT` only.
     WrongPhase,
+    /// The inventory pages were not authenticated yet: [`ConversionSession::verify_inventory`] first.
+    InventoryNotVerified,
     /// No write-operation identifier could be drawn from the operating system.
     OperationId(SealError),
     /// The committed journal is not the one this session holds (a step's read-back named another
@@ -191,6 +200,9 @@ pub struct ConversionSession<'a> {
     root: PathBuf,
     journal_pin: PinnedDirectory,
     journal: CommittedJournal,
+    /// The page set authenticated by [`ConversionSession::verify_inventory`]; it is immutable once
+    /// captured, so it stays valid for the snapshot it was verified against.
+    inventory: Option<VerifiedInventory>,
     spent: bool,
 }
 
@@ -223,6 +235,7 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
         root,
         journal_pin,
         journal,
+        inventory: None,
         spent: false,
     })
 }
@@ -259,6 +272,19 @@ fn check_convertible(manifest: &JournalManifest, owner_id: &str) -> Result<(), C
         return Err(ConversionError::ForeignLeaseOwner);
     }
     Ok(())
+}
+
+/// Whether two manifests name the same captured inventory.
+fn same_inventory(left: &JournalManifest, right: &JournalManifest) -> bool {
+    left.inventory_version == right.inventory_version
+        && left.page_count == right.page_count
+        && left.entry_count == right.entry_count
+        && left.inventory_digest == right.inventory_digest
+        && left.journal_page_set_digest == right.journal_page_set_digest
+}
+
+fn page_refusal(error: JournalError) -> ConversionError {
+    ConversionError::Migration(MigrationExecutionError::Journal(error))
 }
 
 impl<'a> ConversionSession<'a> {
@@ -323,24 +349,105 @@ impl<'a> ConversionSession<'a> {
         .map(Some)
     }
 
+    /// Authenticates the whole page set the committed root names and keeps its references, which the
+    /// cursor and the page reads are checked against. The pages are read once, one at a time (only the
+    /// references are kept), and the set must be the inventory the session's snapshot names; otherwise
+    /// the session is spent (`Superseded`). A read failure writes nothing and does not spend the
+    /// session: the call may be repeated.
+    pub fn verify_inventory<F: DurableFs, P: KeyProvider>(
+        &mut self,
+        fs: &mut F,
+        provider: &P,
+    ) -> Result<(), ConversionError> {
+        self.ready()?;
+        let operation = WriteOperationId::generate().map_err(ConversionError::OperationId)?;
+        let layout = RootLayout {
+            root_dir: &self.root,
+        };
+        let journal = JournalSource {
+            dir: &self.journal_pin.canonical,
+            operation: &operation,
+        };
+        let read = verify_committed_inventory(fs, provider, layout, journal);
+        // A lost admission is reported first, whether or not the read succeeded.
+        self.check_admitted()?;
+        let verified = read?;
+        if !same_inventory(verified.manifest(), &self.journal.manifest) {
+            self.spent = true;
+            return Err(ConversionError::Superseded);
+        }
+        self.inventory = Some(verified);
+        Ok(())
+    }
+
+    /// The page set [`ConversionSession::verify_inventory`] authenticated: the manifest it was verified
+    /// against and the authenticated reference of every page, if it was verified.
+    pub fn inventory(&self) -> Option<&VerifiedInventory> {
+        self.inventory.as_ref()
+    }
+
+    /// Reads page `page_index` of the verified inventory by the exact path of its authenticated
+    /// reference; the envelope must hash to the reference before it is opened. Needs
+    /// [`ConversionSession::verify_inventory`] first (`InventoryNotVerified`); nothing is written.
+    pub fn page<F: DurableFs, P: KeyProvider>(
+        &self,
+        fs: &mut F,
+        provider: &P,
+        page_index: u32,
+    ) -> Result<JournalPage, ConversionError> {
+        self.ready()?;
+        let verified = self
+            .inventory
+            .as_ref()
+            .ok_or(ConversionError::InventoryNotVerified)?;
+        let operation = WriteOperationId::generate().map_err(ConversionError::OperationId)?;
+        let layout = RootLayout {
+            root_dir: &self.root,
+        };
+        let journal = JournalSource {
+            dir: &self.journal_pin.canonical,
+            operation: &operation,
+        };
+        let read = load_committed_page(fs, provider, layout, journal, verified, page_index);
+        // A lost admission is reported first, whether or not the read succeeded.
+        self.check_admitted()?;
+        Ok(read?)
+    }
+
     /// Records durable progress in `CONVERT`: moves the checkpoint cursor to `cursor` and returns the
-    /// root commit. The cursor never moves backwards and stays inside the manifest's extent, its page
-    /// count and its total entry count (`Migration(RegressiveCheckpoint)` and the extent refusals,
-    /// before any write); an equal cursor is accepted and records a revision with the same cursor. The
-    /// manifest does not carry the entry count of a page, so this does not check the entry index
-    /// against the selected page: what the index means within a page is fixed by the iteration that
-    /// reads the pages. In any other phase the step is `WrongPhase`.
+    /// root commit. The cursor is page-local: `cursor.entry_index` is the index, from zero, within page
+    /// `cursor.page_index` of the next entry to process. It never moves backwards and stays inside the
+    /// manifest's extent and inside the selected page, whose entry count is the authenticated
+    /// reference's (`Migration(RegressiveCheckpoint)` and the extent refusals, before any write); an
+    /// equal cursor is accepted and records a revision with the same cursor. The end of the last page
+    /// has no cursor value: completion is the transition to `VERIFY`. In any other phase the step is
+    /// `WrongPhase`, and without [`ConversionSession::verify_inventory`] it is `InventoryNotVerified`.
     pub fn advance_cursor<F: DurableFs, P: KeyProvider>(
         &mut self,
         fs: &mut F,
         provider: &mut P,
         cursor: JournalCheckpointCursor,
     ) -> Result<RootCommitted, ConversionError> {
+        self.ready()?;
+        if self.journal.manifest.phase != phase_code::CONVERT {
+            return Err(ConversionError::WrongPhase);
+        }
+        let verified = self
+            .inventory
+            .as_ref()
+            .ok_or(ConversionError::InventoryNotVerified)?;
+        let in_page = usize::try_from(cursor.page_index)
+            .ok()
+            .and_then(|index| verified.page_refs().get(index))
+            .map(|reference| reference.page_entry_count);
         self.step(fs, provider, StepKind::Checkpoint, |manifest, fence| {
-            if manifest.phase != phase_code::CONVERT {
-                return Err(ConversionError::WrongPhase);
+            let next =
+                checkpoint_progress(manifest, fence, cursor).map_err(ConversionError::Migration)?;
+            match in_page {
+                Some(entries) if cursor.entry_index < entries => Ok(next),
+                Some(_) => Err(page_refusal(JournalError::EntryCountMismatch)),
+                None => Err(page_refusal(JournalError::InvalidPageIndex)),
             }
-            checkpoint_progress(manifest, fence, cursor).map_err(ConversionError::Migration)
         })
     }
 

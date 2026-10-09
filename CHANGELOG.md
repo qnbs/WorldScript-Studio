@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** the conversion session reads the inventory it converts and the cursor becomes page-local
+  (part c-1 of the conversion driver). `ConversionSession::verify_inventory` authenticates the whole page set
+  once against the committed root (keylessly, one page in memory at a time) and `page` reads one authenticated
+  page; `advance_cursor` needs the verified set and refuses an entry index outside the selected page, where it
+  used to check the total only. The contract now says what `cursor_entry_index` means: the index within its
+  page of the next entry to process. The cursor-driven iteration is the next part. PR #1016.
 - **R-15 Gate 4D:** the conversion session enters `CONVERT` and moves the checkpoint cursor (part b-2 of the
   owner's steps through the gate). `ConversionSession::enter_convert` (idempotent: a session already in
   `CONVERT` writes nothing) and `advance_cursor` (forward only, inside the inventory, in `CONVERT` only) share

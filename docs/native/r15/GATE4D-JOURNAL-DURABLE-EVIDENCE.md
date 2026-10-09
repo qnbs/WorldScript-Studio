@@ -665,6 +665,42 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Slice C2c-1 — authenticated page access and the page-local cursor
+
+The session could not read the inventory it is to convert (the readers need a key-carrying context, the key route is
+private to `authority.rs`, the session is keyless), and `advance_cursor` checked a cursor against the manifest's *total*
+entry count only: with pages of six and four entries the cursor `(1, 9)` passed. The contract did not say what
+`cursor_entry_index` means. This slice closes the criterion recorded from the review of #1015.
+
+| Step | Rule |
+|---|---|
+| readers | `verify_committed_inventory` (binding from the root, key through the registry, `verify_stored_inventory`) and `load_committed_page` (`load_inventory_page`), cut like `read_committed_journal`; nothing is written and no lock is taken |
+| `verify_inventory` | not spent, admission and pinned journal checked before and after (a lost admission is reported first, also when the read failed); reads and authenticates the whole page set once (one page in memory, only the references kept); the verified set must be the inventory the snapshot names (page count, entry count, inventory digest, page-set digest), otherwise `Superseded` and the session is spent; a read failure writes nothing and does not spend the session |
+| `page` | needs the verified set (`InventoryNotVerified`); reads one page by the exact path of its authenticated reference, the envelope hashing to the reference before it is opened; admission checked before and after, a failed read included |
+| cursor meaning | `cursor_entry_index` is the index, from zero, within page `cursor_page_index` of the next entry to process; finishing a page moves the cursor to `(page + 1, 0)`; the end of the last page has no cursor value (the validator requires `entry_index < entry_count`), so completion is the `CONVERT` -> `VERIFY` transition |
+| `advance_cursor` | `CONVERT` only (`WrongPhase`), then the verified set (`InventoryNotVerified`), then `checkpoint_progress` (never backwards, inside the manifest's extent), then the entry index against the authenticated `page_entry_count` of the selected page (`EntryCountMismatch`); all refused before any write |
+
+Decisions, disclosed: (a) an explicit `verify_inventory` rather than a lazy verification inside the first cursor step, so
+that the whole page set is read once and visibly; (b) `advance_cursor` requires it, so the page-local check is mandatory,
+not best effort; (c) the session stays keyless, the key is routed per call; (d) a read failure does not spend the session,
+because nothing was written; (e) the page-local meaning of the entry index is proposed here and fixed by this slice, so
+that the maintainer may correct it before the iteration (C2c-2) builds on it.
+
+Proof (`gate4d_conversion_entry_test`, over a stored inventory of ten entries in pages of six and four, built with
+`seal_inventory_pages`, `capture_inventory` and the stored page layout): the whole set is authenticated and the
+references say six and four; both pages are read and equal what was captured; a page before the set is verified, and
+a page past the end, are refused; `(1, 9)` is refused (inside the total, outside page 1), `(1, 4)` likewise, `(0, 3)`,
+`(1, 2)` and `(1, 2)` again are accepted, `(0, 5)` is regressive, `(2, 0)` and `(1, 10)` are outside the extent; the
+cursor without the verified set is refused with nothing written; a tampered, a missing and a swapped page are refused by
+the verification, nothing is written, the session is not spent and the same installation verifies once the damage is
+undone; an installation moved away before a read, and right after its last read, is reported and the read is not
+returned, and so is a loss at the moment the last read fails; a session another owner took over from cannot move the cursor. Mutation-checked: the page-local check, the
+verified-set requirement of the cursor and of the page read, the admission checks before and after each read, removed one
+at a time, fail the test that owns them. Two checks have no failing test: the `None` arm for a page index outside the
+references is unreachable (the extent check refuses it first), and the comparison of the verified set with the snapshot's
+inventory cannot differ without a defect, because the inventory fields are frozen once captured; both are defence in
+depth.
+
 ## Slice C2b-2 — the session enters `CONVERT` and moves the cursor
 
 C2b-1 gave the conversion session its first step. The other two steps differ from it only in the pure successor
@@ -676,7 +712,7 @@ finalisation rule.
 | shared step | spent and admission checks; the successor built from the session's snapshot; root event through the held admission; the committed journal read back under it; the root settles the outcome; canonical paths, the pinned journal, `Quarantine`, the commit returned (all as C2b-1) |
 | commit | `StepKind::Renewal` commits through `commit_lease_renewal_held`, `StepKind::Checkpoint` through the new `commit_journal_checkpoint_held`, the body of `commit_journal_checkpoint` under a root event the caller holds (that function acquires the lock and delegates) |
 | `enter_convert` | `transition_phase` to `CONVERT` (cursor `(0, 0)`, revision plus one, fence kept, `final_inventory_captured` required by the pure function); a session already in `CONVERT` writes nothing and returns `None`, after a spent check and a read of the committed journal that must still equal its snapshot (otherwise `Superseded` and the session is spent: another owner took over); an unreadable root is the read error and nothing was written |
-| `advance_cursor` | `CONVERT` only (`WrongPhase` otherwise), then `checkpoint_progress`: never backwards (`RegressiveCheckpoint`), inside the manifest's extent, its page count and total entry count (`InvalidPageIndex`, `EntryCountMismatch`), an equal cursor accepted as a revision with the same cursor; all refused before any write. The manifest does not carry the entry count of a page, so the entry index is not checked against the selected page: that, and what the index means within a page, is the page iteration's contract (C2c) |
+| `advance_cursor` | `CONVERT` only (`WrongPhase` otherwise), then `checkpoint_progress`: never backwards (`RegressiveCheckpoint`), inside the manifest's extent, its page count and total entry count (`InvalidPageIndex`, `EntryCountMismatch`), an equal cursor accepted as a revision with the same cursor; all refused before any write. The manifest does not carry the entry count of a page, so the entry index was checked against the total only; C2c-1 adds the page-local check and fixes the meaning of the index |
 | finalisation | after the commit call every outcome, a refusal included (it may follow a published candidate), is followed by the admission check, `NotAdmitted` taking precedence, which closes the criterion recorded from the review of #1014 |
 
 Decisions, disclosed: (a) one private step shared by the three public methods, so they cannot drift, with the
@@ -1104,7 +1140,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
-- Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) exist, but nothing yet iterates the verified page set: the cursor-driven iteration with a per-entry step and the crash/resume evidence (C2c), then `CONVERT` -> `VERIFY`.
+- Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) and the authenticated page access with the page-local cursor (C2c-1: `verify_inventory`, `page`) exist, but nothing yet iterates the verified page set: the cursor-driven iteration with a per-entry step and the crash/resume evidence (C2c-2), then `CONVERT` -> `VERIFY`.
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read. Reclaiming them needs a directory-removal primitive and a sweep that knows no live attempt owns them, as for the orphaned digest directories of a discarded capture (acceptance criterion on #359).
