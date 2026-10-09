@@ -555,7 +555,7 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     begin: SessionBegin<'_>,
 ) -> Result<StagingSession, AuthorityError> {
-    let live = committed_live_migration(fs, provider, layout)?;
+    let live = committed_route(fs, provider, layout)?.live;
     let key = route_journal_key(fs, provider, layout, begin.journal)?;
     let capture = {
         let mut ctx = journal_context(&mut *fs, begin.journal, &key, CandidateConflict::Refuse);
@@ -577,26 +577,42 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
     })
 }
 
-/// The binding the committed root names, or [`AuthorityError::NoLiveMigration`].
+/// What the committed root names for a bound migration: the binding, and the key route and active
+/// epoch the journal-owner operations must carry unchanged.
+struct CommittedRoute {
+    live: LiveMigration,
+    root_key_ref: RootKeyRefV1,
+    active_key_epoch: u64,
+}
+
+/// The route the committed root names, or [`AuthorityError::NoLiveMigration`].
 ///
 /// The root alone names the binding: the catalog pages are not read, so starting a capture of a very
 /// large inventory does not first materialise a very large catalog.
-fn committed_live_migration<F: DurableFs, P: KeyProvider>(
+fn committed_route<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,
     layout: RootLayout<'_>,
-) -> Result<LiveMigration, AuthorityError> {
-    load_committed_root(fs, provider, layout)
-        .map_err(AuthorityError::Root)?
-        .and_then(|view| view.root.live_migration)
-        .ok_or(AuthorityError::NoLiveMigration)
+) -> Result<CommittedRoute, AuthorityError> {
+    let view = load_committed_root(fs, provider, layout).map_err(AuthorityError::Root)?;
+    view.and_then(|view| {
+        Some(CommittedRoute {
+            live: view.root.live_migration?,
+            root_key_ref: view.root_key_ref,
+            active_key_epoch: view.root.active_key_epoch,
+        })
+    })
+    .ok_or(AuthorityError::NoLiveMigration)
 }
 
-/// The journal state the committed root vouches for: its binding and the manifest it names.
+/// The journal state the committed root vouches for: its binding, the manifest it names, and the key
+/// route and active epoch the root itself carries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CommittedJournal {
     pub(crate) live: LiveMigration,
     pub(crate) manifest: JournalManifest,
+    pub(crate) root_key_ref: RootKeyRefV1,
+    pub(crate) active_key_epoch: u64,
 }
 
 /// Reads the committed journal state without a key in the caller's hands.
@@ -612,13 +628,18 @@ pub(crate) fn read_committed_journal<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     journal: JournalSource<'_>,
 ) -> Result<CommittedJournal, AuthorityError> {
-    let live = committed_live_migration(fs, provider, layout)?;
+    let route = committed_route(fs, provider, layout)?;
     let key = route_journal_key(fs, provider, layout, journal)?;
     let manifest = {
         let mut ctx = journal_context(&mut *fs, journal, &key, CandidateConflict::Refuse);
-        load_authoritative_manifest(&mut ctx, &live).map_err(AuthorityError::Journal)?
+        load_authoritative_manifest(&mut ctx, &route.live).map_err(AuthorityError::Journal)?
     };
-    Ok(CommittedJournal { live, manifest })
+    Ok(CommittedJournal {
+        live: route.live,
+        manifest,
+        root_key_ref: route.root_key_ref,
+        active_key_epoch: route.active_key_epoch,
+    })
 }
 
 impl StagingSession {
@@ -822,6 +843,21 @@ pub fn commit_lease_renewal<F: DurableFs, P: KeyProvider>(
     check_operation_id(&renewal.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
     let held = acquire_root_commit(layout)?;
+    commit_lease_renewal_held(fs, provider, layout, renewal, &held)
+}
+
+/// As [`commit_lease_renewal`], under a root event the caller already holds: the exclusive conversion
+/// session takes it through its admission, so the identity check and the root lock are coupled. `held`
+/// must guard the root of `layout`.
+pub(crate) fn commit_lease_renewal_held<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    renewal: JournalCheckpoint<'_>,
+    held: &RootCommitGuard,
+) -> Result<RootCommitted, AuthorityError> {
+    check_operation_id(&renewal.manifest.operation_id)
+        .map_err(|_| AuthorityError::InvalidOperationId)?;
     let commit = journal_catalog_commit(&renewal);
     let committed = committed_binding(fs, provider, layout, commit)?;
     let key = route_journal_key(fs, provider, layout, renewal.journal)?;
@@ -836,7 +872,7 @@ pub fn commit_lease_renewal<F: DurableFs, P: KeyProvider>(
         binding: BindingStep::Renewal(&advance),
         key: &key,
     };
-    commit_planned(fs, provider, layout, commit, &held, Some(step))
+    commit_planned(fs, provider, layout, commit, held, Some(step))
 }
 
 fn acquire_root_commit(layout: RootLayout<'_>) -> Result<RootCommitGuard, AuthorityError> {

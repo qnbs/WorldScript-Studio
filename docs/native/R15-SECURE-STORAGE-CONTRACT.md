@@ -2388,6 +2388,26 @@ can be entered) or `CONVERT` (a resumed conversion), the final inventory was cap
 lease belongs to the caller. A lease owned by another owner, or by none, is refused: the gate takes nothing
 over, and a restart is the takeover followed by a fresh begin. The gate reads no clock, writes nothing and
 holds no key, and the identity of the admitted directories is checked before the reads and again after them.
+The session then moves the journal only through the fenced journal-owner operations, one step at a time,
+each built from the session's own snapshot. The journal directory must lie strictly below the admitted
+installation directory, outside the authority root, and is pinned for the session, and every file operation goes through the canonical
+paths of the root, the installation and the journal directory validated at begin, never through the
+caller's spelling, so a symlink retargeted later cannot redirect a step. A step checks the admission and
+that pin, builds the successor and proves it against the snapshot, takes the root event through the held
+admission (so the identity check and the root lock are coupled), commits with the key route and active
+epoch the committed root itself names (never a caller's), and then, whatever the commit reported, reads
+the committed journal back under that same root event, so no other root commit can come between, and lets
+the root settle the outcome: if it names the successor the step is committed (even when the commit
+reported an error, such as an ambiguous anchor outcome) and the session follows it; if it names anything
+else the step did not commit and the snapshot is kept. Before the commit a failed step leaves the tree and
+the snapshot as they were; a retry rebuilds the same successor, which the journal adopts if it is
+identical to a candidate already written, and a differing candidate of a crashed attempt is moved aside
+with its bytes preserved, so it never blocks the next step. If the read-back fails, or names a journal
+that is neither of the two where the commit reported success, the session is spent and every later step
+is refused until the caller begins again. The first step is the owner's lease renewal at
+an expiry the caller chooses: strictly after the held one, accepted after the held one has lapsed while
+nobody has taken over, and refused as a stale owner once another owner has; the root commit, with its
+durability result, is returned. A lost admission is reported even when it was lost after the commit.
 A token check performed as a separate preflight is insufficient. Every mutation-capable adapter
 operation therefore exposes the semantic equivalent of
 `with_fence(fencing_generation, mutation_and_durability)`: it acquires the cross-process migration
