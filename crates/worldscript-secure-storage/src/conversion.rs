@@ -368,8 +368,10 @@ impl<'a> ConversionSession<'a> {
             dir: &self.journal_pin.canonical,
             operation: &operation,
         };
-        let verified = verify_committed_inventory(fs, provider, layout, journal)?;
+        let read = verify_committed_inventory(fs, provider, layout, journal);
+        // A lost admission is reported first, whether or not the read succeeded.
         self.check_admitted()?;
+        let verified = read?;
         if !same_inventory(verified.manifest(), &self.journal.manifest) {
             self.spent = true;
             return Err(ConversionError::Superseded);
@@ -406,9 +408,10 @@ impl<'a> ConversionSession<'a> {
             dir: &self.journal_pin.canonical,
             operation: &operation,
         };
-        let page = load_committed_page(fs, provider, layout, journal, verified, page_index)?;
+        let read = load_committed_page(fs, provider, layout, journal, verified, page_index);
+        // A lost admission is reported first, whether or not the read succeeded.
         self.check_admitted()?;
-        Ok(page)
+        Ok(read?)
     }
 
     /// Records durable progress in `CONVERT`: moves the checkpoint cursor to `cursor` and returns the

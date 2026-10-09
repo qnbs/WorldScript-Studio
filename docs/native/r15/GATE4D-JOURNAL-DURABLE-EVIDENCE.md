@@ -675,8 +675,8 @@ entry count only: with pages of six and four entries the cursor `(1, 9)` passed.
 | Step | Rule |
 |---|---|
 | readers | `verify_committed_inventory` (binding from the root, key through the registry, `verify_stored_inventory`) and `load_committed_page` (`load_inventory_page`), cut like `read_committed_journal`; nothing is written and no lock is taken |
-| `verify_inventory` | not spent, admission and pinned journal checked before and after; reads and authenticates the whole page set once (one page in memory, only the references kept); the verified set must be the inventory the snapshot names (page count, entry count, inventory digest, page-set digest), otherwise `Superseded` and the session is spent; a read failure writes nothing and does not spend the session |
-| `page` | needs the verified set (`InventoryNotVerified`); reads one page by the exact path of its authenticated reference, the envelope hashing to the reference before it is opened; admission checked before and after |
+| `verify_inventory` | not spent, admission and pinned journal checked before and after (a lost admission is reported first, also when the read failed); reads and authenticates the whole page set once (one page in memory, only the references kept); the verified set must be the inventory the snapshot names (page count, entry count, inventory digest, page-set digest), otherwise `Superseded` and the session is spent; a read failure writes nothing and does not spend the session |
+| `page` | needs the verified set (`InventoryNotVerified`); reads one page by the exact path of its authenticated reference, the envelope hashing to the reference before it is opened; admission checked before and after, a failed read included |
 | cursor meaning | `cursor_entry_index` is the index, from zero, within page `cursor_page_index` of the next entry to process; finishing a page moves the cursor to `(page + 1, 0)`; the end of the last page has no cursor value (the validator requires `entry_index < entry_count`), so completion is the `CONVERT` -> `VERIFY` transition |
 | `advance_cursor` | `CONVERT` only (`WrongPhase`), then the verified set (`InventoryNotVerified`), then `checkpoint_progress` (never backwards, inside the manifest's extent), then the entry index against the authenticated `page_entry_count` of the selected page (`EntryCountMismatch`); all refused before any write |
 
@@ -694,7 +694,7 @@ a page past the end, are refused; `(1, 9)` is refused (inside the total, outside
 cursor without the verified set is refused with nothing written; a tampered, a missing and a swapped page are refused by
 the verification, nothing is written, the session is not spent and the same installation verifies once the damage is
 undone; an installation moved away before a read, and right after its last read, is reported and the read is not
-returned; a session another owner took over from cannot move the cursor. Mutation-checked: the page-local check, the
+returned, and so is a loss at the moment the last read fails; a session another owner took over from cannot move the cursor. Mutation-checked: the page-local check, the
 verified-set requirement of the cursor and of the page read, the admission checks before and after each read, removed one
 at a time, fail the test that owns them. Two checks have no failing test: the `None` arm for a page index outside the
 references is unreachable (the extent check refuses it first), and the comparison of the verified set with the snapshot's

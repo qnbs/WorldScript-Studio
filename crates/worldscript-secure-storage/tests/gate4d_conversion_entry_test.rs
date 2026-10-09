@@ -1657,3 +1657,26 @@ fn an_inventory_read_that_loses_the_admission_is_not_returned() {
     }
     assert_eq!(outcomes, vec![Err(ConversionError::NotAdmitted); 2]);
 }
+
+#[cfg(unix)]
+#[test]
+fn a_failed_inventory_read_under_a_lost_admission_reports_the_loss() {
+    // The last read fails at the same moment the installation is moved away: the loss is reported, not
+    // the read error.
+    let mut outcomes = Vec::new();
+    for read in [InventoryRead::Verify, InventoryRead::Page] {
+        let mut total = 0;
+        inventory_read_watched(&Fixture::bound_with_inventory(10, 6), read, |_| {
+            total += 1;
+            Ok(())
+        })
+        .unwrap();
+        let fixture = Fixture::bound_with_inventory(10, 6);
+        let installation = fixture.base.0.clone();
+        let moved = installation.with_extension("moved");
+        let hook = failing_and_moving(total, installation.clone(), moved.clone());
+        outcomes.push(inventory_read_watched(&fixture, read, hook));
+        fs::rename(&moved, &installation).unwrap();
+    }
+    assert_eq!(outcomes, vec![Err(ConversionError::NotAdmitted); 2]);
+}
