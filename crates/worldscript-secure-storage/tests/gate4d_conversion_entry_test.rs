@@ -1064,3 +1064,30 @@ fn a_symlinked_journal_directory_retargeted_after_begin_does_not_redirect_the_st
         (Ok(()), true, true)
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn an_admission_lost_after_a_commit_that_reported_an_error_is_still_reported() {
+    // The anchor commits the root but reports the outcome as unavailable, and the installation is
+    // moved away right after the last read of the step: the step is committed and the loss is reported.
+    let anchor_fault = Fault::AfterPersist(AnchorOp::Commit);
+    let total = renewal_reads(Some(anchor_fault));
+    let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
+    fixture.provider.inject(anchor_fault);
+    let installation = fixture.base.0.clone();
+    let moved = installation.with_extension("moved");
+    let mut seen = 0;
+    let outcome = renewal_watched(&mut fixture, |_| {
+        seen += 1;
+        if seen == total {
+            fs::rename(&installation, &moved).unwrap();
+        }
+        Ok(())
+    });
+    fs::rename(&moved, &installation).unwrap();
+    let renewed = fixture.committed(OWNER).map(|m| m.lease_expires_unix_ms);
+    assert_eq!(
+        (outcome, renewed),
+        (Err(ConversionError::NotAdmitted), Ok(Some(RENEWED_EXPIRY)))
+    );
+}

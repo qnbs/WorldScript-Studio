@@ -699,7 +699,7 @@ owner before any write; a busy root is `RootBusy` with nothing written and the r
 refusing the root's preparation the session keeps its snapshot, the journal holds the renewal as an unadopted
 candidate and the retry adopts it without rewriting the generation; a restarted owner with another expiry
 quarantines the candidate (bytes preserved) and renews; an installation moved away before the step is refused before
-any write and one moved away right after the last read of the step is reported while the step stays committed; a
+any write and one moved away right after the last read of the step is reported while the step stays committed, also when the commit reported an error that the root shows to have landed; a
 failed read-back is `Unreadable`, the renewal is committed and the next step is `Spent`; with the anchor reporting
 an error after it committed the root the step is `Committed` and the session follows it, and when the read-back also
 fails it is `Unsettled` and the next step is `Spent`; a symlink to the journal directory retargeted after begin does

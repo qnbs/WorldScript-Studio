@@ -324,9 +324,12 @@ impl<'a> ConversionSession<'a> {
                 read_committed_journal(fs, &*provider, layout, journal),
             )
         };
-        let committed = self.settle(&renewed, committed, read_back)?;
-        self.check_admitted()?;
-        Ok(committed)
+        let settled = self.settle(&renewed, committed, read_back);
+        // A step that landed, whatever the commit reported, is followed by the admission check.
+        if matches!(settled, Ok(_) | Err(ConversionError::Committed(_))) {
+            self.check_admitted()?;
+        }
+        settled
     }
 
     /// Settles what a step did from what the commit reported and what the root names afterwards.
