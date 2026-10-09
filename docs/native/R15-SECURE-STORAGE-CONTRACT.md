@@ -2404,10 +2404,14 @@ the snapshot as they were; a retry rebuilds the same successor, which the journa
 identical to a candidate already written, and a differing candidate of a crashed attempt is moved aside
 with its bytes preserved, so it never blocks the next step. If the read-back fails, or names a journal
 that is neither of the two where the commit reported success, the session is spent and every later step
-is refused until the caller begins again. The first step is the owner's lease renewal at
-an expiry the caller chooses: strictly after the held one, accepted after the held one has lapsed while
-nobody has taken over, and refused as a stale owner once another owner has; the root commit, with its
-durability result, is returned. A lost admission is reported even when it was lost after the commit.
+is refused until the caller begins again. The steps are the owner's lease renewal at an expiry the
+caller chooses (strictly after the held one, accepted after the held one has lapsed while nobody has taken
+over, and refused as a stale owner once another owner has), entering `CONVERT` from `ADMIT` at cursor
+`(0, 0)` (a session that already is in `CONVERT` has nothing to enter and writes nothing), and the
+checkpoint cursor, which in `CONVERT` only moves forward and stays inside the inventory; each returns the
+root commit with its durability result. After the commit call every outcome except a refusal that
+certainly wrote nothing is followed by the admission check, and a lost admission is reported first: the
+step may have committed, and the caller begins again to learn the state.
 A token check performed as a separate preflight is insufficient. Every mutation-capable adapter
 operation therefore exposes the semantic equivalent of
 `with_fence(fencing_generation, mutation_and_durability)`: it acquires the cross-process migration

@@ -665,6 +665,36 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Slice C2b-2 — the session enters `CONVERT` and moves the cursor
+
+C2b-1 gave the conversion session its first step. The other two steps differ from it only in the pure successor
+builder and in the journal-owner operation that commits it, so the three share one private step and one
+finalisation rule.
+
+| Step | Rule |
+|---|---|
+| shared step | spent and admission checks; the successor built from the session's snapshot; root event through the held admission; the committed journal read back under it; the root settles the outcome; canonical paths, the pinned journal, `Quarantine`, the commit returned (all as C2b-1) |
+| commit | `StepKind::Renewal` commits through `commit_lease_renewal_held`, `StepKind::Checkpoint` through the new `commit_journal_checkpoint_held`, the body of `commit_journal_checkpoint` under a root event the caller holds (that function acquires the lock and delegates) |
+| `enter_convert` | `transition_phase` to `CONVERT` (cursor `(0, 0)`, revision plus one, fence kept, `final_inventory_captured` required by the pure function); a session already in `CONVERT` writes nothing and returns `None`; a spent session is `Spent` before that answer |
+| `advance_cursor` | `CONVERT` only (`WrongPhase` otherwise), then `checkpoint_progress`: never backwards (`RegressiveCheckpoint`), inside the inventory extent (`InvalidPageIndex`, `EntryCountMismatch`), an equal cursor accepted as a revision with the same cursor; all refused before any write |
+| finalisation | after the commit call every outcome except `Authority` (a refusal that certainly wrote nothing) is followed by the admission check, `NotAdmitted` taking precedence, which closes the criterion recorded from the review of #1014 |
+
+Decisions, disclosed: (a) one private step shared by the three public methods, so they cannot drift, with the
+renewal's behaviour and tests unchanged; (b) `enter_convert` is idempotent so a resumed session can call it
+unconditionally; (c) the cursor moves in `CONVERT` only and an equal cursor is a valid checkpoint, as
+`checkpoint_progress` defines it; (d) the admission check also follows `Unsettled`, because whether that step landed
+is unknown and the session is spent either way; (e) a new `_held` function rather than a flag on the existing one.
+
+Proof (`gate4d_conversion_entry_test`): `ADMIT` -> `CONVERT` moves the phase and the revision only, the session and a
+fresh gate agree and the root is one generation further; a second call and a resumed session in `CONVERT` write
+nothing; three forward checkpoints (one at the same cursor) are accepted and a regressive cursor, a page past the
+extent and an entry past the extent are refused with nothing written; the cursor in `ADMIT` is `WrongPhase`; a session
+another owner took over from is refused before any write; the lease is renewed after entering `CONVERT`; with the
+installation moved away at the same moment as the read-back fails, the admission loss is reported first both when the
+read-back follows a successful commit and when the commit reported an error. Mutation-checked: the idempotence, the
+spent check of the no-op, the phase check of the cursor, the commit dispatch and each of the two finalisation rules,
+removed one at a time, fail the test that owns them.
+
 ## Slice C2b-1 — the session renews its lease
 
 The conversion session of C2a could only be read, and the D3b renewal had no caller. `ConversionSession::renew_lease`
@@ -1073,7 +1103,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   (`DurableFs::read_at_most`) and the page-directory listing is bounded (`DurableFs::list_dir_at_most`; both defaults must be overridden by an adapter over real files, which `StdFs` does), but the Gate 3 post-promotion verify and the page, marker and root
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
-- Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) and the lease renewal through it (C2b-1: `ConversionSession::renew_lease`, the first caller of the D3b renewal) exist, but nothing yet enters `CONVERT` or moves the cursor under the gate: entering `CONVERT` and advancing the cursor (C2b-2), the cursor-driven iteration with a per-entry step and the crash/resume evidence (C2c).
+- Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) exist, but nothing yet iterates the verified page set: the cursor-driven iteration with a per-entry step and the crash/resume evidence (C2c), then `CONVERT` -> `VERIFY`.
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read. Reclaiming them needs a directory-removal primitive and a sweep that knows no live attempt owns them, as for the orphaned digest directories of a discarded capture (acceptance criterion on #359).

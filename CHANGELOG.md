@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4D:** the conversion session enters `CONVERT` and moves the checkpoint cursor (part b-2 of the
+  owner's steps through the gate). `ConversionSession::enter_convert` (idempotent: a session already in
+  `CONVERT` writes nothing) and `advance_cursor` (forward only, inside the inventory, in `CONVERT` only) share
+  one private step with `renew_lease`, which now commits through `commit_lease_renewal_held` or the new
+  `commit_journal_checkpoint_held`, and every outcome after a landed commit is followed by the admission
+  check. The cursor-driven iteration is the next part. PR #1015.
 - **R-15 Gate 4D:** the conversion session renews its lease (part b-1 of the owner's steps through the
   gate). `ConversionSession::renew_lease` builds the renewal from the session's own snapshot (`renewed_lease`),
   takes the root event through the held admission, commits it with the key route and active epoch the
