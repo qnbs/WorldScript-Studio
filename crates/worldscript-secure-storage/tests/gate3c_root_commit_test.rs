@@ -76,6 +76,17 @@ impl DurableFs for RootFault {
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
         StdFs.create_dir_all(dir)
     }
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        worldscript_secure_storage::durable::read_at_most_via_read(self, path, limit)
+    }
+
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        worldscript_secure_storage::durable::list_dir_at_most_via_list_dir(self, dir, limit)
+    }
 }
 
 /// A fresh temporary root directory, cleared first and removed by `Drop for Fixture`.

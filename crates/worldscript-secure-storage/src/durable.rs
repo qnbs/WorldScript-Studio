@@ -38,6 +38,112 @@ pub enum DirectoryDurability {
 /// The platform file operations the Core sequences (§9: "The platform adapter implements
 /// `fsync`/directory-sync mechanics. The Core owns the order, success boundary, generation rules,
 /// and recovery interpretation.").
+///
+/// # Every adapter bounds its reads
+///
+/// [`read_at_most`](Self::read_at_most) and [`list_dir_at_most`](Self::list_dir_at_most) have no
+/// default body, so an adapter cannot compile without stating how it keeps the allocation bounded.
+/// An adapter that implements every method compiles:
+///
+/// ```
+/// # use std::ffi::OsString;
+/// # use std::fs::File;
+/// # use std::io;
+/// # use std::path::Path;
+/// # use worldscript_secure_storage::durable::{DirectoryDurability, DurableFs, StdFs};
+/// struct Adapter;
+///
+/// impl DurableFs for Adapter {
+///     # type File = File;
+///     # fn create_new(&mut self, path: &Path) -> io::Result<File> { StdFs.create_new(path) }
+///     # fn sync_file(&mut self, file: &mut File) -> io::Result<()> { StdFs.sync_file(file) }
+///     # fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> { StdFs.read(path) }
+///     # fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+///     #     StdFs.link_no_replace(from, to)
+///     # }
+///     # fn remove_file(&mut self, path: &Path) -> io::Result<()> { StdFs.remove_file(path) }
+///     # fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+///     #     StdFs.sync_dir(dir)
+///     # }
+///     # fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> { StdFs.list_dir(dir) }
+///     # fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+///     #     StdFs.rename_replace(from, to)
+///     # }
+///     # fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> { StdFs.create_dir_all(dir) }
+///     fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+///         StdFs.read_at_most(path, limit)
+///     }
+///     fn list_dir_at_most(&mut self, dir: &Path, limit: usize) -> io::Result<Option<Vec<OsString>>> {
+///         StdFs.list_dir_at_most(dir, limit)
+///     }
+/// }
+/// ```
+///
+/// Leaving out either one alone does not compile. Without `read_at_most`:
+///
+/// ```compile_fail,E0046
+/// # use std::ffi::OsString;
+/// # use std::fs::File;
+/// # use std::io;
+/// # use std::path::Path;
+/// # use worldscript_secure_storage::durable::{DirectoryDurability, DurableFs, StdFs};
+/// struct Adapter;
+///
+/// impl DurableFs for Adapter {
+///     # type File = File;
+///     # fn create_new(&mut self, path: &Path) -> io::Result<File> { StdFs.create_new(path) }
+///     # fn sync_file(&mut self, file: &mut File) -> io::Result<()> { StdFs.sync_file(file) }
+///     # fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> { StdFs.read(path) }
+///     # fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+///     #     StdFs.link_no_replace(from, to)
+///     # }
+///     # fn remove_file(&mut self, path: &Path) -> io::Result<()> { StdFs.remove_file(path) }
+///     # fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+///     #     StdFs.sync_dir(dir)
+///     # }
+///     # fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> { StdFs.list_dir(dir) }
+///     # fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+///     #     StdFs.rename_replace(from, to)
+///     # }
+///     # fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> { StdFs.create_dir_all(dir) }
+///     fn list_dir_at_most(&mut self, dir: &Path, limit: usize) -> io::Result<Option<Vec<OsString>>> {
+///         StdFs.list_dir_at_most(dir, limit)
+///     }
+/// }
+/// ```
+///
+/// Without `list_dir_at_most`:
+///
+/// ```compile_fail,E0046
+/// # use std::ffi::OsString;
+/// # use std::fs::File;
+/// # use std::io;
+/// # use std::path::Path;
+/// # use worldscript_secure_storage::durable::{DirectoryDurability, DurableFs, StdFs};
+/// struct Adapter;
+///
+/// impl DurableFs for Adapter {
+///     # type File = File;
+///     # fn create_new(&mut self, path: &Path) -> io::Result<File> { StdFs.create_new(path) }
+///     # fn sync_file(&mut self, file: &mut File) -> io::Result<()> { StdFs.sync_file(file) }
+///     # fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> { StdFs.read(path) }
+///     # fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+///     #     StdFs.link_no_replace(from, to)
+///     # }
+///     # fn remove_file(&mut self, path: &Path) -> io::Result<()> { StdFs.remove_file(path) }
+///     # fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+///     #     StdFs.sync_dir(dir)
+///     # }
+///     # fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> { StdFs.list_dir(dir) }
+///     # fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+///     #     StdFs.rename_replace(from, to)
+///     # }
+///     # fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> { StdFs.create_dir_all(dir) }
+///     fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+///         StdFs.read_at_most(path, limit)
+///     }
+/// }
+/// ```
 pub trait DurableFs {
     type File: Write;
     /// Creates `path`, failing if anything already exists there.
@@ -47,13 +153,14 @@ pub trait DurableFs {
     fn read(&mut self, path: &Path) -> io::Result<Vec<u8>>;
     /// Reads `path` only if it holds at most `limit` bytes; a larger file yields `None`.
     ///
-    /// [`StdFs`] never allocates more than `limit + 1` bytes. This default reads through
-    /// [`Self::read`] so wrappers and test doubles stay faithful; an adapter that reads real files
-    /// must override it with a bounded read.
-    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
-        let bytes = self.read(path)?;
-        Ok((bytes.len() <= limit).then_some(bytes))
-    }
+    /// Required, with no default: an adapter states how it keeps the allocation bounded, because
+    /// the journal reads its manifest and inventory pages through this method precisely so that a
+    /// corrupted or hostile size cannot exhaust memory. An implementation never holds more than
+    /// `limit + 1` bytes of the file ([`StdFs`] reads through `take(limit + 1)`), answers `None`
+    /// above the limit and otherwise returns the error of the read. A test double that only wraps
+    /// [`Self::read`] may use `read_at_most_via_read` (feature `test-support`), which loads the
+    /// whole file first and so is never an adapter over real files.
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>>;
     /// Makes `to` refer to `from`'s contents, failing with `AlreadyExists` if `to` exists; never
     /// replaces an existing file.
     fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()>;
@@ -65,19 +172,47 @@ pub trait DurableFs {
     /// The names of the entries directly inside `dir` only if there are at most `limit` of them;
     /// more yield `None`.
     ///
-    /// [`StdFs`] never collects more than `limit + 1` names. This default lists through
-    /// [`Self::list_dir`] so wrappers and test doubles stay faithful; an adapter over a real
-    /// directory must override it with a bounded iteration.
-    fn list_dir_at_most(&mut self, dir: &Path, limit: usize) -> io::Result<Option<Vec<OsString>>> {
-        let names = self.list_dir(dir)?;
-        Ok((names.len() <= limit).then_some(names))
-    }
+    /// Required, with no default, for the same reason as [`Self::read_at_most`]: an implementation
+    /// never collects more than `limit + 1` names ([`StdFs`] iterates `take(limit + 1)`), answers
+    /// `None` above the limit and otherwise returns the error of the listing. A test double that
+    /// only wraps [`Self::list_dir`] may use `list_dir_at_most_via_list_dir` (feature
+    /// `test-support`), which lists the whole directory first and so is never an adapter over a
+    /// real directory.
+    fn list_dir_at_most(&mut self, dir: &Path, limit: usize) -> io::Result<Option<Vec<OsString>>>;
     /// Atomically replaces `to` with `from` within one directory (the §5.3 pointer's
     /// atomic-rename-and-fsync mechanism). Used only for the recoverable root pointer, never for a
     /// generation file.
     fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()>;
     /// Creates `dir` and its missing parents; an existing directory is not an error.
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()>;
+}
+
+/// [`DurableFs::read_at_most`] for a test double that intercepts [`DurableFs::read`]: reads the
+/// whole file through it, then applies the limit. It allocates the entire file before the limit is
+/// looked at, so it is for doubles over small test files only and exists only with the
+/// `test-support` feature.
+#[cfg(feature = "test-support")]
+pub fn read_at_most_via_read<F: DurableFs + ?Sized>(
+    fs: &mut F,
+    path: &Path,
+    limit: usize,
+) -> io::Result<Option<Vec<u8>>> {
+    let bytes = fs.read(path)?;
+    Ok((bytes.len() <= limit).then_some(bytes))
+}
+
+/// [`DurableFs::list_dir_at_most`] for a test double that intercepts [`DurableFs::list_dir`]: lists
+/// the whole directory through it, then applies the limit. It collects every name before the limit
+/// is looked at, so it is for doubles over small test directories only and exists only with the
+/// `test-support` feature.
+#[cfg(feature = "test-support")]
+pub fn list_dir_at_most_via_list_dir<F: DurableFs + ?Sized>(
+    fs: &mut F,
+    dir: &Path,
+    limit: usize,
+) -> io::Result<Option<Vec<OsString>>> {
+    let names = fs.list_dir(dir)?;
+    Ok((names.len() <= limit).then_some(names))
 }
 
 /// The real filesystem. On Apple platforms `File::sync_all` issues `F_FULLFSYNC`; on Windows it is
