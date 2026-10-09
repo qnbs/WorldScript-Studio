@@ -2377,6 +2377,17 @@ nor the plain binding advance can carry a lease change, so this is the only path
 extended. A renewal and a takeover that race for the same revision are settled by the root lock: whichever
 commits first makes the other stale, because a takeover advances the fence and a renewal advances the expiry
 the takeover required to have lapsed.
+
+**The conversion entry gate.** Conversion runs under the installation's exclusive operation admission
+(§11), taken by mutable borrow so the admission outlives the conversion session by construction, and over
+the root of the scope that admission was acquired for: the root layout is derived from that scope, never a
+second input. The gate re-reads what the committed root vouches for instead of trusting a caller's copy (the
+binding from the root, the journal key from the key-epoch registry, the manifest by the exact root-named
+path authenticated against the binding's digest) and refuses unless the operation is in `ADMIT` (conversion
+can be entered) or `CONVERT` (a resumed conversion), the final inventory was captured, and the committed
+lease belongs to the caller. A lease owned by another owner, or by none, is refused: the gate takes nothing
+over, and a restart is the takeover followed by a fresh begin. The gate reads no clock, writes nothing and
+holds no key, and the identity of the admitted directories is checked before the reads and again after them.
 A token check performed as a separate preflight is insufficient. Every mutation-capable adapter
 operation therefore exposes the semantic equivalent of
 `with_fence(fencing_generation, mutation_and_durability)`: it acquires the cross-process migration

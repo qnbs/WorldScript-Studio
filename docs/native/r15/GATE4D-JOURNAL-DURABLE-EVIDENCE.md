@@ -665,6 +665,40 @@ after authentication (D2b-2), and resolving the journal key through the authenti
 readability proof for a root already at the target epoch (D2b-3a), used by every journal-owner operation
 (D2b-3b). Each is described in its own section below.
 
+## Slice C2a — the entry gate of the exclusive conversion driver
+
+The journal-owner operations take no admission guard, and nothing read the committed journal state without a
+key in the caller's hands. `begin_conversion` is the first part of the conversion driver (maintainer decision
+D): it makes exclusive admission structural and re-reads the authenticated root-bound manifest, and it
+writes nothing.
+
+| Step | Rule |
+|---|---|
+| input | `&mut ExclusiveAdmissionGuard` (a shared guard does not type-check: compile_fail doctest) and `ConversionBegin{scope, journal, owner_id}`; the root layout is derived from `scope`, so the root cannot differ from the one admitted |
+| admission | `guards(scope)` is checked before anything is read and again after the reads; a guard for another installation is `NotAdmitted` with no read made, and an installation moved away during the reads is `NotAdmitted` |
+| read | `read_committed_journal`: the binding from the committed root alone (`NoLiveMigration` if none), the key through the registry (`JournalRoute` errors), the manifest by the exact root-named path authenticated against the binding digest; no sibling generation is read |
+| gate | phase `ADMIT` or `CONVERT` (`TerminalPhase` for `DONE`, `RecoveryRequired` for `RECOVERY_REQUIRED`, `PhaseNotConvertible` otherwise), `final_inventory_captured` (`FinalInventoryNotCaptured`), and the committed lease owner equal to the caller (`ForeignLeaseOwner`; an absent lease is foreign) |
+| result | a `ConversionSession` that keeps the `&mut` borrow of the admission (one session per admission) and exposes the manifest, the binding and the fence it read; it holds no key |
+
+Decisions, disclosed: (a) three slices for the driver, this one mutating nothing so that the exclusivity proof
+lands before any conversion write; (b) the layout is derived from the admitted scope instead of being a second
+parameter; (c) a foreign lease owner is refused rather than taken over, and whether exclusive admission may
+replace lease expiry as the proof that a former owner is gone is a normative question left open (the
+cross-process lease CAS stays residual); (d) no clock is read, so a lease past its expiry is still the
+owner's while nobody has taken over; (e) the journal source's operation is a write-operation identifier for
+staging names, not the migration operation, so an operation mismatch is not a separate refusal here: the
+manifest is opened under the binding's operation identity and the binding vouches for it.
+
+Proof (`gate4d_conversion_entry_test`): the owner in `ADMIT` and in `CONVERT` gets exactly the committed
+manifest, fence and binding with every file of the installation unchanged; every other phase is refused with its
+own reason; an `ADMIT` manifest without the final inventory, a lease of another owner, of the empty owner and
+of none, a root that binds no migration and a root-named generation that is not the bound bytes are refused;
+a guard for another installation is refused before any read; an installation moved away during the reads is
+refused; a newer sibling generation is never read. The key route refuses the gate with a revoked or unregistered
+epoch and with a route to another key, beside the other journal-owner operations
+(`gate4d_journal_route_test`). Mutation-checked: each of the two admission checks, each phase arm, the final
+inventory requirement and the owner check, removed one at a time, fails the test that owns it.
+
 ## Streaming capture, stage two (b) — the staging session routes the key
 
 After stage two (a) the stage-one builder still took the journal key, the committed manifest and the binding
@@ -987,7 +1021,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   reads still use the whole-file `DurableFs::read`. Applying the same size limits to them is a
   separate slice, recorded as an acceptance criterion on #359.
 - A caller of the lease renewal: `commit_lease_renewal` exists (D3b) but no orchestrator renews a lease yet.
-- Conversion (C2+) over the verified page set: it must require exclusive admission by construction and re-read the root-bound manifest with `final_inventory_captured = 1` (maintainer decision D).
+- Conversion over the verified page set: the entry gate exists (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D), but nothing yet moves the journal under it: entering `CONVERT`, advancing the cursor and renewing the lease through the gate (C2b), the cursor-driven iteration with a per-entry step and the crash/resume evidence (C2c).
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers, and the write path must refuse ordinary mutating writes by that phase (`ordinary_mutating_writes_admitted`) before the final capture has a caller (Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
 - Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read. Reclaiming them needs a directory-removal primitive and a sweep that knows no live attempt owns them, as for the orphaned digest directories of a discarded capture (acceptance criterion on #359).
@@ -1008,6 +1042,8 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
 Integration: `crates/worldscript-secure-storage/tests/gate4d_journal_durable_test.rs` (4 promotion cases, 7 root-bound resume cases, 9 R4 caller-authority cases, 7 B2b-3 publish and bounded-read cases, 3 B2b-4 cases and 3 B2c takeover cases).
 Integration: `crates/worldscript-secure-storage/tests/gate4d_root_binding_test.rs` (9 B2b-1 binding-advance cases, 6 B2b-2 checkpoint cases, 5 B2b-3 candidate-retry cases, 4 B2b-4 successor cases and 6 B2c takeover cases and 7 B2d discard cases).
 Unit: `crates/worldscript-secure-storage/tests/gate4d_migration_state_test.rs` (8 B2b-4 successor-relation cases and 5 B2c takeover cases beside the earlier state-machine cases).
+
+Integration: `crates/worldscript-secure-storage/tests/gate4d_conversion_entry_test.rs` (the conversion entry gate), and the gate as a further operation in `gate4d_journal_route_test.rs`.
 
 Unit (mutex): `journal_durable_mutex_blocks_try_lock_while_guard_held` and
 `with_fence_holds_mutex_during_closure` in `journal::durable::mutex_proof`.
