@@ -2407,11 +2407,13 @@ that is neither of the two where the commit reported success, the session is spe
 is refused until the caller begins again. The steps are the owner's lease renewal at an expiry the
 caller chooses (strictly after the held one, accepted after the held one has lapsed while nobody has taken
 over, and refused as a stale owner once another owner has), entering `CONVERT` from `ADMIT` at cursor
-`(0, 0)` (a session that already is in `CONVERT` has nothing to enter and writes nothing), and the
-checkpoint cursor, which in `CONVERT` only moves forward and stays inside the inventory; each returns the
-root commit with its durability result. After the commit call every outcome except a refusal that
-certainly wrote nothing is followed by the admission check, and a lost admission is reported first: the
-step may have committed, and the caller begins again to learn the state.
+`(0, 0)` (a session that already is in `CONVERT` has nothing to write, but it confirms against the root
+that its snapshot is still the committed journal before it says so), and the checkpoint cursor, which in
+`CONVERT` only moves forward and stays inside the manifest's extent (its page count and total entry count;
+the manifest does not carry the entry count of a page, so what an entry index means within a page is fixed
+by the page iteration, the next slice); each returns the root commit with its durability result. After the
+commit call every outcome is followed by the admission check, and a lost admission is reported first: the
+step may have committed or left a candidate, and the caller begins again to learn the state.
 A token check performed as a separate preflight is insufficient. Every mutation-capable adapter
 operation therefore exposes the semantic equivalent of
 `with_fence(fencing_generation, mutation_and_durability)`: it acquires the cross-process migration

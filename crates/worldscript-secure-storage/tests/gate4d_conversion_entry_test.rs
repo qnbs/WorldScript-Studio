@@ -1320,3 +1320,51 @@ fn a_spent_session_in_convert_does_not_claim_there_is_nothing_to_enter() {
         (true, Err(ConversionError::Spent))
     );
 }
+
+#[test]
+fn a_no_op_enter_convert_is_not_answered_from_a_snapshot_another_owner_overtook() {
+    let committed = with_extent(phase_code::CONVERT);
+    let mut fixture = Fixture::bound(&committed);
+    let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+    let mut session = open(&fixture, &paths, &mut held);
+    fixture.take_over(&committed);
+    let before = fixture.snapshot();
+    let first = session.enter_convert(&mut StdFs, &mut fixture.provider);
+    let later = session.enter_convert(&mut StdFs, &mut fixture.provider);
+    assert_eq!(
+        (first, later, fixture.snapshot() == before),
+        (
+            Err(ConversionError::Superseded),
+            Err(ConversionError::Spent),
+            true
+        )
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_admission_lost_after_a_refusal_that_left_a_candidate_is_reported_first() {
+    // The anchor refuses the root's preparation: the renewal is already in the journal as revision
+    // `r + 1`, the root still names `r`, and the step reports a refusal. The installation is moved away
+    // right after the last read, so the loss is reported instead of the refusal.
+    let refusal = Fault::BeforePersist(AnchorOp::Prepare);
+    let total = renewal_reads(Some(refusal));
+    let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
+    fixture.provider.inject(refusal);
+    let installation = fixture.base.0.clone();
+    let moved = installation.with_extension("moved");
+    let mut seen = 0;
+    let outcome = renewal_watched(&mut fixture, |_| {
+        seen += 1;
+        if seen == total {
+            fs::rename(&installation, &moved).unwrap();
+        }
+        Ok(())
+    });
+    fs::rename(&moved, &installation).unwrap();
+    let candidate = generation_path(&fixture.journal_dir(), REVISION + 1).exists();
+    assert_eq!(
+        (outcome, candidate),
+        (Err(ConversionError::NotAdmitted), true)
+    );
+}

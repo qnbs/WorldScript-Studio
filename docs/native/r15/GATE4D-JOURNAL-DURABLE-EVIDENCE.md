@@ -675,25 +675,26 @@ finalisation rule.
 |---|---|
 | shared step | spent and admission checks; the successor built from the session's snapshot; root event through the held admission; the committed journal read back under it; the root settles the outcome; canonical paths, the pinned journal, `Quarantine`, the commit returned (all as C2b-1) |
 | commit | `StepKind::Renewal` commits through `commit_lease_renewal_held`, `StepKind::Checkpoint` through the new `commit_journal_checkpoint_held`, the body of `commit_journal_checkpoint` under a root event the caller holds (that function acquires the lock and delegates) |
-| `enter_convert` | `transition_phase` to `CONVERT` (cursor `(0, 0)`, revision plus one, fence kept, `final_inventory_captured` required by the pure function); a session already in `CONVERT` writes nothing and returns `None`; a spent session is `Spent` before that answer |
-| `advance_cursor` | `CONVERT` only (`WrongPhase` otherwise), then `checkpoint_progress`: never backwards (`RegressiveCheckpoint`), inside the inventory extent (`InvalidPageIndex`, `EntryCountMismatch`), an equal cursor accepted as a revision with the same cursor; all refused before any write |
-| finalisation | after the commit call every outcome except `Authority` (a refusal that certainly wrote nothing) is followed by the admission check, `NotAdmitted` taking precedence, which closes the criterion recorded from the review of #1014 |
+| `enter_convert` | `transition_phase` to `CONVERT` (cursor `(0, 0)`, revision plus one, fence kept, `final_inventory_captured` required by the pure function); a session already in `CONVERT` writes nothing and returns `None`, after a spent check and a read of the committed journal that must still equal its snapshot (otherwise `Superseded` and the session is spent: another owner took over); an unreadable root is the read error and nothing was written |
+| `advance_cursor` | `CONVERT` only (`WrongPhase` otherwise), then `checkpoint_progress`: never backwards (`RegressiveCheckpoint`), inside the manifest's extent, its page count and total entry count (`InvalidPageIndex`, `EntryCountMismatch`), an equal cursor accepted as a revision with the same cursor; all refused before any write. The manifest does not carry the entry count of a page, so the entry index is not checked against the selected page: that, and what the index means within a page, is the page iteration's contract (C2c) |
+| finalisation | after the commit call every outcome, a refusal included (it may follow a published candidate), is followed by the admission check, `NotAdmitted` taking precedence, which closes the criterion recorded from the review of #1014 |
 
 Decisions, disclosed: (a) one private step shared by the three public methods, so they cannot drift, with the
 renewal's behaviour and tests unchanged; (b) `enter_convert` is idempotent so a resumed session can call it
 unconditionally; (c) the cursor moves in `CONVERT` only and an equal cursor is a valid checkpoint, as
-`checkpoint_progress` defines it; (d) the admission check also follows `Unsettled`, because whether that step landed
-is unknown and the session is spent either way; (e) a new `_held` function rather than a flag on the existing one.
+`checkpoint_progress` defines it; (d) the admission check follows every outcome of the commit call, `Unsettled` and a refusal included, because whether the step
+landed or left a candidate is not always known; (e) a new `_held` function rather than a flag on the existing one.
 
 Proof (`gate4d_conversion_entry_test`): `ADMIT` -> `CONVERT` moves the phase and the revision only, the session and a
 fresh gate agree and the root is one generation further; a second call and a resumed session in `CONVERT` write
 nothing; three forward checkpoints (one at the same cursor) are accepted and a regressive cursor, a page past the
 extent and an entry past the extent are refused with nothing written; the cursor in `ADMIT` is `WrongPhase`; a session
-another owner took over from is refused before any write; the lease is renewed after entering `CONVERT`; with the
+another owner took over from is refused before any write, and a no-op `enter_convert` on such a session is `Superseded` rather
+than a stale `None`; the lease is renewed after entering `CONVERT`; with the
 installation moved away at the same moment as the read-back fails, the admission loss is reported first both when the
-read-back follows a successful commit and when the commit reported an error. Mutation-checked: the idempotence, the
-spent check of the no-op, the phase check of the cursor, the commit dispatch and each of the two finalisation rules,
-removed one at a time, fail the test that owns them.
+read-back follows a successful commit and when the commit reported an error, and after a refusal that left a candidate.
+Mutation-checked: the idempotence, the spent check and the snapshot confirmation of the no-op, the phase check of the
+cursor, the commit dispatch and the finalisation rule, removed one at a time, fail the test that owns them.
 
 ## Slice C2b-1 — the session renews its lease
 

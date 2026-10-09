@@ -48,9 +48,9 @@
 //! it names the successor (committed, even if the commit reported an error), or it does not (not
 //! committed, snapshot kept). If the read-back fails, or names a journal that is neither of the two
 //! where the commit reported success, the session is spent: every later step is refused and the caller
-//! begins again to learn the state. After the commit call, every outcome except a refusal that certainly
-//! wrote nothing is followed by the admission check, and a lost admission is reported first: the step
-//! may have committed, and the caller begins again to learn the state.
+//! begins again to learn the state. After the commit call every outcome is followed by the admission
+//! check, and a lost admission is reported first: the step may have committed or left a candidate, and
+//! the caller begins again to learn the state.
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -116,8 +116,8 @@ pub enum ConversionError {
     WrongPhase,
     /// No write-operation identifier could be drawn from the operating system.
     OperationId(SealError),
-    /// The step committed, but the journal read back is not the one it committed: the session is
-    /// spent, begin again.
+    /// The committed journal is not the one this session holds (a step's read-back named another
+    /// journal, or another owner advanced it since): the session is spent, begin again.
     Superseded,
     /// The step committed, but the committed journal could not be read back: the session is spent,
     /// begin again.
@@ -312,6 +312,8 @@ impl<'a> ConversionSession<'a> {
     ) -> Result<Option<RootCommitted>, ConversionError> {
         self.ready()?;
         if self.journal.manifest.phase == phase_code::CONVERT {
+            // Nothing to write, but the answer must not rest on a snapshot another owner has overtaken.
+            self.confirm_snapshot(fs, provider)?;
             return Ok(None);
         }
         let convert = MigrationPhase::from_wire(phase_code::CONVERT);
@@ -322,10 +324,12 @@ impl<'a> ConversionSession<'a> {
     }
 
     /// Records durable progress in `CONVERT`: moves the checkpoint cursor to `cursor` and returns the
-    /// root commit. The cursor never moves backwards and stays inside the inventory
-    /// (`Migration(RegressiveCheckpoint)` and the extent refusals, before any write); an equal cursor
-    /// is accepted and records a revision with the same cursor. In any other phase the step is
-    /// `WrongPhase`.
+    /// root commit. The cursor never moves backwards and stays inside the manifest's extent, its page
+    /// count and its total entry count (`Migration(RegressiveCheckpoint)` and the extent refusals,
+    /// before any write); an equal cursor is accepted and records a revision with the same cursor. The
+    /// manifest does not carry the entry count of a page, so this does not check the entry index
+    /// against the selected page: what the index means within a page is fixed by the iteration that
+    /// reads the pages. In any other phase the step is `WrongPhase`.
     pub fn advance_cursor<F: DurableFs, P: KeyProvider>(
         &mut self,
         fs: &mut F,
@@ -338,6 +342,32 @@ impl<'a> ConversionSession<'a> {
             }
             checkpoint_progress(manifest, fence, cursor).map_err(ConversionError::Migration)
         })
+    }
+
+    /// Requires the committed journal to be the one the session holds. If it is not (another owner
+    /// advanced it), the session is spent; if it cannot be read, nothing was written and the step may
+    /// be tried again.
+    fn confirm_snapshot<F: DurableFs, P: KeyProvider>(
+        &mut self,
+        fs: &mut F,
+        provider: &P,
+    ) -> Result<(), ConversionError> {
+        let operation = WriteOperationId::generate().map_err(ConversionError::OperationId)?;
+        let layout = RootLayout {
+            root_dir: &self.root,
+        };
+        let journal = JournalSource {
+            dir: &self.journal_pin.canonical,
+            operation: &operation,
+        };
+        match read_committed_journal(fs, provider, layout, journal) {
+            Ok(current) if current.manifest == self.journal.manifest => self.check_admitted(),
+            Ok(_) => {
+                self.spent = true;
+                Err(ConversionError::Superseded)
+            }
+            Err(error) => Err(ConversionError::Authority(error)),
+        }
     }
 
     /// Whether the session may take a step: not spent, and the admission and the pinned journal
@@ -403,11 +433,9 @@ impl<'a> ConversionSession<'a> {
             )
         };
         let settled = self.settle(&successor, committed, read_back);
-        // Every outcome except a refusal that certainly wrote nothing is followed by the admission
-        // check, and a lost admission is reported first.
-        if !matches!(settled, Err(ConversionError::Authority(_))) {
-            self.check_admitted()?;
-        }
+        // Every outcome of the commit call is followed by the admission check, and a lost admission is
+        // reported first: the step may have committed or left a candidate, whatever it reported.
+        self.check_admitted()?;
         settled
     }
 
