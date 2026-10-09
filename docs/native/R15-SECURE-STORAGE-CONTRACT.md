@@ -3084,8 +3084,9 @@ named only where a test pins it. The ordinary data operations (write, reconcile,
 `catalog()` from the committed root, before any catalog page is read, and refuse with
 `MigrationRequired`; that holds when a required catalog page is missing too. A write or reconcile first
 lets the root recover an interrupted root commit (`recover_prepared_root_admitted`), which completes or
-discards a preparation that root commit already made durable and is not an ordinary write; the refusal
-that follows does not depend on its outcome. The transitions that claim something about the catalog
+discards a preparation that root commit already made durable and is not an ordinary write; when the
+interrupted commit is an ordinary catalog commit, which copies the binding forward, the refusal that
+follows is the same whether the recovery completed or discarded it. The transitions that claim something about the catalog
 (lock from an unlocked key, unlock, shutdown) load and verify the catalog first and then refuse with
 `RecoveryPending`; when the bound root's catalog cannot be used they fail with the error of that load
 instead (a missing required page is `RecoveryRequired(CatalogSetMismatch)`; other load failures, such

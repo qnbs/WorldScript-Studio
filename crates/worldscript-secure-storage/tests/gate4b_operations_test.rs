@@ -13,7 +13,8 @@ use std::time::Duration;
 
 use support::{
     acquire_exclusive_until_available, acquire_shared_until_available, child_probe, payload,
-    poll_admitted, Event, Fixture, HookFs, ObservedProvider, Probe, Setup, CHILD_MODE, CHILD_SCOPE,
+    poll_admitted, Event, Fixture, HookFs, Interruption, ObservedProvider, Probe, Setup,
+    CHILD_MODE, CHILD_SCOPE,
 };
 use worldscript_secure_storage::memory_provider::MemoryKeyProvider;
 use worldscript_secure_storage::*;
@@ -830,10 +831,19 @@ fn barrier_is_coordination(name: &std::ffi::OsStr) -> bool {
     name == OPERATION_ADMISSION_LOCK_FILE || name == BARRIER_WRITER_RESOURCE
 }
 
-/// Every directory and file under `dir`, with its path relative to `base` and, for a file, its
-/// bytes. The two coordination resources are skipped only where they live, directly under the
-/// installation (`dir == base`); a same-named entry anywhere deeper is part of the comparison.
-fn barrier_collect(base: &Path, dir: &Path, out: &mut Vec<(PathBuf, Option<Vec<u8>>)>) {
+/// What an entry of the installation tree is, recorded without following links: a symlink is its
+/// target, never the directory or the bytes behind it.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum BarrierNode {
+    Directory,
+    File(Vec<u8>),
+    Link(PathBuf),
+}
+
+/// Every entry under `dir`, with its path relative to `base`. The two coordination resources are
+/// skipped only where they live, directly under the installation (`dir == base`); a same-named entry
+/// anywhere deeper is part of the comparison.
+fn barrier_collect(base: &Path, dir: &Path, out: &mut Vec<(PathBuf, BarrierNode)>) {
     for entry in fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
         if dir == base && barrier_is_coordination(&entry.file_name()) {
@@ -841,11 +851,14 @@ fn barrier_collect(base: &Path, dir: &Path, out: &mut Vec<(PathBuf, Option<Vec<u
         }
         let path = entry.path();
         let relative = path.strip_prefix(base).unwrap().to_owned();
-        if path.is_dir() {
-            out.push((relative, None));
+        let kind = entry.file_type().unwrap();
+        if kind.is_symlink() {
+            out.push((relative, BarrierNode::Link(fs::read_link(&path).unwrap())));
+        } else if kind.is_dir() {
+            out.push((relative, BarrierNode::Directory));
             barrier_collect(base, &path, out);
         } else {
-            out.push((relative, Some(fs::read(&path).unwrap())));
+            out.push((relative, BarrierNode::File(fs::read(&path).unwrap())));
         }
     }
 }
@@ -853,11 +866,11 @@ fn barrier_collect(base: &Path, dir: &Path, out: &mut Vec<(PathBuf, Option<Vec<u
 /// The installation tree, sorted: the authority root, the records, the markers and anything else a
 /// write could create, apart from the two top-level coordination resources, which are compared by
 /// `barrier_coordination_holds_no_data` instead.
-fn barrier_tree(fixture: &Fixture) -> Vec<(PathBuf, Option<Vec<u8>>)> {
-    let mut files = Vec::new();
-    barrier_collect(&fixture.base, &fixture.base, &mut files);
-    files.sort();
-    files
+fn barrier_tree(fixture: &Fixture) -> Vec<(PathBuf, BarrierNode)> {
+    let mut nodes = Vec::new();
+    barrier_collect(&fixture.base, &fixture.base, &mut nodes);
+    nodes.sort();
+    nodes
 }
 
 /// Whether the coordination resources hold no data: the writer directory, when it exists, contains
@@ -1056,7 +1069,7 @@ fn the_barrier_snapshot_sees_every_change_but_the_two_coordination_resources_at_
     // Changed bytes of an existing file.
     let file = baseline
         .iter()
-        .find(|(path, bytes)| bytes.is_some() && path.starts_with("authority"))
+        .find(|(path, node)| matches!(node, BarrierNode::File(_)) && path.starts_with("authority"))
         .map(|(path, _)| fixture.base.join(path))
         .unwrap();
     let original = fs::read(&file).unwrap();
@@ -1065,10 +1078,45 @@ fn the_barrier_snapshot_sees_every_change_but_the_two_coordination_resources_at_
     fs::write(&file, &changed).unwrap();
     seen.push(barrier_tree(&fixture) != baseline);
     fs::write(&file, &original).unwrap();
+    #[cfg(unix)]
+    let links = barrier_symlinks_are_seen(&fixture, &baseline, &file);
+    #[cfg(not(unix))]
+    let links = (true, true);
     assert_eq!(
-        (skipped, seen, barrier_tree(&fixture) == baseline),
-        ((true, false), vec![true; 5], true)
+        (skipped, seen, links, barrier_tree(&fixture) == baseline),
+        ((true, false), vec![true; 5], (true, true), true)
     );
+}
+
+/// A file replaced by a symlink to an outside copy with the same bytes, and an empty directory
+/// replaced by a symlink to another empty directory, must both change the snapshot. Unix only:
+/// creating a symlink needs no privilege there.
+#[cfg(unix)]
+fn barrier_symlinks_are_seen(
+    fixture: &Fixture,
+    baseline: &[(PathBuf, BarrierNode)],
+    file: &Path,
+) -> (bool, bool) {
+    use std::os::unix::fs::symlink;
+    let outside = fixture.base.with_extension("outside");
+    fs::create_dir_all(&outside).unwrap();
+    let original = fs::read(file).unwrap();
+    let copy = outside.join("copy");
+    fs::write(&copy, &original).unwrap();
+    fs::remove_file(file).unwrap();
+    symlink(&copy, file).unwrap();
+    let file_seen = barrier_tree(fixture) != baseline;
+    fs::remove_file(file).unwrap();
+    fs::write(file, &original).unwrap();
+    let empty = outside.join("empty");
+    fs::create_dir(&empty).unwrap();
+    fs::remove_dir(&fixture.markers).unwrap();
+    symlink(&empty, &fixture.markers).unwrap();
+    let directory_seen = barrier_tree(fixture) != baseline;
+    fs::remove_file(&fixture.markers).unwrap();
+    fs::create_dir(&fixture.markers).unwrap();
+    fs::remove_dir_all(&outside).unwrap();
+    (file_seen, directory_seen)
 }
 
 fn barrier_paged() -> Setup {
@@ -1154,10 +1202,17 @@ fn a_bound_root_that_lost_a_catalog_page_is_still_refused_before_any_page_is_rea
             .storage()
             .try_read_record(&mut StdFs, fixture.record(), payload)
     });
+    let reconcile = poll_admitted(|| {
+        fixture
+            .storage()
+            .try_reconcile_record(&mut StdFs, &fixture.identity, fixture.location())
+    })
+    .map(|_| ());
     // The data operations check the binding in `catalog()` before the pages are read.
     assert_eq!(
-        (write, list, read),
+        (write, list, read, reconcile),
         (
+            Err(OperationError::MigrationRequired),
             Err(OperationError::MigrationRequired),
             Err(OperationError::MigrationRequired),
             Err(OperationError::MigrationRequired)
@@ -1165,29 +1220,48 @@ fn a_bound_root_that_lost_a_catalog_page_is_still_refused_before_any_page_is_rea
     );
 }
 
-#[test]
-fn a_write_over_an_interrupted_root_commit_is_refused_once_the_root_has_recovered() {
-    let fixture = Fixture::with_setup(Setup {
+/// A bound root followed by an ordinary root commit that stopped as `how` says, on a fresh storage.
+fn barrier_interrupted(how: Interruption) -> Fixture {
+    Fixture::with_setup(Setup {
         bound: Some(barrier_binding("barrier-operation", 1, 1, 0xAB)),
-        interrupted: true,
+        interrupted: Some(how),
         ..Setup::default()
-    });
-    // The root recovers the durable preparation first (not an ordinary write); the committed root it
-    // leaves still carries the binding, so the operation is refused.
-    let write = fixture.write_poll(&mut StdFs, None, b"v");
-    let reconcile = poll_admitted(|| {
-        fixture
-            .storage()
-            .try_reconcile_record(&mut StdFs, &fixture.identity, fixture.location())
     })
-    .map(|_| ());
-    assert_eq!(
-        (write, reconcile),
-        (
-            Err(OperationError::MigrationRequired),
-            Err(OperationError::MigrationRequired)
-        )
-    );
+}
+
+// The root recovers the durable preparation first (not an ordinary write). Two outcomes exist: the
+// commit is completed, or it is discarded. Either way the committed root carries the binding, because
+// the interrupted commit is an ordinary catalog commit that copies it forward. Each operation gets its
+// own fixture, so neither runs against a root that the other already recovered.
+const BARRIER_RECOVERY_OUTCOMES: [Interruption; 2] =
+    [Interruption::AtAnchorCommit, Interruption::AfterPrepare];
+
+#[test]
+fn a_write_over_an_interrupted_root_commit_is_refused_whatever_the_root_recovery_decides() {
+    let outcomes: Vec<_> = BARRIER_RECOVERY_OUTCOMES
+        .into_iter()
+        .map(|how| barrier_interrupted(how).write_poll(&mut StdFs, None, b"v"))
+        .collect();
+    assert_eq!(outcomes, vec![Err(OperationError::MigrationRequired); 2]);
+}
+
+#[test]
+fn a_reconcile_over_an_interrupted_root_commit_is_refused_whatever_the_root_recovery_decides() {
+    let outcomes: Vec<_> = BARRIER_RECOVERY_OUTCOMES
+        .into_iter()
+        .map(|how| {
+            let fixture = barrier_interrupted(how);
+            poll_admitted(|| {
+                fixture.storage().try_reconcile_record(
+                    &mut StdFs,
+                    &fixture.identity,
+                    fixture.location(),
+                )
+            })
+            .map(|_| ())
+        })
+        .collect();
+    assert_eq!(outcomes, vec![Err(OperationError::MigrationRequired); 2]);
 }
 
 #[test]

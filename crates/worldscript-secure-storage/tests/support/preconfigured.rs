@@ -7,6 +7,17 @@ use std::path::Path;
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::*;
 
+/// Where an interrupted root commit stopped.
+#[derive(Clone, Copy)]
+pub enum Interruption {
+    /// At the anchor commit, after the target slot and the pointer were written: the root's recovery
+    /// completes the commit.
+    AtAnchorCommit,
+    /// Right after the preparation was persisted, before any slot was written: the root's recovery
+    /// discards it.
+    AfterPrepare,
+}
+
 /// What the preconfigured tree and provider look like when the storage is built.
 #[derive(Default)]
 pub struct Setup {
@@ -16,9 +27,9 @@ pub struct Setup {
     pub locked: bool,
     /// The catalog holds one record, so that it has a page on disk.
     pub page: bool,
-    /// After the (bound) root, a further root commit is interrupted at the anchor commit, leaving a
-    /// durable preparation for the next operation's root recovery to resolve.
-    pub interrupted: bool,
+    /// After the (bound) root, a further ordinary root commit is interrupted here, leaving a durable
+    /// preparation for the next operation's root recovery to resolve.
+    pub interrupted: Option<Interruption>,
 }
 
 /// The catalog descriptor of one record that is committed and readable, so that it has a page.
@@ -138,10 +149,13 @@ impl Authority<'_> {
         .unwrap();
     }
 
-    /// A further ordinary root commit that stops at the anchor commit: the preparation is durable,
-    /// the committed root is still the previous one.
-    fn interrupt_root_commit(&self, provider: &mut MemoryKeyProvider) {
-        provider.inject(Fault::BeforePersist(AnchorOp::Commit));
+    /// A further ordinary root commit that stops where `how` says: the preparation is durable, the
+    /// committed root is still the previous one.
+    fn interrupt_root_commit(&self, provider: &mut MemoryKeyProvider, how: Interruption) {
+        provider.inject(match how {
+            Interruption::AtAnchorCommit => Fault::BeforePersist(AnchorOp::Commit),
+            Interruption::AfterPrepare => Fault::AfterPersist(AnchorOp::Prepare),
+        });
         let interrupted = self.commit_catalog(provider, &[], "fixture-interrupted");
         assert!(interrupted.is_err(), "the commit must stop at the anchor");
         assert!(
@@ -182,8 +196,8 @@ pub fn configured_provider(base: &Path, root: &Path, setup: &Setup) -> MemoryKey
     if let Some(live) = &setup.bound {
         authority.bind(&mut provider, &mut exclusive, live);
     }
-    if setup.interrupted {
-        authority.interrupt_root_commit(&mut provider);
+    if let Some(how) = setup.interrupted {
+        authority.interrupt_root_commit(&mut provider, how);
     }
     drop(exclusive);
     provider

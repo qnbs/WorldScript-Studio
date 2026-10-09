@@ -16,7 +16,7 @@ use worldscript_secure_storage::*;
 #[path = "preconfigured.rs"]
 mod preconfigured;
 use preconfigured::configured_provider;
-pub use preconfigured::Setup;
+pub use preconfigured::{Interruption, Setup};
 
 #[derive(Default)]
 pub struct Probe {

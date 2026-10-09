@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **R-15 Gate 4E:** the ordinary-operation barrier of a bound root is now pinned with evidence. With an unlocked
   provider, a loadable catalog and no interrupted root commit, a committed root that binds a live migration already
   made `ProtectedStorage` refuse every ordinary operation (write, reconcile, list, read, lock, unlock, shutdown) in
-  every phase, from the committed root and so across a crash. Seventeen new cases show it with the installation tree
+  every phase, from the committed root and so across a crash. Eighteen new cases show it with the installation tree
   unchanged apart from the two coordination resources, a binding that names no journal, a cold start, a provider that
   starts locked, a lost catalog page, an interrupted root commit and unbound controls; the refusal codes in states
   they do not pin are stated as such. No behaviour changed. The barrier is stricter than the contract's `PREPARE`
