@@ -38,62 +38,79 @@ fn one_record_descriptor() -> CatalogDescriptor {
     CatalogDescriptor::new_unverified(&record, &marker, Some(readable)).unwrap()
 }
 
-pub fn configured_provider(base: &Path, root: &Path, setup: &Setup) -> MemoryKeyProvider {
-    let mut provider = MemoryKeyProvider::new();
-    let scope = provider.read_or_provision_installation_scope().unwrap();
-    let route = provider.provision_epoch_key(1).unwrap();
-    provider.unlock().unwrap();
-    // Test-only preconfigured authority, not first enable (which remains Gate 4E).
-    let mut exclusive = ExclusiveAdmissionGuard::try_acquire(AdmissionScope {
-        installation_dir: base,
-        root_dir: root,
-    })
-    .unwrap()
-    .unwrap();
-    let event = exclusive.try_root_commit().unwrap().unwrap();
-    write_key_epoch(
-        &mut StdFs,
-        &provider,
-        RootLayout { root_dir: root },
-        KeyEpochCommit {
-            scope: &scope,
-            record: &KeyEpochRecord {
-                epoch: 1,
-                status: KeyEpochStatus::Active,
-                root_key_ref: route.clone(),
+/// The authority being built: where its root lives and the scope and key route its roots name.
+struct Authority<'a> {
+    root: &'a Path,
+    scope: InstallationScopeId,
+    route: RootKeyRefV1,
+}
+
+impl Authority<'_> {
+    fn layout(&self) -> RootLayout<'_> {
+        RootLayout {
+            root_dir: self.root,
+        }
+    }
+
+    /// The registry's first generation: epoch 1, active, under the authority's route.
+    fn register_epoch(
+        &self,
+        provider: &MemoryKeyProvider,
+        exclusive: &mut ExclusiveAdmissionGuard,
+    ) {
+        let event = exclusive.try_root_commit().unwrap().unwrap();
+        write_key_epoch(
+            &mut StdFs,
+            provider,
+            self.layout(),
+            KeyEpochCommit {
+                scope: &self.scope,
+                record: &KeyEpochRecord {
+                    epoch: 1,
+                    status: KeyEpochStatus::Active,
+                    root_key_ref: self.route.clone(),
+                },
+                registry_generation: 1,
+                root_key_ref: &self.route,
+                key_epoch: 1,
+                held: event.root_guard().unwrap(),
             },
-            registry_generation: 1,
-            root_key_ref: &route,
-            key_epoch: 1,
-            held: event.root_guard().unwrap(),
-        },
-    )
-    .unwrap();
-    drop(event);
-    let descriptors = if setup.page {
-        vec![one_record_descriptor()]
-    } else {
-        Vec::new()
-    };
-    commit_catalog_change(
-        &mut StdFs,
-        &mut provider,
-        RootLayout { root_dir: root },
-        CatalogCommit {
-            change: CatalogChange {
-                upsert: &descriptors,
-                remove: &[],
+        )
+        .unwrap();
+    }
+
+    /// An ordinary catalog commit, naming `operation_id`, that upserts `descriptors`.
+    fn commit_catalog(
+        &self,
+        provider: &mut MemoryKeyProvider,
+        descriptors: &[CatalogDescriptor],
+        operation_id: &str,
+    ) -> Result<RootCommitted, AuthorityError> {
+        commit_catalog_change(
+            &mut StdFs,
+            provider,
+            self.layout(),
+            CatalogCommit {
+                change: CatalogChange {
+                    upsert: descriptors,
+                    remove: &[],
+                },
+                root_key_ref: &self.route,
+                active_key_epoch: 1,
+                operation_id,
             },
-            root_key_ref: &route,
-            active_key_epoch: 1,
-            operation_id: "fixture-bootstrap",
-        },
-    )
-    .unwrap();
-    if let Some(live) = &setup.bound {
-        // No producer of a bind exists in the crate yet, so the next root is committed directly.
-        let layout = RootLayout { root_dir: root };
-        let catalog = load_catalog(&mut StdFs, &provider, layout)
+        )
+    }
+
+    /// The next root, binding `live`. No producer of a bind exists in the crate yet, so the root
+    /// is committed directly.
+    fn bind(
+        &self,
+        provider: &mut MemoryKeyProvider,
+        exclusive: &mut ExclusiveAdmissionGuard,
+        live: &LiveMigration,
+    ) {
+        let catalog = load_catalog(&mut StdFs, provider, self.layout())
             .unwrap()
             .unwrap();
         let body = RootBody {
@@ -109,36 +126,23 @@ pub fn configured_provider(base: &Path, root: &Path, setup: &Setup) -> MemoryKey
         let event = exclusive.try_root_commit().unwrap().unwrap();
         commit_root(
             &mut StdFs,
-            &mut provider,
-            layout,
+            provider,
+            self.layout(),
             RootCommitRequest {
-                scope: &scope,
+                scope: &self.scope,
                 root: &body,
-                root_key_ref: &route,
+                root_key_ref: &self.route,
                 held: event.root_guard().unwrap(),
             },
         )
         .unwrap();
-        drop(event);
     }
-    if setup.interrupted {
-        // A further ordinary root commit that stops at the anchor commit: the preparation is durable,
-        // the committed root is still the previous one.
+
+    /// A further ordinary root commit that stops at the anchor commit: the preparation is durable,
+    /// the committed root is still the previous one.
+    fn interrupt_root_commit(&self, provider: &mut MemoryKeyProvider) {
         provider.inject(Fault::BeforePersist(AnchorOp::Commit));
-        let interrupted = commit_catalog_change(
-            &mut StdFs,
-            &mut provider,
-            RootLayout { root_dir: root },
-            CatalogCommit {
-                change: CatalogChange {
-                    upsert: &[],
-                    remove: &[],
-                },
-                root_key_ref: &route,
-                active_key_epoch: 1,
-                operation_id: "fixture-interrupted",
-            },
-        );
+        let interrupted = self.commit_catalog(provider, &[], "fixture-interrupted");
         assert!(interrupted.is_err(), "the commit must stop at the anchor");
         assert!(
             provider
@@ -148,6 +152,38 @@ pub fn configured_provider(base: &Path, root: &Path, setup: &Setup) -> MemoryKey
                 .is_some(),
             "the interrupted commit leaves a durable preparation"
         );
+    }
+}
+
+/// A provider with the registry, the first catalog and, as `setup` says, a bound root and an
+/// interrupted root commit. Test-only preconfigured authority, not first enable (which remains
+/// Gate 4E).
+pub fn configured_provider(base: &Path, root: &Path, setup: &Setup) -> MemoryKeyProvider {
+    let mut provider = MemoryKeyProvider::new();
+    let scope = provider.read_or_provision_installation_scope().unwrap();
+    let route = provider.provision_epoch_key(1).unwrap();
+    provider.unlock().unwrap();
+    let authority = Authority { root, scope, route };
+    let mut exclusive = ExclusiveAdmissionGuard::try_acquire(AdmissionScope {
+        installation_dir: base,
+        root_dir: root,
+    })
+    .unwrap()
+    .unwrap();
+    authority.register_epoch(&provider, &mut exclusive);
+    let descriptors = if setup.page {
+        vec![one_record_descriptor()]
+    } else {
+        Vec::new()
+    };
+    authority
+        .commit_catalog(&mut provider, &descriptors, "fixture-bootstrap")
+        .unwrap();
+    if let Some(live) = &setup.bound {
+        authority.bind(&mut provider, &mut exclusive, live);
+    }
+    if setup.interrupted {
+        authority.interrupt_root_commit(&mut provider);
     }
     drop(exclusive);
     provider
