@@ -186,6 +186,16 @@ impl Fixture {
     }
 
     pub fn new_in(parent: &Path) -> Self {
+        Self::build(parent, None)
+    }
+
+    /// A storage over a tree whose committed root already binds `live`, built after the binding
+    /// was committed: it is a cold start, and it never observed an unbound tree.
+    pub fn new_bound(live: LiveMigration) -> Self {
+        Self::build(&std::env::temp_dir(), Some(live))
+    }
+
+    fn build(parent: &Path, bound: Option<LiveMigration>) -> Self {
         static NEXT: AtomicU32 = AtomicU32::new(0);
         let base = parent.join(format!(
             "wss-gate4b-ops-{}-{}",
@@ -214,7 +224,7 @@ impl Fixture {
             fs::canonicalize(records).unwrap(),
             fs::canonicalize(markers).unwrap(),
         );
-        let provider = configured_provider(&base, &root);
+        let provider = configured_provider(&base, &root, bound.as_ref());
         let probe = Arc::new(Probe::default());
         let storage = Arc::new(ProtectedStorage::new(
             AdmissionScope {
@@ -380,7 +390,11 @@ pub fn poll_admitted<T, E>(mut operation: impl FnMut() -> Result<Option<T>, E>) 
     }
 }
 
-fn configured_provider(base: &Path, root: &Path) -> MemoryKeyProvider {
+fn configured_provider(
+    base: &Path,
+    root: &Path,
+    bound: Option<&LiveMigration>,
+) -> MemoryKeyProvider {
     let mut provider = MemoryKeyProvider::new();
     let scope = provider.read_or_provision_installation_scope().unwrap();
     let route = provider.provision_epoch_key(1).unwrap();
@@ -427,6 +441,37 @@ fn configured_provider(base: &Path, root: &Path) -> MemoryKeyProvider {
         },
     )
     .unwrap();
+    if let Some(live) = bound {
+        // No producer of a bind exists in the crate yet, so the next root is committed directly.
+        let layout = RootLayout { root_dir: root };
+        let catalog = load_catalog(&mut StdFs, &provider, layout)
+            .unwrap()
+            .unwrap();
+        let body = RootBody {
+            root_generation: catalog.root.root_generation + 1,
+            commit_evidence: RootCommitEvidence {
+                operation_id: live.operation_id.clone(),
+                fencing_generation: live.fencing_generation,
+                state: RootCommitState::Committed,
+            },
+            live_migration: Some(live.clone()),
+            ..catalog.root
+        };
+        let event = exclusive.try_root_commit().unwrap().unwrap();
+        commit_root(
+            &mut StdFs,
+            &mut provider,
+            layout,
+            RootCommitRequest {
+                scope: &scope,
+                root: &body,
+                root_key_ref: &route,
+                held: event.root_guard().unwrap(),
+            },
+        )
+        .unwrap();
+        drop(event);
+    }
     drop(exclusive);
     provider
 }

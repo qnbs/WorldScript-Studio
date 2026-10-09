@@ -5,7 +5,7 @@ mod support;
 
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -793,4 +793,187 @@ fn operation_child() {
         _ => panic!("unknown child mode"),
     }
     assert_eq!(probe.observations.load(Ordering::SeqCst), 0);
+}
+
+// Gate 4E E1: a committed root that binds a live migration refuses every ordinary operation.
+//
+// The barrier is the authenticated root alone (`catalog()` and `verify_transition`), so it is durable
+// across a crash, needs no journal read and does not depend on the migration phase. It is stricter
+// than contract §10.3, which admits ordinary reads and writes while `PREPARE` lasts (the relaxation
+// is a later slice). Every storage below is built after the binding was committed: a cold start
+// that never observed an unbound tree.
+
+fn barrier_binding(operation: &str, fence: u64, revision: u64, digest: u8) -> LiveMigration {
+    LiveMigration {
+        operation_id: operation.into(),
+        fencing_generation: fence,
+        journal_revision: revision,
+        manifest_digest: [digest; 32],
+    }
+}
+
+/// A binding that names no journal at all: the storage never reads one.
+fn barrier_bound() -> Fixture {
+    Fixture::new_bound(barrier_binding("barrier-operation", 1, 1, 0xAB))
+}
+
+/// Every file under `dir`, with its path relative to `base` and its bytes.
+fn barrier_collect(base: &Path, dir: &Path, out: &mut Vec<(PathBuf, Vec<u8>)>) {
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            barrier_collect(base, &path, out);
+        } else {
+            let relative = path.strip_prefix(base).unwrap().to_owned();
+            out.push((relative, fs::read(&path).unwrap()));
+        }
+    }
+}
+
+/// The authority root, the records and the markers, sorted: what an ordinary write would change.
+fn barrier_tree(fixture: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut files = Vec::new();
+    for dir in [&fixture.root, &fixture.records, &fixture.markers] {
+        barrier_collect(&fixture.base, dir, &mut files);
+    }
+    files.sort();
+    files
+}
+
+#[test]
+fn a_bound_root_refuses_a_write_and_writes_nothing() {
+    let fixture = barrier_bound();
+    let before = barrier_tree(&fixture);
+    assert!(!before.is_empty(), "the root itself is part of the tree");
+    let first = fixture.write_poll(&mut StdFs, None, b"first");
+    let second = fixture.write_poll(&mut StdFs, Some(1), b"second");
+    assert_eq!(
+        (first, second, barrier_tree(&fixture) == before),
+        (
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired),
+            true
+        )
+    );
+}
+
+#[test]
+fn a_bound_root_refuses_a_read_a_list_and_a_reconcile_and_writes_nothing() {
+    let fixture = barrier_bound();
+    let before = barrier_tree(&fixture);
+    let read = poll_admitted(|| {
+        fixture
+            .storage()
+            .try_read_record(&mut StdFs, fixture.record(), payload)
+    });
+    let list = poll_admitted(|| fixture.storage().try_list_records(&mut StdFs));
+    let reconcile = poll_admitted(|| {
+        fixture
+            .storage()
+            .try_reconcile_record(&mut StdFs, &fixture.identity, fixture.location())
+    });
+    assert_eq!(
+        (
+            read,
+            list.map(|_| ()),
+            reconcile.map(|_| ()),
+            barrier_tree(&fixture) == before
+        ),
+        (
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired),
+            true
+        )
+    );
+}
+
+#[test]
+fn a_snapshot_over_a_bound_root_reads_nothing() {
+    let fixture = barrier_bound();
+    let before = barrier_tree(&fixture);
+    let mut guard = poll_admitted(|| fixture.storage().try_authority_snapshot(&mut StdFs))
+        .expect("the snapshot itself is not what the binding refuses");
+    let list = guard.list_records(&mut StdFs).map(|_| ());
+    let read = guard.read_record(&mut StdFs, fixture.record(), payload);
+    drop(guard);
+    assert_eq!(
+        (list, read, barrier_tree(&fixture) == before),
+        (
+            Err(OperationError::MigrationRequired),
+            Err(OperationError::MigrationRequired),
+            true
+        )
+    );
+}
+
+#[test]
+fn a_bound_root_refuses_to_lock_and_the_storage_stays_usable_for_refusals() {
+    let fixture = barrier_bound();
+    let lock = poll_admitted(|| fixture.storage().try_lock(&mut StdFs)).map(|_| ());
+    assert_eq!(lock, Err(OperationError::RecoveryPending));
+    // The refusal changed nothing the next operation depends on.
+    assert_eq!(
+        fixture.write_poll(&mut StdFs, None, b"later"),
+        Err(OperationError::MigrationRequired)
+    );
+}
+
+#[test]
+fn a_bound_root_refuses_to_unlock() {
+    let fixture = barrier_bound();
+    let unlock = poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ());
+    assert_eq!(unlock, Err(OperationError::RecoveryPending));
+}
+
+#[test]
+fn a_bound_root_refuses_to_shut_down() {
+    let fixture = barrier_bound();
+    let shutdown = poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs));
+    assert_eq!(shutdown, Err(OperationError::RecoveryPending));
+}
+
+#[test]
+fn the_refusal_is_the_roots_alone_whatever_the_binding_names() {
+    // Different operations, fences, revisions and digests; none names a journal that exists.
+    let bindings = [
+        barrier_binding("barrier-operation", 1, 1, 0xAB),
+        barrier_binding("another-operation", 7, 9, 0x01),
+        barrier_binding("x", 2, 100, 0xFF),
+    ];
+    let outcomes: Vec<_> = bindings
+        .into_iter()
+        .map(|binding| {
+            let fixture = Fixture::new_bound(binding);
+            fixture.write_poll(&mut StdFs, None, b"v")
+        })
+        .collect();
+    assert_eq!(outcomes, vec![Err(OperationError::MigrationRequired); 3]);
+}
+
+#[test]
+fn the_same_tree_without_the_binding_admits_the_operations() {
+    let fixture = Fixture::new();
+    let committed = fixture
+        .write_until_admitted(&mut StdFs, None, b"first")
+        .unwrap();
+    assert_eq!(committed.generation, 1);
+    assert_eq!(fixture.payload(), b"first");
+    let list = poll_admitted(|| fixture.storage().try_list_records(&mut StdFs)).unwrap();
+    assert_eq!(list.len(), 1);
+    let lock = poll_admitted(|| fixture.storage().try_lock(&mut StdFs)).unwrap();
+    assert_eq!(lock, KeyState::Locked);
+}
+
+#[test]
+fn a_storage_built_over_a_bound_root_observed_nothing_before_it_refuses() {
+    let fixture = barrier_bound();
+    // Construction performs no observation, so the refusal below comes from what the first
+    // operation reads from the tree, not from anything the storage remembered.
+    assert_eq!(fixture.probe.observations.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        fixture.write_poll(&mut StdFs, None, b"v"),
+        Err(OperationError::MigrationRequired)
+    );
+    assert!(fixture.probe.observations.load(Ordering::SeqCst) > 0);
 }
