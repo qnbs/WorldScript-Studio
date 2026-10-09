@@ -843,6 +843,21 @@ pub fn commit_lease_renewal<F: DurableFs, P: KeyProvider>(
     check_operation_id(&renewal.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
     let held = acquire_root_commit(layout)?;
+    commit_lease_renewal_held(fs, provider, layout, renewal, &held)
+}
+
+/// As [`commit_lease_renewal`], under a root event the caller already holds: the exclusive conversion
+/// session takes it through its admission, so the identity check and the root lock are coupled. `held`
+/// must guard the root of `layout`.
+pub(crate) fn commit_lease_renewal_held<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    renewal: JournalCheckpoint<'_>,
+    held: &RootCommitGuard,
+) -> Result<RootCommitted, AuthorityError> {
+    check_operation_id(&renewal.manifest.operation_id)
+        .map_err(|_| AuthorityError::InvalidOperationId)?;
     let commit = journal_catalog_commit(&renewal);
     let committed = committed_binding(fs, provider, layout, commit)?;
     let key = route_journal_key(fs, provider, layout, renewal.journal)?;
@@ -857,7 +872,7 @@ pub fn commit_lease_renewal<F: DurableFs, P: KeyProvider>(
         binding: BindingStep::Renewal(&advance),
         key: &key,
     };
-    commit_planned(fs, provider, layout, commit, &held, Some(step))
+    commit_planned(fs, provider, layout, commit, held, Some(step))
 }
 
 fn acquire_root_commit(layout: RootLayout<'_>) -> Result<RootCommitGuard, AuthorityError> {

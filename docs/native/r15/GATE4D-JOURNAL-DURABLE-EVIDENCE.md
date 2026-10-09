@@ -674,25 +674,39 @@ is the first step that moves the journal through the gate, and the first real ca
 |---|---|
 | builder | `renewed_lease(manifest, fence, expires)`: the fence checked, the next revision, the expiry replaced, the renewal relation proved (`assert_renewal_successor`: a named lease, an expiry strictly after the held one, not terminal) and the manifest encodable; the expiry is the caller's, Core reads no clock |
 | key route | `read_committed_journal` also returns the root key reference and active epoch the committed root names; the step carries those, so no key, route or epoch comes from the caller and the commit cannot meet `KeyRotationNotAdmitted` |
-| step | admission checked; successor built from the session's snapshot; fresh write-operation identifier; `commit_lease_renewal` under the session's journal directory; the session re-reads the committed journal and replaces its snapshot; admission checked again |
-| failure | the snapshot is kept; a retry rebuilds the identical successor and the journal adopts it if the first attempt had written it (a failed root commit that leaves a pending preparation is the root's own recovery, not the session's) |
+| journal directory | pinned at begin (opened before it is canonicalised, as the admission does) and required to lie strictly below the admitted installation directory (`JournalOutsideInstallation` otherwise, before any read); every step and `is_admitted` look at the pin again, so a directory replaced after begin is `NotAdmitted` before any write |
+| root event | `try_root_commit` on the held admission (`RootBusy` when another root commit holds the lock, nothing written), `root_guard` while the lock is held, and `commit_lease_renewal_held`, the commit of `commit_lease_renewal` under a root event the caller holds, so the identity check and the root lock are coupled |
+| read-back | the committed journal is read under that same root event, where no other root commit can come between, and installed only if it is the renewal just committed; a failed read-back (`Unreadable`) or a different journal (`Superseded`) spends the session and every later step is `Spent` |
+| conflict | a differing candidate at the next revision (a crashed attempt that used another expiry) is moved aside with its bytes preserved (`CandidateConflict::Quarantine`, the policy of the composed journal commits, which hold the root lock and have read the committed binding), so it never blocks the next step; an identical candidate is adopted |
+| result | the `RootCommitted` of the commit, whose `directories` says whether the directory entries are confirmed durable |
 
 Decisions, disclosed: (a) renewal alone first, the smallest slice that gives D3b a caller; entering `CONVERT` and
 the cursor follow; (b) a lost admission after a step is reported as `NotAdmitted` even though the step may have
-committed, because a check after the commit can report but not undo it; (c) no internal retry; (d) the key
-reference and epoch come from the committed root; (e) the tests live in the conversion test file, whose
-fixture they share.
+committed, because a check after the commit can report but not undo it, and the snapshot then is the committed
+journal; (c) no internal retry, and a session spent by a failed read-back is replaced by a new begin rather than
+resynchronised; (d) the key reference and epoch come from the committed root; (e) the journal directory must lie
+below the admitted installation directory: the contract does not place the journal, but an exclusive admission
+guards nothing outside the installation, so a journal outside it would be written without the admission's
+protection; (f) the path-based file operations cannot be made atomic with an identity check, so the checks bracket
+every step (before it, under the root lock at the root event, and after it) and fail closed.
 
-Proof (`gate4d_conversion_entry_test`): the owner renews in `ADMIT` and in `CONVERT`, the session equals the
-expected renewal (revision plus one, expiry replaced, nothing else) and a fresh gate reads the same from the
-root, with the original lease long past its expiry; an expiry equal to or before the held one is refused with
-nothing written; a session whose journal another owner took over is refused as a stale owner before any write;
-with the anchor refusing the root's preparation the session keeps its snapshot, the journal holds the renewal
-as an unadopted candidate and the retry adopts it without rewriting the generation; an installation moved away
-before the step is refused before any write and one moved away right after the last read of the step is
-reported while the step stays committed; the builder refuses another token, a missing lease and a terminal
-journal. Mutation-checked: the admission check before and after the step, the refresh of the snapshot, the
-carried epoch and fence, and each of the builder's three checks removed one at a time fail the test that owns them.
+Proof (`gate4d_conversion_entry_test`): the owner renews in `ADMIT` and in `CONVERT`, the commit is returned (one root
+generation further), the session equals the expected renewal (revision plus one, expiry replaced, nothing else) and a
+fresh gate reads the same from the root, with the original lease long past its expiry; an expiry equal to or before
+the held one is refused with nothing written; a session whose journal another owner took over is refused as a stale
+owner before any write; a busy root is `RootBusy` with nothing written and the retry succeeds; with the anchor
+refusing the root's preparation the session keeps its snapshot, the journal holds the renewal as an unadopted
+candidate and the retry adopts it without rewriting the generation; a restarted owner with another expiry
+quarantines the candidate (bytes preserved) and renews; an installation moved away before the step is refused before
+any write and one moved away right after the last read of the step is reported while the step stays committed; a
+failed read-back is `Unreadable`, the renewal is committed and the next step is `Spent`; a journal directory outside
+the installation, or the installation itself, is refused before any read, and one replaced after begin is refused
+before any write; the builder refuses another token, a missing lease and a terminal journal. Mutation-checked: the
+admission check before and after the step, the snapshot refresh, the carried epoch and fence, the conflict policy, the
+spent state, the root-busy mapping, the journal pin, the containment rule and its order, and each of the builder's
+three checks, removed one at a time, fail the test that owns them. One check has no failing test: the comparison of
+the read-back with the committed renewal is defence in depth, because the read happens under the root event and is
+authenticated against the digest the commit just bound, so it can only differ through a defect.
 
 ## Slice C2a — the entry gate of the exclusive conversion driver
 

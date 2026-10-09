@@ -3,9 +3,9 @@
 //! Conversion rewrites every record of the final inventory, so it must run with no ordinary operation
 //! in flight. [`begin_conversion`] makes that structural: it takes the installation's
 //! [`ExclusiveAdmissionGuard`] by mutable borrow, derives the root layout from the scope that guard
-//! was acquired for (the root cannot differ from the one admitted), and returns a
-//! [`ConversionSession`] that keeps the borrow, so one admission carries one session and the
-//! admission outlives it. A shared guard cannot be passed:
+//! was acquired for (the root cannot differ from the one admitted), pins the journal directory below
+//! the admitted installation, and returns a [`ConversionSession`] that keeps the borrow, so one
+//! admission carries one session and the admission outlives it. A shared guard cannot be passed:
 //!
 //! ```compile_fail
 //! use worldscript_secure_storage::{
@@ -31,17 +31,26 @@
 //! still the caller's while nobody has taken over (the fence arbitrates).
 //!
 //! Beginning writes nothing and holds no key. The session then moves the journal only through the
-//! fenced journal-owner operations, one step at a time ([`ConversionSession::renew_lease`] is the first):
-//! each step checks the admission, builds the successor from the session's own snapshot, commits it
-//! with the key route and active epoch the committed root itself names, re-reads the committed journal
-//! and checks the admission again. A step that fails leaves the snapshot as it was; a retry rebuilds
-//! the identical successor, which the journal adopts if the first attempt had already written it.
+//! fenced journal-owner operations, one step at a time ([`ConversionSession::renew_lease`] is the
+//! first). A step checks the admission and the journal directory, builds the successor from the
+//! session's own snapshot, takes the root event through the held admission (so the identity check and
+//! the root lock are coupled), commits with the key route and active epoch the committed root itself
+//! names, reads the committed journal back under that same root event and checks the admission again.
+//!
+//! What a step leaves behind. Before the commit the tree and the snapshot are unchanged, and a retry
+//! rebuilds the same successor, which the journal adopts if it is identical to a candidate already
+//! written; a differing candidate of a crashed attempt is moved aside with its bytes preserved, so it
+//! never blocks the next step. After the commit the session holds the journal it read back. If that
+//! read fails, or names anything but the renewal that was just committed, the session is spent: every
+//! later step is refused and the caller begins again to learn the state. A lost admission is reported
+//! even when it was lost after the commit; the snapshot then is the committed journal.
 
-use crate::admission::{AdmissionScope, ExclusiveAdmissionGuard};
-use std::path::Path;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 
+use crate::admission::{AdmissionError, AdmissionScope, ExclusiveAdmissionGuard};
 use crate::authority::{
-    commit_lease_renewal, read_committed_journal, AuthorityError, CommittedJournal,
+    commit_lease_renewal_held, read_committed_journal, AuthorityError, CommittedJournal,
     JournalCheckpoint, JournalSource,
 };
 use crate::durable::{DurableFs, WriteOperationId};
@@ -52,10 +61,12 @@ use crate::journal::{
 };
 use crate::provider::KeyProvider;
 use crate::root::LiveMigration;
-use crate::root_store::RootLayout;
+use crate::root_lock::sys;
+use crate::root_store::{RootCommitted, RootLayout};
 
 /// What the gate needs from its caller: the scope the admission was acquired for, where the journal
-/// lives, and the identity the committed lease must carry.
+/// lives (below the installation directory of that scope), and the identity the committed lease must
+/// carry.
 #[derive(Clone, Copy)]
 pub struct ConversionBegin<'a> {
     pub scope: AdmissionScope<'a>,
@@ -67,9 +78,17 @@ pub struct ConversionBegin<'a> {
 /// tree unchanged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConversionError {
-    /// The guard does not hold the scope: other directories, or directories replaced since acquisition.
+    /// The guard does not hold the scope, or the journal directory is no longer the one pinned:
+    /// other directories, or directories replaced since acquisition.
     NotAdmitted,
-    /// Reading the committed journal failed (no bound migration, key route, authentication, I/O).
+    /// The admission could not take the root event, or could not pin a directory.
+    Admission(AdmissionError),
+    /// Another root commit holds the root lock; nothing was written, try again.
+    RootBusy,
+    /// The journal directory is not below the admitted installation directory.
+    JournalOutsideInstallation,
+    /// Reading the committed journal, or committing a step, failed (no bound migration, key route,
+    /// authentication, I/O, a stale token).
     Authority(AuthorityError),
     /// The operation finished (`DONE`).
     TerminalPhase,
@@ -86,11 +105,50 @@ pub enum ConversionError {
     Migration(MigrationExecutionError),
     /// No write-operation identifier could be drawn from the operating system.
     OperationId(SealError),
+    /// The step committed, but the journal read back is not the one it committed: the session is
+    /// spent, begin again.
+    Superseded,
+    /// The step committed, but the committed journal could not be read back: the session is spent,
+    /// begin again.
+    Unreadable(AuthorityError),
+    /// An earlier step spent this session; begin again.
+    Spent,
 }
 
 impl From<AuthorityError> for ConversionError {
     fn from(error: AuthorityError) -> Self {
         Self::Authority(error)
+    }
+}
+
+/// A directory held open, so that a later look can tell whether its path still names it.
+#[derive(Debug)]
+struct PinnedDirectory {
+    pin: File,
+    canonical: PathBuf,
+}
+
+impl PinnedDirectory {
+    /// Pins `dir` (before canonicalising it, as the admission does) and requires it to lie strictly
+    /// below the installation directory of `scope`.
+    fn below(scope: AdmissionScope<'_>, dir: &Path) -> Result<Self, ConversionError> {
+        let io = |error: std::io::Error| ConversionError::Admission(AdmissionError::from(error));
+        let pin = sys::open_directory(dir).map_err(io)?;
+        let canonical = std::fs::canonicalize(dir).map_err(io)?;
+        let installation = std::fs::canonicalize(scope.installation_dir).map_err(io)?;
+        if canonical == installation || !canonical.starts_with(&installation) {
+            return Err(ConversionError::JournalOutsideInstallation);
+        }
+        let pinned = Self { pin, canonical };
+        if pinned.is_current() {
+            Ok(pinned)
+        } else {
+            Err(ConversionError::NotAdmitted)
+        }
+    }
+
+    fn is_current(&self) -> bool {
+        sys::still_named(&self.pin, &self.canonical).unwrap_or(false)
     }
 }
 
@@ -101,7 +159,9 @@ pub struct ConversionSession<'a> {
     held: &'a mut ExclusiveAdmissionGuard,
     scope: AdmissionScope<'a>,
     journal_dir: &'a Path,
+    journal_pin: PinnedDirectory,
     journal: CommittedJournal,
+    spent: bool,
 }
 
 /// Opens the conversion gate over the committed journal; see the module documentation.
@@ -112,18 +172,24 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
     begin: ConversionBegin<'a>,
 ) -> Result<ConversionSession<'a>, ConversionError> {
     ensure_admitted(held, begin.scope)?;
+    let journal_pin = PinnedDirectory::below(begin.scope, begin.journal.dir)?;
     let layout = RootLayout {
         root_dir: begin.scope.root_dir,
     };
     let journal = read_committed_journal(fs, provider, layout, begin.journal)?;
     // The directories must still be the ones admitted after the reads, not only before them.
     ensure_admitted(held, begin.scope)?;
+    if !journal_pin.is_current() {
+        return Err(ConversionError::NotAdmitted);
+    }
     check_convertible(&journal.manifest, begin.owner_id)?;
     Ok(ConversionSession {
         held,
         scope: begin.scope,
         journal_dir: begin.journal.dir,
+        journal_pin,
         journal,
+        spent: false,
     })
 }
 
@@ -155,7 +221,7 @@ fn check_convertible(manifest: &JournalManifest, owner_id: &str) -> Result<(), C
 }
 
 impl<'a> ConversionSession<'a> {
-    /// The manifest the committed root names.
+    /// The manifest the committed root names, as of the last step this session could read back.
     pub fn manifest(&self) -> &JournalManifest {
         &self.journal.manifest
     }
@@ -170,31 +236,36 @@ impl<'a> ConversionSession<'a> {
         MigrationFence::from_manifest(&self.journal.manifest)
     }
 
-    /// Whether the admission still holds the scope the session began under.
+    /// Whether the admission still holds the scope the session began under and the journal directory
+    /// is still the one pinned.
     pub fn is_admitted(&self) -> bool {
-        self.held.guards(self.scope)
+        self.check_admitted().is_ok()
     }
 
-    /// Renews the owner's lease to `expires_unix_ms`, a time the caller chose (Core reads no clock).
+    /// Renews the owner's lease to `expires_unix_ms`, a time the caller chose (Core reads no clock),
+    /// and returns the root commit, whose `directories` says whether the directory entries are
+    /// confirmed durable.
     ///
     /// The expiry must move strictly forward (`Migration(InvalidLeaseRenewal)`); a lease long past its
     /// expiry is still renewed while nobody has taken over, because a takeover advances the fence and
     /// the committed manifest then names another owner. The renewal is committed by
-    /// [`commit_lease_renewal`] under the root lock, so a snapshot that went stale is refused before any
-    /// write. On success the session holds the committed journal as the root now names it. On failure it
-    /// holds the snapshot it had, and a retry adopts a renewal the journal already wrote. A lost
-    /// admission is reported as `NotAdmitted` even when it was lost after the commit: begin again to
-    /// learn the state.
+    /// [`commit_lease_renewal_held`] under the root event the admission hands out, so a snapshot that
+    /// went stale is refused before any write. See the module documentation for what a failed step
+    /// leaves behind.
     pub fn renew_lease<F: DurableFs, P: KeyProvider>(
         &mut self,
         fs: &mut F,
         provider: &mut P,
         expires_unix_ms: u64,
-    ) -> Result<(), ConversionError> {
+    ) -> Result<RootCommitted, ConversionError> {
+        if self.spent {
+            return Err(ConversionError::Spent);
+        }
         self.check_admitted()?;
         let renewed = renewed_lease(&self.journal.manifest, &self.fence(), expires_unix_ms)
             .map_err(ConversionError::Migration)?;
         let operation = WriteOperationId::generate().map_err(ConversionError::OperationId)?;
+        let layout = self.layout();
         let journal = JournalSource {
             dir: self.journal_dir,
             operation: &operation,
@@ -206,11 +277,48 @@ impl<'a> ConversionSession<'a> {
             journal,
             root_key_ref: &self.journal.root_key_ref,
             active_key_epoch: self.journal.active_key_epoch,
-            conflict: CandidateConflict::Refuse,
+            conflict: CandidateConflict::Quarantine,
         };
-        commit_lease_renewal(fs, provider, self.layout(), step)?;
-        self.journal = read_committed_journal(fs, &*provider, self.layout(), journal)?;
-        self.check_admitted()
+        let (committed, read_back) = {
+            let event = self
+                .held
+                .try_root_commit()
+                .map_err(ConversionError::Admission)?
+                .ok_or(ConversionError::RootBusy)?;
+            let root = event.root_guard().map_err(ConversionError::Admission)?;
+            let committed = commit_lease_renewal_held(fs, provider, layout, step, root)?;
+            // Read back while the root event is still held: no other root commit comes between.
+            (
+                committed,
+                read_committed_journal(fs, &*provider, layout, journal),
+            )
+        };
+        self.install(&renewed, read_back)?;
+        self.check_admitted()?;
+        Ok(committed)
+    }
+
+    /// Installs the journal read back after a commit if it is the one that was committed; otherwise the
+    /// session is spent.
+    fn install(
+        &mut self,
+        committed: &JournalManifest,
+        read_back: Result<CommittedJournal, AuthorityError>,
+    ) -> Result<(), ConversionError> {
+        match read_back {
+            Ok(journal) if journal.manifest == *committed => {
+                self.journal = journal;
+                Ok(())
+            }
+            Ok(_) => {
+                self.spent = true;
+                Err(ConversionError::Superseded)
+            }
+            Err(error) => {
+                self.spent = true;
+                Err(ConversionError::Unreadable(error))
+            }
+        }
     }
 
     fn layout(&self) -> RootLayout<'a> {
@@ -220,6 +328,11 @@ impl<'a> ConversionSession<'a> {
     }
 
     fn check_admitted(&self) -> Result<(), ConversionError> {
-        ensure_admitted(self.held, self.scope)
+        ensure_admitted(self.held, self.scope)?;
+        if self.journal_pin.is_current() {
+            Ok(())
+        } else {
+            Err(ConversionError::NotAdmitted)
+        }
     }
 }
