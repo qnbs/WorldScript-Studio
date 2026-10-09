@@ -31,8 +31,9 @@
 //! still the caller's while nobody has taken over (the fence arbitrates).
 //!
 //! Beginning writes nothing and holds no key. The session then moves the journal only through the
-//! fenced journal-owner operations, one step at a time ([`ConversionSession::renew_lease`] is the
-//! first). A step checks the admission and the journal directory, builds the successor from the
+//! fenced journal-owner operations, one step at a time ([`ConversionSession::renew_lease`],
+//! [`ConversionSession::enter_convert`] and [`ConversionSession::advance_cursor`], which share one
+//! private step). A step checks the admission and the journal directory, builds the successor from the
 //! session's own snapshot, takes the root event through the held admission (so the identity check and
 //! the root lock are coupled), commits with the key route and active epoch the committed root itself
 //! names, reads the committed journal back under that same root event and checks the admission again.
@@ -47,22 +48,24 @@
 //! it names the successor (committed, even if the commit reported an error), or it does not (not
 //! committed, snapshot kept). If the read-back fails, or names a journal that is neither of the two
 //! where the commit reported success, the session is spent: every later step is refused and the caller
-//! begins again to learn the state. A lost admission is reported even when it was lost after the
-//! commit; the snapshot then is the committed journal.
+//! begins again to learn the state. After the commit call, every outcome except a refusal that certainly
+//! wrote nothing is followed by the admission check, and a lost admission is reported first: the step
+//! may have committed, and the caller begins again to learn the state.
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use crate::admission::{AdmissionError, AdmissionScope, ExclusiveAdmissionGuard};
 use crate::authority::{
-    commit_lease_renewal_held, read_committed_journal, AuthorityError, CommittedJournal,
-    JournalCheckpoint, JournalSource,
+    commit_journal_checkpoint_held, commit_lease_renewal_held, read_committed_journal,
+    AuthorityError, CommittedJournal, JournalCheckpoint, JournalSource,
 };
 use crate::durable::{DurableFs, WriteOperationId};
 use crate::error::SealError;
 use crate::journal::{
-    phase_code, renewed_lease, CandidateConflict, JournalManifest, MigrationExecutionError,
-    MigrationFence,
+    checkpoint_progress, phase_code, renewed_lease, transition_phase, CandidateConflict,
+    JournalCheckpointCursor, JournalManifest, MigrationExecutionError, MigrationFence,
+    MigrationPhase,
 };
 use crate::provider::KeyProvider;
 use crate::root::LiveMigration;
@@ -106,9 +109,11 @@ pub enum ConversionError {
     FinalInventoryNotCaptured,
     /// The committed lease is owned by another owner, or by none.
     ForeignLeaseOwner,
-    /// A step's successor is not a valid one (a renewal with no lease to renew, or an expiry that does
-    /// not move strictly forward).
+    /// A step's successor is not a valid one (a renewal with no lease to renew, an expiry that does not
+    /// move strictly forward, a cursor that regresses or lies outside the inventory).
     Migration(MigrationExecutionError),
+    /// The step belongs to another phase: the cursor moves in `CONVERT` only.
+    WrongPhase,
     /// No write-operation identifier could be drawn from the operating system.
     OperationId(SealError),
     /// The step committed, but the journal read back is not the one it committed: the session is
@@ -165,6 +170,14 @@ impl PinnedDirectory {
     fn is_current(&self) -> bool {
         sys::still_named(&self.pin, &self.canonical).unwrap_or(false)
     }
+}
+
+/// Which journal-owner operation commits a step's successor: the lease renewal and the ordinary
+/// checkpoint are different operations over the same root event.
+#[derive(Debug, Clone, Copy)]
+enum StepKind {
+    Renewal,
+    Checkpoint,
 }
 
 /// The exclusive conversion entry: the committed journal state, read under an admission that no
@@ -276,9 +289,7 @@ impl<'a> ConversionSession<'a> {
     ///
     /// The expiry must move strictly forward (`Migration(InvalidLeaseRenewal)`); a lease long past its
     /// expiry is still renewed while nobody has taken over, because a takeover advances the fence and
-    /// the committed manifest then names another owner. The renewal is committed by
-    /// [`commit_lease_renewal_held`] under the root event the admission hands out, so a snapshot that
-    /// went stale is refused before any write. See the module documentation for what a failed step
+    /// the committed manifest then names another owner. See the module documentation for what a step
     /// leaves behind.
     pub fn renew_lease<F: DurableFs, P: KeyProvider>(
         &mut self,
@@ -286,12 +297,74 @@ impl<'a> ConversionSession<'a> {
         provider: &mut P,
         expires_unix_ms: u64,
     ) -> Result<RootCommitted, ConversionError> {
+        self.step(fs, provider, StepKind::Renewal, |manifest, fence| {
+            renewed_lease(manifest, fence, expires_unix_ms).map_err(ConversionError::Migration)
+        })
+    }
+
+    /// Enters `CONVERT` from `ADMIT`, at cursor `(0, 0)` (§10.3), and returns the root commit. A
+    /// session that already is in `CONVERT` (a resumed conversion) has nothing to do: nothing is
+    /// written and `None` is returned.
+    pub fn enter_convert<F: DurableFs, P: KeyProvider>(
+        &mut self,
+        fs: &mut F,
+        provider: &mut P,
+    ) -> Result<Option<RootCommitted>, ConversionError> {
+        self.ready()?;
+        if self.journal.manifest.phase == phase_code::CONVERT {
+            return Ok(None);
+        }
+        let convert = MigrationPhase::from_wire(phase_code::CONVERT);
+        self.step(fs, provider, StepKind::Checkpoint, |manifest, fence| {
+            transition_phase(manifest, fence, convert).map_err(ConversionError::Migration)
+        })
+        .map(Some)
+    }
+
+    /// Records durable progress in `CONVERT`: moves the checkpoint cursor to `cursor` and returns the
+    /// root commit. The cursor never moves backwards and stays inside the inventory
+    /// (`Migration(RegressiveCheckpoint)` and the extent refusals, before any write); an equal cursor
+    /// is accepted and records a revision with the same cursor. In any other phase the step is
+    /// `WrongPhase`.
+    pub fn advance_cursor<F: DurableFs, P: KeyProvider>(
+        &mut self,
+        fs: &mut F,
+        provider: &mut P,
+        cursor: JournalCheckpointCursor,
+    ) -> Result<RootCommitted, ConversionError> {
+        self.step(fs, provider, StepKind::Checkpoint, |manifest, fence| {
+            if manifest.phase != phase_code::CONVERT {
+                return Err(ConversionError::WrongPhase);
+            }
+            checkpoint_progress(manifest, fence, cursor).map_err(ConversionError::Migration)
+        })
+    }
+
+    /// Whether the session may take a step: not spent, and the admission and the pinned journal
+    /// directory still hold.
+    fn ready(&self) -> Result<(), ConversionError> {
         if self.spent {
             return Err(ConversionError::Spent);
         }
-        self.check_admitted()?;
-        let renewed = renewed_lease(&self.journal.manifest, &self.fence(), expires_unix_ms)
-            .map_err(ConversionError::Migration)?;
+        self.check_admitted()
+    }
+
+    /// The step shared by the public methods: `build` makes the successor from the session's snapshot
+    /// and `kind` says which journal-owner operation commits it. See the module documentation.
+    fn step<F, P, B>(
+        &mut self,
+        fs: &mut F,
+        provider: &mut P,
+        kind: StepKind,
+        build: B,
+    ) -> Result<RootCommitted, ConversionError>
+    where
+        F: DurableFs,
+        P: KeyProvider,
+        B: FnOnce(&JournalManifest, &MigrationFence) -> Result<JournalManifest, ConversionError>,
+    {
+        self.ready()?;
+        let successor = build(&self.journal.manifest, &self.fence())?;
         let operation = WriteOperationId::generate().map_err(ConversionError::OperationId)?;
         let layout = RootLayout {
             root_dir: &self.root,
@@ -300,9 +373,9 @@ impl<'a> ConversionSession<'a> {
             dir: &self.journal_pin.canonical,
             operation: &operation,
         };
-        let fence = MigrationFence::from_manifest(&renewed);
+        let fence = MigrationFence::from_manifest(&successor);
         let step = JournalCheckpoint {
-            manifest: &renewed,
+            manifest: &successor,
             fence: &fence,
             journal,
             root_key_ref: &self.journal.root_key_ref,
@@ -316,7 +389,12 @@ impl<'a> ConversionSession<'a> {
                 .map_err(ConversionError::Admission)?
                 .ok_or(ConversionError::RootBusy)?;
             let root = event.root_guard().map_err(ConversionError::Admission)?;
-            let committed = commit_lease_renewal_held(fs, provider, layout, step, root);
+            let committed = match kind {
+                StepKind::Renewal => commit_lease_renewal_held(fs, provider, layout, step, root),
+                StepKind::Checkpoint => {
+                    commit_journal_checkpoint_held(fs, provider, layout, step, root)
+                }
+            };
             // Whatever the commit reported, read the root back while the event is still held: no other
             // root commit comes between, and the root says whether the step committed.
             (
@@ -324,9 +402,10 @@ impl<'a> ConversionSession<'a> {
                 read_committed_journal(fs, &*provider, layout, journal),
             )
         };
-        let settled = self.settle(&renewed, committed, read_back);
-        // A step that landed, whatever the commit reported, is followed by the admission check.
-        if matches!(settled, Ok(_) | Err(ConversionError::Committed(_))) {
+        let settled = self.settle(&successor, committed, read_back);
+        // Every outcome except a refusal that certainly wrote nothing is followed by the admission
+        // check, and a lost admission is reported first.
+        if !matches!(settled, Err(ConversionError::Authority(_))) {
             self.check_admitted()?;
         }
         settled
