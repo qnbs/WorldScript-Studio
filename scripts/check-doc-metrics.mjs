@@ -850,6 +850,97 @@ function matchAcrossHistories(groups, context) {
   });
 }
 
+function tryGit(args, repositoryRoot) {
+  try {
+    return {
+      status: 0,
+      stdout: execFileSync('git', args, {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }),
+    };
+  } catch (error) {
+    return { status: typeof error.status === 'number' ? error.status : 128, stdout: '' };
+  }
+}
+
+function boundaryFinding(code) {
+  return `CHANGELOG.md — ${code}`;
+}
+
+// QNBS-v3: stop before vTAG..HEAD when the peeled tag is not an ancestor, so a disjoint release frontier cannot be reported as hundreds of missing notes.
+export function classifyReleaseTagBoundary({
+  repositoryRoot = root,
+  head = 'HEAD',
+  context = 'main',
+} = {}) {
+  const shallow = tryGit(['rev-parse', '--is-shallow-repository'], repositoryRoot);
+  if (shallow.status !== 0 || shallow.stdout.trim() === 'true') {
+    return { code: 'HISTORY_UNAVAILABLE', finding: boundaryFinding('HISTORY_UNAVAILABLE') };
+  }
+  const latest = getLatestTaggedVersion(repositoryRoot);
+  if (!latest) return { code: 'TAGLESS', finding: boundaryFinding('TAGLESS') };
+  const peel = tryGit(['rev-parse', '--verify', `v${latest}^{commit}`], repositoryRoot);
+  const headCommit = tryGit(['rev-parse', '--verify', `${head}^{commit}`], repositoryRoot);
+  if (
+    peel.status !== 0 ||
+    headCommit.status !== 0 ||
+    !peel.stdout.trim() ||
+    !headCommit.stdout.trim()
+  ) {
+    return { code: 'HISTORY_UNAVAILABLE', finding: boundaryFinding('HISTORY_UNAVAILABLE') };
+  }
+  const ancestor = tryGit(
+    ['merge-base', '--is-ancestor', peel.stdout.trim(), headCommit.stdout.trim()],
+    repositoryRoot,
+  );
+  if (ancestor.status === 0) return { code: 'ANCESTOR', peel: peel.stdout.trim() };
+  if (ancestor.status !== 1) {
+    return { code: 'HISTORY_UNAVAILABLE', finding: boundaryFinding('HISTORY_UNAVAILABLE') };
+  }
+  const code = context === 'feature' ? 'FEATURE_TAG_BOUNDARY_MISMATCH' : 'TAG_BOUNDARY_MISMATCH';
+  return { code, finding: boundaryFinding(code) };
+}
+
+export function collectGovernedReleaseFindings({
+  repositoryRoot = root,
+  changelog,
+  packageVersion,
+  isFeatureBranchContext = false,
+  head = 'HEAD',
+} = {}) {
+  const boundary = classifyReleaseTagBoundary({
+    repositoryRoot,
+    head,
+    context: isFeatureBranchContext ? 'feature' : 'main',
+  });
+  if (boundary.code !== 'ANCESTOR') return [boundary.finding];
+  const taggedVersions = getTaggedVersions(repositoryRoot);
+  const postReleaseRecords = getPostReleaseCommitRecords(repositoryRoot, { firstParent: true });
+  if (!postReleaseRecords) return [boundaryFinding('HISTORY_UNAVAILABLE')];
+  if (isFeatureBranchContext) {
+    return scanUnreleasedTruth(
+      changelog,
+      postReleaseRecords?.map(({ subject }) => subject) ?? null,
+      packageVersion,
+      taggedVersions,
+      true,
+      getBranchLocalSubjectIndices(repositoryRoot, { firstParent: true }),
+      new Set(
+        postReleaseRecords?.flatMap(({ parents }, index) => (parents.length > 1 ? [index] : [])),
+      ),
+    );
+  }
+  return scanMainContextTruth({
+    changelog,
+    firstParentRecords: postReleaseRecords,
+    mergeBranches: getDirectMainSideBranchRecords(repositoryRoot),
+    packageVersion,
+    taggedVersions,
+  });
+}
+
 // QNBS-v3: the single main-context release-truth rule; docs:check on main and pre-merge admission both call it, so admission cannot drift from what the resulting main will enforce.
 export function scanMainContextTruth({
   changelog,
@@ -1293,33 +1384,15 @@ function main() {
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
   const isFeatureBranchContext =
     process.env.GITHUB_EVENT_NAME === 'pull_request' || isOnFeatureBranch();
-  const postReleaseRecords = getPostReleaseCommitRecords(undefined, { firstParent: true });
-  const allFindings = [...scanReleaseTruth(changelog, packageVersion, taggedVersions)];
-  if (isFeatureBranchContext) {
-    allFindings.push(
-      ...scanUnreleasedTruth(
-        changelog,
-        postReleaseRecords?.map(({ subject }) => subject) ?? null,
-        packageVersion,
-        taggedVersions,
-        true,
-        getBranchLocalSubjectIndices(undefined, { firstParent: true }),
-        new Set(
-          postReleaseRecords?.flatMap(({ parents }, index) => (parents.length > 1 ? [index] : [])),
-        ),
-      ),
-    );
-  } else {
-    allFindings.push(
-      ...scanMainContextTruth({
-        changelog,
-        firstParentRecords: postReleaseRecords,
-        mergeBranches: getDirectMainSideBranchRecords(),
-        packageVersion,
-        taggedVersions,
-      }),
-    );
-  }
+  const allFindings = [
+    ...scanReleaseTruth(changelog, packageVersion, taggedVersions),
+    ...collectGovernedReleaseFindings({
+      repositoryRoot: root,
+      changelog,
+      packageVersion,
+      isFeatureBranchContext,
+    }),
+  ];
   allFindings.push(
     ...scanReadmeReleaseTruth(readFileSync(join(root, 'README.md'), 'utf8'), taggedVersions),
   );

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  classifyReleaseTagBoundary,
   getLatestReleasedVersion,
   getMergeAdmissionCommitRecords,
   getTaggedVersions,
@@ -219,8 +220,14 @@ function collectReleaseFindings(pr, mergeState) {
   });
   if (refFindings.length > 0) return refFindings;
 
+  const boundary = classifyReleaseTagBoundary({
+    repositoryRoot: root,
+    head: pr.base.sha,
+    context: 'main',
+  });
+  if (boundary.code !== 'ANCESTOR') return [boundary.finding];
   const records = getMergeAdmissionCommitRecords(pr.base.sha, pr.head.sha, root);
-  if (!records) return ['post-release history is unavailable or has no latest tag'];
+  if (!records) return ['CHANGELOG.md — HISTORY_UNAVAILABLE'];
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
   const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
   const taggedVersions = getTaggedVersions(root);
