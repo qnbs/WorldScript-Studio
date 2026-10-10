@@ -155,8 +155,8 @@ describe('release tag boundary', () => {
         `#!/bin/sh\nif [ "$1" = "log" ]; then exit 1; fi\nexec ${realGit} "$@"\n`,
       );
       chmodSync(join(bin, 'git'), 0o755);
-      const savedPath = process.env.PATH;
-      process.env.PATH = `${bin}:${savedPath ?? ''}`;
+      const savedPath = process.env['PATH'];
+      process.env['PATH'] = `${bin}:${savedPath ?? ''}`;
       try {
         expect(
           metrics.collectGovernedReleaseFindings({
@@ -166,7 +166,8 @@ describe('release tag boundary', () => {
           }),
         ).toEqual(['CHANGELOG.md — HISTORY_UNAVAILABLE']);
       } finally {
-        process.env.PATH = savedPath;
+        if (savedPath === undefined) delete process.env['PATH'];
+        else process.env['PATH'] = savedPath;
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
