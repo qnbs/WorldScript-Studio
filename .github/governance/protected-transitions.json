@@ -9,7 +9,7 @@
     {
       "path": "scripts/check-doc-metrics.mjs",
       "from": "0ad96e40d206083b03867aca2474941cfeeedc608faacf3be5d2bad7753602ca",
-      "to": "170d8145a5733dc8c313b6e95615a7ac4592db21efd53aad14e9762ddcbacd6c"
+      "to": "82d931ef19ccdf253e27e5f0bc5b57b646ba968b8056268ae9c42557802527e6"
     }
   ]
 }
