@@ -325,6 +325,35 @@ jobs:
             node "$CHECKER" "$BASE" "$HEAD"
           fi
           # QNBS-v3: PR title/body attribution is checked by the separate, cheap pr-text-attribution.yml (also runs on `edited`, which this workflow's trigger deliberately excludes).
+      - name: Reject unapproved identity on introduced commits
+        run: |
+          set -euo pipefail
+          HEAD="${{ github.sha }}"
+          # QNBS-v3: grade with the base copy so this PR cannot weaken the identity classes that gate it.
+          CHECKER=scripts/check-personal-identity-ingress.mjs
+          POLICY=config/personal-identity-ingress-policy.json
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            mkdir -p /tmp/base-identity
+            if git show "$BASE:scripts/check-personal-identity-ingress.mjs" > /tmp/base-identity/check.mjs 2>/dev/null \
+              && git show "$BASE:config/personal-identity-ingress-policy.json" > /tmp/base-identity/policy.json 2>/dev/null; then
+              CHECKER=/tmp/base-identity/check.mjs
+              POLICY=/tmp/base-identity/policy.json
+            else
+              echo "::notice::personal-identity ingress guard not found on base ref (bootstrap PR) — using this PR's own copy this one time."
+            fi
+            node "$CHECKER" --policy "$POLICY" "$BASE" "$HEAD"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_SHA=$(git rev-parse "$GITHUB_REF")
+            node "$CHECKER" --policy "$POLICY" --tag "$TAG_SHA"
+          else
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+              echo "::error::No usable base SHA — personal-identity ingress guard cannot audit introduced commits."
+              exit 1
+            fi
+            node "$CHECKER" --policy "$POLICY" "$BASE" "$HEAD"
+          fi
 
   # ----------------------------------------------------------
   # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)

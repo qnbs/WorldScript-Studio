@@ -103,6 +103,10 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   `scripts/check-commit-attribution.mjs` mechanically enforces this for commit messages, tags,
   and PR titles/bodies (commit-msg hook, pre-push, and CI); review comments and replies have no
   automated check and stay a manual policy — never append these footers there.
+  `scripts/check-personal-identity-ingress.mjs` is a separate guard: introduced commits and
+  annotated taggers must use a GitHub noreply email, including Co-authored-by and Signed-off-by
+  trailers. It does not rescan the published graph. GitHub-managed `refs/pull/*` stay
+  `UNRESOLVED_PROVIDER_PURGE`.
 - Before new history, run `pnpm run signing:doctor` and install hooks with
   `pnpm run hooks:install`. Commits and tags must be normally signed and Git-verified; never
   use `--no-gpg-sign`, `--no-verify`, unsigned temporary history, or force-push ordinary PR

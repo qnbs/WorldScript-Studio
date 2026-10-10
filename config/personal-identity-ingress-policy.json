@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "mode": "fail-closed",
+  "newWritesOnly": true,
+  "allowedEmailClasses": ["github-noreply"],
+  "identityTrailers": ["co-authored-by", "signed-off-by"],
+  "historicalGraph": "not-a-new-write-blocker",
+  "providerManagedRefs": "UNRESOLVED_PROVIDER_PURGE"
+}
