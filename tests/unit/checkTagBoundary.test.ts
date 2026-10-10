@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -136,6 +136,40 @@ describe('release tag boundary', () => {
       rmSync(bare, { recursive: true, force: true });
       rmSync(disjoint, { recursive: true, force: true });
       rmSync(shallowSource, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when history cannot be read after an ancestor tag', () => {
+    const dir = initRepo();
+    try {
+      const tagged = commit(dir, 'chore: tagged root');
+      git(dir, ['tag', 'v0.0.1', tagged]);
+      commit(dir, 'feat: documented subject');
+      expect(metrics.classifyReleaseTagBoundary({ repositoryRoot: dir }).code).toBe('ANCESTOR');
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
+      // QNBS-v3: PATH git fails only the log subcommand; a config alias cannot override that builtin.
+      writeFileSync(
+        join(bin, 'git'),
+        `#!/bin/sh\nif [ "$1" = "log" ]; then exit 1; fi\nexec ${realGit} "$@"\n`,
+      );
+      chmodSync(join(bin, 'git'), 0o755);
+      const savedPath = process.env.PATH;
+      process.env.PATH = `${bin}:${savedPath ?? ''}`;
+      try {
+        expect(
+          metrics.collectGovernedReleaseFindings({
+            repositoryRoot: dir,
+            changelog: '## [Unreleased]\n\n- feat: documented subject\n',
+            packageVersion: '0.0.0',
+          }),
+        ).toEqual(['CHANGELOG.md — HISTORY_UNAVAILABLE']);
+      } finally {
+        process.env.PATH = savedPath;
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

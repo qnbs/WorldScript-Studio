@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Docs:** a release tag that is not an ancestor of the checked history now fails as one tag-boundary class instead of a list of disjoint subjects. Real undocumented subjects still fail after a correct ancestor tag. PR #1023.
+- **Docs:** a release tag that is not an ancestor of the checked history now fails as one tag-boundary class instead of a list of disjoint subjects. Real undocumented subjects still fail after a correct ancestor tag. A history read that fails after that ancestor check fails closed instead of passing as empty history. PR #1023.
 
 - **Operations:** destructive Vercel Preview retention for source merges may now
   wait until the next sanctioned release reconciliation, owned by Codex CLI in

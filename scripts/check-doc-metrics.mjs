@@ -918,6 +918,7 @@ export function collectGovernedReleaseFindings({
   if (boundary.code !== 'ANCESTOR') return [boundary.finding];
   const taggedVersions = getTaggedVersions(repositoryRoot);
   const postReleaseRecords = getPostReleaseCommitRecords(repositoryRoot, { firstParent: true });
+  if (!postReleaseRecords) return [boundaryFinding('HISTORY_UNAVAILABLE')];
   if (isFeatureBranchContext) {
     return scanUnreleasedTruth(
       changelog,
