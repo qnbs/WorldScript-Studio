@@ -1,4 +1,15 @@
 {
   "version": 1,
-  "transitions": []
+  "transitions": [
+    {
+      "path": "scripts/check-merge-admission.mjs",
+      "from": "47689edebf7651f92ed9efb56ef80ff7648815201787a15c02f2e3a84a156b70",
+      "to": "53994d2524bebb1ccfb7eae7a3b1ce4b0bbc9df3a52603c47c1587bd6e52ff40"
+    },
+    {
+      "path": "scripts/check-doc-metrics.mjs",
+      "from": "0ad96e40d206083b03867aca2474941cfeeedc608faacf3be5d2bad7753602ca",
+      "to": "170d8145a5733dc8c313b6e95615a7ac4592db21efd53aad14e9762ddcbacd6c"
+    }
+  ]
 }
