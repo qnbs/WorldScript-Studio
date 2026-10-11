@@ -1286,6 +1286,97 @@ fn barrier_remove_catalog_pages(fixture: &Fixture) -> usize {
     remove(&fixture.root.join("catalog"))
 }
 
+struct BarrierObservationFs<'a> {
+    root: &'a Path,
+    catalog_observations: usize,
+    root_error: Option<io::ErrorKind>,
+}
+
+impl BarrierObservationFs<'_> {
+    fn observe(&mut self, path: &Path) -> io::Result<()> {
+        if path.starts_with(self.root.join("catalog")) {
+            self.catalog_observations += 1;
+            return Err(io::Error::from(io::ErrorKind::PermissionDenied));
+        }
+        match self.root_error {
+            Some(kind)
+                if path.starts_with(self.root.join("slot-a"))
+                    || path.starts_with(self.root.join("slot-b")) =>
+            {
+                Err(io::Error::from(kind))
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+impl DurableFs for BarrierObservationFs<'_> {
+    type File = fs::File;
+    fn create_new(&mut self, path: &Path) -> io::Result<fs::File> {
+        StdFs.create_new(path)
+    }
+    fn sync_file(&mut self, file: &mut fs::File) -> io::Result<()> {
+        StdFs.sync_file(file)
+    }
+    fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+        self.observe(path)?;
+        StdFs.read(path)
+    }
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        self.observe(path)?;
+        StdFs.read_at_most(path, limit)
+    }
+    fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        StdFs.link_no_replace(from, to)
+    }
+    fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        StdFs.remove_file(path)
+    }
+    fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+        StdFs.sync_dir(dir)
+    }
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<std::ffi::OsString>> {
+        self.observe(dir)?;
+        StdFs.list_dir(dir)
+    }
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        self.observe(dir)?;
+        StdFs.list_dir_at_most(dir, limit)
+    }
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        StdFs.rename_replace(from, to)
+    }
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        StdFs.create_dir_all(dir)
+    }
+}
+
+#[test]
+fn barrier_observer_intercepts_file_reads_and_directory_enumerations() {
+    let fixture = barrier_bound();
+    let mut filesystem = BarrierObservationFs {
+        root: &fixture.root,
+        catalog_observations: 0,
+        root_error: None,
+    };
+    let dir = fixture.root.join("catalog");
+    let results = [
+        filesystem.read(&dir).map(|_| ()),
+        filesystem.read_at_most(&dir, 1).map(|_| ()),
+        filesystem.list_dir(&dir).map(|_| ()),
+        filesystem.list_dir_at_most(&dir, 1).map(|_| ()),
+    ];
+    assert_eq!(
+        results.map(|result| result.unwrap_err().kind()),
+        [io::ErrorKind::PermissionDenied; 4]
+    );
+    assert_eq!(filesystem.catalog_observations, 4);
+}
+
 /// Lock (0), unlock (1) or shutdown (2) on a fresh storage built from `setup`, as its outcome.
 fn barrier_transition(
     setup: Setup,
@@ -1295,20 +1386,17 @@ fn barrier_transition(
     let fixture = Fixture::with_setup(setup);
     damage(&fixture);
     let before = barrier_tree(&fixture);
-    let mut catalog_reads = 0;
-    let mut filesystem = HookFs(|path: &Path, event| {
-        if event == Event::Read && path.starts_with(fixture.root.join("catalog")) {
-            catalog_reads += 1;
-            return Err(io::Error::from(io::ErrorKind::PermissionDenied));
-        }
-        Ok(())
-    });
+    let mut filesystem = BarrierObservationFs {
+        root: &fixture.root,
+        catalog_observations: 0,
+        root_error: None,
+    };
     let outcome = match which {
         0 => poll_admitted(|| fixture.storage().try_lock(&mut filesystem)).map(|_| ()),
         1 => poll_admitted(|| fixture.storage().try_unlock(&mut filesystem)).map(|_| ()),
         _ => poll_admitted(|| fixture.storage().try_shutdown(&mut filesystem)),
     };
-    assert_eq!(catalog_reads, 0);
+    assert_eq!(filesystem.catalog_observations, 0);
     assert_eq!(barrier_tree(&fixture), before);
     if which == 1 {
         assert!(fixture.probe.lock_calls.load(Ordering::SeqCst) > 0);
@@ -1375,19 +1463,11 @@ fn barrier_assert_lifecycle_root_error(bound: bool, which: usize, kind: io::Erro
         ..Setup::default()
     });
     let before = barrier_tree(&fixture);
-    let mut catalog_reads = 0;
-    let mut filesystem = HookFs(|path: &Path, event| {
-        if event == Event::Read && path.starts_with(fixture.root.join("catalog")) {
-            catalog_reads += 1;
-        }
-        if event == Event::Read
-            && (path.starts_with(fixture.root.join("slot-a"))
-                || path.starts_with(fixture.root.join("slot-b")))
-        {
-            return Err(io::Error::from(kind));
-        }
-        Ok(())
-    });
+    let mut filesystem = BarrierObservationFs {
+        root: &fixture.root,
+        catalog_observations: 0,
+        root_error: Some(kind),
+    };
     let outcome = match which {
         0 => poll_admitted(|| fixture.storage().try_lock(&mut filesystem)).map(|_| ()),
         1 => poll_admitted(|| fixture.storage().try_unlock(&mut filesystem)).map(|_| ()),
@@ -1405,7 +1485,7 @@ fn barrier_assert_lifecycle_root_error(bound: bool, which: usize, kind: io::Erro
         outcome,
         Err(OperationError::Catalog(AuthorityError::Root(root_error)))
     );
-    assert_eq!(catalog_reads, 0);
+    assert_eq!(filesystem.catalog_observations, 0);
     assert_eq!(barrier_tree(&fixture), before);
 }
 
