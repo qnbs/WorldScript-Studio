@@ -1368,53 +1368,59 @@ fn a_bound_root_with_corrupt_catalog_pages_refuses_before_observing_them() {
     assert_eq!(outcomes, vec![Err(OperationError::RecoveryPending); 3]);
 }
 
+fn barrier_assert_lifecycle_root_error(bound: bool, which: usize, kind: io::ErrorKind) {
+    let fixture = Fixture::with_setup(Setup {
+        bound: bound.then(|| barrier_binding("barrier-operation", 1, 1, 0xAB)),
+        page: true,
+        ..Setup::default()
+    });
+    let before = barrier_tree(&fixture);
+    let mut catalog_reads = 0;
+    let mut filesystem = HookFs(|path: &Path, event| {
+        if event == Event::Read && path.starts_with(fixture.root.join("catalog")) {
+            catalog_reads += 1;
+        }
+        if event == Event::Read
+            && (path.starts_with(fixture.root.join("slot-a"))
+                || path.starts_with(fixture.root.join("slot-b")))
+        {
+            return Err(io::Error::from(kind));
+        }
+        Ok(())
+    });
+    let outcome = match which {
+        0 => poll_admitted(|| fixture.storage().try_lock(&mut filesystem)).map(|_| ()),
+        1 => poll_admitted(|| fixture.storage().try_unlock(&mut filesystem)).map(|_| ()),
+        _ => poll_admitted(|| fixture.storage().try_shutdown(&mut filesystem)),
+    };
+    let root_error = if kind == io::ErrorKind::NotFound {
+        RootStoreError::RecoveryRequired(RootRecoveryReason::CommittedSlotMissing)
+    } else {
+        RootStoreError::Io {
+            step: RootStep::ReadSlot,
+            kind,
+        }
+    };
+    assert_eq!(
+        outcome,
+        Err(OperationError::Catalog(AuthorityError::Root(root_error)))
+    );
+    assert_eq!(catalog_reads, 0);
+    assert_eq!(barrier_tree(&fixture), before);
+}
+
 #[test]
 fn lifecycle_root_read_errors_keep_their_catalog_root_envelope_without_page_reads() {
-    for bound in [false, true] {
-        for which in 0..3 {
-            for kind in [io::ErrorKind::PermissionDenied, io::ErrorKind::NotFound] {
-                let fixture = Fixture::with_setup(Setup {
-                    bound: bound.then(|| barrier_binding("barrier-operation", 1, 1, 0xAB)),
-                    page: true,
-                    ..Setup::default()
-                });
-                let before = barrier_tree(&fixture);
-                let mut catalog_reads = 0;
-                let mut filesystem = HookFs(|path: &Path, event| {
-                    if event == Event::Read {
-                        if path.starts_with(fixture.root.join("catalog")) {
-                            catalog_reads += 1;
-                        }
-                        if path.starts_with(fixture.root.join("slot-a"))
-                            || path.starts_with(fixture.root.join("slot-b"))
-                        {
-                            return Err(io::Error::from(kind));
-                        }
-                    }
-                    Ok(())
-                });
-                let outcome = match which {
-                    0 => poll_admitted(|| fixture.storage().try_lock(&mut filesystem)).map(|_| ()),
-                    1 => {
-                        poll_admitted(|| fixture.storage().try_unlock(&mut filesystem)).map(|_| ())
-                    }
-                    _ => poll_admitted(|| fixture.storage().try_shutdown(&mut filesystem)),
-                };
-                let root_error = if kind == io::ErrorKind::NotFound {
-                    RootStoreError::RecoveryRequired(RootRecoveryReason::CommittedSlotMissing)
-                } else {
-                    RootStoreError::Io {
-                        step: RootStep::ReadSlot,
-                        kind,
-                    }
-                };
-                assert_eq!(
-                    outcome,
-                    Err(OperationError::Catalog(AuthorityError::Root(root_error)))
-                );
-                assert_eq!(catalog_reads, 0);
-                assert_eq!(barrier_tree(&fixture), before);
-            }
+    for (bound, which) in [
+        (false, 0),
+        (false, 1),
+        (false, 2),
+        (true, 0),
+        (true, 1),
+        (true, 2),
+    ] {
+        for kind in [io::ErrorKind::PermissionDenied, io::ErrorKind::NotFound] {
+            barrier_assert_lifecycle_root_error(bound, which, kind);
         }
     }
 }
