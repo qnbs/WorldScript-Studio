@@ -873,23 +873,31 @@ fn barrier_tree(fixture: &Fixture) -> Vec<(PathBuf, BarrierNode)> {
     nodes
 }
 
-/// Whether the coordination resources hold no data: the writer directory, when it exists, contains
-/// nothing but empty files (a lock file on Windows).
-fn barrier_coordination_holds_no_data(fixture: &Fixture) -> bool {
-    fn empty(dir: &Path) -> bool {
-        fs::read_dir(dir).unwrap().all(|entry| {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                empty(&path)
-            } else {
-                fs::metadata(&path).unwrap().len() == 0
-            }
-        })
+/// Missing paths and empty regular files/directories are data-free. Links and special files are
+/// not, even when their target or reported length is empty. Observation errors refuse the proof.
+fn barrier_path_holds_no_data(path: &Path) -> bool {
+    let meta = match fs::symlink_metadata(path) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return true,
+        Err(_) => return false,
+    };
+    if meta.file_type().is_symlink() {
+        return false;
     }
-    let writer = fixture.base.join(BARRIER_WRITER_RESOURCE);
-    let lock = fixture.base.join(OPERATION_ADMISSION_LOCK_FILE);
-    (!writer.exists() || empty(&writer))
-        && (!lock.exists() || fs::metadata(&lock).unwrap().len() == 0)
+    if meta.is_dir() {
+        return match fs::read_dir(path) {
+            Ok(mut entries) => entries
+                .all(|entry| entry.is_ok_and(|entry| barrier_path_holds_no_data(&entry.path()))),
+            Err(_) => false,
+        };
+    }
+    meta.file_type().is_file() && meta.len() == 0
+}
+
+/// Check both top-level coordination resources separately from the preserved installation tree.
+fn barrier_coordination_holds_no_data(fixture: &Fixture) -> bool {
+    barrier_path_holds_no_data(&fixture.base.join(BARRIER_WRITER_RESOURCE))
+        && barrier_path_holds_no_data(&fixture.base.join(OPERATION_ADMISSION_LOCK_FILE))
 }
 
 #[test]
@@ -1117,6 +1125,139 @@ fn barrier_symlinks_are_seen(
     fs::create_dir(&fixture.markers).unwrap();
     fs::remove_dir_all(&outside).unwrap();
     (file_seen, directory_seen)
+}
+
+#[test]
+fn a_coordination_resource_requires_missing_or_empty_regular_content() {
+    let fixture = barrier_bound();
+    let path = fixture.base.join("coord-proof");
+    assert!(barrier_path_holds_no_data(&path));
+    fs::write(&path, b"").unwrap();
+    assert!(barrier_path_holds_no_data(&path));
+    fs::write(&path, b"preserved").unwrap();
+    assert!(!barrier_path_holds_no_data(&path));
+    fs::remove_file(&path).unwrap();
+
+    fs::create_dir(&path).unwrap();
+    assert!(barrier_path_holds_no_data(&path));
+    fs::write(path.join("child"), b"preserved").unwrap();
+    assert!(!barrier_path_holds_no_data(&path));
+    fs::write(path.join("child"), b"").unwrap();
+    assert!(barrier_path_holds_no_data(&path));
+
+    // An invalid locator deterministically exercises metadata refusal without permission assumptions.
+    let invalid = fixture.base.join("coord\0proof");
+    assert!(fs::symlink_metadata(&invalid).is_err());
+    assert!(!barrier_path_holds_no_data(&invalid));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_at_a_coordination_resource_is_not_data_free() {
+    use std::os::unix::fs::symlink;
+
+    fn replace_with_link(path: &Path, target: &Path) {
+        if let Ok(meta) = fs::symlink_metadata(path) {
+            if meta.is_dir() && !meta.file_type().is_symlink() {
+                fs::remove_dir_all(path).unwrap();
+            } else {
+                fs::remove_file(path).unwrap();
+            }
+        }
+        symlink(target, path).unwrap();
+    }
+
+    let fixture = barrier_bound();
+    // Fixture Drop owns this target too, including when an assertion fails early.
+    let target = fixture.base.join("coord-target");
+    fs::create_dir(&target).unwrap();
+    let empty = target.join("empty");
+    fs::write(&empty, b"").unwrap();
+    let writer = fixture.base.join(BARRIER_WRITER_RESOURCE);
+    let lock = fixture.base.join(OPERATION_ADMISSION_LOCK_FILE);
+
+    replace_with_link(&writer, &empty);
+    let writer_link = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&writer).unwrap();
+
+    fs::create_dir(&writer).unwrap();
+    symlink(&empty, writer.join("lock")).unwrap();
+    let nested_link = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_dir_all(&writer).unwrap();
+
+    replace_with_link(&lock, &empty);
+    let lock_link = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&lock).unwrap();
+
+    replace_with_link(&writer, &target.join("missing"));
+    let dangling = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&writer).unwrap();
+
+    replace_with_link(&writer, &target);
+    let directory_link = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&writer).unwrap();
+
+    fs::write(&lock, b"").unwrap();
+    let empty_file = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&lock).unwrap();
+    fs::remove_dir_all(&target).unwrap();
+    assert!(!target.exists());
+    assert_eq!(
+        (
+            writer_link,
+            nested_link,
+            lock_link,
+            dangling,
+            directory_link,
+            empty_file
+        ),
+        (false, false, false, false, false, true)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_fifo_or_socket_at_a_coordination_resource_is_not_data_free() {
+    use std::os::unix::net::UnixListener;
+
+    fn remove_path(path: &Path) {
+        if let Ok(meta) = fs::symlink_metadata(path) {
+            if meta.is_dir() && !meta.file_type().is_symlink() {
+                fs::remove_dir_all(path).unwrap();
+            } else {
+                fs::remove_file(path).unwrap();
+            }
+        }
+    }
+
+    let fixture = barrier_bound();
+    let writer = fixture.base.join(BARRIER_WRITER_RESOURCE);
+    let lock = fixture.base.join(OPERATION_ADMISSION_LOCK_FILE);
+    remove_path(&lock);
+    // rustix's mkfifoat is unavailable on Apple targets; use the Unix utility without a shell.
+    assert!(std::process::Command::new("/usr/bin/mkfifo")
+        .args(["-m", "600"])
+        .arg(&lock)
+        .status()
+        .unwrap()
+        .success());
+    assert_eq!(fs::symlink_metadata(&lock).unwrap().len(), 0);
+    let fifo = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&lock).unwrap();
+
+    remove_path(&writer);
+    fs::create_dir(&writer).unwrap();
+    // A short basename leaves room for macOS's longer temporary-directory prefix.
+    let listener = UnixListener::bind(writer.join("s")).unwrap();
+    assert_eq!(fs::symlink_metadata(writer.join("s")).unwrap().len(), 0);
+    let socket = barrier_coordination_holds_no_data(&fixture);
+    drop(listener);
+    fs::remove_dir_all(&writer).unwrap();
+
+    fs::write(&lock, b"").unwrap();
+    let empty_file = barrier_coordination_holds_no_data(&fixture);
+    fs::remove_file(&lock).unwrap();
+    assert_eq!((fifo, socket, empty_file), (false, false, true));
 }
 
 fn barrier_paged() -> Setup {
