@@ -1234,12 +1234,13 @@ fn a_fifo_or_socket_at_a_coordination_resource_is_not_data_free() {
     let writer = fixture.base.join(BARRIER_WRITER_RESOURCE);
     let lock = fixture.base.join(OPERATION_ADMISSION_LOCK_FILE);
     remove_path(&lock);
-    rustix::fs::mkfifoat(
-        rustix::fs::CWD,
-        &lock,
-        rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
-    )
-    .unwrap();
+    // rustix's mkfifoat is unavailable on Apple targets; use the Unix utility without a shell.
+    assert!(std::process::Command::new("/usr/bin/mkfifo")
+        .args(["-m", "600"])
+        .arg(&lock)
+        .status()
+        .unwrap()
+        .success());
     assert_eq!(fs::symlink_metadata(&lock).unwrap().len(), 0);
     let fifo = barrier_coordination_holds_no_data(&fixture);
     fs::remove_file(&lock).unwrap();
