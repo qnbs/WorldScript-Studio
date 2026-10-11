@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **R-15 E2 preparation:** lifecycle transitions authenticate the committed migration binding before catalog pages and refuse with `RecoveryPending` even when those pages are missing or corrupt. Existing root-error, locked-provider and unbound-catalog behavior is preserved. The contract records the owner-approved locator, phase-barrier and error-priority direction; PREPARE/DONE windows remain closed. PR reference pending.
+- **R-15 E2 preparation:** lifecycle transitions authenticate the committed migration binding before catalog pages and refuse with `RecoveryPending` even when those pages are missing or corrupt. Existing root-error, locked-provider and unbound-catalog behavior is preserved. The contract records the owner-approved locator, phase-barrier and error-priority direction; PREPARE/DONE windows remain closed. PR #1027.
 
 - **R-15 Gate 4E evidence:** coordination-resource preservation checks inspect links without following them and reject nonempty files, FIFOs, sockets, and observation errors. Fixture-scoped regressions cover missing/empty resources and link variants. The ordinary-operation barrier is unchanged. Clean successor to PR #1021. PR #1026.
 
