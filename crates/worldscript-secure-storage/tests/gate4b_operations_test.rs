@@ -1294,11 +1294,30 @@ fn barrier_transition(
 ) -> Result<(), OperationError> {
     let fixture = Fixture::with_setup(setup);
     damage(&fixture);
-    match which {
-        0 => poll_admitted(|| fixture.storage().try_lock(&mut StdFs)).map(|_| ()),
-        1 => poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ()),
-        _ => poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
+    let before = barrier_tree(&fixture);
+    let mut catalog_reads = 0;
+    let mut filesystem = HookFs(|path: &Path, event| {
+        if event == Event::Read && path.starts_with(fixture.root.join("catalog")) {
+            catalog_reads += 1;
+            return Err(io::Error::from(io::ErrorKind::PermissionDenied));
+        }
+        Ok(())
+    });
+    let outcome = match which {
+        0 => poll_admitted(|| fixture.storage().try_lock(&mut filesystem)).map(|_| ()),
+        1 => poll_admitted(|| fixture.storage().try_unlock(&mut filesystem)).map(|_| ()),
+        _ => poll_admitted(|| fixture.storage().try_shutdown(&mut filesystem)),
+    };
+    assert_eq!(catalog_reads, 0);
+    assert_eq!(barrier_tree(&fixture), before);
+    if which == 1 {
+        assert!(fixture.probe.lock_calls.load(Ordering::SeqCst) > 0);
+        assert!(matches!(
+            fixture.storage().try_authority_snapshot(&mut StdFs),
+            Err(OperationError::Provider(KeyProviderError::Locked))
+        ));
     }
+    outcome
 }
 
 #[test]
@@ -1310,10 +1329,7 @@ fn a_bound_root_with_an_intact_catalog_page_refuses_the_transitions_with_recover
 }
 
 #[test]
-fn a_bound_root_that_lost_a_catalog_page_fails_the_transitions_with_the_set_mismatch() {
-    let mismatch = OperationError::Catalog(AuthorityError::RecoveryRequired(
-        CatalogRecoveryReason::CatalogSetMismatch,
-    ));
+fn a_bound_root_that_lost_a_catalog_page_refuses_the_transitions_with_recovery_pending() {
     let outcomes: Vec<_> = (0..3)
         .map(|which| {
             barrier_transition(barrier_paged(), which, |fixture| {
@@ -1324,9 +1340,113 @@ fn a_bound_root_that_lost_a_catalog_page_fails_the_transitions_with_the_set_mism
             })
         })
         .collect();
-    // `load_catalog` returns `None` only when no root is committed: this is a committed, bound
-    // root, so a missing page is a set mismatch, never `MigrationRequired` and never `RecoveryPending`.
-    assert_eq!(outcomes, vec![Err(mismatch); 3]);
+    assert_eq!(outcomes, vec![Err(OperationError::RecoveryPending); 3]);
+}
+
+#[test]
+fn a_bound_root_with_corrupt_catalog_pages_refuses_before_observing_them() {
+    fn corrupt(dir: &Path) -> usize {
+        let mut changed = 0;
+        for entry in fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                changed += corrupt(&path);
+            } else {
+                fs::write(&path, b"corrupt catalog fixture").unwrap();
+                changed += 1;
+            }
+        }
+        changed
+    }
+    let outcomes: Vec<_> = (0..3)
+        .map(|which| {
+            barrier_transition(barrier_paged(), which, |fixture| {
+                assert!(corrupt(&fixture.root.join("catalog")) > 0);
+            })
+        })
+        .collect();
+    assert_eq!(outcomes, vec![Err(OperationError::RecoveryPending); 3]);
+}
+
+#[test]
+fn lifecycle_root_read_errors_keep_their_catalog_root_envelope_without_page_reads() {
+    for bound in [false, true] {
+        for which in 0..3 {
+            for kind in [io::ErrorKind::PermissionDenied, io::ErrorKind::NotFound] {
+                let fixture = Fixture::with_setup(Setup {
+                    bound: bound.then(|| barrier_binding("barrier-operation", 1, 1, 0xAB)),
+                    page: true,
+                    ..Setup::default()
+                });
+                let before = barrier_tree(&fixture);
+                let mut catalog_reads = 0;
+                let mut filesystem = HookFs(|path: &Path, event| {
+                    if event == Event::Read {
+                        if path.starts_with(fixture.root.join("catalog")) {
+                            catalog_reads += 1;
+                        }
+                        if path.starts_with(fixture.root.join("slot-a"))
+                            || path.starts_with(fixture.root.join("slot-b"))
+                        {
+                            return Err(io::Error::from(kind));
+                        }
+                    }
+                    Ok(())
+                });
+                let outcome = match which {
+                    0 => poll_admitted(|| fixture.storage().try_lock(&mut filesystem)).map(|_| ()),
+                    1 => {
+                        poll_admitted(|| fixture.storage().try_unlock(&mut filesystem)).map(|_| ())
+                    }
+                    _ => poll_admitted(|| fixture.storage().try_shutdown(&mut filesystem)),
+                };
+                let root_error = if kind == io::ErrorKind::NotFound {
+                    RootStoreError::RecoveryRequired(RootRecoveryReason::CommittedSlotMissing)
+                } else {
+                    RootStoreError::Io {
+                        step: RootStep::ReadSlot,
+                        kind,
+                    }
+                };
+                assert_eq!(
+                    outcome,
+                    Err(OperationError::Catalog(AuthorityError::Root(root_error)))
+                );
+                assert_eq!(catalog_reads, 0);
+                assert_eq!(barrier_tree(&fixture), before);
+            }
+        }
+    }
+}
+
+#[test]
+fn an_unbound_root_with_a_missing_catalog_page_keeps_the_lifecycle_set_mismatch() {
+    let outcomes: Vec<_> = (0..3)
+        .map(|which| {
+            let fixture = Fixture::with_setup(Setup {
+                page: true,
+                ..Setup::default()
+            });
+            assert!(barrier_remove_catalog_pages(&fixture) > 0);
+            let before = barrier_tree(&fixture);
+            let outcome = match which {
+                0 => poll_admitted(|| fixture.storage().try_lock(&mut StdFs)).map(|_| ()),
+                1 => poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ()),
+                _ => poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
+            };
+            assert_eq!(barrier_tree(&fixture), before);
+            outcome
+        })
+        .collect();
+    assert_eq!(
+        outcomes,
+        vec![
+            Err(OperationError::Catalog(AuthorityError::RecoveryRequired(
+                CatalogRecoveryReason::CatalogSetMismatch,
+            )));
+            3
+        ]
+    );
 }
 
 #[test]
