@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plus current publication, rollback and evidence holds. Daily bounded reconciliation
   replaces broad CI-completion triggers; manual dispatch is read-only. Failed inactivation
   stops deletion, and every mutation revalidates inventory and trusted-main authority.
-  The workflow remains disabled pending separate owner admission. Issue #1028.
+  The workflow remains disabled pending separate owner admission. Issue #1028. PR #1029.
 
 - **R-15 Gate 4E evidence:** coordination-resource preservation checks inspect links without following them and reject nonempty files, FIFOs, sockets, and observation errors. Fixture-scoped regressions cover missing/empty resources and link variants. The ordinary-operation barrier is unchanged. Clean successor to PR #1021. PR #1026.
 
