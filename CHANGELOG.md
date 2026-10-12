@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Destructive writes stay closed in code and in the workflow token until the owner admits a
   writer-fence protocol, so even an enabled schedule only reports. Issue #1028. PR #1029.
 
+- **Security:** update quinn-proto to the OSV-fixed release 0.11.18 (RUSTSEC-2026-0338 to -0342). The crate is a transitive dependency through `tauri-plugin-http`, `reqwest` 0.12 and `quinn`; the lockfile-only update changes no manifest, feature, or toolchain pin and unblocks the required OSV scan. PR #1030.
+
 - **R-15 Gate 4E evidence:** coordination-resource preservation checks inspect links without following them and reject nonempty files, FIFOs, sockets, and observation errors. Fixture-scoped regressions cover missing/empty resources and link variants. The ordinary-operation barrier is unchanged. Clean successor to PR #1021. PR #1026.
 
 - **Docs:** a release tag that is not an ancestor of the checked history now fails as one tag-boundary class instead of a list of disjoint subjects. Real undocumented subjects still fail after a correct ancestor tag. A history read that fails after that ancestor check fails closed instead of passing as empty history. PR #1023.
