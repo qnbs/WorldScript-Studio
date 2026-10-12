@@ -1,126 +1,53 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { REQUEST_LIMIT } from '../../../scripts/pages-pruning/github.mjs';
 import {
   admission,
+  DESTRUCTIVE_WRITES_ADMITTED,
   planPruning,
-  REPOSITORY,
-  reconcilePages,
   runAction,
+  validateHolds,
 } from '../../../scripts/prune-pages-deployments.mjs';
+import {
+  apiError,
+  authority,
+  client,
+  date,
+  execute,
+  executeDestructive,
+  holds,
+  job as jobFixture,
+  jobUrl,
+  linkHeader,
+  publication,
+  REPO_ID,
+  ROOT,
+  reads,
+  record,
+  records,
+  status,
+  writes,
+} from './support/pagesPruningFixture.mjs';
 
-const ROOT = `/repos/${REPOSITORY}`;
-const SITE = 'https://qnbs.github.io/WorldScript-Studio/';
-const date = (id) => new Date(Date.UTC(2026, 0, 1) + id * 1000).toISOString();
-const authority = {
-  repository: REPOSITORY,
-  ref: 'refs/heads/main',
-  sha: 'a'.repeat(40),
-  workflowRef: `${REPOSITORY}/.github/workflows/prune-deployments.yml@refs/heads/main`,
-  eventName: 'schedule',
+const BOT = { login: 'github-actions[bot]' };
+const candidates = (result) =>
+  result.manifest.filter((item) => item.disposition === 'candidate').map((item) => item.id);
+const disposition = (result, id) => result.manifest.find((item) => item.id === id);
+const nonSuccess = (item, state = 'failure') => {
+  item.statuses = [status(item.id, { state })];
+  return item;
 };
-const holds = { rollback: [], evidence: [] };
-function record(id) {
-  return {
-    id,
-    created_at: date(id),
-    sha: id.toString(16).padStart(40, '0'),
-    environment: 'github-pages',
-    ref: 'main',
-    task: 'deploy',
-    transient_environment: false,
-    production_environment: false,
-    performed_via_github_app: { id: 15368, slug: 'github-actions' },
-    statuses: [
-      {
-        id: 100 + id,
-        created_at: date(id),
-        state: 'success',
-        environment: 'github-pages',
-        environment_url: SITE,
-        log_url: `https://github.com/${REPOSITORY}/actions/runs/${1000 + id}/job/${2000 + id}`,
-      },
-    ],
-  };
-}
-const records = (count) => Array.from({ length: count }, (_, index) => record(index + 1));
-const publication = (id) => ({
-  id: 1000 + id,
-  repository: { full_name: REPOSITORY },
-  head_repository: { full_name: REPOSITORY },
-  name: 'CI / CD',
-  path: '.github/workflows/ci.yml',
-  event: 'push',
-  head_branch: 'main',
-  head_sha: record(id).sha,
-  status: 'completed',
-  conclusion: 'success',
-});
-const apiError = (status, retryAfter) =>
-  Object.assign(new Error('PRIVATE provider detail'), {
-    status,
-    response: { headers: { 'retry-after': retryAfter } },
-  });
-function client(initial, intercept = () => undefined) {
-  const state = structuredClone(initial);
-  const calls = [];
-  let statusId = 10000;
-  return {
-    state,
-    calls,
-    request: async (route, parameters = {}) => {
-      calls.push({ route, parameters });
-      const override = await intercept(route, parameters, state, calls);
-      if (override) return override;
-      const response = (data) => ({ data: structuredClone(data), headers: {} });
-      if (route === `GET ${ROOT}/pages`)
-        return response({ build_type: 'workflow', html_url: SITE });
-      if (route === `GET ${ROOT}/branches/main`)
-        return response({ commit: { sha: authority.sha } });
-      if (route === `GET ${ROOT}/deployments?environment=github-pages`)
-        return response(
-          state
-            .slice((parameters.page - 1) * 100, parameters.page * 100)
-            .map(({ statuses, ...item }) => item),
-        );
-      const deployment = /\/deployments\/(\d+)(\/statuses)?$/.exec(route);
-      if (deployment) {
-        const item = state.find((value) => value.id === Number(deployment[1]));
-        if (!item) throw apiError(404);
-        if (route.startsWith('GET '))
-          return response(item.statuses.slice((parameters.page - 1) * 100, parameters.page * 100));
-        if (route.startsWith('POST ')) {
-          assert.equal(parameters.auto_inactive, false);
-          const status = { ...parameters, id: statusId++, created_at: date(statusId) };
-          item.statuses.push(status);
-          return response(status);
-        }
-        assert.equal([...item.statuses].sort((a, b) => b.id - a.id)[0].state, 'inactive');
-        state.splice(state.indexOf(item), 1);
-        return response(undefined);
-      }
-      const runId = /\/actions\/runs\/(\d+)$/.exec(route);
-      if (runId) {
-        const id = Number(runId[1]) - 1000;
-        return response(publication(id));
-      }
-      const jobId = /\/actions\/jobs\/(\d+)$/.exec(route);
-      if (jobId)
-        return response({
-          id: Number(jobId[1]),
-          run_id: Number(jobId[1]) - 1000,
-          name: '🚀 Deploy to GitHub Pages',
-          status: 'completed',
-          conclusion: 'success',
-          steps: [{ name: 'Deploy to GitHub Pages', conclusion: 'success' }],
-        });
-      throw new Error(`Unexpected fixture route ${route}`);
-    },
-  };
-}
-const writes = (github) => github.calls.filter((call) => !call.route.startsWith('GET '));
-const execute = (github, options = {}) =>
-  reconcilePages({ github, authority, holds, pause: async () => {}, ...options });
+// A history with failed publications between the current and the previous good one.
+const gapped = () => {
+  const input = records(8);
+  for (const id of [5, 6, 7]) nonSuccess(input[id - 1]);
+  return input;
+};
+const forgedSuccess = (input, id, at) =>
+  input[id - 1].statuses.push(status(id, { id: 700 + id, created_at: date(at), creator: BOT }));
 
 for (const count of [0, 1, 2, 3, 4, 20])
   test(`plans ${count} records with newest-three retention`, () => {
@@ -170,8 +97,11 @@ for (const environment of ['Production', 'Preview', 'vercel', 'unknown', '', und
   });
 
 for (const change of [
-  { performed_via_github_app: null },
   { performed_via_github_app: { id: 15368, slug: 'other' } },
+  { performed_via_github_app: { id: 1, slug: 'vercel' } },
+  { creator: null },
+  { creator: { login: '' } },
+  { creator: BOT },
   { ref: 'feature' },
   { task: 'other' },
   { sha: 'unknown' },
@@ -184,8 +114,15 @@ for (const change of [
     assert.ok(!planPruning(input, holds).candidates.some((item) => item.id === 1));
   });
 
+test('accepts bot-triggered records that carry no GitHub App identity', () => {
+  const input = records(5);
+  input[0].performed_via_github_app = null;
+  input[0].creator = { login: 'cursor[bot]' };
+  assert.ok(planPruning(input, holds).candidates.some((item) => item.id === 1));
+});
+
 test('refuses malformed, duplicate or incomplete inventories and holds', () => {
-  assert.throws(() => planPruning(records(5), holds, false), /incomplete/);
+  assert.throws(() => planPruning(records(5), holds, { complete: false }), /incomplete/);
   assert.throws(() => planPruning([record(1), record(1)], holds), /invalid-inventory/);
   assert.throws(
     () => planPruning([{ ...record(1), created_at: 'invalid' }], holds),
@@ -197,6 +134,8 @@ test('refuses malformed, duplicate or incomplete inventories and holds', () => {
   );
   assert.throws(() => planPruning(records(5), { rollback: [] }), /invalid-holds/);
   assert.throws(() => planPruning(records(5), { rollback: [], evidence: ['1'] }), /invalid-holds/);
+  for (const bad of [null, [], 'holds', { rollback: [], evidence: [], extra: [] }])
+    assert.throws(() => validateHolds(bad), /invalid-holds/);
 });
 
 for (const state of ['queued', 'pending', 'waiting', 'in_progress', 'unknown'])
@@ -205,6 +144,21 @@ for (const state of ['queued', 'pending', 'waiting', 'in_progress', 'unknown'])
     input[0].statuses.push({ ...input[0].statuses[0], id: 999, state, created_at: date(99) });
     assert.equal(planPruning(input, holds).blocked, true);
   });
+
+test('refuses normalized malformed dates and cross-record status ID collisions', () => {
+  for (const created_at of ['2026-02-31T00:00:00Z', '2026-01-01T24:00:00Z', 'Jan 1 2026Z']) {
+    assert.throws(() => planPruning([{ ...record(1), created_at }], holds), /invalid-inventory/);
+  }
+  const input = records(4);
+  input[0].statuses[0].id = input[1].statuses[0].id;
+  assert.throws(() => planPruning(input, holds), /invalid-statuses/);
+});
+
+test('contradictory status environment is unknown ownership and preserved', () => {
+  const input = records(5);
+  input[0].statuses[0].environment = 'Production';
+  assert.ok(!planPruning(input, holds).candidates.some((item) => item.id === 1));
+});
 
 for (const eventName of ['workflow_run', 'pull_request', 'pull_request_target', 'push', 'unknown'])
   test(`rejects trigger ${eventName} with zero API writes`, async () => {
@@ -220,6 +174,8 @@ for (const change of [
   { ref: 'refs/pull/1/merge' },
   { sha: 'unknown' },
   { workflowRef: 'other@refs/heads/main' },
+  { eventName: 'constructor' },
+  { eventName: 'toString' },
 ])
   test(`rejects execution authority ${JSON.stringify(change)}`, () => {
     assert.equal(admission({ ...authority, ...change }), 'refused');
@@ -227,7 +183,7 @@ for (const change of [
 
 test('dispatch always performs a zero-write dry-run, regardless of caller payload', async () => {
   const github = client(records(5));
-  const result = await execute(github, {
+  const result = await executeDestructive(github, {
     authority: { ...authority, eventName: 'workflow_dispatch', inputs: { delete: true } },
   });
   assert.equal(result.mode, 'dry-run');
@@ -236,13 +192,67 @@ test('dispatch always performs a zero-write dry-run, regardless of caller payloa
   assert.deepEqual(writes(github), []);
 });
 
+test('an explicit dry-run stays read-only even when the destructive gate is open', async () => {
+  const github = client(records(5));
+  const result = await executeDestructive(github, { dryRun: true });
+  assert.equal(result.mode, 'dry-run');
+  assert.equal(result.deleted, 0);
+  assert.deepEqual(writes(github), []);
+});
+
+test('the shipped destructive gate is closed and a scheduled run stays read-only', async () => {
+  assert.equal(DESTRUCTIVE_WRITES_ADMITTED, false);
+  const github = client(records(5));
+  const result = await execute(github);
+  assert.equal(result.mode, 'dry-run');
+  assert.equal(result.candidate, 2);
+  assert.equal(result.deleted, 0);
+  assert.equal(result.failed, 0);
+  assert.equal(result.reasons['destructive-gate-closed'], 1);
+  assert.deepEqual(writes(github), []);
+});
+
+const workflowSource = (name) =>
+  readFileSync(new URL(`../../../.github/workflows/${name}`, import.meta.url), 'utf8');
+
+test('the workflow token carries deployments:write only while the destructive gate is open', () => {
+  const grantsWrite = /^\s+deployments:\s*write\s*$/m.test(workflowSource('prune-deployments.yml'));
+  assert.equal(grantsWrite, DESTRUCTIVE_WRITES_ADMITTED);
+});
+
+test('only the Pages publisher and the gated pruner can write deployment records in this repository', () => {
+  const directory = new URL('../../../.github/workflows/', import.meta.url);
+  const names = readdirSync(directory).filter((name) => name.endsWith('.yml'));
+  const using = (pattern) => names.filter((name) => pattern.test(workflowSource(name))).sort();
+  assert.deepEqual(
+    using(/^\s+deployments:\s*write\s*$/m),
+    DESTRUCTIVE_WRITES_ADMITTED ? ['prune-deployments.yml'] : [],
+  );
+  assert.deepEqual(using(/^\s+pages:\s*write\s*$/m), ['ci.yml']);
+  assert.deepEqual(using(/actions\/deploy-pages@/), ['ci.yml']);
+  assert.deepEqual(using(/createDeployment(Status)?\b|deployments\/\$\{[^}]+\}\/statuses/), []);
+});
+
+test('real workflow admits only main schedule and read-only dispatch with serialized writer', () => {
+  const source = workflowSource('prune-deployments.yml');
+  assert.ok(!source.includes('workflow_run:'));
+  assert.ok(!source.includes('inputs:'));
+  assert.ok(source.includes("cron: '0 3 * * *'"));
+  assert.ok(source.includes('cancel-in-progress: false'));
+  assert.ok(source.includes("github.repository == 'qnbs/WorldScript-Studio'"));
+  assert.ok(source.includes("github.ref == 'refs/heads/main'"));
+  assert.ok(source.includes(`ref: \${{ github.sha }}`));
+  assert.ok(source.includes('persist-credentials: false'));
+  assert.ok(source.includes('retries: 0'));
+});
+
 test('inactivates then revalidates before deletion; repeated run is idempotent', async () => {
   const github = client(records(5));
-  const first = await execute(github);
+  const first = await executeDestructive(github);
   assert.equal(first.failed, 0);
   assert.equal(first.deleted, 2);
   assert.equal(first.inactivated, 2);
-  const second = await execute(github);
+  const second = await executeDestructive(github);
   assert.equal(second.deleted, 0);
   assert.equal(writes(github).length, 4);
   const routes = github.calls.map((call) => call.route);
@@ -263,17 +273,17 @@ test('already inactive candidates require no POST', async () => {
     state: 'inactive',
   });
   const github = client(input);
-  const result = await execute(github);
+  const result = await executeDestructive(github);
   assert.equal(result.deleted, 1);
   assert.equal(writes(github).length, 1);
 });
 
-for (const status of [404, 409, 429, 500, 503])
-  test(`failed inactivation ${status} never reaches DELETE or retries writes`, async () => {
+for (const code of [403, 404, 409, 429, 500, 503])
+  test(`failed inactivation ${code} never reaches DELETE or retries writes`, async () => {
     const github = client(records(4), (route) => {
-      if (route.startsWith('POST ')) throw apiError(status, '1');
+      if (route.startsWith('POST ')) throw apiError(code, '1');
     });
-    const result = await execute(github);
+    const result = await executeDestructive(github);
     assert.equal(result.failed, 1);
     assert.equal(result.deleted, 0);
     assert.deepEqual(
@@ -283,23 +293,34 @@ for (const status of [404, 409, 429, 500, 503])
     assert.ok(!JSON.stringify(result).includes('PRIVATE'));
   });
 
-for (const status of [404, 409, 429, 500, 503])
-  test(`failed DELETE ${status} is non-success and never blindly retried`, async () => {
+for (const code of [404, 409, 429, 500, 503])
+  test(`failed DELETE ${code} is non-success and never blindly retried`, async () => {
     const github = client(records(4), (route) => {
-      if (route.startsWith('DELETE ')) throw apiError(status);
+      if (route.startsWith('DELETE ')) throw apiError(code);
     });
-    const result = await execute(github);
+    const result = await executeDestructive(github);
     assert.equal(result.failed, 1);
     assert.equal(result.inactivated, 1);
     assert.equal(result.deleted, 0);
     assert.equal(writes(github).filter((call) => call.route.startsWith('DELETE ')).length, 1);
   });
 
+test('a malformed inactivation response never reaches DELETE', async () => {
+  const github = client(records(4), (route) =>
+    route.startsWith('POST ')
+      ? { data: { id: 'x', state: 'success', created_at: 'now' }, headers: {} }
+      : undefined,
+  );
+  const result = await executeDestructive(github);
+  assert.equal(result.reasons['invalid-inactivation-response'], 1);
+  assert.equal(writes(github).filter((call) => call.route.startsWith('DELETE ')).length, 0);
+});
+
 test('bounded reads exhaust retries without writes', async () => {
   const github = client(records(4), () => {
     throw apiError(503);
   });
-  assert.equal((await execute(github)).failed, 1);
+  assert.equal((await executeDestructive(github)).failed, 1);
   assert.equal(github.calls.length, 3);
   assert.deepEqual(writes(github), []);
 });
@@ -308,11 +329,11 @@ test('bounded transient read retry succeeds; long 429 Retry-After fails closed',
   const github = client(records(4), (_route, _parameters, _state, calls) => {
     if (calls.length === 1) throw apiError(503);
   });
-  assert.equal((await execute(github)).deleted, 1);
+  assert.equal((await executeDestructive(github)).deleted, 1);
   const limited = client(records(4), () => {
     throw apiError(429, '60');
   });
-  assert.equal((await execute(limited)).failed, 1);
+  assert.equal((await executeDestructive(limited)).failed, 1);
   assert.equal(limited.calls.length, 1);
 });
 
@@ -320,7 +341,7 @@ test('truncated pagination cannot authorize writes', async () => {
   const github = client(records(4), (route) =>
     route.includes('?environment=') ? { data: records(100), headers: {} } : undefined,
   );
-  const result = await execute(github);
+  const result = await executeDestructive(github);
   assert.equal(result.failed, 1);
   assert.equal(result.reasons['pagination-limit'], 1);
   assert.deepEqual(writes(github), []);
@@ -330,170 +351,10 @@ test('a failed later inventory page is failure, never a partial clean result', a
   const github = client(records(4), (route, parameters) => {
     if (!route.includes('?environment=')) return;
     if (parameters.page === 2) throw apiError(404);
-    return {
-      data: [record(1)],
-      headers: {
-        link: `<https://api.github.com${ROOT}/deployments?environment=github-pages&per_page=100&page=2>; rel="next"`,
-      },
-    };
+    return { data: [record(1)], headers: linkHeader(`${ROOT}/deployments`, 2) };
   });
-  assert.equal((await execute(github)).failed, 1);
+  assert.equal((await executeDestructive(github)).failed, 1);
   assert.deepEqual(writes(github), []);
-});
-
-for (const change of [
-  { event: 'pull_request' },
-  { event: 'workflow_dispatch' },
-  { head_branch: 'v1.30' },
-  { head_repository: { full_name: 'fork/repo' } },
-  { conclusion: 'failure' },
-  { conclusion: 'cancelled' },
-  { path: '.github/workflows/other.yml' },
-])
-  test(`rejects publication evidence ${JSON.stringify(change)}`, async () => {
-    const github = client(records(4), (route) =>
-      route.includes('/actions/runs/')
-        ? {
-            data: { ...publication(Number(route.split('/').at(-1)) - 1000), ...change },
-            headers: {},
-          }
-        : undefined,
-    );
-    const result = await execute(github);
-    assert.equal(result.failed, 1);
-    assert.deepEqual(writes(github), []);
-  });
-
-test('main moving invalidates hold and executable authority before mutation', async () => {
-  const github = client(records(4), (route) =>
-    route.endsWith('/branches/main')
-      ? { data: { commit: { sha: 'b'.repeat(40) } }, headers: {} }
-      : undefined,
-  );
-  assert.equal((await execute(github)).reasons['main-moved'], 1);
-  assert.deepEqual(writes(github), []);
-});
-
-test('candidate SHA drift is skipped with zero writes', async () => {
-  let inventories = 0;
-  const github = client(records(4), (route, _parameters, state) => {
-    if (route.includes('?environment=') && ++inventories === 2) state[0].sha = 'b'.repeat(40);
-  });
-  const result = await execute(github);
-  assert.equal(result.skipped, 1);
-  assert.deepEqual(writes(github), []);
-});
-
-test('status promotion after inactivation prevents deletion', async () => {
-  let inventories = 0;
-  const github = client(records(4), (route, _parameters, state) => {
-    if (route.includes('?environment=') && ++inventories === 3)
-      state[0].statuses.push({ ...state[0].statuses[0], id: 99999, created_at: date(99999) });
-  });
-  const result = await execute(github);
-  assert.equal(result.failed, 1);
-  assert.equal(result.deleted, 0);
-  assert.equal(writes(github).length, 1);
-});
-
-test('mixed partial outcomes report confirmed deletion and subsequent failure', async () => {
-  const github = client(records(6), (route) => {
-    if (route === `POST ${ROOT}/deployments/2/statuses`) throw apiError(409);
-  });
-  const result = await execute(github);
-  assert.equal(result.deleted, 1);
-  assert.equal(result.failed, 1);
-  assert.equal(result.followUpRequired, true);
-  assert.ok(github.state.some((item) => item.id === 2));
-});
-
-test('caps each invocation at ten records and reports remaining backlog', async () => {
-  const github = client(records(20));
-  const result = await execute(github);
-  assert.equal(result.deleted, 10);
-  assert.equal(result.attempted, 10);
-  assert.equal(result.followUpRequired, true);
-  assert.equal(result.skipped, 7);
-  assert.equal(result.reasons['batch-limit'], 7);
-});
-
-test('real workflow admits only main schedule and read-only dispatch with serialized writer', () => {
-  const source = readFileSync(
-    new URL('../../../.github/workflows/prune-deployments.yml', import.meta.url),
-    'utf8',
-  );
-  assert.ok(!source.includes('workflow_run:'));
-  assert.ok(!source.includes('inputs:'));
-  assert.ok(source.includes("cron: '0 3 * * *'"));
-  assert.ok(source.includes('cancel-in-progress: false'));
-  assert.ok(source.includes("github.repository == 'qnbs/WorldScript-Studio'"));
-  assert.ok(source.includes("github.ref == 'refs/heads/main'"));
-  assert.ok(source.includes(`ref: \${{ github.sha }}`));
-  assert.ok(source.includes('persist-credentials: false'));
-  assert.ok(source.includes('retries: 0'));
-});
-
-test('complete multi-page inventory makes stable progress', async () => {
-  const github = client(records(5), (route, parameters, state) => {
-    if (!route.includes('?environment=')) return;
-    return parameters.page === 1
-      ? {
-          data: structuredClone(state.slice(0, 2)),
-          headers: {
-            link: `<https://api.github.com${ROOT}/deployments?environment=github-pages&per_page=100&page=2>; rel="next"`,
-          },
-        }
-      : { data: structuredClone(state.slice(2)), headers: {} };
-  });
-  assert.equal((await execute(github)).deleted, 2);
-});
-
-test('contradictory status environment is unknown ownership and preserved', () => {
-  const input = records(5);
-  input[0].statuses[0].environment = 'Production';
-  assert.ok(!planPruning(input, holds).candidates.some((item) => item.id === 1));
-});
-
-test('Actions summary reports a partial failure without provider or author metadata', async () => {
-  const blocks = [];
-  const logs = [];
-  const failures = [];
-  const summary = {
-    addHeading() {
-      return this;
-    },
-    addCodeBlock(value) {
-      blocks.push(JSON.parse(value));
-      return this;
-    },
-    async write() {},
-  };
-  const github = client(records(4), (route) => {
-    if (route.startsWith('POST ')) throw apiError(409);
-  });
-  await runAction({
-    github,
-    holds,
-    workflowRef: authority.workflowRef,
-    core: {
-      summary,
-      info: (value) => logs.push(value),
-      setFailed: (value) => failures.push(value),
-    },
-    context: {
-      repo: { owner: 'qnbs', repo: 'WorldScript-Studio' },
-      eventName: 'schedule',
-      ref: authority.ref,
-      sha: authority.sha,
-    },
-  });
-  assert.equal(blocks[0].attempted, 1);
-  assert.equal(blocks[0].deleted, 0);
-  assert.equal(blocks[0].failed, 1);
-  assert.equal(blocks[0].followUpRequired, true);
-  assert.equal(failures.length, 1);
-  assert.ok(!JSON.stringify([blocks, logs, failures]).includes('PRIVATE'));
-  assert.ok(!JSON.stringify(blocks).includes('log_url'));
 });
 
 test('exactly full terminal page is probed for completeness in zero-write dry-run', async () => {
@@ -507,11 +368,451 @@ test('exactly full terminal page is probed for completeness in zero-write dry-ru
   assert.deepEqual(writes(github), []);
 });
 
-test('refuses normalized malformed dates and cross-record status ID collisions', () => {
-  for (const created_at of ['2026-02-31T00:00:00Z', '2026-01-01T24:00:00Z', 'Jan 1 2026Z']) {
-    assert.throws(() => planPruning([{ ...record(1), created_at }], holds), /invalid-inventory/);
+const paged = (input, headers) =>
+  client(input, (route, parameters, state) => {
+    if (!route.includes('?environment=')) return;
+    const first = parameters.page === 1;
+    return {
+      data: structuredClone(first ? state.slice(0, 2) : state.slice(2)),
+      headers: first ? headers : {},
+    };
+  });
+
+for (const [name, path] of [
+  ['repository path', `${ROOT}/deployments`],
+  ['repository id path', `/repositories/${REPO_ID}/deployments`],
+])
+  test(`a complete multi-page inventory accepts the ${name} next link`, async () => {
+    const github = paged(records(5), linkHeader(path, 2));
+    const result = await executeDestructive(github);
+    assert.equal(result.failed, 0);
+    assert.equal(result.deleted, 2);
+    const lookups = reads(github, /^GET \/repos\/qnbs\/WorldScript-Studio$/).length;
+    assert.equal(lookups, path.startsWith('/repositories') ? 1 : 0);
+  });
+
+const query = 'environment=github-pages&per_page=100';
+const unsafeLinks = {
+  'a different repository id': `https://api.github.com/repositories/9999/deployments?${query}&page=2`,
+  'a foreign origin': `https://example.test/repositories/${REPO_ID}/deployments?${query}&page=2`,
+  'a foreign repository path': `https://api.github.com/repos/other/Repo/deployments?${query}&page=2`,
+  'the wrong next page': `https://api.github.com${ROOT}/deployments?${query}&page=3`,
+  'an extra query parameter': `https://api.github.com${ROOT}/deployments?${query}&page=2&state=active`,
+  'a different environment': `https://api.github.com${ROOT}/deployments?environment=Production&per_page=100&page=2`,
+  'a duplicated parameter': `https://api.github.com${ROOT}/deployments?${query}&page=2&page=2`,
+  'a malformed url': '::not a url::',
+};
+for (const [name, href] of Object.entries(unsafeLinks))
+  test(`refuses a next link with ${name} and never writes`, async () => {
+    const github = paged(records(5), { link: `<${href}>; rel="next"` });
+    const result = await executeDestructive(github);
+    assert.equal(result.failed, 1);
+    assert.equal(result.reasons['invalid-pagination-link'], 1);
+    assert.deepEqual(writes(github), []);
+  });
+
+test('refuses a repository id lookup that names another repository', async () => {
+  const github = client(records(5), (route, _parameters, state) => {
+    if (route === `GET ${ROOT}`)
+      return { data: { id: REPO_ID, full_name: 'other/Repo' }, headers: {} };
+    if (route.includes('?environment='))
+      return {
+        data: structuredClone(state.slice(0, 2)),
+        headers: linkHeader(`/repositories/${REPO_ID}/deployments`, 2),
+      };
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.reasons['unknown-repository'], 1);
+  assert.deepEqual(writes(github), []);
+});
+
+test('status history over several pages loads completely under the repository id path', async () => {
+  const input = records(5);
+  const older = Array.from({ length: 149 }, (_, index) =>
+    status(3, {
+      id: 5000 + index,
+      state: 'queued',
+      created_at: new Date(Date.UTC(2025, 0, 1) + index * 1000).toISOString(),
+    }),
+  );
+  input[2].statuses = [...older, status(3)];
+  const github = client(input, (route, parameters, state) => {
+    if (route !== `GET ${ROOT}/deployments/3/statuses`) return;
+    const first = parameters.page === 1;
+    return {
+      data: structuredClone(state[2].statuses.slice(first ? 0 : 100, first ? 100 : 200)),
+      headers: first
+        ? {
+            link: `<https://api.github.com/repositories/${REPO_ID}/deployments/3/statuses?page=2&per_page=100>; rel="next"`,
+          }
+        : {},
+    };
+  });
+  const result = await execute(github);
+  assert.equal(result.failed, 0);
+  assert.ok(reads(github, /deployments\/3\/statuses$/).some((call) => call.parameters.page === 2));
+});
+
+test('an unproved success between current and a known-good rollback never consumes the rollback slot', async () => {
+  const input = gapped();
+  forgedSuccess(input, 2, 4.5);
+  const shapeOnly = planPruning(input, holds);
+  assert.ok(
+    shapeOnly.candidates.some((item) => item.id === 4),
+    'the shape-only plan alone would expose the genuine rollback',
+  );
+  const result = await execute(client(input));
+  assert.equal(result.failed, 0);
+  assert.equal(result.current, 8);
+  assert.equal(result.rollback, 4);
+  assert.equal(disposition(result, 4).disposition, 'protected');
+  assert.ok(disposition(result, 2).reasons.includes('unproved-publication'));
+  assert.deepEqual(candidates(result), [3, 1]);
+});
+
+test('refuses when no rollback publication can be proven', async () => {
+  const github = client(records(6), (route) =>
+    route.includes('/actions/runs/') && !route.endsWith('/1006')
+      ? { data: publication(1, { head_branch: 'feature' }), headers: {} }
+      : undefined,
+  );
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['no-proven-rollback'], 1);
+  assert.deepEqual(writes(github), []);
+});
+
+const runChanges = [
+  { event: 'pull_request' },
+  { event: 'workflow_dispatch' },
+  { head_branch: 'v1.30' },
+  { head_repository: { full_name: 'fork/repo' } },
+  { conclusion: 'failure' },
+  { conclusion: 'cancelled' },
+  { path: '.github/workflows/other.yml' },
+  { actor: { login: 'intruder' }, triggering_actor: { login: 'intruder' } },
+  { actor: null, triggering_actor: null },
+];
+for (const change of runChanges)
+  test(`rejects publication evidence ${JSON.stringify(change)}`, async () => {
+    const github = client(records(4), (route) =>
+      route.includes('/actions/runs/')
+        ? {
+            data: { ...publication(Number(route.split('/').at(-1)) - 1000), ...change },
+            headers: {},
+          }
+        : undefined,
+    );
+    const result = await executeDestructive(github);
+    assert.equal(result.failed, 1);
+    assert.equal(result.reasons['unproved-current'], 1);
+    assert.deepEqual(writes(github), []);
+  });
+
+for (const change of [
+  { conclusion: 'failure' },
+  { name: 'Other job' },
+  { steps: [] },
+  { run_id: 1 },
+])
+  test(`rejects job evidence ${JSON.stringify(change)}`, async () => {
+    const github = client(records(4), (route) =>
+      route.includes('/actions/jobs/')
+        ? { data: { ...jobFixture(Number(route.split('/').at(-1))), ...change }, headers: {} }
+        : undefined,
+    );
+    const result = await executeDestructive(github);
+    assert.equal(result.failed, 1);
+    assert.deepEqual(writes(github), []);
+  });
+
+const forgeries = {
+  'a status authored by the Actions bot': (item) => {
+    item.statuses[0].creator = BOT;
+  },
+  'a status authored by another principal': (item) => {
+    item.statuses[0].creator = { login: 'intruder' };
+  },
+  'a status without an author': (item) => {
+    delete item.statuses[0].creator;
+  },
+  'a deployment authored by another principal': (item) => {
+    item.creator = { login: 'intruder' };
+  },
+  'a log_url naming another legitimate publication job': (item) => {
+    item.statuses[0].log_url = jobUrl(5);
+  },
+};
+for (const [name, forge] of Object.entries(forgeries))
+  test(`a candidate with ${name} is protected and never deleted`, async () => {
+    const input = records(5);
+    forge(input[0]);
+    const github = client(input);
+    const result = await executeDestructive(github);
+    assert.equal(result.failed, 0);
+    assert.equal(result.deleted, 1);
+    assert.equal(result.reasons['unproved-publication'], 1);
+    assert.deepEqual(
+      github.state.map((item) => item.id),
+      [1, 3, 4, 5],
+    );
+  });
+
+test('a candidate whose publication run no longer exists is protected', async () => {
+  const github = client(records(5), (route) => {
+    if (route.endsWith('/actions/runs/1001')) throw apiError(404);
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.reasons['unproved-publication'], 1);
+  assert.ok(github.state.some((item) => item.id === 1));
+});
+
+test('a bot-triggered record is retired when its run actor matches the record authors', async () => {
+  const input = records(5);
+  input[0].performed_via_github_app = null;
+  input[0].creator = { login: 'cursor[bot]' };
+  input[0].statuses[0].creator = { login: 'cursor[bot]' };
+  const github = client(input, (route) =>
+    route.endsWith('/actions/runs/1001')
+      ? {
+          data: publication(1, {
+            actor: { login: 'cursor[bot]' },
+            triggering_actor: { login: 'cursor[bot]' },
+          }),
+          headers: {},
+        }
+      : undefined,
+  );
+  const result = await executeDestructive(github);
+  assert.equal(result.deleted, 2);
+  assert.deepEqual(
+    github.state.map((item) => item.id),
+    [3, 4, 5],
+  );
+});
+
+test('main moving invalidates hold and executable authority before mutation', async () => {
+  const github = client(records(4), (route) =>
+    route.endsWith('/branches/main')
+      ? { data: { commit: { sha: 'b'.repeat(40) } }, headers: {} }
+      : undefined,
+  );
+  assert.equal((await executeDestructive(github)).reasons['main-moved'], 1);
+  assert.deepEqual(writes(github), []);
+});
+
+test('candidate SHA drift is skipped with zero writes', async () => {
+  let lists = 0;
+  const github = client(records(4), (route, _parameters, state) => {
+    if (route.includes('?environment=') && ++lists === 2) state[0].sha = 'b'.repeat(40);
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.skipped, 1);
+  assert.deepEqual(writes(github), []);
+});
+
+test('status promotion after inactivation prevents deletion', async () => {
+  let lists = 0;
+  const github = client(records(4), (route, _parameters, state) => {
+    if (route.includes('?environment=') && ++lists === 3)
+      state[0].statuses.push({ ...state[0].statuses[0], id: 99999, created_at: date(99999) });
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 1);
+  assert.equal(result.deleted, 0);
+  assert.equal(writes(github).length, 1);
+});
+
+test('a record whose list key changed is re-read and a new publication head stops the run', async () => {
+  let lists = 0;
+  const github = client(records(8), (route, _parameters, state) => {
+    if (route.includes('?environment=') && ++lists === 2) {
+      state[1].statuses.push(status(2, { id: 5555, created_at: date(500) }));
+      state[1].updated_at = date(500);
+    }
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['current-moved'], 1);
+  assert.deepEqual(writes(github), []);
+});
+
+for (const [name, extra] of [
+  ['a successful', record(99)],
+  ['an in-flight', record(99, { statuses: [status(99, { state: 'in_progress' })] })],
+])
+  test(`${name} publication appearing during the run stops before any write`, async () => {
+    let lists = 0;
+    const github = client(records(6), (route, _parameters, state) => {
+      if (route.includes('?environment=') && ++lists === 2) state.push(structuredClone(extra));
+    });
+    const result = await executeDestructive(github);
+    assert.equal(result.reasons['current-moved'], 1);
+    assert.deepEqual(writes(github), []);
+  });
+
+const arrivals = [
+  (size) => record(size + 1),
+  (size) => nonSuccess(record(size + 1)),
+  (size) => nonSuccess(record(size + 1), 'in_progress'),
+];
+const withFailures = (size) => {
+  const input = records(size);
+  for (const item of input) if (item.id % 3 === 0) nonSuccess(item);
+  return input;
+};
+test('a stale snapshot never turns a genuine candidate into a protected record after a new publication', () => {
+  for (const size of [4, 6, 9, 14])
+    for (const build of [records, withFailures])
+      for (const arrive of arrivals) {
+        const stale = build(size);
+        const fresh = [...stale, arrive(size)];
+        const before = planPruning(stale, holds).candidates.map((item) => item.id);
+        const after = new Set(planPruning(fresh, holds).candidates.map((item) => item.id));
+        for (const id of before) assert.ok(after.has(id), `record ${id} of ${size}`);
+      }
+});
+
+test('mixed partial outcomes report confirmed deletion and subsequent failure', async () => {
+  const github = client(records(6), (route) => {
+    if (route === `POST ${ROOT}/deployments/2/statuses`) throw apiError(409);
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.deleted, 1);
+  assert.equal(result.failed, 1);
+  assert.equal(result.followUpRequired, true);
+  assert.ok(github.state.some((item) => item.id === 2));
+});
+
+test('caps each invocation at ten records and reports remaining backlog', async () => {
+  const github = client(records(20));
+  const result = await executeDestructive(github);
+  assert.equal(result.deleted, 10);
+  assert.equal(result.attempted, 10);
+  assert.equal(result.followUpRequired, true);
+  assert.equal(result.skipped, 7);
+  assert.equal(result.reasons['batch-limit'], 7);
+});
+
+const statusReads = (github) => reads(github, /\/statuses$/).length;
+for (const [count, bound] of [
+  [6, 60],
+  [50, 200],
+  [100, 260],
+])
+  test(`request volume stays bounded for ${count} records`, async () => {
+    const github = client(records(count));
+    const result = await executeDestructive(github);
+    const expected = Math.min(10, count - 3);
+    assert.equal(result.failed, 0);
+    assert.equal(result.deleted, expected);
+    assert.equal(result.requests, github.calls.length);
+    assert.ok(result.requests <= bound, `${result.requests} requests for ${count} records`);
+    assert.ok(result.requests < REQUEST_LIMIT);
+    // Inventory reads every history once; each write then re-reads only the candidate and both slots, twice.
+    assert.equal(statusReads(github), count + 6 * expected);
+  });
+
+test('a request budget that cannot fund another candidate stops gracefully before writes', async () => {
+  const github = client(records(100));
+  const result = await executeDestructive(github, { limit: 160 });
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 0);
+  assert.equal(result.reasons['budget-limit'], 10);
+  assert.equal(result.followUpRequired, true);
+  assert.deepEqual(writes(github), []);
+});
+
+test('an inventory larger than the request budget fails closed without writes', async () => {
+  const github = client(records(100));
+  const result = await executeDestructive(github, { limit: 50 });
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['request-budget'], 1);
+  assert.equal(result.requests, 50);
+  assert.deepEqual(writes(github), []);
+});
+
+test('a low live rate-limit allowance stops before the next candidate', async () => {
+  const github = client(records(30), undefined, { 'x-ratelimit-remaining': '120' });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 0);
+  assert.ok(result.reasons['budget-limit'] > 0);
+  assert.deepEqual(writes(github), []);
+});
+
+const summaryStub = (blocks) => ({
+  addHeading() {
+    return this;
+  },
+  addCodeBlock(value) {
+    blocks.push(JSON.parse(value));
+    return this;
+  },
+  async write() {},
+});
+const actionContext = {
+  repo: { owner: 'qnbs', repo: 'WorldScript-Studio' },
+  eventName: 'schedule',
+  ref: authority.ref,
+  sha: authority.sha,
+};
+
+test('Actions summary reports a failure without provider or author metadata', async () => {
+  const blocks = [];
+  const logs = [];
+  const failures = [];
+  const github = client(records(4), (route) => {
+    if (route.includes('/actions/runs/')) throw apiError(503);
+  });
+  await runAction({
+    github,
+    holds,
+    workflowRef: authority.workflowRef,
+    context: actionContext,
+    core: {
+      summary: summaryStub(blocks),
+      info: (value) => logs.push(value),
+      setFailed: (value) => failures.push(value),
+    },
+  });
+  assert.equal(blocks[0].failed, 1);
+  assert.equal(blocks[0].deleted, 0);
+  assert.equal(failures.length, 1);
+  assert.ok(!JSON.stringify([blocks, logs, failures]).includes('PRIVATE'));
+  assert.ok(!JSON.stringify(blocks).includes('log_url'));
+});
+
+test('Actions warns when the backlog exceeds one bounded pass', async () => {
+  const warnings = [];
+  await runAction({
+    github: {},
+    holds,
+    workflowRef: authority.workflowRef,
+    context: actionContext,
+    reconcile: async () => ({ manifest: [], reasons: { 'batch-limit': 3 }, failed: 0 }),
+    core: {
+      summary: summaryStub([]),
+      info: () => {},
+      warning: (value) => warnings.push(value),
+      setFailed: () => assert.fail('a backlog is not a failure'),
+    },
+  });
+  assert.equal(warnings.length, 1);
+});
+
+test('the local CLI refuses every mode except --dry-run before any network access', () => {
+  const script = fileURLToPath(
+    new URL('../../../scripts/prune-pages-deployments.mjs', import.meta.url),
+  );
+  for (const flag of ['--delete', '--execute', '']) {
+    const result = spawnSync(process.execPath, flag ? [script, flag] : [script], {
+      encoding: 'utf8',
+      timeout: 15000,
+    });
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Read-only Pages inventory failed/);
   }
-  const input = records(4);
-  input[0].statuses[0].id = input[1].statuses[0].id;
-  assert.throws(() => planPruning(input, holds), /invalid-statuses/);
 });

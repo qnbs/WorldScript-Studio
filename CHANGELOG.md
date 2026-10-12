@@ -9,9 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **CI / Pages:** reconcile owned deployment records safely, keeping the newest three
   plus current publication, rollback and evidence holds. Daily bounded reconciliation
-  replaces broad CI-completion triggers; manual dispatch is read-only. Failed inactivation
-  stops deletion, and every mutation revalidates inventory and trusted-main authority.
-  The workflow remains disabled pending separate owner admission. Issue #1028. PR #1029.
+  replaces broad CI-completion triggers; manual dispatch is read-only. Both publication
+  slots are proven against the triggering run's actor before any candidate is classified,
+  so a forged status can neither consume the rollback slot nor vouch for a record.
+  Failed inactivation stops deletion, and every mutation revalidates the candidate, both
+  slots and trusted-main authority within a measured per-run request budget.
+  Destructive writes stay closed in code and in the workflow token until the owner admits a
+  writer-fence protocol, so even an enabled schedule only reports. Issue #1028. PR #1029.
 
 - **R-15 Gate 4E evidence:** coordination-resource preservation checks inspect links without following them and reject nonempty files, FIFOs, sockets, and observation errors. Fixture-scoped regressions cover missing/empty resources and link variants. The ordinary-operation barrier is unchanged. Clean successor to PR #1021. PR #1026.
 

@@ -4,9 +4,13 @@ Owner: [#1028](https://github.com/qnbs/WorldScript-Studio/issues/1028).
 This procedure concerns GitHub deployment **records** for `github-pages` only.
 Vercel/provider objects and all other environments are outside its authority.
 
-The workflow remains manually disabled. Merging this implementation neither enables it
-nor admits a destructive operator run. Manual dispatch has no deletion input and always
-runs read-only. A local read-only inventory needs no workflow enablement:
+**Status: implemented, not enabled.** The destructive path is closed twice, independently:
+`DESTRUCTIVE_WRITES_ADMITTED` in `scripts/pages-pruning/policy.mjs` is `false`, and the workflow
+token holds `deployments: read` only. A scheduled run, even if the workflow is switched on in the
+Actions UI, therefore performs the full read-only reconciliation, reports `destructive-gate-closed`,
+and cannot write. Opening the gate needs both reviewed changes plus the owner decision below; a test
+pins that the permission and the constant move together. Manual dispatch has no deletion input and
+always runs read-only. A local read-only inventory needs no workflow enablement:
 
 ```sh
 node scripts/prune-pages-deployments.mjs --dry-run
@@ -16,60 +20,135 @@ node --test tests/unit/tooling/prunePagesDeployments.test.mjs
 ## Retention and ownership
 
 Keep the newest three Pages records, ordered by `created_at` descending then numeric ID
-descending. Also retain the current and previous successful publication by successful
-status completion order, every explicit rollback/evidence hold, unknown ownership and
-unsafe status. Current/rollback protection can add at most two records to the normal
-floor; unknown metadata and evidence holds need owner disposition rather than expiry.
+descending. Also retain the current and previous **proven** successful publication by successful
+status completion order, every explicit rollback/evidence hold, unknown ownership, unproved
+publications and unsafe status. Current/rollback protection can add at most two records to the
+normal floor; unknown metadata and evidence holds need owner disposition rather than expiry.
 
-Positive ownership requires exact environment/ref/task, a full commit SHA, the GitHub
-Actions app identity, canonical Pages URL and an own-repository Actions job log URL.
-Before candidate mutation, fetch that run and job: exact `CI / CD` workflow path,
-successful completed `main` push, own head repository, matching SHA and successful
-Pages deployment job/step. A PR, fork, tag, manual CI, cancelled or failed run supplies
-no deletion authority. Records without the app identity are preserved even when their
-environment happens to be named `github-pages`.
+The six IDs in `.github/pages-pruning-holds.json` are the complete observed Pages inventory on
+2026-10-12. They preserve the existing incident evidence pending #723/#1028 owner disposition; they
+are not an age grace period for future records. No historical non-execution or hold release is
+inferred from the terminal cancelled Actions run. Replace the evidence list with specifically
+retained IDs only after that disposition; rollback holds are independent. Such a change is reviewed
+on main before it acquires writer authority.
 
-The six IDs in `.github/pages-pruning-holds.json` are the complete observed Pages
-inventory on 2026-10-12. They preserve the existing incident evidence pending #723/#1028
-owner disposition; they are not an age grace period for future records. Three records
-are currently surplus to the normal newest-three floor. No historical non-execution or
-hold release is inferred from the terminal cancelled Actions run. Replace the evidence
-list with specifically retained IDs only after that disposition; rollback holds are
-independent. Such a change is reviewed on main before it acquires writer authority.
+## Publication proof
+
+`deployment_status.log_url` is written by the status author, so a matching job URL proves nothing
+on its own. A record is deletable only after all of these hold, read fresh from the API:
+
+- deployment shape: `github-pages`, `main`, task `deploy`, full SHA, non-transient, non-production,
+  no GitHub App other than Actions;
+- the referenced run is the own-repository `CI / CD` push on `main` for the same SHA, completed
+  successfully, and its job `🚀 Deploy to GitHub Pages` and step `Deploy to GitHub Pages` succeeded;
+- **causal link:** the deployment record and its newest success status were authored by the actor
+  or triggering actor of that run, and neither author is `github-actions[bot]`.
+
+The causal link is what a `GITHUB_TOKEN` writer cannot imitate: any other workflow writes as
+`github-actions[bot]`, while the Pages publisher records the principal that triggered the run.
+Observed on all six live records on 2026-10-13: deployment author, status author and run actor
+agree in 6/6 (`qnbs` and `cursor[bot]`); the bot-triggered records carry no GitHub App,
+which is why the App identity is accepted as absent rather than required. Time-window matching was
+rejected: the success status falls outside the job's `started_at..completed_at` in 3 of 6 records.
+
+Residual: a principal holding the run actor's own credentials can still write matching records.
+That principal can delete records directly, so this adds no new authority. If the proof cannot be
+established for a record (run deleted, fields missing, mismatch), the record is protected as
+`unproved-publication`; it is never deleted and never blocks the rest of the batch.
+
+## Current and rollback slots
+
+Both publication slots are proven by API before any candidate is classified. The newest success
+must prove or the run stops (`unproved-current`). Up to four older successes are walked in order;
+an unproved one is protected and does not consume the rollback slot, and the first proven one is
+the rollback. If none proves, the run stops (`no-proven-rollback`). Shape-only classification
+exists for the pure plan and never authorizes a write.
 
 ## Trigger and mutation boundary
 
 Daily 03:00 UTC reconciliation includes the existing Sunday backlog pass. There is no
-`workflow_run` trigger: this avoids privileged follow-up jobs for PR/fork/failed/manual
-CI and separates event completion from publication proof. Only main schedule runs can
-write; main dispatch is dry-run. The executing workflow/ref/repository are checked
-again in the module, checkout uses the immutable event SHA without persisted credentials,
-and a changed main SHA invalidates the hold/executable snapshot before each mutation.
-Product CI, required statuses, CodeQL, signing and reviewer governance are unchanged.
+`workflow_run` trigger: this avoids privileged follow-up jobs for PR/fork/failed/manual CI and
+separates event completion from publication proof. Only main schedule runs can write (once the gate
+is open); main dispatch is dry-run. The executing workflow/ref/repository are checked again in the
+module, checkout uses the immutable event SHA without persisted credentials, and a changed main SHA
+invalidates the hold/executable snapshot before each mutation.
 
-One concurrency group serializes pruning invocations; at most ten records are attempted.
-Every inactivate and delete operation requires a new complete inventory/status read and
-unchanged identity, current publication, protection and status evidence. A failed or
-ambiguous inactivation never reaches deletion. `auto_inactive: false` avoids affecting
-other records. GET retries are bounded at three and two seconds maximum delay; writes
-are never blindly retried. API failures stop the batch, fail the job and report confirmed
-partial outcomes with sanitized reason codes. A later pass must re-observe uncertain writes.
+At most ten records are attempted per invocation. Every inactivate and delete operation requires a
+fresh read of the deployment list plus the full status history of the candidate and of both
+publication slots, an unchanged publication-order prefix, an unchanged candidate fingerprint and
+the trusted-main SHA. Other records are re-read only when their list entry (including `updated_at`)
+changed; GitHub bumped `updated_at` past the newest status on all six live records, but that is an
+optimization, not the authority for the candidate or the slots. A failed or ambiguous inactivation
+never reaches deletion. `auto_inactive: false` avoids affecting other records. GET retries are
+bounded at three attempts and two seconds maximum delay; writes are never retried. API failures
+stop the batch, fail the job and report confirmed partial outcomes with sanitized reason codes. A
+later pass must re-observe uncertain writes.
 
-GitHub does not offer conditional inactivation/deletion tied to a deployment-status
-version. Revalidation detects observed promotion/publication races; it cannot provide a
-transaction across the final GET and POST. GitHub refuses DELETE of an active record.
-An independent exact-delta review must assess this residual API boundary before merge;
-external status writers must not be treated as serialized by the pruning concurrency group.
+### Pagination
 
-## Owner reactivation sequence
+GitHub returns `rel="next"` links under `/repositories/{id}/…` rather than `/repos/{owner}/{repo}/…`.
+Both forms are accepted only for the verified repository ID (one extra read of the repository),
+the API origin, the exact next page and the original query. Any other origin, path, extra,
+changed or duplicated parameter, or malformed link fails closed.
+
+### Request budget
+
+A run spends at most 450 requests (45% of GitHub's documented 1,000 requests per hour and
+repository for `GITHUB_TOKEN`, shared with CI); the live `x-ratelimit-remaining` header can only
+lower that. Before each candidate the run checks the remaining budget and rate allowance and stops
+gracefully with `budget-limit` rather than half-working. An inventory that alone exceeds the budget
+fails closed with `request-budget` before any write. Measured by the test fixture (GET + POST +
+DELETE, ten candidates):
+
+| Records | Previous design (full re-inventory per write) | This design |
+| ---: | ---: | ---: |
+| 6 | – | 54 |
+| 50 | ≈1,214 | 196 |
+| 100 | ≈2,264 | 249 |
+| 200 | ≈4,364 | 370 |
+| 300 | ≈6,464 | 411 (stops after 5 deletions) |
+
+A read-only dry-run costs 18, 76, 127 and 329 requests for 6, 50, 100 and 300 records.
+
+## Writer fence
+
+GitHub offers no compare-and-delete tied to a status version, so no check can make the final read
+and the write atomic. What is and is not protected:
+
+| Writer | Effect on a chosen candidate | Handling |
+| --- | --- | --- |
+| Pages publisher (`ci.yml` `deploy`) | A publication creates a **new** record; it cannot give an old record a success status. A stale snapshot is therefore never less protective than the fresh state (a test checks this for successful, failed and in-flight arrivals). | Structurally safe; mid-run arrivals stop the run (`current-moved`) before any write. |
+| In-repository status writers | None other than the publisher and this workflow exist; a test pins the set of workflows that can write deployment records. | Mechanical. |
+| Changes to the hold list on main | A hold landing between the final trusted-main check and the DELETE would not stop that delete. | **Not fenced.** Gate closed. |
+| External status writers (PAT holders, third-party Apps) | Could add a success status to an old record. | **Not fenced.** Gate closed. |
+
+The pruning concurrency group serializes pruning invocations only. It does not serialize the
+publisher, hold changes or external writers, and must not be read as a fence.
+
+## Capacity
+
+Verified from the Actions API: 44 successful `CI / CD` runs on `main` in the 7 days to 2026-10-13
+(mean ≈6.3 per day, one day with 15, then 8, 10, 8, 2, 1). Each success publishes one record. One
+pass retires at most ten, so the mean leaves ≈3.7 per day of headroom and a 15-run day leaves a
+backlog of five that the following days absorb. The run reports `batch-limit` or `budget-limit`
+and raises an Actions warning when a backlog remains. If that warning persists over three
+consecutive scheduled runs, raising the cadence (for example `0 3,15 * * *`) is an owner decision;
+`workflow_run` triggers on PR CI are not an option. Trigger-count and runner-minute measurements
+belong to #550/QNB-41; no monetary or CPU savings are inferred from workflow-start counts alone.
+
+## Owner enablement sequence
 
 1. Merge only after exact-head full CI/security/signature/governance success and substantive
    independent review; prove resulting-main CI/CodeQL and Production separately.
 2. Record a current, zero-write dry-run; reconcile the evidence holds with their owners.
-3. Obtain a separate explicit owner decision to enable the workflow. This PR/CLI does not
-   perform that action. Observe the first admitted scheduled pass and assert counts,
-   protected IDs and unchanged non-Pages inventory.
+3. Decide the open fence items: how hold changes are frozen during the run window, and whether
+   external status writers are excluded by policy or by a shared serialization with the publisher.
+   Adding the publisher to a shared concurrency group needs its own review because a queued
+   deploy can be replaced by a newer pending run.
+4. Obtain a separate explicit owner decision, then open the gate in one reviewed change that sets
+   `DESTRUCTIVE_WRITES_ADMITTED` to `true` and restores `deployments: write` for the job. This
+   PR/CLI does not perform that action. Observe the first admitted scheduled pass and assert
+   counts, protected IDs and unchanged non-Pages inventory.
 
 Until those steps are complete, implementation/review/operational verification remain
-separate states. Trigger-count measurements belong to #550/QNB-41; no monetary or CPU
-savings are inferred from workflow-start counts alone.
+separate states.

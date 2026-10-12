@@ -6,7 +6,7 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
-# QNBS-v3: top-level read-only; deployments:write scoped to job (CodeQL Token-Permissions).
+# QNBS-v3: top-level read-only; the job holds no write scope while the destructive gate in scripts/pages-pruning/policy.mjs is closed (CodeQL Token-Permissions).
 permissions:
   contents: read
 
@@ -24,7 +24,7 @@ jobs:
       contents: read
       actions: read
       pages: read
-      deployments: write
+      deployments: read
     steps:
       - name: Check out immutable trusted main execution tree
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
