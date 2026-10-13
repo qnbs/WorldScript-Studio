@@ -7,6 +7,7 @@ const API_ORIGIN = 'https://api.github.com';
 const PAGE_SIZE = 100;
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 const BACKOFF_CAP_MS = 2000;
+export const READ_ATTEMPTS = 3;
 
 export const defaultPause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -41,7 +42,7 @@ const retryDelay = (error, attempt) =>
 
 function shouldRetry(error, attempt, delay) {
   return [
-    attempt < 2,
+    attempt < READ_ATTEMPTS - 1,
     RETRYABLE.has(error.status),
     Number.isFinite(delay),
     delay >= 0,

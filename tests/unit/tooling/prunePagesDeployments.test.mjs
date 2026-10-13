@@ -5,7 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { REQUEST_LIMIT } from '../../../scripts/pages-pruning/github.mjs';
 import { EXAMINE_LIMIT, PUBLISH_EVENTS } from '../../../scripts/pages-pruning/provenance.mjs';
-import { candidateCeiling } from '../../../scripts/pages-pruning/reconcile.mjs';
+import { candidateCeiling, finishCeiling } from '../../../scripts/pages-pruning/reconcile.mjs';
 import {
   admission,
   DESTRUCTIVE_WRITES_ADMITTED,
@@ -766,10 +766,54 @@ test('a candidate pass is reserved at the observed inventory depth before any wr
   assert.equal(refused.failed, 0);
   assert.ok(refused.reasons['budget-limit'] > 0);
   assert.deepEqual(writes(short), []);
+  // First revalidation: list page, candidate and rollback histories, five current-record pages, main read.
+  const preWrite = 1 + 1 + 5 + 1 + 1;
   const funded = client(deepHistory(records(14)));
-  const done = await executeDestructive(funded, { limit: dry.requests + ceiling });
+  const done = await executeDestructive(funded, {
+    limit: dry.requests + preWrite + finishCeiling({ observed: { list: 1, status: 5 } }),
+  });
   assert.equal(done.failed, 0);
   assert.equal(done.deleted, 1);
+});
+
+test('the post-POST reservation covers every read at its full retry count', () => {
+  assert.equal(finishCeiling({ observed: { list: 1, status: 1 } }), 52);
+  assert.equal(finishCeiling({ observed: { list: 4, status: 5 } }), 97);
+});
+
+test('the POST is only issued when everything after it fits the budget even with retried reads', async () => {
+  const dry = await execute(client(records(8)), { dryRun: true });
+  // First revalidation: list page, three focused histories, main read.
+  const preWrite = 5;
+  const finish = finishCeiling({ observed: { list: 1, status: 1 } });
+  const short = client(records(8));
+  const refused = await executeDestructive(short, { limit: dry.requests + preWrite + finish - 1 });
+  assert.equal(refused.failed, 0);
+  assert.ok(refused.reasons['budget-limit'] > 0);
+  assert.deepEqual(writes(short), []);
+  let posted = false;
+  const seen = new Set();
+  const flaky = client(records(8), (route, parameters) => {
+    if (route.startsWith('POST ')) posted = true;
+    if (!posted || !route.startsWith('GET ')) return;
+    const key = `${route}${JSON.stringify(parameters)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    throw apiError(503);
+  });
+  const done = await executeDestructive(flaky, { limit: dry.requests + preWrite + finish });
+  assert.equal(done.failed, 0);
+  assert.equal(done.deleted, 1);
+});
+
+test('the CI inventory describes the reconciliation triggers and authority', () => {
+  const audit = readFileSync(new URL('../../../.github/CI-AUDIT.md', import.meta.url), 'utf8');
+  const row = audit.split('\n').find((line) => line.includes('workflows/prune-deployments.yml'));
+  assert.ok(row, 'CI-AUDIT.md lists the pruning workflow');
+  assert.match(row, /daily cron/);
+  assert.match(row, /no `workflow_run`/);
+  assert.match(row, /GitHub Pages deployment records only/);
+  assert.ok(!/ALL environments/.test(row));
 });
 
 test('records beyond the examination limit are reported as unexamined, never as candidates', async () => {

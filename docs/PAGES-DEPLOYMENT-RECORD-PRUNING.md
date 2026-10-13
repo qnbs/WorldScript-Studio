@@ -107,7 +107,10 @@ deployment list pages, the three focused histories each allowed one more page, t
 POST and DELETE, and a worst-case re-proof of both slots and the candidate. The reservation is
 computed from the page depths observed in this run, from 24 requests for a small inventory to 54
 for a 400-record list with five-page histories, and the run stops gracefully with `budget-limit`
-instead of leaving a half-finished candidate. An inventory that alone exceeds the budget fails
+instead of leaving a half-finished candidate. Reads are retried up to twice, so immediately before
+the first write of a candidate the run also reserves everything after the inactive-status POST at
+three attempts per read plus the DELETE (52 requests for a small inventory, 97 for the
+400-record case) and otherwise stops without writing. An inventory that alone exceeds the budget fails
 closed with `request-budget` before any write. Measured by the test fixture (GET + POST + DELETE,
 ten candidates):
 
@@ -117,7 +120,7 @@ ten candidates):
 | 50 | ≈1,214 | 216 |
 | 100 | ≈2,264 | 269 |
 | 200 | ≈4,364 | 390 |
-| 300 | ≈6,464 | 431 (stops after 5 deletions) |
+| 300 | ≈6,464 | 390 (stops after 2 deletions) |
 
 A read-only dry-run costs 18, 96, 147 and 349 requests for 6, 50, 100 and 300 records.
 

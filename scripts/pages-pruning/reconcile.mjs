@@ -7,7 +7,15 @@ import {
   timestamp,
   validId,
 } from './evidence.mjs';
-import { createContext, inventory, listRecords, loadStatuses, read, write } from './github.mjs';
+import {
+  createContext,
+  inventory,
+  listRecords,
+  loadStatuses,
+  READ_ATTEMPTS,
+  read,
+  write,
+} from './github.mjs';
 import {
   admission,
   DESTRUCTIVE_WRITES_ADMITTED,
@@ -25,6 +33,13 @@ const API_FAILURES = new Set([403, 404, 409, 429, 500, 502, 503, 504]);
 export function candidateCeiling(ctx) {
   const { list, status } = ctx.observed;
   return 2 * (list + 3 * (status + 1) + 1) + 2 + 6;
+}
+
+// QNBS-v3: reads may be retried, so everything after the inactive-status POST is reserved at READ_ATTEMPTS per read plus the DELETE, and the POST is only issued when that worst case still fits the budget.
+export function finishCeiling(ctx) {
+  const { list, status } = ctx.observed;
+  const reads = list + 3 * (status + 1) + 1 + 6 + 3;
+  return READ_ATTEMPTS * reads + 1;
 }
 
 function newRun(authority, mode) {
@@ -168,8 +183,10 @@ async function retire(session, candidate) {
   const { ctx, run } = session;
   let fresh = await revalidate(session, candidate, fingerprint(candidate));
   if (!fresh) return skip(run, 'stale-candidate');
+  const needsPost = latestStatus(fresh).state !== 'inactive';
+  if (needsPost && ctx.used + finishCeiling(ctx) > ctx.limit) return 'budget';
   run.result.attempted += 1;
-  if (latestStatus(fresh).state !== 'inactive') {
+  if (needsPost) {
     fresh.statuses.push(await inactivate(ctx, fresh));
     run.result.inactivated += 1;
     fresh = await revalidate(session, candidate, fingerprint(fresh));
@@ -195,7 +212,11 @@ async function mutate(session) {
       return;
     }
     run.considered += 1;
-    await retire(session, candidate);
+    if ((await retire(session, candidate)) === 'budget') {
+      run.considered -= 1;
+      run.reason('budget-limit', run.batch.length - run.considered);
+      return;
+    }
   }
 }
 
