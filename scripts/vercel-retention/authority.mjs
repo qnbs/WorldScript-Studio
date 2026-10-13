@@ -6,11 +6,21 @@ export function readMain(deps) {
   return FULL_SHA.test(sha) ? sha : refuse('main-unreadable');
 }
 
+// QNBS-v3: an open-PR record that lacks a usable number, head branch or head commit would silently drop that PR's protection, so one malformed record refuses the whole snapshot.
+const isOpenPr = (pr) =>
+  [
+    Number.isInteger(pr?.number) && pr.number > 0,
+    typeof pr?.headRefName === 'string' && pr.headRefName !== '',
+    FULL_SHA.test(pr?.headRefOid ?? ''),
+  ].every(Boolean);
+
 export function readOpenPrs(deps) {
   const fields = 'number,headRefName,headRefOid';
   const args = ['pr', 'list', '--repo', SCOPE.repository, '--state', 'open', '--limit', '100'];
   const prs = parseJson(deps.gh([...args, '--json', fields]), 'open-prs');
-  if (!Array.isArray(prs) || prs.length >= 100) refuse('open-prs-incomplete');
+  if (!Array.isArray(prs)) refuse('open-prs-incomplete');
+  if (prs.length >= 100) refuse('open-prs-incomplete');
+  if (!prs.every(isOpenPr)) refuse('open-prs-malformed');
   return prs;
 }
 

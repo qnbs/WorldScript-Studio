@@ -187,13 +187,18 @@ function gh(world, args) {
   return JSON.stringify(args[0] === 'run' ? world.runs : world.prs);
 }
 
+// 'new' keeps returning a record nobody has seen (the page limit must stop it); 'same' returns the identical page again (the stall check must stop it).
+function endlessPage(world) {
+  world.pages = (world.pages ?? 0) + 1;
+  const uid = world.endless === 'same' ? 'dpl_same' : `dpl_endless${world.pages}`;
+  return JSON.stringify({ deployments: [{ uid }], pagination: { next: 1 } });
+}
+
 function vercel(world, args) {
   world.calls.push(`vercel ${args[0]}`);
   if (args[0] !== 'api') return mutate(world, args);
   if (world.hooks.failReads) throw new Error(SECRET);
-  if (world.endless && args[1].startsWith('/v6/deployments')) {
-    return JSON.stringify({ deployments: [], pagination: { next: 1 } });
-  }
+  if (world.endless && args[1].startsWith('/v6/deployments')) return endlessPage(world);
   return JSON.stringify(readApi(world, args[1]));
 }
 

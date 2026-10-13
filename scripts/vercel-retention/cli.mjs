@@ -53,22 +53,28 @@ const rowLine = (row) =>
     row.branch ?? '-',
     `PR ${row.pr ?? '-'}`,
     row.sha || '-',
-    `aliases=${row.aliases}`,
+    `${row.state}/${row.target}`,
+    row.created,
+    `aliases=${row.aliases.join(',') || '-'}`,
     row.lifecycle,
     row.reasons.join('+') || '-',
   ].join(' | ');
 
-export function report(io, summary) {
-  const { manifest = [], ...rest } = summary;
+export function printManifest(io, manifest) {
   for (const row of manifest) io.log(`RETENTION_MANIFEST ${rowLine(row)}`);
+}
+
+export function report(io, summary) {
+  const { manifest, ...rest } = summary;
   io.log(`RETENTION_SUMMARY ${JSON.stringify(rest)}`);
 }
 
+// QNBS-v3: the manifest is printed from the plan, before the first write, so an operator can read exactly what a reconcile pass is about to do; the summary line follows the pass.
 export async function main(argv, deps, io = console) {
   const mode = parseMode(argv);
   if (mode === 'reconcile') assertTrustedSource(deps);
   const { runRetention } = await import('./apply.mjs');
-  report(io, await runRetention(deps, mode));
+  report(io, await runRetention(deps, mode, (plan) => printManifest(io, plan.manifest)));
 }
 
 function realDeps() {

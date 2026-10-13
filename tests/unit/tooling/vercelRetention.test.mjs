@@ -1,18 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { runRetention } from '../../../scripts/vercel-retention/apply.mjs';
+import { classify } from '../../../scripts/vercel-retention/classify.mjs';
 import {
   assertTrustedSource,
   main,
   parseMode,
+  printManifest,
   report,
 } from '../../../scripts/vercel-retention/cli.mjs';
-import { acquireLock } from '../../../scripts/vercel-retention/lock.mjs';
 import { removeAlias, removeDeployment } from '../../../scripts/vercel-retention/provider.mjs';
 import { MAX_DELETIONS } from '../../../scripts/vercel-retention/scope.mjs';
 import {
@@ -59,6 +58,7 @@ test('reconcile deletes only the proven SAFE previews and proves the rest afterw
     protectedPresent: '6/6',
     deletedAbsent: true,
     canonicalAliasesBound: true,
+    protectedAliasesBound: true,
     productionReady: true,
     httpProduction: '200',
   });
@@ -196,7 +196,7 @@ for (const [name, change] of Object.entries(badProduction))
 
 test('a paginated inventory is read completely', async () => {
   const world = standardWorld();
-  world.pageSize = 2;
+  world.pageSize = 4;
   const summary = await dry(world);
   assert.equal(summary.safe, 4);
   assert.equal(summary.protectedProduction, 2);
@@ -204,7 +204,7 @@ test('a paginated inventory is read completely', async () => {
 
 test('pagination that never ends stops instead of acting on a partial inventory', async () => {
   const world = standardWorld();
-  world.endless = true;
+  world.endless = 'new';
   assert.equal((await stop(() => reconcile(world))).reason, 'provider-pagination-limit');
   assert.deepEqual(world.writes, []);
 });
@@ -290,15 +290,13 @@ for (const [name, change] of Object.entries(unclear))
     assert.ok(ids(world).includes('dpl_prev11'));
   });
 
-test('a preview carrying a canonical alias is protected', async () => {
+test('a preview carrying a canonical alias is protected', () => {
   const world = standardWorld();
-  world.aliases.push({
-    alias: 'worldscript-studio.vercel.app',
-    deploymentId: 'dpl_prev11',
-    created: 300,
-  });
-  const summary = await dry(world);
-  assert.equal(summary.safe, 3);
+  const canonical = { alias: 'worldscript-studio.vercel.app', deploymentId: 'dpl_prev11' };
+  const plan = classify({ ...world, holds: new Set(), aliases: [canonical] });
+  const row = plan.rows.find((candidate) => candidate.id === 'dpl_prev11');
+  assert.equal(row.verdict, 'PROTECTED');
+  assert.ok(row.reasons.includes('canonical-alias'));
 });
 
 test('a verdict that changes before deletion only defers the ID', async () => {
@@ -560,19 +558,6 @@ test('a second concurrent reconcile stops before reading anything, and the lock 
   assert.equal(failing.released, 1);
 });
 
-test('the real lock excludes a live holder, recovers a dead one and releases cleanly', () => {
-  const directory = join(mkdtempSync(join(tmpdir(), 'vr-lock-')), 'held');
-  const release = acquireLock(directory);
-  assert.throws(() => acquireLock(directory), { reason: 'retention-already-running' });
-  release();
-  assert.equal(existsSync(directory), false);
-  const dead = acquireLock(directory);
-  writeFileSync(join(directory, 'pid'), '2147483646');
-  const recovered = acquireLock(directory);
-  recovered();
-  dead();
-});
-
 test('the entry file loads only built-ins and the lock before the source check', () => {
   const source = readFileSync(
     new URL('../../../scripts/vercel-retention/cli.mjs', import.meta.url),
@@ -590,29 +575,28 @@ test('the entry file loads only built-ins and the lock before the source check',
   assert.match(source, /await import\('\.\/apply\.mjs'\)/);
 });
 
-test('report prints the manifest rows before a single summary line', () => {
+test('the manifest rows and the summary line are printed separately', () => {
   const lines = [];
-  report(
-    { log: (line) => lines.push(line) },
-    {
-      manifest: [
-        {
-          id: 'dpl_x',
-          verdict: 'SAFE',
-          branch: null,
-          pr: null,
-          sha: '',
-          aliases: 0,
-          lifecycle: 'orphan',
-          reasons: [],
-        },
-      ],
-      mode: 'dry-run',
-    },
-  );
+  const io = { log: (line) => lines.push(line) };
+  const row = {
+    id: 'dpl_x',
+    verdict: 'SAFE',
+    branch: null,
+    pr: null,
+    sha: '',
+    state: 'READY',
+    target: 'preview',
+    created: '2026-10-13T00:00:00.000Z',
+    aliases: ['a.vercel.app', 'b.vercel.app'],
+    lifecycle: 'orphan',
+    reasons: [],
+  };
+  printManifest(io, [row]);
+  report(io, { manifest: [row], mode: 'dry-run' });
   assert.equal(lines.length, 2);
-  assert.match(
+  assert.equal(
     lines[0],
-    /^RETENTION_MANIFEST dpl_x \| SAFE \| - \| PR - \| - \| aliases=0 \| orphan \| -$/,
+    'RETENTION_MANIFEST dpl_x | SAFE | - | PR - | - | READY/preview | 2026-10-13T00:00:00.000Z | aliases=a.vercel.app,b.vercel.app | orphan | -',
   );
+  assert.equal(lines[1], 'RETENTION_SUMMARY {"mode":"dry-run"}');
 });

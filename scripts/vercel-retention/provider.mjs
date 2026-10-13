@@ -33,22 +33,50 @@ function nextPage(body, key) {
   return pagination.next ?? null;
 }
 
-async function paged(deps, path, key) {
-  const items = [];
+// QNBS-v3: the overlap between two pages must be byte-identical; a record that differs between reads (an alias rebound, a deployment that changed state) means the inventory moved while it was read, so it is refused instead of keeping either version.
+function remember(items, key, item) {
+  const seen = items.get(key);
+  if (seen !== undefined && JSON.stringify(seen) !== JSON.stringify(item))
+    refuse('provider-inventory-inconsistent');
+  items.set(key, item);
+}
+
+// QNBS-v3: the cursor is a creation timestamp, so the next request starts one millisecond above it and the overlap is removed by a unique key; records that share the boundary timestamp are then read instead of skipped, and a page that adds nothing new stops the run instead of looping.
+async function paged(deps, path, key, shape) {
+  const items = new Map();
   let until = null;
   for (let page = 0; page < MAX_PAGES; page++) {
     const params = { projectId: SCOPE.projectId, teamId: SCOPE.teamId, limit: '100' };
-    if (until !== null) params.until = String(until);
+    if (until !== null) params.until = String(until + 1);
     const body = await providerGet(deps, withQuery(path, params));
-    items.push(...body[key]);
-    until = nextPage(body, key);
-    if (until === null) return items;
+    const next = nextPage(body, key);
+    if (!body[key].every(shape.valid)) refuse('invalid-provider-response');
+    const before = items.size;
+    for (const item of body[key]) remember(items, shape.key(item), item);
+    if (next === null) return [...items.values()];
+    if (items.size === before) refuse('provider-pagination-stalled');
+    until = next;
   }
   return refuse('provider-pagination-limit');
 }
 
-export const listDeployments = (deps) => paged(deps, '/v6/deployments', 'deployments');
-export const listAliases = (deps) => paged(deps, '/v4/aliases', 'aliases');
+const hasHost = (item) => typeof item?.alias === 'string' && item.alias !== '';
+const linkIsExplicit = (value) => value === null || DEPLOYMENT_ID.test(value);
+
+// QNBS-v3: every record must carry the fields classification relies on; an alias must name its host and state its deployment link explicitly (null for a redirect), so a response that drops or renames the link refuses instead of reading as "no alias".
+const DEPLOYMENT_SHAPE = {
+  key: (item) => item.uid,
+  valid: (item) => DEPLOYMENT_ID.test(item?.uid),
+};
+
+const ALIAS_SHAPE = {
+  key: (item) => item.alias,
+  valid: (item) => hasHost(item) && linkIsExplicit(item.deploymentId),
+};
+
+export const listDeployments = (deps) =>
+  paged(deps, '/v6/deployments', 'deployments', DEPLOYMENT_SHAPE);
+export const listAliases = (deps) => paged(deps, '/v4/aliases', 'aliases', ALIAS_SHAPE);
 
 export async function readProject(deps) {
   const path = withQuery(`/v9/projects/${SCOPE.projectId}`, { teamId: SCOPE.teamId });

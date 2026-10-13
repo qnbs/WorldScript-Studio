@@ -40,8 +40,15 @@ function identityConfirmed(deployment) {
   ].every(Boolean);
 }
 
+// QNBS-v3: only a plain Preview (no target, or the literal preview target, and no custom environment) is ever classified for deletion; a custom environment such as staging is UNKNOWN, never SAFE.
+const isPlainPreview = (deployment) =>
+  [[null, 'preview'].includes(deployment.target ?? null), !deployment.customEnvironmentId].every(
+    Boolean,
+  );
+
 function unknownReasons(deployment) {
   const reasons = [];
+  if (!isPlainPreview(deployment)) reasons.push('target-unrecognized');
   if (!identityConfirmed(deployment)) reasons.push('identity-unconfirmed');
   if (!TERMINAL_STATES.has(deployment.readyState)) reasons.push('non-terminal-state');
   if (typeof deployment.isRollbackCandidate !== 'boolean') reasons.push('rollback-unknown');
@@ -49,6 +56,18 @@ function unknownReasons(deployment) {
   if (!FULL_SHA.test(deployment.meta?.githubCommitSha ?? '')) reasons.push('commit-unknown');
   if (!Number.isFinite(deployment.created)) reasons.push('created-unknown');
   return reasons;
+}
+
+const FAILED_STATES = new Set(['ERROR', 'CANCELED']);
+
+// QNBS-v3: a failed or canceled Preview is deletable only when no open PR and no existing branch still needs it, so such a Preview of a living branch or an open PR is protected whatever its PR lifecycle says.
+function failedPreviewNeeded(deployment, context) {
+  const meta = deployment.meta ?? {};
+  const needed = [
+    context.branches.has(meta.githubCommitRef),
+    context.prNumbers.has(meta.githubPrId),
+  ];
+  return FAILED_STATES.has(deployment.readyState) && needed.some(Boolean);
 }
 
 function protectionReasons(deployment, aliases, context) {
@@ -60,6 +79,7 @@ function protectionReasons(deployment, aliases, context) {
   if (context.newestThree.has(deployment.uid)) reasons.push('open-pr-newest-three');
   if (context.heads.has(meta.githubCommitSha)) reasons.push('main-or-open-head');
   if (context.holds.has(deployment.uid)) reasons.push('explicit-hold');
+  if (failedPreviewNeeded(deployment, context)) reasons.push('failed-preview-needed');
   return reasons;
 }
 
@@ -82,6 +102,18 @@ function verdictOf(protection, unknown) {
   return unknown.length > 0 ? 'UNKNOWN' : 'SAFE';
 }
 
+// QNBS-v3: the manifest names the state, target and age the gates looked at, so an operator can audit a verdict without the raw provider payload; creator metadata is never copied.
+function evidenceOf(deployment) {
+  const created = Number.isFinite(deployment.created)
+    ? new Date(deployment.created).toISOString()
+    : '-';
+  return {
+    state: deployment.readyState ?? '-',
+    target: deployment.target ?? 'preview',
+    created,
+  };
+}
+
 function classifyPreview(deployment, context) {
   const aliases = context.aliasesOf.get(deployment.uid) ?? [];
   const lifecycle = lifecycleOf(deployment, context);
@@ -93,6 +125,7 @@ function classifyPreview(deployment, context) {
     branch: deployment.meta?.githubCommitRef ?? null,
     pr: deployment.meta?.githubPrId ?? null,
     sha: (deployment.meta?.githubCommitSha ?? '').slice(0, 8),
+    ...evidenceOf(deployment),
     aliases,
     lifecycle,
     reasons: [...protection, ...unknown],
@@ -102,9 +135,10 @@ function classifyPreview(deployment, context) {
 export function classify(world) {
   const production = world.deployments.filter(isProductionClass);
   const previews = world.deployments.filter((deployment) => !isProductionClass(deployment));
+  // QNBS-v3: a fork PR's head branch does not exist in this repository, so the open-PR snapshot counts as branch authority too.
   const context = {
     aliasesOf: aliasesByDeployment(world.aliases),
-    branches: world.branches,
+    branches: new Set([...world.branches, ...world.prs.map((pr) => pr.headRefName)]),
     prNumbers: new Set(world.prs.map((pr) => String(pr.number))),
     heads: new Set([world.main, ...world.prs.map((pr) => pr.headRefOid)]),
     newestThree: newestThreeOfOpenPrs(world.prs, previews),
