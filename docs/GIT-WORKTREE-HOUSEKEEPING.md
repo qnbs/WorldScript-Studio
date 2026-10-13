@@ -18,7 +18,7 @@ these strings looks like a normal typo but produces the opposite conclusion (e.g
 
 | String you may see | Meaning | English equivalent |
 |---|---|---|
-| `entfernt` | remote-tracking ref has no corresponding remote branch anymore (GitHub already deleted it, e.g. via a PR's own delete-branch) | `gone` |
+| `entfernt` | remote-tracking ref has no corresponding remote branch anymore (the remote branch was deleted — by a merge before the repository's `delete_branch_on_merge` was switched to `false` on 2026-10-13, or manually) | `gone` |
 | `voraus N` | N commits ahead of the compared ref | `ahead N` |
 | `hinterher N` | N commits behind the compared ref | `behind N` |
 | `## HEAD (kein Branch)` | detached HEAD state | `## HEAD (no branch)` |
@@ -36,6 +36,11 @@ below without first checking `rev-list --count` in both directions.
 $ gh pr merge <N> --squash --delete-branch
 failed to run git: fatal: 'main' is already used by worktree at '/path/to/.worktrees/<name>'
 ```
+
+(This is the symptom as observed with the former merge command, which passed `--delete-branch`. The
+current merge policy in [`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md) no longer passes that
+flag; the diagnosis below applies to any `gh` invocation that updates local `main` from a worktree
+that does not hold it.)
 
 **Root cause:** `gh pr merge` (like several git plumbing operations) tries to update the local
 `refs/heads/main` ref after merging. Git refuses if `main` is *currently checked out* in any
@@ -725,8 +730,9 @@ PR-state record alone.
 
 **Before deleting, get an accurate picture of what's actually gone — but don't prune blindly to
 get it.** Local `origin/*` remote-tracking refs are a cache; if you never refresh it, branches
-GitHub already auto-deleted (via a PR's own `--delete-branch` flag) still show up locally as
-phantom entries. The reflex fix — `git fetch origin --prune` — mutates before anything has been
+GitHub already deleted (merges before `delete_branch_on_merge` became `false` on 2026-10-13
+auto-deleted their head branch; a manual deletion does the same) still show up locally as phantom
+entries. The reflex fix — `git fetch origin --prune` — mutates before anything has been
 classified, which is exactly the same preserve-first violation this doc calls out for worktree
 pruning: if a collaborator deleted an *unmerged* remote branch outside any process this doc
 tracks, and no local branch or tag references its tip either, that stale `origin/<branch>`

@@ -250,8 +250,8 @@ LOW-RISK final delta) and merge-mechanics ordering rule in full — summarized:
 
 - Enable protected squash **auto-merge** only after this repo's stricter internal criteria (not just
   GitHub's branch-protection floor) are satisfied — use the exact command in
-  `PR-CI-MERGE-WORKFLOW.md`'s merge-mechanics paragraph (`--match-head-commit <SHA>`, and
-  `--delete-branch` only after that doc's paginated dependent-PR check confirms nothing depends on
+  `PR-CI-MERGE-WORKFLOW.md`'s merge-mechanics paragraph (`--match-head-commit <SHA>`, never
+  `--delete-branch`, after that doc's paginated dependent-PR check confirms nothing is stacked on
   this branch). Not restated here to avoid a second, independently drifting copy of that command.
 - If branch protection presents the PR as `BLOCKED` despite green required checks, stop and
   re-read the live head, checks, reviews, protection, rulesets, and check suites. Use a normal
@@ -262,8 +262,12 @@ LOW-RISK final delta) and merge-mechanics ordering rule in full — summarized:
 
 ## 9. Branch housekeeping (after merges)
 
-GitHub auto-deletes head branches on merge here. Periodically prune stale local/remote-tracking
-refs and delete redundant branches (e.g. a `release/x` branch already captured by a tag):
+A merge does not delete the head branch here (`delete_branch_on_merge = false`, maintainer decision
+of 2026-10-13); a merged branch is kept until a manual census finds nothing that still needs it —
+open dependent PRs, evidence naming its tip, local worktrees (see the branch-retention rule in
+`PR-CI-MERGE-WORKFLOW.md` and `GIT-WORKTREE-HOUSEKEEPING.md`). Periodically prune stale
+local/remote-tracking refs of branches deleted earlier, and delete redundant branches (e.g. a
+`release/x` branch already captured by a tag) only after that census:
 
 ```bash
 git fetch --prune
