@@ -388,6 +388,77 @@ test('a new preview that appears during the wave does not affect the proof of wh
   assert.equal((await reconcile(world)).stop, null);
 });
 
+for (const id of [0, false, ''])
+  test(`a custom environment id of ${JSON.stringify(id)} is present, not absent, and makes the preview UNKNOWN`, async () => {
+    const world = standardWorld();
+    find(world, 'dpl_prev11').customEnvironmentId = id;
+    const row = verdicts(await reconcile(world)).dpl_prev11;
+    assert.equal(row.verdict, 'UNKNOWN');
+    assert.deepEqual(row.reasons, ['target-unrecognized']);
+  });
+
+for (const substate of ['STAGED', undefined, null])
+  test(`the substate ${String(substate)} is an ordinary Preview`, async () => {
+    const world = standardWorld();
+    find(world, 'dpl_prev11').readySubstate = substate;
+    assert.ok((await reconcile(world)).deleted.includes('dpl_prev11'));
+  });
+
+for (const substate of ['PROMOTING', 'ROLLED_BACK', '', 'staged'])
+  test(`the substate ${JSON.stringify(substate)} is not recognized and is never deleted`, async () => {
+    const world = standardWorld();
+    find(world, 'dpl_prev11').readySubstate = substate;
+    const row = verdicts(await reconcile(world)).dpl_prev11;
+    assert.equal(row.verdict, 'UNKNOWN');
+    assert.deepEqual(row.reasons, ['substate-unrecognized']);
+    assert.ok(find(world, 'dpl_prev11'));
+  });
+
+for (const created of [-1, 0, 1.5, 1e20, Date.now() + 10 * 86_400_000, '1000'])
+  test(`a creation time of ${String(created)} is not a plausible instant and is never deleted`, async () => {
+    const world = standardWorld();
+    find(world, 'dpl_prev11').created = created;
+    const row = verdicts(await reconcile(world)).dpl_prev11;
+    assert.equal(row.verdict, 'UNKNOWN');
+    assert.deepEqual(row.reasons, ['created-unknown']);
+    assert.equal(row.created, '-');
+  });
+
+test('custom-environment and unrecognized deployments cannot take a retained slot of an open PR', async () => {
+  const world = standardWorld();
+  world.deployments.push(
+    preview(71, { target: 'staging', created: 2001 }),
+    preview(72, { customEnvironmentId: 'env_x', created: 2002 }),
+    preview(73, { readySubstate: 'PROMOTING', created: 2003 }),
+  );
+  const rows = verdicts(await dry(world));
+  for (const kept of ['dpl_prev3', 'dpl_prev4', 'dpl_prev5'])
+    assert.equal(rows[kept].verdict, 'PROTECTED', kept);
+  for (const odd of ['dpl_prev71', 'dpl_prev72', 'dpl_prev73'])
+    assert.equal(rows[odd].verdict, 'UNKNOWN', odd);
+});
+
+for (const [name, change] of Object.entries({
+  'another commit': (deployment) => {
+    deployment.meta.githubCommitSha = 'd'.repeat(40);
+  },
+  'another project': (deployment) => {
+    deployment.projectId = 'prj_other';
+  },
+  'another repository': (deployment) => {
+    deployment.meta.githubRepo = 'Other';
+  },
+}))
+  test(`the post-proof applies the full Production predicate: ${name}`, async () => {
+    const world = standardWorld();
+    world.hooks.onWrite = (live, args) => {
+      if (args[1] === 'dpl_prev1') change(find(live, 'dpl_prod'));
+    };
+    const error = await stop(() => reconcile(world));
+    assert.equal(error.reason, 'postproof-failed');
+    assert.equal(error.summary.postproof.productionReady, false);
+  });
+
 test('reconcile prints the whole manifest before its first write, then one summary line', async () => {
   const world = standardWorld();
   const lines = [];

@@ -17,13 +17,13 @@ function aliasesByDeployment(aliases) {
   return map;
 }
 
-// QNBS-v3: the exact per-PR snapshot keeps the newest min(3, available) Previews of every open PR; a preview without a usable creation time is ranked out, because it is UNKNOWN and never deleted, so it cannot displace a dated one.
+// QNBS-v3: the exact per-PR snapshot keeps the newest min(3, available) plain Previews of every open PR; a preview without a usable creation time, a custom environment or an unrecognized promotion substate is ranked out, because it is never deleted anyway and so must not displace a real, dated Preview from a retained slot.
 function newestThreeOfOpenPrs(prs, previews) {
   const kept = new Set();
   for (const pr of prs) {
     const own = previews
       .filter((deployment) => deployment.meta?.githubPrId === String(pr.number))
-      .filter((deployment) => Number.isFinite(deployment.created))
+      .filter(isRankable)
       .sort((a, b) => b.created - a.created)
       .slice(0, 3);
     for (const deployment of own) kept.add(deployment.uid);
@@ -40,9 +40,25 @@ export function identityConfirmed(deployment) {
   ].every(Boolean);
 }
 
-// QNBS-v3: only a plain Preview (no target, or the literal preview target, and no custom environment) is ever classified for deletion; a custom environment such as staging is UNKNOWN, never SAFE.
+// QNBS-v3: only a plain Preview (no target, or the literal preview target, and no custom environment id at all) is ever classified for deletion; a custom environment such as staging, or an environment id of any other kind, is UNKNOWN, never SAFE.
 const isPlainPreview = (deployment) =>
-  [[null, 'preview'].includes(deployment.target ?? null), !deployment.customEnvironmentId].every(
+  [
+    [null, 'preview'].includes(deployment.target ?? null),
+    [undefined, null].includes(deployment.customEnvironmentId),
+  ].every(Boolean);
+
+// QNBS-v3: STAGED is the only non-Production substate a Preview carries (PROMOTED and ROLLING are Production-class and never reach this point); any other value may be a promotion state this runner does not know.
+const PREVIEW_SUBSTATES = new Set([undefined, null, 'STAGED']);
+const hasKnownSubstate = (deployment) => PREVIEW_SUBSTATES.has(deployment.readySubstate);
+
+const DAY_MS = 86_400_000;
+
+// A creation time is a positive safe integer that is not in the future; -1, 0, 1.5 or an out-of-range value would pass a bare finiteness test.
+export const validStamp = (value) =>
+  Number.isSafeInteger(value) && value > 0 && value <= Date.now() + DAY_MS;
+
+const isRankable = (deployment) =>
+  [isPlainPreview(deployment), hasKnownSubstate(deployment), validStamp(deployment.created)].every(
     Boolean,
   );
 
@@ -59,13 +75,14 @@ function prIdMalformed(deployment) {
 // QNBS-v3: each check names the reason it raises, so the list stays flat as checks are added and the reasons keep a fixed order.
 const UNKNOWN_CHECKS = [
   ['target-unrecognized', (deployment) => !isPlainPreview(deployment)],
+  ['substate-unrecognized', (deployment) => !hasKnownSubstate(deployment)],
   ['identity-unconfirmed', (deployment) => !identityConfirmed(deployment)],
   ['non-terminal-state', (deployment) => !TERMINAL_STATES.has(deployment.readyState)],
   ['rollback-unknown', (deployment) => typeof deployment.isRollbackCandidate !== 'boolean'],
   ['branch-unknown', (deployment) => !isRef(deployment.meta?.githubCommitRef)],
   ['pr-id-malformed', prIdMalformed],
   ['commit-unknown', (deployment) => !FULL_SHA.test(deployment.meta?.githubCommitSha ?? '')],
-  ['created-unknown', (deployment) => !Number.isFinite(deployment.created)],
+  ['created-unknown', (deployment) => !validStamp(deployment.created)],
 ];
 
 const unknownReasons = (deployment) =>
@@ -120,9 +137,7 @@ function verdictOf(protection, unknown) {
 
 // QNBS-v3: the manifest names the state, target and age the gates looked at, so an operator can audit a verdict without the raw provider payload; creator metadata is never copied.
 function evidenceOf(deployment) {
-  const created = Number.isFinite(deployment.created)
-    ? new Date(deployment.created).toISOString()
-    : '-';
+  const created = validStamp(deployment.created) ? new Date(deployment.created).toISOString() : '-';
   return {
     state: deployment.readyState ?? '-',
     target: deployment.target ?? 'preview',

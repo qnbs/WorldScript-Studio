@@ -2,6 +2,7 @@ import {
   assertOrigin,
   assertProduction,
   assertRequiredRuns,
+  isProductionOn,
   readBranches,
   readMain,
   readOpenPrs,
@@ -143,9 +144,12 @@ const holdsBinding = (after) => (binding) =>
 const holdsState = (after) => (row) =>
   after.deployments.find((deployment) => deployment.uid === row.id)?.readyState === row.state;
 
-const isReadyProduction = (after, id) => {
-  const production = after.deployments.find((deployment) => deployment.uid === id);
-  return [production?.target === 'production', production?.readyState === 'READY'].every(Boolean);
+// QNBS-v3: the same predicate that authorized the pass (target, READY, the anchored commit, project and repository identity) is applied again to the very deployment the pass started from.
+const isReadyProduction = (after, session) => {
+  const production = after.deployments.find(
+    (deployment) => deployment.uid === session.summary.productionId,
+  );
+  return production !== undefined && isProductionOn(session.anchor)(production);
 };
 
 // QNBS-v3: previews the pass keeps (planned or deferred) are the rows whose aliases and settled states the post-proof compares; a state that was still moving at plan time is not compared.
@@ -216,7 +220,7 @@ async function postProof(session, plan) {
       .every(holdsState(after)),
     deletionsStillSafe: deletionsStillSafe(after, session),
     productionSetStable: productionSetStable(after, plan),
-    productionReady: isReadyProduction(after, summary.productionId),
+    productionReady: isReadyProduction(after, session),
     httpProduction: deps.http(CANONICAL_URL),
   };
   if (!proofHolds(summary.postproof, lost)) refuse('postproof-failed');

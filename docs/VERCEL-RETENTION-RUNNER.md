@@ -47,11 +47,13 @@ print no tokens, e-mail addresses or provider error text.
    promoted as, or can roll back to Production never enters the preview classification. A preview
    is `PROTECTED` when it carries a canonical alias, an alias of a branch that still exists (a
    branch of an open PR counts even when it lives in a fork), is among the newest `min(3, available)`
-   dated previews of an open PR, builds `main` or an open PR head, is named in
+   dated plain previews of an open PR (custom environments and unrecognized substates are ranked
+   out, so they cannot take a retained slot), builds `main` or an open PR head, is named in
    `.github/vercel-retention-holds.json` as review or retest evidence, or has failed or been canceled
    while its branch or an open PR still exists. It is `UNKNOWN` when its identity, state, rollback
-   flag, branch (it must be a non-empty string), commit SHA or creation time is missing or
-   contradictory, when one of its aliases is a host the removal command would refuse (a custom
+   flag, branch (it must be a non-empty string), commit SHA or creation time (a positive integer that
+   is not in the future) is missing or contradictory, when it carries any environment id or a
+   promotion substate other than `STAGED`, when one of its aliases is a host the removal command would refuse (a custom
    domain, a nested label), when its PR identifier is
    present but not a plain decimal string, when its target is not the
    plain Preview (a custom environment such as `staging`), or when it has no PR but a live branch or
@@ -74,7 +76,8 @@ print no tokens, e-mail addresses or provider error text.
    the canonical aliases still bound to Production, every branch alias of a kept preview still bound
    to the same deployment, every kept preview that had settled (`READY`, `ERROR`, `CANCELED`) still in
    that state, the Production-class set exactly as planned (no promotion or rollback started during
-   the wave, no rollback flag lost), every deleted record classified again against the final PR and
+   the wave, no rollback flag lost), the Production deployment still passing the full predicate that
+   authorized the pass (target, `READY`, anchored commit, project and repository identity), every deleted record classified again against the final PR and
    branch snapshot and still `SAFE` (a PR that reopened after its preview was deleted fails the
    proof; the deletion itself cannot be undone), HTTP 200. A deferred ID is held to the same alias
    and state checks as a planned one. Previews that appear during the wave (every push to a PR
@@ -96,7 +99,8 @@ ID stops the run as `retention-lock-unreadable` and is never taken over. If the 
 loses to a third process, the displaced lock is kept (as `<lock>.stale.<pid>.<random>`) and the run
 stops; Node has no OS advisory lock, so three processes racing within the same instant cannot be
 excluded, and the safety of a pass does not depend on the lock (every deletion is re-validated and
-a concurrent delete of the same ID fails as `delete-failed`). A release removes the
+a deployment that another process already deleted is either deferred, or confirmed absent by the
+re-read and counted as deleted). A release removes the
 file only while it still names the releasing process. A process ID that was reused by an unrelated
 live process reads as a live holder, and the file is then removed by hand.
 

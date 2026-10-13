@@ -69,7 +69,7 @@ export function assertRequiredRuns(deps, sha) {
   }
 }
 
-const isProductionOn = (sha) => (deployment) =>
+export const isProductionOn = (sha) => (deployment) =>
   [
     deployment.target === 'production',
     deployment.readyState === 'READY',
