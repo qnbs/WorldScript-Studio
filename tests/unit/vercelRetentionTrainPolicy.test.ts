@@ -168,8 +168,9 @@ describe('active ordinary per-merge Preview retention', () => {
     expect(policy).toContain(
       'to name a branch that is gone; the alias of a branch that still exists',
     );
-    expect(policy).toContain('a write is never retried');
-    expect(policy).toContain('A read may retry once; a write is never retried');
+    expect(policy).toContain('a read that fails (403, 429, 5xx) is retried once');
+    expect(policy).toContain('a write that fails is never retried and stops the run unless');
+    expect(policy).toContain('A read may retry once and a second failure stops the wave');
     expect(policy).not.toContain('bounded retry/backoff');
     expect(policy).not.toContain('a branch that is gone or a PR that is closed');
   });

@@ -305,9 +305,11 @@ these predicates:
 4. a branch alias is removed only after it is shown to bind to that deployment,
    to be neither Production nor `main`, and to name a branch that is gone; the
    alias of a branch that still exists stays whatever the state of its PR;
-5. a 403, 429, 5xx, a contradictory provider state, pending or failed gates, or
-   a moved `main` stops the run, a write is never retried, and a write of
-   unclear outcome is verified by re-enumeration;
+5. a read that fails (403, 429, 5xx) is retried once and a second failure
+   stops the run; a write that fails is never retried and stops the run unless
+   a re-read of the alias binding or of the deployment inventory shows that the
+   removal landed; a contradictory provider state, pending or failed gates, or
+   a moved `main` stops the run;
 6. a pass with no `SAFE_TO_DELETE` candidate is complete when the inventory was
    complete, and candidates are never created to reach a number.
 
@@ -471,8 +473,9 @@ eligibility is no longer provable, move that ID from `DRY_RUN_CANDIDATE` to
 `RECLASSIFIED_UNKNOWN/DEFERRED` and preserve it. Only then move an ID to
 `REVALIDATED_DELETE` and attempt its individual deletion through the
 authenticated Vercel CLI/API, with a pause between deletions. A read may retry
-once; a write is never retried, and a throttled or failed write stops the wave.
-Record `DELETE_CONFIRMED` only after absence is verified.
+once and a second failure stops the wave; a write is never retried, and a
+throttled or failed write stops the wave unless a re-read shows that the
+removal landed. Record `DELETE_CONFIRMED` only after absence is verified.
 Never fall back to a broad deletion.
 
 The cleanup report may identify the creator as `qnbs`, but must render
