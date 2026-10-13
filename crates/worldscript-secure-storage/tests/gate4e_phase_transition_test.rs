@@ -15,7 +15,7 @@ use worldscript_secure_storage::{
     empty_journal_page_set_digest, generation_path, load_authoritative_manifest, load_catalog,
     operation_type, phase_code, promote_manifest_fenced, publish_manifest_fenced,
     publish_phase_transition_fenced, transition_phase, write_key_epoch, AdmissionScope,
-    AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit,
+    AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit, DurableFs,
     ExclusiveAdmissionGuard, InstallationScopeId, JournalCheckpoint, JournalDurableContext,
     JournalDurableError, JournalManifest, JournalSource, KeyEpochCommit, KeyEpochRecord,
     KeyEpochStatus, KeyProvider, LiveMigration, MigrationExecutionError, MigrationFence,
@@ -91,19 +91,15 @@ fn binding_of(manifest: &JournalManifest, dir: &Path) -> LiveMigration {
 }
 
 fn checkpoint_of<'a>(
-    journal_dir: &'a Path,
+    journal: JournalSource<'a>,
     key_ref: &'a RootKeyRefV1,
     manifest: &'a JournalManifest,
     fence: &'a MigrationFence,
-    operation: &'a WriteOperationId,
 ) -> JournalCheckpoint<'a> {
     JournalCheckpoint {
         manifest,
         fence,
-        journal: JournalSource {
-            dir: journal_dir,
-            operation,
-        },
+        journal,
         root_key_ref: key_ref,
         active_key_epoch: 1,
         conflict: CandidateConflict::Refuse,
@@ -294,20 +290,32 @@ impl Bound {
         promote_manifest_fenced(&mut ctx, manifest, &fence, committed).unwrap();
     }
 
-    fn checkpoint(&mut self, next: &JournalManifest) -> Result<RootCommitted, AuthorityError> {
+    /// Builds the checkpoint of `next` under its own fence and hands it, with the provider, to `call`.
+    fn publish<R>(
+        &mut self,
+        next: &JournalManifest,
+        call: impl FnOnce(&mut MemoryKeyProvider, JournalCheckpoint<'_>) -> R,
+    ) -> R {
         let fence = MigrationFence::from_manifest(next);
         let operation = WriteOperationId::generate().unwrap();
-        let checkpoint = checkpoint_of(
-            &self.installation.journal_dir,
-            &self.key_ref,
-            next,
-            &fence,
-            &operation,
-        );
-        let layout = RootLayout {
-            root_dir: &self.installation.root_dir,
+        let journal = JournalSource {
+            dir: &self.installation.journal_dir,
+            operation: &operation,
         };
-        commit_journal_checkpoint(&mut StdFs, &mut self.provider, layout, checkpoint)
+        call(
+            &mut self.provider,
+            checkpoint_of(journal, &self.key_ref, next, &fence),
+        )
+    }
+
+    fn checkpoint(&mut self, next: &JournalManifest) -> Result<RootCommitted, AuthorityError> {
+        let root_dir = self.installation.root_dir.clone();
+        self.publish(next, |provider, checkpoint| {
+            let layout = RootLayout {
+                root_dir: &root_dir,
+            };
+            commit_journal_checkpoint(&mut StdFs, provider, layout, checkpoint)
+        })
     }
 
     fn transition(
@@ -315,25 +323,22 @@ impl Bound {
         admission: &mut ExclusiveAdmissionGuard,
         next: &JournalManifest,
     ) -> Result<RootCommitted, AuthorityError> {
-        let fence = MigrationFence::from_manifest(next);
-        let operation = WriteOperationId::generate().unwrap();
-        let checkpoint = checkpoint_of(
-            &self.installation.journal_dir,
-            &self.key_ref,
-            next,
-            &fence,
-            &operation,
-        );
-        let layout = RootLayout {
-            root_dir: &self.installation.root_dir,
-        };
-        commit_phase_transition(
-            admission,
-            &mut StdFs,
-            &mut self.provider,
-            layout,
-            checkpoint,
-        )
+        let root_dir = self.installation.root_dir.clone();
+        self.transition_through(admission, &mut StdFs, &root_dir, next)
+    }
+
+    /// The transition over `fs`, naming the root as `root_dir`, which may be an alias of it.
+    fn transition_through<F: DurableFs>(
+        &mut self,
+        admission: &mut ExclusiveAdmissionGuard,
+        fs: &mut F,
+        root_dir: &Path,
+        next: &JournalManifest,
+    ) -> Result<RootCommitted, AuthorityError> {
+        self.publish(next, |provider, checkpoint| {
+            let layout = RootLayout { root_dir };
+            commit_phase_transition(admission, fs, provider, layout, checkpoint)
+        })
     }
 
     fn advance(&mut self, next: &LiveMigration) -> Result<RootCommitted, AuthorityError> {
@@ -492,4 +497,151 @@ fn no_transition_can_start_while_an_ordinary_operation_holds_the_shared_admissio
             .unwrap()
             .is_some()
     );
+}
+
+/// The alias cases need a symbolic link, which only Unix creates without a privilege.
+#[cfg(unix)]
+mod through_an_alias {
+    use std::ffi::OsString;
+    use std::fs::File;
+    use std::io;
+    use std::os::unix::fs::symlink;
+
+    use worldscript_secure_storage::DirectoryDurability;
+
+    use super::*;
+
+    /// A file system that, on its first read, points the alias at another root, as a local attacker
+    /// with write access to the installation could between the admission proof and the first write.
+    struct RetargetingFs {
+        inner: StdFs,
+        alias: PathBuf,
+        other: PathBuf,
+        fired: bool,
+    }
+
+    impl RetargetingFs {
+        fn new(alias: &Path, other: &Path) -> Self {
+            RetargetingFs {
+                inner: StdFs,
+                alias: alias.to_path_buf(),
+                other: other.to_path_buf(),
+                fired: false,
+            }
+        }
+
+        fn retarget_once(&mut self) {
+            if !self.fired {
+                self.fired = true;
+                fs::remove_file(&self.alias).unwrap();
+                symlink(&self.other, &self.alias).unwrap();
+            }
+        }
+    }
+
+    impl DurableFs for RetargetingFs {
+        type File = File;
+
+        fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+            self.retarget_once();
+            self.inner.read(path)
+        }
+
+        fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+            self.retarget_once();
+            self.inner.read_at_most(path, limit)
+        }
+
+        fn create_new(&mut self, path: &Path) -> io::Result<File> {
+            self.inner.create_new(path)
+        }
+
+        fn sync_file(&mut self, file: &mut File) -> io::Result<()> {
+            self.inner.sync_file(file)
+        }
+
+        fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+            self.inner.link_no_replace(from, to)
+        }
+
+        fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+            self.inner.remove_file(path)
+        }
+
+        fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+            self.inner.sync_dir(dir)
+        }
+
+        fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> {
+            self.inner.list_dir(dir)
+        }
+
+        fn list_dir_at_most(
+            &mut self,
+            dir: &Path,
+            limit: usize,
+        ) -> io::Result<Option<Vec<OsString>>> {
+            self.inner.list_dir_at_most(dir, limit)
+        }
+
+        fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+            self.inner.rename_replace(from, to)
+        }
+
+        fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+            self.inner.create_dir_all(dir)
+        }
+    }
+
+    /// Every path below `dir`, relative to it, to prove that nothing was created.
+    fn tree_of(dir: &Path) -> Vec<String> {
+        fn walk(dir: &Path, prefix: &str, out: &mut Vec<String>) {
+            for entry in fs::read_dir(dir).unwrap() {
+                let entry = entry.unwrap();
+                let name = format!("{prefix}/{}", entry.file_name().to_string_lossy());
+                out.push(name.clone());
+                if entry.file_type().unwrap().is_dir() {
+                    walk(&entry.path(), &name, out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(dir, "", &mut out);
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn a_root_alias_retargeted_during_the_commit_cannot_redirect_it() {
+        let mut bound = Bound::new();
+        let foreign = Installation::new();
+        let alias = bound.installation.base.join("alias");
+        symlink(&bound.installation.root_dir, &alias).unwrap();
+        let discover = entering(&bound.zero, phase_code::DISCOVER);
+        let foreign_before = tree_of(&foreign.base);
+        let mut admission = bound.installation.exclusive();
+        let mut fs = RetargetingFs::new(&alias, &foreign.root_dir);
+        let result = bound.transition_through(&mut admission, &mut fs, &alias, &discover);
+        assert!(fs.fired, "the alias was retargeted during the call");
+        result.unwrap();
+        assert_eq!(bound.committed(), discover);
+        assert_eq!(tree_of(&foreign.base), foreign_before);
+    }
+
+    #[test]
+    fn a_root_alias_that_leads_to_another_root_is_refused_before_anything_is_written() {
+        let mut bound = Bound::new();
+        let foreign = Installation::new();
+        let alias = bound.installation.base.join("alias");
+        symlink(&foreign.root_dir, &alias).unwrap();
+        let discover = entering(&bound.zero, phase_code::DISCOVER);
+        let (before, foreign_before) = (bound.state(), tree_of(&foreign.base));
+        let mut admission = bound.installation.exclusive();
+        assert_eq!(
+            bound.transition_through(&mut admission, &mut StdFs, &alias, &discover),
+            Err(AuthorityError::NotAdmitted)
+        );
+        assert_eq!(bound.state(), before);
+        assert_eq!(tree_of(&foreign.base), foreign_before);
+    }
 }

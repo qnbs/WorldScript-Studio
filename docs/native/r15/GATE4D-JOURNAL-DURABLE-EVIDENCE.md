@@ -1307,9 +1307,13 @@ level splits the same way: `publish_manifest_fenced` refuses a phase change and
 | a phase change promoted directly is refused by the binding advance and the checkpoint, and is adopted without a journal write only by the transition | `a_phase_change_promoted_directly_becomes_authoritative_only_through_the_exclusive_transition` |
 | the journal-level publishers split the same way before any write | `the_journal_publishers_split_the_same_way_before_any_write` |
 | a shared admission excludes the exclusive one a transition needs | `no_transition_can_start_while_an_ordinary_operation_holds_the_shared_admission` |
+| on Unix, a root alias retargeted during the commit cannot redirect it, and an alias that already leads to another root is refused (`NotAdmitted`); the other root is untouched | `a_root_alias_retargeted_during_the_commit_cannot_redirect_it`, `a_root_alias_that_leads_to_another_root_is_refused_before_anything_is_written` |
 
 A shared guard, and a shared reference to the exclusive guard, do not compile: the two `compile_fail`
-doctests of `commit_phase_transition` pair with a doctest of the same call that does. The conversion
+doctests of `commit_phase_transition` pair with a doctest of the same call that does. The root commit
+event carries the mode of its admission (`AdmittedRootCommitGuard<'_, Mode>`), and the held form of
+the transition takes the exclusive one, so a shared admission or a bare root lock cannot reach it; a
+`compile_fail` doctest on `try_root_commit` pairs with one that compiles. The conversion
 gate's `enter_convert` and `finish_convert` commit through the held form of the transition, and its tests
 are unchanged. This slice adds no producer of a binding, opens no `PREPARE`/`DONE` window and leaves
 the capture writers, the writer journal locator and E3 closed.

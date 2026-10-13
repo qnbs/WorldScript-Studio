@@ -3107,7 +3107,8 @@ policy for reconciliation under the barrier, and no producer of a binding exists
 It also relies on a phase transition out of `PREPARE` happening under exclusive admission.
 
 **A phase change has one publisher (Gate 4E E2 follow-up).** `commit_phase_transition` takes the
-installation's `ExclusiveAdmissionGuard` by mutable borrow, so a shared guard does not compile. An admission that does not guard the root of its layout is refused as `NotAdmitted`, and the
+installation's `ExclusiveAdmissionGuard` by mutable borrow, so a shared guard does not compile. An admission that does not guard the root of its layout is refused as `NotAdmitted`, the commit
+runs on the canonical root the admission was proven for, and the
 progress checkpoint, the binding advance and the journal-level checkpoint publish refuse a successor
 that changes the phase (`PhaseChangeNotACheckpoint`), as the transition refuses one that keeps it
 (`NotAPhaseChange`). Each refusal precedes the first journal byte, and a generation promoted directly

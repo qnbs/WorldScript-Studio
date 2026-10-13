@@ -169,9 +169,37 @@ impl<Mode> AdmissionGuard<Mode> {
     }
 
     /// One finite root event below the SAME admission. Busy never upgrades or releases admission.
+    ///
+    /// The event carries the mode of the admission it was taken from, so an operation that needs the
+    /// exclusive admission can ask for it in its signature: an event of a shared admission is another
+    /// type and does not compile where an exclusive one is required.
+    ///
+    /// ```compile_fail
+    /// use worldscript_secure_storage::admission::{
+    ///     AdmittedRootCommitGuard, ExclusiveAdmission, SharedAdmission,
+    /// };
+    ///
+    /// fn needs_exclusive(_: &AdmittedRootCommitGuard<'_, ExclusiveAdmission>) {}
+    ///
+    /// fn shared_event_is_refused(event: &AdmittedRootCommitGuard<'_, SharedAdmission>) {
+    ///     needs_exclusive(event);
+    /// }
+    /// ```
+    ///
+    /// and the same call with an exclusive event compiles:
+    ///
+    /// ```
+    /// use worldscript_secure_storage::admission::{AdmittedRootCommitGuard, ExclusiveAdmission};
+    ///
+    /// fn needs_exclusive(_: &AdmittedRootCommitGuard<'_, ExclusiveAdmission>) {}
+    ///
+    /// fn exclusive_event_is_accepted(event: &AdmittedRootCommitGuard<'_, ExclusiveAdmission>) {
+    ///     needs_exclusive(event);
+    /// }
+    /// ```
     pub fn try_root_commit(
         &mut self,
-    ) -> Result<Option<AdmittedRootCommitGuard<'_>>, AdmissionError> {
+    ) -> Result<Option<AdmittedRootCommitGuard<'_, Mode>>, AdmissionError> {
         if !self.held.is_current() {
             return Err(AdmissionError::IdentityChanged);
         }
@@ -184,6 +212,7 @@ impl<Mode> AdmissionGuard<Mode> {
         Ok(Some(AdmittedRootCommitGuard {
             root,
             admission: &mut self.held,
+            mode: PhantomData,
         }))
     }
 }
@@ -267,14 +296,15 @@ impl HeldAdmission {
     }
 }
 
-/// A root mutex event that cannot outlive its operation admission.
+/// A root mutex event that cannot outlive its operation admission, of the mode of that admission.
 #[derive(Debug)]
-pub struct AdmittedRootCommitGuard<'a> {
+pub struct AdmittedRootCommitGuard<'a, Mode> {
     root: RootCommitGuard,
     admission: &'a mut HeldAdmission,
+    mode: PhantomData<Mode>,
 }
 
-impl AdmittedRootCommitGuard<'_> {
+impl<Mode> AdmittedRootCommitGuard<'_, Mode> {
     /// The 4A guard, only while both identities still match. Root APIs also revalidate their guard.
     pub fn root_guard(&self) -> Result<&RootCommitGuard, AdmissionError> {
         if self.admission.is_current() && self.root.guards(&self.admission.root_dir) {

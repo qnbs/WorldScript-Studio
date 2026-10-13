@@ -766,7 +766,7 @@ impl<'a> ConversionSession<'a> {
                     commit_journal_checkpoint_held(fs, provider, layout, step, root)
                 }
                 StepKind::PhaseTransition => {
-                    commit_phase_transition_held(fs, provider, layout, step, root)
+                    commit_phase_transition_held(fs, provider, layout, step, &event)
                 }
             };
             // Whatever the commit reported, read the root back while the event is still held: no other

@@ -27,7 +27,10 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::admission::{AdmissionError, AdmissionScope, ExclusiveAdmissionGuard};
+use crate::admission::{
+    AdmissionError, AdmissionScope, AdmittedRootCommitGuard, ExclusiveAdmission,
+    ExclusiveAdmissionGuard,
+};
 use crate::anchor::check_operation_id;
 use crate::catalog::{
     catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, PageAddress,
@@ -461,7 +464,9 @@ pub(crate) fn commit_journal_checkpoint_held<F: DurableFs, P: KeyProvider>(
 /// phase (`NotAPhaseChange` otherwise); the ordinary checkpoint refuses exactly those successors
 /// (`PhaseChangeNotACheckpoint`), so neither can publish the other's manifest. An admission that
 /// does not guard the root of `layout` is refused as `NotAdmitted` before anything is read, and a
-/// root commit event in flight elsewhere is `RootBusy`; both write nothing. This opens no window:
+/// root commit event in flight elsewhere is `RootBusy`; both write nothing. The root is resolved to
+/// its canonical path once, when the admission is proven, and every read and write of the commit
+/// uses that path, so an alias of the root that is retargeted afterwards cannot redirect it. This opens no window:
 /// while a migration is bound, the root keeps refusing every ordinary operation (Gate 4E E1).
 pub fn commit_phase_transition<F: DurableFs, P: KeyProvider>(
     admission: &mut ExclusiveAdmissionGuard,
@@ -472,26 +477,29 @@ pub fn commit_phase_transition<F: DurableFs, P: KeyProvider>(
 ) -> Result<RootCommitted, AuthorityError> {
     check_operation_id(&checkpoint.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
-    ensure_root_admitted(admission, layout)?;
+    // Everything below runs on the canonical root the admission was proven against, never on the
+    // caller's spelling of it, which an alias could retarget between the proof and the first write.
+    let root = admitted_root(admission, layout)?;
+    let layout = RootLayout { root_dir: &root };
     let event = admission
         .try_root_commit()
         .map_err(AuthorityError::Admission)?
         .ok_or(AuthorityError::RootBusy)?;
-    let held = event.root_guard().map_err(AuthorityError::Admission)?;
-    commit_phase_transition_held(fs, provider, layout, checkpoint, held)
+    commit_phase_transition_held(fs, provider, layout, checkpoint, &event)
 }
 
 /// As [`commit_phase_transition`], under a root event the caller already holds from its exclusive
-/// admission, as [`commit_journal_checkpoint_held`] is for the checkpoint. `held` must guard the root
-/// of `layout`, and the caller must hold the installation's exclusive admission: the conversion
-/// driver does, by the borrow its session keeps.
+/// admission, as [`commit_journal_checkpoint_held`] is for the checkpoint. The event is of the
+/// exclusive mode, so no shared admission and no bare root lock can reach this commit; it must guard
+/// the root of `layout`, which the caller passes in its canonical spelling.
 pub(crate) fn commit_phase_transition_held<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     layout: RootLayout<'_>,
     checkpoint: JournalCheckpoint<'_>,
-    held: &RootCommitGuard,
+    event: &AdmittedRootCommitGuard<'_, ExclusiveAdmission>,
 ) -> Result<RootCommitted, AuthorityError> {
+    let held = event.root_guard().map_err(AuthorityError::Admission)?;
     commit_revision_held(
         fs,
         provider,
@@ -509,11 +517,12 @@ enum Revision {
     PhaseTransition,
 }
 
-/// Proves that `admission` guards the root of `layout`, before anything is read or written.
-fn ensure_root_admitted(
+/// Proves that `admission` guards the root of `layout`, before anything is read or written, and
+/// returns the canonical root it proved it for.
+fn admitted_root(
     admission: &ExclusiveAdmissionGuard,
     layout: RootLayout<'_>,
-) -> Result<(), AuthorityError> {
+) -> Result<PathBuf, AuthorityError> {
     let root = std::fs::canonicalize(layout.root_dir)
         .map_err(|error| AuthorityError::Admission(AdmissionError::from(error)))?;
     let installation = root.parent().ok_or(AuthorityError::NotAdmitted)?;
@@ -522,7 +531,7 @@ fn ensure_root_admitted(
         root_dir: &root,
     };
     if admission.guards(scope) {
-        Ok(())
+        Ok(root)
     } else {
         Err(AuthorityError::NotAdmitted)
     }
