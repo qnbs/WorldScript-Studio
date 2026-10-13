@@ -1,5 +1,5 @@
 import { CANONICAL_ALIASES, SCOPE, TERMINAL_STATES } from './scope.mjs';
-import { anyOf, FULL_SHA } from './util.mjs';
+import { ALIAS_HOST, anyOf, FULL_SHA } from './util.mjs';
 
 // QNBS-v3: anything that is, is moving to, was promoted as, or can roll back to Production is Production-class and never enters the preview classification at all.
 export const isProductionClass = (deployment) =>
@@ -31,7 +31,7 @@ function newestThreeOfOpenPrs(prs, previews) {
   return kept;
 }
 
-function identityConfirmed(deployment) {
+export function identityConfirmed(deployment) {
   const meta = deployment.meta ?? {};
   return [
     deployment.projectId === SCOPE.projectId,
@@ -47,6 +47,7 @@ const isPlainPreview = (deployment) =>
   );
 
 const PR_ID = /^[1-9][0-9]*$/;
+const isRef = (value) => typeof value === 'string' && value !== '';
 
 // QNBS-v3: a PR identifier that is present but not a plain decimal string cannot be matched against the open-PR set, so it must not read as "closed or merged".
 function prIdMalformed(deployment) {
@@ -61,7 +62,7 @@ const UNKNOWN_CHECKS = [
   ['identity-unconfirmed', (deployment) => !identityConfirmed(deployment)],
   ['non-terminal-state', (deployment) => !TERMINAL_STATES.has(deployment.readyState)],
   ['rollback-unknown', (deployment) => typeof deployment.isRollbackCandidate !== 'boolean'],
-  ['branch-unknown', (deployment) => !deployment.meta?.githubCommitRef],
+  ['branch-unknown', (deployment) => !isRef(deployment.meta?.githubCommitRef)],
   ['pr-id-malformed', prIdMalformed],
   ['commit-unknown', (deployment) => !FULL_SHA.test(deployment.meta?.githubCommitSha ?? '')],
   ['created-unknown', (deployment) => !Number.isFinite(deployment.created)],
@@ -103,10 +104,13 @@ function lifecycleOf(deployment, context) {
   return branchExists ? 'open-pr-older-generation' : 'open-pr-branch-gone';
 }
 
+// QNBS-v3: an alias host the removal command would refuse (a custom domain, a nested label) makes the preview UNKNOWN up front, so a pass can never start on a deployment whose alias it is unable to remove.
 function lifecycleUnknown(lifecycle, aliases) {
-  if (lifecycle === 'no-pr-branch-exists') return ['no-pr-branch-exists'];
-  if (lifecycle === 'orphan' && aliases.length > 0) return ['orphan-with-alias'];
-  return [];
+  const reasons = [];
+  if (lifecycle === 'no-pr-branch-exists') reasons.push('no-pr-branch-exists');
+  if (lifecycle === 'orphan' && aliases.length > 0) reasons.push('orphan-with-alias');
+  if (aliases.some((host) => !ALIAS_HOST.test(host))) reasons.push('alias-host-unsupported');
+  return reasons;
 }
 
 function verdictOf(protection, unknown) {

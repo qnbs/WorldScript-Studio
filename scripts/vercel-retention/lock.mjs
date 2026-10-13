@@ -38,15 +38,15 @@ function tryLink(mine, path) {
   }
 }
 
-// QNBS-v3: a stale lock is removed by renaming it away and checking that what was moved is the dead holder seen earlier; if another process replaced it in between, the moved lock is put back, so a live holder is never deleted on the strength of an old observation.
-function reclaim(path, dead) {
+// QNBS-v3: a stale lock is removed by renaming it away and checking that what was moved is the dead holder seen earlier; if another process replaced it in between, the moved lock is put back, and if that fails too the moved file is kept and the run stops, so a live holder's lock is never deleted on the strength of an old observation.
+export function reclaim(path, dead, restore = tryLink) {
   const moved = `${path}.stale.${suffix()}`;
   try {
     renameSync(path, moved);
   } catch {
     return;
   }
-  if (holderOf(moved) !== dead) tryLink(moved, path);
+  if (holderOf(moved) !== dead && !restore(moved, path)) throw reason('retention-already-running');
   rmSync(moved, { force: true });
 }
 

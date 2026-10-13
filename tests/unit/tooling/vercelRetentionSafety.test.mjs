@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { runRetention } from '../../../scripts/vercel-retention/apply.mjs';
 import { main } from '../../../scripts/vercel-retention/cli.mjs';
-import { acquireLock } from '../../../scripts/vercel-retention/lock.mjs';
+import { acquireLock, reclaim } from '../../../scripts/vercel-retention/lock.mjs';
 import { listDeployments } from '../../../scripts/vercel-retention/provider.mjs';
 import {
   aliasEntry,
@@ -278,6 +278,116 @@ for (const id of [9, '09', 'bogus', 0, 'x1', -3])
     assert.ok(find(world, 'dpl_prev11'));
   });
 
+for (const [name, change] of Object.entries({
+  'another project': (deployment) => {
+    deployment.projectId = 'prj_other';
+  },
+  'another repository': (deployment) => {
+    deployment.meta.githubRepo = 'Other';
+  },
+  'another organisation': (deployment) => {
+    deployment.meta.githubOrg = 'other';
+  },
+}))
+  test(`a Production deployment of ${name} never authorizes a write`, async () => {
+    const world = standardWorld();
+    change(find(world, 'dpl_prod'));
+    for (const run of [dry, reconcile])
+      assert.equal((await stop(() => run(world))).reason, 'production-not-ready-on-main');
+    assert.deepEqual(world.writes, []);
+  });
+
+for (const url of [
+  'https://github.com/someone/WorldScript-Studio.git',
+  'git@github.com:qnbs/WorldScript-Studio-fork.git',
+  'https://example.com/qnbs/WorldScript-Studio.git',
+  '',
+])
+  test(`an origin of ${JSON.stringify(url)} stops before any provider call`, async () => {
+    const world = standardWorld();
+    world.origin = url;
+    assert.equal((await stop(() => reconcile(world))).reason, 'origin-unexpected');
+    assert.ok(world.calls.every((call) => !call.startsWith('vercel')));
+  });
+
+for (const url of [
+  'git@github.com:qnbs/WorldScript-Studio.git',
+  'https://github.com/qnbs/WorldScript-Studio.git',
+  'https://github.com/qnbs/WorldScript-Studio',
+  'ssh://git@github.com/qnbs/WorldScript-Studio.git',
+])
+  test(`the origin ${url} is the expected repository`, async () => {
+    const world = standardWorld();
+    world.origin = `${url}\n`;
+    assert.equal((await dry(world)).safe, 4);
+  });
+
+for (const ref of [42, true, {}, ['feat/open']])
+  test(`a branch reference of ${JSON.stringify(ref)} is UNKNOWN, not "branch gone"`, async () => {
+    const world = standardWorld();
+    find(world, 'dpl_prev11').meta.githubCommitRef = ref;
+    const row = verdicts(await reconcile(world)).dpl_prev11;
+    assert.equal(row.verdict, 'UNKNOWN');
+    assert.ok(row.reasons.includes('branch-unknown'));
+    assert.ok(find(world, 'dpl_prev11'));
+  });
+
+for (const host of ['preview.example.com', 'a.b.vercel.app', 'UPPER.vercel.app'])
+  test(`a preview with the alias host ${host} that the removal would refuse is UNKNOWN up front`, async () => {
+    const world = standardWorld();
+    world.aliases.push(aliasEntry(host, 'dpl_prev11', 260));
+    const summary = await reconcile(world);
+    const row = verdicts(summary).dpl_prev11;
+    assert.equal(row.verdict, 'UNKNOWN');
+    assert.ok(row.reasons.includes('alias-host-unsupported'));
+    assert.ok(find(world, 'dpl_prev11'));
+    assert.ok(summary.deleted.includes('dpl_prev12'));
+  });
+
+test('a rollback candidate that loses its flag during the wave fails the post-proof', async () => {
+  const world = standardWorld();
+  world.deployments.push(
+    preview(31, {
+      isRollbackCandidate: true,
+      meta: { githubPrId: '7', githubCommitRef: 'fix/gone' },
+    }),
+  );
+  world.hooks.onWrite = (live, args) => {
+    if (args[1] === 'dpl_prev1') find(live, 'dpl_prev31').isRollbackCandidate = false;
+  };
+  const error = await stop(() => reconcile(world));
+  assert.equal(error.reason, 'postproof-failed');
+  assert.equal(error.summary.postproof.productionSetStable, false);
+});
+
+test('a PR that reopens after its previews were deleted fails the post-proof', async () => {
+  const world = standardWorld();
+  world.hooks.onWrite = (live, args) => {
+    if (args[1] === 'dpl_prev2') {
+      live.prs.push({ number: 7, headRefName: 'fix/gone', headRefOid: 'e'.repeat(40) });
+      live.branches.add('fix/gone');
+    }
+  };
+  const error = await stop(() => reconcile(world));
+  assert.equal(error.reason, 'postproof-failed');
+  assert.equal(error.summary.postproof.deletionsStillSafe, false);
+  assert.deepEqual(error.summary.deleted, ['dpl_prev12', 'dpl_prev11', 'dpl_prev2', 'dpl_prev1']);
+});
+
+test('deletions that stay safe under the final snapshot pass the post-proof', async () => {
+  const proof = (await reconcile(standardWorld())).postproof;
+  assert.equal(proof.deletionsStillSafe, true);
+  assert.equal(proof.productionSetStable, true);
+});
+
+test('a new preview that appears during the wave does not affect the proof of what the pass touched', async () => {
+  const world = standardWorld();
+  world.hooks.onWrite = (live, args) => {
+    if (args[1] === 'dpl_prev1') live.deployments.push(preview(60, { created: 9000 }));
+  };
+  assert.equal((await reconcile(world)).stop, null);
+});
+
 test('reconcile prints the whole manifest before its first write, then one summary line', async () => {
   const world = standardWorld();
   const lines = [];
@@ -376,4 +486,31 @@ test('a release never removes a lock that now belongs to another process', () =>
   writeFileSync(path, String(process.ppid));
   release();
   assert.equal(readFileSync(path, 'utf8'), String(process.ppid));
+});
+
+test('a stale lock that was replaced by a live holder is put back untouched', () => {
+  const path = lockPath();
+  writeFileSync(path, String(process.ppid));
+  reclaim(path, Number(DEAD_PID));
+  assert.equal(readFileSync(path, 'utf8'), String(process.ppid));
+  assert.deepEqual(readdirSync(join(path, '..')), ['held.lock']);
+});
+
+test('a failed put-back keeps the displaced lock and stops instead of deleting it', () => {
+  const path = lockPath();
+  writeFileSync(path, String(process.ppid));
+  assert.throws(() => reclaim(path, Number(DEAD_PID), () => false), {
+    reason: 'retention-already-running',
+  });
+  const left = readdirSync(join(path, '..'));
+  assert.equal(left.length, 1);
+  assert.match(left[0], /^held\.lock\.stale\./);
+  assert.equal(readFileSync(join(path, '..', left[0]), 'utf8'), String(process.ppid));
+});
+
+test('reclaiming the dead holder that was observed removes it', () => {
+  const path = lockPath();
+  writeFileSync(path, DEAD_PID);
+  reclaim(path, Number(DEAD_PID));
+  assert.deepEqual(readdirSync(join(path, '..')), []);
 });

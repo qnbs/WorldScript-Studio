@@ -1,5 +1,16 @@
+import { identityConfirmed } from './classify.mjs';
 import { CANONICAL_ALIASES, CANONICAL_URL, REQUIRED_RUNS, SCOPE } from './scope.mjs';
 import { FULL_SHA, parseJson, refuse } from './util.mjs';
+
+const ORIGIN = new RegExp(
+  `^(https://github\\.com/|git@github\\.com:|ssh://git@github\\.com/)${SCOPE.repository}(\\.git)?/?$`,
+);
+
+// QNBS-v3: branches and main are read through `origin`, while the provider and PR reads are pinned to the project's repository, so a checkout whose origin is a fork must stop before any inventory is built from the wrong branch set.
+export function assertOrigin(deps) {
+  const url = deps.git(['remote', 'get-url', 'origin']).trim();
+  if (!ORIGIN.test(url)) refuse('origin-unexpected');
+}
 
 export function readMain(deps) {
   const sha = deps.git(['ls-remote', 'origin', 'refs/heads/main']).split('\t')[0].trim();
@@ -63,6 +74,7 @@ const isProductionOn = (sha) => (deployment) =>
     deployment.target === 'production',
     deployment.readyState === 'READY',
     deployment.meta?.githubCommitSha === sha,
+    identityConfirmed(deployment),
   ].every(Boolean);
 
 export function assertProduction(deps, world, sha) {

@@ -172,6 +172,7 @@ const mainRead = (world) => {
 };
 
 const GIT = {
+  remote: (world) => world.origin ?? 'git@github.com:qnbs/WorldScript-Studio.git',
   main: mainRead,
   heads: (world) => [...world.branches].map((name) => `${sha(1)}\trefs/heads/${name}`).join('\n'),
   status: (world) => world.dirty,

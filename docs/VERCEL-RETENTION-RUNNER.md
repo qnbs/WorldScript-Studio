@@ -26,9 +26,12 @@ print no tokens, e-mail addresses or provider error text.
 1. **Authority.** Reads `origin/main` and requires every push-triggered `CI / CD` and
    `CodeQL SAST` run on `main` for that exact SHA to be a completed success; a manual or tag run
    never stands in for it, and a run list as long as the request limit counts as possibly
-   truncated. Requires Vercel Production `READY` on that SHA, the three canonical aliases bound to
-   it, and the canonical host to answer HTTP 200. The project identity (ID, name, team, linked
-   repository) must match the constants in `scope.mjs`.
+   truncated. Requires Vercel Production `READY` on that SHA with the project's identity (project ID,
+   GitHub organisation and repository) confirmed on the deployment itself, the three canonical
+   aliases bound to it, and the canonical host to answer HTTP 200. The project identity (ID, name,
+   team, linked repository) must match the constants in `scope.mjs`, and the checkout's `origin`
+   must be this repository (`origin-unexpected` otherwise), because main and the branch list are
+   read through it while the provider and PR reads are pinned to the project.
 2. **Inventory.** Reads every page of deployments and aliases, the open PRs, the remote branches
    and the hold file. A provider page without pagination metadata is malformed, not final; an
    incomplete or unreadable inventory stops the run. Every record must carry what classification
@@ -47,7 +50,9 @@ print no tokens, e-mail addresses or provider error text.
    dated previews of an open PR, builds `main` or an open PR head, is named in
    `.github/vercel-retention-holds.json` as review or retest evidence, or has failed or been canceled
    while its branch or an open PR still exists. It is `UNKNOWN` when its identity, state, rollback
-   flag, branch, commit SHA or creation time is missing or contradictory, when its PR identifier is
+   flag, branch (it must be a non-empty string), commit SHA or creation time is missing or
+   contradictory, when one of its aliases is a host the removal command would refuse (a custom
+   domain, a nested label), when its PR identifier is
    present but not a plain decimal string, when its target is not the
    plain Preview (a custom environment such as `staging`), or when it has no PR but a live branch or
    an orphan alias. Only the rest is `SAFE`. The manifest line shows ID, verdict, branch, PR, commit,
@@ -68,9 +73,13 @@ print no tokens, e-mail addresses or provider error text.
    and every ID that was deferred after its verdict changed still present, every deleted ID absent,
    the canonical aliases still bound to Production, every branch alias of a kept preview still bound
    to the same deployment, every kept preview that had settled (`READY`, `ERROR`, `CANCELED`) still in
-   that state, no Production-class deployment that was not in the plan (a promotion or rollback
-   started during the wave), HTTP 200. A deferred ID is held to the same alias and state checks
-   as a planned one. Anything else stops the run as `postproof-failed`. A legitimate
+   that state, the Production-class set exactly as planned (no promotion or rollback started during
+   the wave, no rollback flag lost), every deleted record classified again against the final PR and
+   branch snapshot and still `SAFE` (a PR that reopened after its preview was deleted fails the
+   proof; the deletion itself cannot be undone), HTTP 200. A deferred ID is held to the same alias
+   and state checks as a planned one. Previews that appear during the wave (every push to a PR
+   branch creates one) are not classified by the proof: the pass cannot have touched them, and the
+   next pass classifies them. Anything else stops the run as `postproof-failed`. A legitimate
    push to a kept PR branch during the pass rebinds its alias and fails this check; nothing was
    deleted because of it and a new pass re-proves.
 
@@ -83,7 +92,11 @@ atomically, so no process ever sees a lock without its holder. A second run stop
 `retention-already-running` before it reads anything. A lock whose holder is dead is reclaimed by
 renaming it away and checking that what was moved is the dead holder that was seen; if another
 process replaced it in between, the moved lock is put back. A lock file that does not hold a process
-ID stops the run as `retention-lock-unreadable` and is never taken over. A release removes the
+ID stops the run as `retention-lock-unreadable` and is never taken over. If the put-back itself
+loses to a third process, the displaced lock is kept (as `<lock>.stale.<pid>.<random>`) and the run
+stops; Node has no OS advisory lock, so three processes racing within the same instant cannot be
+excluded, and the safety of a pass does not depend on the lock (every deletion is re-validated and
+a concurrent delete of the same ID fails as `delete-failed`). A release removes the
 file only while it still names the releasing process. A process ID that was reused by an unrelated
 live process reads as a live holder, and the file is then removed by hand.
 
@@ -132,7 +145,7 @@ authentication stop, not something an allow rule fixes.
 | `main-moved`, `main-moved-during-read` | `main` advanced (also checked again at the post-proof); start a new pass for the new SHA. |
 | `provider-read-failed`, `provider-pagination-limit`, `provider-pagination-stalled`, `provider-inventory-inconsistent`, `invalid-provider-response` | The inventory could not be read completely or consistently, or a record is malformed. |
 | `open-prs-incomplete`, `open-prs-malformed` | The open-PR snapshot is unreadable, possibly truncated, or has an incomplete record. |
-| `project-mismatch`, `repository-unconfirmed` | The provider project is not the expected one. |
+| `project-mismatch`, `repository-unconfirmed`, `origin-unexpected` | The provider project, or the checkout's `origin`, is not the expected one. |
 | `alias-remove-failed`, `delete-failed`, `delete-not-confirmed` | A write failed or could not be confirmed; nothing is retried. |
 | `postproof-failed` | A protected or deferred deployment is missing, a deleted one is back, a canonical or kept branch alias moved, Production is not `READY` or HTTP failed. |
 | `runner-source-modified`, `runner-source-differs-from-main`, `package-script-differs-from-main` | `reconcile` was started from a source that is not the reviewed `main`. |

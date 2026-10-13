@@ -1,4 +1,5 @@
 import {
+  assertOrigin,
   assertProduction,
   assertRequiredRuns,
   readBranches,
@@ -25,6 +26,7 @@ import { refuse } from './util.mjs';
 
 // QNBS-v3: main is read before and after the provider reads so a merge landing mid-read cannot give the snapshot an anchor it does not belong to.
 export async function readWorld(deps) {
+  assertOrigin(deps);
   const main = readMain(deps);
   await readProject(deps);
   const deployments = await listDeployments(deps);
@@ -131,6 +133,7 @@ async function retire(session, id) {
   const written = attempt(session, () => removeDeployment(deps, id));
   await deps.sleep(PAUSE_MS);
   if (!(await absent(deps, id))) refuse(written ? 'delete-not-confirmed' : 'delete-failed');
+  session.erased.push(live.deployments.find((deployment) => deployment.uid === id));
   return summary.deleted.push(id);
 }
 
@@ -159,10 +162,24 @@ function requiredPresent(session, plan) {
   return new Set([...ids, ...kept, ...session.keep]);
 }
 
-// QNBS-v3: a Production-class deployment that was not in the plan (a promotion or rollback started during the wave) is not something this pass may declare complete over.
+// QNBS-v3: the Production-class set must be exactly the planned one: a promotion or rollback that started during the wave adds to it, and a rollback flag that was lost removes from it; neither is something this pass may declare complete over.
 function productionSetStable(after, plan) {
-  const planned = new Set(plan.production.map((deployment) => deployment.uid));
-  return classify(after).production.every((deployment) => planned.has(deployment.uid));
+  const ids = (deployments) =>
+    deployments
+      .map((deployment) => deployment.uid)
+      .sort()
+      .join();
+  return ids(classify(after).production) === ids(plan.production);
+}
+
+// QNBS-v3: a PR can reopen or a branch reappear after a preview's turn; the deleted records are classified again against the final snapshot, and any that would now be protected or unclear fail the proof, because the pass can no longer undo that deletion but must not report it as clean.
+function deletionsStillSafe(after, session) {
+  if (session.erased.length === 0) return true;
+  const world = { ...after, deployments: [...after.deployments, ...session.erased] };
+  const erased = new Set(session.erased.map((deployment) => deployment.uid));
+  return classify(world)
+    .rows.filter((row) => erased.has(row.id))
+    .every((row) => row.verdict === 'SAFE');
 }
 
 const proofHolds = (proof, lost) =>
@@ -172,6 +189,7 @@ const proofHolds = (proof, lost) =>
     proof.canonicalAliasesBound,
     proof.protectedAliasesBound,
     proof.previewStatesHeld,
+    proof.deletionsStillSafe,
     proof.productionSetStable,
     proof.productionReady,
     proof.httpProduction === '200',
@@ -196,6 +214,7 @@ async function postProof(session, plan) {
     previewStatesHeld: kept
       .filter((row) => TERMINAL_STATES.has(row.state))
       .every(holdsState(after)),
+    deletionsStillSafe: deletionsStillSafe(after, session),
     productionSetStable: productionSetStable(after, plan),
     productionReady: isReadyProduction(after, summary.productionId),
     httpProduction: deps.http(CANONICAL_URL),
@@ -223,7 +242,7 @@ export async function runRetention(deps, mode, announce = () => {}) {
     announce(summary);
     if (mode === 'reconcile')
       await reconcileSafe(
-        { deps, anchor: world.main, summary, keep: new Set(), deferred: [] },
+        { deps, anchor: world.main, summary, keep: new Set(), deferred: [], erased: [] },
         plan,
       );
     return summary;
