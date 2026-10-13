@@ -607,7 +607,7 @@ impl Fixture {
 
     /// The entry gate of the conversion driver over a valid scope and owner, which is expected to be
     /// refused: the key is routed from the root before the manifest is loaded.
-    fn conversion_is_refused(&self) -> AuthorityError {
+    fn conversion_is_refused(&mut self) -> AuthorityError {
         let (root_dir, journal_dir) = (self.root_dir(), self.journal_dir());
         let scope = AdmissionScope {
             installation_dir: &self.base.0,
@@ -625,7 +625,7 @@ impl Fixture {
             },
             owner_id: "owner-a",
         };
-        match begin_conversion(&mut held, &mut StdFs, &self.provider, begin).unwrap_err() {
+        match begin_conversion(&mut held, &mut StdFs, &mut self.provider, begin).unwrap_err() {
             ConversionError::Authority(error) => error,
             other => panic!("the route must refuse first, not {other:?}"),
         }

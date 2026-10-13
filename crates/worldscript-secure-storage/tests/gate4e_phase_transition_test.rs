@@ -184,6 +184,13 @@ struct Bound {
 
 impl Bound {
     fn new() -> Self {
+        let mut bound = Self::unbound();
+        bound.bind_zero();
+        bound
+    }
+
+    /// A provisioned root with its first ordinary catalog commit and no binding yet.
+    fn unbound() -> Self {
         let installation = Installation::new();
         let mut provider = MemoryKeyProvider::new();
         let scope = provider.read_or_provision_installation_scope().unwrap();
@@ -197,7 +204,7 @@ impl Bound {
             zero: manifest_at(0, phase_code::BOOTSTRAP_TARGET),
         };
         bound.register_epoch();
-        bound.bind_zero();
+        bound.commit_ordinary();
         bound
     }
 
@@ -225,8 +232,8 @@ impl Bound {
         write_key_epoch(&mut StdFs, &self.provider, self.layout(), commit).unwrap();
     }
 
-    /// Commits the first ordinary root, then a root that binds revision 0 of the journal.
-    fn bind_zero(&mut self) {
+    /// The first ordinary root: a catalog commit with no change.
+    fn commit_ordinary(&mut self) {
         let commit = CatalogCommit {
             change: CatalogChange {
                 upsert: &[],
@@ -240,6 +247,10 @@ impl Bound {
             root_dir: &self.installation.root_dir,
         };
         commit_catalog_change(&mut StdFs, &mut self.provider, layout, commit).unwrap();
+    }
+
+    /// Promotes revision 0 of the journal and commits a root that binds it.
+    fn bind_zero(&mut self) {
         let zero = self.zero.clone();
         self.promote(&zero, None);
         let binding = binding_of(&zero, &self.installation.journal_dir);
@@ -536,3 +547,10 @@ fn no_transition_can_start_while_an_ordinary_operation_holds_the_shared_admissio
 #[cfg(unix)]
 #[path = "gate4e_phase_transition_test/through_an_alias.rs"]
 mod through_an_alias;
+
+#[path = "gate4e_phase_transition_test/crash_recovery.rs"]
+mod crash_recovery;
+/// The crash cases of the recovery of a prepared root: the shared recovery, the exclusive one, and
+/// the file system that stops a commit where the anchor does not.
+#[path = "gate4e_phase_transition_test/faulty_fs.rs"]
+mod faulty_fs;

@@ -1300,8 +1300,27 @@ capture, renewal and takeover keep their own relations, which already keep the p
 level splits the same way: `publish_manifest_fenced` refuses a phase change and
 `publish_phase_transition_fenced` refuses a successor that keeps the phase, each before a write; the
 latter also refuses a bootstrap, which has no predecessor, and leaves it to the regular publisher.
-A transition interrupted by a crash after the anchor was prepared is completed forward by `recover_root`,
-which asks for no exclusive admission; that is open and recorded on #359.
+
+### Recovery of a prepared binding change (Gate 4E E2c)
+
+A transition that a crash stops after the anchor was prepared leaves a prepared root. `recover_root`
+completes a prepared root that keeps the committed binding and refuses one that changes it
+(`BindingChangeNeedsExclusiveRecovery`) before any sync or write; `recover_root_exclusive`, taking the
+`AdmittedRootCommitGuard<'_, ExclusiveAdmission>` of the exclusive admission, completes it, and
+`begin_conversion` resolves a pending preparation through it before it reads the journal. The shared
+operation path maps the refusal to `RecoveryPending`. A `compile_fail` doctest on `recover_root_exclusive`
+pairs with one that compiles. The pins, in `gate4e_phase_transition_test/crash_recovery.rs` unless noted:
+
+| Claim | Test |
+|---|---|
+| a shared recovery refuses a prepared phase change and leaves root files, journal and anchor unchanged; the exclusive recovery completes exactly it | `the_shared_recovery_refuses_a_prepared_phase_change_and_the_exclusive_one_completes_it` |
+| a crash before the anchor prepare, right after it, or after an ambiguous commit ends as its recovery decides, without a second publication | `a_crash_before_the_anchor_commit_ends_as_its_recovery_decides` |
+| a slot that was never written is discarded by either recovery | `a_slot_that_was_never_written_is_discarded_by_either_recovery` |
+| a pointer that never moved leaves a phase change for the exclusive recovery only | `a_pointer_that_was_never_moved_leaves_a_phase_change_for_the_exclusive_recovery` |
+| none to a binding, one binding to another, and a binding to none are refused under a shared recovery; an unchanged binding and none to none complete | `only_a_change_of_the_binding_needs_the_exclusive_recovery` |
+| a held shared admission stops the exclusive recovery from starting | `a_held_shared_admission_stops_the_exclusive_recovery_from_starting` |
+| an ordinary operation over a prepared phase change is refused with `RecoveryPending` and writes nothing | `an_ordinary_operation_over_a_prepared_phase_change_is_refused_and_writes_nothing` |
+| the conversion gate resolves the root a crash left prepared in `enter_convert` before it reads (`gate4d_conversion_entry_test.rs`) | `a_gate_resolves_the_root_a_crash_left_prepared_in_enter_convert_before_it_reads` |
 
 | Claim | Pinned by `gate4e_phase_transition_test.rs` |
 |---|---|

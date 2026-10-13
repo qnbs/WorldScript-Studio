@@ -14,12 +14,17 @@
 //!
 //! fn shared_cannot_convert<P: KeyProvider>(
 //!     admission: &mut SharedAdmissionGuard,
-//!     provider: &P,
+//!     provider: &mut P,
 //!     begin: ConversionBegin<'_>,
 //! ) {
 //!     let _ = begin_conversion(admission, &mut StdFs, provider, begin);
 //! }
 //! ```
+//!
+//! A crash between the anchor's preparation of a root and its commit leaves a prepared root. One that
+//! changes the live-migration binding is completed only under the exclusive admission, which this gate
+//! holds, so a pending preparation is resolved through [`recover_root_exclusive`] before anything is read
+//! (a missing or mismatching target is discarded as in any recovery).
 //!
 //! The gate re-reads what the committed root vouches for instead of trusting a caller's copy: the
 //! binding comes from the root, the journal key is resolved through the key-epoch registry, and the
@@ -93,7 +98,7 @@ use crate::journal::{
 use crate::provider::KeyProvider;
 use crate::root::LiveMigration;
 use crate::root_lock::sys;
-use crate::root_store::{RootCommitted, RootLayout};
+use crate::root_store::{recover_root_exclusive, RootCommitted, RootLayout, RootStoreError};
 
 /// What the gate needs from its caller: the scope the admission was acquired for, where the journal
 /// lives (below the installation directory of that scope), and the identity the committed lease must
@@ -292,7 +297,7 @@ pub struct ConversionSession<'a> {
 pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
     held: &'a mut ExclusiveAdmissionGuard,
     fs: &mut F,
-    provider: &P,
+    provider: &mut P,
     begin: ConversionBegin<'_>,
 ) -> Result<ConversionSession<'a>, ConversionError> {
     let installation = std::fs::canonicalize(begin.scope.installation_dir).map_err(io_error)?;
@@ -304,7 +309,8 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
         dir: &journal_pin.canonical,
         operation: begin.journal.operation,
     };
-    let journal = read_committed_journal(fs, provider, layout, source)?;
+    resolve_pending_preparation(held, fs, provider, layout)?;
+    let journal = read_committed_journal(fs, &*provider, layout, source)?;
     // The directories must still be the ones admitted after the reads, not only before them.
     ensure_admitted(held, canonical(&installation, &root))?;
     if !journal_pin.is_current() {
@@ -322,6 +328,33 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
         cursor_moved: false,
         spent: false,
     })
+}
+
+/// Completes or discards the prepared root that a crash left behind, under the exclusive admission the
+/// caller holds; a no-op when nothing is pending.
+fn resolve_pending_preparation<F: DurableFs, P: KeyProvider>(
+    held: &mut ExclusiveAdmissionGuard,
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+) -> Result<(), ConversionError> {
+    let anchor = provider
+        .read_root_anchor_state()
+        .map_err(|error| root_error(RootStoreError::Anchor(error)))?;
+    if anchor.prepared_root_commit.is_none() {
+        return Ok(());
+    }
+    let event = held
+        .try_root_commit()
+        .map_err(ConversionError::Admission)?
+        .ok_or(ConversionError::RootBusy)?;
+    recover_root_exclusive(fs, provider, layout, &event)
+        .map(|_| ())
+        .map_err(root_error)
+}
+
+fn root_error(error: RootStoreError) -> ConversionError {
+    ConversionError::Authority(AuthorityError::Root(error))
 }
 
 fn canonical<'p>(installation: &'p Path, root: &'p Path) -> AdmissionScope<'p> {

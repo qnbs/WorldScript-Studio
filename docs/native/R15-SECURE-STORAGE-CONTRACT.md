@@ -3106,7 +3106,7 @@ policy for reconciliation under the barrier, and no producer of a binding exists
 (`ordinary_mutating_writes_admitted` is the specification of that later relaxation, not a gate in use).
 It also relies on a phase transition out of `PREPARE` happening under exclusive admission.
 
-**A phase change has one starter (Gate 4E E2 follow-up).** `commit_phase_transition` takes the
+**A phase change is published under the exclusive admission (Gate 4E E2 follow-up and E2c).** `commit_phase_transition` takes the
 installation's `ExclusiveAdmissionGuard` by mutable borrow, so a shared guard does not compile. An admission that does not guard the root of its layout is refused as `NotAdmitted`, the commit
 runs on the canonical root the admission was proven for, and the
 progress checkpoint, the binding advance and the journal-level checkpoint publish refuse a successor
@@ -3115,9 +3115,14 @@ that changes the phase (`PhaseChangeNotACheckpoint`), as the transition refuses 
 becomes authoritative only through the transition. The raw root commit, which publishes whatever binding
 it is given, is exported only with the test-only `test-support` feature; the production crate publishes
 roots through the authority commits. The conversion gate's own phase changes use the transition.
-**Open:** a transition interrupted by a crash after the anchor was prepared is completed forward by
-`recover_root`, which asks for no exclusive admission; the decision on how recovery of a prepared binding
-change is held to it is recorded on #359 and is not part of this slice.
+A transition interrupted by a crash after the anchor was prepared leaves a prepared root. `recover_root`
+completes a prepared root only when it keeps the binding of the committed root, including a root that binds
+nothing; one that changes the binding is refused as `BindingChangeNeedsExclusiveRecovery` before any sync or
+write and stays prepared, and the ordinary operation that ran that recovery is refused with `RecoveryPending`.
+`recover_root_exclusive`, which takes the root event of the exclusive admission, completes it, and
+`begin_conversion` resolves a pending preparation through it before it reads the journal. The classification
+compares the committed root with the prepared target, both authenticated against the anchor's digests; it is
+the binding and not the phase, because the phase would need the journal locator.
 The capture, takeover and renewal writers are unchanged: they already keep the phase, and the barrier
 of the final (`ADMIT`) capture stays with E3. This opens no window and admits no producer of a binding.
 

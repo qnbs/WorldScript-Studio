@@ -210,7 +210,7 @@ impl Fixture {
     }
 
     /// The stored envelope of page `index` of the captured inventory.
-    fn page_file(&self, index: u32) -> PathBuf {
+    fn page_file(&mut self, index: u32) -> PathBuf {
         let digest = self.committed(OWNER).unwrap().journal_page_set_digest;
         let dir = inventory_page_dir(&self.journal_dir(), &digest, index);
         generation_path(&dir, REVISION)
@@ -322,15 +322,20 @@ impl Fixture {
 
     /// The manifest the gate returns to `owner` under this installation's own admission, which is
     /// released again: no other admission may be held.
-    fn committed(&self, owner: &str) -> Result<JournalManifest, ConversionError> {
+    fn committed(&mut self, owner: &str) -> Result<JournalManifest, ConversionError> {
         let paths = self.paths();
         let mut held = paths.admission();
-        begin_conversion(&mut held, &mut StdFs, &self.provider, paths.begin(owner))
-            .map(|session| session.manifest().clone())
+        begin_conversion(
+            &mut held,
+            &mut StdFs,
+            &mut self.provider,
+            paths.begin(owner),
+        )
+        .map(|session| session.manifest().clone())
     }
 
     /// The gate as `owner` under this installation's own admission, over the real file system.
-    fn begin(&self, owner: &str) -> Result<(), ConversionError> {
+    fn begin(&mut self, owner: &str) -> Result<(), ConversionError> {
         self.committed(owner).map(|_| ())
     }
 
@@ -503,12 +508,17 @@ fn the_owner_in_admit_or_convert_gets_the_committed_state_and_nothing_is_written
     let mut seen = Vec::new();
     for phase in [phase_code::ADMIT, phase_code::CONVERT] {
         let committed = manifest(phase);
-        let fixture = Fixture::bound(&committed);
+        let mut fixture = Fixture::bound(&committed);
         let before = fixture.snapshot();
         let paths = fixture.paths();
         let mut held = paths.admission();
-        let session =
-            begin_conversion(&mut held, &mut StdFs, &fixture.provider, paths.begin(OWNER)).unwrap();
+        let session = begin_conversion(
+            &mut held,
+            &mut StdFs,
+            &mut fixture.provider,
+            paths.begin(OWNER),
+        )
+        .unwrap();
         seen.push((
             session.manifest() == &committed,
             session.fence() == MigrationFence::from_manifest(&committed),
@@ -548,7 +558,7 @@ fn every_other_phase_is_refused_with_its_own_reason() {
 fn an_admit_manifest_without_the_final_inventory_is_refused() {
     let mut open = manifest(phase_code::ADMIT);
     open.final_inventory_captured = false;
-    let fixture = Fixture::bound(&open);
+    let mut fixture = Fixture::bound(&open);
     let before = fixture.snapshot();
     assert_eq!(
         fixture.begin(OWNER),
@@ -573,22 +583,28 @@ fn a_lease_of_another_owner_or_of_none_is_refused() {
 
 /// The gate over `fixture` as its owner under `held`, reporting every read to `on_read`.
 fn begin_watched<H: FnMut(&Path) -> io::Result<()>>(
-    fixture: &Fixture,
+    fixture: &mut Fixture,
     held: &mut ExclusiveAdmissionGuard,
     on_read: H,
 ) -> Result<(), ConversionError> {
     let paths = fixture.paths();
     let mut watched = WatchedFs { on_read };
-    begin_conversion(held, &mut watched, &fixture.provider, paths.begin(OWNER)).map(|_| ())
+    begin_conversion(
+        held,
+        &mut watched,
+        &mut fixture.provider,
+        paths.begin(OWNER),
+    )
+    .map(|_| ())
 }
 
 #[test]
 fn a_guard_admitted_for_another_installation_is_refused_before_anything_is_read() {
     let committed = manifest(phase_code::ADMIT);
-    let (fixture, other) = (Fixture::bound(&committed), Fixture::bound(&committed));
+    let (mut fixture, other) = (Fixture::bound(&committed), Fixture::bound(&committed));
     let before = fixture.snapshot();
     let mut reads = 0;
-    let outcome = begin_watched(&fixture, &mut other.paths().admission(), |_| {
+    let outcome = begin_watched(&mut fixture, &mut other.paths().admission(), |_| {
         reads += 1;
         Ok(())
     });
@@ -605,18 +621,20 @@ fn an_installation_replaced_while_the_journal_is_read_is_refused() {
     // The gate is deterministic, so a first run counts its reads and a second run moves the
     // installation directory away right after the last one: only the check after the reads sees it.
     let committed = manifest(phase_code::ADMIT);
-    let counted = Fixture::bound(&committed);
+    let mut counted = Fixture::bound(&committed);
     let mut total = 0;
-    begin_watched(&counted, &mut counted.paths().admission(), |_| {
+    let mut counting_admission = counted.paths().admission();
+    begin_watched(&mut counted, &mut counting_admission, |_| {
         total += 1;
         Ok(())
     })
     .unwrap();
-    let fixture = Fixture::bound(&committed);
+    let mut fixture = Fixture::bound(&committed);
     let installation = fixture.base.0.clone();
     let moved = installation.with_extension("moved");
     let mut seen = 0;
-    let outcome = begin_watched(&fixture, &mut fixture.paths().admission(), |_| {
+    let mut admission = fixture.paths().admission();
+    let outcome = begin_watched(&mut fixture, &mut admission, |_| {
         seen += 1;
         if seen == total {
             fs::rename(&installation, &moved).unwrap();
@@ -629,7 +647,7 @@ fn an_installation_replaced_while_the_journal_is_read_is_refused() {
 
 #[test]
 fn a_root_that_binds_no_migration_is_refused() {
-    let (fixture, _live) = Fixture::unbound(&manifest(phase_code::ADMIT));
+    let (mut fixture, _live) = Fixture::unbound(&manifest(phase_code::ADMIT));
     assert_eq!(
         fixture.begin(OWNER),
         Err(ConversionError::Authority(AuthorityError::NoLiveMigration))
@@ -638,7 +656,7 @@ fn a_root_that_binds_no_migration_is_refused() {
 
 #[test]
 fn a_journal_generation_the_root_does_not_name_is_refused() {
-    let fixture = Fixture::bound(&manifest(phase_code::ADMIT));
+    let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
     let mut tampered = manifest(phase_code::ADMIT);
     tampered.lease_owner_id = Some("someone-else".into());
     fixture.store_journal(&tampered);
@@ -657,7 +675,7 @@ fn a_sibling_generation_is_never_read_instead_of_the_root_named_one() {
     // A newer generation in the journal directory is not authority: the gate reads the one the root
     // names, so an unrelated later file neither replaces it nor makes the gate refuse.
     let committed = manifest(phase_code::ADMIT);
-    let fixture = Fixture::bound(&committed);
+    let mut fixture = Fixture::bound(&committed);
     let mut later = manifest(phase_code::CONVERT);
     later.journal_revision = REVISION + 1;
     later.lease_owner_id = Some("someone-else".into());
@@ -682,11 +700,11 @@ fn a_sibling_generation_is_never_read_instead_of_the_root_named_one() {
 
 /// A session over `fixture`'s installation as its owner, under `held`.
 fn open<'a>(
-    fixture: &Fixture,
+    fixture: &mut Fixture,
     paths: &'a Paths,
     held: &'a mut ExclusiveAdmissionGuard,
 ) -> ConversionSession<'a> {
-    begin_conversion(held, &mut StdFs, &fixture.provider, paths.begin(OWNER)).unwrap()
+    begin_conversion(held, &mut StdFs, &mut fixture.provider, paths.begin(OWNER)).unwrap()
 }
 
 /// The digest of the manifest generation `revision` in `dir`.
@@ -706,7 +724,7 @@ fn the_owner_renews_its_lease_in_admit_and_in_convert_and_the_session_follows_th
         let generation = fixture.root_generation();
         let followed = {
             let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-            let mut session = open(&fixture, &paths, &mut held);
+            let mut session = open(&mut fixture, &paths, &mut held);
             let renewed = session.renew_lease(&mut StdFs, &mut fixture.provider, RENEWED_EXPIRY);
             let token = MigrationFence::from_manifest(&expected);
             (
@@ -728,7 +746,7 @@ fn an_expiry_that_does_not_move_forward_is_refused_and_writes_nothing() {
     let before = fixture.snapshot();
     let outcomes: Vec<_> = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         [LEASE_EXPIRY, LEASE_EXPIRY - 1]
             .into_iter()
             .map(|expiry| {
@@ -748,7 +766,7 @@ fn a_session_that_another_owner_took_over_from_is_refused_before_any_write() {
     let committed = manifest(phase_code::ADMIT);
     let mut fixture = Fixture::bound(&committed);
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     fixture.take_over(&committed);
     let before = fixture.snapshot();
     let outcome = session
@@ -766,7 +784,7 @@ fn a_failed_root_commit_leaves_the_session_where_it_was_and_the_retry_adopts_the
     let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
     let journal_dir = fixture.journal_dir();
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     // The anchor refuses the root's preparation: the renewal is already in the journal as revision
     // `r + 1`, the root still names `r`, and nothing is left pending.
     fixture
@@ -794,7 +812,7 @@ fn a_step_after_the_installation_moved_is_refused_before_any_write() {
     let installation = fixture.base.0.clone();
     let moved = installation.with_extension("moved");
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     fs::rename(&installation, &moved).unwrap();
     let outcome = session
         .renew_lease(&mut StdFs, &mut fixture.provider, RENEWED_EXPIRY)
@@ -894,7 +912,7 @@ fn a_differing_candidate_of_a_crashed_attempt_is_quarantined_and_does_not_block_
     {
         // The first attempt dies after writing its candidate: the anchor refuses the root's preparation.
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         fixture
             .provider
             .inject(Fault::BeforePersist(AnchorOp::Prepare));
@@ -907,7 +925,7 @@ fn a_differing_candidate_of_a_crashed_attempt_is_quarantined_and_does_not_block_
     let other = RENEWED_EXPIRY + 1;
     let outcome = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         session
             .renew_lease(&mut StdFs, &mut fixture.provider, other)
             .map(|_| ())
@@ -928,7 +946,7 @@ fn a_differing_candidate_of_a_crashed_attempt_is_quarantined_and_does_not_block_
 fn a_renewal_is_busy_while_another_root_commit_holds_the_lock_and_writes_nothing() {
     let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     let lock = RootCommitGuard::acquire(&fixture.root_dir()).unwrap();
     let before = fixture.snapshot();
     let busy = session
@@ -982,7 +1000,7 @@ fn a_read_back_that_fails_spends_the_session_though_the_step_committed() {
     };
     let (first, later, snapshot) = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         let first = session.renew_lease(&mut watched, &mut fixture.provider, RENEWED_EXPIRY);
         let later = session.renew_lease(&mut StdFs, &mut fixture.provider, RENEWED_EXPIRY + 1);
         (
@@ -1008,7 +1026,7 @@ fn a_commit_that_reports_an_error_after_it_landed_is_settled_by_the_root() {
     let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
     let first = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         // The anchor commits the root but reports the outcome as unavailable.
         fixture
             .provider
@@ -1035,7 +1053,7 @@ fn a_commit_error_whose_outcome_cannot_be_read_back_spends_the_session() {
     };
     let (first, later) = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         fixture.provider.inject(anchor_fault);
         let first = session.renew_lease(&mut watched, &mut fixture.provider, RENEWED_EXPIRY);
         let later = session.renew_lease(&mut StdFs, &mut fixture.provider, RENEWED_EXPIRY + 1);
@@ -1051,7 +1069,7 @@ fn a_commit_error_whose_outcome_cannot_be_read_back_spends_the_session() {
 #[test]
 fn a_journal_directory_outside_the_installation_or_inside_the_root_is_refused_before_anything_is_read(
 ) {
-    let fixture = Fixture::bound(&manifest(phase_code::ADMIT));
+    let mut fixture = Fixture::bound(&manifest(phase_code::ADMIT));
     let outside = Dir::new();
     let mut outcomes = Vec::new();
     let root = fixture.root_dir();
@@ -1075,7 +1093,7 @@ fn a_journal_directory_outside_the_installation_or_inside_the_root_is_refused_be
         let outcome = begin_conversion(
             &mut held,
             &mut watched,
-            &fixture.provider,
+            &mut fixture.provider,
             paths.begin(OWNER),
         );
         outcomes.push((outcome.map(|_| ()), reads));
@@ -1092,7 +1110,7 @@ fn a_journal_directory_replaced_after_begin_is_refused_before_any_write() {
     let journal = fixture.journal_dir();
     let moved = journal.with_extension("moved");
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     // A copy of the journal takes the place of the directory the session pinned.
     fs::rename(&journal, &moved).unwrap();
     fs::create_dir(&journal).unwrap();
@@ -1130,8 +1148,13 @@ fn a_symlinked_journal_directory_retargeted_after_begin_does_not_redirect_the_st
     let mut paths = fixture.paths();
     paths.journal = link.clone();
     let mut held = paths.admission();
-    let mut session =
-        begin_conversion(&mut held, &mut StdFs, &fixture.provider, paths.begin(OWNER)).unwrap();
+    let mut session = begin_conversion(
+        &mut held,
+        &mut StdFs,
+        &mut fixture.provider,
+        paths.begin(OWNER),
+    )
+    .unwrap();
     fs::remove_file(&link).unwrap();
     std::os::unix::fs::symlink(&other, &link).unwrap();
     let outcome = session
@@ -1197,7 +1220,7 @@ fn entering_convert_moves_only_the_phase_and_the_revision_and_a_second_call_writ
     let generation = fixture.root_generation();
     let (entered, again, snapshot) = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         let entered = session
             .enter_convert(&mut StdFs, &mut fixture.provider)
             .map(|commit| commit.map(|c| c.root_generation == generation + 1));
@@ -1220,12 +1243,33 @@ fn entering_convert_moves_only_the_phase_and_the_revision_and_a_second_call_writ
 }
 
 #[test]
+fn a_gate_resolves_the_root_a_crash_left_prepared_in_enter_convert_before_it_reads() {
+    // Entering CONVERT changes the phase, so the anchor's refusal of its commit leaves a prepared root
+    // that only the exclusive admission may complete; the next gate holds that admission and resolves
+    // the root before it reads the journal.
+    let committed = with_extent(phase_code::ADMIT);
+    let mut expected = next_revision(&committed);
+    expected.phase = phase_code::CONVERT;
+    let mut fixture = Fixture::bound(&committed);
+    {
+        let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
+        let mut session = open(&mut fixture, &paths, &mut held);
+        fixture
+            .provider
+            .inject(Fault::BeforePersist(AnchorOp::Commit));
+        let entered = session.enter_convert(&mut StdFs, &mut fixture.provider);
+        assert!(entered.is_err());
+    }
+    assert_eq!(fixture.committed(OWNER), Ok(expected));
+}
+
+#[test]
 fn a_resumed_session_in_convert_has_nothing_to_enter() {
     let mut fixture = Fixture::bound(&with_extent(phase_code::CONVERT));
     let before = fixture.snapshot();
     let outcome = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         session.enter_convert(&mut StdFs, &mut fixture.provider)
     };
     assert_eq!((outcome, fixture.snapshot() == before), (Ok(None), true));
@@ -1248,7 +1292,7 @@ fn the_cursor_is_page_local_and_never_moves_backwards_or_outside_the_selected_pa
     ];
     let (outcomes, snapshot) = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         session
             .verify_inventory(&mut StdFs, &fixture.provider)
             .unwrap();
@@ -1304,7 +1348,7 @@ fn the_cursor_needs_the_verified_inventory() {
     let before_enter = fixture.snapshot();
     let outcome = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         session
             .enter_convert(&mut StdFs, &mut fixture.provider)
             .unwrap();
@@ -1321,11 +1365,11 @@ fn the_cursor_needs_the_verified_inventory() {
 
 #[test]
 fn a_session_authenticates_the_inventory_and_reads_every_page() {
-    let fixture = Fixture::bound_with_inventory(10, 6);
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
     let before = fixture.snapshot();
     let expected = pages_of(10, 6, REVISION);
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     let unverified = session.page(&mut StdFs, &fixture.provider, 0).map(|_| ());
     session
         .verify_inventory(&mut StdFs, &fixture.provider)
@@ -1393,7 +1437,7 @@ impl Damage {
 
 #[test]
 fn a_tampered_missing_or_swapped_page_is_refused_by_the_verification_and_nothing_is_written() {
-    let fixture = Fixture::bound_with_inventory(10, 6);
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
     let files = (fixture.page_file(0), fixture.page_file(1));
     let originals = (fs::read(&files.0).unwrap(), fs::read(&files.1).unwrap());
     let before = fixture.snapshot();
@@ -1401,7 +1445,7 @@ fn a_tampered_missing_or_swapped_page_is_refused_by_the_verification_and_nothing
     for damage in [Damage::Tampered, Damage::Missing, Damage::Swapped] {
         damage.apply((&files.0, &files.1), (&originals.0, &originals.1));
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         let outcome = session.verify_inventory(&mut StdFs, &fixture.provider);
         refused.push((
             matches!(outcome, Err(ConversionError::Authority(_))),
@@ -1414,7 +1458,7 @@ fn a_tampered_missing_or_swapped_page_is_refused_by_the_verification_and_nothing
     // Nothing was written, and after the damage is undone the same installation verifies.
     assert_eq!(fixture.snapshot(), before);
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     assert_eq!(
         session.verify_inventory(&mut StdFs, &fixture.provider),
         Ok(())
@@ -1424,11 +1468,11 @@ fn a_tampered_missing_or_swapped_page_is_refused_by_the_verification_and_nothing
 #[cfg(unix)]
 #[test]
 fn reading_the_inventory_under_a_lost_admission_is_refused() {
-    let fixture = Fixture::bound_with_inventory(10, 6);
+    let mut fixture = Fixture::bound_with_inventory(10, 6);
     let installation = fixture.base.0.clone();
     let moved = installation.with_extension("moved");
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     session
         .verify_inventory(&mut StdFs, &fixture.provider)
         .unwrap();
@@ -1451,7 +1495,7 @@ fn the_cursor_does_not_move_outside_convert() {
     let before = fixture.snapshot();
     let outcome = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         let cursor = JournalCheckpointCursor::new(0, 1);
         session
             .advance_cursor(&mut StdFs, &mut fixture.provider, cursor)
@@ -1467,7 +1511,7 @@ fn the_cursor_does_not_move_outside_convert() {
 fn a_session_that_another_owner_took_over_from_cannot_move_the_cursor() {
     let mut fixture = Fixture::bound_with_inventory(10, 6);
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     session
         .verify_inventory(&mut StdFs, &fixture.provider)
         .unwrap();
@@ -1497,7 +1541,7 @@ fn the_lease_is_renewed_after_entering_convert() {
     let mut fixture = Fixture::bound(&committed);
     let outcome = {
         let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-        let mut session = open(&fixture, &paths, &mut held);
+        let mut session = open(&mut fixture, &paths, &mut held);
         session
             .enter_convert(&mut StdFs, &mut fixture.provider)
             .unwrap();
@@ -1565,7 +1609,7 @@ fn a_spent_session_in_convert_does_not_claim_there_is_nothing_to_enter() {
         on_read: failing_nth_read(total),
     };
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     let spent = session.renew_lease(&mut watched, &mut fixture.provider, RENEWED_EXPIRY);
     let entered = session.enter_convert(&mut StdFs, &mut fixture.provider);
     let is_unreadable = matches!(spent, Err(ConversionError::Unreadable(_)));
@@ -1580,7 +1624,7 @@ fn a_no_op_enter_convert_is_not_answered_from_a_snapshot_another_owner_overtook(
     let committed = with_extent(phase_code::CONVERT);
     let mut fixture = Fixture::bound(&committed);
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     fixture.take_over(&committed);
     let before = fixture.snapshot();
     let first = session.enter_convert(&mut StdFs, &mut fixture.provider);
@@ -1634,7 +1678,7 @@ enum InventoryRead {
 /// One authenticated read over `fixture`, with `on_read` told of every read it makes.
 #[cfg(unix)]
 fn inventory_read_watched<H: FnMut(&Path) -> io::Result<()>>(
-    fixture: &Fixture,
+    fixture: &mut Fixture,
     read: InventoryRead,
     on_read: H,
 ) -> Result<(), ConversionError> {
@@ -1660,16 +1704,16 @@ fn an_inventory_read_that_loses_the_admission_is_not_returned() {
     let mut outcomes = Vec::new();
     for read in [InventoryRead::Verify, InventoryRead::Page] {
         let mut total = 0;
-        inventory_read_watched(&Fixture::bound_with_inventory(10, 6), read, |_| {
+        inventory_read_watched(&mut Fixture::bound_with_inventory(10, 6), read, |_| {
             total += 1;
             Ok(())
         })
         .unwrap();
-        let fixture = Fixture::bound_with_inventory(10, 6);
+        let mut fixture = Fixture::bound_with_inventory(10, 6);
         let installation = fixture.base.0.clone();
         let moved = installation.with_extension("moved");
         let mut seen = 0;
-        let outcome = inventory_read_watched(&fixture, read, |_| {
+        let outcome = inventory_read_watched(&mut fixture, read, |_| {
             seen += 1;
             if seen == total {
                 fs::rename(&installation, &moved).unwrap();
@@ -1690,16 +1734,16 @@ fn a_failed_inventory_read_under_a_lost_admission_reports_the_loss() {
     let mut outcomes = Vec::new();
     for read in [InventoryRead::Verify, InventoryRead::Page] {
         let mut total = 0;
-        inventory_read_watched(&Fixture::bound_with_inventory(10, 6), read, |_| {
+        inventory_read_watched(&mut Fixture::bound_with_inventory(10, 6), read, |_| {
             total += 1;
             Ok(())
         })
         .unwrap();
-        let fixture = Fixture::bound_with_inventory(10, 6);
+        let mut fixture = Fixture::bound_with_inventory(10, 6);
         let installation = fixture.base.0.clone();
         let moved = installation.with_extension("moved");
         let hook = failing_and_moving(total, installation.clone(), moved.clone());
-        outcomes.push(inventory_read_watched(&fixture, read, hook));
+        outcomes.push(inventory_read_watched(&mut fixture, read, hook));
         fs::rename(&moved, &installation).unwrap();
     }
     assert_eq!(outcomes, vec![Err(ConversionError::NotAdmitted); 2]);
@@ -1950,7 +1994,7 @@ fn leaving_convert_early_or_converting_in_the_wrong_phase_is_refused() {
     let mut fixture = Fixture::bound_with_inventory(10, 6);
     let mut recorder = Recorder::new();
     let (paths, mut held) = (fixture.paths(), fixture.paths().admission());
-    let mut session = open(&fixture, &paths, &mut held);
+    let mut session = open(&mut fixture, &paths, &mut held);
     // `ADMIT`: neither the iteration nor the exit exists yet.
     let converted = convert_once(&mut session, &mut fixture, &mut recorder, 4);
     let finished = session.finish_convert(&mut StdFs, &mut fixture.provider);
