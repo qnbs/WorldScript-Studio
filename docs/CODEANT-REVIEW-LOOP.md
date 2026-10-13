@@ -96,7 +96,7 @@ cross 100 files from i18n alone.
    minimized. Keep commits **atomic per concern** so the split is a clean branch operation, not a
    re-edit.
 3. **Stack** them: PR1 base = `main`; PR2 base = **PR1's branch**. GitHub then shows PR2 only its
-   *incremental* diff (what CodeAnt counts), and PR2 auto-retargets to `main` when PR1 merges.
+   *incremental* diff (what CodeAnt counts), and PR2 is retargeted to `main` by hand before PR1 merges (GitHub retargets a stacked PR automatically only when the merged head branch is deleted, which this repository no longer does).
    Run the loop on PR1 to quiescence + merge first, then PR2.
 4. **Do not over-split.** If the whole change fits under ~100 in one (or two) PRs, use that — extra
    PRs are extra review loops and CI runs. One or two is the target, never "one PR per file group"
@@ -264,14 +264,16 @@ LOW-RISK final delta) and merge-mechanics ordering rule in full — summarized:
 
 A merge does not delete the head branch here (`delete_branch_on_merge = false`, maintainer decision
 of 2026-10-13); a merged branch is kept until a manual census finds nothing that still needs it —
-open dependent PRs, evidence naming its tip, local worktrees (see the branch-retention rule in
-`PR-CI-MERGE-WORKFLOW.md` and `GIT-WORKTREE-HOUSEKEEPING.md`). Periodically prune stale
-local/remote-tracking refs of branches deleted earlier, and delete redundant branches (e.g. a
-`release/x` branch already captured by a tag) only after that census:
+open dependent PRs, evidence naming its tip, local worktrees, and its current tip (see the
+branch-retention rule in `PR-CI-MERGE-WORKFLOW.md`). Stale local/remote-tracking refs are classified
+before anything is pruned: an `origin/*` ref can be the last reachable pointer to unmerged commits,
+so pruning and deleting follow the preserve-first procedure in `GIT-WORKTREE-HOUSEKEEPING.md`.
+Start read-only:
 
 ```bash
-git fetch --prune
-git branch -vv                # find branches whose upstream is "[gone]"
+git fetch                          # refresh remote-tracking refs, no pruning
+git remote prune origin --dry-run  # list stale origin/* refs without removing any
+git branch -vv                     # inspect the upstream state of local branches
 ```
 
 ---
