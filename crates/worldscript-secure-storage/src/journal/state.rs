@@ -33,6 +33,11 @@ pub enum MigrationExecutionError {
     /// A lease renewal that is not the same owner extending a lease it holds: no lease to renew, or an
     /// expiry that does not move strictly forward (§10.1).
     InvalidLeaseRenewal,
+    /// A progress checkpoint whose successor changes the phase. A phase change is published only by
+    /// the exclusively admitted phase-transition commit, never by a checkpoint (§10.3).
+    PhaseChangeNotACheckpoint,
+    /// A phase-transition commit whose successor keeps the phase: that is a progress checkpoint.
+    NotAPhaseChange,
     Journal(JournalError),
 }
 

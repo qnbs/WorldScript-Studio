@@ -127,10 +127,10 @@ pub use digest::{
 };
 pub use durable::{
     acquire_journal_durable_guard, load_authoritative_manifest, load_manifest_generation,
-    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced, publish_renewal_fenced,
-    publish_takeover_fenced, root_named_journal_epoch, with_fence, CandidateConflict,
-    JournalDurableContext, JournalDurableError, JournalDurableGuard, JournalTakeover,
-    PublishedManifest,
+    promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced,
+    publish_phase_transition_fenced, publish_renewal_fenced, publish_takeover_fenced,
+    root_named_journal_epoch, with_fence, CandidateConflict, JournalDurableContext,
+    JournalDurableError, JournalDurableGuard, JournalTakeover, PublishedManifest,
 };
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
 pub use inventory_read::{load_inventory_page, verify_stored_inventory, VerifiedInventory};
@@ -152,7 +152,10 @@ pub use stream_capture::{
     load_staged_page, CaptureStart, StagedCapture, StagedPage, StreamedCapture,
 };
 pub use stream_promote::{promote_staged_inventory_fenced, StagedPromotion};
-pub use succession::{assert_manifest_successor, assert_progress_successor};
+pub use succession::{
+    assert_checkpoint_successor, assert_manifest_successor, assert_phase_transition_successor,
+    assert_progress_successor,
+};
 pub use takeover::{
     assert_binding_takeover, assert_takeover_promote_authority, assert_takeover_successor,
 };

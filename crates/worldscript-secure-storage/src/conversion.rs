@@ -79,9 +79,9 @@ use std::path::{Path, PathBuf};
 
 use crate::admission::{AdmissionError, AdmissionScope, ExclusiveAdmissionGuard};
 use crate::authority::{
-    commit_journal_checkpoint_held, commit_lease_renewal_held, load_committed_page,
-    read_committed_journal, verify_committed_inventory, AuthorityError, CommittedJournal,
-    JournalCheckpoint, JournalSource,
+    commit_journal_checkpoint_held, commit_lease_renewal_held, commit_phase_transition_held,
+    load_committed_page, read_committed_journal, verify_committed_inventory, AuthorityError,
+    CommittedJournal, JournalCheckpoint, JournalSource,
 };
 use crate::durable::{DurableFs, WriteOperationId};
 use crate::error::SealError;
@@ -257,12 +257,13 @@ impl<E> From<ConversionError> for ConvertError<E> {
     }
 }
 
-/// Which journal-owner operation commits a step's successor: the lease renewal and the ordinary
-/// checkpoint are different operations over the same root event.
+/// Which journal-owner operation commits a step's successor: the lease renewal, the ordinary
+/// checkpoint and the phase transition are different operations over the same root event.
 #[derive(Debug, Clone, Copy)]
 enum StepKind {
     Renewal,
     Checkpoint,
+    PhaseTransition,
 }
 
 /// The exclusive conversion entry: the committed journal state, read under an admission that no
@@ -439,9 +440,14 @@ impl<'a> ConversionSession<'a> {
             return Ok(None);
         }
         let convert = MigrationPhase::from_wire(phase_code::CONVERT);
-        self.step(fs, provider, StepKind::Checkpoint, |manifest, fence| {
-            transition_phase(manifest, fence, convert).map_err(ConversionError::Migration)
-        })
+        self.step(
+            fs,
+            provider,
+            StepKind::PhaseTransition,
+            |manifest, fence| {
+                transition_phase(manifest, fence, convert).map_err(ConversionError::Migration)
+            },
+        )
         .map(Some)
     }
 
@@ -669,9 +675,14 @@ impl<'a> ConversionSession<'a> {
             return Err(ConversionError::NotConverted);
         }
         let verify = MigrationPhase::from_wire(phase_code::VERIFY);
-        self.step(fs, provider, StepKind::Checkpoint, |manifest, fence| {
-            transition_phase(manifest, fence, verify).map_err(ConversionError::Migration)
-        })
+        self.step(
+            fs,
+            provider,
+            StepKind::PhaseTransition,
+            |manifest, fence| {
+                transition_phase(manifest, fence, verify).map_err(ConversionError::Migration)
+            },
+        )
     }
 
     /// Requires the committed journal to be the one the session holds. If it is not (another owner
@@ -753,6 +764,9 @@ impl<'a> ConversionSession<'a> {
                 StepKind::Renewal => commit_lease_renewal_held(fs, provider, layout, step, root),
                 StepKind::Checkpoint => {
                     commit_journal_checkpoint_held(fs, provider, layout, step, root)
+                }
+                StepKind::PhaseTransition => {
+                    commit_phase_transition_held(fs, provider, layout, step, root)
                 }
             };
             // Whatever the commit reported, read the root back while the event is still held: no other

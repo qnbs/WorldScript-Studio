@@ -11,11 +11,11 @@ use worldscript_secure_storage::{
     empty_inventory_digest, empty_journal_page_set_digest, generation_path,
     load_authoritative_manifest, load_manifest_generation, operation_type, parse_envelope,
     phase_code, promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced,
-    publish_takeover_fenced, seal_record, DirectoryDurability, DurableFs, JournalDurableContext,
-    JournalDurableError, JournalError, JournalManifest, JournalPage, JournalTakeover,
-    LiveMigration, MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity,
-    RecordMeta, StageFailureKind, StagingResidue, StdFs, WriteOperationId,
-    JOURNAL_MANIFEST_RECORD_SCHEMA, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
+    publish_phase_transition_fenced, publish_takeover_fenced, seal_record, DirectoryDurability,
+    DurableFs, JournalDurableContext, JournalDurableError, JournalError, JournalManifest,
+    JournalPage, JournalTakeover, LiveMigration, MigrationExecutionError, MigrationFence,
+    OpenError, RecordClass, RecordIdentity, RecordMeta, StageFailureKind, StagingResidue, StdFs,
+    WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -824,6 +824,24 @@ fn published(
     (result, fs.create_count())
 }
 
+/// As [`published`], through the phase-transition publisher.
+fn published_transition(
+    dir: &Path,
+    manifest: &JournalManifest,
+    committed: Option<&LiveMigration>,
+) -> (
+    Result<worldscript_secure_storage::PublishedManifest, JournalDurableError>,
+    usize,
+) {
+    let fence = MigrationFence::from_manifest(manifest);
+    let mut fs = CountingFs::new();
+    let op = write_op();
+    let key = key();
+    let mut ctx = durable_ctx_counting(&mut fs, &key, dir, &op);
+    let result = publish_phase_transition_fenced(&mut ctx, manifest, &fence, committed);
+    (result, fs.create_count())
+}
+
 #[test]
 fn publish_writes_an_absent_generation_and_adopts_an_identical_one_without_writing() {
     let dir = TempDir::new();
@@ -853,11 +871,12 @@ fn publish_refuses_a_different_or_unopenable_candidate_and_changes_nothing() {
     let next = manifest_at("pub-differs", 2, 4);
     published(&dir.0, &next, Some(&live)).0.unwrap();
     let listing = dir_listing(&dir.0);
-    // Another valid successor of the committed revision: the journal enters recovery instead.
+    // Another valid successor of the committed revision: the journal enters recovery instead, a phase
+    // change, so it goes through the phase-transition publisher.
     let mut recovering = next.clone();
     recovering.phase = phase_code::RECOVERY_REQUIRED;
     recovering.recovery_reason_code = 3;
-    let (result, creates) = published(&dir.0, &recovering, Some(&live));
+    let (result, creates) = published_transition(&dir.0, &recovering, Some(&live));
     let Err(JournalDurableError::Stage(stage)) = result else {
         panic!("a different candidate must be refused");
     };

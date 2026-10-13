@@ -23,7 +23,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::assert_manifest_promote_authority` / `assert_page_promote_authority` | Pure R4 predicates: the caller's token against the root's committed `Option<&LiveMigration>` |
 | `journal::assert_binding_successor` | Pure B2b-1 predicate: a binding advance is the CAS successor (same operation and fence, revision + 1) of the committed binding |
 | `journal::assert_manifest_successor` | Pure B2b-4 predicate: a manifest is a valid successor of the manifest the root names (revision + 1, kept operation identity, allowed phase step, no cursor regression within a phase, frozen target key and inventory, recovery reason only on entering recovery) |
-| `authority::advance_live_migration` | B2b-1/B2b-4: under `root_commit_mutex`, verify the binding successor, the durable manifest generation and that it is a valid manifest successor of the committed one, then commit a root carrying the new binding |
+| `authority::advance_live_migration` | B2b-1/B2b-4: under `root_commit_mutex`, verify the binding successor, the durable manifest generation and that it is a valid progress checkpoint of the committed one (the phase is kept; a phase change is refused, see the Gate 4E E2 follow-up), then commit a root carrying the new binding |
 | `journal::capture_inventory` | Slice C1a: pure constructor of the manifest successor that captures a paged inventory (page set, entry count, `inventory_digest`) from sealed pages |
 | `journal::seal_inventory_pages` / `inventory_page_dir` / `promote_inventory_set_fenced` | Slice C1b-1: seal each inventory page once, the directory its authenticated page-set digest names, and the fenced promotion of a whole captured page set into it |
 | `authority::commit_inventory_capture` / `InventoryCapture` | Slice C1c: under `root_commit_mutex`, store the captured page set, publish the capture manifest and advance the binding as a capture, so the root only ever names a manifest whose pages are durable |
@@ -32,7 +32,8 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::assert_takeover_successor` / `assert_takeover_promote_authority` / `assert_binding_takeover` | Pure B2c predicates: a takeover is the committed owner's lease-expired successor with fence + 1 and revision + 1 that changes ownership only |
 | `journal::publish_takeover_fenced` | B2c: takeover authority, the committed generation loaded bounded and authenticated, the takeover successor check, then the same publish-or-adopt step as the checkpoint |
 | `authority::commit_journal_takeover` | B2c: under `root_commit_mutex`, read the committed binding, publish the new owner's claim (lease expired at the caller's `now`, fence + 1), advance the binding to the new fence and record it as the commit evidence |
-| `authority::commit_journal_checkpoint` | B2b-2/B2b-3: under `root_commit_mutex`, read the committed binding, publish the owner's next manifest against it (R4; an identical candidate from a failed attempt is adopted), then advance the binding to that generation |
+| `authority::commit_journal_checkpoint` | B2b-2/B2b-3: under `root_commit_mutex`, read the committed binding, publish the owner's next manifest against it (R4; an identical candidate from a failed attempt is adopted), then advance the binding to that generation (a progress checkpoint: a phase change is refused, see the Gate 4E E2 follow-up) |
+| `authority::commit_phase_transition` | Gate 4E E2 follow-up: under the installation's exclusive admission, publish the owner's next manifest when it changes the phase, then advance the binding to that generation |
 | `journal::load_manifest_generation` | Load one manifest generation from a journal record directory |
 | `journal::load_authoritative_manifest` | Resume the generation the committed root names, then bind its exact envelope digest |
 | `journal::with_fence` / `acquire_journal_durable_guard` | Mutex + `assert_fence` before I/O |
@@ -1287,3 +1288,28 @@ Gate 4D overall status: **IN PROGRESS**. B2a resume selection, R4 promote-time c
 the B2b-1 root binding advance, the B2b-2 journal checkpoint, the B2b-3 candidate adoption on
 retry, the B2b-4 successor-relation guard, the B2c owner takeover and the B2d discard of a stale
 candidate are in scope above; B2 is not terminal.
+
+## Gate 4E E2 follow-up: a phase change is published under exclusive admission
+
+`authority::commit_phase_transition` takes the installation's `ExclusiveAdmissionGuard` by mutable
+borrow and is the only way a phase change becomes authoritative. The root classifies every binding
+advance (`BindingStep`): the progress checkpoint keeps the phase, the transition changes it, and
+capture, renewal and takeover keep their own relations, which already keep the phase. The journal
+level splits the same way: `publish_manifest_fenced` refuses a phase change and
+`publish_phase_transition_fenced` refuses a successor that keeps the phase, each before a write.
+
+| Claim | Pinned by `gate4e_phase_transition_test.rs` |
+|---|---|
+| the transition publishes a phase change and binds the root to it, twice in a row under one admission | `the_exclusive_transition_publishes_a_phase_change_and_binds_the_root_to_it` |
+| the checkpoint refuses a phase change (`PhaseChangeNotACheckpoint`) and writes nothing | `the_checkpoint_refuses_a_phase_change_and_writes_nothing` |
+| the transition refuses a successor that keeps the phase (`NotAPhaseChange`) and writes nothing; the checkpoint takes that successor | `the_transition_refuses_a_successor_that_keeps_the_phase_while_the_checkpoint_takes_it` |
+| an admission for another root is refused (`NotAdmitted`) and writes nothing | `an_admission_for_another_root_is_refused_before_anything_is_written` |
+| a phase change promoted directly is refused by the binding advance and the checkpoint, and is adopted without a journal write only by the transition | `a_phase_change_promoted_directly_becomes_authoritative_only_through_the_exclusive_transition` |
+| the journal-level publishers split the same way before any write | `the_journal_publishers_split_the_same_way_before_any_write` |
+| a shared admission excludes the exclusive one a transition needs | `no_transition_can_start_while_an_ordinary_operation_holds_the_shared_admission` |
+
+A shared guard, and a shared reference to the exclusive guard, do not compile: the two `compile_fail`
+doctests of `commit_phase_transition` pair with a doctest of the same call that does. The conversion
+gate's `enter_convert` and `finish_convert` commit through the held form of the transition, and its tests
+are unchanged. This slice adds no producer of a binding, opens no `PREPARE`/`DONE` window and leaves
+the capture writers, the writer journal locator and E3 closed.

@@ -13,13 +13,14 @@ use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProv
 use worldscript_secure_storage::{
     advance_live_migration, begin_streamed_capture, capture_inventory, commit_catalog_change,
     commit_inventory_capture, commit_journal_checkpoint, commit_journal_takeover,
-    commit_lease_renewal, commit_root, commit_streamed_inventory_capture, content_digest,
-    empty_inventory_digest, empty_journal_page_set_digest, generation_path, inventory_page_dir,
-    load_authoritative_manifest, load_catalog, load_staged_page, operation_type, phase_code,
-    promote_manifest_fenced, seal_inventory_pages, source_authority_kind,
-    source_physical_authority_kind, transition_phase, verify_stored_inventory, write_key_epoch,
-    AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit,
-    CatalogDescriptor, CommitMarker, CommittedGeneration, DirectoryDurability, DurableFs,
+    commit_lease_renewal, commit_phase_transition, commit_root, commit_streamed_inventory_capture,
+    content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
+    inventory_page_dir, load_authoritative_manifest, load_catalog, load_staged_page,
+    operation_type, phase_code, promote_manifest_fenced, seal_inventory_pages,
+    source_authority_kind, source_physical_authority_kind, transition_phase,
+    verify_stored_inventory, write_key_epoch, AdmissionScope, AuthorityError, BindingAdvance,
+    CandidateConflict, CatalogChange, CatalogCommit, CatalogDescriptor, CommitMarker,
+    CommittedGeneration, DirectoryDurability, DurableFs, ExclusiveAdmissionGuard,
     InstallationScopeId, InventoryCapture, JournalCheckpoint, JournalDurableContext,
     JournalDurableError, JournalError, JournalInventoryEntry, JournalInventorySource,
     JournalManifest, JournalPage, JournalSource, JournalTakeoverCommit, KeyEpochCommit,
@@ -299,7 +300,9 @@ impl Fixture {
         )
     }
 
-    /// A checkpoint of `manifest` under its own fence and the committed key route and epoch.
+    /// The next revision `manifest` under its own fence and the committed key route and epoch: a
+    /// progress checkpoint, or, when it changes the phase of the committed manifest, the phase
+    /// transition under the installation's exclusive admission.
     fn checkpoint(&mut self, manifest: &JournalManifest) -> Result<RootCommitted, AuthorityError> {
         let key_ref = self.key_ref.clone();
         let route = Route {
@@ -331,14 +334,43 @@ impl Fixture {
             active_key_epoch: route.epoch,
             conflict: self.conflict,
         };
-        commit_journal_checkpoint(
-            &mut StdFs,
-            &mut self.provider,
-            RootLayout {
-                root_dir: &root_dir,
-            },
-            checkpoint,
-        )
+        let layout = RootLayout {
+            root_dir: &root_dir,
+        };
+        if self.changes_phase(manifest) {
+            let scope = AdmissionScope {
+                installation_dir: &self.base,
+                root_dir: &self.root_dir,
+            };
+            let mut admission = ExclusiveAdmissionGuard::try_acquire(scope)
+                .unwrap()
+                .expect("nothing else holds the admission");
+            commit_phase_transition(
+                &mut admission,
+                &mut StdFs,
+                &mut self.provider,
+                layout,
+                checkpoint,
+            )
+        } else {
+            commit_journal_checkpoint(&mut StdFs, &mut self.provider, layout, checkpoint)
+        }
+    }
+
+    /// Whether `manifest` has another phase than the manifest the root names; `false` without one.
+    fn changes_phase(&self, manifest: &JournalManifest) -> bool {
+        let Ok(Some(catalog)) = load_catalog(&mut StdFs, &self.provider, self.layout()) else {
+            return false;
+        };
+        let Some(live) = catalog.root.live_migration else {
+            return false;
+        };
+        let op = WriteOperationId::generate().unwrap();
+        let key = journal_key();
+        let mut fs = StdFs;
+        let mut ctx = JournalDurableContext::new(&mut fs, &key, &self.journal_dir, &op);
+        load_authoritative_manifest(&mut ctx, &live)
+            .is_ok_and(|committed| committed.phase != manifest.phase)
     }
 
     /// A takeover claim of `claim` under its own fence, the committed key route and `now_unix_ms`.
@@ -652,7 +684,10 @@ fn scenario() -> Scenario {
     promote(&dir, &zero, None);
     let bound = binding_of(&zero, digest_of(&dir, 0));
     fixture.bind(&bound);
-    let one = manifest_at(OPERATION, 1, FENCE);
+    // The binding advance adopts a progress checkpoint, so revision 1 keeps the phase of revision 0:
+    // a generation that changes the phase is refused at the root (`gate4e_phase_transition_test`).
+    let mut one = manifest_at(OPERATION, 1, FENCE);
+    one.phase = zero.phase;
     promote(&dir, &one, Some(&bound));
     let next = binding_of(&one, digest_of(&dir, 1));
     Scenario {

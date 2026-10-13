@@ -27,6 +27,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::admission::{AdmissionError, AdmissionScope, ExclusiveAdmissionGuard};
 use crate::anchor::check_operation_id;
 use crate::catalog::{
     catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, PageAddress,
@@ -41,10 +42,11 @@ use crate::envelope::parse_envelope;
 use crate::error::SealError;
 use crate::identity::RecordIdentity;
 use crate::journal::{
-    assert_binding_successor, assert_binding_takeover, assert_capture_successor, assert_fence,
-    assert_progress_successor, assert_renewal_successor, assert_takeover_successor,
-    load_authoritative_manifest, load_inventory_page, promote_inventory_set_fenced,
-    promote_staged_inventory_fenced, publish_manifest_fenced, publish_renewal_fenced,
+    assert_binding_successor, assert_binding_takeover, assert_capture_successor,
+    assert_checkpoint_successor, assert_fence, assert_phase_transition_successor,
+    assert_renewal_successor, assert_takeover_successor, load_authoritative_manifest,
+    load_inventory_page, promote_inventory_set_fenced, promote_staged_inventory_fenced,
+    publish_manifest_fenced, publish_phase_transition_fenced, publish_renewal_fenced,
     publish_takeover_fenced, verify_stored_inventory, CandidateConflict, CaptureStart,
     InventorySetWrite, JournalDurableContext, JournalDurableError, JournalInventoryEntry,
     JournalManifest, JournalPage, JournalTakeover, MigrationExecutionError, MigrationFence,
@@ -127,6 +129,15 @@ pub enum AuthorityError {
     /// registry (absent or `Revoked` epoch, a registry that is not the committed one, a route that
     /// does not resolve). Returned before any journal write.
     JournalRoute(JournalRouteError),
+    /// The exclusive admission handed to a phase transition does not guard the root of its layout.
+    /// Returned before any journal write.
+    NotAdmitted,
+    /// The admission could not provide a root commit event: the directories it pinned changed, or
+    /// reading them failed. Returned before any journal write.
+    Admission(AdmissionError),
+    /// Another root commit event is in flight, so the phase transition did not start. Nothing was
+    /// written; the admission is still held and the call may be repeated.
+    RootBusy,
 }
 
 impl From<RootStoreError> for AuthorityError {
@@ -280,9 +291,11 @@ pub struct BindingAdvance<'a> {
 /// The root is re-read under `root_commit_mutex`; the advance must be the CAS successor of the
 /// binding found there ([`assert_binding_successor`]), and the manifest generation it names must be
 /// durable, authenticate under the journal key and hash to the binding's `manifest_digest`
-/// ([`load_authoritative_manifest`]), and it must be a valid successor of the manifest the root
-/// names that leaves the inventory fields alone ([`assert_progress_successor`]; only
-/// [`commit_inventory_capture`] may change them). Only then is a root committed that keeps the catalog, key
+/// ([`load_authoritative_manifest`]), and it must be a valid progress checkpoint of the manifest the
+/// root names: it leaves the inventory fields alone and keeps the phase
+/// ([`assert_checkpoint_successor`]; only [`commit_inventory_capture`] may change the inventory, and
+/// only [`commit_phase_transition`] the phase, so a generation that changes the phase is refused
+/// here however it was promoted). Only then is a root committed that keeps the catalog, key
 /// route and epoch unchanged, swaps in the new binding and records the operation's own positive
 /// fence as its commit evidence. No journal byte is written or deleted, and until step F the prior
 /// root and binding stay authority. A stale owner that still holds an older binding is refused
@@ -353,7 +366,9 @@ pub struct JournalCheckpoint<'a> {
 /// Lock order is the root lock, then the journal mutex inside the promote; nothing takes them in
 /// the opposite order. A checkpoint never changes the inventory fields (page count, entry count and
 /// the two digests): that is refused as `FrozenFieldChanged` before a journal byte is written, and
-/// only [`commit_inventory_capture`] changes them.
+/// only [`commit_inventory_capture`] changes them. Nor does a checkpoint change the phase: that is
+/// refused as `PhaseChangeNotACheckpoint` before a journal byte is written, and only
+/// [`commit_phase_transition`], under the installation's exclusive admission, publishes it.
 pub fn commit_journal_checkpoint<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
@@ -375,6 +390,154 @@ pub(crate) fn commit_journal_checkpoint_held<F: DurableFs, P: KeyProvider>(
     checkpoint: JournalCheckpoint<'_>,
     held: &RootCommitGuard,
 ) -> Result<RootCommitted, AuthorityError> {
+    commit_revision_held(fs, provider, layout, checkpoint, held, Revision::Progress)
+}
+
+/// Publishes the journal owner's next manifest revision when it **changes the phase**, and advances
+/// the root binding to it (§10.3), under the installation's exclusive admission.
+///
+/// A phase change ends the window in which one phase admitted what the next one forbids: `PREPARE`
+/// admits ordinary operations, `ADMIT` onward does not. It cannot be published while an ordinary
+/// operation may be in flight, and the signature says so. The call takes the installation's
+/// [`ExclusiveAdmissionGuard`] by mutable borrow, which no shared holder can coexist with, and takes
+/// the root commit event from that same admission ([`ExclusiveAdmissionGuard::try_root_commit`]), so
+/// the root is committed below the admission it was proven against. A shared guard cannot be passed:
+///
+/// ```compile_fail
+/// use worldscript_secure_storage::{
+///     commit_phase_transition, JournalCheckpoint, KeyProvider, RootLayout, SharedAdmissionGuard,
+///     StdFs,
+/// };
+///
+/// fn shared_cannot_change_the_phase<P: KeyProvider>(
+///     admission: &mut SharedAdmissionGuard,
+///     provider: &mut P,
+///     layout: RootLayout<'_>,
+///     checkpoint: JournalCheckpoint<'_>,
+/// ) {
+///     let _ = commit_phase_transition(admission, &mut StdFs, provider, layout, checkpoint);
+/// }
+/// ```
+///
+/// and neither can a shared reference to the exclusive guard:
+///
+/// ```compile_fail
+/// use worldscript_secure_storage::{
+///     commit_phase_transition, ExclusiveAdmissionGuard, JournalCheckpoint, KeyProvider,
+///     RootLayout, StdFs,
+/// };
+///
+/// fn a_shared_reference_cannot_change_the_phase<P: KeyProvider>(
+///     admission: &ExclusiveAdmissionGuard,
+///     provider: &mut P,
+///     layout: RootLayout<'_>,
+///     checkpoint: JournalCheckpoint<'_>,
+/// ) {
+///     let _ = commit_phase_transition(admission, &mut StdFs, provider, layout, checkpoint);
+/// }
+/// ```
+///
+/// The same call with the exclusive guard by mutable borrow compiles:
+///
+/// ```
+/// use worldscript_secure_storage::{
+///     commit_phase_transition, ExclusiveAdmissionGuard, JournalCheckpoint, KeyProvider,
+///     RootLayout, StdFs,
+/// };
+///
+/// fn exclusive_can_change_the_phase<P: KeyProvider>(
+///     admission: &mut ExclusiveAdmissionGuard,
+///     provider: &mut P,
+///     layout: RootLayout<'_>,
+///     checkpoint: JournalCheckpoint<'_>,
+/// ) {
+///     let _ = commit_phase_transition(admission, &mut StdFs, provider, layout, checkpoint);
+/// }
+/// ```
+///
+/// Everything else is as [`commit_journal_checkpoint`]: the committed binding is read from the
+/// root, the manifest must be its fenced next revision and a valid successor that leaves the
+/// inventory alone, and a refusal before the promote writes nothing. The successor must change the
+/// phase (`NotAPhaseChange` otherwise); the ordinary checkpoint refuses exactly those successors
+/// (`PhaseChangeNotACheckpoint`), so neither can publish the other's manifest. An admission that
+/// does not guard the root of `layout` is refused as `NotAdmitted` before anything is read, and a
+/// root commit event in flight elsewhere is `RootBusy`; both write nothing. This opens no window:
+/// while a migration is bound, the root keeps refusing every ordinary operation (Gate 4E E1).
+pub fn commit_phase_transition<F: DurableFs, P: KeyProvider>(
+    admission: &mut ExclusiveAdmissionGuard,
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    checkpoint: JournalCheckpoint<'_>,
+) -> Result<RootCommitted, AuthorityError> {
+    check_operation_id(&checkpoint.manifest.operation_id)
+        .map_err(|_| AuthorityError::InvalidOperationId)?;
+    ensure_root_admitted(admission, layout)?;
+    let event = admission
+        .try_root_commit()
+        .map_err(AuthorityError::Admission)?
+        .ok_or(AuthorityError::RootBusy)?;
+    let held = event.root_guard().map_err(AuthorityError::Admission)?;
+    commit_phase_transition_held(fs, provider, layout, checkpoint, held)
+}
+
+/// As [`commit_phase_transition`], under a root event the caller already holds from its exclusive
+/// admission, as [`commit_journal_checkpoint_held`] is for the checkpoint. `held` must guard the root
+/// of `layout`, and the caller must hold the installation's exclusive admission: the conversion
+/// driver does, by the borrow its session keeps.
+pub(crate) fn commit_phase_transition_held<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    checkpoint: JournalCheckpoint<'_>,
+    held: &RootCommitGuard,
+) -> Result<RootCommitted, AuthorityError> {
+    commit_revision_held(
+        fs,
+        provider,
+        layout,
+        checkpoint,
+        held,
+        Revision::PhaseTransition,
+    )
+}
+
+/// Whether the journal owner's next revision keeps the phase or changes it.
+#[derive(Clone, Copy)]
+enum Revision {
+    Progress,
+    PhaseTransition,
+}
+
+/// Proves that `admission` guards the root of `layout`, before anything is read or written.
+fn ensure_root_admitted(
+    admission: &ExclusiveAdmissionGuard,
+    layout: RootLayout<'_>,
+) -> Result<(), AuthorityError> {
+    let root = std::fs::canonicalize(layout.root_dir)
+        .map_err(|error| AuthorityError::Admission(AdmissionError::from(error)))?;
+    let installation = root.parent().ok_or(AuthorityError::NotAdmitted)?;
+    let scope = AdmissionScope {
+        installation_dir: installation,
+        root_dir: &root,
+    };
+    if admission.guards(scope) {
+        Ok(())
+    } else {
+        Err(AuthorityError::NotAdmitted)
+    }
+}
+
+/// The commit shared by the checkpoint and the phase transition: the same authority checks and the
+/// same promote, differing only in the successor relation `revision` requires of the manifest.
+fn commit_revision_held<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    checkpoint: JournalCheckpoint<'_>,
+    held: &RootCommitGuard,
+    revision: Revision,
+) -> Result<RootCommitted, AuthorityError> {
     check_operation_id(&checkpoint.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
     let commit = journal_catalog_commit(&checkpoint);
@@ -382,26 +545,35 @@ pub(crate) fn commit_journal_checkpoint_held<F: DurableFs, P: KeyProvider>(
     let key = route_journal_key(fs, provider, layout, checkpoint.journal)?;
     let published = {
         let mut journal = journal_context(&mut *fs, checkpoint.journal, &key, checkpoint.conflict);
-        publish_manifest_fenced(
-            &mut journal,
-            checkpoint.manifest,
-            checkpoint.fence,
-            Some(&committed),
-        )
-        .map_err(AuthorityError::Journal)?
+        let published = match revision {
+            Revision::Progress => publish_manifest_fenced(
+                &mut journal,
+                checkpoint.manifest,
+                checkpoint.fence,
+                Some(&committed),
+            ),
+            Revision::PhaseTransition => publish_phase_transition_fenced(
+                &mut journal,
+                checkpoint.manifest,
+                checkpoint.fence,
+                Some(&committed),
+            ),
+        };
+        published.map_err(AuthorityError::Journal)?
     };
     let next = binding_for(checkpoint.manifest, published.content_digest);
     let advance = binding_advance(&next, &checkpoint);
+    let binding = match revision {
+        Revision::Progress => BindingStep::Checkpoint(&advance),
+        Revision::PhaseTransition => BindingStep::PhaseTransition(&advance),
+    };
     commit_planned(
         fs,
         provider,
         layout,
         commit,
         held,
-        Some(JournalStep {
-            binding: BindingStep::Checkpoint(&advance),
-            key: &key,
-        }),
+        Some(JournalStep { binding, key: &key }),
     )
 }
 
@@ -1019,8 +1191,12 @@ fn binding_advance<'a>(
 /// How a binding advance relates to the binding the root names.
 #[derive(Clone, Copy)]
 enum BindingStep<'a> {
-    /// The same owner's next revision (§5.4), which leaves the inventory alone.
+    /// The same owner's next revision (§5.4), which leaves the inventory alone and keeps the phase.
     Checkpoint(&'a BindingAdvance<'a>),
+    /// The same owner's next revision when it changes the phase (§10.3): the only step that may, and
+    /// only [`commit_phase_transition`] and its `_held` form under the installation's exclusive
+    /// admission take it. It leaves the inventory alone like a checkpoint.
+    PhaseTransition(&'a BindingAdvance<'a>),
     /// The same owner's next revision when it is a capture of the inventory (§10.3): the only step
     /// that may change the inventory fields, and only as the capture-window successor.
     Capture(&'a BindingAdvance<'a>),
@@ -1044,6 +1220,7 @@ impl<'a> BindingStep<'a> {
     fn advance(&self) -> &'a BindingAdvance<'a> {
         match *self {
             BindingStep::Checkpoint(advance)
+            | BindingStep::PhaseTransition(advance)
             | BindingStep::Capture(advance)
             | BindingStep::Renewal(advance)
             | BindingStep::Takeover { advance, .. } => advance,
@@ -1149,9 +1326,10 @@ fn verify_binding_advance<F: DurableFs>(
         .ok_or(AuthorityError::NoLiveMigration)?;
     // QNBS-v3: the stale-owner comparison runs against the binding read from the root under root_commit_mutex, never against a binding the caller carried in; the journal is read by exact generation, with no directory enumeration.
     match step {
-        BindingStep::Checkpoint(_) | BindingStep::Capture(_) | BindingStep::Renewal(_) => {
-            assert_binding_successor(committed, advance.next)
-        }
+        BindingStep::Checkpoint(_)
+        | BindingStep::PhaseTransition(_)
+        | BindingStep::Capture(_)
+        | BindingStep::Renewal(_) => assert_binding_successor(committed, advance.next),
         BindingStep::Takeover { .. } => assert_binding_takeover(committed, advance.next),
     }
     .map_err(AuthorityError::LiveMigration)?;
@@ -1180,7 +1358,8 @@ fn assert_manifest_step(
     next: &JournalManifest,
 ) -> Result<(), MigrationExecutionError> {
     match step {
-        BindingStep::Checkpoint(_) => assert_progress_successor(committed, next),
+        BindingStep::Checkpoint(_) => assert_checkpoint_successor(committed, next),
+        BindingStep::PhaseTransition(_) => assert_phase_transition_successor(committed, next),
         BindingStep::Capture(_) => assert_capture_successor(committed, next),
         BindingStep::Renewal(_) => assert_renewal_successor(committed, next),
         BindingStep::Takeover { now_unix_ms, .. } => {

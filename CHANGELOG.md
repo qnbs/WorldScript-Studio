@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4E:** a journal phase change is now published only by `commit_phase_transition`, which takes the installation's exclusive admission by type. The progress checkpoint, the binding advance and the journal-level checkpoint publish refuse a successor that changes the phase, and the transition refuses one that keeps it, each before a journal byte is written. The conversion driver's own phase changes use the new commit and behave as before. The capture, takeover and renewal writers, the writer journal locator and the PREPARE/DONE windows are unchanged and stay closed. Issue #359. PR #1033.
+
 - **Operations:** add a versioned Vercel Preview retention runner for the post-merge
   reconciliation. `pnpm run vercel:retention:dry-run` is read-only and
   `pnpm run vercel:retention:reconcile` runs the full pass, both without arguments. A pass

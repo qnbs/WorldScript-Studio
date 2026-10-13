@@ -3104,8 +3104,16 @@ reads and writes while `PREPARE` lasts and after `DONE`: that window is not impl
 the root-named manifest (`read_committed_journal`), a journal location as writer configuration and a
 policy for reconciliation under the barrier, and no producer of a binding exists yet to need it
 (`ordinary_mutating_writes_admitted` is the specification of that later relaxation, not a gate in use).
-It also relies on a phase transition out of `PREPARE` happening under exclusive admission, which the
-conversion gate holds by type; making the lower-level transition require it is a separate step.
+It also relies on a phase transition out of `PREPARE` happening under exclusive admission.
+
+**A phase change has one publisher (Gate 4E E2 follow-up).** `commit_phase_transition` takes the
+installation's `ExclusiveAdmissionGuard` by mutable borrow, so a shared guard does not compile. An admission that does not guard the root of its layout is refused as `NotAdmitted`, and the
+progress checkpoint, the binding advance and the journal-level checkpoint publish refuse a successor
+that changes the phase (`PhaseChangeNotACheckpoint`), as the transition refuses one that keeps it
+(`NotAPhaseChange`). Each refusal precedes the first journal byte, and a generation promoted directly
+becomes authoritative only through the transition. The conversion gate's own phase changes use it.
+The capture, takeover and renewal writers are unchanged: they already keep the phase, and the barrier
+of the final (`ADMIT`) capture stays with E3. This opens no window and admits no producer of a binding.
 
 **Owner-approved E2 direction (2026-10-11), not general source admission:** a writer journal locator
 must be explicit, immutable and scope-bound; the committed operation, key route, exact manifest digest,
