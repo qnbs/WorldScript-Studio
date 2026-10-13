@@ -1,96 +1,44 @@
 name: Prune old GitHub deployment records
 
 on:
-  workflow_run:
-    workflows: [CI / CD]
-    types: [completed]
   schedule:
-    # Weekly cleanup on Sundays at 03:00 UTC
-    - cron: '0 3 * * 0'
+    # Daily reconciliation includes the Sunday 03:00 UTC backlog pass.
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
-# QNBS-v3: top-level read-only; deployments:write scoped to job (CodeQL Token-Permissions).
+# QNBS-v3: top-level read-only; the job holds no write scope while the destructive gate in scripts/pages-pruning/policy.mjs is closed (CodeQL Token-Permissions).
 permissions:
   contents: read
 
+concurrency:
+  group: github-pages-record-pruning
+  cancel-in-progress: false
+
 jobs:
   prune:
-    name: Keep latest 3 GitHub deployment records
+    name: Reconcile GitHub Pages records only
+    if: github.repository == 'qnbs/WorldScript-Studio' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      deployments: write
+      contents: read
+      actions: read
+      pages: read
+      deployments: read
     steps:
-      - name: Delete stale GitHub deployment records — keep latest 3 per environment
-        # QNBS-v3: v9.0.0 uses node24 — v7 was node20 (deprecated June 2026)
+      - name: Check out immutable trusted main execution tree
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Plan or reconcile bounded Pages records
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
+          retries: 0
           script: |
-            const KEEP = 3;
-
-            // QNBS-v3: GitHub API only; Vercel artifacts require the protected #627 procedure.
-            // QNBS-v3: Paginate all GitHub deployment records to prevent retention drift.
-            const allDeployments = await github.paginate(
-              github.rest.repos.listDeployments,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                per_page: 100,
-              },
-            );
-
-            // Group by environment, sort each group newest-first, keep the first KEEP
-            const byEnv = {};
-            for (const dep of allDeployments) {
-              const env = dep.environment || 'unknown';
-              (byEnv[env] ??= []).push(dep);
-            }
-
-            let totalDeleted = 0;
-            let totalFailed = 0;
-
-            for (const [env, deps] of Object.entries(byEnv)) {
-              const sorted = deps.sort((a, b) => b.id - a.id);
-              const toDelete = sorted.slice(KEEP);
-
-              if (toDelete.length === 0) {
-                core.info(`[${env}] Nothing to prune — only ${deps.length} deployment(s).`);
-                continue;
-              }
-
-              core.info(`[${env}] ${deps.length} total → pruning ${toDelete.length}, keeping ${KEEP} latest.`);
-
-              let deleted = 0;
-              let failed = 0;
-              for (const dep of toDelete) {
-                // A deployment must be inactive before it can be deleted
-                try {
-                  await github.rest.repos.createDeploymentStatus({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    deployment_id: dep.id,
-                    state: 'inactive',
-                  });
-                } catch (e) {
-                  core.warning(`[${env}] Could not inactivate ${dep.id}: ${e.message}`);
-                }
-
-                try {
-                  await github.rest.repos.deleteDeployment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    deployment_id: dep.id,
-                  });
-                  deleted++;
-                } catch (e) {
-                  core.warning(`[${env}] Could not delete ${dep.id}: ${e.message}`);
-                  failed++;
-                }
-              }
-
-              core.info(`[${env}] Done: ${deleted} deleted, ${failed} failed.`);
-              totalDeleted += deleted;
-              totalFailed += failed;
-            }
-
-            core.info(`All environments: ${totalDeleted} deleted, ${totalFailed} failed.`);
+            const { readFileSync } = require('node:fs');
+            const { pathToFileURL } = require('node:url');
+            const root = process.env.GITHUB_WORKSPACE;
+            const { runAction } = await import(pathToFileURL(`${root}/scripts/prune-pages-deployments.mjs`).href);
+            const holds = JSON.parse(readFileSync(`${root}/.github/pages-pruning-holds.json`, 'utf8'));
+            await runAction({ github, context, core, holds, workflowRef: process.env.GITHUB_WORKFLOW_REF });

@@ -12,7 +12,7 @@ This document summarizes the **current inventory** and **stabilization measures*
 |------|---------|-----------|
 | [`workflows/ci.yml`](workflows/ci.yml) | `push`/`pull_request` **main**, tags, `workflow_dispatch` | `security` → `quality` (matrix) → `build` \| `e2e` \| `storybook` \| `mutation` → `lighthouse` \| `vrt` → `deploy` (main) |
 | [`workflows/tauri-build.yml`](workflows/tauri-build.yml) | `workflow_dispatch`, tags `v*` | Desktop bundles (Linux/Win/macOS) |
-| [`workflows/prune-deployments.yml`](workflows/prune-deployments.yml) | `workflow_run` (after CI/CD), weekly cron, `workflow_dispatch` | Prune ALL environments (Production/Preview/github-pages); keeps latest 3 per env |
+| [`workflows/prune-deployments.yml`](workflows/prune-deployments.yml) | daily cron 03:00 UTC and `workflow_dispatch`, both only on `main`; no `workflow_run` | Reconciles GitHub Pages deployment records only (newest three plus the proven current and rollback publication and the evidence holds); read-only while the destructive gate is closed, see [`docs/PAGES-DEPLOYMENT-RECORD-PRUNING.md`](../docs/PAGES-DEPLOYMENT-RECORD-PRUNING.md) |
 | [`workflows/storybook-debug.yml`](workflows/storybook-debug.yml) | `workflow_dispatch` only | Cloud-first Storybook debug: configurable workers/retries, PWDEBUG output |
 | [`workflows/scorecard.yml`](workflows/scorecard.yml) | weekly cron, `workflow_dispatch` | OpenSSF Scorecard → GitHub Code Scanning SARIF (publish_results=false; api.scorecard.dev timed out on push runs) |
 | [`workflows/codeql.yml`](workflows/codeql.yml) | `push`/`pull_request` main, weekly cron | CodeQL JS/TS SAST |

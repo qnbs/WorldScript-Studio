@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Operations:** add a versioned Vercel Preview retention runner for the post-merge
+  reconciliation. `pnpm run vercel:retention:dry-run` is read-only and
+  `pnpm run vercel:retention:reconcile` runs the full pass, both without arguments. A pass
+  proves the exact-main gates and Production, classifies every preview conservatively,
+  re-reads the provider and revalidates each ID before deleting it, never retries a write,
+  and ends with a post-proof. A mutating pass runs only from a source equal to the reviewed
+  `origin/main`. Issue #627. PR #1032.
+
+- **Operations:** supersede the release-batched Vercel Preview retention record with
+  ordinary per-merge retention. A dated Active mode section in the retention policy names
+  the local Claude Code CLI session as the destructive writer under the maintainer decision
+  recorded in GH #627, keeps the #1020 record as history, and requires every deletion to
+  name one exact deployment ID revalidated against live data. AGENTS.md and the
+  deployment, merge and Cursor Cloud runbooks point to it. PR #1031.
+
+- **CI / Pages:** reconcile owned deployment records safely, keeping the newest three
+  plus current publication, rollback and evidence holds. Daily bounded reconciliation
+  replaces broad CI-completion triggers; manual dispatch is read-only. Both publication
+  slots are proven against the triggering run's actor before any candidate is classified,
+  so a forged status can neither consume the rollback slot nor vouch for a record.
+  Failed inactivation stops deletion, and every mutation revalidates the candidate, both
+  slots and trusted-main authority within a measured per-run request budget.
+  Destructive writes stay closed in code and in the workflow token until the owner admits a
+  writer-fence protocol, so even an enabled schedule only reports. Issue #1028. PR #1029.
+
 - **R-15 E2 preparation:** lifecycle transitions authenticate the committed migration binding before catalog pages and refuse with `RecoveryPending` even when those pages are missing or corrupt. Existing root-error, locked-provider and unbound-catalog behavior is preserved. The contract records the owner-approved locator, phase-barrier and error-priority direction; PREPARE/DONE windows remain closed. PR #1027.
 
 - **Security:** update quinn-proto to the OSV-fixed release 0.11.18 (RUSTSEC-2026-0338 to -0342). The crate is a transitive dependency through `tauri-plugin-http`, `reqwest` 0.12 and `quinn`; the lockfile-only update changes no manifest, feature, or toolchain pin and unblocks the required OSV scan. PR #1030.
