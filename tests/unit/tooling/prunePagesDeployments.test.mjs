@@ -950,3 +950,16 @@ test('the local CLI refuses every mode except --dry-run before any network acces
     assert.match(result.stderr, /Read-only Pages inventory failed/);
   }
 });
+
+test('a blocked run still lists every eligible record in the manifest as unexamined', async () => {
+  const input = records(4);
+  input[3].statuses.push(status(4, { id: 999, state: 'in_progress', created_at: date(99) }));
+  const result = await execute(client(input));
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['unproved-current-or-unsettled'], 1);
+  assert.equal(result.classified, 4);
+  assert.equal(result.manifest.length, 4);
+  assert.equal(disposition(result, 1).disposition, 'unexamined');
+  assert.deepEqual(disposition(result, 1).reasons, ['blocked-before-proof']);
+  assert.deepEqual(candidates(result), []);
+});

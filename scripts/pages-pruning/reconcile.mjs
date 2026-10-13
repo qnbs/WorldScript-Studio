@@ -74,7 +74,7 @@ function resolveMode(admitted, dryRun, destructive) {
 }
 
 // QNBS-v3: only records that received causal proof are reported as candidates; structurally eligible but unexamined records are listed separately and never counted as safe.
-function report(run, records, prepared) {
+function report(run, records, prepared, why = 'unexamined-batch-limit') {
   const { plan, proven, unexamined } = prepared;
   const { result } = run;
   result.classified = records.length;
@@ -87,7 +87,7 @@ function report(run, records, prepared) {
     ...unexamined.map((entry) => ({
       id: entry.id,
       disposition: 'unexamined',
-      reasons: ['unexamined-batch-limit'],
+      reasons: [why],
     })),
     ...proven.map((entry) => ({ id: entry.id, disposition: 'candidate', reasons: [] })),
   ];
@@ -226,7 +226,13 @@ async function execute(ctx, run, holds) {
   run.result.queried = records.length;
   const first = planPruning(records, holds);
   if (first.blocked) {
-    report(run, records, { plan: first, proven: [], unexamined: [] });
+    // QNBS-v3: a blocked run still lists every eligible record, as unexamined, so the manifest never silently drops records the counts include.
+    report(
+      run,
+      records,
+      { plan: first, proven: [], unexamined: first.candidates },
+      'blocked-before-proof',
+    );
     refuse('unproved-current-or-unsettled');
   }
   const prepared = await prepare(ctx, holds, records, first);
