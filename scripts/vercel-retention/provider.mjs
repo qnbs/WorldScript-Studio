@@ -33,6 +33,18 @@ function nextPage(body, key) {
   return pagination.next ?? null;
 }
 
+// QNBS-v3: a cursor that is not a positive integer, or that lies below the oldest record of its own page, would make the next request skip records and then end on an empty last page; it is refused instead of followed.
+function coherentCursor(shape, items, next) {
+  const stamps = items.map(shape.stamp);
+  const usable = [
+    Number.isInteger(next),
+    next > 0,
+    stamps.length > 0,
+    stamps.every(Number.isFinite),
+  ];
+  return usable.every(Boolean) && next >= Math.min(...stamps);
+}
+
 // QNBS-v3: the overlap between two pages must be byte-identical; a record that differs between reads (an alias rebound, a deployment that changed state) means the inventory moved while it was read, so it is refused instead of keeping either version.
 function remember(items, key, item) {
   const seen = items.get(key);
@@ -51,6 +63,8 @@ async function paged(deps, path, key, shape) {
     const body = await providerGet(deps, withQuery(path, params));
     const next = nextPage(body, key);
     if (!body[key].every(shape.valid)) refuse('invalid-provider-response');
+    if (next !== null && !coherentCursor(shape, body[key], next))
+      refuse('invalid-provider-response');
     const before = items.size;
     for (const item of body[key]) remember(items, shape.key(item), item);
     if (next === null) return [...items.values()];
@@ -66,11 +80,14 @@ const linkIsExplicit = (value) => value === null || DEPLOYMENT_ID.test(value);
 // QNBS-v3: every record must carry the fields classification relies on; an alias must name its host and state its deployment link explicitly (null for a redirect), so a response that drops or renames the link refuses instead of reading as "no alias".
 const DEPLOYMENT_SHAPE = {
   key: (item) => item.uid,
+  stamp: (item) => item.created,
   valid: (item) => DEPLOYMENT_ID.test(item?.uid),
 };
 
+// An alias record carries its creation instant twice: `created` as text, `createdAt` as the millisecond timestamp the page cursor is built from.
 const ALIAS_SHAPE = {
   key: (item) => item.alias,
+  stamp: (item) => item.createdAt,
   valid: (item) => hasHost(item) && linkIsExplicit(item.deploymentId),
 };
 

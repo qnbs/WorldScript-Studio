@@ -59,6 +59,8 @@ test('reconcile deletes only the proven SAFE previews and proves the rest afterw
     deletedAbsent: true,
     canonicalAliasesBound: true,
     protectedAliasesBound: true,
+    previewStatesHeld: true,
+    productionSetStable: true,
     productionReady: true,
     httpProduction: '200',
   });

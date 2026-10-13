@@ -46,6 +46,15 @@ const isPlainPreview = (deployment) =>
     Boolean,
   );
 
+const PR_ID = /^[1-9][0-9]*$/;
+
+// QNBS-v3: a PR identifier that is present but not a plain decimal string cannot be matched against the open-PR set, so it must not read as "closed or merged".
+function prIdMalformed(deployment) {
+  const id = deployment.meta?.githubPrId;
+  if ([undefined, null, ''].includes(id)) return false;
+  return typeof id !== 'string' || !PR_ID.test(id);
+}
+
 // QNBS-v3: each check names the reason it raises, so the list stays flat as checks are added and the reasons keep a fixed order.
 const UNKNOWN_CHECKS = [
   ['target-unrecognized', (deployment) => !isPlainPreview(deployment)],
@@ -53,6 +62,7 @@ const UNKNOWN_CHECKS = [
   ['non-terminal-state', (deployment) => !TERMINAL_STATES.has(deployment.readyState)],
   ['rollback-unknown', (deployment) => typeof deployment.isRollbackCandidate !== 'boolean'],
   ['branch-unknown', (deployment) => !deployment.meta?.githubCommitRef],
+  ['pr-id-malformed', prIdMalformed],
   ['commit-unknown', (deployment) => !FULL_SHA.test(deployment.meta?.githubCommitSha ?? '')],
   ['created-unknown', (deployment) => !Number.isFinite(deployment.created)],
 ];

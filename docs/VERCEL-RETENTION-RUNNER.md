@@ -34,8 +34,10 @@ print no tokens, e-mail addresses or provider error text.
    incomplete or unreadable inventory stops the run. Every record must carry what classification
    relies on: a deployment an ID, an alias its host and an explicit deployment link (`null` for a
    redirect), an open PR a number, head branch and head commit; one malformed record refuses the
-   whole snapshot. The page cursor is a creation timestamp, so the next page starts one millisecond
-   above it and the overlap is removed by key; a record that differs between two reads means the
+   whole snapshot. The page cursor is a creation timestamp (`created` for deployments, `createdAt`
+   for aliases): it must be a positive integer that does not lie below the oldest record of its own
+   page, otherwise the inventory is refused instead of followed. The next page starts one
+   millisecond above the cursor and the overlap is removed by key; a record that differs between two reads means the
    inventory moved while it was read (`provider-inventory-inconsistent`), and a page that adds
    nothing new stops as `provider-pagination-stalled` instead of passing as complete.
 3. **Classification** (pure, in `classify.mjs`). Anything that is, is moving to (`ROLLING`), was
@@ -45,7 +47,8 @@ print no tokens, e-mail addresses or provider error text.
    dated previews of an open PR, builds `main` or an open PR head, is named in
    `.github/vercel-retention-holds.json` as review or retest evidence, or has failed or been canceled
    while its branch or an open PR still exists. It is `UNKNOWN` when its identity, state, rollback
-   flag, branch, commit SHA or creation time is missing or contradictory, when its target is not the
+   flag, branch, commit SHA or creation time is missing or contradictory, when its PR identifier is
+   present but not a plain decimal string, when its target is not the
    plain Preview (a custom environment such as `staging`), or when it has no PR but a live branch or
    an orphan alias. Only the rest is `SAFE`. The manifest line shows ID, verdict, branch, PR, commit,
    state/target, creation time, alias hosts, lifecycle and reasons: a gate that passed adds no
@@ -54,7 +57,9 @@ print no tokens, e-mail addresses or provider error text.
 4. **Deletion** (`reconcile` only), at most 25 per pass, newest first. For every ID the run re-reads
    `main`, the gates and the whole provider state and re-classifies it. A changed verdict only defers
    that ID. A branch alias of a gone branch is removed first, after it is shown to bind to that
-   deployment and not to be canonical; then `vercel remove <dpl_id> --safe --yes`. Each call names
+   deployment and not to be canonical (an alias removal that fails is settled by re-reading the
+   binding: gone means it landed and the pass goes on without a retry, still bound stops the pass);
+   then `vercel remove <dpl_id> --safe --yes`. Each call names
    one validated deployment ID or alias host, so a project name can never reach the project-wide
    form of `remove`. A write is never retried: a failed or unconfirmed one stops the pass, and a
    write of unclear outcome is settled by re-reading the inventory.
@@ -62,7 +67,10 @@ print no tokens, e-mail addresses or provider error text.
    then the anchored gates again, the same Production deployment still `READY`, every protected ID
    and every ID that was deferred after its verdict changed still present, every deleted ID absent,
    the canonical aliases still bound to Production, every branch alias of a kept preview still bound
-   to the same deployment, HTTP 200. Anything else stops the run as `postproof-failed`. A legitimate
+   to the same deployment, every kept preview that had settled (`READY`, `ERROR`, `CANCELED`) still in
+   that state, no Production-class deployment that was not in the plan (a promotion or rollback
+   started during the wave), HTTP 200. A deferred ID is held to the same alias and state checks
+   as a planned one. Anything else stops the run as `postproof-failed`. A legitimate
    push to a kept PR branch during the pass rebinds its alias and fails this check; nothing was
    deleted because of it and a new pass re-proves.
 

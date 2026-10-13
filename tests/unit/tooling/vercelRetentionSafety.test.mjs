@@ -7,7 +7,14 @@ import { runRetention } from '../../../scripts/vercel-retention/apply.mjs';
 import { main } from '../../../scripts/vercel-retention/cli.mjs';
 import { acquireLock } from '../../../scripts/vercel-retention/lock.mjs';
 import { listDeployments } from '../../../scripts/vercel-retention/provider.mjs';
-import { MAIN, makeDeps, preview, standardWorld } from './support/vercelRetentionFixture.mjs';
+import {
+  aliasEntry,
+  MAIN,
+  makeDeps,
+  preview,
+  production,
+  standardWorld,
+} from './support/vercelRetentionFixture.mjs';
 
 const OTHER = 'c'.repeat(40);
 const dry = (world) => runRetention(makeDeps(world), 'dry-run');
@@ -60,7 +67,7 @@ for (const [name, change] of Object.entries({
 
 test('a redirect alias that states a null deployment link is a valid record', async () => {
   const world = standardWorld();
-  world.aliases.push({ alias: 'redirect.vercel.app', deploymentId: null, created: 300 });
+  world.aliases.push(aliasEntry('redirect.vercel.app', null, 300));
   assert.equal((await dry(world)).safe, 4);
 });
 
@@ -85,11 +92,7 @@ test('the literal preview target is an ordinary Preview', async () => {
 test('the branch alias of an open fork PR is protected although its ref is not in origin', async () => {
   const world = standardWorld();
   world.branches.delete('feat/open');
-  world.aliases.push({
-    alias: 'worldscript-studio-feat-open-old.vercel.app',
-    deploymentId: 'dpl_prev1',
-    created: 250,
-  });
+  world.aliases.push(aliasEntry('worldscript-studio-feat-open-old.vercel.app', 'dpl_prev1', 250));
   const summary = await reconcile(world);
   assert.equal(verdicts(summary).dpl_prev1.verdict, 'PROTECTED');
   assert.ok(verdicts(summary).dpl_prev1.reasons.includes('active-branch-alias'));
@@ -102,11 +105,7 @@ test('the branch alias of an open fork PR is protected although its ref is not i
 test('an alias read twice with different content means the inventory moved and is refused', async () => {
   const world = standardWorld();
   world.pageSize = 4;
-  world.aliases.push({
-    alias: world.aliases[3].alias,
-    deploymentId: 'dpl_prev4',
-    created: world.aliases[3].created,
-  });
+  world.aliases.push(aliasEntry(world.aliases[3].alias, 'dpl_prev4', world.aliases[3].createdAt));
   const error = await stop(() => dry(world));
   assert.equal(error.reason, 'provider-inventory-inconsistent');
 });
@@ -179,6 +178,105 @@ test('a deployment that became protected during the pass must still be there at 
   const [present, required] = error.summary.postproof.protectedPresent.split('/').map(Number);
   assert.equal(required - present, 1);
 });
+
+test('a deferred ID keeps its live alias binding under the post-proof', async () => {
+  const world = standardWorld();
+  let lists = 0;
+  world.hooks.onRead = (live, args) => {
+    if (args[0] === 'pr' && ++lists === 2) {
+      live.prs.push({ number: 7, headRefName: 'fix/gone', headRefOid: 'e'.repeat(40) });
+      live.branches.add('fix/gone');
+    }
+  };
+  world.hooks.onWrite = (live, args) => {
+    if (args[1] === 'dpl_prev2')
+      live.aliases = live.aliases.filter((entry) => entry.deploymentId !== 'dpl_prev12');
+  };
+  const error = await stop(() => reconcile(world));
+  assert.equal(error.reason, 'postproof-failed');
+  assert.ok(find(world, 'dpl_prev12'));
+  assert.equal(error.summary.postproof.protectedAliasesBound, false);
+});
+
+test('a kept preview that stops being READY during the wave fails the post-proof', async () => {
+  const world = standardWorld();
+  world.hooks.onWrite = (live, args) => {
+    if (args[1] === 'dpl_prev1') find(live, 'dpl_prev5').readyState = 'ERROR';
+  };
+  const error = await stop(() => reconcile(world));
+  assert.equal(error.reason, 'postproof-failed');
+  assert.equal(error.summary.postproof.previewStatesHeld, false);
+});
+
+test('a kept preview that was still building is not held to a state it had not settled into', async () => {
+  const world = standardWorld();
+  find(world, 'dpl_prev5').readyState = 'BUILDING';
+  world.hooks.onWrite = (live, args) => {
+    if (args[1] === 'dpl_prev1') find(live, 'dpl_prev5').readyState = 'READY';
+  };
+  assert.equal((await reconcile(world)).postproof.previewStatesHeld, true);
+});
+
+test('a promotion that starts during the wave is not declared complete over', async () => {
+  const world = standardWorld();
+  world.hooks.onWrite = (live, args) => {
+    if (args[1] === 'dpl_prev1')
+      live.deployments.push(
+        production('dpl_rolling', 'e'.repeat(40), {
+          created: 6000,
+          target: null,
+          readySubstate: 'ROLLING',
+        }),
+      );
+  };
+  const error = await stop(() => reconcile(world));
+  assert.equal(error.reason, 'postproof-failed');
+  assert.equal(error.summary.postproof.productionSetStable, false);
+  assert.equal(error.summary.postproof.canonicalAliasesBound, true);
+});
+
+test('an alias removal that threw after the provider acted is settled by re-reading, not retried', async () => {
+  const world = standardWorld();
+  const host = 'worldscript-studio-git-fix-gone-qnbs-projects.vercel.app';
+  world.removeFault[host] = 'alias-throw-after';
+  const summary = await reconcile(world);
+  assert.ok(summary.deleted.includes('dpl_prev12'));
+  assert.equal(world.writes.filter((entry) => entry.includes(host)).length, 1);
+});
+
+for (const [name, cursor] of [
+  ['a negative cursor', -5],
+  ['a zero cursor', 0],
+  ['a fractional cursor', 1.5],
+  ['a textual cursor', '1000'],
+  ['a cursor below the oldest record of its own page', 3],
+])
+  test(`${name} refuses the inventory instead of being followed`, async () => {
+    const world = standardWorld();
+    world.pageSize = 4;
+    const deps = makeDeps(world);
+    const original = deps.vercel;
+    deps.vercel = (args) => {
+      const text = original(args);
+      if (!args[1]?.startsWith('/v6/deployments')) return text;
+      const body = JSON.parse(text);
+      if (body.pagination.next !== null) body.pagination.next = cursor;
+      return JSON.stringify(body);
+    };
+    const error = await stop(() => runRetention(deps, 'dry-run'));
+    assert.equal(error.reason, 'invalid-provider-response');
+  });
+
+for (const id of [9, '09', 'bogus', 0, 'x1', -3])
+  test(`a deployment with the PR identifier ${JSON.stringify(id)} is UNKNOWN, not "closed or merged"`, async () => {
+    const world = standardWorld();
+    find(world, 'dpl_prev11').meta.githubPrId = id;
+    const summary = await reconcile(world);
+    const row = verdicts(summary).dpl_prev11;
+    assert.equal(row.verdict, 'UNKNOWN');
+    assert.ok(row.reasons.includes('pr-id-malformed'));
+    assert.ok(find(world, 'dpl_prev11'));
+  });
 
 test('reconcile prints the whole manifest before its first write, then one summary line', async () => {
   const world = standardWorld();

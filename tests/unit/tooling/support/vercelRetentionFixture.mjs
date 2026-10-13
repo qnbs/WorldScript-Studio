@@ -49,7 +49,14 @@ export const greenRuns = (commit = MAIN) =>
     headSha: commit,
   }));
 
-const alias = (host, deploymentId, created) => ({ alias: host, deploymentId, created });
+// A provider alias record carries its creation instant as text (`created`) and as the millisecond cursor stamp (`createdAt`).
+export const aliasEntry = (host, deploymentId, stamp) => ({
+  alias: host,
+  deploymentId,
+  created: new Date(stamp).toISOString(),
+  createdAt: stamp,
+});
+const alias = aliasEntry;
 
 // Open PR 9 has five previews, closed PR 7 two (one aliased), and one preview has no PR.
 export function standardWorld() {
@@ -99,13 +106,15 @@ export function standardWorld() {
   };
 }
 
+const stamp = (item) => item.createdAt ?? item.created;
+
 function page(items, params, key, size) {
-  const sorted = [...items].sort((a, b) => b.created - a.created);
+  const sorted = [...items].sort((a, b) => stamp(b) - stamp(a));
   const until = Number(params.get('until'));
-  const start = params.has('until') ? sorted.findIndex((item) => item.created < until) : 0;
+  const start = params.has('until') ? sorted.findIndex((item) => stamp(item) < until) : 0;
   const slice = start < 0 ? [] : sorted.slice(start, start + size);
   const more = start >= 0 && start + size < sorted.length;
-  const next = more ? slice.at(-1).created : null;
+  const next = more ? stamp(slice.at(-1)) : null;
   return { [key]: slice, pagination: { count: slice.length, next } };
 }
 
@@ -143,8 +152,10 @@ function removeDeployment(world, id) {
 }
 
 function removeAliasEntry(world, host) {
-  if (world.removeFault[host] === 'alias-fail') throw new Error('alias failure');
+  const fault = world.removeFault[host];
+  if (fault === 'alias-fail') throw new Error('alias failure');
   world.aliases = world.aliases.filter((entry) => entry.alias !== host);
+  if (fault === 'alias-throw-after') throw new Error('timeout');
 }
 
 function mutate(world, args) {
@@ -191,7 +202,7 @@ function gh(world, args) {
 function endlessPage(world) {
   world.pages = (world.pages ?? 0) + 1;
   const uid = world.endless === 'same' ? 'dpl_same' : `dpl_endless${world.pages}`;
-  return JSON.stringify({ deployments: [{ uid }], pagination: { next: 1 } });
+  return JSON.stringify({ deployments: [{ uid, created: 1 }], pagination: { next: 1 } });
 }
 
 function vercel(world, args) {
