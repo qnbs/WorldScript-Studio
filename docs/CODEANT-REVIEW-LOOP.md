@@ -268,13 +268,10 @@ open dependent PRs, evidence naming its tip, local worktrees, and its current ti
 branch-retention rule in `PR-CI-MERGE-WORKFLOW.md`). Stale local/remote-tracking refs are classified
 before anything is pruned: an `origin/*` ref can be the last reachable pointer to unmerged commits,
 so pruning and deleting follow the preserve-first procedure in `GIT-WORKTREE-HOUSEKEEPING.md`.
-Start read-only:
-
-```bash
-git fetch                          # refresh remote-tracking refs, no pruning
-git remote prune origin --dry-run  # list stale origin/* refs without removing any
-git branch -vv                     # inspect the upstream state of local branches
-```
+Start with the snapshot-then-fetch sequence in `GIT-WORKTREE-HOUSEKEEPING.md`: it snapshots
+`refs/remotes/origin/*` as real refs, then runs `git fetch --no-prune --no-auto-maintenance origin`
+and the non-mutating `git remote prune origin --dry-run`. A bare `git fetch` is not read-only — it
+force-updates `origin/*` refs and, with `fetch.prune` or `remote.origin.prune` set, deletes them.
 
 ---
 
