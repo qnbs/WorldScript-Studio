@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Operations:** add a versioned Vercel Preview retention runner for the post-merge
+  reconciliation. `pnpm run vercel:retention:dry-run` is read-only and
+  `pnpm run vercel:retention:reconcile` runs the full pass, both without arguments. A pass
+  proves the exact-main gates and Production, classifies every preview conservatively,
+  re-reads the provider and revalidates each ID before deleting it, never retries a write,
+  and ends with a post-proof. A mutating pass runs only from a source equal to the reviewed
+  `origin/main`. Issue #627. PR #1032.
+
 - **Security:** update quinn-proto to the OSV-fixed release 0.11.18 (RUSTSEC-2026-0338 to -0342). The crate is a transitive dependency through `tauri-plugin-http`, `reqwest` 0.12 and `quinn`; the lockfile-only update changes no manifest, feature, or toolchain pin and unblocks the required OSV scan. PR #1030.
 
 - **R-15 Gate 4E evidence:** coordination-resource preservation checks inspect links without following them and reject nonempty files, FIFOs, sockets, and observation errors. Fixture-scoped regressions cover missing/empty resources and link variants. The ordinary-operation barrier is unchanged. Clean successor to PR #1021. PR #1026.
