@@ -41,6 +41,8 @@
     "i18n:report": "node scripts/i18n-quality-report.mjs",
     "i18n:quality": "node scripts/i18n-quality-report.mjs --strict --min-coverage 75 --max-length-outliers 8",
     "verify:vendor": "node scripts/verify-vendor-fork.mjs",
+    "vercel:retention:dry-run": "node scripts/vercel-retention/cli.mjs dry-run",
+    "vercel:retention:reconcile": "node scripts/vercel-retention/cli.mjs reconcile",
     "i18n:status": "tsx scripts/i18n-status-dashboard.ts",
     "content:guard": "node scripts/content-guard.mjs",
     "parity:check": "tsx scripts/audit-feature-parity.ts",

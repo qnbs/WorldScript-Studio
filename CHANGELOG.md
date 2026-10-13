@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Operations:** add a versioned Vercel Preview retention runner for the post-merge
+  reconciliation. `pnpm run vercel:retention:dry-run` is read-only and
+  `pnpm run vercel:retention:reconcile` runs the full pass, both without arguments. A pass
+  proves the exact-main gates and Production, classifies every preview conservatively,
+  re-reads the provider and revalidates each ID before deleting it, never retries a write,
+  and ends with a post-proof. A mutating pass runs only from a source equal to the reviewed
+  `origin/main`. Issue #627. PR #1032.
+
 - **Operations:** supersede the release-batched Vercel Preview retention record with
   ordinary per-merge retention. A dated Active mode section in the retention policy names
   the local Claude Code CLI session as the destructive writer under the maintainer decision
