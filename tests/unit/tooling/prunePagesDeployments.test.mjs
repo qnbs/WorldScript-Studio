@@ -805,6 +805,54 @@ test('the same budget refusal after the inactive-status POST stays a failure', a
   );
 });
 
+// The allowance falls by one per call, like the real counter.
+const countdown = (start) => (calls) => ({ 'x-ratelimit-remaining': String(start - calls) });
+
+test('inventory reads stop before the live allowance drops below the CI reserve', async () => {
+  const github = client(records(150), undefined, countdown(120));
+  const result = await execute(github, { dryRun: true });
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['rate-reserve'], 1);
+  // The 20th response reports 100 left, which is the reserve; no 21st request is sent.
+  assert.equal(github.calls.length, 20);
+  assert.equal(result.requests, 20);
+  assert.equal(result.candidate, 0);
+  assert.deepEqual(writes(github), []);
+});
+
+for (const [remaining, completes] of [
+  ['101', true],
+  ['100', false],
+])
+  test(`an allowance of ${remaining} ${completes ? 'lets the read-only pass finish' : 'is refused after the first request'}`, async () => {
+    const github = client(records(6), undefined, { 'x-ratelimit-remaining': remaining });
+    const result = await execute(github, { dryRun: true });
+    assert.equal(result.failed, completes ? 0 : 1);
+    assert.equal(result.reasons['rate-reserve'], completes ? undefined : 1);
+    if (!completes) assert.equal(github.calls.length, 1);
+    assert.deepEqual(writes(github), []);
+  });
+
+test('a response without a rate header stops the run after the first request', async () => {
+  const github = client(records(4), undefined, { 'x-ratelimit-remaining': undefined });
+  const result = await execute(github, { dryRun: true });
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['rate-unknown'], 1);
+  assert.equal(github.calls.length, 1);
+});
+
+test('a throttled response lowers the allowance before any retry can be sent', async () => {
+  const github = client(records(4), () => {
+    throw Object.assign(apiError(429, '0'), {
+      response: { headers: { 'retry-after': '0', 'x-ratelimit-remaining': '50' } },
+    });
+  });
+  const result = await execute(github, { dryRun: true });
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['rate-reserve'], 1);
+  assert.equal(github.calls.length, 1);
+});
+
 test('a candidate whose publication run no longer exists is protected', async () => {
   const github = client(records(5), (route) => {
     if (route.endsWith('/actions/runs/1001')) throw apiError(404);

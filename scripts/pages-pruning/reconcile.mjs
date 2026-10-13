@@ -255,7 +255,8 @@ async function retireWithinBudget(session, candidate) {
   try {
     return await retire(session, candidate);
   } catch (error) {
-    if (error.reason === 'request-budget' && run.result.attempted === attempted) return 'budget';
+    const spent = ['request-budget', 'rate-reserve'].includes(error.reason);
+    if (spent && run.result.attempted === attempted) return 'budget';
     throw error;
   }
 }

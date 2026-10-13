@@ -141,8 +141,11 @@ three attempts per read plus the DELETE (70 requests for a small inventory, 151 
 the live `x-ratelimit-remaining` value last reported by GitHub, with a reserve of 100 requests kept
 for CI. The same check gates the proof scan, the POST and a DELETE that needs no POST; none of them
 is issued when the last reported allowance cannot cover it (other consumers of the same token can
-still lower it afterwards). The rate headers of failed reads and writes count too, so a run of
-404 responses cannot spend the reserve unnoticed. A budget refusal before a candidate's first
+still lower it afterwards). Every read, retries and the whole inventory included, is also gated
+by the live allowance before it is sent: a read that would leave fewer than 100 requests stops the
+run with `rate-reserve`, and once a response has succeeded a missing rate header stops it with
+`rate-unknown`, so the local 450 counter is never the only brake. The rate headers of failed reads
+and writes count too, so a run of 404 responses cannot spend the reserve unnoticed. A budget refusal before a candidate's first
 write (a retry storm in its first revalidation) is the same graceful `budget-limit` stop; after the
 POST it stays a failure. An inventory that alone exceeds the budget fails
 closed with `request-budget` before any write. Measured by the test fixture (GET + POST + DELETE,

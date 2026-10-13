@@ -130,6 +130,12 @@ function routeTable(state, next) {
   ];
 }
 
+// Like the real API, every fixture response reports the live allowance unless a test overrides it; `headers` may be a function of the call count.
+const withAllowance = (headers, count) => ({
+  'x-ratelimit-remaining': '5000',
+  ...(typeof headers === 'function' ? headers(count) : headers),
+});
+
 export function client(initial, intercept = () => undefined, headers = {}) {
   const state = structuredClone(initial);
   const calls = [];
@@ -147,7 +153,10 @@ export function client(initial, intercept = () => undefined, headers = {}) {
       );
       if (!hit) throw new Error(`Unexpected fixture route ${route}`);
       const match = typeof hit[0] === 'string' ? null : hit[0].exec(route);
-      return { data: structuredClone(await hit[1](match, parameters)), headers };
+      return {
+        data: structuredClone(await hit[1](match, parameters)),
+        headers: withAllowance(headers, calls.length),
+      };
     },
   };
 }

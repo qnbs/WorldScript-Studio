@@ -26,6 +26,7 @@ export function createContext({ github, authority, pause = defaultPause, limit =
     pause,
     limit,
     used: 0,
+    answered: false,
     remaining: null,
     repositoryId: null,
     proven: new Map(),
@@ -58,11 +59,19 @@ function shouldRetry(error, attempt, delay) {
   ].every(Boolean);
 }
 
+// QNBS-v3: every read, each retry included, passes the live allowance before it is sent; once a response has succeeded the allowance must be known, so a missing rate header stops the run instead of leaving the local counter as the only brake (failed attempts before any success are bounded by READ_ATTEMPTS), and a read never takes the allowance below the CI reserve.
+function spendRead(ctx) {
+  if (ctx.answered && ctx.remaining === null) refuse('rate-unknown');
+  if (ctx.remaining !== null && ctx.remaining < RATE_RESERVE + 1) refuse('rate-reserve');
+  spend(ctx);
+}
+
 export async function read(ctx, route, parameters = {}) {
   for (let attempt = 0; ; attempt++) {
-    spend(ctx);
+    spendRead(ctx);
     try {
       const response = await ctx.github.request(`GET ${route}`, parameters);
+      ctx.answered = true;
       noteRate(ctx, response.headers);
       return response;
     } catch (error) {
