@@ -492,6 +492,27 @@ fn the_journal_publishers_split_the_same_way_before_any_write() {
 }
 
 #[test]
+fn the_transition_publisher_refuses_a_bootstrap_and_leaves_it_to_the_regular_publisher() {
+    let installation = Installation::new();
+    let zero = manifest_at(0, phase_code::BOOTSTRAP_TARGET);
+    let fence = MigrationFence::from_manifest(&zero);
+    let operation = WriteOperationId::generate().unwrap();
+    let key = journal_key();
+    let mut fs = StdFs;
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, &installation.journal_dir, &operation);
+    assert_eq!(
+        publish_phase_transition_fenced(&mut ctx, &zero, &fence, None),
+        Err(JournalDurableError::Authority(
+            MigrationExecutionError::NotAPhaseChange
+        ))
+    );
+    assert!(installation.journal_names().is_empty());
+    // The bootstrap itself is unchanged: the regular publisher still writes generation 0.
+    publish_manifest_fenced(&mut ctx, &zero, &fence, None).unwrap();
+    assert_eq!(installation.journal_names().len(), 1);
+}
+
+#[test]
 fn no_transition_can_start_while_an_ordinary_operation_holds_the_shared_admission() {
     let bound = Bound::new();
     let shared = SharedAdmissionGuard::try_acquire(bound.installation.scope())

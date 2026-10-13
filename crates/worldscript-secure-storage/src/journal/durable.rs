@@ -300,7 +300,9 @@ pub fn publish_manifest_fenced<F: DurableFs>(
 ///
 /// Everything is checked and published exactly as [`publish_manifest_fenced`] does, except that the
 /// successor must change the phase (`NotAPhaseChange` otherwise) and is still a valid successor of
-/// the committed generation in every other rule. This function takes no admission: a generation it
+/// the committed generation in every other rule. It needs a committed predecessor: the bootstrap
+/// revision is no phase change and is refused the same way before any journal I/O, and stays with the
+/// regular publisher. This function takes no admission: a generation it
 /// writes becomes authoritative only when the root commits a binding step for it, and the root
 /// accepts a phase change only from the phase-transition commit, which holds the installation's
 /// exclusive admission by type.
@@ -454,7 +456,14 @@ fn assert_successor_of_committed<F: DurableFs>(
     rule: PhaseRule,
 ) -> Result<(), JournalDurableError> {
     let Some(live) = committed else {
-        return Ok(());
+        // Only the bootstrap revision reaches here, and it has no predecessor: it is no phase change,
+        // so the phase-transition publisher refuses it before any journal I/O.
+        return match rule {
+            PhaseRule::Kept => Ok(()),
+            PhaseRule::Changed => Err(JournalDurableError::Authority(
+                MigrationExecutionError::NotAPhaseChange,
+            )),
+        };
     };
     let current = load_authoritative_manifest(ctx, live)?;
     let relation = if ctx.capture {

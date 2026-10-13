@@ -1292,13 +1292,16 @@ candidate are in scope above; B2 is not terminal.
 ## Gate 4E E2 follow-up: a phase change is published under exclusive admission
 
 `authority::commit_phase_transition` takes the installation's `ExclusiveAdmissionGuard` by mutable
-borrow and is the only way a phase change becomes authoritative in the production crate: the raw
+borrow and is the only way to start a phase change in the production crate: the raw
 `commit_root`, which publishes whatever binding it is given, is crate-private there and exported only
 with the test-only `test-support` feature, like `load_catalog` and `list_records`. The root classifies every binding
 advance (`BindingStep`): the progress checkpoint keeps the phase, the transition changes it, and
 capture, renewal and takeover keep their own relations, which already keep the phase. The journal
 level splits the same way: `publish_manifest_fenced` refuses a phase change and
-`publish_phase_transition_fenced` refuses a successor that keeps the phase, each before a write.
+`publish_phase_transition_fenced` refuses a successor that keeps the phase, each before a write; the
+latter also refuses a bootstrap, which has no predecessor, and leaves it to the regular publisher.
+A transition interrupted by a crash after the anchor was prepared is completed forward by `recover_root`,
+which asks for no exclusive admission; that is open and recorded on #359.
 
 | Claim | Pinned by `gate4e_phase_transition_test.rs` |
 |---|---|
@@ -1308,6 +1311,7 @@ level splits the same way: `publish_manifest_fenced` refuses a phase change and
 | an admission for another root is refused (`NotAdmitted`) and writes nothing | `an_admission_for_another_root_is_refused_before_anything_is_written` |
 | a phase change promoted directly is refused by the binding advance and the checkpoint, and is adopted without a journal write only by the transition | `a_phase_change_promoted_directly_becomes_authoritative_only_through_the_exclusive_transition` |
 | the journal-level publishers split the same way before any write | `the_journal_publishers_split_the_same_way_before_any_write` |
+| the transition publisher refuses a bootstrap before any journal I/O and leaves it to the regular publisher | `the_transition_publisher_refuses_a_bootstrap_and_leaves_it_to_the_regular_publisher` |
 | a shared admission excludes the exclusive one a transition needs | `no_transition_can_start_while_an_ordinary_operation_holds_the_shared_admission` |
 | on Unix, a root alias retargeted during the commit cannot redirect it, and an alias that already leads to another root is refused (`NotAdmitted`); the other root is untouched | `a_root_alias_retargeted_during_the_commit_cannot_redirect_it`, `a_root_alias_that_leads_to_another_root_is_refused_before_anything_is_written` (module `gate4e_phase_transition_test/through_an_alias.rs`) |
 

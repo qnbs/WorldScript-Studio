@@ -401,8 +401,10 @@ pub(crate) fn commit_journal_checkpoint_held<F: DurableFs, P: KeyProvider>(
 /// the root binding to it (§10.3), under the installation's exclusive admission.
 ///
 /// A phase change ends the window in which one phase admitted what the next one forbids: `PREPARE`
-/// admits ordinary operations, `ADMIT` onward does not. It cannot be published while an ordinary
-/// operation may be in flight, and the signature says so. The call takes the installation's
+/// admits ordinary operations, `ADMIT` onward does not. It cannot be started while an ordinary
+/// operation may be in flight, and the signature says so. A transition that a crash interrupts after
+/// the anchor was prepared is completed forward by root recovery, which does not ask for the exclusive
+/// admission; that is an open point of the recovery protocol, recorded on #359. The call takes the installation's
 /// [`ExclusiveAdmissionGuard`] by mutable borrow, which no shared holder can coexist with, and takes
 /// the root commit event from that same admission ([`ExclusiveAdmissionGuard::try_root_commit`]), so
 /// the root is committed below the admission it was proven against. A shared guard cannot be passed:
