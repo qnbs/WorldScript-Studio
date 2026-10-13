@@ -587,6 +587,14 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         provider: &PublishedProvider<'_, P>,
         require_quiescent: bool,
     ) -> Result<(), OperationError> {
+        // A committed migration binding refuses lifecycle claims before any catalog observation.
+        // Keep the existing catalog/root error envelope for genuinely unusable root authority.
+        let committed = crate::root_store::load_committed_root(fs, provider, self.scope.layout())
+            .map_err(AuthorityError::from)?
+            .ok_or(OperationError::MigrationRequired)?;
+        if committed.root.live_migration.is_some() {
+            return Err(OperationError::RecoveryPending);
+        }
         let catalog = crate::authority::load_catalog(fs, provider, self.scope.layout())?
             .ok_or(OperationError::MigrationRequired)?;
         if catalog.root.live_migration.is_some()

@@ -1286,6 +1286,97 @@ fn barrier_remove_catalog_pages(fixture: &Fixture) -> usize {
     remove(&fixture.root.join("catalog"))
 }
 
+struct BarrierObservationFs<'a> {
+    root: &'a Path,
+    catalog_observations: usize,
+    root_error: Option<io::ErrorKind>,
+}
+
+impl BarrierObservationFs<'_> {
+    fn observe(&mut self, path: &Path) -> io::Result<()> {
+        if path.starts_with(self.root.join("catalog")) {
+            self.catalog_observations += 1;
+            return Err(io::Error::from(io::ErrorKind::PermissionDenied));
+        }
+        match self.root_error {
+            Some(kind)
+                if path.starts_with(self.root.join("slot-a"))
+                    || path.starts_with(self.root.join("slot-b")) =>
+            {
+                Err(io::Error::from(kind))
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+impl DurableFs for BarrierObservationFs<'_> {
+    type File = fs::File;
+    fn create_new(&mut self, path: &Path) -> io::Result<fs::File> {
+        StdFs.create_new(path)
+    }
+    fn sync_file(&mut self, file: &mut fs::File) -> io::Result<()> {
+        StdFs.sync_file(file)
+    }
+    fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+        self.observe(path)?;
+        StdFs.read(path)
+    }
+    fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        self.observe(path)?;
+        StdFs.read_at_most(path, limit)
+    }
+    fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        StdFs.link_no_replace(from, to)
+    }
+    fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        StdFs.remove_file(path)
+    }
+    fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+        StdFs.sync_dir(dir)
+    }
+    fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<std::ffi::OsString>> {
+        self.observe(dir)?;
+        StdFs.list_dir(dir)
+    }
+    fn list_dir_at_most(
+        &mut self,
+        dir: &Path,
+        limit: usize,
+    ) -> io::Result<Option<Vec<std::ffi::OsString>>> {
+        self.observe(dir)?;
+        StdFs.list_dir_at_most(dir, limit)
+    }
+    fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        StdFs.rename_replace(from, to)
+    }
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        StdFs.create_dir_all(dir)
+    }
+}
+
+#[test]
+fn barrier_observer_intercepts_file_reads_and_directory_enumerations() {
+    let fixture = barrier_bound();
+    let mut filesystem = BarrierObservationFs {
+        root: &fixture.root,
+        catalog_observations: 0,
+        root_error: None,
+    };
+    let dir = fixture.root.join("catalog");
+    let results = [
+        filesystem.read(&dir).map(|_| ()),
+        filesystem.read_at_most(&dir, 1).map(|_| ()),
+        filesystem.list_dir(&dir).map(|_| ()),
+        filesystem.list_dir_at_most(&dir, 1).map(|_| ()),
+    ];
+    assert_eq!(
+        results.map(|result| result.unwrap_err().kind()),
+        [io::ErrorKind::PermissionDenied; 4]
+    );
+    assert_eq!(filesystem.catalog_observations, 4);
+}
+
 /// Lock (0), unlock (1) or shutdown (2) on a fresh storage built from `setup`, as its outcome.
 fn barrier_transition(
     setup: Setup,
@@ -1294,11 +1385,27 @@ fn barrier_transition(
 ) -> Result<(), OperationError> {
     let fixture = Fixture::with_setup(setup);
     damage(&fixture);
-    match which {
-        0 => poll_admitted(|| fixture.storage().try_lock(&mut StdFs)).map(|_| ()),
-        1 => poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ()),
-        _ => poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
+    let before = barrier_tree(&fixture);
+    let mut filesystem = BarrierObservationFs {
+        root: &fixture.root,
+        catalog_observations: 0,
+        root_error: None,
+    };
+    let outcome = match which {
+        0 => poll_admitted(|| fixture.storage().try_lock(&mut filesystem)).map(|_| ()),
+        1 => poll_admitted(|| fixture.storage().try_unlock(&mut filesystem)).map(|_| ()),
+        _ => poll_admitted(|| fixture.storage().try_shutdown(&mut filesystem)),
+    };
+    assert_eq!(filesystem.catalog_observations, 0);
+    assert_eq!(barrier_tree(&fixture), before);
+    if which == 1 {
+        assert!(fixture.probe.lock_calls.load(Ordering::SeqCst) > 0);
+        assert!(matches!(
+            fixture.storage().try_authority_snapshot(&mut StdFs),
+            Err(OperationError::Provider(KeyProviderError::Locked))
+        ));
     }
+    outcome
 }
 
 #[test]
@@ -1310,10 +1417,7 @@ fn a_bound_root_with_an_intact_catalog_page_refuses_the_transitions_with_recover
 }
 
 #[test]
-fn a_bound_root_that_lost_a_catalog_page_fails_the_transitions_with_the_set_mismatch() {
-    let mismatch = OperationError::Catalog(AuthorityError::RecoveryRequired(
-        CatalogRecoveryReason::CatalogSetMismatch,
-    ));
+fn a_bound_root_that_lost_a_catalog_page_refuses_the_transitions_with_recovery_pending() {
     let outcomes: Vec<_> = (0..3)
         .map(|which| {
             barrier_transition(barrier_paged(), which, |fixture| {
@@ -1324,9 +1428,111 @@ fn a_bound_root_that_lost_a_catalog_page_fails_the_transitions_with_the_set_mism
             })
         })
         .collect();
-    // `load_catalog` returns `None` only when no root is committed: this is a committed, bound
-    // root, so a missing page is a set mismatch, never `MigrationRequired` and never `RecoveryPending`.
-    assert_eq!(outcomes, vec![Err(mismatch); 3]);
+    assert_eq!(outcomes, vec![Err(OperationError::RecoveryPending); 3]);
+}
+
+#[test]
+fn a_bound_root_with_corrupt_catalog_pages_refuses_before_observing_them() {
+    fn corrupt(dir: &Path) -> usize {
+        let mut changed = 0;
+        for entry in fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                changed += corrupt(&path);
+            } else {
+                fs::write(&path, b"corrupt catalog fixture").unwrap();
+                changed += 1;
+            }
+        }
+        changed
+    }
+    let outcomes: Vec<_> = (0..3)
+        .map(|which| {
+            barrier_transition(barrier_paged(), which, |fixture| {
+                assert!(corrupt(&fixture.root.join("catalog")) > 0);
+            })
+        })
+        .collect();
+    assert_eq!(outcomes, vec![Err(OperationError::RecoveryPending); 3]);
+}
+
+fn barrier_assert_lifecycle_root_error(bound: bool, which: usize, kind: io::ErrorKind) {
+    let fixture = Fixture::with_setup(Setup {
+        bound: bound.then(|| barrier_binding("barrier-operation", 1, 1, 0xAB)),
+        page: true,
+        ..Setup::default()
+    });
+    let before = barrier_tree(&fixture);
+    let mut filesystem = BarrierObservationFs {
+        root: &fixture.root,
+        catalog_observations: 0,
+        root_error: Some(kind),
+    };
+    let outcome = match which {
+        0 => poll_admitted(|| fixture.storage().try_lock(&mut filesystem)).map(|_| ()),
+        1 => poll_admitted(|| fixture.storage().try_unlock(&mut filesystem)).map(|_| ()),
+        _ => poll_admitted(|| fixture.storage().try_shutdown(&mut filesystem)),
+    };
+    let root_error = if kind == io::ErrorKind::NotFound {
+        RootStoreError::RecoveryRequired(RootRecoveryReason::CommittedSlotMissing)
+    } else {
+        RootStoreError::Io {
+            step: RootStep::ReadSlot,
+            kind,
+        }
+    };
+    assert_eq!(
+        outcome,
+        Err(OperationError::Catalog(AuthorityError::Root(root_error)))
+    );
+    assert_eq!(filesystem.catalog_observations, 0);
+    assert_eq!(barrier_tree(&fixture), before);
+}
+
+#[test]
+fn lifecycle_root_read_errors_keep_their_catalog_root_envelope_without_page_reads() {
+    for (bound, which) in [
+        (false, 0),
+        (false, 1),
+        (false, 2),
+        (true, 0),
+        (true, 1),
+        (true, 2),
+    ] {
+        for kind in [io::ErrorKind::PermissionDenied, io::ErrorKind::NotFound] {
+            barrier_assert_lifecycle_root_error(bound, which, kind);
+        }
+    }
+}
+
+#[test]
+fn an_unbound_root_with_a_missing_catalog_page_keeps_the_lifecycle_set_mismatch() {
+    let outcomes: Vec<_> = (0..3)
+        .map(|which| {
+            let fixture = Fixture::with_setup(Setup {
+                page: true,
+                ..Setup::default()
+            });
+            assert!(barrier_remove_catalog_pages(&fixture) > 0);
+            let before = barrier_tree(&fixture);
+            let outcome = match which {
+                0 => poll_admitted(|| fixture.storage().try_lock(&mut StdFs)).map(|_| ()),
+                1 => poll_admitted(|| fixture.storage().try_unlock(&mut StdFs)).map(|_| ()),
+                _ => poll_admitted(|| fixture.storage().try_shutdown(&mut StdFs)),
+            };
+            assert_eq!(barrier_tree(&fixture), before);
+            outcome
+        })
+        .collect();
+    assert_eq!(
+        outcomes,
+        vec![
+            Err(OperationError::Catalog(AuthorityError::RecoveryRequired(
+                CatalogRecoveryReason::CatalogSetMismatch,
+            )));
+            3
+        ]
+    );
 }
 
 #[test]

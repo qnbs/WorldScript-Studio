@@ -3086,11 +3086,13 @@ named only where a test pins it. The ordinary data operations (write, reconcile,
 lets the root recover an interrupted root commit (`recover_prepared_root_admitted`), which completes or
 discards a preparation that root commit already made durable and is not an ordinary write; when the
 interrupted commit is an ordinary catalog commit, which copies the binding forward, the refusal that
-follows is the same whether the recovery completed or discarded it. The transitions that claim something about the catalog
-(lock from an unlocked key, unlock, shutdown) load and verify the catalog first and then refuse with
-`RecoveryPending`; when the bound root's catalog cannot be used they fail with the error of that load
-instead (a missing required page is `RecoveryRequired(CatalogSetMismatch)`; other load failures, such
-as a tampered page, an unresolvable key or an I/O error, fail with their own error and are not pinned).
+follows is the same whether the recovery completed or discarded it. The owner-admitted E2 preparation
+changes the lifecycle error priority: transitions that claim something about the catalog (lock from an
+unlocked key, unlock, shutdown) authenticate the committed root first. A live binding refuses with
+`RecoveryPending` before catalog pages are observed, including missing or corrupt pages. This is a
+refusal, not permission to ignore corruption. Genuine root-load errors retain their existing
+`Catalog(AuthorityError::Root(...))` envelope; unbound roots still load and verify the catalog and retain
+its errors. No journal lookup or phase-dependent ordinary-operation window is introduced.
 `load_catalog` returns `None`, and the transitions `MigrationRequired`, only when no root is committed at
 all, which is not a bound root. A provider that starts locked fails before the root is consulted (a write
 with the provider's `Locked`); locking it again is idempotent, since nothing is admitted, and unlocking it
@@ -3104,6 +3106,26 @@ policy for reconciliation under the barrier, and no producer of a binding exists
 (`ordinary_mutating_writes_admitted` is the specification of that later relaxation, not a gate in use).
 It also relies on a phase transition out of `PREPARE` happening under exclusive admission, which the
 conversion gate holds by type; making the lower-level transition require it is a separate step.
+
+**Owner-approved E2 direction (2026-10-11), not general source admission:** a writer journal locator
+must be explicit, immutable and scope-bound; the committed operation, key route, exact manifest digest,
+fence and admitted filesystem identity authenticate its association. Missing, ambiguous or
+contradictory locators preserve data and refuse without searching for another journal. Future
+`PREPARE`/`DONE` windows require fresh authenticated phase/binding/fence under shared admission for the
+whole ordinary operation, with authority revalidated at writes. Every relevant phase-changing writer
+must mechanically hold exclusive admission before those windows can activate; until separately
+admitted and proven, the E1 barrier remains. Cached journal snapshots never grant authority. This
+direction does not admit E3, other migration phases, read/list policy, Gates 5–7 or release.
+
+| Lifecycle condition | Error priority / authority boundary |
+|---|---|
+| Locked provider / repeated lock | Existing provider refusal or idempotent lock; refused unlock clears runtime keys. |
+| Root unreadable, malformed, incompatible or unresolved | Preserve the actual root error; no catalog or phase fallback. |
+| Committed bound root, catalog intact/missing/corrupt | `RecoveryPending` before any catalog-page read; no ordinary write. |
+| Bound root, missing/wrong journal or locator | Root-bound refusal remains; unauthenticated journal association never grants a future window. |
+| Future admitted/authenticated window, catalog unusable | Preserve the real catalog error after authority checks; corruption never becomes success. |
+| Interrupted root commit / recovery | Existing separately authorized root recovery or refusal only; no uncertain-phase permission. |
+| Admission conflict, changed binding or stale fence | No admission or an authority refusal; stale snapshots cannot grant access. |
 
 ### 10.4 Operations
 
