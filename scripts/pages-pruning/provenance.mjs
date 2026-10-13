@@ -11,6 +11,9 @@ import {
 } from './policy.mjs';
 
 export const SLOT_DEPTH = 4;
+export const EXAMINE_LIMIT = 20;
+// QNBS-v3: ci.yml publishes Pages from every non-pull_request event on main, and its only such triggers are push and workflow_dispatch; a test keeps this set bound to the workflow file.
+export const PUBLISH_EVENTS = new Set(['push', 'workflow_dispatch']);
 const UNKNOWN = 'unknown-publication';
 
 function runFacts(run, record, identity) {
@@ -20,7 +23,7 @@ function runFacts(run, record, identity) {
     run.head_repository?.full_name === REPOSITORY,
     run.name === 'CI / CD',
     run.path === '.github/workflows/ci.yml',
-    run.event === 'push',
+    PUBLISH_EVENTS.has(run.event),
     run.head_branch === 'main',
     run.head_sha === record.sha,
     run.status === 'completed',
@@ -117,13 +120,16 @@ export async function proveSlots(ctx, records) {
   return refuse('no-proven-rollback');
 }
 
-// QNBS-v3: a candidate without causal proof is protected and skipped, so one unprovable record cannot stall the rest of the batch or turn the schedule permanently red.
-export async function selectBatch(ctx, candidates, slots) {
-  const batch = [];
-  for (const record of candidates.slice(0, MAX_BATCH * 2)) {
-    if (batch.length === MAX_BATCH) break;
-    if (await proves(ctx, record)) batch.push(record);
+// QNBS-v3: every examined candidate gets causal proof, so the manifest never reports an unexamined record as a candidate; the remainder is explicitly unexamined, and an unprovable record is protected instead of stalling the batch.
+export async function examineCandidates(ctx, candidates, slots) {
+  const proven = [];
+  for (const record of candidates.slice(0, EXAMINE_LIMIT)) {
+    if (await proves(ctx, record)) proven.push(record);
     else slots.unproved.push(record.id);
   }
-  return batch;
+  return {
+    proven,
+    batch: proven.slice(0, MAX_BATCH),
+    unexamined: candidates.slice(EXAMINE_LIMIT),
+  };
 }

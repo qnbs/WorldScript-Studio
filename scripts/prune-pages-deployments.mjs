@@ -14,7 +14,7 @@ export {
 } from './pages-pruning/policy.mjs';
 export { reconcilePages };
 
-const BACKLOG_REASONS = ['batch-limit', 'budget-limit'];
+const BACKLOG_REASONS = ['batch-limit', 'budget-limit', 'unexamined'];
 
 export async function runAction({
   github,

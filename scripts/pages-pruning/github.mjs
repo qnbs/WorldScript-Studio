@@ -20,6 +20,7 @@ export function createContext({ github, authority, pause = defaultPause, limit =
     remaining: null,
     repositoryId: null,
     proven: new Map(),
+    observed: { list: 1, status: 1 },
   };
 }
 
@@ -110,14 +111,22 @@ async function assertCanonicalNext(ctx, href, route, page) {
 
 const nextHref = (headers) => /<([^>]+)>;\s*rel="next"/.exec(headers?.link ?? '')?.[1] ?? null;
 
-export async function collect(ctx, route, maxPages = 20) {
+// QNBS-v3: the deepest page count seen per kind feeds the per-candidate cost ceiling, so the reservation grows with the real inventory instead of a fixed guess.
+function noteDepth(ctx, kind, pages) {
+  if (kind) ctx.observed[kind] = Math.max(ctx.observed[kind], pages);
+}
+
+export async function collect(ctx, route, maxPages = 20, kind = null) {
   const all = [];
   for (let page = 1; page <= maxPages; page++) {
     const response = await read(ctx, route, { per_page: PAGE_SIZE, page });
     if (!Array.isArray(response.data) || response.data.length > PAGE_SIZE) refuse('invalid-page');
     all.push(...response.data);
     const href = nextHref(response.headers);
-    if (href === null && response.data.length < PAGE_SIZE) return all;
+    if (href === null && response.data.length < PAGE_SIZE) {
+      noteDepth(ctx, kind, page);
+      return all;
+    }
     if (href === null) continue;
     if (response.data.length === 0) refuse('invalid-pagination-link');
     await assertCanonicalNext(ctx, href, route, page);
@@ -130,11 +139,12 @@ export async function assertPagesSite(ctx) {
   if (data.build_type !== 'workflow' || data.html_url !== SITE) refuse('unknown-pages-site');
 }
 
-export const listRecords = (ctx) => collect(ctx, `${ROOT}/deployments?environment=github-pages`);
+export const listRecords = (ctx) =>
+  collect(ctx, `${ROOT}/deployments?environment=github-pages`, 20, 'list');
 
 export function loadStatuses(ctx, record) {
   if (!validId(record.id)) refuse('invalid-inventory');
-  return collect(ctx, `${ROOT}/deployments/${record.id}/statuses`, 5);
+  return collect(ctx, `${ROOT}/deployments/${record.id}/statuses`, 5, 'status');
 }
 
 export async function inventory(ctx) {

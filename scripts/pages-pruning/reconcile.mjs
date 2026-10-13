@@ -11,17 +11,21 @@ import { createContext, inventory, listRecords, loadStatuses, read, write } from
 import {
   admission,
   DESTRUCTIVE_WRITES_ADMITTED,
-  MAX_BATCH,
   planPruning,
   publicationOrder,
   ROOT,
   SITE,
 } from './policy.mjs';
-import { ensureProven, proveSlots, selectBatch } from './provenance.mjs';
+import { ensureProven, examineCandidates, proveSlots } from './provenance.mjs';
 
-const CANDIDATE_CEILING = 40;
 const RATE_RESERVE = 100;
 const API_FAILURES = new Set([403, 404, 409, 429, 500, 502, 503, 504]);
+
+// QNBS-v3: one candidate costs two full refreshes (list pages, three focused histories that may grow by a page, the main read), the POST and DELETE, and a worst-case re-proof of both slots and the candidate.
+export function candidateCeiling(ctx) {
+  const { list, status } = ctx.observed;
+  return 2 * (list + 3 * (status + 1) + 1) + 2 + 6;
+}
 
 function newRun(authority, mode) {
   const result = {
@@ -54,32 +58,45 @@ function resolveMode(admitted, dryRun, destructive) {
   return anyOf(dryRun, admitted !== 'delete', !destructive) ? 'dry-run' : 'delete';
 }
 
-function report(run, records, plan) {
+// QNBS-v3: only records that received causal proof are reported as candidates; structurally eligible but unexamined records are listed separately and never counted as safe.
+function report(run, records, prepared) {
+  const { plan, proven, unexamined } = prepared;
   const { result } = run;
   result.classified = records.length;
   result.protected = plan.protectedRecords.length;
-  result.candidate = plan.candidates.length;
+  result.candidate = proven.length;
   result.current = plan.current;
   result.rollback = plan.rollback;
   result.manifest = [
     ...plan.protectedRecords.map((entry) => ({ ...entry, disposition: 'protected' })),
-    ...plan.candidates.map((entry) => ({ id: entry.id, disposition: 'candidate', reasons: [] })),
+    ...unexamined.map((entry) => ({
+      id: entry.id,
+      disposition: 'unexamined',
+      reasons: ['unexamined-batch-limit'],
+    })),
+    ...proven.map((entry) => ({ id: entry.id, disposition: 'candidate', reasons: [] })),
   ];
   for (const entry of plan.protectedRecords) for (const key of entry.reasons) run.reason(key);
+  if (unexamined.length) run.reason('unexamined', unexamined.length);
 }
 
-function finishDryRun(run, plan, records) {
-  run.result.skipped = plan.candidates.length;
+function finishDryRun(run, records) {
+  run.result.skipped = run.result.candidate;
   if (run.result.skipped) run.reason('dry-run', run.result.skipped);
   run.result.followUpRequired = records.length > 3;
   run.finalized = true;
 }
 
 async function prepare(ctx, holds, records, first) {
-  if (first.candidates.length === 0) return { plan: first, slots: null, batch: [] };
+  const none = { plan: first, slots: null, batch: [], proven: [], unexamined: [] };
+  if (first.candidates.length === 0) return none;
   const slots = await proveSlots(ctx, records);
-  const batch = await selectBatch(ctx, planPruning(records, holds, { slots }).candidates, slots);
-  return { plan: planPruning(records, holds, { slots }), slots, batch };
+  const examined = await examineCandidates(
+    ctx,
+    planPruning(records, holds, { slots }).candidates,
+    slots,
+  );
+  return { plan: planPruning(records, holds, { slots }), slots, ...examined };
 }
 
 function reusableStatuses(before, item, focus) {
@@ -87,22 +104,22 @@ function reusableStatuses(before, item, focus) {
   return listKey(item) === listKey(before) ? before.statuses : null;
 }
 
-async function refresh(ctx, state, focusId) {
-  const previous = new Map(state.records.map((record) => [record.id, record]));
-  const focus = new Set([focusId, state.slots.current, state.slots.rollback]);
+async function refresh(session, focusId) {
+  const previous = new Map(session.records.map((record) => [record.id, record]));
+  const focus = new Set([focusId, session.slots.current, session.slots.rollback]);
   const fresh = [];
-  for (const item of await listRecords(ctx)) {
+  for (const item of await listRecords(session.ctx)) {
     const kept = reusableStatuses(previous.get(item.id), item, focus);
-    fresh.push({ ...item, statuses: kept ?? (await loadStatuses(ctx, item)) });
+    fresh.push({ ...item, statuses: kept ?? (await loadStatuses(session.ctx, item)) });
   }
   return fresh;
 }
 
-function assertStable(state, fresh, next) {
+function assertStable(session, fresh, next) {
   const order = publicationOrder(fresh)
-    .slice(0, state.slots.order.length)
+    .slice(0, session.slots.order.length)
     .map((entry) => entry.record.id);
-  if (next.blocked || order.join() !== state.slots.order.join()) refuse('current-moved');
+  if (next.blocked || order.join() !== session.slots.order.join()) refuse('current-moved');
 }
 
 async function assertMainUnchanged(ctx) {
@@ -111,16 +128,17 @@ async function assertMainUnchanged(ctx) {
 }
 
 // QNBS-v3: holds are immutable at the executing main SHA; every write re-reads the list plus the candidate and both publication slots, and unchanged other records are trusted only while their list key is identical.
-async function revalidate(ctx, holds, state, candidate, expected) {
-  const fresh = await refresh(ctx, state, candidate.id);
-  const next = planPruning(fresh, holds, { slots: state.slots });
-  assertStable(state, fresh, next);
-  state.records = fresh;
+async function revalidate(session, candidate, expected) {
+  const { ctx, holds, slots } = session;
+  const fresh = await refresh(session, candidate.id);
+  const next = planPruning(fresh, holds, { slots });
+  assertStable(session, fresh, next);
+  session.records = fresh;
   const record = fresh.find((item) => item.id === candidate.id);
   const candidateStillEligible = next.candidates.some((item) => item.id === candidate.id);
   if (!record || !candidateStillEligible) return null;
   if (fingerprint(record) !== expected) return null;
-  for (const id of [state.slots.current, state.slots.rollback])
+  for (const id of [slots.current, slots.rollback])
     await ensureProven(ctx, fresh.find((item) => item.id === id) ?? refuse('current-moved'));
   await ensureProven(ctx, record);
   await assertMainUnchanged(ctx);
@@ -146,35 +164,38 @@ function skip(run, reason) {
 }
 
 // QNBS-v3: a failed or ambiguous inactivation never reaches DELETE, and writes are never retried against an assumed inventory.
-async function retire(ctx, run, holds, state, candidate) {
-  let fresh = await revalidate(ctx, holds, state, candidate, fingerprint(candidate));
+async function retire(session, candidate) {
+  const { ctx, run } = session;
+  let fresh = await revalidate(session, candidate, fingerprint(candidate));
   if (!fresh) return skip(run, 'stale-candidate');
   run.result.attempted += 1;
   if (latestStatus(fresh).state !== 'inactive') {
     fresh.statuses.push(await inactivate(ctx, fresh));
     run.result.inactivated += 1;
-    fresh = await revalidate(ctx, holds, state, candidate, fingerprint(fresh));
+    fresh = await revalidate(session, candidate, fingerprint(fresh));
     if (!fresh) return skip(run, 'status-moved');
   }
   await write(ctx, `DELETE ${ROOT}/deployments/${candidate.id}`);
   run.result.deleted += 1;
-  state.records = state.records.filter((record) => record.id !== candidate.id);
+  session.records = session.records.filter((record) => record.id !== candidate.id);
 }
 
 function affordable(ctx) {
-  const room = ctx.used + CANDIDATE_CEILING <= ctx.limit;
-  const rate = ctx.remaining === null || ctx.remaining >= RATE_RESERVE + CANDIDATE_CEILING;
+  const ceiling = candidateCeiling(ctx);
+  const room = ctx.used + ceiling <= ctx.limit;
+  const rate = ctx.remaining === null || ctx.remaining >= RATE_RESERVE + ceiling;
   return room && rate;
 }
 
-async function mutate(ctx, run, holds, state) {
+async function mutate(session) {
+  const { ctx, run } = session;
   for (const candidate of run.batch) {
     if (!affordable(ctx)) {
       run.reason('budget-limit', run.batch.length - run.considered);
       return;
     }
     run.considered += 1;
-    await retire(ctx, run, holds, state, candidate);
+    await retire(session, candidate);
   }
 }
 
@@ -184,17 +205,17 @@ async function execute(ctx, run, holds) {
   run.result.queried = records.length;
   const first = planPruning(records, holds);
   if (first.blocked) {
-    report(run, records, first);
+    report(run, records, { plan: first, proven: [], unexamined: [] });
     refuse('unproved-current-or-unsettled');
   }
-  const { plan, slots, batch } = await prepare(ctx, holds, records, first);
-  run.batch = batch;
-  report(run, records, plan);
-  if (run.result.mode !== 'delete') return finishDryRun(run, plan, records);
-  await mutate(ctx, run, holds, { records, slots });
+  const prepared = await prepare(ctx, holds, records, first);
+  run.batch = prepared.batch;
+  report(run, records, prepared);
+  if (run.result.mode !== 'delete') return finishDryRun(run, records);
+  await mutate({ ctx, run, holds, records, slots: prepared.slots });
   run.result.followUpRequired = records.length - run.result.deleted > 3;
-  if (plan.candidates.length > MAX_BATCH)
-    run.reason('batch-limit', plan.candidates.length - MAX_BATCH);
+  const backlog = prepared.proven.length - prepared.batch.length;
+  if (backlog > 0) run.reason('batch-limit', backlog);
 }
 
 function failureReason(error) {

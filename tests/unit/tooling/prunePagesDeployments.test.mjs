@@ -4,6 +4,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { REQUEST_LIMIT } from '../../../scripts/pages-pruning/github.mjs';
+import { EXAMINE_LIMIT, PUBLISH_EVENTS } from '../../../scripts/pages-pruning/provenance.mjs';
+import { candidateCeiling } from '../../../scripts/pages-pruning/reconcile.mjs';
 import {
   admission,
   DESTRUCTIVE_WRITES_ADMITTED,
@@ -484,7 +486,9 @@ test('refuses when no rollback publication can be proven', async () => {
 
 const runChanges = [
   { event: 'pull_request' },
-  { event: 'workflow_dispatch' },
+  { event: 'schedule' },
+  { event: 'repository_dispatch' },
+  { event: 'release' },
   { head_branch: 'v1.30' },
   { head_repository: { full_name: 'fork/repo' } },
   { conclusion: 'failure' },
@@ -698,8 +702,8 @@ test('caps each invocation at ten records and reports remaining backlog', async 
 const statusReads = (github) => reads(github, /\/statuses$/).length;
 for (const [count, bound] of [
   [6, 60],
-  [50, 200],
-  [100, 260],
+  [50, 240],
+  [100, 300],
 ])
   test(`request volume stays bounded for ${count} records`, async () => {
     const github = client(records(count));
@@ -731,6 +735,92 @@ test('an inventory larger than the request budget fails closed without writes', 
   assert.equal(result.reasons['request-budget'], 1);
   assert.equal(result.requests, 50);
   assert.deepEqual(writes(github), []);
+});
+
+test('the per-candidate cost ceiling grows with the observed inventory depth', () => {
+  assert.equal(candidateCeiling({ observed: { list: 1, status: 1 } }), 24);
+  const deep = candidateCeiling({ observed: { list: 4, status: 5 } });
+  assert.equal(deep, 54);
+  assert.ok(deep > 40, 'a fixed 40-request allowance would under-reserve this inventory');
+});
+
+const deepHistory = (input) => {
+  const item = input.at(-1);
+  const older = Array.from({ length: 449 }, (_, index) =>
+    status(item.id, {
+      id: 7000 + index,
+      state: 'queued',
+      created_at: new Date(Date.UTC(2025, 0, 1) + index * 1000).toISOString(),
+    }),
+  );
+  item.statuses.push(...older);
+  return input;
+};
+
+test('a candidate pass is reserved at the observed inventory depth before any write', async () => {
+  const dry = await execute(client(deepHistory(records(14))), { dryRun: true });
+  const ceiling = candidateCeiling({ observed: { list: 1, status: 5 } });
+  assert.equal(ceiling, 48);
+  const short = client(deepHistory(records(14)));
+  const refused = await executeDestructive(short, { limit: dry.requests + ceiling - 1 });
+  assert.equal(refused.failed, 0);
+  assert.ok(refused.reasons['budget-limit'] > 0);
+  assert.deepEqual(writes(short), []);
+  const funded = client(deepHistory(records(14)));
+  const done = await executeDestructive(funded, { limit: dry.requests + ceiling });
+  assert.equal(done.failed, 0);
+  assert.equal(done.deleted, 1);
+});
+
+test('records beyond the examination limit are reported as unexamined, never as candidates', async () => {
+  const input = records(40);
+  input[0].statuses[0].creator = BOT;
+  const github = client(input);
+  const result = await execute(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.candidate, EXAMINE_LIMIT);
+  assert.equal(result.reasons.unexamined, 17);
+  assert.equal(disposition(result, 1).disposition, 'unexamined');
+  assert.equal(candidates(result).length, EXAMINE_LIMIT);
+  assert.ok(!candidates(result).includes(1));
+  // Slots take two proofs; each examined candidate takes one; nothing else is fetched.
+  assert.equal(reads(github, /\/actions\/runs\//).length, 2 + EXAMINE_LIMIT);
+});
+
+test('every candidate within the examination limit is proven even beyond the deletion batch', async () => {
+  const input = records(20);
+  forgedSuccess(input, 1, 1.5);
+  const result = await execute(client(input));
+  assert.equal(result.failed, 0);
+  assert.equal(result.reasons['unproved-publication'], 1);
+  assert.ok(!candidates(result).includes(1));
+  assert.equal(result.candidate, 16);
+});
+
+test('manual CI dispatch publications on main are proven like push publications', async () => {
+  const github = client(records(5), (route) =>
+    route.includes('/actions/runs/')
+      ? {
+          data: publication(Number(route.split('/').at(-1)) - 1000, { event: 'workflow_dispatch' }),
+          headers: {},
+        }
+      : undefined,
+  );
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 2);
+});
+
+test('the proven publication events are exactly the non-pull_request events ci.yml publishes from', () => {
+  const ci = workflowSource('ci.yml');
+  const triggers = ci.slice(ci.indexOf('\non:'), ci.indexOf('\npermissions:'));
+  const declared = [...triggers.matchAll(/^ {2}([a-z_]+):/gm)]
+    .map((match) => match[1])
+    .filter((name) => name !== 'pull_request')
+    .sort();
+  assert.deepEqual([...PUBLISH_EVENTS].sort(), declared);
+  assert.match(ci, /github\.event_name != 'pull_request'/);
+  assert.match(ci, /github\.ref == 'refs\/heads\/main'/);
 });
 
 test('a low live rate-limit allowance stops before the next candidate', async () => {

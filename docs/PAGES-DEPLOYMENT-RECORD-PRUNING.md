@@ -39,8 +39,10 @@ on its own. A record is deletable only after all of these hold, read fresh from 
 
 - deployment shape: `github-pages`, `main`, task `deploy`, full SHA, non-transient, non-production,
   no GitHub App other than Actions;
-- the referenced run is the own-repository `CI / CD` push on `main` for the same SHA, completed
-  successfully, and its job `🚀 Deploy to GitHub Pages` and step `Deploy to GitHub Pages` succeeded;
+- the referenced run is the own-repository `CI / CD` run on `main` for the same SHA, started by a
+  `push` or a `workflow_dispatch` (the only non-pull-request events `ci.yml` can publish from; a
+  test binds this set to the workflow file), completed successfully, and its job
+  `🚀 Deploy to GitHub Pages` and step `Deploy to GitHub Pages` succeeded;
 - **causal link:** the deployment record and its newest success status were authored by the actor
   or triggering actor of that run, and neither author is `github-actions[bot]`.
 
@@ -55,6 +57,11 @@ Residual: a principal holding the run actor's own credentials can still write ma
 That principal can delete records directly, so this adds no new authority. If the proof cannot be
 established for a record (run deleted, fields missing, mismatch), the record is protected as
 `unproved-publication`; it is never deleted and never blocks the rest of the batch.
+
+Proof costs two requests per record, so at most 20 structurally eligible records are examined per
+pass, newest first, and every one of them is proven even when only ten can be deleted. Eligible
+records beyond that are reported as `unexamined`: they are not counted or listed as candidates and
+are never deleted until a later pass examines them.
 
 ## Current and rollback slots
 
@@ -95,20 +102,24 @@ changed or duplicated parameter, or malformed link fails closed.
 
 A run spends at most 450 requests (45% of GitHub's documented 1,000 requests per hour and
 repository for `GITHUB_TOKEN`, shared with CI); the live `x-ratelimit-remaining` header can only
-lower that. Before each candidate the run checks the remaining budget and rate allowance and stops
-gracefully with `budget-limit` rather than half-working. An inventory that alone exceeds the budget
-fails closed with `request-budget` before any write. Measured by the test fixture (GET + POST +
-DELETE, ten candidates):
+lower that. Before each candidate the run reserves its full cost: two complete refreshes (the
+deployment list pages, the three focused histories each allowed one more page, the main read), the
+POST and DELETE, and a worst-case re-proof of both slots and the candidate. The reservation is
+computed from the page depths observed in this run, from 24 requests for a small inventory to 54
+for a 400-record list with five-page histories, and the run stops gracefully with `budget-limit`
+instead of leaving a half-finished candidate. An inventory that alone exceeds the budget fails
+closed with `request-budget` before any write. Measured by the test fixture (GET + POST + DELETE,
+ten candidates):
 
 | Records | Previous design (full re-inventory per write) | This design |
 | ---: | ---: | ---: |
 | 6 | – | 54 |
-| 50 | ≈1,214 | 196 |
-| 100 | ≈2,264 | 249 |
-| 200 | ≈4,364 | 370 |
-| 300 | ≈6,464 | 411 (stops after 5 deletions) |
+| 50 | ≈1,214 | 216 |
+| 100 | ≈2,264 | 269 |
+| 200 | ≈4,364 | 390 |
+| 300 | ≈6,464 | 431 (stops after 5 deletions) |
 
-A read-only dry-run costs 18, 76, 127 and 329 requests for 6, 50, 100 and 300 records.
+A read-only dry-run costs 18, 96, 147 and 349 requests for 6, 50, 100 and 300 records.
 
 ## Writer fence
 
