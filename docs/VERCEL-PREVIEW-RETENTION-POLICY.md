@@ -292,17 +292,22 @@ these predicates:
 2. the full paginated deployment and alias inventory is read for the exact
    project identity below, and an incomplete or contradictory inventory stops
    the run;
-3. immediately before each deletion or alias removal the ID is revalidated
-   against live data: `main` SHA, `CI / CD` and CodeQL, Production `READY` on
+3. before the first write for each ID, that ID is revalidated against a fresh
+   read of live data: `main` SHA, `CI / CD` and CodeQL, Production `READY` on
    that SHA, the three canonical aliases, project identity, target, terminal
    state, aliases, rollback eligibility, open-PR heads, and the exact protected
-   sets;
+   sets. The writes for that one ID (its branch aliases, then the deployment)
+   follow that read without another full read; an alias removal that fails is
+   settled by re-reading its binding, and the deployment is removed with
+   `--safe`, which makes the provider re-check its aliases at removal time. The
+   window that remains between a read and a write is stated under "Not covered"
+   in the [runner reference](VERCEL-RETENTION-RUNNER.md);
 4. a branch alias is removed only after it is shown to bind to that deployment,
-   to be neither Production nor `main`, and to name a branch that is gone or a
-   PR that is closed;
+   to be neither Production nor `main`, and to name a branch that is gone; the
+   alias of a branch that still exists stays whatever the state of its PR;
 5. a 403, 429, 5xx, a contradictory provider state, pending or failed gates, or
-   a moved `main` stops the run, and a delete of unclear outcome is verified by
-   re-enumeration, never retried blindly;
+   a moved `main` stops the run, a write is never retried, and a write of
+   unclear outcome is verified by re-enumeration;
 6. a pass with no `SAFE_TO_DELETE` candidate is complete when the inventory was
    complete, and candidates are never created to reach a number.
 
@@ -465,8 +470,9 @@ wave. If any other predicate changed, metadata is missing or contradictory, or
 eligibility is no longer provable, move that ID from `DRY_RUN_CANDIDATE` to
 `RECLASSIFIED_UNKNOWN/DEFERRED` and preserve it. Only then move an ID to
 `REVALIDATED_DELETE` and attempt its individual deletion through the
-authenticated Vercel CLI/API, with rate limiting and bounded retry/backoff for
-provider throttling. Record `DELETE_CONFIRMED` only after absence is verified.
+authenticated Vercel CLI/API, with a pause between deletions. A read may retry
+once; a write is never retried, and a throttled or failed write stops the wave.
+Record `DELETE_CONFIRMED` only after absence is verified.
 Never fall back to a broad deletion.
 
 The cleanup report may identify the creator as `qnbs`, but must render

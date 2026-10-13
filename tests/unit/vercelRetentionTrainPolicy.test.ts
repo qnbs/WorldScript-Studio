@@ -160,8 +160,18 @@ describe('active ordinary per-merge Preview retention', () => {
     );
     expect(policy).toContain('TAG_AND_PUBLISH = not granted by this record');
     expect(policy).toContain('a project name is never passed to `vercel remove`');
-    expect(policy).toContain('revalidated against live data');
     expect(policy).toContain('does not reuse the #1020 bootstrap');
+  });
+
+  it('states the guarantees the canonical runner implements, not stronger ones', () => {
+    expect(policy).toContain('before the first write for each ID, that ID is revalidated');
+    expect(policy).toContain(
+      'to name a branch that is gone; the alias of a branch that still exists',
+    );
+    expect(policy).toContain('a write is never retried');
+    expect(policy).toContain('A read may retry once; a write is never retried');
+    expect(policy).not.toContain('bounded retry/backoff');
+    expect(policy).not.toContain('a branch that is gone or a PR that is closed');
   });
 
   it('keeps the historical batch record and marks it superseded in every companion', () => {
