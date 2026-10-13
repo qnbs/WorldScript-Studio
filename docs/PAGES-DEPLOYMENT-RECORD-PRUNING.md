@@ -42,7 +42,9 @@ on main before it acquires writer authority.
 on its own. A record is deletable only after all of these hold, read fresh from the API:
 
 - deployment shape: `github-pages`, `main`, task `deploy`, full SHA, non-transient, non-production,
-  no GitHub App other than Actions;
+  no GitHub App other than Actions, an identified author, and a newest success status for the
+  Pages site (the same shape the classifier requires, so a record it would call unknown ownership
+  can neither occupy the current or rollback slot nor be proven);
 - the referenced run is the own-repository `CI / CD` run on `main` for the same SHA, started by a
   `push` or a `workflow_dispatch` (the only non-pull-request events `ci.yml` can publish from; a
   test binds this set to the workflow file), completed successfully, and its job

@@ -4,8 +4,10 @@ import {
   ACTIONS_BOT,
   actorKey,
   creatorLogin,
+  isPagesStatus,
   jobIdentity,
   MAX_BATCH,
+  owned,
   publicationOrder,
   REPOSITORY,
   ROOT,
@@ -61,6 +63,9 @@ function actorFacts(record, success, run) {
   ];
 }
 
+// QNBS-v3: the proof covers the record shape the classifier requires, so a record it would call unknown ownership can neither occupy a publication slot nor be declared proven.
+const shapeFacts = (record, success) => [owned(record), isPagesStatus(success)];
+
 async function fetchEvidence(ctx, identity) {
   try {
     const { data: run } = await read(ctx, `${ROOT}/actions/runs/${identity.run}`);
@@ -78,6 +83,7 @@ export async function provePublication(ctx, record) {
   if (!identity) refuse(UNKNOWN);
   const { run, job } = await fetchEvidence(ctx, identity);
   const facts = [
+    ...shapeFacts(record, success),
     ...runFacts(run, record, identity),
     ...jobFacts(job, run, identity),
     ...actorFacts(record, success, run),

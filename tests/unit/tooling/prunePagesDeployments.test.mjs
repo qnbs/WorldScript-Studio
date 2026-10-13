@@ -643,6 +643,33 @@ for (const [remaining, outcome] of [
     if (remaining !== '5000') assert.ok(result.reasons['budget-limit'] > 0);
   });
 
+const notAPagesPublication = {
+  'a record of another ref': (item) => {
+    item.ref = 'feature';
+  },
+  'a success status for another site': (item) => {
+    item.statuses[0].environment_url = 'https://elsewhere.example/';
+  },
+};
+for (const [name, spoil] of Object.entries(notAPagesPublication))
+  test(`${name} cannot take the rollback slot or protect the real previous publication from deletion`, async () => {
+    const input = gapped();
+    spoil(input[3]);
+    const github = client(input);
+    const result = await executeDestructive(github);
+    assert.equal(result.failed, 0);
+    assert.equal(result.rollback, 3);
+    assert.equal(result.reasons['unproved-publication'], 1);
+    assert.ok(
+      github.state.some((item) => item.id === 3),
+      'the real rollback is kept',
+    );
+    assert.ok(
+      github.state.some((item) => item.id === 4),
+      'the spoiled record is never deleted',
+    );
+  });
+
 test('a candidate whose publication run no longer exists is protected', async () => {
   const github = client(records(5), (route) => {
     if (route.endsWith('/actions/runs/1001')) throw apiError(404);
