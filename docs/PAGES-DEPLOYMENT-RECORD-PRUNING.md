@@ -143,8 +143,9 @@ for CI. The same check gates the proof scan, the POST and a DELETE that needs no
 is issued when the last reported allowance cannot cover it (other consumers of the same token can
 still lower it afterwards). Every read, retries and the whole inventory included, is also gated
 by the live allowance before it is sent: a read that would leave fewer than 100 requests stops the
-run with `rate-reserve`, and once a response has succeeded a missing rate header stops it with
-`rate-unknown`, so the local 450 counter is never the only brake. The rate headers of failed reads
+run with `rate-reserve`, and once a response has succeeded any later successful response without
+a usable rate header stops it with `rate-unknown` (the allowance is replaced, never kept stale), so
+the local 450 counter is never the only brake. The rate headers of failed reads
 and writes count too, so a run of 404 responses cannot spend the reserve unnoticed. A budget refusal before a candidate's first
 write (a retry storm in its first revalidation) is the same graceful `budget-limit` stop; after the
 POST it stays a failure. An inventory that alone exceeds the budget fails

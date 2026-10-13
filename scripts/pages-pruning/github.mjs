@@ -59,6 +59,12 @@ function shouldRetry(error, attempt, delay) {
   ].every(Boolean);
 }
 
+// QNBS-v3: a successful response replaces the allowance, so one that omits or malforms its rate header leaves it unknown instead of stale and the next read fails closed.
+function replaceRate(ctx, headers) {
+  ctx.remaining = null;
+  noteRate(ctx, headers);
+}
+
 // QNBS-v3: every read, each retry included, passes the live allowance before it is sent; once a response has succeeded the allowance must be known, so a missing rate header stops the run instead of leaving the local counter as the only brake (failed attempts before any success are bounded by READ_ATTEMPTS), and a read never takes the allowance below the CI reserve.
 function spendRead(ctx) {
   if (ctx.answered && ctx.remaining === null) refuse('rate-unknown');
@@ -72,7 +78,7 @@ export async function read(ctx, route, parameters = {}) {
     try {
       const response = await ctx.github.request(`GET ${route}`, parameters);
       ctx.answered = true;
-      noteRate(ctx, response.headers);
+      replaceRate(ctx, response.headers);
       return response;
     } catch (error) {
       noteRate(ctx, error.response?.headers);
@@ -88,7 +94,7 @@ export async function write(ctx, route, parameters) {
   spend(ctx);
   try {
     const response = await ctx.github.request(route, parameters);
-    noteRate(ctx, response?.headers);
+    replaceRate(ctx, response?.headers);
     return response;
   } catch (error) {
     noteRate(ctx, error.response?.headers);

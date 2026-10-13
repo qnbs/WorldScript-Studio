@@ -147,7 +147,8 @@ export function client(initial, intercept = () => undefined, headers = {}) {
     request: async (route, parameters = {}) => {
       calls.push({ route, parameters });
       const override = await intercept(route, parameters, state, calls);
-      if (override) return override;
+      if (override)
+        return { ...override, headers: withAllowance(override.headers ?? {}, calls.length) };
       const hit = table.find(([pattern]) =>
         typeof pattern === 'string' ? pattern === route : pattern.test(route),
       );

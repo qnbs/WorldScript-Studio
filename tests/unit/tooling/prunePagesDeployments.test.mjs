@@ -841,6 +841,16 @@ test('a response without a rate header stops the run after the first request', a
   assert.equal(github.calls.length, 1);
 });
 
+test('a later response without a rate header does not leave a stale allowance behind', async () => {
+  const github = client(records(4), undefined, (calls) =>
+    calls === 1 ? {} : { 'x-ratelimit-remaining': undefined },
+  );
+  const result = await execute(github, { dryRun: true });
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['rate-unknown'], 1);
+  assert.equal(github.calls.length, 2);
+});
+
 test('a throttled response lowers the allowance before any retry can be sent', async () => {
   const github = client(records(4), () => {
     throw Object.assign(apiError(429, '0'), {
