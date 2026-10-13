@@ -167,6 +167,12 @@ impl Drop for Installation {
     }
 }
 
+/// The file system a transition goes through and how it spells the root, which may be an alias.
+struct Attempt<'a, F: DurableFs> {
+    fs: &'a mut F,
+    root_dir: &'a Path,
+}
+
 /// A provisioned root that binds revision 0 (`BOOTSTRAP_TARGET`) of `OPERATION`.
 struct Bound {
     installation: Installation,
@@ -324,20 +330,25 @@ impl Bound {
         next: &JournalManifest,
     ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.installation.root_dir.clone();
-        self.transition_through(admission, &mut StdFs, &root_dir, next)
+        let attempt = Attempt {
+            fs: &mut StdFs,
+            root_dir: &root_dir,
+        };
+        self.transition_through(admission, attempt, next)
     }
 
-    /// The transition over `fs`, naming the root as `root_dir`, which may be an alias of it.
+    /// The transition over the file system and under the spelling of the root that `attempt` names.
     fn transition_through<F: DurableFs>(
         &mut self,
         admission: &mut ExclusiveAdmissionGuard,
-        fs: &mut F,
-        root_dir: &Path,
+        attempt: Attempt<'_, F>,
         next: &JournalManifest,
     ) -> Result<RootCommitted, AuthorityError> {
         self.publish(next, |provider, checkpoint| {
-            let layout = RootLayout { root_dir };
-            commit_phase_transition(admission, fs, provider, layout, checkpoint)
+            let layout = RootLayout {
+                root_dir: attempt.root_dir,
+            };
+            commit_phase_transition(admission, attempt.fs, provider, layout, checkpoint)
         })
     }
 
@@ -621,7 +632,11 @@ mod through_an_alias {
         let foreign_before = tree_of(&foreign.base);
         let mut admission = bound.installation.exclusive();
         let mut fs = RetargetingFs::new(&alias, &foreign.root_dir);
-        let result = bound.transition_through(&mut admission, &mut fs, &alias, &discover);
+        let attempt = Attempt {
+            fs: &mut fs,
+            root_dir: &alias,
+        };
+        let result = bound.transition_through(&mut admission, attempt, &discover);
         assert!(fs.fired, "the alias was retargeted during the call");
         result.unwrap();
         assert_eq!(bound.committed(), discover);
@@ -637,8 +652,12 @@ mod through_an_alias {
         let discover = entering(&bound.zero, phase_code::DISCOVER);
         let (before, foreign_before) = (bound.state(), tree_of(&foreign.base));
         let mut admission = bound.installation.exclusive();
+        let attempt = Attempt {
+            fs: &mut StdFs,
+            root_dir: &alias,
+        };
         assert_eq!(
-            bound.transition_through(&mut admission, &mut StdFs, &alias, &discover),
+            bound.transition_through(&mut admission, attempt, &discover),
             Err(AuthorityError::NotAdmitted)
         );
         assert_eq!(bound.state(), before);
