@@ -79,7 +79,9 @@ Both publication slots are proven by API before any candidate is classified. The
 must prove or the run stops (`unproved-current`). Up to four older successes are walked in order;
 an unproved one is protected and does not consume the rollback slot, and the first proven one is
 the rollback. If none proves, the run stops (`no-proven-rollback`). Shape-only classification
-exists for the pure plan and never authorizes a write.
+exists for the pure plan and never authorizes a write. When no record is eligible for deletion the
+slots are not proven at all: they can only retain, so an empty plan needs no evidence. When a proof
+stops the run, the manifest still lists every record as protected or unexamined.
 
 ## Trigger and mutation boundary
 
@@ -104,8 +106,10 @@ records may need a reload in one refresh; more churn than that stops the run
 inactive-status POST is skipped only when the latest status is already an inactive Pages status
 (environment `github-pages`, the Pages site URL) with an identified author; any other latest
 status, including an inactive one of unknown origin, gets this run's own inactive status first, so
-deletion authority never rests on unvalidated status metadata. A failed or ambiguous inactivation
-never reaches deletion. `auto_inactive: false` avoids affecting other records. GET retries are
+deletion authority never rests on unvalidated status metadata. The status this run creates must
+come back from the API as a recognised inactive Pages status before the DELETE
+(`inactive-status-unrecognized` otherwise). A failed or ambiguous inactivation never reaches
+deletion. `auto_inactive: false` avoids affecting other records. GET retries are
 bounded at three attempts and two seconds maximum delay; writes are never retried. API failures
 stop the batch, fail the job and report confirmed partial outcomes with sanitized reason codes. A
 later pass must re-observe uncertain writes.
@@ -132,8 +136,9 @@ the first write of a candidate the run also reserves everything after the inacti
 three attempts per read plus the DELETE (70 requests for a small inventory, 151 for the
 400-record case) and otherwise stops without writing. Both reservations are also checked against
 the live `x-ratelimit-remaining` value last reported by GitHub, with a reserve of 100 requests kept
-for CI; the POST is not issued when the last reported allowance cannot cover the rest of the
-candidate (other consumers of the same token can still lower it afterwards). An inventory that alone exceeds the budget fails
+for CI. The same check gates the proof scan, the POST and a DELETE that needs no POST; none of them
+is issued when the last reported allowance cannot cover it (other consumers of the same token can
+still lower it afterwards). An inventory that alone exceeds the budget fails
 closed with `request-budget` before any write. Measured by the test fixture (GET + POST + DELETE,
 ten candidates):
 

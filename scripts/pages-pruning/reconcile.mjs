@@ -10,6 +10,7 @@ import {
 } from './evidence.mjs';
 import {
   createContext,
+  funds,
   inventory,
   listRecords,
   loadStatuses,
@@ -29,7 +30,6 @@ import {
 } from './policy.mjs';
 import { examineCandidates, proveSlots, reprove } from './provenance.mjs';
 
-const RATE_RESERVE = 100;
 const API_FAILURES = new Set([403, 404, 409, 429, 500, 502, 503, 504]);
 
 // QNBS-v3: a refresh reloads the three focused histories and at most EXTRA_RELOADS others whose list key changed, so its cost has a ceiling; more churn than that stops the run.
@@ -39,6 +39,7 @@ const RELOADS = FOCUSED_RELOADS + EXTRA_RELOADS;
 
 // Re-reading the run and the job of the candidate and of both slots at one write boundary.
 const REPROOF = 6;
+const DELETE_COST = 1;
 
 // QNBS-v3: one candidate costs two full refreshes (list pages, every reloadable history that may grow by a page, the main read, the re-proof of both slots and the candidate) and the POST and DELETE.
 export function candidateCeiling(ctx) {
@@ -126,6 +127,25 @@ async function prepare(ctx, holds, records, first) {
   return { plan: planPruning(records, holds, { slots }), slots, ...examined };
 }
 
+// QNBS-v3: a run that stops before every eligible record is proven still lists them, as unexamined, so the manifest never silently drops records the counts include.
+function reportUnexamined(run, records, first) {
+  report(
+    run,
+    records,
+    { plan: first, proven: [], unexamined: first.candidates },
+    'blocked-before-proof',
+  );
+}
+
+async function prepareOrReport(ctx, run, holds, records, first) {
+  try {
+    return await prepare(ctx, holds, records, first);
+  } catch (error) {
+    reportUnexamined(run, records, first);
+    throw error;
+  }
+}
+
 function reusableStatuses(before, item, focus) {
   if (!before || focus.has(item.id)) return null;
   return listKey(item) === listKey(before) ? before.statuses : null;
@@ -199,30 +219,31 @@ const isSettledInactive = (status) =>
     Boolean,
   );
 
+// QNBS-v3: the status this run just created must come back from the API as a recognised inactive Pages status before the DELETE, so malformed or incompatible status data keeps the record.
+async function settle(session, candidate, fresh) {
+  const { ctx, run } = session;
+  fresh.statuses.push(await inactivate(ctx, fresh));
+  run.result.inactivated += 1;
+  const next = await revalidate(session, candidate, fingerprint(fresh));
+  if (!next) return { skip: 'status-moved' };
+  return isSettledInactive(latestStatus(next)) ? {} : { skip: 'inactive-status-unrecognized' };
+}
+
 // QNBS-v3: a failed or ambiguous inactivation never reaches DELETE, and writes are never retried against an assumed inventory.
 async function retire(session, candidate) {
   const { ctx, run } = session;
-  let fresh = await revalidate(session, candidate, fingerprint(candidate));
+  const fresh = await revalidate(session, candidate, fingerprint(candidate));
   if (!fresh) return skip(run, 'stale-candidate');
   const needsPost = !isSettledInactive(latestStatus(fresh));
-  if (needsPost && !funds(ctx, finishCeiling(ctx))) return 'budget';
+  if (!funds(ctx, needsPost ? finishCeiling(ctx) : DELETE_COST)) return 'budget';
   run.result.attempted += 1;
   if (needsPost) {
-    fresh.statuses.push(await inactivate(ctx, fresh));
-    run.result.inactivated += 1;
-    fresh = await revalidate(session, candidate, fingerprint(fresh));
-    if (!fresh) return skip(run, 'status-moved');
+    const settled = await settle(session, candidate, fresh);
+    if (settled.skip) return skip(run, settled.skip);
   }
   await write(ctx, `DELETE ${ROOT}/deployments/${candidate.id}`);
   run.result.deleted += 1;
   session.records = session.records.filter((record) => record.id !== candidate.id);
-}
-
-// QNBS-v3: a cost is funded only when it fits both the local request counter and the live rate allowance last reported by GitHub, with a reserve kept for CI.
-function funds(ctx, cost) {
-  const room = ctx.used + cost <= ctx.limit;
-  const rate = ctx.remaining === null || ctx.remaining >= RATE_RESERVE + cost;
-  return room && rate;
 }
 
 const affordable = (ctx) => funds(ctx, candidateCeiling(ctx));
@@ -249,16 +270,10 @@ async function execute(ctx, run, holds) {
   run.result.queried = records.length;
   const first = planPruning(records, holds);
   if (first.blocked) {
-    // QNBS-v3: a blocked run still lists every eligible record, as unexamined, so the manifest never silently drops records the counts include.
-    report(
-      run,
-      records,
-      { plan: first, proven: [], unexamined: first.candidates },
-      'blocked-before-proof',
-    );
+    reportUnexamined(run, records, first);
     refuse('unproved-current-or-unsettled');
   }
-  const prepared = await prepare(ctx, holds, records, first);
+  const prepared = await prepareOrReport(ctx, run, holds, records, first);
   run.batch = prepared.batch;
   report(run, records, prepared);
   if (run.result.mode !== 'delete') return finishDryRun(run, records);

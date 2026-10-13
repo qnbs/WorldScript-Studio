@@ -7,6 +7,8 @@ export const REPO_ID = 4242;
 export const ACTOR = 'maintainer';
 // A principal is the account id and the login together; the publication proof matches both.
 export const PRINCIPAL = { login: ACTOR, id: 9001 };
+// The principal the pruning workflow's own token writes as.
+const WORKFLOW_BOT = { login: 'github-actions[bot]', id: 41898282 };
 export const date = (id) => new Date(Date.UTC(2026, 0, 1) + id * 1000).toISOString();
 export const authority = {
   repository: REPOSITORY,
@@ -107,7 +109,7 @@ function routeTable(state, next) {
       async (m, p) => {
         assert.equal(p.auto_inactive, false);
         const item = await find(m[1]);
-        const created = { ...p, id: next(), created_at: date(next()) };
+        const created = { ...p, id: next(), created_at: date(next()), creator: WORKFLOW_BOT };
         item.statuses.push(created);
         item.updated_at = created.created_at;
         return created;

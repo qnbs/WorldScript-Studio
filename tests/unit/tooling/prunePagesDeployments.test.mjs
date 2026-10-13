@@ -670,6 +670,77 @@ for (const [name, spoil] of Object.entries(notAPagesPublication))
     );
   });
 
+test('a status this run just created must come back as a recognised inactive Pages status', async () => {
+  const github = client(records(4), (route, parameters, state) => {
+    if (!route.startsWith('POST ')) return undefined;
+    const item = state.find((entry) => entry.id === 1);
+    const created = { ...parameters, id: 9999, created_at: date(900) };
+    item.statuses.push(created);
+    item.updated_at = created.created_at;
+    return { data: created, headers: {} };
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 0);
+  assert.equal(result.reasons['inactive-status-unrecognized'], 1);
+  assert.deepEqual(
+    writes(github).map((call) => call.route),
+    [`POST ${ROOT}/deployments/1/statuses`],
+  );
+});
+
+test('an already inactive candidate is not deleted when the live allowance is below the reserve', async () => {
+  const lowAllowance = (remaining) =>
+    client(
+      (() => {
+        const input = records(4);
+        input[0].statuses.push({
+          ...input[0].statuses[0],
+          id: 900,
+          created_at: date(900),
+          state: 'inactive',
+        });
+        return input;
+      })(),
+      (route) =>
+        route.endsWith('/branches/main')
+          ? {
+              data: { commit: { sha: authority.sha } },
+              headers: { 'x-ratelimit-remaining': remaining },
+            }
+          : undefined,
+    );
+  const low = lowAllowance('90');
+  const refused = await executeDestructive(low);
+  assert.equal(refused.failed, 0);
+  assert.equal(refused.deleted, 0);
+  assert.ok(refused.reasons['budget-limit'] > 0);
+  assert.deepEqual(writes(low), []);
+  const high = lowAllowance('5000');
+  assert.equal((await executeDestructive(high)).deleted, 1);
+});
+
+test('the proof scan stops when the live allowance cannot cover another proof and one candidate', async () => {
+  const github = client(records(20), undefined, { 'x-ratelimit-remaining': '120' });
+  const result = await execute(github, { dryRun: true });
+  assert.equal(result.failed, 0);
+  assert.equal(result.candidate, 0);
+  assert.ok(result.reasons.unexamined > 0);
+});
+
+test('a failed slot proof still reports the whole inventory as protected or unexamined', async () => {
+  const github = client(records(6), (route) => {
+    if (route.includes('/actions/runs/')) throw apiError(404);
+  });
+  const result = await execute(github, { dryRun: true });
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['unproved-current'], 1);
+  assert.equal(result.classified, 6);
+  assert.equal(result.manifest.length, 6);
+  assert.equal(disposition(result, 1).disposition, 'unexamined');
+  assert.deepEqual(writes(github), []);
+});
+
 test('a candidate whose publication run no longer exists is protected', async () => {
   const github = client(records(5), (route) => {
     if (route.endsWith('/actions/runs/1001')) throw apiError(404);
@@ -1033,7 +1104,7 @@ test('a low live rate-limit allowance stops before the next candidate', async ()
   const result = await executeDestructive(github);
   assert.equal(result.failed, 0);
   assert.equal(result.deleted, 0);
-  assert.ok(result.reasons['budget-limit'] > 0);
+  assert.ok((result.reasons['budget-limit'] ?? 0) + (result.reasons.unexamined ?? 0) > 0);
   assert.deepEqual(writes(github), []);
 });
 

@@ -1,5 +1,5 @@
 import { newestSuccess, proofKey, refuse } from './evidence.mjs';
-import { READ_ATTEMPTS, read } from './github.mjs';
+import { funds, READ_ATTEMPTS, read } from './github.mjs';
 import {
   ACTIONS_BOT,
   actorKey,
@@ -133,7 +133,7 @@ export async function proveSlots(ctx, records) {
   return refuse('no-proven-rollback');
 }
 
-const hasRoomToProve = (ctx, floor) => ctx.used + floor + PROOF_COST <= ctx.limit;
+const hasRoomToProve = (ctx, floor) => funds(ctx, floor + PROOF_COST);
 
 // QNBS-v3: every examined candidate gets causal proof, so the manifest never reports an unexamined record as a candidate; an unprovable record is protected and does not count against EXAMINE_LIMIT, so permanently unprovable newest records cannot hide older provable ones, and the scan ends early only when the budget left would no longer fund one more proof plus the floor kept for the mutation phase.
 export async function examineCandidates(ctx, candidates, slots, floor = 0) {

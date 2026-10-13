@@ -8,6 +8,14 @@ const PAGE_SIZE = 100;
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 const BACKOFF_CAP_MS = 2000;
 export const READ_ATTEMPTS = 3;
+const RATE_RESERVE = 100;
+
+// QNBS-v3: a cost is funded only when it fits both the local request counter and the live rate allowance last reported by GitHub, with a reserve kept for CI.
+export function funds(ctx, cost) {
+  const room = ctx.used + cost <= ctx.limit;
+  const rate = ctx.remaining === null || ctx.remaining >= RATE_RESERVE + cost;
+  return room && rate;
+}
 
 export const defaultPause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
