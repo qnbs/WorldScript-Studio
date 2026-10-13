@@ -1,7 +1,8 @@
 import { newestSuccess, proofKey, refuse } from './evidence.mjs';
-import { read } from './github.mjs';
+import { READ_ATTEMPTS, read } from './github.mjs';
 import {
   ACTIONS_BOT,
+  actorKey,
   creatorLogin,
   jobIdentity,
   MAX_BATCH,
@@ -12,6 +13,8 @@ import {
 
 export const SLOT_DEPTH = 4;
 export const EXAMINE_LIMIT = 20;
+// A proof reads the run and the job, each at its full retry count.
+const PROOF_COST = 2 * READ_ATTEMPTS;
 // QNBS-v3: ci.yml publishes Pages from every non-pull_request event on main, and its only such triggers are push and workflow_dispatch; a test keeps this set bound to the workflow file.
 export const PUBLISH_EVENTS = new Set(['push', 'workflow_dispatch']);
 const UNKNOWN = 'unknown-publication';
@@ -45,18 +48,16 @@ function jobFacts(job, run, identity) {
   ];
 }
 
-// QNBS-v3: log_url is caller-written, so the record and its success status must both be authored by the principal that triggered the referenced run; a GITHUB_TOKEN writer is always github-actions[bot].
+// QNBS-v3: log_url is caller-written, so the record and its success status must both be authored by the principal that triggered the referenced run, matched by account id and login (a missing id never matches); a GITHUB_TOKEN writer is always github-actions[bot].
 function actorFacts(record, success, run) {
-  const actors = new Set([creatorLogin(run.actor), creatorLogin(run.triggering_actor)]);
+  const actors = new Set([actorKey(run.actor), actorKey(run.triggering_actor)]);
   actors.delete(null);
-  const deployer = creatorLogin(record.creator);
-  const publisher = creatorLogin(success.creator);
   return [
     actors.size > 0,
-    actors.has(deployer),
-    actors.has(publisher),
-    deployer !== ACTIONS_BOT,
-    publisher !== ACTIONS_BOT,
+    actors.has(actorKey(record.creator)),
+    actors.has(actorKey(success.creator)),
+    creatorLogin(record.creator) !== ACTIONS_BOT,
+    creatorLogin(success.creator) !== ACTIONS_BOT,
   ];
 }
 
@@ -120,16 +121,21 @@ export async function proveSlots(ctx, records) {
   return refuse('no-proven-rollback');
 }
 
-// QNBS-v3: every examined candidate gets causal proof, so the manifest never reports an unexamined record as a candidate; the remainder is explicitly unexamined, and an unprovable record is protected instead of stalling the batch.
-export async function examineCandidates(ctx, candidates, slots) {
+const hasRoomToProve = (ctx, floor) => ctx.used + floor + PROOF_COST <= ctx.limit;
+
+// QNBS-v3: every examined candidate gets causal proof, so the manifest never reports an unexamined record as a candidate; an unprovable record is protected and does not count against EXAMINE_LIMIT, so permanently unprovable newest records cannot hide older provable ones, and the scan ends early only when the budget left would no longer fund one more proof plus the floor kept for the mutation phase.
+export async function examineCandidates(ctx, candidates, slots, floor = 0) {
   const proven = [];
-  for (const record of candidates.slice(0, EXAMINE_LIMIT)) {
+  let examined = 0;
+  for (const record of candidates) {
+    if (proven.length >= EXAMINE_LIMIT || !hasRoomToProve(ctx, floor)) break;
+    examined += 1;
     if (await proves(ctx, record)) proven.push(record);
     else slots.unproved.push(record.id);
   }
   return {
     proven,
     batch: proven.slice(0, MAX_BATCH),
-    unexamined: candidates.slice(EXAMINE_LIMIT),
+    unexamined: candidates.slice(examined),
   };
 }

@@ -51,6 +51,12 @@ export function validateHolds(holds) {
 export const creatorLogin = (actor) =>
   typeof actor?.login === 'string' && actor.login !== '' ? actor.login : null;
 
+// QNBS-v3: an author is bound by account id and login together; a payload without a valid id, a reused login or a renamed account never matches another author.
+export function actorKey(actor) {
+  const login = creatorLogin(actor);
+  return login !== null && validId(actor.id) ? `${actor.id}:${login}` : null;
+}
+
 const isActionsApp = (app) => app.id === ACTIONS_APP_ID && app.slug === 'github-actions';
 const appIsActionsOrAbsent = (app) => app == null || isActionsApp(app);
 

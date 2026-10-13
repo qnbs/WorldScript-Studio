@@ -31,6 +31,7 @@ const statusKey = (status) => [
   status.environment_url,
   status.log_url,
   status.creator?.login ?? null,
+  status.creator?.id ?? null,
 ];
 
 const metaKey = (record) => [
@@ -43,6 +44,7 @@ const metaKey = (record) => [
   record.transient_environment,
   record.production_environment,
   record.creator?.login ?? null,
+  record.creator?.id ?? null,
   record.performed_via_github_app?.id ?? null,
 ];
 

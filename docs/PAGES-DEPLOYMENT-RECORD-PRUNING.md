@@ -44,7 +44,8 @@ on its own. A record is deletable only after all of these hold, read fresh from 
   test binds this set to the workflow file), completed successfully, and its job
   `🚀 Deploy to GitHub Pages` and step `Deploy to GitHub Pages` succeeded;
 - **causal link:** the deployment record and its newest success status were authored by the actor
-  or triggering actor of that run, and neither author is `github-actions[bot]`.
+  or triggering actor of that run, matched by numeric account id and login together (an author
+  without a valid id never matches), and neither author is `github-actions[bot]`.
 
 The causal link is what a `GITHUB_TOKEN` writer cannot imitate: any other workflow writes as
 `github-actions[bot]`, while the Pages publisher records the principal that triggered the run.
@@ -58,10 +59,13 @@ That principal can delete records directly, so this adds no new authority. If th
 established for a record (run deleted, fields missing, mismatch), the record is protected as
 `unproved-publication`; it is never deleted and never blocks the rest of the batch.
 
-Proof costs two requests per record, so at most 20 structurally eligible records are examined per
-pass, newest first, and every one of them is proven even when only ten can be deleted. Eligible
-records beyond that are reported as `unexamined`: they are not counted or listed as candidates and
-are never deleted until a later pass examines them.
+Proof costs two requests per record. Eligible records are examined newest first until 20 of them
+are proven, even though only ten can be deleted. A record that cannot be proven is protected and
+does not count against those 20, so unprovable newest records cannot hide older provable ones;
+the scan ends early only when the budget left would no longer fund one more proof plus the cost of
+one candidate, which is kept for the mutation phase. Eligible records not examined are reported as
+`unexamined`: they are not counted or listed as candidates and are never deleted until a later pass
+examines them.
 
 ## Current and rollback slots
 
@@ -85,7 +89,13 @@ fresh read of the deployment list plus the full status history of the candidate 
 publication slots, an unchanged publication-order prefix, an unchanged candidate fingerprint and
 the trusted-main SHA. Other records are re-read only when their list entry (including `updated_at`)
 changed; GitHub bumped `updated_at` past the newest status on all six live records, but that is an
-optimization, not the authority for the candidate or the slots. A failed or ambiguous inactivation
+optimization, not the authority for the candidate or the slots. At most three such unfocused
+records may need a reload in one refresh; more churn than that stops the run
+(`inventory-churn`) before any history is read, so the cost ceilings below always hold. The
+inactive-status POST is skipped only when the latest status is already an inactive Pages status
+(environment `github-pages`, the Pages site URL) with an identified author; any other latest
+status, including an inactive one of unknown origin, gets this run's own inactive status first, so
+deletion authority never rests on unvalidated status metadata. A failed or ambiguous inactivation
 never reaches deletion. `auto_inactive: false` avoids affecting other records. GET retries are
 bounded at three attempts and two seconds maximum delay; writes are never retried. API failures
 stop the batch, fail the job and report confirmed partial outcomes with sanitized reason codes. A
@@ -103,13 +113,13 @@ changed or duplicated parameter, or malformed link fails closed.
 A run spends at most 450 requests (45% of GitHub's documented 1,000 requests per hour and
 repository for `GITHUB_TOKEN`, shared with CI); the live `x-ratelimit-remaining` header can only
 lower that. Before each candidate the run reserves its full cost: two complete refreshes (the
-deployment list pages, the three focused histories each allowed one more page, the main read), the
-POST and DELETE, and a worst-case re-proof of both slots and the candidate. The reservation is
-computed from the page depths observed in this run, from 24 requests for a small inventory to 54
-for a 400-record list with five-page histories, and the run stops gracefully with `budget-limit`
+deployment list pages, the three focused histories and up to three more reloads, each allowed one
+more page, the main read), the POST and DELETE, and a worst-case re-proof of both slots and the
+candidate. The reservation is computed from the page depths observed in this run, from 36 requests
+for a small inventory to 90 for a 400-record list with five-page histories, and the run stops gracefully with `budget-limit`
 instead of leaving a half-finished candidate. Reads are retried up to twice, so immediately before
 the first write of a candidate the run also reserves everything after the inactive-status POST at
-three attempts per read plus the DELETE (52 requests for a small inventory, 97 for the
+three attempts per read plus the DELETE (70 requests for a small inventory, 151 for the
 400-record case) and otherwise stops without writing. An inventory that alone exceeds the budget fails
 closed with `request-budget` before any write. Measured by the test fixture (GET + POST + DELETE,
 ten candidates):
@@ -119,8 +129,8 @@ ten candidates):
 | 6 | – | 54 |
 | 50 | ≈1,214 | 216 |
 | 100 | ≈2,264 | 269 |
-| 200 | ≈4,364 | 390 |
-| 300 | ≈6,464 | 390 (stops after 2 deletions) |
+| 200 | ≈4,364 | 382 (stops after 9 deletions) |
+| 300 | ≈6,464 | 374 (stops after 1 deletion) |
 
 A read-only dry-run costs 18, 96, 147 and 349 requests for 6, 50, 100 and 300 records.
 

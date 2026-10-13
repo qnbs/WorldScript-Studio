@@ -3,6 +3,7 @@ import {
   fingerprint,
   latestStatus,
   listKey,
+  newestSuccess,
   refuse,
   timestamp,
   validId,
@@ -17,8 +18,10 @@ import {
   write,
 } from './github.mjs';
 import {
+  actorKey,
   admission,
   DESTRUCTIVE_WRITES_ADMITTED,
+  isPagesStatus,
   planPruning,
   publicationOrder,
   ROOT,
@@ -29,16 +32,21 @@ import { ensureProven, examineCandidates, proveSlots } from './provenance.mjs';
 const RATE_RESERVE = 100;
 const API_FAILURES = new Set([403, 404, 409, 429, 500, 502, 503, 504]);
 
-// QNBS-v3: one candidate costs two full refreshes (list pages, three focused histories that may grow by a page, the main read), the POST and DELETE, and a worst-case re-proof of both slots and the candidate.
+// QNBS-v3: a refresh reloads the three focused histories and at most EXTRA_RELOADS others whose list key changed, so its cost has a ceiling; more churn than that stops the run.
+const FOCUSED_RELOADS = 3;
+export const EXTRA_RELOADS = 3;
+const RELOADS = FOCUSED_RELOADS + EXTRA_RELOADS;
+
+// QNBS-v3: one candidate costs two full refreshes (list pages, every reloadable history that may grow by a page, the main read), the POST and DELETE, and a worst-case re-proof of both slots and the candidate.
 export function candidateCeiling(ctx) {
   const { list, status } = ctx.observed;
-  return 2 * (list + 3 * (status + 1) + 1) + 2 + 6;
+  return 2 * (list + RELOADS * (status + 1) + 1) + 2 + 6;
 }
 
 // QNBS-v3: reads may be retried, so everything after the inactive-status POST is reserved at READ_ATTEMPTS per read plus the DELETE, and the POST is only issued when that worst case still fits the budget.
 export function finishCeiling(ctx) {
   const { list, status } = ctx.observed;
-  const reads = list + 3 * (status + 1) + 1 + 6 + 3;
+  const reads = list + RELOADS * (status + 1) + 1 + 6 + 3;
   return READ_ATTEMPTS * reads + 1;
 }
 
@@ -110,6 +118,7 @@ async function prepare(ctx, holds, records, first) {
     ctx,
     planPruning(records, holds, { slots }).candidates,
     slots,
+    candidateCeiling(ctx),
   );
   return { plan: planPruning(records, holds, { slots }), slots, ...examined };
 }
@@ -119,14 +128,17 @@ function reusableStatuses(before, item, focus) {
   return listKey(item) === listKey(before) ? before.statuses : null;
 }
 
+// QNBS-v3: the list is read first and the number of unfocused records whose history must be reloaded is checked against EXTRA_RELOADS before any history is read, so a moving inventory stops the run inside the reads the ceilings reserved.
 async function refresh(session, focusId) {
   const previous = new Map(session.records.map((record) => [record.id, record]));
   const focus = new Set([focusId, session.slots.current, session.slots.rollback]);
+  const items = await listRecords(session.ctx);
+  const kept = items.map((item) => reusableStatuses(previous.get(item.id), item, focus));
+  const churned = items.filter((item, index) => kept[index] === null && !focus.has(item.id));
+  if (churned.length > EXTRA_RELOADS) refuse('inventory-churn');
   const fresh = [];
-  for (const item of await listRecords(session.ctx)) {
-    const kept = reusableStatuses(previous.get(item.id), item, focus);
-    fresh.push({ ...item, statuses: kept ?? (await loadStatuses(session.ctx, item)) });
-  }
+  for (const [index, item] of items.entries())
+    fresh.push({ ...item, statuses: kept[index] ?? (await loadStatuses(session.ctx, item)) });
   return fresh;
 }
 
@@ -165,7 +177,7 @@ async function inactivate(ctx, record) {
     state: 'inactive',
     environment: 'github-pages',
     environment_url: SITE,
-    log_url: latestStatus(record).log_url,
+    log_url: newestSuccess(record).log_url,
     auto_inactive: false,
   });
   if (anyOf(!validId(data.id), data.state !== 'inactive', !timestamp(data.created_at)))
@@ -178,12 +190,18 @@ function skip(run, reason) {
   run.reason(reason);
 }
 
+// QNBS-v3: the POST is skipped only for an inactive Pages status with an identified author; any other latest status, including an inactive one of unknown origin, gets this run's own inactive status before the DELETE, so deletion authority never rests on unvalidated status metadata.
+const isSettledInactive = (status) =>
+  [status?.state === 'inactive', isPagesStatus(status), actorKey(status?.creator) !== null].every(
+    Boolean,
+  );
+
 // QNBS-v3: a failed or ambiguous inactivation never reaches DELETE, and writes are never retried against an assumed inventory.
 async function retire(session, candidate) {
   const { ctx, run } = session;
   let fresh = await revalidate(session, candidate, fingerprint(candidate));
   if (!fresh) return skip(run, 'stale-candidate');
-  const needsPost = latestStatus(fresh).state !== 'inactive';
+  const needsPost = !isSettledInactive(latestStatus(fresh));
   if (needsPost && ctx.used + finishCeiling(ctx) > ctx.limit) return 'budget';
   run.result.attempted += 1;
   if (needsPost) {

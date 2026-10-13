@@ -5,6 +5,8 @@ export const ROOT = `/repos/${REPOSITORY}`;
 export const SITE = 'https://qnbs.github.io/WorldScript-Studio/';
 export const REPO_ID = 4242;
 export const ACTOR = 'maintainer';
+// A principal is the account id and the login together; the publication proof matches both.
+export const PRINCIPAL = { login: ACTOR, id: 9001 };
 export const date = (id) => new Date(Date.UTC(2026, 0, 1) + id * 1000).toISOString();
 export const authority = {
   repository: REPOSITORY,
@@ -25,7 +27,7 @@ export function status(id, overrides = {}) {
     state: 'success',
     environment: 'github-pages',
     environment_url: SITE,
-    creator: { login: ACTOR },
+    creator: PRINCIPAL,
     log_url: jobUrl(id),
     ...overrides,
   };
@@ -42,7 +44,7 @@ export function record(id, overrides = {}) {
     task: 'deploy',
     transient_environment: false,
     production_environment: false,
-    creator: { login: ACTOR },
+    creator: PRINCIPAL,
     performed_via_github_app: { id: 15368, slug: 'github-actions' },
     statuses: [status(id)],
     ...overrides,
@@ -62,8 +64,8 @@ export const publication = (id, overrides = {}) => ({
   head_sha: record(id).sha,
   status: 'completed',
   conclusion: 'success',
-  actor: { login: ACTOR },
-  triggering_actor: { login: ACTOR },
+  actor: PRINCIPAL,
+  triggering_actor: PRINCIPAL,
   ...overrides,
 });
 

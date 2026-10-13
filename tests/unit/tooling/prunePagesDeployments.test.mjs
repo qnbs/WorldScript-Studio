@@ -5,7 +5,11 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { REQUEST_LIMIT } from '../../../scripts/pages-pruning/github.mjs';
 import { EXAMINE_LIMIT, PUBLISH_EVENTS } from '../../../scripts/pages-pruning/provenance.mjs';
-import { candidateCeiling, finishCeiling } from '../../../scripts/pages-pruning/reconcile.mjs';
+import {
+  candidateCeiling,
+  EXTRA_RELOADS,
+  finishCeiling,
+} from '../../../scripts/pages-pruning/reconcile.mjs';
 import {
   admission,
   DESTRUCTIVE_WRITES_ADMITTED,
@@ -24,6 +28,7 @@ import {
   job as jobFixture,
   jobUrl,
   linkHeader,
+  PRINCIPAL,
   publication,
   REPO_ID,
   ROOT,
@@ -34,7 +39,8 @@ import {
   writes,
 } from './support/pagesPruningFixture.mjs';
 
-const BOT = { login: 'github-actions[bot]' };
+const BOT = { login: 'github-actions[bot]', id: 41898282 };
+const CURSOR = { login: 'cursor[bot]', id: 9002 };
 const candidates = (result) =>
   result.manifest.filter((item) => item.disposition === 'candidate').map((item) => item.id);
 const disposition = (result, id) => result.manifest.find((item) => item.id === id);
@@ -280,6 +286,34 @@ test('already inactive candidates require no POST', async () => {
   assert.equal(writes(github).length, 1);
 });
 
+const unrecognizedInactive = {
+  'an author that is missing': { creator: null },
+  'an author without an account id': { creator: { login: 'maintainer' } },
+  'a site that is not the Pages site': { environment_url: 'https://elsewhere.example/' },
+  'no site at all': { environment_url: undefined },
+};
+for (const [name, change] of Object.entries(unrecognizedInactive))
+  test(`an inactive latest status with ${name} is replaced by this run's own status before DELETE`, async () => {
+    const input = records(4);
+    input[0].statuses.push({
+      ...input[0].statuses[0],
+      id: 900,
+      created_at: date(900),
+      state: 'inactive',
+      ...change,
+    });
+    const github = client(input);
+    const result = await executeDestructive(github);
+    assert.equal(result.deleted, 1);
+    assert.equal(result.inactivated, 1);
+    assert.deepEqual(
+      writes(github).map((call) => call.route),
+      [`POST ${ROOT}/deployments/1/statuses`, `DELETE ${ROOT}/deployments/1`],
+    );
+    // The new status carries the proven success status's job link, never the unrecognised one's.
+    assert.equal(writes(github)[0].parameters.log_url, jobUrl(1));
+  });
+
 for (const code of [403, 404, 409, 429, 500, 503])
   test(`failed inactivation ${code} never reaches DELETE or retries writes`, async () => {
     const github = client(records(4), (route) => {
@@ -494,7 +528,9 @@ const runChanges = [
   { conclusion: 'failure' },
   { conclusion: 'cancelled' },
   { path: '.github/workflows/other.yml' },
-  { actor: { login: 'intruder' }, triggering_actor: { login: 'intruder' } },
+  { actor: { login: 'intruder', id: 7 }, triggering_actor: { login: 'intruder', id: 7 } },
+  { actor: { login: 'maintainer' }, triggering_actor: { login: 'maintainer' } },
+  { actor: { login: 'maintainer', id: 1 }, triggering_actor: { login: 'maintainer', id: 1 } },
   { actor: null, triggering_actor: null },
 ];
 for (const change of runChanges)
@@ -537,6 +573,18 @@ const forgeries = {
   'a status authored by another principal': (item) => {
     item.statuses[0].creator = { login: 'intruder' };
   },
+  'a status author without an account id': (item) => {
+    item.statuses[0].creator = { login: PRINCIPAL.login };
+  },
+  'a status author whose account id differs from the run actor': (item) => {
+    item.statuses[0].creator = { login: PRINCIPAL.login, id: PRINCIPAL.id + 1 };
+  },
+  'a deployment author without an account id': (item) => {
+    item.creator = { login: PRINCIPAL.login };
+  },
+  'a deployment author whose account id differs from the run actor': (item) => {
+    item.creator = { login: PRINCIPAL.login, id: PRINCIPAL.id + 1 };
+  },
   'a status without an author': (item) => {
     delete item.statuses[0].creator;
   },
@@ -575,14 +623,14 @@ test('a candidate whose publication run no longer exists is protected', async ()
 test('a bot-triggered record is retired when its run actor matches the record authors', async () => {
   const input = records(5);
   input[0].performed_via_github_app = null;
-  input[0].creator = { login: 'cursor[bot]' };
-  input[0].statuses[0].creator = { login: 'cursor[bot]' };
+  input[0].creator = CURSOR;
+  input[0].statuses[0].creator = CURSOR;
   const github = client(input, (route) =>
     route.endsWith('/actions/runs/1001')
       ? {
           data: publication(1, {
-            actor: { login: 'cursor[bot]' },
-            triggering_actor: { login: 'cursor[bot]' },
+            actor: CURSOR,
+            triggering_actor: CURSOR,
           }),
           headers: {},
         }
@@ -640,6 +688,31 @@ test('a record whose list key changed is re-read and a new publication head stop
   assert.equal(result.failed, 1);
   assert.equal(result.reasons['current-moved'], 1);
   assert.deepEqual(writes(github), []);
+});
+
+test('more changed unfocused records than a refresh can afford stop the run before any write', async () => {
+  let lists = 0;
+  const github = client(records(10), (route, _parameters, state) => {
+    if (route.includes('?environment=') && ++lists === 2)
+      for (const item of state.slice(0, EXTRA_RELOADS + 1)) item.updated_at = date(500);
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['inventory-churn'], 1);
+  assert.deepEqual(writes(github), []);
+  // The refusal comes before any history of the changed records is read again.
+  assert.equal(statusReads(github), 10);
+});
+
+test('as many changed unfocused records as a refresh can afford are reloaded and the run goes on', async () => {
+  let lists = 0;
+  const github = client(records(10), (route, _parameters, state) => {
+    if (route.includes('?environment=') && ++lists === 2)
+      for (const item of state.slice(0, EXTRA_RELOADS)) item.updated_at = date(500);
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 7);
 });
 
 for (const [name, extra] of [
@@ -723,7 +796,8 @@ test('a request budget that cannot fund another candidate stops gracefully befor
   const result = await executeDestructive(github, { limit: 160 });
   assert.equal(result.failed, 0);
   assert.equal(result.deleted, 0);
-  assert.equal(result.reasons['budget-limit'], 10);
+  assert.ok(result.reasons['budget-limit'] > 0);
+  assert.ok(result.reasons.unexamined > 0);
   assert.equal(result.followUpRequired, true);
   assert.deepEqual(writes(github), []);
 });
@@ -738,9 +812,9 @@ test('an inventory larger than the request budget fails closed without writes', 
 });
 
 test('the per-candidate cost ceiling grows with the observed inventory depth', () => {
-  assert.equal(candidateCeiling({ observed: { list: 1, status: 1 } }), 24);
+  assert.equal(candidateCeiling({ observed: { list: 1, status: 1 } }), 36);
   const deep = candidateCeiling({ observed: { list: 4, status: 5 } });
-  assert.equal(deep, 54);
+  assert.equal(deep, 90);
   assert.ok(deep > 40, 'a fixed 40-request allowance would under-reserve this inventory');
 });
 
@@ -760,7 +834,7 @@ const deepHistory = (input) => {
 test('a candidate pass is reserved at the observed inventory depth before any write', async () => {
   const dry = await execute(client(deepHistory(records(14))), { dryRun: true });
   const ceiling = candidateCeiling({ observed: { list: 1, status: 5 } });
-  assert.equal(ceiling, 48);
+  assert.equal(ceiling, 84);
   const short = client(deepHistory(records(14)));
   const refused = await executeDestructive(short, { limit: dry.requests + ceiling - 1 });
   assert.equal(refused.failed, 0);
@@ -777,8 +851,8 @@ test('a candidate pass is reserved at the observed inventory depth before any wr
 });
 
 test('the post-POST reservation covers every read at its full retry count', () => {
-  assert.equal(finishCeiling({ observed: { list: 1, status: 1 } }), 52);
-  assert.equal(finishCeiling({ observed: { list: 4, status: 5 } }), 97);
+  assert.equal(finishCeiling({ observed: { list: 1, status: 1 } }), 70);
+  assert.equal(finishCeiling({ observed: { list: 4, status: 5 } }), 151);
 });
 
 test('the POST is only issued when everything after it fits the budget even with retried reads', async () => {
@@ -829,6 +903,33 @@ test('records beyond the examination limit are reported as unexamined, never as 
   assert.ok(!candidates(result).includes(1));
   // Slots take two proofs; each examined candidate takes one; nothing else is fetched.
   assert.equal(reads(github, /\/actions\/runs\//).length, 2 + EXAMINE_LIMIT);
+});
+
+test('unprovable newest records do not hide older provable candidates', async () => {
+  const input = records(40);
+  for (const id of Array.from({ length: 22 }, (_, index) => 16 + index)) {
+    input[id - 1].statuses[0].creator = BOT;
+  }
+  const github = client(input);
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.reasons['unproved-publication'], 22);
+  assert.equal(result.candidate, 15);
+  assert.equal(result.reasons.unexamined, undefined);
+  assert.equal(result.deleted, 10);
+  assert.ok(
+    github.state.some((item) => item.id === 20),
+    'an unprovable record is never deleted',
+  );
+});
+
+test('the scan keeps the budget floor of one candidate for the mutation phase', async () => {
+  const github = client(records(100));
+  const dry = await execute(github, { dryRun: true, limit: 140 });
+  assert.equal(dry.failed, 0);
+  assert.equal(dry.candidate, 0);
+  assert.ok(dry.reasons.unexamined > 0);
+  assert.deepEqual(reads(github, /\/actions\/runs\//).length, 2);
 });
 
 test('every candidate within the examination limit is proven even beyond the deletion batch', async () => {
