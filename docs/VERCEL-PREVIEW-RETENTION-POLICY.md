@@ -33,7 +33,8 @@ full reconciliation above. Opt-in exceptions are only the bounded
 dependency/toolchain maintenance train in the next section and the
 release-batched Preview retention after it. Silence, a green head, or a READY
 Production deployment is neither exception. Until a named exception is on
-`main`, this normal lifecycle still applies.
+`main`, this normal lifecycle still applies. The release-batched exception is
+superseded from 2026-10-13; see the Active mode section after it.
 
 ## Bounded dependency/toolchain maintenance train
 
@@ -259,6 +260,56 @@ canonical Production HTTP fails, alias/promotion/rollback state contradicts
 the proof, the destructive writer is not the named local Codex CLI operator,
 or a maintainer revokes the mode. Resource pressure uses the exceptional
 handoff above. It does not by itself restore per-merge destructive cleanup.
+
+## Active mode from 2026-10-13: ordinary per-merge retention
+
+This dated successor section supersedes the release-batched record above. The
+record above stays unchanged as history. The maintainer revoked that mode, which
+its own abort clause treats as an abort into ordinary reconciliation, and named
+the executing writer. The decision is recorded in
+[GH #627](https://github.com/qnbs/WorldScript-Studio/issues/627#issuecomment-6134785538)
+and QNB-67. It does not reuse the #1020 bootstrap, does not declare another
+exception, and does not waive any post-merge safety requirement.
+
+```text
+ACTIVE_MODE = ordinary per-merge preview retention
+ACTIVE_DESTRUCTIVE_WRITER = Claude Code CLI, local VS Code / Ubuntu
+SUPERSEDES = release-batched preview retention record, FIRST_BATCH_PR #1020
+SUPERSESSION_AUTHORITY = maintainer decision, GH #627 comment 6134785538
+CURSOR_CLOUD_DESTRUCTIVE_ACCESS = NO
+TAG_AND_PUBLISH = not granted by this record
+GATE_7 = maintainer only
+PRODUCTION_AUTHORITY_SWITCH = forbidden
+```
+
+After every merge to `main`, the mandatory lifecycle at the top of this policy
+runs in full before dependent repository mutation. The writer must also hold
+these predicates:
+
+1. every deletion names one exact `dpl_` deployment ID; a project name is never
+   passed to `vercel remove`, because it addresses every deployment of that
+   project;
+2. the full paginated deployment and alias inventory is read for the exact
+   project identity below, and an incomplete or contradictory inventory stops
+   the run;
+3. immediately before each deletion or alias removal the ID is revalidated
+   against live data: `main` SHA, `CI / CD` and CodeQL, Production `READY` on
+   that SHA, the three canonical aliases, project identity, target, terminal
+   state, aliases, rollback eligibility, open-PR heads, and the exact protected
+   sets;
+4. a branch alias is removed only after it is shown to bind to that deployment,
+   to be neither Production nor `main`, and to name a branch that is gone or a
+   PR that is closed;
+5. a 403, 429, 5xx, a contradictory provider state, pending or failed gates, or
+   a moved `main` stops the run, and a delete of unclear outcome is verified by
+   re-enumeration, never retried blindly;
+6. a pass with no `SAFE_TO_DELETE` candidate is complete when the inventory was
+   complete, and candidates are never created to reach a number.
+
+The run ends with the post-cleanup proof below, and records the exact `main`
+SHA, run IDs, Production and alias state, the SAFE/PROTECTED/UNKNOWN counts, the
+deleted IDs and the verification in GH #627 and QNB-67. A later batched or
+train exception needs its own newly declared record in a later pull request.
 
 ## Expected provider scope and identity
 

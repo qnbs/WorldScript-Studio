@@ -95,7 +95,11 @@ or 24 non-protected Preview deployments, or provider resource pressure,
 requires one exceptional Codex CLI pass and stops dependent repository
 mutation until that pass is recorded. That pass does not restore per-merge
 destructive cleanup. Until that mode is on `main`, ordinary mode still
-requires the full reconciliation. This is a Vercel artifact procedure; the
+requires the full reconciliation. As of 2026-10-13 that release-batched mode is
+superseded: the maintainer decision recorded in GH #627 makes ordinary
+per-merge reconciliation the active mode, executed by the local Claude Code CLI
+session. The Codex CLI writer, handoff and release-pass clauses above no longer
+apply; see the policy's Active mode section. This is a Vercel artifact procedure; the
 existing GitHub deployment-record workflow does not satisfy it. Never print
 tokens, environment values, or creator emails.
 

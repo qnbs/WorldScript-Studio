@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Operations:** supersede the release-batched Vercel Preview retention record with
+  ordinary per-merge retention. A dated Active mode section in the retention policy names
+  the local Claude Code CLI session as the destructive writer under the maintainer decision
+  recorded in GH #627, keeps the #1020 record as history, and requires every deletion to
+  name one exact deployment ID revalidated against live data. AGENTS.md and the
+  deployment, merge and Cursor Cloud runbooks point to it.
+
 - **Security:** update quinn-proto to the OSV-fixed release 0.11.18 (RUSTSEC-2026-0338 to -0342). The crate is a transitive dependency through `tauri-plugin-http`, `reqwest` 0.12 and `quinn`; the lockfile-only update changes no manifest, feature, or toolchain pin and unblocks the required OSV scan. PR #1030.
 
 - **R-15 Gate 4E evidence:** coordination-resource preservation checks inspect links without following them and reject nonempty files, FIFOs, sockets, and observation errors. Fixture-scoped regressions cover missing/empty resources and link variants. The ordinary-operation barrier is unchanged. Clean successor to PR #1021. PR #1026.

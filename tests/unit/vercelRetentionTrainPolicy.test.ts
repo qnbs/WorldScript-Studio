@@ -146,3 +146,33 @@ describe('release-batched Preview retention', () => {
     expect(policy).toContain('Resource pressure uses the exceptional');
   });
 });
+
+describe('active ordinary per-merge Preview retention', () => {
+  it('supersedes the release-batched record with a named local Claude Code CLI writer', () => {
+    expect(policy).toContain('## Active mode from 2026-10-13: ordinary per-merge retention');
+    expect(policy).toContain('ACTIVE_MODE = ordinary per-merge preview retention');
+    expect(policy).toContain('ACTIVE_DESTRUCTIVE_WRITER = Claude Code CLI, local VS Code / Ubuntu');
+    expect(policy).toContain(
+      'SUPERSEDES = release-batched preview retention record, FIRST_BATCH_PR #1020',
+    );
+    expect(policy).toContain(
+      'SUPERSESSION_AUTHORITY = maintainer decision, GH #627 comment 6134785538',
+    );
+    expect(policy).toContain('TAG_AND_PUBLISH = not granted by this record');
+    expect(policy).toContain('a project name is never passed to `vercel remove`');
+    expect(policy).toContain('revalidated against live data');
+    expect(policy).toContain('does not reuse the #1020 bootstrap');
+  });
+
+  it('keeps the historical batch record and marks it superseded in every companion', () => {
+    expect(policy).toContain('DESTRUCTIVE_WRITER = Codex CLI, local VS Code / Ubuntu');
+    for (const relativePath of companionPaths) {
+      const source = prose(
+        readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8'),
+      );
+      expect(source, relativePath).toContain('As of 2026-10-13 that release-batched mode is');
+      expect(source, relativePath).toContain('executed by the local Claude Code CLI');
+      expect(source, relativePath).toContain('GH #627');
+    }
+  });
+});
