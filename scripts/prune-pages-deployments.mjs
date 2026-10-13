@@ -73,9 +73,12 @@ function readOnlyClient(token) {
   };
 }
 
+// QNBS-v3: the token is requested for github.com explicitly, because GH_HOST or an enterprise default would return a credential for another host, and every request below goes to api.github.com.
+export const TOKEN_ARGS = ['auth', 'token', '--hostname', 'github.com'];
+
 async function localDryRun() {
   if (process.argv.length !== 3 || process.argv[2] !== '--dry-run') refuse('invalid-cli-mode');
-  const token = execFileSync('gh', ['auth', 'token'], {
+  const token = execFileSync('gh', TOKEN_ARGS, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
   }).trim();

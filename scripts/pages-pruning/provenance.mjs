@@ -92,6 +92,12 @@ export async function ensureProven(ctx, record) {
   ctx.proven.set(record.id, key);
 }
 
+// QNBS-v3: at a write boundary the run and job are read again, so evidence that was deleted or became unreadable since classification protects the record instead of authorizing the write on a cached proof.
+export async function reprove(ctx, record) {
+  ctx.proven.delete(record.id);
+  await ensureProven(ctx, record);
+}
+
 async function proves(ctx, record) {
   try {
     await ensureProven(ctx, record);

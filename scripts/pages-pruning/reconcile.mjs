@@ -27,7 +27,7 @@ import {
   ROOT,
   SITE,
 } from './policy.mjs';
-import { ensureProven, examineCandidates, proveSlots } from './provenance.mjs';
+import { examineCandidates, proveSlots, reprove } from './provenance.mjs';
 
 const RATE_RESERVE = 100;
 const API_FAILURES = new Set([403, 404, 409, 429, 500, 502, 503, 504]);
@@ -37,16 +37,19 @@ const FOCUSED_RELOADS = 3;
 export const EXTRA_RELOADS = 3;
 const RELOADS = FOCUSED_RELOADS + EXTRA_RELOADS;
 
-// QNBS-v3: one candidate costs two full refreshes (list pages, every reloadable history that may grow by a page, the main read), the POST and DELETE, and a worst-case re-proof of both slots and the candidate.
+// Re-reading the run and the job of the candidate and of both slots at one write boundary.
+const REPROOF = 6;
+
+// QNBS-v3: one candidate costs two full refreshes (list pages, every reloadable history that may grow by a page, the main read, the re-proof of both slots and the candidate) and the POST and DELETE.
 export function candidateCeiling(ctx) {
   const { list, status } = ctx.observed;
-  return 2 * (list + RELOADS * (status + 1) + 1) + 2 + 6;
+  return 2 * (list + RELOADS * (status + 1) + 1 + REPROOF) + 2;
 }
 
 // QNBS-v3: reads may be retried, so everything after the inactive-status POST is reserved at READ_ATTEMPTS per read plus the DELETE, and the POST is only issued when that worst case still fits the budget.
 export function finishCeiling(ctx) {
   const { list, status } = ctx.observed;
-  const reads = list + RELOADS * (status + 1) + 1 + 6 + 3;
+  const reads = list + RELOADS * (status + 1) + 1 + REPROOF + 3;
   return READ_ATTEMPTS * reads + 1;
 }
 
@@ -166,8 +169,8 @@ async function revalidate(session, candidate, expected) {
   if (!record || !candidateStillEligible) return null;
   if (fingerprint(record) !== expected) return null;
   for (const id of [slots.current, slots.rollback])
-    await ensureProven(ctx, fresh.find((item) => item.id === id) ?? refuse('current-moved'));
-  await ensureProven(ctx, record);
+    await reprove(ctx, fresh.find((item) => item.id === id) ?? refuse('current-moved'));
+  await reprove(ctx, record);
   await assertMainUnchanged(ctx);
   return record;
 }
@@ -202,7 +205,7 @@ async function retire(session, candidate) {
   let fresh = await revalidate(session, candidate, fingerprint(candidate));
   if (!fresh) return skip(run, 'stale-candidate');
   const needsPost = !isSettledInactive(latestStatus(fresh));
-  if (needsPost && ctx.used + finishCeiling(ctx) > ctx.limit) return 'budget';
+  if (needsPost && !funds(ctx, finishCeiling(ctx))) return 'budget';
   run.result.attempted += 1;
   if (needsPost) {
     fresh.statuses.push(await inactivate(ctx, fresh));
@@ -215,12 +218,14 @@ async function retire(session, candidate) {
   session.records = session.records.filter((record) => record.id !== candidate.id);
 }
 
-function affordable(ctx) {
-  const ceiling = candidateCeiling(ctx);
-  const room = ctx.used + ceiling <= ctx.limit;
-  const rate = ctx.remaining === null || ctx.remaining >= RATE_RESERVE + ceiling;
+// QNBS-v3: a cost is funded only when it fits both the local request counter and the live rate allowance last reported by GitHub, with a reserve kept for CI.
+function funds(ctx, cost) {
+  const room = ctx.used + cost <= ctx.limit;
+  const rate = ctx.remaining === null || ctx.remaining >= RATE_RESERVE + cost;
   return room && rate;
 }
+
+const affordable = (ctx) => funds(ctx, candidateCeiling(ctx));
 
 async function mutate(session) {
   const { ctx, run } = session;

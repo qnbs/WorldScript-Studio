@@ -17,6 +17,10 @@ node scripts/prune-pages-deployments.mjs --dry-run
 node --test tests/unit/tooling/prunePagesDeployments.test.mjs
 ```
 
+The local command asks `gh` for the `github.com` token explicitly (`gh auth token --hostname
+github.com`), so `GH_HOST` or an enterprise default can never hand a credential for another host
+to `api.github.com`; it only issues GET requests.
+
 ## Retention and ownership
 
 Keep the newest three Pages records, ordered by `created_at` descending then numeric ID
@@ -87,7 +91,10 @@ invalidates the hold/executable snapshot before each mutation.
 At most ten records are attempted per invocation. Every inactivate and delete operation requires a
 fresh read of the deployment list plus the full status history of the candidate and of both
 publication slots, an unchanged publication-order prefix, an unchanged candidate fingerprint and
-the trusted-main SHA. Other records are re-read only when their list entry (including `updated_at`)
+the trusted-main SHA. The run and job evidence of the candidate and of both slots is read again
+at each of those two boundaries, bypassing the proof cache, so evidence that was deleted or became
+unreadable since classification stops the run before the write (`unknown-publication`). Other
+records are re-read only when their list entry (including `updated_at`)
 changed; GitHub bumped `updated_at` past the newest status on all six live records, but that is an
 optimization, not the authority for the candidate or the slots. At most three such unfocused
 records may need a reload in one refresh; more churn than that stops the run
@@ -115,22 +122,26 @@ repository for `GITHUB_TOKEN`, shared with CI); the live `x-ratelimit-remaining`
 lower that. Before each candidate the run reserves its full cost: two complete refreshes (the
 deployment list pages, the three focused histories and up to three more reloads, each allowed one
 more page, the main read), the POST and DELETE, and a worst-case re-proof of both slots and the
-candidate. The reservation is computed from the page depths observed in this run, from 36 requests
-for a small inventory to 90 for a 400-record list with five-page histories, and the run stops gracefully with `budget-limit`
+candidate (twice, once per write boundary). The reservation is computed from the page depths
+observed in this run, from 42 requests for a small inventory to 96 for a 400-record list with
+five-page histories, and the run stops gracefully with `budget-limit`
 instead of leaving a half-finished candidate. Reads are retried up to twice, so immediately before
 the first write of a candidate the run also reserves everything after the inactive-status POST at
 three attempts per read plus the DELETE (70 requests for a small inventory, 151 for the
-400-record case) and otherwise stops without writing. An inventory that alone exceeds the budget fails
+400-record case) and otherwise stops without writing. Both reservations are also checked against
+the live `x-ratelimit-remaining` value last reported by GitHub, with a reserve of 100 requests kept
+for CI; the POST is not issued when the last reported allowance cannot cover the rest of the
+candidate (other consumers of the same token can still lower it afterwards). An inventory that alone exceeds the budget fails
 closed with `request-budget` before any write. Measured by the test fixture (GET + POST + DELETE,
 ten candidates):
 
 | Records | Previous design (full re-inventory per write) | This design |
 | ---: | ---: | ---: |
-| 6 | – | 54 |
-| 50 | ≈1,214 | 216 |
-| 100 | ≈2,264 | 269 |
-| 200 | ≈4,364 | 382 (stops after 9 deletions) |
-| 300 | ≈6,464 | 374 (stops after 1 deletion) |
+| 6 | – | 90 |
+| 50 | ≈1,214 | 336 |
+| 100 | ≈2,264 | 389 |
+| 200 | ≈4,364 | 392 (stops after 5 deletions) |
+| 300 | ≈6,464 | 392 (stops after 1 deletion) |
 
 A read-only dry-run costs 18, 96, 147 and 349 requests for 6, 50, 100 and 300 records.
 

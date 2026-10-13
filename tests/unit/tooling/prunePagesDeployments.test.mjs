@@ -15,6 +15,7 @@ import {
   DESTRUCTIVE_WRITES_ADMITTED,
   planPruning,
   runAction,
+  TOKEN_ARGS,
   validateHolds,
 } from '../../../scripts/prune-pages-deployments.mjs';
 import {
@@ -610,6 +611,38 @@ for (const [name, forge] of Object.entries(forgeries))
     );
   });
 
+test('evidence that disappears after classification protects the record at the write boundary', async () => {
+  let looked = 0;
+  const github = client(records(5), (route) => {
+    if (route.endsWith('/actions/runs/1002') && ++looked > 1) throw apiError(404);
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['unknown-publication'], 1);
+  assert.equal(result.deleted, 0);
+  assert.deepEqual(writes(github), []);
+  assert.equal(looked, 2, 'classification read the run once and the write boundary read it again');
+});
+
+for (const [remaining, outcome] of [
+  ['120', 'is not issued'],
+  ['5000', 'is issued'],
+])
+  test(`the inactive-status POST ${outcome} at ${remaining} live requests left`, async () => {
+    const github = client(records(4), (route) => {
+      if (route.endsWith('/branches/main'))
+        return {
+          data: { commit: { sha: authority.sha } },
+          headers: { 'x-ratelimit-remaining': remaining },
+        };
+    });
+    const result = await executeDestructive(github);
+    assert.equal(result.failed, 0);
+    assert.equal(result.deleted, remaining === '5000' ? 1 : 0);
+    assert.equal(writes(github).length, remaining === '5000' ? 2 : 0);
+    if (remaining !== '5000') assert.ok(result.reasons['budget-limit'] > 0);
+  });
+
 test('a candidate whose publication run no longer exists is protected', async () => {
   const github = client(records(5), (route) => {
     if (route.endsWith('/actions/runs/1001')) throw apiError(404);
@@ -774,9 +807,9 @@ test('caps each invocation at ten records and reports remaining backlog', async 
 
 const statusReads = (github) => reads(github, /\/statuses$/).length;
 for (const [count, bound] of [
-  [6, 60],
-  [50, 240],
-  [100, 300],
+  [6, 100],
+  [50, 370],
+  [100, 420],
 ])
   test(`request volume stays bounded for ${count} records`, async () => {
     const github = client(records(count));
@@ -812,9 +845,9 @@ test('an inventory larger than the request budget fails closed without writes', 
 });
 
 test('the per-candidate cost ceiling grows with the observed inventory depth', () => {
-  assert.equal(candidateCeiling({ observed: { list: 1, status: 1 } }), 36);
+  assert.equal(candidateCeiling({ observed: { list: 1, status: 1 } }), 42);
   const deep = candidateCeiling({ observed: { list: 4, status: 5 } });
-  assert.equal(deep, 90);
+  assert.equal(deep, 96);
   assert.ok(deep > 40, 'a fixed 40-request allowance would under-reserve this inventory');
 });
 
@@ -834,14 +867,14 @@ const deepHistory = (input) => {
 test('a candidate pass is reserved at the observed inventory depth before any write', async () => {
   const dry = await execute(client(deepHistory(records(14))), { dryRun: true });
   const ceiling = candidateCeiling({ observed: { list: 1, status: 5 } });
-  assert.equal(ceiling, 84);
+  assert.equal(ceiling, 90);
   const short = client(deepHistory(records(14)));
   const refused = await executeDestructive(short, { limit: dry.requests + ceiling - 1 });
   assert.equal(refused.failed, 0);
   assert.ok(refused.reasons['budget-limit'] > 0);
   assert.deepEqual(writes(short), []);
-  // First revalidation: list page, candidate and rollback histories, five current-record pages, main read.
-  const preWrite = 1 + 1 + 5 + 1 + 1;
+  // First revalidation: list page, candidate and rollback histories, five current-record pages, main read, three re-proofs.
+  const preWrite = 1 + 1 + 5 + 1 + 1 + 6;
   const funded = client(deepHistory(records(14)));
   const done = await executeDestructive(funded, {
     limit: dry.requests + preWrite + finishCeiling({ observed: { list: 1, status: 5 } }),
@@ -857,8 +890,8 @@ test('the post-POST reservation covers every read at its full retry count', () =
 
 test('the POST is only issued when everything after it fits the budget even with retried reads', async () => {
   const dry = await execute(client(records(8)), { dryRun: true });
-  // First revalidation: list page, three focused histories, main read.
-  const preWrite = 5;
+  // First revalidation: list page, three focused histories, main read, three re-proofs.
+  const preWrite = 5 + 6;
   const finish = finishCeiling({ observed: { list: 1, status: 1 } });
   const short = client(records(8));
   const refused = await executeDestructive(short, { limit: dry.requests + preWrite + finish - 1 });
@@ -1035,6 +1068,10 @@ test('Actions warns when the backlog exceeds one bounded pass', async () => {
     },
   });
   assert.equal(warnings.length, 1);
+});
+
+test('the local CLI asks for the github.com token explicitly, whatever GH_HOST says', () => {
+  assert.deepEqual(TOKEN_ARGS, ['auth', 'token', '--hostname', 'github.com']);
 });
 
 test('the local CLI refuses every mode except --dry-run before any network access', () => {
