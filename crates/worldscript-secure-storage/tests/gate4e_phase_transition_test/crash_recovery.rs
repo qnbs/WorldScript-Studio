@@ -101,22 +101,28 @@ fn transition_stopped_by(bound: &mut Bound, fs: &mut FaultyFs) -> JournalManifes
     next
 }
 
+/// A prepared phase change: the shared recovery refuses it and changes nothing, the exclusive one
+/// completes exactly it.
+fn assert_refused_then_completed(bound: &mut Bound, next: &JournalManifest) {
+    assert!(preparation_pending(bound));
+    let before = snapshot(bound);
+    assert_eq!(
+        recover_shared(bound),
+        Err(RootStoreError::BindingChangeNeedsExclusiveRecovery)
+    );
+    assert_eq!(snapshot(bound), before);
+    assert!(matches!(
+        recover_exclusive(bound),
+        Ok(RootRecovery::Completed { .. })
+    ));
+    assert_eq!(bound.committed(), *next);
+}
+
 #[test]
 fn the_shared_recovery_refuses_a_prepared_phase_change_and_the_exclusive_one_completes_it() {
     let mut bound = Bound::new();
     let next = interrupted_transition(&mut bound, Fault::BeforePersist(AnchorOp::Commit));
-    assert!(preparation_pending(&bound));
-    let before = snapshot(&bound);
-    assert_eq!(
-        recover_shared(&mut bound),
-        Err(RootStoreError::BindingChangeNeedsExclusiveRecovery)
-    );
-    assert_eq!(snapshot(&bound), before);
-    assert!(matches!(
-        recover_exclusive(&mut bound),
-        Ok(RootRecovery::Completed { .. })
-    ));
-    assert_eq!(bound.committed(), next);
+    assert_refused_then_completed(&mut bound, &next);
 }
 
 #[test]
@@ -174,17 +180,7 @@ fn a_slot_that_was_never_written_is_discarded_by_either_recovery() {
 fn a_pointer_that_was_never_moved_leaves_a_phase_change_for_the_exclusive_recovery() {
     let mut bound = Bound::new();
     let next = transition_stopped_by(&mut bound, &mut FaultyFs::failing_rename_to("pointer"));
-    let before = snapshot(&bound);
-    assert_eq!(
-        recover_shared(&mut bound),
-        Err(RootStoreError::BindingChangeNeedsExclusiveRecovery)
-    );
-    assert_eq!(snapshot(&bound), before);
-    assert!(matches!(
-        recover_exclusive(&mut bound),
-        Ok(RootRecovery::Completed { .. })
-    ));
-    assert_eq!(bound.committed(), next);
+    assert_refused_then_completed(&mut bound, &next);
 }
 
 /// The root a raw commit would publish, and that commit stopped at the anchor.

@@ -148,3 +148,34 @@ fn a_root_alias_that_leads_to_another_root_is_refused_before_anything_is_written
     assert_eq!(bound.state(), before);
     assert_eq!(tree_of(&foreign.base), foreign_before);
 }
+
+#[test]
+fn an_exclusive_recovery_through_a_root_alias_retargeted_during_it_stays_on_the_admitted_root() {
+    use worldscript_secure_storage::memory_provider::{AnchorOp, Fault};
+    use worldscript_secure_storage::{recover_root_exclusive, RootRecovery};
+
+    let mut bound = Bound::new();
+    let foreign = Installation::new();
+    let next = entering(&bound.zero, phase_code::DISCOVER);
+    {
+        let mut admission = bound.installation.exclusive();
+        bound
+            .provider
+            .inject(Fault::BeforePersist(AnchorOp::Commit));
+        assert!(bound.transition(&mut admission, &next).is_err());
+    }
+    let alias = bound.installation.base.join("alias");
+    symlink(&bound.installation.root_dir, &alias).unwrap();
+    let foreign_before = tree_of(&foreign.base);
+    let mut admission = bound.installation.exclusive();
+    let event = admission.try_root_commit().unwrap().expect("root idle");
+    let mut fs = RetargetingFs::new(&alias, &foreign.root_dir);
+    let layout = RootLayout { root_dir: &alias };
+    let recovery = recover_root_exclusive(&mut fs, &mut bound.provider, layout, &event);
+    assert!(fs.fired, "the alias was retargeted during the recovery");
+    assert!(matches!(recovery, Ok(RootRecovery::Completed { .. })));
+    drop(event);
+    drop(admission);
+    assert_eq!(bound.committed(), next);
+    assert_eq!(tree_of(&foreign.base), foreign_before);
+}

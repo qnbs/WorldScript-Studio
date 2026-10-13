@@ -308,6 +308,8 @@ pub fn recover_root<F: DurableFs, P: KeyProvider>(
 /// As [`recover_root`], for the holder of the exclusive admission: the event proves it by type, and a
 /// prepared root that changes the binding is completed like any other authenticated target.
 ///
+/// The root is resolved to its canonical path once, and the recovery uses that path throughout.
+///
 /// A shared event does not compile where the exclusive one is required:
 ///
 /// ```compile_fail
@@ -344,6 +346,11 @@ pub fn recover_root_exclusive<F: DurableFs, P: KeyProvider>(
     event: &AdmittedRootCommitGuard<'_, ExclusiveAdmission>,
 ) -> Result<RootRecovery, RootStoreError> {
     let held = event.root_guard().map_err(RootStoreError::Admission)?;
+    // Every read and write of the recovery runs on the canonical root, never on the caller's spelling of
+    // it, which an alias could retarget after the event was taken; the lock is checked against it.
+    let root = std::fs::canonicalize(layout.root_dir)
+        .map_err(|error| RootStoreError::Admission(AdmissionError::from(error)))?;
+    let layout = RootLayout { root_dir: &root };
     recover_root_as(fs, provider, layout, held, BindingRecovery::Proven)
 }
 
