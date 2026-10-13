@@ -529,6 +529,10 @@ const runChanges = [
   { conclusion: 'failure' },
   { conclusion: 'cancelled' },
   { path: '.github/workflows/other.yml' },
+  { path: '.github/workflows/ci.yml@refs/heads/feature' },
+  { path: '.github/workflows/ci.yml@other' },
+  { path: '.github/workflows/ci.yml.evil' },
+  { path: undefined },
   { actor: { login: 'intruder', id: 7 }, triggering_actor: { login: 'intruder', id: 7 } },
   { actor: { login: 'maintainer' }, triggering_actor: { login: 'maintainer' } },
   { actor: { login: 'maintainer', id: 1 }, triggering_actor: { login: 'maintainer', id: 1 } },
@@ -555,6 +559,8 @@ for (const change of [
   { name: 'Other job' },
   { steps: [] },
   { run_id: 1 },
+  { head_sha: 'f'.repeat(40) },
+  { head_sha: undefined },
 ])
   test(`rejects job evidence ${JSON.stringify(change)}`, async () => {
     const github = client(records(4), (route) =>
@@ -739,6 +745,64 @@ test('a failed slot proof still reports the whole inventory as protected or unex
   assert.equal(result.manifest.length, 6);
   assert.equal(disposition(result, 1).disposition, 'unexamined');
   assert.deepEqual(writes(github), []);
+});
+
+for (const path of ['.github/workflows/ci.yml@refs/heads/main', '.github/workflows/ci.yml@main'])
+  test(`a ref-qualified workflow path ${path} still proves the publication`, async () => {
+    const github = client(records(4), (route) =>
+      route.includes('/actions/runs/')
+        ? {
+            data: { ...publication(Number(route.split('/').at(-1)) - 1000), path },
+            headers: {},
+          }
+        : undefined,
+    );
+    const result = await executeDestructive(github);
+    assert.equal(result.failed, 0);
+    assert.equal(result.deleted, 1);
+  });
+
+test('rate-limit headers of a failed read lower the live allowance used by the proof scan', async () => {
+  const github = client(records(20), (route) => {
+    if (!route.endsWith('/actions/runs/1017')) return undefined;
+    throw Object.assign(apiError(404), {
+      response: { headers: { 'x-ratelimit-remaining': '120' } },
+    });
+  });
+  const result = await execute(github, { dryRun: true });
+  assert.equal(result.failed, 0);
+  assert.equal(result.candidate, 0);
+  assert.equal(result.reasons['unproved-publication'], 1);
+  assert.equal(result.reasons.unexamined, 16);
+});
+
+const budgetRefusal = () => Object.assign(new Error('budget'), { reason: 'request-budget' });
+
+test('a budget refusal before the first write of a candidate is the graceful stop, not a failure', async () => {
+  const github = client(records(4), (route) => {
+    if (route.endsWith('/branches/main')) throw budgetRefusal();
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 0);
+  assert.ok(result.reasons['budget-limit'] > 0);
+  assert.equal(result.followUpRequired, true);
+  assert.deepEqual(writes(github), []);
+});
+
+test('the same budget refusal after the inactive-status POST stays a failure', async () => {
+  let mains = 0;
+  const github = client(records(4), (route) => {
+    if (route.endsWith('/branches/main') && ++mains === 2) throw budgetRefusal();
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['request-budget'], 1);
+  assert.equal(result.deleted, 0);
+  assert.deepEqual(
+    writes(github).map((call) => call.route),
+    [`POST ${ROOT}/deployments/1/statuses`],
+  );
 });
 
 test('a candidate whose publication run no longer exists is protected', async () => {

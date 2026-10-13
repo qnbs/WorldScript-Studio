@@ -21,13 +21,16 @@ const PROOF_COST = 2 * READ_ATTEMPTS;
 export const PUBLISH_EVENTS = new Set(['push', 'workflow_dispatch']);
 const UNKNOWN = 'unknown-publication';
 
+// GitHub documents the workflow path with an optional ref suffix; only the CI file on main is accepted, in either spelling.
+const CI_PATH = /^\.github\/workflows\/ci\.yml(?:@(?:refs\/heads\/)?main)?$/;
+
 function runFacts(run, record, identity) {
   return [
     run.id === identity.run,
     run.repository?.full_name === REPOSITORY,
     run.head_repository?.full_name === REPOSITORY,
     run.name === 'CI / CD',
-    run.path === '.github/workflows/ci.yml',
+    CI_PATH.test(run.path ?? ''),
     PUBLISH_EVENTS.has(run.event),
     run.head_branch === 'main',
     run.head_sha === record.sha,
@@ -43,6 +46,7 @@ function jobFacts(job, run, identity) {
   return [
     job.id === identity.job,
     job.run_id === run.id,
+    job.head_sha === run.head_sha,
     job.name === '🚀 Deploy to GitHub Pages',
     job.status === 'completed',
     job.conclusion === 'success',

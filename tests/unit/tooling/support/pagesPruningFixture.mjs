@@ -74,6 +74,7 @@ export const publication = (id, overrides = {}) => ({
 export const job = (jobId) => ({
   id: jobId,
   run_id: jobId - 1000,
+  head_sha: record(jobId - 2000).sha,
   name: '🚀 Deploy to GitHub Pages',
   status: 'completed',
   conclusion: 'success',

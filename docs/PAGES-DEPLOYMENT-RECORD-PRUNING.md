@@ -48,7 +48,10 @@ on its own. A record is deletable only after all of these hold, read fresh from 
 - the referenced run is the own-repository `CI / CD` run on `main` for the same SHA, started by a
   `push` or a `workflow_dispatch` (the only non-pull-request events `ci.yml` can publish from; a
   test binds this set to the workflow file), completed successfully, and its job
-  `🚀 Deploy to GitHub Pages` and step `Deploy to GitHub Pages` succeeded;
+  `🚀 Deploy to GitHub Pages` (same run, same head SHA) and step `Deploy to GitHub Pages`
+  succeeded. The workflow path is `.github/workflows/ci.yml`, with or without GitHub's documented
+  `@main` / `@refs/heads/main` suffix (live runs report it without one); any other file or ref
+  does not prove;
 - **causal link:** the deployment record and its newest success status were authored by the actor
   or triggering actor of that run, matched by numeric account id and login together (an author
   without a valid id never matches), and neither author is `github-actions[bot]`.
@@ -138,7 +141,10 @@ three attempts per read plus the DELETE (70 requests for a small inventory, 151 
 the live `x-ratelimit-remaining` value last reported by GitHub, with a reserve of 100 requests kept
 for CI. The same check gates the proof scan, the POST and a DELETE that needs no POST; none of them
 is issued when the last reported allowance cannot cover it (other consumers of the same token can
-still lower it afterwards). An inventory that alone exceeds the budget fails
+still lower it afterwards). The rate headers of failed reads and writes count too, so a run of
+404 responses cannot spend the reserve unnoticed. A budget refusal before a candidate's first
+write (a retry storm in its first revalidation) is the same graceful `budget-limit` stop; after the
+POST it stays a failure. An inventory that alone exceeds the budget fails
 closed with `request-budget` before any write. Measured by the test fixture (GET + POST + DELETE,
 ten candidates):
 

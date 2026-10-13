@@ -66,6 +66,7 @@ export async function read(ctx, route, parameters = {}) {
       noteRate(ctx, response.headers);
       return response;
     } catch (error) {
+      noteRate(ctx, error.response?.headers);
       const delay = retryDelay(error, attempt);
       if (!shouldRetry(error, attempt, delay)) throw error;
       await ctx.pause(delay);
@@ -76,9 +77,14 @@ export async function read(ctx, route, parameters = {}) {
 // QNBS-v3: writes are never retried; an ambiguous outcome is re-observed by a later pass instead of repeated against an assumed inventory.
 export async function write(ctx, route, parameters) {
   spend(ctx);
-  const response = await ctx.github.request(route, parameters);
-  noteRate(ctx, response?.headers);
-  return response;
+  try {
+    const response = await ctx.github.request(route, parameters);
+    noteRate(ctx, response?.headers);
+    return response;
+  } catch (error) {
+    noteRate(ctx, error.response?.headers);
+    throw error;
+  }
 }
 
 async function repositoryId(ctx) {

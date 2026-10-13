@@ -137,7 +137,7 @@ function reportUnexamined(run, records, first) {
   );
 }
 
-async function prepareOrReport(ctx, run, holds, records, first) {
+async function prepareOrReport(ctx, run, { holds, records, first }) {
   try {
     return await prepare(ctx, holds, records, first);
   } catch (error) {
@@ -248,6 +248,18 @@ async function retire(session, candidate) {
 
 const affordable = (ctx) => funds(ctx, candidateCeiling(ctx));
 
+// QNBS-v3: a budget refusal before this candidate's first write (a retry storm in its first revalidation) is the same graceful stop as an unaffordable candidate, because nothing was written yet; after a write it stays a failure.
+async function retireWithinBudget(session, candidate) {
+  const { run } = session;
+  const attempted = run.result.attempted;
+  try {
+    return await retire(session, candidate);
+  } catch (error) {
+    if (error.reason === 'request-budget' && run.result.attempted === attempted) return 'budget';
+    throw error;
+  }
+}
+
 async function mutate(session) {
   const { ctx, run } = session;
   for (const candidate of run.batch) {
@@ -256,7 +268,7 @@ async function mutate(session) {
       return;
     }
     run.considered += 1;
-    if ((await retire(session, candidate)) === 'budget') {
+    if ((await retireWithinBudget(session, candidate)) === 'budget') {
       run.considered -= 1;
       run.reason('budget-limit', run.batch.length - run.considered);
       return;
@@ -273,7 +285,7 @@ async function execute(ctx, run, holds) {
     reportUnexamined(run, records, first);
     refuse('unproved-current-or-unsettled');
   }
-  const prepared = await prepareOrReport(ctx, run, holds, records, first);
+  const prepared = await prepareOrReport(ctx, run, { holds, records, first });
   run.batch = prepared.batch;
   report(run, records, prepared);
   if (run.result.mode !== 'delete') return finishDryRun(run, records);
