@@ -3112,7 +3112,9 @@ runs on the canonical root the admission was proven for, and the
 progress checkpoint, the binding advance and the journal-level checkpoint publish refuse a successor
 that changes the phase (`PhaseChangeNotACheckpoint`), as the transition refuses one that keeps it
 (`NotAPhaseChange`). Each refusal precedes the first journal byte, and a generation promoted directly
-becomes authoritative only through the transition. The conversion gate's own phase changes use it.
+becomes authoritative only through the transition. The raw root commit, which publishes whatever binding
+it is given, is exported only with the test-only `test-support` feature; the production crate publishes
+roots through the authority commits. The conversion gate's own phase changes use the transition.
 The capture, takeover and renewal writers are unchanged: they already keep the phase, and the barrier
 of the final (`ADMIT`) capture stays with E3. This opens no window and admits no producer of a binding.
 

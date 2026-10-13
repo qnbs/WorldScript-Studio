@@ -15,7 +15,7 @@
 //! pages to hash to the root's `catalog_set_digest` and their descriptors' markers to hash to its
 //! `marker_set_digest`; any other result is `RECOVERY_REQUIRED`. [`list_records`] returns the
 //! verified descriptors. [`commit_catalog_change`] applies descriptor upserts and removals,
-//! checks everything [`commit_root`] would refuse, writes one new page generation per affected
+//! checks everything `commit_root` would refuse, writes one new page generation per affected
 //! shard (an emptied shard keeps a zero-descriptor page), and commits the root that names them;
 //! until that root commits, the prior catalog stays authority. A change keeps the committed key
 //! route and epoch; changing them is a key rotation (Gate 5). Each change runs under the
@@ -64,8 +64,9 @@ use crate::root::{
 };
 use crate::root_lock::RootCommitGuard;
 use crate::root_store::{
-    active_epoch_bound, commit_root, is_generation_debris, load_committed_root, load_key_epoch_set,
-    RootCommitRequest, RootCommitted, RootLayout, RootRecoveryReason, RootStep, RootStoreError,
+    active_epoch_bound, commit_root_primitive, is_generation_debris, load_committed_root,
+    load_key_epoch_set, RootCommitRequest, RootCommitted, RootLayout, RootRecoveryReason, RootStep,
+    RootStoreError,
 };
 use crate::seal::{Key, RecordMeta};
 
@@ -248,7 +249,7 @@ pub fn list_records<F: DurableFs, P: KeyProvider>(
 }
 
 /// Applies `commit.change` to the committed catalog and commits the next root naming the new
-/// pages. Everything [`commit_root`] would refuse — the operation ID, the generation, the
+/// pages. Everything `commit_root` would refuse — the operation ID, the generation, the
 /// key-epoch set and its active-epoch binding — is checked before any leftover is relocated or
 /// any page written; until the root commits (step F) the prior root and catalog stay authority.
 pub fn commit_catalog_change<F: DurableFs, P: KeyProvider>(
@@ -1309,7 +1310,7 @@ fn commit_planned<F: DurableFs, P: KeyProvider>(
         root_key_ref: commit.root_key_ref,
         held,
     };
-    let mut committed = commit_root(fs, provider, layout, request)?;
+    let mut committed = commit_root_primitive(fs, provider, layout, request)?;
     // `Confirmed` only if every page and journal directory sync was too, not just the slot and
     // pointer ones.
     committed.directories = all_confirmed([
@@ -1385,7 +1386,7 @@ fn keeps_key_route(root: &RootBody, commit: CatalogCommit<'_>) -> bool {
 
 /// The key-epoch set the new root names: its digest, after checking that `active_key_epoch` is
 /// exactly one `KEY_EPOCH_ACTIVE` record binding the commit's route (§8.3) — the check
-/// [`commit_root`] repeats, made here so a refused commit writes no page.
+/// `commit_root` repeats, made here so a refused commit writes no page.
 fn preflight_key_epochs<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,

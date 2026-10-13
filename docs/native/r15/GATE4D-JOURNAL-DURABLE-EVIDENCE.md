@@ -1292,7 +1292,9 @@ candidate are in scope above; B2 is not terminal.
 ## Gate 4E E2 follow-up: a phase change is published under exclusive admission
 
 `authority::commit_phase_transition` takes the installation's `ExclusiveAdmissionGuard` by mutable
-borrow and is the only way a phase change becomes authoritative. The root classifies every binding
+borrow and is the only way a phase change becomes authoritative in the production crate: the raw
+`commit_root`, which publishes whatever binding it is given, is crate-private there and exported only
+with the test-only `test-support` feature, like `load_catalog` and `list_records`. The root classifies every binding
 advance (`BindingStep`): the progress checkpoint keeps the phase, the transition changes it, and
 capture, renewal and takeover keep their own relations, which already keep the phase. The journal
 level splits the same way: `publish_manifest_fenced` refuses a phase change and

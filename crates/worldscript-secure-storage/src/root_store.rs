@@ -4,7 +4,7 @@
 //! The authority root lives in two places that cannot be written atomically together: the secure
 //! anchor held by the [`KeyProvider`] (the rollback floor and `committed_root`, the sole publication
 //! authority) and the filesystem (two generation-addressed root slots and a recoverable active-slot
-//! pointer). [`commit_root`] runs §5.3.1's A–G sequence — prepare the anchor (C), write the target
+//! pointer). `commit_root` runs §5.3.1's A–G sequence — prepare the anchor (C), write the target
 //! slot directly in its `COMMITTED` form (D collapsed into E1, which §5.3.1 admits because the final
 //! evidence is known in advance), move the pointer (E2), then commit the anchor (F) — and verifies
 //! every durable step before the next; a request for any scope but the anchor's is refused.
@@ -207,7 +207,11 @@ pub struct CommittedRootView {
 /// Commits `request.root` as the next authority root (§5.3.1 A–G). Step F is the only
 /// publication point; until it succeeds the prior committed root stays authority, and an
 /// interrupted commit is resolved by [`recover_root`].
-pub fn commit_root<F: DurableFs, P: KeyProvider>(
+///
+/// This primitive trusts the root it is given, including the live-migration binding it names: the
+/// relation of a changed binding to the committed one (phase, owner, inventory, lease) is proven by
+/// the authority commits that call it, under the same root lock. It is therefore crate-private.
+pub(crate) fn commit_root_primitive<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     layout: RootLayout<'_>,
@@ -252,6 +256,20 @@ pub fn commit_root<F: DurableFs, P: KeyProvider>(
         root_digest: commit.target_final_root_digest,
         directories: both(slot, pointer_sync),
     })
+}
+
+/// The raw root commit, for tests only. It publishes any root it is given, including a changed
+/// live-migration binding of a bound root, so the production crate does not expose it: every
+/// production publication goes through the authority commits, which prove the binding relation
+/// first. Available with the test-only `test-support` feature, like the in-memory key provider.
+#[cfg(feature = "test-support")]
+pub fn commit_root<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    request: RootCommitRequest<'_>,
+) -> Result<RootCommitted, RootStoreError> {
+    commit_root_primitive(fs, provider, layout, request)
 }
 
 /// Startup resolution of an interrupted root commit (§5.3.1 crash table). It completes forward
@@ -1078,7 +1096,7 @@ mod snapshot_tests {
             },
             live_migration: None,
         };
-        commit_root(
+        commit_root_primitive(
             &mut StdFs,
             provider,
             layout,
