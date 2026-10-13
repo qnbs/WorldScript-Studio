@@ -96,7 +96,12 @@ cross 100 files from i18n alone.
    minimized. Keep commits **atomic per concern** so the split is a clean branch operation, not a
    re-edit.
 3. **Stack** them: PR1 base = `main`; PR2 base = **PR1's branch**. GitHub then shows PR2 only its
-   *incremental* diff (what CodeAnt counts), and PR2 is retargeted to `main` by hand before PR1 merges (GitHub retargets a stacked PR automatically only when the merged head branch is deleted, which this repository no longer does).
+   *incremental* diff (what CodeAnt counts), for as long as it stays based on PR1's branch. GitHub
+   retargets a stacked PR automatically only when the merged head branch is deleted, which this
+   repository no longer does, so the move to `main` is a deliberate step at merge time: follow the
+   dependent-PR rule in `PR-CI-MERGE-WORKFLOW.md` (retarget only when the composite diff against
+   `main` stays inside the review and PR-size limits, bring the dependent onto the resulting
+   `main` after the base squash, rerun CI and the review wave on that head).
    Run the loop on PR1 to quiescence + merge first, then PR2.
 4. **Do not over-split.** If the whole change fits under ~100 in one (or two) PRs, use that — extra
    PRs are extra review loops and CI runs. One or two is the target, never "one PR per file group"
