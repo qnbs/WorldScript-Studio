@@ -46,17 +46,19 @@ const isPlainPreview = (deployment) =>
     Boolean,
   );
 
-function unknownReasons(deployment) {
-  const reasons = [];
-  if (!isPlainPreview(deployment)) reasons.push('target-unrecognized');
-  if (!identityConfirmed(deployment)) reasons.push('identity-unconfirmed');
-  if (!TERMINAL_STATES.has(deployment.readyState)) reasons.push('non-terminal-state');
-  if (typeof deployment.isRollbackCandidate !== 'boolean') reasons.push('rollback-unknown');
-  if (!deployment.meta?.githubCommitRef) reasons.push('branch-unknown');
-  if (!FULL_SHA.test(deployment.meta?.githubCommitSha ?? '')) reasons.push('commit-unknown');
-  if (!Number.isFinite(deployment.created)) reasons.push('created-unknown');
-  return reasons;
-}
+// QNBS-v3: each check names the reason it raises, so the list stays flat as checks are added and the reasons keep a fixed order.
+const UNKNOWN_CHECKS = [
+  ['target-unrecognized', (deployment) => !isPlainPreview(deployment)],
+  ['identity-unconfirmed', (deployment) => !identityConfirmed(deployment)],
+  ['non-terminal-state', (deployment) => !TERMINAL_STATES.has(deployment.readyState)],
+  ['rollback-unknown', (deployment) => typeof deployment.isRollbackCandidate !== 'boolean'],
+  ['branch-unknown', (deployment) => !deployment.meta?.githubCommitRef],
+  ['commit-unknown', (deployment) => !FULL_SHA.test(deployment.meta?.githubCommitSha ?? '')],
+  ['created-unknown', (deployment) => !Number.isFinite(deployment.created)],
+];
+
+const unknownReasons = (deployment) =>
+  UNKNOWN_CHECKS.filter(([, raised]) => raised(deployment)).map(([reason]) => reason);
 
 const FAILED_STATES = new Set(['ERROR', 'CANCELED']);
 
