@@ -4,7 +4,7 @@
 //! The authority root lives in two places that cannot be written atomically together: the secure
 //! anchor held by the [`KeyProvider`] (the rollback floor and `committed_root`, the sole publication
 //! authority) and the filesystem (two generation-addressed root slots and a recoverable active-slot
-//! pointer). [`commit_root`] runs §5.3.1's A–G sequence — prepare the anchor (C), write the target
+//! pointer). `commit_root` runs §5.3.1's A–G sequence — prepare the anchor (C), write the target
 //! slot directly in its `COMMITTED` form (D collapsed into E1, which §5.3.1 admits because the final
 //! evidence is known in advance), move the pointer (E2), then commit the anchor (F) — and verifies
 //! every durable step before the next; a request for any scope but the anchor's is refused.
@@ -30,6 +30,7 @@ use crate::seal::Key;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use crate::admission::{AdmissionError, AdmittedRootCommitGuard, ExclusiveAdmission};
 use crate::commit::{first_gap, parse_counter, parse_generation_name, parse_staging_name};
 use crate::commit::{relocate, CommitError};
 use crate::durable::{
@@ -42,7 +43,8 @@ use crate::provider::{
     RootKeyRefV1, RootSlot,
 };
 use crate::root::{
-    key_epoch_set_digest, root_digest, KeyEpochEntry, RootBody, RootCommitState, RootError,
+    key_epoch_set_digest, root_digest, KeyEpochEntry, LiveMigration, RootBody, RootCommitState,
+    RootError,
 };
 use crate::root_lock::RootCommitGuard;
 use crate::root_record::{
@@ -153,6 +155,12 @@ pub enum RootStoreError {
     /// migration: the journal is sealed under an epoch that must stay resolvable until the binding
     /// is cleared (§8.3, §10.1.1).
     RevocationWhileMigrationBound,
+    /// The prepared root changes the live-migration binding of the committed root, so only a recovery
+    /// that holds the exclusive admission may complete it. Nothing was written and the preparation
+    /// stays pending.
+    BindingChangeNeedsExclusiveRecovery,
+    /// The exclusive admission could not provide its root commit event.
+    Admission(AdmissionError),
 }
 
 /// A root to commit: its body (evidence `COMMITTED`, naming this commit's operation) and the key
@@ -207,7 +215,11 @@ pub struct CommittedRootView {
 /// Commits `request.root` as the next authority root (§5.3.1 A–G). Step F is the only
 /// publication point; until it succeeds the prior committed root stays authority, and an
 /// interrupted commit is resolved by [`recover_root`].
-pub fn commit_root<F: DurableFs, P: KeyProvider>(
+///
+/// This primitive trusts the root it is given, including the live-migration binding it names: the
+/// relation of a changed binding to the committed one (phase, owner, inventory, lease) is proven by
+/// the authority commits that call it, under the same root lock. It is therefore crate-private.
+pub(crate) fn commit_root_primitive<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     layout: RootLayout<'_>,
@@ -254,6 +266,20 @@ pub fn commit_root<F: DurableFs, P: KeyProvider>(
     })
 }
 
+/// The raw root commit, for tests only. It publishes any root it is given, including a changed
+/// live-migration binding of a bound root, so the production crate does not expose it: every
+/// production publication goes through the authority commits, which prove the binding relation
+/// first. Available with the test-only `test-support` feature, like the in-memory key provider.
+#[cfg(feature = "test-support")]
+pub fn commit_root<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    request: RootCommitRequest<'_>,
+) -> Result<RootCommitted, RootStoreError> {
+    commit_root_primitive(fs, provider, layout, request)
+}
+
 /// Startup resolution of an interrupted root commit (§5.3.1 crash table). It completes forward
 /// only when the target slot authenticates to exactly the prepared final digest (re-syncing its
 /// directory first). Otherwise, if the pointer already names the target, the filesystem moved to a
@@ -261,11 +287,86 @@ pub fn commit_root<F: DurableFs, P: KeyProvider>(
 /// pointer still names the prior root is the preparation discarded, a non-matching target slot
 /// relocated (never deleted) and the pointer repaired to the committed root. A read or sync failure
 /// decides nothing.
+///
+/// A prepared root that changes the live-migration binding of the committed root (a journal owner's
+/// commit, such as a phase transition) is completed only by [`recover_root_exclusive`]. Here it is
+/// refused as [`RootStoreError::BindingChangeNeedsExclusiveRecovery`] before any sync or write, and the
+/// preparation stays pending: the holder of a bare root lock, such as an ordinary operation under a
+/// shared admission, must not publish a change that was prepared under the exclusive one. The
+/// classification compares the two authenticated roots only: the committed one against the anchor's
+/// digest and the prepared one against the prepared digest. A target that keeps the binding, including
+/// one that binds nothing, completes as before.
 pub fn recover_root<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     layout: RootLayout<'_>,
     held: &RootCommitGuard,
+) -> Result<RootRecovery, RootStoreError> {
+    recover_root_as(fs, provider, layout, held, BindingRecovery::Refused)
+}
+
+/// As [`recover_root`], for the holder of the exclusive admission: the event proves it by type, and a
+/// prepared root that changes the binding is completed like any other authenticated target.
+///
+/// The root is resolved to its canonical path once, and the recovery uses that path throughout.
+///
+/// A shared event does not compile where the exclusive one is required:
+///
+/// ```compile_fail
+/// use worldscript_secure_storage::admission::{AdmittedRootCommitGuard, SharedAdmission};
+/// use worldscript_secure_storage::{recover_root_exclusive, KeyProvider, RootLayout, StdFs};
+///
+/// fn shared_cannot_recover_exclusively<P: KeyProvider>(
+///     provider: &mut P,
+///     layout: RootLayout<'_>,
+///     event: &AdmittedRootCommitGuard<'_, SharedAdmission>,
+/// ) {
+///     let _ = recover_root_exclusive(&mut StdFs, provider, layout, event);
+/// }
+/// ```
+///
+/// and the same call with an exclusive event compiles:
+///
+/// ```
+/// use worldscript_secure_storage::admission::{AdmittedRootCommitGuard, ExclusiveAdmission};
+/// use worldscript_secure_storage::{recover_root_exclusive, KeyProvider, RootLayout, StdFs};
+///
+/// fn exclusive_can_recover<P: KeyProvider>(
+///     provider: &mut P,
+///     layout: RootLayout<'_>,
+///     event: &AdmittedRootCommitGuard<'_, ExclusiveAdmission>,
+/// ) {
+///     let _ = recover_root_exclusive(&mut StdFs, provider, layout, event);
+/// }
+/// ```
+pub fn recover_root_exclusive<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    event: &AdmittedRootCommitGuard<'_, ExclusiveAdmission>,
+) -> Result<RootRecovery, RootStoreError> {
+    let held = event.root_guard().map_err(RootStoreError::Admission)?;
+    // Every read and write of the recovery runs on the canonical root, never on the caller's spelling of
+    // it, which an alias could retarget after the event was taken; the lock is checked against it.
+    let root = std::fs::canonicalize(layout.root_dir)
+        .map_err(|error| RootStoreError::Admission(AdmissionError::from(error)))?;
+    let layout = RootLayout { root_dir: &root };
+    recover_root_as(fs, provider, layout, held, BindingRecovery::Proven)
+}
+
+/// Whether a recovery may complete a prepared root that changes the binding of the committed one.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BindingRecovery {
+    Refused,
+    Proven,
+}
+
+fn recover_root_as<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+    held: &RootCommitGuard,
+    binding: BindingRecovery,
 ) -> Result<RootRecovery, RootStoreError> {
     check_held(held, layout)?;
     let anchor = read_anchor(provider)?;
@@ -281,8 +382,15 @@ pub fn recover_root<F: DurableFs, P: KeyProvider>(
         scope: &scope,
         commit: &commit,
     };
-    let state = target_state(fs, provider, &target)?;
+    let read = read_target(fs, provider, &target)?;
+    let state = read.state;
     if state == TargetState::Matches {
+        if binding == BindingRecovery::Refused {
+            let committed = committed_live_migration(fs, provider, layout, &scope, &anchor)?;
+            if committed != read.live_migration {
+                return Err(RootStoreError::BindingChangeNeedsExclusiveRecovery);
+            }
+        }
         fs.sync_dir(&target.slot_dir())
             .map_err(|error| io_error(RootStep::SyncSlot, &error))?;
         ensure_pointer(fs, layout, &target.pointer())?;
@@ -935,9 +1043,28 @@ fn target_state<F: DurableFs, P: KeyProvider>(
     provider: &P,
     target: &Target<'_>,
 ) -> Result<TargetState, RootStoreError> {
+    Ok(read_target(fs, provider, target)?.state)
+}
+
+/// The prepared target slot, classified, with the binding it would publish when it matches.
+struct TargetRead {
+    state: TargetState,
+    live_migration: Option<LiveMigration>,
+}
+
+fn read_target<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    target: &Target<'_>,
+) -> Result<TargetRead, RootStoreError> {
     let envelope = match fs.read(&target.slot_file()) {
         Ok(bytes) => bytes,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(TargetState::Absent),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(TargetRead {
+                state: TargetState::Absent,
+                live_migration: None,
+            })
+        }
         Err(error) => return Err(io_error(RootStep::ReadSlot, &error)),
     };
     let key = provider
@@ -948,15 +1075,40 @@ fn target_state<F: DurableFs, P: KeyProvider>(
         root_generation: target.commit.target_root_generation,
         envelope: &envelope,
     };
-    let matches = open_root_slot(&key, &read).is_ok_and(|(root, digest)| {
-        digest == target.commit.target_final_root_digest
+    let opened = open_root_slot(&key, &read).ok().filter(|(root, digest)| {
+        *digest == target.commit.target_final_root_digest
             && root.commit_evidence.state == RootCommitState::Committed
     });
-    Ok(if matches {
-        TargetState::Matches
-    } else {
-        TargetState::Mismatch
+    Ok(match opened {
+        Some((root, _)) => TargetRead {
+            state: TargetState::Matches,
+            live_migration: root.live_migration,
+        },
+        None => TargetRead {
+            state: TargetState::Mismatch,
+            live_migration: None,
+        },
     })
+}
+
+/// The binding of the root the anchor calls committed, read while a preparation is pending: only the
+/// committed slot is authenticated, against the anchor's digest and route, as for
+/// [`assert_no_live_migration`]. `None` when no root is committed yet.
+fn committed_live_migration<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    scope: &InstallationScopeId,
+    anchor: &AnchorState,
+) -> Result<Option<LiveMigration>, RootStoreError> {
+    let Some(committed) = anchor.committed_root.as_ref() else {
+        return Ok(None);
+    };
+    let key = provider
+        .resolve_ref(&committed.root_key_ref)
+        .map_err(RootStoreError::Anchor)?;
+    let (root, _) = open_committed_slot(fs, layout, scope, committed, &key)?;
+    Ok(root.live_migration)
 }
 
 /// The pointer as the filesystem holds it; a malformed pointer is `None` (recoverable state).
@@ -1078,7 +1230,7 @@ mod snapshot_tests {
             },
             live_migration: None,
         };
-        commit_root(
+        commit_root_primitive(
             &mut StdFs,
             provider,
             layout,

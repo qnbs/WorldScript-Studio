@@ -63,10 +63,10 @@ pub use admission::{
 pub use authority::{
     advance_live_migration, begin_streamed_capture, commit_catalog_change,
     commit_inventory_capture, commit_journal_checkpoint, commit_journal_takeover,
-    commit_lease_renewal, commit_streamed_inventory_capture, AuthorityError, BindingAdvance,
-    CatalogChange, CatalogCommit, CatalogRecoveryReason, CatalogStep, CommittedShard,
-    InventoryCapture, JournalCheckpoint, JournalSource, JournalTakeoverCommit, LoadedCatalog,
-    SessionBegin, StagingSession, StreamedInventoryCapture,
+    commit_lease_renewal, commit_phase_transition, commit_streamed_inventory_capture,
+    AuthorityError, BindingAdvance, CatalogChange, CatalogCommit, CatalogRecoveryReason,
+    CatalogStep, CommittedShard, InventoryCapture, JournalCheckpoint, JournalSource,
+    JournalTakeoverCommit, LoadedCatalog, SessionBegin, StagingSession, StreamedInventoryCapture,
 };
 #[cfg(feature = "test-support")]
 pub use authority::{list_records, load_catalog};
@@ -96,28 +96,30 @@ pub use error::{AadError, KdfError, KeyProviderError, OpenError, RecoveryError, 
 pub use identity::{IdentityError, RecordIdentity};
 pub use journal::{
     acquire_journal_durable_guard, allows_phase_transition, assert_binding_successor,
-    assert_binding_takeover, assert_capture_successor, assert_fence, assert_live_binding,
-    assert_manifest_promote_authority, assert_manifest_successor, assert_page_promote_authority,
-    assert_progress_successor, assert_renewal_successor, assert_takeover_promote_authority,
-    assert_takeover_successor, authoritative_manifest_revision, capture_inventory,
-    checkpoint_progress, empty_inventory_digest, empty_journal_page_set_digest, inventory_digest,
-    inventory_page_dir, is_terminal_phase, journal_envelope_epoch, journal_page_set_digest,
+    assert_binding_takeover, assert_capture_successor, assert_checkpoint_successor, assert_fence,
+    assert_live_binding, assert_manifest_promote_authority, assert_manifest_successor,
+    assert_page_promote_authority, assert_phase_transition_successor, assert_progress_successor,
+    assert_renewal_successor, assert_takeover_promote_authority, assert_takeover_successor,
+    authoritative_manifest_revision, capture_inventory, checkpoint_progress,
+    empty_inventory_digest, empty_journal_page_set_digest, inventory_digest, inventory_page_dir,
+    is_terminal_phase, journal_envelope_epoch, journal_page_set_digest,
     load_authoritative_manifest, load_inventory_page, load_manifest_generation, load_staged_page,
     mark_done, mark_recovery, operation_type, ordinary_mutating_writes_admitted, page_ref_for,
     phase_code, promote_inventory_set_fenced, promote_manifest_fenced, promote_page_fenced,
-    promote_staged_inventory_fenced, publish_manifest_fenced, publish_renewal_fenced,
-    publish_takeover_fenced, root_named_journal_epoch, seal_inventory_pages, source_authority_kind,
-    source_physical_authority_kind, source_scheme_id, transition_phase, verify_stored_inventory,
-    with_fence, CandidateConflict, CaptureStart, ForeignInventoryExtension,
-    InventoryDigestVerifier, InventorySetWrite, JournalCheckpointCursor, JournalDurableContext,
-    JournalDurableError, JournalDurableGuard, JournalError, JournalInventoryEntry,
-    JournalInventoryExtent, JournalInventorySource, JournalManifest, JournalPage, JournalPageRef,
-    JournalRevision, JournalTakeover, ManifestEnvelopeDigest, ManifestRead,
-    MigrationExecutionError, MigrationFence, MigrationPhase, PublishedManifest, RecoveryReasonCode,
-    SealedPage, StagedCapture, StagedPage, StagedPromotion, StreamedCapture, VerifiedInventory,
-    JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION,
-    JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES,
-    MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES, MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
+    promote_staged_inventory_fenced, publish_manifest_fenced, publish_phase_transition_fenced,
+    publish_renewal_fenced, publish_takeover_fenced, root_named_journal_epoch,
+    seal_inventory_pages, source_authority_kind, source_physical_authority_kind, source_scheme_id,
+    transition_phase, verify_stored_inventory, with_fence, CandidateConflict, CaptureStart,
+    ForeignInventoryExtension, InventoryDigestVerifier, InventorySetWrite, JournalCheckpointCursor,
+    JournalDurableContext, JournalDurableError, JournalDurableGuard, JournalError,
+    JournalInventoryEntry, JournalInventoryExtent, JournalInventorySource, JournalManifest,
+    JournalPage, JournalPageRef, JournalRevision, JournalTakeover, ManifestEnvelopeDigest,
+    ManifestRead, MigrationExecutionError, MigrationFence, MigrationPhase, PublishedManifest,
+    RecoveryReasonCode, SealedPage, StagedCapture, StagedPage, StagedPromotion, StreamedCapture,
+    VerifiedInventory, JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    JOURNAL_PAGE_FORMAT_VERSION, JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES,
+    MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES, MAX_JOURNAL_PAGE_BYTES,
+    MAX_JOURNAL_PAGE_DESCRIPTORS,
 };
 pub use journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};
@@ -152,10 +154,12 @@ pub use root_record::{
     open_root_slot, seal_root_slot, KeyEpochAddress, KeyEpochRead, KeyEpochRecord, KeyEpochStatus,
     KeyEpochWrite, RootPointer, RootRecordError, RootSlotRead,
 };
+#[cfg(feature = "test-support")]
+pub use root_store::commit_root;
 pub use root_store::{
-    commit_root, load_committed_root, load_key_epoch_set, recover_root, repair_root_pointer,
-    write_key_epoch, CommittedRootView, KeyEpochCommit, RootCommitRequest, RootCommitted,
-    RootLayout, RootRecovery, RootRecoveryReason, RootStep, RootStoreError,
+    load_committed_root, load_key_epoch_set, recover_root, recover_root_exclusive,
+    repair_root_pointer, write_key_epoch, CommittedRootView, KeyEpochCommit, RootCommitRequest,
+    RootCommitted, RootLayout, RootRecovery, RootRecoveryReason, RootStep, RootStoreError,
 };
 #[cfg(feature = "test-randomness")]
 pub use seal::seal_with_random;

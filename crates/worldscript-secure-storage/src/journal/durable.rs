@@ -26,7 +26,7 @@ use super::state::{
     assert_fence, assert_live_binding, assert_manifest_promote_authority,
     assert_page_promote_authority, ManifestEnvelopeDigest, MigrationExecutionError, MigrationFence,
 };
-use super::succession::assert_progress_successor;
+use super::succession::{assert_checkpoint_successor, assert_phase_transition_successor};
 use super::takeover::{assert_takeover_promote_authority, assert_takeover_successor};
 use super::{
     JournalError, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_RECORD_SCHEMA,
@@ -283,16 +283,58 @@ pub struct PublishedManifest {
 /// (discarding it needs a relocation primitive that is not part of this slice). The read is
 /// bounded by [`MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES`] through [`DurableFs::read_at_most`], so a file
 /// larger than any valid manifest is refused as a different candidate without being loaded.
+///
+/// This is the progress-checkpoint publish: a successor that changes the phase is refused as
+/// `PhaseChangeNotACheckpoint`, before any write, whoever calls it. A phase change has its own entry
+/// point, [`publish_phase_transition_fenced`], as a lease renewal and a takeover do.
 pub fn publish_manifest_fenced<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
     fence: &MigrationFence,
     committed: Option<&LiveMigration>,
 ) -> Result<PublishedManifest, JournalDurableError> {
+    publish_successor(ctx, manifest, fence, committed, PhaseRule::Kept)
+}
+
+/// Fenced publication of the owner's next manifest revision when it changes the phase (§10.3).
+///
+/// Everything is checked and published exactly as [`publish_manifest_fenced`] does, except that the
+/// successor must change the phase (`NotAPhaseChange` otherwise) and is still a valid successor of
+/// the committed generation in every other rule. It needs a committed predecessor: the bootstrap
+/// revision is no phase change and is refused the same way before any journal I/O, and stays with the
+/// regular publisher. This function takes no admission: a generation it
+/// writes becomes authoritative only when the root commits a binding step for it, and the root
+/// accepts a phase change only from the phase-transition commit, which holds the installation's
+/// exclusive admission by type.
+pub fn publish_phase_transition_fenced<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    fence: &MigrationFence,
+    committed: Option<&LiveMigration>,
+) -> Result<PublishedManifest, JournalDurableError> {
+    publish_successor(ctx, manifest, fence, committed, PhaseRule::Changed)
+}
+
+/// What an ordinary (non-capture) publish requires of the phase relative to the committed one.
+#[derive(Clone, Copy)]
+enum PhaseRule {
+    /// A progress checkpoint: the phase is kept.
+    Kept,
+    /// A phase transition: the phase changes.
+    Changed,
+}
+
+fn publish_successor<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    manifest: &JournalManifest,
+    fence: &MigrationFence,
+    committed: Option<&LiveMigration>,
+    rule: PhaseRule,
+) -> Result<PublishedManifest, JournalDurableError> {
     with_fence(manifest, fence, || {
         assert_manifest_promote_authority(manifest, committed)
             .map_err(JournalDurableError::Authority)?;
-        assert_successor_of_committed(ctx, manifest, committed)?;
+        assert_successor_of_committed(ctx, manifest, committed, rule)?;
         publish_or_adopt(ctx, manifest)
     })
 }
@@ -411,15 +453,26 @@ fn assert_successor_of_committed<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     manifest: &JournalManifest,
     committed: Option<&LiveMigration>,
+    rule: PhaseRule,
 ) -> Result<(), JournalDurableError> {
     let Some(live) = committed else {
-        return Ok(());
+        // Only the bootstrap revision reaches here, and it has no predecessor: it is no phase change,
+        // so the phase-transition publisher refuses it before any journal I/O.
+        return match rule {
+            PhaseRule::Kept => Ok(()),
+            PhaseRule::Changed => Err(JournalDurableError::Authority(
+                MigrationExecutionError::NotAPhaseChange,
+            )),
+        };
     };
     let current = load_authoritative_manifest(ctx, live)?;
     let relation = if ctx.capture {
         assert_capture_successor(&current, manifest)
     } else {
-        assert_progress_successor(&current, manifest)
+        match rule {
+            PhaseRule::Kept => assert_checkpoint_successor(&current, manifest),
+            PhaseRule::Changed => assert_phase_transition_successor(&current, manifest),
+        }
     };
     relation.map_err(JournalDurableError::Authority)
 }

@@ -54,6 +54,40 @@ pub fn assert_progress_successor(
     frozen_when(true, inventory(prev) == inventory(next))
 }
 
+/// Refuses a manifest that is not a progress checkpoint of `prev`: a valid progress successor that
+/// also keeps the phase (§10.3).
+///
+/// A phase change ends the window in which one phase admitted what the next one forbids (`PREPARE`
+/// admits ordinary operations, `ADMIT` onward does not), so it is published only by the exclusively
+/// admitted phase-transition commit. The ordinary checkpoint refuses it with its own typed error,
+/// and only after every other successor rule, so that an invalid jump still names the rule it breaks.
+pub fn assert_checkpoint_successor(
+    prev: &JournalManifest,
+    next: &JournalManifest,
+) -> Result<(), MigrationExecutionError> {
+    assert_progress_successor(prev, next)?;
+    if manifest_phase(prev) == manifest_phase(next) {
+        Ok(())
+    } else {
+        Err(MigrationExecutionError::PhaseChangeNotACheckpoint)
+    }
+}
+
+/// Refuses a manifest that is not a phase transition of `prev`: a valid progress successor whose
+/// phase differs (§10.3). The counterpart of [`assert_checkpoint_successor`]: what one refuses as a
+/// phase change, this requires.
+pub fn assert_phase_transition_successor(
+    prev: &JournalManifest,
+    next: &JournalManifest,
+) -> Result<(), MigrationExecutionError> {
+    assert_progress_successor(prev, next)?;
+    if manifest_phase(prev) == manifest_phase(next) {
+        Err(MigrationExecutionError::NotAPhaseChange)
+    } else {
+        Ok(())
+    }
+}
+
 pub(super) fn assert_successor_revision(
     prev: &JournalManifest,
     next: &JournalManifest,

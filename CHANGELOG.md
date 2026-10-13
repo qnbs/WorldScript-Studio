@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **R-15 Gate 4E:** the recovery of a prepared root that changes the live-migration binding now needs the exclusive admission. `recover_root` refuses to complete such a root (typed, before any sync or write; the preparation stays) and the ordinary operation that ran it is refused with `RecoveryPending`; the new `recover_root_exclusive` completes it, and `begin_conversion` resolves a pending preparation through it before it reads the journal (it now takes the provider by mutable reference). A prepared root that keeps the binding still completes under a shared admission. The classification compares the authenticated committed and prepared roots; no journal locator, no E3 writer and no `PREPARE`/`DONE` window. Issue #359. PR #1035.
+
+- **R-15 Gate 4E:** a journal phase change is now published only by `commit_phase_transition`, which takes the installation's exclusive admission by type. The progress checkpoint, the binding advance and the journal-level checkpoint publish refuse a successor that changes the phase, and the transition refuses one that keeps it, each before a journal byte is written. The conversion driver's own phase changes use the new commit and behave as before. The raw root commit is no longer exported by the production crate, only with the test-only `test-support` feature, so it cannot be used to name a phase change. The capture, takeover and renewal writers, the writer journal locator and the PREPARE/DONE windows are unchanged and stay closed. Issue #359. PR #1033, which was closed unmerged: its six commits landed through PR #1035.
+
 - **Operations:** add a versioned Vercel Preview retention runner for the post-merge
   reconciliation. `pnpm run vercel:retention:dry-run` is read-only and
   `pnpm run vercel:retention:reconcile` runs the full pass, both without arguments. A pass

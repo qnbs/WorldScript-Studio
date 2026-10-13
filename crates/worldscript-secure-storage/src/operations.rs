@@ -251,7 +251,13 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             return Ok(None);
         };
         let held = event.root_guard().map_err(OperationError::from)?;
-        recover_root(fs, provider, self.scope.layout(), held)?;
+        match recover_root(fs, provider, self.scope.layout(), held) {
+            // A prepared journal-owner commit is completed only under the exclusive admission.
+            Err(RootStoreError::BindingChangeNeedsExclusiveRecovery) => {
+                return Err(OperationError::RecoveryPending)
+            }
+            other => other.map(|_| ())?,
+        }
         let anchor = provider.read_root_anchor_state()?;
         lock_cell(&self.cell)?.publish(&anchor)?;
         Ok(Some(()))

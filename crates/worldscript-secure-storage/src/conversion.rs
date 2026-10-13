@@ -14,12 +14,17 @@
 //!
 //! fn shared_cannot_convert<P: KeyProvider>(
 //!     admission: &mut SharedAdmissionGuard,
-//!     provider: &P,
+//!     provider: &mut P,
 //!     begin: ConversionBegin<'_>,
 //! ) {
 //!     let _ = begin_conversion(admission, &mut StdFs, provider, begin);
 //! }
 //! ```
+//!
+//! A crash between the anchor's preparation of a root and its commit leaves a prepared root. One that
+//! changes the live-migration binding is completed only under the exclusive admission, which this gate
+//! holds, so a pending preparation is resolved through [`recover_root_exclusive`] before anything is read
+//! (a missing or mismatching target is discarded as in any recovery).
 //!
 //! The gate re-reads what the committed root vouches for instead of trusting a caller's copy: the
 //! binding comes from the root, the journal key is resolved through the key-epoch registry, and the
@@ -79,9 +84,9 @@ use std::path::{Path, PathBuf};
 
 use crate::admission::{AdmissionError, AdmissionScope, ExclusiveAdmissionGuard};
 use crate::authority::{
-    commit_journal_checkpoint_held, commit_lease_renewal_held, load_committed_page,
-    read_committed_journal, verify_committed_inventory, AuthorityError, CommittedJournal,
-    JournalCheckpoint, JournalSource,
+    commit_journal_checkpoint_held, commit_lease_renewal_held, commit_phase_transition_held,
+    load_committed_page, read_committed_journal, verify_committed_inventory, AuthorityError,
+    CommittedJournal, JournalCheckpoint, JournalSource,
 };
 use crate::durable::{DurableFs, WriteOperationId};
 use crate::error::SealError;
@@ -93,7 +98,7 @@ use crate::journal::{
 use crate::provider::KeyProvider;
 use crate::root::LiveMigration;
 use crate::root_lock::sys;
-use crate::root_store::{RootCommitted, RootLayout};
+use crate::root_store::{recover_root_exclusive, RootCommitted, RootLayout, RootStoreError};
 
 /// What the gate needs from its caller: the scope the admission was acquired for, where the journal
 /// lives (below the installation directory of that scope), and the identity the committed lease must
@@ -257,12 +262,13 @@ impl<E> From<ConversionError> for ConvertError<E> {
     }
 }
 
-/// Which journal-owner operation commits a step's successor: the lease renewal and the ordinary
-/// checkpoint are different operations over the same root event.
+/// Which journal-owner operation commits a step's successor: the lease renewal, the ordinary
+/// checkpoint and the phase transition are different operations over the same root event.
 #[derive(Debug, Clone, Copy)]
 enum StepKind {
     Renewal,
     Checkpoint,
+    PhaseTransition,
 }
 
 /// The exclusive conversion entry: the committed journal state, read under an admission that no
@@ -291,7 +297,7 @@ pub struct ConversionSession<'a> {
 pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
     held: &'a mut ExclusiveAdmissionGuard,
     fs: &mut F,
-    provider: &P,
+    provider: &mut P,
     begin: ConversionBegin<'_>,
 ) -> Result<ConversionSession<'a>, ConversionError> {
     let installation = std::fs::canonicalize(begin.scope.installation_dir).map_err(io_error)?;
@@ -303,7 +309,8 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
         dir: &journal_pin.canonical,
         operation: begin.journal.operation,
     };
-    let journal = read_committed_journal(fs, provider, layout, source)?;
+    resolve_pending_preparation(held, fs, provider, layout)?;
+    let journal = read_committed_journal(fs, &*provider, layout, source)?;
     // The directories must still be the ones admitted after the reads, not only before them.
     ensure_admitted(held, canonical(&installation, &root))?;
     if !journal_pin.is_current() {
@@ -321,6 +328,33 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
         cursor_moved: false,
         spent: false,
     })
+}
+
+/// Completes or discards the prepared root that a crash left behind, under the exclusive admission the
+/// caller holds; a no-op when nothing is pending.
+fn resolve_pending_preparation<F: DurableFs, P: KeyProvider>(
+    held: &mut ExclusiveAdmissionGuard,
+    fs: &mut F,
+    provider: &mut P,
+    layout: RootLayout<'_>,
+) -> Result<(), ConversionError> {
+    let anchor = provider
+        .read_root_anchor_state()
+        .map_err(|error| root_error(RootStoreError::Anchor(error)))?;
+    if anchor.prepared_root_commit.is_none() {
+        return Ok(());
+    }
+    let event = held
+        .try_root_commit()
+        .map_err(ConversionError::Admission)?
+        .ok_or(ConversionError::RootBusy)?;
+    recover_root_exclusive(fs, provider, layout, &event)
+        .map(|_| ())
+        .map_err(root_error)
+}
+
+fn root_error(error: RootStoreError) -> ConversionError {
+    ConversionError::Authority(AuthorityError::Root(error))
 }
 
 fn canonical<'p>(installation: &'p Path, root: &'p Path) -> AdmissionScope<'p> {
@@ -439,9 +473,14 @@ impl<'a> ConversionSession<'a> {
             return Ok(None);
         }
         let convert = MigrationPhase::from_wire(phase_code::CONVERT);
-        self.step(fs, provider, StepKind::Checkpoint, |manifest, fence| {
-            transition_phase(manifest, fence, convert).map_err(ConversionError::Migration)
-        })
+        self.step(
+            fs,
+            provider,
+            StepKind::PhaseTransition,
+            |manifest, fence| {
+                transition_phase(manifest, fence, convert).map_err(ConversionError::Migration)
+            },
+        )
         .map(Some)
     }
 
@@ -669,9 +708,14 @@ impl<'a> ConversionSession<'a> {
             return Err(ConversionError::NotConverted);
         }
         let verify = MigrationPhase::from_wire(phase_code::VERIFY);
-        self.step(fs, provider, StepKind::Checkpoint, |manifest, fence| {
-            transition_phase(manifest, fence, verify).map_err(ConversionError::Migration)
-        })
+        self.step(
+            fs,
+            provider,
+            StepKind::PhaseTransition,
+            |manifest, fence| {
+                transition_phase(manifest, fence, verify).map_err(ConversionError::Migration)
+            },
+        )
     }
 
     /// Requires the committed journal to be the one the session holds. If it is not (another owner
@@ -753,6 +797,9 @@ impl<'a> ConversionSession<'a> {
                 StepKind::Renewal => commit_lease_renewal_held(fs, provider, layout, step, root),
                 StepKind::Checkpoint => {
                     commit_journal_checkpoint_held(fs, provider, layout, step, root)
+                }
+                StepKind::PhaseTransition => {
+                    commit_phase_transition_held(fs, provider, layout, step, &event)
                 }
             };
             // Whatever the commit reported, read the root back while the event is still held: no other
