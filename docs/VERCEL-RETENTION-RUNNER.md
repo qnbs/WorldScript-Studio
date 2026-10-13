@@ -22,18 +22,24 @@ print no tokens, e-mail addresses or provider error text.
 
 ## What a pass does
 
-1. **Authority.** Reads `origin/main` and requires every `CI / CD` and `CodeQL SAST` run of that
-   exact SHA to be a completed success. Requires Vercel Production `READY` on that SHA, the three
-   canonical aliases bound to it, and the canonical host to answer HTTP 200. The project identity
-   (ID, name, team, linked repository) must match the constants in `scope.mjs`.
-2. **Inventory.** Reads every page of deployments and aliases, the open PRs and the remote
-   branches. An incomplete or unreadable inventory stops the run.
-3. **Classification** (pure, in `classify.mjs`). Anything that is, was promoted as, or can roll
-   back to Production never enters the preview classification. A preview is `PROTECTED` when it
-   carries a canonical alias, an alias of a branch that still exists, is among the newest
-   `min(3, available)` previews of an open PR, or builds `main` or an open PR head. It is `UNKNOWN`
-   when its identity, state, rollback flag, branch or creation time is missing or contradictory, or
-   when it has no PR but a live branch or an orphan alias. Only the rest is `SAFE`.
+1. **Authority.** Reads `origin/main` and requires every push-triggered `CI / CD` and
+   `CodeQL SAST` run on `main` for that exact SHA to be a completed success; a manual or tag run
+   never stands in for it, and a run list as long as the request limit counts as possibly
+   truncated. Requires Vercel Production `READY` on that SHA, the three canonical aliases bound to
+   it, and the canonical host to answer HTTP 200. The project identity (ID, name, team, linked
+   repository) must match the constants in `scope.mjs`.
+2. **Inventory.** Reads every page of deployments and aliases, the open PRs, the remote branches
+   and the hold file. A provider page without pagination metadata is malformed, not final; an
+   incomplete or unreadable inventory stops the run.
+3. **Classification** (pure, in `classify.mjs`). Anything that is, is moving to (`ROLLING`), was
+   promoted as, or can roll back to Production never enters the preview classification. A preview
+   is `PROTECTED` when it carries a canonical alias, an alias of a branch that still exists, is
+   among the newest `min(3, available)` dated previews of an open PR, builds `main` or an open PR
+   head, or is named in `.github/vercel-retention-holds.json` as review or retest evidence. It is
+   `UNKNOWN` when its identity, state, rollback flag, branch, commit SHA or creation time is missing
+   or contradictory, or when it has no PR but a live branch or an orphan alias. Only the rest is
+   `SAFE`. Both modes print one `RETENTION_MANIFEST` line per preview (ID, verdict, branch, PR,
+   commit, alias count, lifecycle, reasons) before the summary, so the SAFE set can be reviewed.
 4. **Deletion** (`reconcile` only), at most 25 per pass, newest first. For every ID the run re-reads
    `main`, the gates and the whole provider state and re-classifies it. A changed verdict only defers
    that ID. A branch alias of a gone branch is removed first, after it is shown to bind to that
@@ -41,17 +47,32 @@ print no tokens, e-mail addresses or provider error text.
    one validated deployment ID or alias host, so a project name can never reach the project-wide
    form of `remove`. A write is never retried: a failed or unconfirmed one stops the pass, and a
    write of unclear outcome is settled by re-reading the inventory.
-5. **Post-proof.** Re-reads everything: every protected ID still present, every deleted ID absent,
-   the canonical aliases still bound to the same Production deployment, HTTP 200. Anything else
-   stops the run as `postproof-failed`.
+5. **Post-proof.** Re-reads everything: the anchored gates again, the same Production deployment
+   still `READY`, every protected ID still present, every deleted ID absent, the canonical aliases
+   still bound to it, HTTP 200. Anything else stops the run as `postproof-failed`.
 
-A pass with no `SAFE` candidate is complete when the inventory was complete.
+A pass with no `SAFE` candidate is complete when the inventory was complete. Only one `reconcile`
+runs per machine at a time; a second one stops with `retention-already-running` before it reads
+anything, and a lock left by a dead process is recovered.
 
 ## Trusted source
 
-`reconcile` runs only when `scripts/vercel-retention/` and the two `package.json` script entries equal
-`origin/main` and the working tree there is clean. An edited, unmerged or divergent checkout is
-refused before any provider call. `dry-run` is read-only and has no such requirement.
+`reconcile` runs only when `scripts/vercel-retention/`, the hold file and the two `package.json`
+script entries equal `origin/main` and are clean. An edited, unmerged or divergent checkout is
+refused before any provider call, and `cli.mjs` loads only Node built-ins and the lock before this
+check, so the runner modules that read or delete anything are not loaded from an untrusted source.
+`dry-run` is read-only and has no such requirement.
+
+This is a guard against accidental or stale checkouts, not a defense against a hostile one: an edited
+checkout can edit the check, and `pnpm run` reads the script text from its own `package.json`. The
+boundary is operational: run `reconcile` from a clean worktree on `main`, never from a feature
+branch, and keep the permission rule to the exact command.
+
+## Holds
+
+`.github/vercel-retention-holds.json` lists previews kept as current review or retest evidence
+(`{"review": ["dpl_…"]}`). The file is reviewed like any change on `main`; a malformed file stops the
+run, and a preview not listed gets no such protection.
 
 ## Permissions
 
@@ -71,7 +92,10 @@ authentication stop, not something an allow rule fixes.
 
 | Reason | Meaning |
 | --- | --- |
-| `gate-not-green:<workflow>` | A required run on the exact `main` SHA is missing, in flight or not a success. |
+| `gate-not-green:<workflow>` | A required push run on `main` for the exact SHA is missing, in flight or not a success. |
+| `runs-unreadable`, `runs-incomplete` | The run list could not be read, or was as long as the request limit and may be truncated. |
+| `invalid-holds` | The hold file is missing, malformed or lists something other than deployment IDs. |
+| `retention-already-running`, `lock-unavailable` | Another `reconcile` holds the lock, or the lock could not be taken. |
 | `production-not-ready-on-main`, `canonical-aliases-not-bound`, `canonical-http-failed` | Production is not proven on this SHA. |
 | `main-moved`, `main-moved-during-read` | `main` advanced; start a new pass for the new SHA. |
 | `provider-read-failed`, `provider-pagination-limit`, `invalid-provider-response` | The inventory could not be read completely. |

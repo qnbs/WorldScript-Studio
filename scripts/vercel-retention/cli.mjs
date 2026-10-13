@@ -1,43 +1,74 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { runRetention } from './apply.mjs';
-import { parseJson, refuse } from './util.mjs';
+import { acquireLock } from './lock.mjs';
 
+// QNBS-v3: this entry file statically imports only Node built-ins and the lock, so the runner modules that read or delete anything are loaded only after the source check has passed.
 const MODES = new Set(['dry-run', 'reconcile']);
 const SCRIPT_KEYS = ['vercel:retention:dry-run', 'vercel:retention:reconcile'];
-const RUNNER_PATH = 'scripts/vercel-retention';
+const TRUSTED_PATHS = ['scripts/vercel-retention', '.github/vercel-retention-holds.json'];
+const HOLDS_PATH = '.github/vercel-retention-holds.json';
+
+const stop = (reason) => {
+  throw Object.assign(new Error(reason), { reason });
+};
+
+function parse(text, what) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return stop(`unparseable-${what}`);
+  }
+}
 
 // QNBS-v3: the entry points take no arguments, so a command-line allow rule for them cannot be widened by appending text.
 export function parseMode(argv) {
-  if (argv.length !== 1 || !MODES.has(argv[0])) refuse('invalid-arguments');
+  if (argv.length !== 1 || !MODES.has(argv[0])) stop('invalid-arguments');
   return argv[0];
 }
 
 const mainScripts = (deps) =>
-  parseJson(deps.git(['show', 'origin/main:package.json']), 'main-package').scripts ?? {};
+  parse(deps.git(['show', 'origin/main:package.json']), 'main-package').scripts ?? {};
 
-// QNBS-v3: a mutating pass runs only from runner files and package scripts that equal the reviewed origin/main, so an edited or unmerged checkout cannot delete anything.
+// QNBS-v3: a mutating pass runs only from runner files, holds and package scripts that equal the reviewed origin/main. This guards against an accidental or stale checkout; a hostile checkout can edit this check too, so the pass belongs in a clean main worktree.
 export function assertTrustedSource(deps) {
   deps.git(['fetch', 'origin', 'main', '--quiet']);
-  const dirty = deps.git(['status', '--porcelain', '--', RUNNER_PATH, 'package.json']).trim();
-  if (dirty !== '') refuse('runner-source-modified');
+  const dirty = deps.git(['status', '--porcelain', '--', ...TRUSTED_PATHS, 'package.json']).trim();
+  if (dirty !== '') stop('runner-source-modified');
   try {
-    deps.git(['diff', '--quiet', 'origin/main', '--', RUNNER_PATH]);
+    deps.git(['diff', '--quiet', 'origin/main', '--', ...TRUSTED_PATHS]);
   } catch {
-    refuse('runner-source-differs-from-main');
+    stop('runner-source-differs-from-main');
   }
-  const mine = parseJson(deps.packageJson(), 'package').scripts ?? {};
+  const mine = parse(deps.packageJson(), 'package').scripts ?? {};
   const main = mainScripts(deps);
   for (const key of SCRIPT_KEYS)
-    if (mine[key] !== main[key]) refuse('package-script-differs-from-main');
+    if (mine[key] !== main[key]) stop('package-script-differs-from-main');
+}
+
+const rowLine = (row) =>
+  [
+    row.id,
+    row.verdict,
+    row.branch ?? '-',
+    `PR ${row.pr ?? '-'}`,
+    row.sha || '-',
+    `aliases=${row.aliases}`,
+    row.lifecycle,
+    row.reasons.join('+') || '-',
+  ].join(' | ');
+
+export function report(io, summary) {
+  const { manifest = [], ...rest } = summary;
+  for (const row of manifest) io.log(`RETENTION_MANIFEST ${rowLine(row)}`);
+  io.log(`RETENTION_SUMMARY ${JSON.stringify(rest)}`);
 }
 
 export async function main(argv, deps, io = console) {
   const mode = parseMode(argv);
   if (mode === 'reconcile') assertTrustedSource(deps);
-  const summary = await runRetention(deps, mode);
-  io.log(`RETENTION_SUMMARY ${JSON.stringify(summary)}`);
+  const { runRetention } = await import('./apply.mjs');
+  report(io, await runRetention(deps, mode));
 }
 
 function realDeps() {
@@ -57,13 +88,15 @@ function realDeps() {
     http: (url) =>
       run('curl', ['-sS', '-o', '/dev/null', '-w', '%{http_code}', '-m', '20', url]).trim(),
     packageJson: () => readFileSync('package.json', 'utf8'),
+    holds: () => readFileSync(HOLDS_PATH, 'utf8'),
+    lock: () => acquireLock(),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main(process.argv.slice(2), realDeps()).catch((error) => {
-    if (error.summary) console.log(`RETENTION_SUMMARY ${JSON.stringify(error.summary)}`);
+    if (error.summary) report(console, error.summary);
     console.error(`RETENTION_STOP: ${error.reason ?? 'unexpected-error'}`);
     process.exitCode = 1;
   });

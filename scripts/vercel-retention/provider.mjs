@@ -21,6 +21,18 @@ export async function providerGet(deps, path) {
   return refuse('provider-read-failed');
 }
 
+// QNBS-v3: a page without pagination metadata is malformed, not final, so an inventory is complete only when the provider says there is no next page.
+function nextPage(body, key) {
+  const pagination = body?.pagination;
+  const wellFormed = [
+    Array.isArray(body?.[key]),
+    pagination !== null,
+    typeof pagination === 'object',
+  ];
+  if (!wellFormed.every(Boolean) || !('next' in pagination)) refuse('invalid-provider-response');
+  return pagination.next ?? null;
+}
+
 async function paged(deps, path, key) {
   const items = [];
   let until = null;
@@ -28,9 +40,8 @@ async function paged(deps, path, key) {
     const params = { projectId: SCOPE.projectId, teamId: SCOPE.teamId, limit: '100' };
     if (until !== null) params.until = String(until);
     const body = await providerGet(deps, withQuery(path, params));
-    if (!Array.isArray(body[key])) refuse('invalid-provider-response');
     items.push(...body[key]);
-    until = body.pagination?.next ?? null;
+    until = nextPage(body, key);
     if (until === null) return items;
   }
   return refuse('provider-pagination-limit');

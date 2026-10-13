@@ -6,6 +6,7 @@ import {
   readOpenPrs,
 } from './authority.mjs';
 import { classify } from './classify.mjs';
+import { readHolds } from './holds.mjs';
 import {
   listAliases,
   listDeployments,
@@ -28,6 +29,7 @@ export async function readWorld(deps) {
     aliases,
     prs: readOpenPrs(deps),
     branches: readBranches(deps),
+    holds: readHolds(deps),
   };
   if (readMain(deps) !== main) refuse('main-moved-during-read');
   return world;
@@ -54,11 +56,13 @@ function newSummary(mode) {
     writeAttempts: 0,
     stop: null,
     postproof: null,
+    manifest: [],
   };
 }
 
 function fillCounts(summary, plan) {
   const count = (verdict) => plan.rows.filter((row) => row.verdict === verdict).length;
+  summary.manifest = plan.rows.map((row) => ({ ...row, aliases: row.aliases.length }));
   summary.protectedProduction = plan.production.length;
   summary.rollbackCandidates = plan.production.filter((d) => d.isRollbackCandidate === true).length;
   summary.protectedPreviews = count('PROTECTED');
@@ -106,9 +110,15 @@ async function retire(session, id) {
   return summary.deleted.push(id);
 }
 
+// QNBS-v3: the post-proof re-asserts the anchored gates and that Production itself is still the same READY deployment, because deleting previews must never be the last thing checked before declaring the pass complete.
 async function postProof(session, protectedIds) {
   const { deps, summary } = session;
   const after = await readWorld(deps);
+  assertRequiredRuns(deps, summary.anchor);
+  const production = after.deployments.find(
+    (deployment) => deployment.uid === summary.productionId,
+  );
+  const productionReady = [production?.target === 'production', production?.readyState === 'READY'];
   const present = new Set(after.deployments.map((deployment) => deployment.uid));
   const lost = [...protectedIds].filter((id) => !present.has(id));
   const resurrected = summary.deleted.filter((id) => present.has(id));
@@ -122,10 +132,17 @@ async function postProof(session, protectedIds) {
     protectedPresent: `${protectedIds.size - lost.length}/${protectedIds.size}`,
     deletedAbsent: resurrected.length === 0,
     canonicalAliasesBound: bound,
+    productionReady: productionReady.every(Boolean),
     httpProduction: http,
   };
   summary.postproof = proof;
-  const sound = [lost.length === 0, proof.deletedAbsent, bound, http === '200'];
+  const sound = [
+    lost.length === 0,
+    proof.deletedAbsent,
+    bound,
+    proof.productionReady,
+    http === '200',
+  ];
   if (!sound.every(Boolean)) refuse('postproof-failed');
 }
 
@@ -144,7 +161,9 @@ async function reconcileSafe(session, plan) {
 
 export async function runRetention(deps, mode) {
   const summary = newSummary(mode);
+  let release = () => {};
   try {
+    if (mode === 'reconcile') release = deps.lock();
     const world = await readWorld(deps);
     summary.anchor = world.main;
     summary.productionId = verifyGates(deps, world);
@@ -155,5 +174,7 @@ export async function runRetention(deps, mode) {
   } catch (error) {
     summary.stop = error.reason ?? 'unexpected-error';
     throw Object.assign(new Error(summary.stop), { reason: summary.stop, summary });
+  } finally {
+    release();
   }
 }

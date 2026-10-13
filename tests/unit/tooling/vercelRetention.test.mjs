@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { runRetention } from '../../../scripts/vercel-retention/apply.mjs';
-import { assertTrustedSource, main, parseMode } from '../../../scripts/vercel-retention/cli.mjs';
+import {
+  assertTrustedSource,
+  main,
+  parseMode,
+  report,
+} from '../../../scripts/vercel-retention/cli.mjs';
+import { acquireLock } from '../../../scripts/vercel-retention/lock.mjs';
 import { removeAlias, removeDeployment } from '../../../scripts/vercel-retention/provider.mjs';
 import { MAX_DELETIONS } from '../../../scripts/vercel-retention/scope.mjs';
 import {
@@ -51,6 +59,7 @@ test('reconcile deletes only the proven SAFE previews and proves the rest afterw
     protectedPresent: '6/6',
     deletedAbsent: true,
     canonicalAliasesBound: true,
+    productionReady: true,
     httpProduction: '200',
   });
   for (const kept of ['dpl_prod', 'dpl_old', 'dpl_prev3', 'dpl_prev4', 'dpl_prev5', 'dpl_prev21'])
@@ -117,10 +126,14 @@ const badRuns = {
   'a cancelled run': (runs) => runs.map((run) => ({ ...run, conclusion: 'cancelled' })),
   'a run still in progress': (runs) =>
     runs.map((run) => ({ ...run, status: 'in_progress', conclusion: '' })),
-  'a failed rerun next to a success': (runs) => [
+  'a failed push rerun next to a success': (runs) => [
     ...runs,
-    { name: 'CI / CD', status: 'completed', conclusion: 'failure' },
+    { ...runs[0], conclusion: 'failure' },
   ],
+  'only a manual dispatch run': (runs) =>
+    runs.map((run) => ({ ...run, event: 'workflow_dispatch' })),
+  'only a tag push run': (runs) => runs.map((run) => ({ ...run, headBranch: 'v1.30.0' })),
+  'a run for another commit': (runs) => runs.map((run) => ({ ...run, headSha: OTHER })),
 };
 for (const [name, change] of Object.entries(badRuns))
   test(`stops with ${name} on the exact main SHA, in both modes`, async () => {
@@ -132,6 +145,23 @@ for (const [name, change] of Object.entries(badRuns))
       assert.deepEqual(world.writes, []);
     }
   });
+
+test('a failing manual run next to the green push runs does not outvote them', async () => {
+  const world = standardWorld();
+  world.runs = [
+    ...world.runs,
+    { ...world.runs[0], event: 'workflow_dispatch', conclusion: 'failure' },
+  ];
+  const summary = await dry(world);
+  assert.equal(summary.safe, 4);
+});
+
+test('a run list as long as the request limit is treated as possibly truncated', async () => {
+  const world = standardWorld();
+  world.runs = Array.from({ length: 200 }, () => ({ ...world.runs[0] }));
+  assert.equal((await stop(() => reconcile(world))).reason, 'runs-incomplete');
+  assert.deepEqual(world.writes, []);
+});
 
 const badProduction = {
   'production on another commit': (world) => {
@@ -415,4 +445,174 @@ test('mutations accept only an exact deployment ID or alias host and always pass
     '--scope',
     'qnbs-projects',
   ]);
+});
+
+const mutateOne = (change) => {
+  const world = standardWorld();
+  const target = world.deployments.find((deployment) => deployment.uid === 'dpl_prev11');
+  change(target, world);
+  return world;
+};
+
+test('a preview without a commit SHA is UNKNOWN because it cannot be compared with main or PR heads', async () => {
+  for (const sha of [undefined, '', 'abc', 'g'.repeat(40)]) {
+    const world = mutateOne((target) => {
+      target.meta.githubCommitSha = sha;
+    });
+    const summary = await reconcile(world);
+    assert.equal(summary.unknown, 1);
+    assert.ok(!summary.deleted.includes('dpl_prev11'));
+  }
+});
+
+test('an open-PR preview without a creation time cannot displace a dated one from the newest three', async () => {
+  const world = standardWorld();
+  world.deployments.push(preview(7, { created: undefined }));
+  const summary = await dry(world);
+  const manifest = Object.fromEntries(summary.manifest.map((row) => [row.id, row.verdict]));
+  assert.equal(manifest.dpl_prev7, 'UNKNOWN');
+  for (const kept of ['dpl_prev3', 'dpl_prev4', 'dpl_prev5'])
+    assert.equal(manifest[kept], 'PROTECTED');
+});
+
+test('a deployment rolling to Production is Production-class and never touched', async () => {
+  const world = mutateOne((target) => {
+    target.readySubstate = 'ROLLING';
+  });
+  const summary = await reconcile(world);
+  assert.equal(summary.protectedProduction, 3);
+  assert.ok(ids(world).includes('dpl_prev11'));
+});
+
+test('a preview named in the reviewed hold file is kept as review evidence', async () => {
+  const world = standardWorld();
+  world.holdFile = { review: ['dpl_prev1'] };
+  const summary = await reconcile(world);
+  assert.ok(!summary.deleted.includes('dpl_prev1'));
+  assert.equal(summary.manifest.find((row) => row.id === 'dpl_prev1').reasons[0], 'explicit-hold');
+});
+
+for (const bad of [
+  null,
+  [],
+  { review: 'dpl_a' },
+  { review: ['dpl_ok', 'prod'] },
+  { review: [], extra: [] },
+])
+  test(`a malformed hold file ${JSON.stringify(bad)} stops the run`, async () => {
+    const world = standardWorld();
+    world.holdFile = bad;
+    assert.equal((await stop(() => dry(world))).reason, 'invalid-holds');
+  });
+
+test('a provider page without pagination metadata is malformed, not the final page', async () => {
+  const world = standardWorld();
+  const deps = makeDeps(world);
+  const original = deps.vercel;
+  deps.vercel = (args) => {
+    const text = original(args);
+    return args[1]?.startsWith('/v4/aliases')
+      ? JSON.stringify({ aliases: JSON.parse(text).aliases })
+      : text;
+  };
+  const error = await stop(() => runRetention(deps, 'dry-run'));
+  assert.equal(error.reason, 'invalid-provider-response');
+});
+
+test('the dry-run reports one manifest line per preview with its verdict and reasons', async () => {
+  const lines = [];
+  await main(['dry-run'], makeDeps(standardWorld()), { log: (line) => lines.push(line) });
+  const manifest = lines.filter((line) => line.startsWith('RETENTION_MANIFEST'));
+  assert.equal(manifest.length, 8);
+  assert.ok(manifest.some((line) => line.includes('dpl_prev1 | SAFE')));
+  assert.ok(
+    manifest.some(
+      (line) => line.includes('dpl_prev5 | PROTECTED') && line.includes('open-pr-newest-three'),
+    ),
+  );
+  const summary = lines.find((line) => line.startsWith('RETENTION_SUMMARY'));
+  assert.ok(!summary.includes('"manifest"'));
+  assert.ok(![...lines].join('\n').includes(SECRET));
+});
+
+test('the post-proof stops when Production itself stops being READY during the pass', async () => {
+  const world = standardWorld();
+  world.hooks.onWrite = (live, args) => {
+    if (args[1] === 'dpl_prev1')
+      live.deployments.find((d) => d.uid === 'dpl_prod').readyState = 'ERROR';
+  };
+  const error = await stop(() => reconcile(world));
+  assert.equal(error.reason, 'postproof-failed');
+  assert.equal(error.summary.postproof.productionReady, false);
+});
+
+test('a second concurrent reconcile stops before reading anything, and the lock is always released', async () => {
+  const world = standardWorld();
+  const first = reconcile(world);
+  const second = await stop(() => reconcile(world));
+  assert.equal(second.reason, 'retention-already-running');
+  await first;
+  assert.equal(world.locked, false);
+  const failing = standardWorld();
+  failing.http = '500';
+  await stop(() => reconcile(failing));
+  assert.equal(failing.locked, false);
+  assert.equal(failing.released, 1);
+});
+
+test('the real lock excludes a live holder, recovers a dead one and releases cleanly', () => {
+  const directory = join(mkdtempSync(join(tmpdir(), 'vr-lock-')), 'held');
+  const release = acquireLock(directory);
+  assert.throws(() => acquireLock(directory), { reason: 'retention-already-running' });
+  release();
+  assert.equal(existsSync(directory), false);
+  const dead = acquireLock(directory);
+  writeFileSync(join(directory, 'pid'), '2147483646');
+  const recovered = acquireLock(directory);
+  recovered();
+  dead();
+});
+
+test('the entry file loads only built-ins and the lock before the source check', () => {
+  const source = readFileSync(
+    new URL('../../../scripts/vercel-retention/cli.mjs', import.meta.url),
+    'utf8',
+  );
+  const staticImports = [...source.matchAll(/^import .* from '([^']+)';$/gm)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(staticImports.sort(), [
+    './lock.mjs',
+    'node:child_process',
+    'node:fs',
+    'node:url',
+  ]);
+  assert.match(source, /await import\('\.\/apply\.mjs'\)/);
+});
+
+test('report prints the manifest rows before a single summary line', () => {
+  const lines = [];
+  report(
+    { log: (line) => lines.push(line) },
+    {
+      manifest: [
+        {
+          id: 'dpl_x',
+          verdict: 'SAFE',
+          branch: null,
+          pr: null,
+          sha: '',
+          aliases: 0,
+          lifecycle: 'orphan',
+          reasons: [],
+        },
+      ],
+      mode: 'dry-run',
+    },
+  );
+  assert.equal(lines.length, 2);
+  assert.match(
+    lines[0],
+    /^RETENTION_MANIFEST dpl_x \| SAFE \| - \| PR - \| - \| aliases=0 \| orphan \| -$/,
+  );
 });

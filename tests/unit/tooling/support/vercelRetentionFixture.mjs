@@ -6,7 +6,7 @@ import {
 
 export const MAIN = 'a'.repeat(40);
 export const SECRET = 'creator-secret@example.test';
-const sha = (n) => n.toString(16).padStart(40, '0');
+export const sha = (n) => n.toString(16).padStart(40, '0');
 
 export function preview(n, overrides = {}) {
   const { meta, ...rest } = overrides;
@@ -39,6 +39,16 @@ export const production = (uid, commit, overrides = {}) => ({
   ...overrides,
 });
 
+export const greenRuns = (commit = MAIN) =>
+  REQUIRED_RUNS.map((name) => ({
+    name,
+    status: 'completed',
+    conclusion: 'success',
+    event: 'push',
+    headBranch: 'main',
+    headSha: commit,
+  }));
+
 const alias = (host, deploymentId, created) => ({ alias: host, deploymentId, created });
 
 // Open PR 9 has five previews, closed PR 7 two (one aliased), and one preview has no PR.
@@ -52,7 +62,7 @@ export function standardWorld() {
   const loose = preview(21, { meta: { githubCommitRef: 'chore/loose', githubPrId: undefined } });
   return {
     main: MAIN,
-    runs: REQUIRED_RUNS.map((name) => ({ name, status: 'completed', conclusion: 'success' })),
+    runs: greenRuns(),
     deployments: [current, older, ...open, ...closed, loose],
     aliases: [
       ...CANONICAL_ALIASES.map((host, index) => alias(host, current.uid, 100 + index)),
@@ -68,6 +78,7 @@ export function standardWorld() {
       accountId: SCOPE.teamId,
       link: { org: SCOPE.org, repo: SCOPE.repo },
     },
+    holdFile: { review: [] },
     http: '200',
     pageSize: 100,
     endless: false,
@@ -81,91 +92,129 @@ export function standardWorld() {
     },
     removeFault: {},
     hooks: {},
+    locked: false,
+    released: 0,
     calls: [],
     writes: [],
   };
 }
 
-const page = (items, params, key, size) => {
+function page(items, params, key, size) {
   const sorted = [...items].sort((a, b) => b.created - a.created);
-  const start = params.has('until')
-    ? sorted.findIndex((i) => i.created < Number(params.get('until')))
-    : 0;
+  const until = Number(params.get('until'));
+  const start = params.has('until') ? sorted.findIndex((item) => item.created < until) : 0;
   const slice = start < 0 ? [] : sorted.slice(start, start + size);
-  const last = slice.at(-1);
   const more = start >= 0 && start + size < sorted.length;
-  return { [key]: slice, pagination: { count: slice.length, next: more ? last.created : null } };
-};
+  const next = more ? slice.at(-1).created : null;
+  return { [key]: slice, pagination: { count: slice.length, next } };
+}
+
+const API_ROUTES = [
+  [/^\/v9\/projects\//, (world) => world.project],
+  [
+    /^\/v6\/deployments$/,
+    (world, params) => page(world.deployments, params, 'deployments', world.pageSize),
+  ],
+  [/^\/v4\/aliases$/, (world, params) => page(world.aliases, params, 'aliases', world.pageSize)],
+];
 
 function readApi(world, path) {
   const [route, query = ''] = path.split('?');
-  const params = new URLSearchParams(query);
-  if (route.startsWith('/v9/projects/')) return world.project;
-  if (route === '/v6/deployments')
-    return page(world.deployments, params, 'deployments', world.pageSize);
-  if (route === '/v4/aliases') return page(world.aliases, params, 'aliases', world.pageSize);
-  throw new Error(`unexpected provider path ${route}`);
+  const hit = API_ROUTES.find(([pattern]) => pattern.test(route));
+  if (!hit) throw new Error(`unexpected provider path ${route}`);
+  return hit[1](world, new URLSearchParams(query));
 }
+
+const REMOVE_FAULTS = {
+  'throw-before': () => {
+    throw new Error(`403 for ${SECRET}`);
+  },
+  skip: () => 'skip',
+};
 
 function removeDeployment(world, id) {
   const fault = world.removeFault[id];
-  if (fault === 'throw-before') throw new Error(`403 for ${SECRET}`);
-  if (fault === 'skip') return;
+  const early = REMOVE_FAULTS[fault]?.();
+  if (early === 'skip') return;
   const bound = world.aliases.some((entry) => entry.deploymentId === id);
   if (bound) return;
   world.deployments = world.deployments.filter((deployment) => deployment.uid !== id);
   if (fault === 'throw-after') throw new Error('timeout');
 }
 
+function removeAliasEntry(world, host) {
+  if (world.removeFault[host] === 'alias-fail') throw new Error('alias failure');
+  world.aliases = world.aliases.filter((entry) => entry.alias !== host);
+}
+
 function mutate(world, args) {
   world.writes.push(args.join(' '));
   world.hooks.onWrite?.(world, args);
-  if (args[0] === 'alias') {
-    if (world.removeFault[args[2]] === 'alias-fail') throw new Error('alias failure');
-    world.aliases = world.aliases.filter((entry) => entry.alias !== args[2]);
-    return '';
-  }
-  removeDeployment(world, args[1]);
+  if (args[0] === 'alias') removeAliasEntry(world, args[2]);
+  else removeDeployment(world, args[1]);
   return '';
+}
+
+const mainRead = (world) => {
+  const main = typeof world.main === 'function' ? world.main() : world.main;
+  return `${main}\trefs/heads/main\n`;
+};
+
+const GIT = {
+  main: mainRead,
+  heads: (world) => [...world.branches].map((name) => `${sha(1)}\trefs/heads/${name}`).join('\n'),
+  status: (world) => world.dirty,
+  diff: (world) => {
+    if (world.differs) throw new Error('differs');
+    return '';
+  },
+  show: (world) => JSON.stringify(world.package),
+};
+
+function gitKey(args) {
+  if (args[0] !== 'ls-remote') return args[0];
+  return args[1] === 'origin' ? 'main' : 'heads';
 }
 
 function git(world, args) {
   world.calls.push(`git ${args[0]}`);
-  const reads = world.calls.filter((call) => call === 'git ls-remote').length;
-  if (args[0] === 'ls-remote' && args[1] === 'origin') {
-    const main = typeof world.main === 'function' ? world.main(reads) : world.main;
-    return `${main}\trefs/heads/main\n`;
-  }
-  if (args[0] === 'ls-remote')
-    return [...world.branches].map((b) => `${sha(1)}\trefs/heads/${b}`).join('\n');
-  if (args[0] === 'status') return world.dirty;
-  if (args[0] === 'diff' && world.differs) throw new Error('differs');
-  if (args[0] === 'show') return JSON.stringify(world.package);
-  return '';
+  return (GIT[gitKey(args)] ?? (() => ''))(world);
 }
 
 function gh(world, args) {
   world.calls.push(`gh ${args[0]}`);
   world.hooks.onRead?.(world, args);
-  if (args[0] === 'run') return JSON.stringify(world.runs);
-  return JSON.stringify(world.prs);
+  return JSON.stringify(args[0] === 'run' ? world.runs : world.prs);
+}
+
+function vercel(world, args) {
+  world.calls.push(`vercel ${args[0]}`);
+  if (args[0] !== 'api') return mutate(world, args);
+  if (world.hooks.failReads) throw new Error(SECRET);
+  if (world.endless && args[1].startsWith('/v6/deployments')) {
+    return JSON.stringify({ deployments: [], pagination: { next: 1 } });
+  }
+  return JSON.stringify(readApi(world, args[1]));
+}
+
+function lock(world) {
+  if (world.locked) throw Object.assign(new Error('busy'), { reason: 'retention-already-running' });
+  world.locked = true;
+  return () => {
+    world.locked = false;
+    world.released += 1;
+  };
 }
 
 export function makeDeps(world) {
   return {
     git: (args) => git(world, args),
     gh: (args) => gh(world, args),
-    vercel(args) {
-      world.calls.push(`vercel ${args[0]}`);
-      if (args[0] !== 'api') return mutate(world, args);
-      if (world.endless && args[1].startsWith('/v6/deployments')) {
-        return JSON.stringify({ deployments: [], pagination: { next: 1 } });
-      }
-      if (world.hooks.failReads) throw new Error(SECRET);
-      return JSON.stringify(readApi(world, args[1]));
-    },
+    vercel: (args) => vercel(world, args),
     http: () => world.http,
     packageJson: () => JSON.stringify(world.package),
+    holds: () => JSON.stringify(world.holdFile),
+    lock: () => lock(world),
     sleep: async () => {},
   };
 }

@@ -19,19 +19,31 @@ export function readBranches(deps) {
   return new Set(lines.map((line) => line.split('\trefs/heads/')[1]).filter(Boolean));
 }
 
+const RUN_LIMIT = 200;
+
+// QNBS-v3: a list as long as the request limit may have been cut off, so it is treated as unreadable rather than as complete.
 function readRuns(deps, sha) {
-  const args = ['run', 'list', '--repo', SCOPE.repository, '--commit', sha, '--limit', '50'];
-  const runs = parseJson(deps.gh([...args, '--json', 'name,status,conclusion']), 'runs');
-  return Array.isArray(runs) ? runs : refuse('runs-unreadable');
+  const args = ['run', 'list', '--repo', SCOPE.repository, '--commit', sha];
+  const fields = 'name,status,conclusion,event,headBranch,headSha';
+  const runs = parseJson(
+    deps.gh([...args, '--limit', String(RUN_LIMIT), '--json', fields]),
+    'runs',
+  );
+  if (!Array.isArray(runs)) refuse('runs-unreadable');
+  if (runs.length >= RUN_LIMIT) refuse('runs-incomplete');
+  return runs;
 }
 
 const isGreen = (run) => run.status === 'completed' && run.conclusion === 'success';
 
-// QNBS-v3: every run of a required workflow on this exact SHA must be a completed success, so a rerun in flight or an older failed attempt stops the pass instead of being outvoted.
+const isMainPush = (sha) => (run) =>
+  [run.event === 'push', run.headBranch === 'main', run.headSha === sha].every(Boolean);
+
+// QNBS-v3: the post-merge gate is the push-triggered run on main for this exact SHA; a manual run or a tag run never stands in for it, and every such run must be a completed success so a rerun in flight or an older failure is not outvoted.
 export function assertRequiredRuns(deps, sha) {
-  const runs = readRuns(deps, sha);
+  const pushRuns = readRuns(deps, sha).filter(isMainPush(sha));
   for (const name of REQUIRED_RUNS) {
-    const named = runs.filter((run) => run.name === name);
+    const named = pushRuns.filter((run) => run.name === name);
     if (named.length === 0 || !named.every(isGreen)) refuse(`gate-not-green:${name}`);
   }
 }
