@@ -245,9 +245,9 @@ dependent-PR check, and the Dependabot exception where applicable. Once DeepSour
 **and** all CI is green **and** that full classification is satisfied:
 
 - Prefer **auto-merge (squash)** using the exact command in `PR-CI-MERGE-WORKFLOW.md`'s
-  merge-mechanics paragraph (`--match-head-commit <SHA>` pinning; `--delete-branch` only after that
-  doc's paginated dependent-PR check confirms nothing depends on this branch) — not restated here to
-  avoid a second, independently drifting copy.
+  merge-mechanics paragraph (`--match-head-commit <SHA>` pinning, never `--delete-branch`, after that
+  doc's paginated dependent-PR check confirms nothing is stacked on this branch) — not restated here
+  to avoid a second, independently drifting copy.
 - If GitHub presents a `BLOCKED` merge state after checks conclude, re-read the exact head,
   checks, reviews, protection, rulesets, and check suites and use a normal policy-enforced merge
   endpoint only after revalidation. There is no standing admin-merge fallback.

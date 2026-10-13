@@ -96,7 +96,12 @@ cross 100 files from i18n alone.
    minimized. Keep commits **atomic per concern** so the split is a clean branch operation, not a
    re-edit.
 3. **Stack** them: PR1 base = `main`; PR2 base = **PR1's branch**. GitHub then shows PR2 only its
-   *incremental* diff (what CodeAnt counts), and PR2 auto-retargets to `main` when PR1 merges.
+   *incremental* diff (what CodeAnt counts), for as long as it stays based on PR1's branch. GitHub
+   retargets a stacked PR automatically only when the merged head branch is deleted, which this
+   repository no longer does, so the move to `main` is a deliberate step at merge time: follow the
+   dependent-PR rule in `PR-CI-MERGE-WORKFLOW.md` (retarget only when the composite diff against
+   `main` stays inside the review and PR-size limits, bring the dependent onto the resulting
+   `main` after the base squash, rerun CI and the review wave on that head).
    Run the loop on PR1 to quiescence + merge first, then PR2.
 4. **Do not over-split.** If the whole change fits under ~100 in one (or two) PRs, use that — extra
    PRs are extra review loops and CI runs. One or two is the target, never "one PR per file group"
@@ -250,8 +255,8 @@ LOW-RISK final delta) and merge-mechanics ordering rule in full — summarized:
 
 - Enable protected squash **auto-merge** only after this repo's stricter internal criteria (not just
   GitHub's branch-protection floor) are satisfied — use the exact command in
-  `PR-CI-MERGE-WORKFLOW.md`'s merge-mechanics paragraph (`--match-head-commit <SHA>`, and
-  `--delete-branch` only after that doc's paginated dependent-PR check confirms nothing depends on
+  `PR-CI-MERGE-WORKFLOW.md`'s merge-mechanics paragraph (`--match-head-commit <SHA>`, never
+  `--delete-branch`, after that doc's paginated dependent-PR check confirms nothing is stacked on
   this branch). Not restated here to avoid a second, independently drifting copy of that command.
 - If branch protection presents the PR as `BLOCKED` despite green required checks, stop and
   re-read the live head, checks, reviews, protection, rulesets, and check suites. Use a normal
@@ -262,13 +267,16 @@ LOW-RISK final delta) and merge-mechanics ordering rule in full — summarized:
 
 ## 9. Branch housekeeping (after merges)
 
-GitHub auto-deletes head branches on merge here. Periodically prune stale local/remote-tracking
-refs and delete redundant branches (e.g. a `release/x` branch already captured by a tag):
-
-```bash
-git fetch --prune
-git branch -vv                # find branches whose upstream is "[gone]"
-```
+A merge does not delete the head branch here (`delete_branch_on_merge = false`, maintainer decision
+of 2026-10-13); a merged branch is kept until a manual census finds nothing that still needs it —
+open dependent PRs, evidence naming its tip, local worktrees, and its current tip (see the
+branch-retention rule in `PR-CI-MERGE-WORKFLOW.md`). Stale local/remote-tracking refs are classified
+before anything is pruned: an `origin/*` ref can be the last reachable pointer to unmerged commits,
+so pruning and deleting follow the preserve-first procedure in `GIT-WORKTREE-HOUSEKEEPING.md`.
+Start with the snapshot-then-fetch sequence in `GIT-WORKTREE-HOUSEKEEPING.md`: it snapshots
+`refs/remotes/origin/*` as real refs, then runs `git fetch --no-prune --no-auto-maintenance origin`
+and the non-mutating `git remote prune origin --dry-run`. A bare `git fetch` is not read-only — it
+force-updates `origin/*` refs and, with `fetch.prune` or `remote.origin.prune` set, deletes them.
 
 ---
 
