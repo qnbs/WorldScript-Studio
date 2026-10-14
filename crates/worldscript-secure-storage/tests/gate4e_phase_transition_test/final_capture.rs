@@ -149,9 +149,9 @@ fn at_discover() -> (Bound, JournalManifest) {
 
 /// A bound journal in `ADMIT`, entered through a preliminary capture and `PREPARE`, where the final
 /// inventory is captured.
-fn at_admit(commit_preliminary: Preliminary) -> (Bound, JournalManifest) {
+fn at_admit(capture: Capturing) -> (Bound, JournalManifest) {
     let (mut bound, discover) = at_discover();
-    let captured = commit_preliminary(&mut bound, &discover);
+    let captured = commit_preliminary(capture, &mut bound, &discover);
     let admit = enter_phases(
         &mut bound,
         &captured,
@@ -160,19 +160,14 @@ fn at_admit(commit_preliminary: Preliminary) -> (Bound, JournalManifest) {
     (bound, admit)
 }
 
-fn preliminary_in_memory(bound: &mut Bound, discover: &JournalManifest) -> JournalManifest {
-    capture_empty(
-        bound,
-        discover,
-        Commit::Ordinary,
-        &mut FaultyFs::observing(),
-    )
-    .unwrap();
-    bound.committed()
-}
-
-fn preliminary_streamed(bound: &mut Bound, discover: &JournalManifest) -> JournalManifest {
-    capture_empty_streamed(
+/// Commits the preliminary inventory of the journal in `DISCOVER` the way `capture` does and returns
+/// the committed manifest.
+fn commit_preliminary(
+    capture: Capturing,
+    bound: &mut Bound,
+    discover: &JournalManifest,
+) -> JournalManifest {
+    capture(
         bound,
         discover,
         Commit::Ordinary,
@@ -189,43 +184,26 @@ type Capturing = fn(
     &mut FaultyFs,
 ) -> Result<RootCommitted, AuthorityError>;
 
-/// Commits the preliminary inventory of the journal in `DISCOVER` and returns the committed manifest.
-type Preliminary = fn(&mut Bound, &JournalManifest) -> JournalManifest;
-
-/// A way to capture, with the way to reach `ADMIT` through the same one.
-struct Way {
-    capture: Capturing,
-    preliminary: Preliminary,
-}
-
-fn both_ways() -> [Way; 2] {
-    [
-        Way {
-            capture: capture_empty,
-            preliminary: preliminary_in_memory,
-        },
-        Way {
-            capture: capture_empty_streamed,
-            preliminary: preliminary_streamed,
-        },
-    ]
+/// The two ways to capture: from pages in memory and from a staged one.
+fn both_ways() -> [Capturing; 2] {
+    [capture_empty, capture_empty_streamed]
 }
 
 #[test]
 fn the_final_inventory_is_captured_only_under_the_exclusive_admission() {
-    for way in both_ways() {
-        let (mut bound, admit) = at_admit(way.preliminary);
+    for capture in both_ways() {
+        let (mut bound, admit) = at_admit(capture);
         let before = snapshot(&bound);
         let mut refused = FaultyFs::observing();
         assert_eq!(
-            (way.capture)(&mut bound, &admit, Commit::Ordinary, &mut refused).unwrap_err(),
+            capture(&mut bound, &admit, Commit::Ordinary, &mut refused).unwrap_err(),
             FINAL_REFUSED
         );
         // The refusal touched neither the file system nor, by the snapshot, any durable resource.
         assert_eq!(refused.calls(), 0);
         assert_eq!(snapshot(&bound), before);
         let mut published = FaultyFs::observing();
-        (way.capture)(&mut bound, &admit, Commit::Final, &mut published).unwrap();
+        capture(&mut bound, &admit, Commit::Final, &mut published).unwrap();
         assert!(published.calls() > 0);
         let committed = bound.committed();
         assert!(committed.final_inventory_captured);
@@ -236,18 +214,18 @@ fn the_final_inventory_is_captured_only_under_the_exclusive_admission() {
 
 #[test]
 fn the_exclusive_final_capture_refuses_a_preliminary_inventory() {
-    for way in both_ways() {
+    for capture in both_ways() {
         let (mut bound, discover) = at_discover();
         let before = snapshot(&bound);
         let mut refused = FaultyFs::observing();
         assert_eq!(
-            (way.capture)(&mut bound, &discover, Commit::Final, &mut refused).unwrap_err(),
+            capture(&mut bound, &discover, Commit::Final, &mut refused).unwrap_err(),
             PRELIMINARY_REFUSED
         );
         assert_eq!(refused.calls(), 0);
         assert_eq!(snapshot(&bound), before);
         // The ordinary capture still publishes it.
-        (way.capture)(
+        capture(
             &mut bound,
             &discover,
             Commit::Ordinary,
