@@ -14,6 +14,7 @@ mod inventory_store;
 mod manifest;
 mod manifest_verify;
 mod page;
+mod reclaim;
 mod renewal;
 mod state;
 mod stream_capture;
@@ -139,6 +140,9 @@ pub use inventory_store::{
 };
 pub use manifest::{journal_envelope_epoch, JournalManifest, JournalPageRef, ManifestRead};
 pub use page::JournalPage;
+pub use reclaim::{
+    reclaim_abandoned_inventory, KeepReason, Preserved, ReclaimError, ReclaimRequest, Reclaimed,
+};
 pub use renewal::assert_renewal_successor;
 pub use state::{
     allows_phase_transition, assert_binding_successor, assert_fence, assert_live_binding,

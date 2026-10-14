@@ -165,6 +165,16 @@ pub trait DurableFs {
     /// replaces an existing file.
     fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()>;
     fn remove_file(&mut self, path: &Path) -> io::Result<()>;
+    /// Removes `dir` only if it is an empty directory; a directory with entries, a file and a link
+    /// are errors, and nothing below `dir` is ever touched.
+    ///
+    /// Provided, with a default that states no removal (`Unsupported`): an adapter that does not
+    /// override it cannot be swept, and the journal's reclamation refuses before it deletes anything.
+    /// [`StdFs`] removes with `std::fs::remove_dir`.
+    fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
+        let _ = dir;
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
     /// Persists the directory's entries where the platform can confirm it.
     fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability>;
     /// The names of the entries directly inside `dir`, in no particular order.
@@ -251,6 +261,10 @@ impl DurableFs for StdFs {
 
     fn remove_file(&mut self, path: &Path) -> io::Result<()> {
         fs::remove_file(path)
+    }
+
+    fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
+        fs::remove_dir(dir)
     }
 
     #[cfg(unix)]

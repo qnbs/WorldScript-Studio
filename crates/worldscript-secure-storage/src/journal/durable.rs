@@ -147,7 +147,7 @@ pub fn with_fence<T>(
     f()
 }
 
-fn migration_identity(operation_id: &str) -> Result<RecordIdentity, JournalError> {
+pub(super) fn migration_identity(operation_id: &str) -> Result<RecordIdentity, JournalError> {
     RecordIdentity::new(RecordClass::Migration, &[operation_id])
         .map_err(|_| JournalError::InvalidOperationId)
 }

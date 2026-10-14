@@ -1262,7 +1262,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
 - Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) and the authenticated page access with the page-local cursor (C2c-1: `verify_inventory`, `page`) and the iteration with a caller-supplied idempotent step, the crash/resume evidence and the exit to `VERIFY` (C2c-2: `convert_next`, `finish_convert`) exist, but nothing converts a real record: the `EntryStep` that moves a source record to the target epoch (Gate 5), the `VERIFY` work that reads every record under the target policy and the phases after it.
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers. The ordinary write path already refuses every operation while the root binds a live migration, in every phase (E1, with evidence); what remains is the phase-aware relaxation (`PREPARE`/`DONE` through `ordinary_mutating_writes_admitted`, E2) and the `ADMIT` transition requiring exclusive admission before the final capture has a caller (E3; Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
-- Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read. Reclaiming them needs a directory-removal primitive and a sweep that knows no live attempt owns them, as for the orphaned digest directories of a discarded capture (acceptance criterion on #359).
+- Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read. Delivered by Gate 4 slice R1 (below, "Reclaiming abandoned inventory staging"), which adds the directory-removal primitive and a sweep that proves no live attempt can own what it removes.
 - The cross-process lease CAS.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
 
@@ -1407,3 +1407,35 @@ barrier that makes an `ADMIT` scan complete is the durable phase, and scanning i
 Gate 5 scanner's obligation (recorded on #923). This slice opens no window; the E1 barrier, the
 `PREPARE`/`DONE` windows and the locator's consumers are unchanged.
 
+
+### Reclaiming abandoned inventory staging (Gate 4 slice R1)
+
+`reclaim_abandoned_inventory` removes what a killed or dropped capture left under `<journal-dir>/inventory/`,
+and only what it can prove dead. The caller is the committed owner: the journal mutex and the fence are
+taken, `assert_page_promote_authority` runs and the root-named manifest generation is read back and
+compared, so a stale owner, a stranger and a wrong key remove nothing and create nothing. `DurableFs::remove_dir`
+is a provided method whose default is `Unsupported`; the sweep probes it with a name that does not exist and
+refuses (`RemovalUnsupported`) before it deletes anything, and `StdFs` removes only an empty directory.
+
+| Entry below `inventory/` | Rule |
+|---|---|
+| `pending-<rev>-<tag>`, `rev <= R` | Dead: a promotion needs `rev == R + 1` and `R` only grows. Removed after every file opened as this operation's page at its index and generation with the journal envelope epoch (staging links `generation-<g>.wsr1.tmp-<op>-<g>` included). |
+| `pending-<rev>-<tag>`, `rev > R` | Kept (`LiveRevision`): a live attempt, a retry candidate or a prepared root may own revision `R + 1`; nothing above it can be promoted yet. |
+| `<hex digest>` = the committed manifest's page-set digest | Kept (`Committed`). |
+| `<hex digest>` whose files all carry one generation `g <= R` and whose authenticated manifest generation `g` (exact path) names another digest | Removed: the set of a discarded attempt at a revision that was committed with a different set. |
+| `<hex digest>` named by its own revision's manifest | Kept (`NamedByManifest`), so a later slice may let a newer set inherit pages of an older one. |
+| `<hex digest>` at `g > R`, without files, with files of unequal generations, or whose manifest cannot be read | Kept (`LiveRevision`, `Unproven`, `ManifestUnproven`). |
+| anything else: a name, a `page-` directory name or a file name outside the grammar, a file that does not open as this operation's page, a listing that cannot be read | Kept (`Unrecognised`, `Unauthenticated`, `Unreadable`); one such entry keeps its whole directory. |
+
+A set is validated completely before its first removal. Removal is never retried: files, then `page-<i>`
+directories, then the directory itself, then one sync of `inventory/`; a failure stops the sweep and a rerun
+converges (a name that is already gone is not a failure). Proof (`gate4d_inventory_reclaim_test`, with the two
+grammar unit tests in `reclaim.rs`): the dead pending directories of two abandoned captures are removed with a
+staging link and the parent is synced; a second sweep does nothing; the next and a future revision are kept;
+a set is removed only against an authenticated manifest that names another and is kept when its own revision
+names it, when its manifest is missing, when it is empty or at the next revision; foreign, tampered and
+misplaced entries keep their directories; a file system without `remove_dir`, a stale fence, a wrong key and a
+stranger's manifest remove nothing; a failed directory removal and a failed file removal stop the sweep and a
+rerun converges. Residual, not closed: the path-based identity of the directories (handle-relative I/O, H1; the
+sweep only deletes files whose bytes authenticate as this operation's pages and `remove_dir` only removes an
+empty directory), and a sweep does not run by itself: no caller schedules it yet (Gate 5).
