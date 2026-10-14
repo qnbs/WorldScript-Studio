@@ -50,12 +50,13 @@ use crate::journal::{
     assert_renewal_successor, assert_takeover_successor, load_authoritative_manifest,
     load_inventory_page, promote_inventory_set_fenced, promote_staged_inventory_fenced,
     publish_manifest_fenced, publish_phase_transition_fenced, publish_renewal_fenced,
-    publish_takeover_fenced, reclaim_with_binding, verify_stored_inventory, CandidateConflict,
-    CaptureStart, InventorySetWrite, JournalDurableContext, JournalDurableError,
-    JournalInventoryEntry, JournalManifest, JournalPage, JournalTakeover, MigrationExecutionError,
-    MigrationFence, ReclaimError, ReclaimRequest, Reclaimed, SealedPage, StagedCapture,
-    StagedPromotion, StreamedCapture, VerifiedInventory,
+    publish_takeover_fenced, verify_stored_inventory, CandidateConflict, CaptureStart,
+    InventorySetWrite, JournalDurableContext, JournalDurableError, JournalInventoryEntry,
+    JournalManifest, JournalPage, JournalTakeover, MigrationExecutionError, MigrationFence,
+    SealedPage, StagedCapture, StagedPromotion, StreamedCapture, VerifiedInventory,
 };
+#[cfg(feature = "test-support")]
+use crate::journal::{reclaim_with_binding, ReclaimError, ReclaimRequest, Reclaimed};
 use crate::journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
@@ -143,7 +144,8 @@ pub enum AuthorityError {
     /// Another root commit event is in flight, so the phase transition did not start. Nothing was
     /// written; the admission is still held and the call may be repeated.
     RootBusy,
-    /// The sweep of abandoned inventory staging refused or stopped ([`reclaim_abandoned_inventory`]).
+    /// The sweep of abandoned inventory staging refused or stopped (`reclaim_abandoned_inventory`).
+    #[cfg(feature = "test-support")]
     Reclaim(ReclaimError),
 }
 
@@ -924,6 +926,11 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
 /// order, so a takeover or a transition to `RECOVERY_REQUIRED` by another process cannot interleave with
 /// the sweep; root commits wait for it, as they do for the capture commits. See `journal::reclaim` for
 /// the rules.
+///
+/// Available with the `test-support` feature only: the removal is path-based, so a local actor that can
+/// swap a directory or retarget the root between a check and its use is not excluded, and production
+/// builds do not contain the sweep until handle-relative I/O (H1) closes those windows.
+#[cfg(feature = "test-support")]
 pub fn reclaim_abandoned_inventory<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,
@@ -949,6 +956,7 @@ pub fn reclaim_abandoned_inventory<F: DurableFs, P: KeyProvider>(
 }
 
 /// The guard still names the root of `layout`: its canonical directory and the lock target are unchanged.
+#[cfg(feature = "test-support")]
 fn assert_held(held: &RootCommitGuard, layout: RootLayout<'_>) -> Result<(), AuthorityError> {
     if held.guards(layout.root_dir) {
         Ok(())
@@ -958,6 +966,7 @@ fn assert_held(held: &RootCommitGuard, layout: RootLayout<'_>) -> Result<(), Aut
 }
 
 /// Where the journal is and which owner asks for its inventory staging to be reclaimed.
+#[cfg(feature = "test-support")]
 #[derive(Clone, Copy)]
 pub struct InventoryReclaim<'a> {
     pub journal: JournalSource<'a>,

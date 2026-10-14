@@ -401,10 +401,18 @@ struct Snapshot {
 }
 
 /// Every file below `dir` with its bytes and every directory (an empty entry named `…/`), by path
-/// relative to `dir`: creating even an empty directory is a write. Nothing when `dir` is absent.
+/// relative to `dir`: creating even an empty directory is a write. Nothing when `dir` is absent, its bytes
+/// when it is a file (a case that replaces a directory with one); any other failure to read it fails the
+/// test instead of reading as an empty tree.
 fn tree_below(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+        Err(_) if fs::symlink_metadata(dir).is_ok_and(|metadata| metadata.is_file()) => {
+            out.insert(format!("{prefix}<file>"), fs::read(dir).unwrap());
+            return;
+        }
+        Err(error) => panic!("cannot read {}: {error}", dir.display()),
     };
     for entry in entries {
         let entry = entry.unwrap();

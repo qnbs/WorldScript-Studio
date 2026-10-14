@@ -1410,6 +1410,17 @@ Gate 5 scanner's obligation (recorded on #923). This slice opens no window; the 
 
 ### Reclaiming abandoned inventory staging (Gate 4 slice R1)
 
+**Availability: `test-support` only.** The removal is path-based, so a local actor that can swap a directory or
+retarget the root between a check and its use is not excluded (see "Residual, not closed" below). Until
+handle-relative I/O (H1) closes those windows the sweep is part of no production build: the module, the root-bound
+entry, `InventoryReclaim` and the sweep's error and result types are compiled and exported only with the
+test-only `test-support` feature, like `commit_root` and `protected_write`. No crate of the repository depends on
+`worldscript-secure-storage`, and `tests/feature_isolation_test.rs` fails if a manifest outside the crate enables
+a test-only feature for a production build, if `default` enables one, or if a definition or export of the sweep
+loses its gate; the production configuration (`cargo check` without features) compiles without the module, so
+nothing outside it can name the sweep. The slice delivers and proves the logic below; activating it is gated on
+the H1 acceptance criteria at the end of this section.
+
 `reclaim_abandoned_inventory(fs, provider, layout, InventoryReclaim { journal, fence })` removes what a killed or
 dropped streaming capture left under `<journal-dir>/inventory/pending-<rev>-<tag>/`, and only what it can prove
 dead. Like `begin_streamed_capture` it reads the binding from the committed root, routes the journal key through
@@ -1464,7 +1475,21 @@ a dead pending directory that points at a stored set, a link in place of a pendi
 a page file and of `inventory/` itself) read and unlink nothing through the link; a second holder asks for the root
 event in the middle of a sweep and is refused; a junction is a link (Windows, `mklink /J`).
 
-Residual, not closed: the check is made on the path just before the use, so a local attacker who swaps a plain
-directory for a link between the check and the removal is the recorded handle-relative I/O residual (H1); `remove_dir`
-only removes an empty directory and the sweep only deletes files whose bytes authenticate as this operation's pages.
-A sweep does not run by itself: no caller schedules it yet (Gate 5). Stored page sets are not reclaimed (I1).
+Residual, not closed (two distinct windows): (1) the check is made on the path just before the use, so a local
+attacker who swaps a plain directory for a link, or renames a directory so that another one (for instance a stored
+set of the same operation at the same revision, whose pages authenticate identically) takes its name, between the
+check and the removal makes the path-based walk read and unlink there; (2) the root guard is checked twice (after
+it is taken and after the binding and the manifest were read), but the root can be renamed or retargeted after the
+last check while the walk continues under the old snapshot. `remove_dir` only removes an empty plain directory
+and the sweep only deletes files whose bytes authenticate as this operation's pages; neither makes the windows
+disappear, which is why the sweep is not part of production builds.
+
+H1 acceptance criteria before the sweep may leave `test-support`: (a) the journal directory, `inventory/` and every
+directory below it are opened once with no-follow semantics and identity (device and inode, or the Windows file
+id) is kept; listing, reading and unlinking go through those handles (`openat`/`unlinkat` on Unix; handles opened
+without delete sharing, or relative `NtCreateFile`, on Windows), never through a path again; (b) a file is
+unlinked only after its identity equals the one that was authenticated; (c) the root identity the authority was
+read from is pinned for the whole sweep, and the sweep stops before the next removal if it no longer is the root
+the lock names; (d) a stored set is never entered by a pending directory's walk, proven by a test that swaps a
+stored set into a dead pending name; (e) the Unix symlink, Windows junction (including a non-empty target),
+crash-after-partial-unlink and sync-failure cases stay covered. Stored page sets are not reclaimed (I1).

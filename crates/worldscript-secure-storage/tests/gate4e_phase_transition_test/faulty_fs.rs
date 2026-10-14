@@ -81,7 +81,8 @@ impl FaultyFs {
         }
     }
 
-    /// How many calls of any kind were served: zero means the file system was never touched.
+    /// How many calls of any kind were served through this adapter: zero means this adapter was never
+    /// asked, not that the file system was never touched (a caller may reach it through another adapter).
     pub fn calls(&self) -> usize {
         self.calls
     }
