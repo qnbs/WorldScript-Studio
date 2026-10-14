@@ -288,7 +288,7 @@ impl Source {
     }
 
     fn is_gated(&self, head: usize) -> bool {
-        self.lines_above(head).iter().any(|above| *above == GATE)
+        self.lines_above(head).contains(&GATE)
     }
 
     /// The statement that holds line `at`: the nearest line at or above it that starts a statement.
