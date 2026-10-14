@@ -28,6 +28,8 @@ pub(crate) enum PlacementError {
 pub(crate) struct PinnedDirectory {
     pin: File,
     pub(crate) canonical: PathBuf,
+    /// Whether the final component is the entry itself (no symlink is followed), not what it leads to.
+    exact: bool,
 }
 
 impl PinnedDirectory {
@@ -41,11 +43,40 @@ impl PinnedDirectory {
         let pin = sys::open_directory(dir).map_err(|error| PlacementError::Io(error.kind()))?;
         let canonical =
             std::fs::canonicalize(dir).map_err(|error| PlacementError::Io(error.kind()))?;
+        Self::confined(installation, root, pin, canonical, false)
+    }
+
+    /// Pins the directory `name` directly below the canonical installation, without following a
+    /// symlink at that entry, and requires it to lie outside the canonical authority root. The entry
+    /// is opened and judged as itself, so an entry that becomes a symlink is refused rather than
+    /// followed, and a symlink put in its place never counts as the pinned directory.
+    pub(crate) fn placed_exact(
+        installation: &Path,
+        root: &Path,
+        name: &str,
+    ) -> Result<Self, PlacementError> {
+        let located = installation.join(name);
+        let pin = sys::open_directory_exact(&located)
+            .map_err(|error| PlacementError::Io(error.kind()))?;
+        Self::confined(installation, root, pin, located, true)
+    }
+
+    fn confined(
+        installation: &Path,
+        root: &Path,
+        pin: File,
+        canonical: PathBuf,
+        exact: bool,
+    ) -> Result<Self, PlacementError> {
         let below = canonical != installation && canonical.starts_with(installation);
         if !below || canonical.starts_with(root) {
             return Err(PlacementError::Misplaced);
         }
-        let pinned = Self { pin, canonical };
+        let pinned = Self {
+            pin,
+            canonical,
+            exact,
+        };
         if pinned.is_current() {
             Ok(pinned)
         } else {
@@ -55,6 +86,47 @@ impl PinnedDirectory {
 
     /// Whether the path still names the directory that was pinned.
     pub(crate) fn is_current(&self) -> bool {
-        sys::still_named(&self.pin, &self.canonical).unwrap_or(false)
+        let named = if self.exact {
+            sys::still_named_exact(&self.pin, &self.canonical)
+        } else {
+            sys::still_named(&self.pin, &self.canonical)
+        };
+        named.unwrap_or(false)
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_exact_placement_refuses_a_symlink_entry_and_the_root() {
+        let installation =
+            std::env::temp_dir().join(format!("wss-placement-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&installation);
+        let root = installation.join("authority");
+        let real = installation.join("real");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&real).unwrap();
+        std::os::unix::fs::symlink(&real, installation.join("link")).unwrap();
+        let installation_dir = std::fs::canonicalize(&installation).unwrap();
+        let root_dir = std::fs::canonicalize(&root).unwrap();
+
+        let placed = PinnedDirectory::placed_exact(&installation_dir, &root_dir, "real").unwrap();
+        assert!(placed.is_current());
+        assert!(matches!(
+            PinnedDirectory::placed_exact(&installation_dir, &root_dir, "link"),
+            Err(PlacementError::Io(_))
+        ));
+        assert!(matches!(
+            PinnedDirectory::placed_exact(&installation_dir, &root_dir, "authority"),
+            Err(PlacementError::Misplaced)
+        ));
+        // A followed placement accepts the link: the exact one is the stricter of the two.
+        assert!(
+            PinnedDirectory::placed(&installation_dir, &root_dir, &installation.join("link"))
+                .is_ok()
+        );
+        std::fs::remove_dir_all(&installation).unwrap();
     }
 }

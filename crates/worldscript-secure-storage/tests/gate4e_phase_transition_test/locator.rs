@@ -5,7 +5,7 @@
 
 use worldscript_secure_storage::admission::AdmittedRootCommitGuard;
 use worldscript_secure_storage::{
-    authenticate_journal, JournalLocator, LocationFault, LocatorError,
+    authenticate_journal, JournalLocator, JournalLookup, LocationFault, LocatorError,
 };
 
 use super::faulty_fs::FaultyFs;
@@ -35,7 +35,11 @@ fn seen_under<F: DurableFs, Mode>(
     locator: &JournalLocator,
 ) -> Result<Seen, LocatorError> {
     let operation = WriteOperationId::generate().unwrap();
-    let proof = authenticate_journal(fs, &bound.provider, event, locator, &operation)?;
+    let lookup = JournalLookup {
+        locator,
+        operation: &operation,
+    };
+    let proof = authenticate_journal(fs, &bound.provider, event, lookup)?;
     Ok(Seen {
         binding: proof.binding().clone(),
         manifest: proof.manifest().clone(),
@@ -249,27 +253,58 @@ fn a_missing_root_named_generation_is_recovery_required_and_nothing_else_is_used
     ));
 }
 
+/// How many bounded reads one authentication of a bound journal serves.
 #[cfg(unix)]
-#[test]
-fn a_directory_replaced_after_the_reads_is_not_the_one_that_was_authenticated() {
-    let observed = Bound::new();
+fn reads_of_an_authentication() -> usize {
+    let bound = Bound::new();
     let mut counting = FaultyFs::observing();
-    seen_shared(&observed, &mut counting, &journal_locator(&observed)).unwrap();
-    let reads = counting.reads();
-    assert!(reads > 0);
+    seen_shared(&bound, &mut counting, &journal_locator(&bound)).unwrap();
+    assert!(counting.reads() > 0);
+    counting.reads()
+}
 
+/// The authentication of a fresh bound journal during which `disturb(journal, moved)` runs right after
+/// its last read; `moved` is a free name next to the journal.
+#[cfg(unix)]
+fn disturbed_after_the_last_read(disturb: fn(&Path, &Path)) -> Result<Seen, LocatorError> {
+    let reads = reads_of_an_authentication();
     let bound = Bound::new();
     let (journal, moved) = (
         bound.installation.journal_dir.clone(),
         bound.installation.base.join("moved-journal"),
     );
-    // Right after the last read of the call, the journal directory is swapped for an empty one.
-    let mut swapping = FaultyFs::acting_after_reads(reads, move || {
-        fs::rename(&journal, &moved).unwrap();
-        fs::create_dir(&journal).unwrap();
-    });
+    let mut disturbing = FaultyFs::acting_after_reads(reads, move || disturb(&journal, &moved));
+    seen_shared(&bound, &mut disturbing, &journal_locator(&bound))
+}
+
+#[cfg(unix)]
+fn replace_with_an_empty_directory(journal: &Path, moved: &Path) {
+    fs::rename(journal, moved).unwrap();
+    fs::create_dir(journal).unwrap();
+}
+
+#[cfg(unix)]
+fn replace_with_a_symlink_to_the_moved_directory(journal: &Path, moved: &Path) {
+    fs::rename(journal, moved).unwrap();
+    std::os::unix::fs::symlink(moved, journal).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn a_directory_replaced_after_the_reads_is_not_the_one_that_was_authenticated() {
     assert_eq!(
-        seen_shared(&bound, &mut swapping, &journal_locator(&bound)),
+        disturbed_after_the_last_read(replace_with_an_empty_directory),
+        Err(LocatorError::Changed)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_put_in_place_of_the_moved_directory_is_not_the_one_that_was_authenticated() {
+    // The symlink leads to the very directory that was pinned, so a check that follows it would
+    // still call the pinned directory current.
+    assert_eq!(
+        disturbed_after_the_last_read(replace_with_a_symlink_to_the_moved_directory),
         Err(LocatorError::Changed)
     );
 }

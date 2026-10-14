@@ -16,13 +16,13 @@ use worldscript_secure_storage::{
     empty_journal_page_set_digest, generation_path, load_authoritative_manifest, load_catalog,
     operation_type, phase_code, promote_manifest_fenced, publish_manifest_fenced,
     publish_phase_transition_fenced, transition_phase, write_key_epoch, AdmissionScope,
-    AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit, DurableFs,
-    ExclusiveAdmissionGuard, InstallationScopeId, JournalCheckpoint, JournalDurableContext,
-    JournalDurableError, JournalManifest, JournalSource, KeyEpochCommit, KeyEpochRecord,
-    KeyEpochStatus, KeyProvider, LiveMigration, MigrationExecutionError, MigrationFence,
-    MigrationPhase, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
-    RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, SharedAdmissionGuard, StdFs,
-    WriteOperationId,
+    AnchorState, AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit,
+    DurableFs, ExclusiveAdmissionGuard, InstallationScopeId, JournalCheckpoint,
+    JournalDurableContext, JournalDurableError, JournalManifest, JournalSource, KeyEpochCommit,
+    KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, MigrationExecutionError,
+    MigrationFence, MigrationPhase, RootBody, RootCommitEvidence, RootCommitGuard,
+    RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout,
+    SharedAdmissionGuard, StdFs, WriteOperationId,
 };
 
 const OPERATION: &str = "phase-op";
@@ -391,17 +391,21 @@ impl Bound {
     }
 }
 
-/// Everything a refused operation must leave as it was: the authority root's files, the journal
-/// directory and the anchor.
+/// Everything a refused operation must leave as it was: the bytes of the authority root's files and
+/// of the journal directory's files, and the anchor state by value.
 #[derive(Debug, PartialEq)]
 struct Snapshot {
     root_files: BTreeMap<String, Vec<u8>>,
-    journal: Vec<String>,
-    anchor: String,
+    journal_files: BTreeMap<String, Vec<u8>>,
+    anchor: AnchorState,
 }
 
+/// Every file below `dir` by its path relative to it; nothing when `dir` is absent.
 fn files_below(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
-    for entry in fs::read_dir(dir).unwrap() {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries {
         let entry = entry.unwrap();
         let name = format!("{prefix}/{}", entry.file_name().to_string_lossy());
         if entry.file_type().unwrap().is_dir() {
@@ -415,10 +419,12 @@ fn files_below(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
 fn snapshot(bound: &Bound) -> Snapshot {
     let mut root_files = BTreeMap::new();
     files_below(&bound.installation.root_dir, "", &mut root_files);
+    let mut journal_files = BTreeMap::new();
+    files_below(&bound.installation.journal_dir, "", &mut journal_files);
     Snapshot {
         root_files,
-        journal: bound.installation.journal_names(),
-        anchor: format!("{:?}", bound.provider.read_root_anchor_state().unwrap()),
+        journal_files,
+        anchor: bound.provider.read_root_anchor_state().unwrap(),
     }
 }
 

@@ -25,8 +25,8 @@
 //!
 //! ```compile_fail
 //! use worldscript_secure_storage::{
-//!     authenticate_journal, JournalLocator, KeyProvider, SharedAdmissionGuard, StdFs,
-//!     WriteOperationId,
+//!     authenticate_journal, JournalLocator, JournalLookup, KeyProvider, SharedAdmissionGuard,
+//!     StdFs, WriteOperationId,
 //! };
 //!
 //! fn proof_outlives_the_event<P: KeyProvider>(
@@ -36,7 +36,8 @@
 //!     operation: &WriteOperationId,
 //! ) {
 //!     let event = admission.try_root_commit().unwrap().unwrap();
-//!     let proof = authenticate_journal(&mut StdFs, provider, &event, locator, operation).unwrap();
+//!     let lookup = JournalLookup { locator, operation };
+//!     let proof = authenticate_journal(&mut StdFs, provider, &event, lookup).unwrap();
 //!     drop(event);
 //!     let _ = proof.manifest();
 //! }
@@ -72,12 +73,7 @@ impl JournalLocator {
     /// letter or digit and at most 64 bytes long. Anything else is refused: a locator never holds a
     /// separator, a dot segment or an absolute path.
     pub fn new(scope: InstallationScopeId, name: &str) -> Result<Self, LocatorError> {
-        let mut bytes = name.bytes();
-        let first_ok = bytes
-            .next()
-            .is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit());
-        let rest_ok = bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
-        if !first_ok || !rest_ok || name.len() > MAX_NAME_LEN {
+        if !is_valid_name(name) {
             return Err(LocatorError::InvalidName);
         }
         Ok(Self {
@@ -94,6 +90,21 @@ impl JournalLocator {
     /// The journal directory name below the installation.
     pub fn name(&self) -> &str {
         &self.name
+    }
+}
+
+fn is_label_char(byte: u8) -> bool {
+    matches!(byte, b'a'..=b'z' | b'0'..=b'9')
+}
+
+fn is_valid_name(name: &str) -> bool {
+    if name.len() > MAX_NAME_LEN {
+        return false;
+    }
+    let mut bytes = name.bytes();
+    match bytes.next() {
+        Some(first) if is_label_char(first) => bytes.all(|b| is_label_char(b) || b == b'-'),
+        _ => false,
     }
 }
 
@@ -176,15 +187,24 @@ impl AuthenticatedJournal<'_> {
     }
 }
 
-/// Authenticates the journal the committed root binds, found through `locator`, under a root event of
-/// either admission mode (module docs). Reads only; nothing is written and no other directory is read.
+/// What an ordinary operation asks for: the journal of its installation, found through `locator`, read
+/// on behalf of the write operation `operation`.
+#[derive(Debug, Clone, Copy)]
+pub struct JournalLookup<'a> {
+    pub locator: &'a JournalLocator,
+    pub operation: &'a WriteOperationId,
+}
+
+/// Authenticates the journal the committed root binds, found through `lookup.locator`, under a root
+/// event of either admission mode (module docs). Reads only; nothing is written and no other directory
+/// is read.
 pub fn authenticate_journal<'e, F: DurableFs, P: KeyProvider, Mode>(
     fs: &mut F,
     provider: &P,
     event: &'e AdmittedRootCommitGuard<'_, Mode>,
-    locator: &JournalLocator,
-    operation: &WriteOperationId,
+    lookup: JournalLookup<'_>,
 ) -> Result<AuthenticatedJournal<'e>, LocatorError> {
+    let JournalLookup { locator, operation } = lookup;
     event.root_guard().map_err(LocatorError::Admission)?;
     let (installation, root) = event.admitted_dirs().map_err(LocatorError::Admission)?;
     let scope = anchored_installation_scope(provider)
@@ -195,7 +215,8 @@ pub fn authenticate_journal<'e, F: DurableFs, P: KeyProvider, Mode>(
     }
     let located = installation.join(&locator.name);
     check_real_directory(&located)?;
-    let pin = PinnedDirectory::placed(installation, root, &located).map_err(location_fault)?;
+    let pin = PinnedDirectory::placed_exact(installation, root, locator.name())
+        .map_err(location_fault)?;
     let layout = RootLayout { root_dir: root };
     let source = JournalSource {
         dir: &pin.canonical,

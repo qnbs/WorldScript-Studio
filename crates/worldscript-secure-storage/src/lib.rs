@@ -124,7 +124,8 @@ pub use journal::{
     MAX_JOURNAL_PAGE_DESCRIPTORS,
 };
 pub use journal_locator::{
-    authenticate_journal, AuthenticatedJournal, JournalLocator, LocationFault, LocatorError,
+    authenticate_journal, AuthenticatedJournal, JournalLocator, JournalLookup, LocationFault,
+    LocatorError,
 };
 pub use journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};

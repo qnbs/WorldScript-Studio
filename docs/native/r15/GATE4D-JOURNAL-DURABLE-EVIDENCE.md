@@ -1348,7 +1348,9 @@ the capture writers, the writer journal locator and E3 closed.
 `JournalLocator` names the journal directory of one installation (its scope and one directory name of a
 fixed grammar); `authenticate_journal` resolves it under a root event of either admission mode and returns
 an `AuthenticatedJournal` that borrows the event. The directory is confined by the `placement` module the
-conversion gate now shares: strictly below the admitted installation, outside the authority root, pinned.
+conversion gate now shares: strictly below the admitted installation, outside the authority root, pinned. The
+locator's directory is opened as the entry itself (`O_NOFOLLOW` on Unix; Windows refuses a reparse point), and
+"still current" compares the entry itself, not the target of a symlink.
 The pins, in `gate4e_phase_transition_test/locator.rs`:
 
 | Claim | Test |
@@ -1363,9 +1365,12 @@ The pins, in `gate4e_phase_transition_test/locator.rs`:
 | a root-named generation that is not the bound one is refused and a valid-looking sibling is not used | `a_generation_that_is_not_the_bound_one_is_refused_and_no_sibling_is_read` |
 | a missing root-named generation is refused and a sibling is not used instead | `a_missing_root_named_generation_is_recovery_required_and_nothing_else_is_used` |
 | on Unix, a directory swapped for another right after the last read is reported as `Changed` | `a_directory_replaced_after_the_reads_is_not_the_one_that_was_authenticated` |
+| on Unix, a symlink put in place of the moved pinned directory is `Changed`, not current | `a_symlink_put_in_place_of_the_moved_directory_is_not_the_one_that_was_authenticated` |
+| on Unix, an exact placement refuses a symlink entry and the authority root (unit test in `placement.rs`) | `placement::tests::an_exact_placement_refuses_a_symlink_entry_and_the_root` |
 
-Every refusal is compared against a snapshot of the root files, the journal directory names and the anchor
-and leaves it unchanged. A `compile_fail` doctest on the module pins that the proof cannot outlive the
+Every refusal of `authenticate_journal` is compared against a snapshot of the bytes of the root files and of the
+journal files and of the anchor state, by value, and leaves it unchanged; the grammar test needs no snapshot,
+since constructing a locator touches nothing. A `compile_fail` doctest on the module pins that the proof cannot outlive the
 event it was authenticated under. The tests were mutation-checked: without the scope check, the
 directory-kind check, the final pin check or the root exclusion of the placement, the named tests fail,
 and the doctest fails to be a compile failure without its `drop(event)`. L1 adds no consumer of the
