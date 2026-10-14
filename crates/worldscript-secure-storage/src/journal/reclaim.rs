@@ -59,6 +59,7 @@ use super::manifest::{journal_envelope_epoch, JournalManifest};
 use super::page::JournalPage;
 use super::phase_code;
 use super::state::{assert_page_promote_authority, MigrationFence};
+use super::MAX_JOURNAL_INVENTORY_ENTRIES;
 
 const INVENTORY_DIR: &str = "inventory";
 const PENDING_PREFIX: &str = "pending-";
@@ -70,9 +71,10 @@ const STAGING_INFIX: &str = ".tmp-";
 const PROBE: &str = "reclaim-probe";
 /// The most entries the sweep reads from `inventory/` before it refuses the listing.
 const MAX_INVENTORY_ENTRIES: usize = 65_536;
-/// The most page directories one pending directory holds before the sweep keeps it: the format allows more
-/// pages than any inventory is expected to need, and every name is held in memory during a pass.
-const MAX_PAGE_DIRS: usize = 100_000;
+/// The most page directories one pending directory holds before the sweep keeps it: a capture of at most
+/// [`MAX_JOURNAL_INVENTORY_ENTRIES`] entries has at most that many non-empty pages, so every capture the
+/// format admits can be reclaimed; every name is held in memory during a pass.
+const MAX_PAGE_DIRS: usize = MAX_JOURNAL_INVENTORY_ENTRIES as usize;
 /// The most files one page directory holds: the page itself and the staging links of earlier attempts.
 const MAX_FILES_PER_PAGE_DIR: usize = 64;
 
@@ -274,9 +276,9 @@ impl Sweep<'_> {
             };
             let dir = self.inventory.join(text);
             match self.judge(ctx, text, &dir) {
-                Ok(files) => {
-                    done.files_removed += files;
-                    done.pending_removed += 1;
+                Ok(removal) => {
+                    done.files_removed += removal.files;
+                    done.pending_removed += usize::from(removal.directory);
                 }
                 Err(Stop::Keep(reason)) => done.keep(text, reason),
                 Err(Stop::Fatal(error)) => return Err(error),
@@ -289,14 +291,14 @@ impl Sweep<'_> {
         Ok(done)
     }
 
-    /// Removes `dir` if it is a provably dead pending directory and returns the number of files removed,
-    /// or says why it is kept.
+    /// Removes `dir` if it is a provably dead pending directory and returns what this sweep removed, or
+    /// says why it is kept.
     fn judge<F: DurableFs>(
         &self,
         ctx: &mut JournalDurableContext<'_, F>,
         name: &str,
         dir: &Path,
-    ) -> Result<usize, Stop> {
+    ) -> Result<Removal, Stop> {
         let committed = self.manifest.journal_revision;
         match parse_name(name) {
             Named::Other => Err(Stop::Keep(KeepReason::Unrecognised)),
@@ -318,8 +320,8 @@ impl Sweep<'_> {
                     walk: Walk::Remove,
                 };
                 let files = self.walk(ctx, dir, remove)?;
-                removed(ctx.fs.remove_dir(dir))?;
-                Ok(files)
+                let directory = removed(ctx.fs.remove_dir(dir))?;
+                Ok(Removal { files, directory })
             }
         }
     }
@@ -428,6 +430,12 @@ impl Reclaimed {
             reason,
         });
     }
+}
+
+/// What one sweep removed of a pending directory: a directory that was already gone is not counted.
+struct Removal {
+    files: usize,
+    directory: bool,
 }
 
 /// A name that is already gone is a rerun of an earlier sweep, not a failure; any other error stops it.

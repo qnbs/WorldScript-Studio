@@ -58,6 +58,8 @@ pub struct ObservedFs {
     pub fail_remove: bool,
     /// Fails every directory removal.
     pub fail_remove_dir: bool,
+    /// Removes the directory and reports that it was already gone.
+    pub report_dirs_vanished: bool,
     /// Every directory removed, in order.
     pub removed_dirs: Vec<PathBuf>,
     /// Every path read, in order.
@@ -76,6 +78,7 @@ impl ObservedFs {
             fail_create_at: None,
             fail_remove: false,
             fail_remove_dir: false,
+            report_dirs_vanished: false,
             removed_dirs: Vec::new(),
             reads: Vec::new(),
         }
@@ -126,6 +129,9 @@ impl DurableFs for ObservedFs {
             return Err(io::Error::other("injected directory removal failure"));
         }
         self.inner.remove_dir(dir)?;
+        if self.report_dirs_vanished {
+            return Err(io::Error::from(io::ErrorKind::NotFound));
+        }
         self.removed_dirs.push(dir.to_path_buf());
         Ok(())
     }

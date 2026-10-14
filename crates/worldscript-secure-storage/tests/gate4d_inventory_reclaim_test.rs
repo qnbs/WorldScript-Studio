@@ -406,6 +406,23 @@ fn a_failed_file_removal_stops_before_any_directory_is_removed() {
     assert_eq!(names_in(&scenario.inventory()).len(), 2);
 }
 
+/// A directory that was already gone when the sweep removed it is a rerun, not a removal of this sweep.
+#[test]
+fn a_directory_that_vanished_before_its_removal_is_not_counted() {
+    let scenario = with_two_dead_pending_dirs();
+    let mut vanishing = ObservedFs::new();
+    vanishing.report_dirs_vanished = true;
+    let done = scenario.sweep(&mut vanishing).unwrap();
+    assert_eq!(
+        (
+            done.pending_removed,
+            done.files_removed,
+            names_in(&scenario.inventory()).len()
+        ),
+        (0, 6, 0)
+    );
+}
+
 #[test]
 fn the_real_file_system_removes_only_an_empty_directory() {
     let dir = TempDir::new();

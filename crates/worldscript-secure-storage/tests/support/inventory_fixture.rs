@@ -138,13 +138,14 @@ pub fn tree_under(root: &Path) -> BTreeSet<String> {
     found
 }
 
-/// The names of the entries directly below `dir`.
+/// The names of the entries directly below `dir`; a directory that does not exist has none, any other
+/// failure to read it is a failure of the test, not an empty directory.
 pub fn names_in(dir: &Path) -> BTreeSet<String> {
-    std::fs::read_dir(dir)
-        .map(|entries| {
-            entries
-                .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-                .collect()
-        })
-        .unwrap_or_default()
+    match std::fs::read_dir(dir) {
+        Ok(entries) => entries
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => BTreeSet::new(),
+        Err(error) => panic!("cannot read {}: {error}", dir.display()),
+    }
 }
