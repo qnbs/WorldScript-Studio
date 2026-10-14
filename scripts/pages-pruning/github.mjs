@@ -88,9 +88,12 @@ export async function read(ctx, route, parameters = {}) {
       replaceRate(ctx, response.headers);
       return response;
     } catch (error) {
-      noteRate(ctx, error.response?.headers);
       const delay = retryDelay(error, attempt);
-      if (!shouldRetry(error, attempt, delay)) throw error;
+      const retrying = shouldRetry(error, attempt, delay);
+      // QNBS-v3: an error that ends the read replaces the allowance like a success does, so a header-less 404 that a caller turns into an unproved candidate cannot leave a stale allowance behind; only a read that is retried keeps it until the retry answers.
+      if (retrying) noteRate(ctx, error.response?.headers);
+      else replaceRate(ctx, error.response?.headers);
+      if (!retrying) throw error;
       await ctx.pause(delay);
     }
   }
@@ -104,7 +107,7 @@ export async function write(ctx, route, parameters) {
     replaceRate(ctx, response?.headers);
     return response;
   } catch (error) {
-    noteRate(ctx, error.response?.headers);
+    replaceRate(ctx, error.response?.headers);
     throw error;
   }
 }

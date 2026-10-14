@@ -81,11 +81,15 @@ export const job = (jobId) => ({
   steps: [{ name: 'Deploy to GitHub Pages', conclusion: 'success' }],
 });
 
+// Like the real API, an error response reports the live allowance unless it is built header-less.
 export const apiError = (code, retryAfter) =>
   Object.assign(new Error('PRIVATE provider detail'), {
     status: code,
-    response: { headers: { 'retry-after': retryAfter } },
+    response: { headers: { 'x-ratelimit-remaining': '5000', 'retry-after': retryAfter } },
   });
+
+export const headerlessError = (code) =>
+  Object.assign(new Error('PRIVATE provider detail'), { status: code, response: { headers: {} } });
 
 const page = (items, parameters) => items.slice((parameters.page - 1) * 100, parameters.page * 100);
 const withoutStatuses = ({ statuses: _statuses, ...item }) => item;

@@ -48,11 +48,11 @@ export function candidateCeiling(ctx) {
   return 2 * (list + RELOADS * (status + 1) + 1 + REPROOF) + 2;
 }
 
-// QNBS-v3: reads may be retried, so everything after the inactive-status POST is reserved at READ_ATTEMPTS per read plus the DELETE, and the POST is only issued when that worst case still fits the budget.
+// QNBS-v3: reads may be retried, so the inactive-status POST, every read after it at READ_ATTEMPTS and the DELETE are reserved together, and the POST is only issued when that worst case still fits the budget.
 export function finishCeiling(ctx) {
   const { list, status } = ctx.observed;
   const reads = list + RELOADS * (status + 1) + 1 + REPROOF + 3;
-  return READ_ATTEMPTS * reads + 1;
+  return READ_ATTEMPTS * reads + 2;
 }
 
 function newRun(authority, mode) {
@@ -186,9 +186,10 @@ async function revalidate(session, candidate, expected) {
   assertStable(session, fresh, next);
   session.records = fresh;
   const record = fresh.find((item) => item.id === candidate.id);
+  if (!record) return null;
+  // QNBS-v3: a candidate that vanished needs no pruning and is skipped, but one that changed or stopped being eligible means another writer touched the inventory, so the run stops instead of deleting its neighbours.
   const candidateStillEligible = next.candidates.some((item) => item.id === candidate.id);
-  if (!record || !candidateStillEligible) return null;
-  if (fingerprint(record) !== expected) return null;
+  if (!candidateStillEligible || fingerprint(record) !== expected) refuse('candidate-moved');
   for (const id of [slots.current, slots.rollback])
     await reprove(ctx, fresh.find((item) => item.id === id) ?? refuse('current-moved'));
   await reprove(ctx, record);
@@ -226,7 +227,7 @@ async function settle(session, candidate, fresh) {
   fresh.statuses.push(await inactivate(ctx, fresh));
   run.result.inactivated += 1;
   const next = await revalidate(session, candidate, fingerprint(fresh));
-  if (!next) return { skip: 'status-moved' };
+  if (!next) return { skip: 'candidate-gone' };
   return isSettledInactive(latestStatus(next)) ? {} : { skip: 'inactive-status-unrecognized' };
 }
 
@@ -234,7 +235,7 @@ async function settle(session, candidate, fresh) {
 async function retire(session, candidate) {
   const { ctx, run } = session;
   const fresh = await revalidate(session, candidate, fingerprint(candidate));
-  if (!fresh) return skip(run, 'stale-candidate');
+  if (!fresh) return skip(run, 'candidate-gone');
   const needsPost = !isSettledInactive(latestStatus(fresh));
   if (!funds(ctx, needsPost ? finishCeiling(ctx) : DELETE_COST)) return 'budget';
   run.result.attempted += 1;

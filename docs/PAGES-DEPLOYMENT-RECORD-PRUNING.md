@@ -137,8 +137,8 @@ candidate (twice, once per write boundary). The reservation is computed from the
 observed in this run, from 42 requests for a small inventory to 96 for a 400-record list with
 five-page histories, and the run stops gracefully with `budget-limit`
 instead of leaving a half-finished candidate. Reads are retried up to twice, so immediately before
-the first write of a candidate the run also reserves everything after the inactive-status POST at
-three attempts per read plus the DELETE (70 requests for a small inventory, 151 for the
+the first write of a candidate the run also reserves the POST itself, every read after it at
+three attempts and the DELETE (71 requests for a small inventory, 152 for the
 400-record case) and otherwise stops without writing. Both reservations are also checked against
 the live `x-ratelimit-remaining` value last reported by GitHub, with a reserve of 100 requests kept
 for CI. The same check gates the proof scan, the POST and a DELETE that needs no POST; none of them
@@ -148,7 +148,10 @@ by the live allowance before it is sent: a read that would leave fewer than 100 
 run with `rate-reserve`, and once a response has succeeded any later successful response without
 a usable rate header stops it with `rate-unknown` (the allowance is replaced, never kept stale), so
 the local 450 counter is never the only brake. The rate headers of failed reads
-and writes count too, so a run of 404 responses cannot spend the reserve unnoticed. A budget refusal before a candidate's first
+and writes count too: an error that ends a call replaces the allowance like a success, so a
+header-less 404 leaves it unknown instead of stale, and a run of 404 responses cannot spend the
+reserve unnoticed; only a read that is about to be retried keeps the previous allowance until its
+retry answers. A budget refusal before a candidate's first
 write (a retry storm in its first revalidation) is the same graceful `budget-limit` stop; after the
 POST it stays a failure. An inventory that alone exceeds the budget fails
 closed with `request-budget` before any write. Measured by the test fixture (GET + POST + DELETE,
@@ -178,17 +181,21 @@ and the write atomic. The fence is therefore a bounded one, and this is exactly 
    re-reads the list, the candidate and both slot histories, re-proves their runs and jobs and
    re-reads `main`; the last of those reads ends the check, and nothing but a budget decision
    (no request) stands between it and the DELETE. The exposure is that one round trip.
-3. **Failure is closed.** Any mid-run change in the publication order, the candidate, the slots,
-   the inventory or `main` stops the run before the write; a failed or ambiguous POST never reaches
-   the DELETE; writes are never retried; an unknown or spent rate allowance stops the run after the
+3. **Failure is closed.** A change in the publication order, in the proof of either slot or in
+   `main` stops the run before the write (`current-moved`, `main-moved`). So does a candidate that
+   changed or stopped being eligible (`candidate-moved`): another writer touched the inventory, and
+   the remaining candidates are not deleted on top of that. A candidate that has vanished needs no
+   pruning and is skipped. Up to three changed, unfocused records are reloaded; a larger change
+   stops the run with `inventory-churn`. A failed or ambiguous POST never reaches the
+   DELETE; writes are never retried; an unknown or spent rate allowance stops the run after the
    POST with the record left inactive (`rate-unknown`, `rate-reserve`).
 
 | Writer | Effect on a chosen candidate | Handling |
 | --- | --- | --- |
 | Pages publisher (`ci.yml` `deploy`) | A publication creates a **new** record; it cannot give an old record a success status. A stale snapshot is therefore never less protective than the fresh state (a test checks this for successful, failed and in-flight arrivals). | Structurally safe; a publication that lands anywhere before the last read stops the run (`current-moved`), also between the two boundaries (tested). One landing inside the final round trip cannot make a candidate protected, only add a newer record. |
 | In-repository status writers | None other than the publisher and this workflow exist; a test pins the set of workflows that can write deployment records. | Mechanical. |
-| Changes to the hold list on main | A hold landing between the final trusted-main check and the DELETE would not stop that delete. | **Bounded residual:** one round trip. The hold file is read at the executing SHA and `main` is re-read before each write, so a hold merged earlier always stops the run. A hold that must survive a run in progress is protected by disabling the workflow first (`gh workflow disable`), which is the documented procedure for a new hold. |
-| External status writers (PAT holders, third-party Apps) | Could add a success status to an old record. | **Bounded residual:** a write inside the same round trip. The principal holds credentials that can delete the record directly, so this adds no authority (see the publication-proof residual); any earlier write changes the candidate fingerprint or the order and stops the run. |
+| Changes to the hold list on main | A hold landing between the final trusted-main check and the DELETE would not stop that delete. | **Bounded residual:** one round trip. The hold file is read at the executing SHA and `main` is re-read before each write, so a hold merged earlier always stops the run. A hold that must survive a run in progress needs the documented procedure for a new hold: disable the workflow (`gh workflow disable`), which only stops future triggers; cancel every queued or running pruning run (`gh run list --workflow prune-deployments.yml --status queued`, the same with `--status in_progress`, then `gh run cancel`) or wait until none is left; merge the hold only after that, and re-enable the workflow afterwards. |
+| External status writers (PAT holders, third-party Apps) | Could add a success status to an old record. | **Bounded residual:** a write inside the same round trip. The principal holds credentials that can delete the record directly, so this adds no authority (see the publication-proof residual); any earlier write changes the candidate fingerprint or the publication order and stops the run. |
 
 The pruning concurrency group serializes pruning invocations only. It does not serialize the
 publisher, hold changes or external writers, and must not be read as a fence. The publisher is
@@ -216,10 +223,11 @@ belong to #550/QNB-41; no monetary or CPU savings are inferred from workflow-sta
    --dry-run`) with `UNKNOWN = 0`, the current and rollback publication, the six evidence holds and
    the newest three; check the site over HTTPS.
 3. Enable the workflow (`gh workflow enable prune-deployments.yml`) as a separate operator action
-   and observe the first scheduled or dispatched-with-writes-admitted pass: at most ten records
-   deleted, every protected ID and every other environment unchanged, site still healthy.
+   and observe the first scheduled pass (a `workflow_dispatch` run is always a dry run and cannot
+   exercise a deletion): at most ten records deleted, every protected ID and every other
+   environment unchanged, site still healthy.
 4. Any `UNKNOWN`, 404/409/429, header-less allowance, protected-object change or fence doubt stops
-   the run; the response is `gh workflow disable prune-deployments.yml` until the cause is
-   repaired.
+   the run; the response is `gh workflow disable prune-deployments.yml` plus cancelling any active
+   run until the cause is repaired.
 
 Implementation, review and operational verification remain separate states.

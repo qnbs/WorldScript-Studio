@@ -30,6 +30,7 @@ import {
   date,
   execute,
   executeDestructive,
+  headerlessError,
   holds,
   job as jobFixture,
   jobUrl,
@@ -954,6 +955,45 @@ test('a later response without a rate header does not leave a stale allowance be
   assert.equal(github.calls.length, 2);
 });
 
+// The first candidate's publication run (not a slot) is the read that fails.
+const firstCandidateRun = (slotRuns, fail) => {
+  let failed = false;
+  return (route) => {
+    const run = /\/actions\/runs\/(\d+)$/.exec(route);
+    if (!run || slotRuns.includes(Number(run[1])) || failed) return undefined;
+    failed = true;
+    throw fail();
+  };
+};
+
+test('a header-less error that ends a read leaves the allowance unknown, so no later write is funded', async () => {
+  const control = client(
+    records(6),
+    firstCandidateRun([1005, 1006], () => apiError(404)),
+  );
+  assert.equal((await executeDestructive(control)).deleted, 2);
+  const github = client(
+    records(6),
+    firstCandidateRun([1005, 1006], () => headerlessError(404)),
+  );
+  const result = await executeDestructive(github);
+  assert.equal(result.deleted, 0);
+  assert.deepEqual(writes(github), []);
+});
+
+test('a header-less error on a read that is retried keeps the allowance until the retry answers', async () => {
+  const seen = new Set();
+  const github = client(records(6), (route, parameters) => {
+    const key = `${route}${JSON.stringify(parameters)}`;
+    if (!route.startsWith('GET ') || !route.includes('/actions/') || seen.has(key)) return;
+    seen.add(key);
+    throw headerlessError(503);
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 3);
+});
+
 test('a throttled response lowers the allowance before any retry can be sent', async () => {
   const github = client(records(4), () => {
     throw Object.assign(apiError(429, '0'), {
@@ -1010,14 +1050,32 @@ test('main moving invalidates hold and executable authority before mutation', as
   assert.deepEqual(writes(github), []);
 });
 
-test('candidate SHA drift is skipped with zero writes', async () => {
+test('candidate SHA drift stops the run with zero writes instead of deleting its neighbours', async () => {
   let lists = 0;
-  const github = client(records(4), (route, _parameters, state) => {
-    if (route.includes('?environment=') && ++lists === 2) state[0].sha = 'b'.repeat(40);
+  // The candidates of eight records are retired newest first; the second list read is the first revalidation.
+  const github = client(records(8), (route, _parameters, state) => {
+    if (route.includes('?environment=') && ++lists === 2) state[4].sha = 'b'.repeat(40);
   });
   const result = await executeDestructive(github);
-  assert.equal(result.skipped, 1);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['candidate-moved'], 1);
+  assert.equal(result.deleted, 0);
   assert.deepEqual(writes(github), []);
+});
+
+test('a candidate that vanished is skipped and the run goes on with the next one', async () => {
+  let lists = 0;
+  const github = client(records(6), (route, _parameters, state) => {
+    if (route.includes('?environment=') && ++lists === 2) state.splice(2, 1);
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.deleted, 2);
+  assert.deepEqual(
+    github.state.map((item) => item.id),
+    [4, 5, 6],
+  );
 });
 
 test('status promotion after inactivation prevents deletion', async () => {
@@ -1206,9 +1264,9 @@ test('a candidate pass is reserved at the observed inventory depth before any wr
   assert.equal(done.deleted, 1);
 });
 
-test('the post-POST reservation covers every read at its full retry count', () => {
-  assert.equal(finishCeiling({ observed: { list: 1, status: 1 } }), 70);
-  assert.equal(finishCeiling({ observed: { list: 4, status: 5 } }), 151);
+test('the reservation covers the POST, every later read at its full retry count and the DELETE', () => {
+  assert.equal(finishCeiling({ observed: { list: 1, status: 1 } }), 71);
+  assert.equal(finishCeiling({ observed: { list: 4, status: 5 } }), 152);
 });
 
 test('the POST is only issued when everything after it fits the budget even with retried reads', async () => {
