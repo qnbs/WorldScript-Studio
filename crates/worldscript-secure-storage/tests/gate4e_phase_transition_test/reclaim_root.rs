@@ -28,14 +28,20 @@ fn entries(count: u32) -> Vec<JournalInventoryEntry> {
         .collect()
 }
 
-/// A bound journal in `DISCOVER` (revision 1) with one finished capture staged for revision 2 and
-/// abandoned: its pending directory is live until the journal commits revision 2.
-fn with_an_abandoned_capture() -> (Bound, JournalManifest) {
+/// A bound journal in `DISCOVER` (revision 1).
+fn at_discover() -> (Bound, JournalManifest) {
     let mut bound = Bound::new();
     let discover = entering(&bound.zero, phase_code::DISCOVER);
     let mut admission = bound.installation.exclusive();
     bound.transition(&mut admission, &discover).unwrap();
     drop(admission);
+    (bound, discover)
+}
+
+/// A bound journal in `DISCOVER` (revision 1) with one finished capture staged for revision 2 and
+/// abandoned: its pending directory is live until the journal commits revision 2.
+fn with_an_abandoned_capture() -> (Bound, JournalManifest) {
+    let (bound, discover) = at_discover();
     let operation = WriteOperationId::generate().unwrap();
     let fence = MigrationFence::from_manifest(&discover);
     let layout = RootLayout {
@@ -195,5 +201,63 @@ fn the_sweep_holds_the_root_event_from_the_read_of_the_binding_to_the_last_remov
             free_again
         ),
         (true, 1, true)
+    );
+}
+
+/// A byte copy of `from` at `to`, so that reads through a retargeted alias still succeed.
+#[cfg(unix)]
+fn copy_tree(from: &Path, to: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for item in fs::read_dir(from).unwrap() {
+        let item = item.unwrap();
+        let target = to.join(item.file_name());
+        if item.file_type().unwrap().is_dir() {
+            copy_tree(&item.path(), &target);
+        } else {
+            fs::copy(item.path(), target).unwrap();
+        }
+    }
+}
+
+/// The root the sweep holds the event of is the root it reads: an alias that is retargeted after the event
+/// was taken makes the guard name another directory, and the sweep stops before it deletes anything even
+/// though the other directory answered every read.
+#[cfg(unix)]
+#[test]
+fn a_root_alias_retargeted_after_the_event_was_taken_stops_the_sweep() {
+    use std::os::unix::fs::symlink;
+
+    use worldscript_secure_storage::RootStoreError;
+
+    use super::through_an_alias::RetargetingFs;
+
+    let (mut bound, discover) = with_an_abandoned_capture();
+    let progressed = progressing(&discover);
+    bound.checkpoint(&progressed).unwrap();
+    let foreign = Installation::new();
+    fs::remove_dir_all(&foreign.root_dir).unwrap();
+    copy_tree(&bound.installation.root_dir, &foreign.root_dir);
+    let alias = bound.installation.base.join("alias");
+    symlink(&bound.installation.root_dir, &alias).unwrap();
+    let before = snapshot(&bound);
+    let mut fs = RetargetingFs::new(&alias, &foreign.root_dir);
+    let operation = WriteOperationId::generate().unwrap();
+    let fence = MigrationFence::from_manifest(&progressed);
+    let request = InventoryReclaim {
+        journal: JournalSource {
+            dir: &bound.installation.journal_dir,
+            operation: &operation,
+        },
+        fence: &fence,
+    };
+    let layout = RootLayout { root_dir: &alias };
+    let refused = reclaim_abandoned_inventory(&mut fs, &bound.provider, layout, request);
+    assert!(fs.fired, "the alias was retargeted during the sweep");
+    assert_eq!(
+        (refused.map(|_| ()), snapshot(&bound)),
+        (
+            Err(AuthorityError::Root(RootStoreError::MutexNotHeld)),
+            before
+        )
     );
 }

@@ -930,18 +930,31 @@ pub fn reclaim_abandoned_inventory<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     request: InventoryReclaim<'_>,
 ) -> Result<Reclaimed, AuthorityError> {
-    let _held = acquire_root_commit(layout)?;
+    let held = acquire_root_commit(layout)?;
+    assert_held(&held, layout)?;
     let live = committed_route(fs, provider, layout)?.live;
     let key = route_journal_key(fs, provider, layout, request.journal)?;
     let mut ctx = journal_context(&mut *fs, request.journal, &key, CandidateConflict::Refuse);
     let committed =
         load_authoritative_manifest(&mut ctx, &live).map_err(AuthorityError::Journal)?;
+    // The lock names the directory that was canonical when it was taken; the reads above went through
+    // the caller's spelling of the root, which a link can retarget meanwhile.
+    assert_held(&held, layout)?;
     let sweep = ReclaimRequest {
         committed_manifest: &committed,
         fence: request.fence,
         committed: &live,
     };
     reclaim_with_binding(&mut ctx, &sweep).map_err(AuthorityError::Reclaim)
+}
+
+/// The guard still names the root of `layout`: its canonical directory and the lock target are unchanged.
+fn assert_held(held: &RootCommitGuard, layout: RootLayout<'_>) -> Result<(), AuthorityError> {
+    if held.guards(layout.root_dir) {
+        Ok(())
+    } else {
+        Err(AuthorityError::Root(RootStoreError::MutexNotHeld))
+    }
 }
 
 /// Where the journal is and which owner asks for its inventory staging to be reclaimed.

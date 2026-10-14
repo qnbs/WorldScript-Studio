@@ -1421,7 +1421,10 @@ until explicit recovery). The binding-taking sweep underneath (`reclaim_with_bin
 root-named generation read back and compared) is exported only with the test-only `test-support` feature. The
 cross-process root commit event is held from the read of the binding to the last removal, in the established
 root-then-journal lock order, so a takeover or a transition to `RECOVERY_REQUIRED` by another process cannot
-interleave with the sweep; root commits wait for it, as they do for the capture commits. The proof of death itself
+interleave with the sweep; root commits wait for it, as they do for the capture commits. The guard is checked
+against the caller's spelling of the root right after it is taken and again after the binding and the manifest were
+read, before the first removal: a root alias that a link retargets in between names another directory than the lock
+(`AuthorityError::Root(RootStoreError::MutexNotHeld)`), and nothing is deleted. The proof of death itself
 depends only on the committed revision `R`, which only grows.
 
 `DurableFs::remove_dir` and `DurableFs::entry_kind` are provided methods whose default is `Unsupported`. The sweep

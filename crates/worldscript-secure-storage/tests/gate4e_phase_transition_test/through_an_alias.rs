@@ -13,15 +13,15 @@ use super::*;
 
 /// A file system that, on its first read, points the alias at another root, as a local attacker
 /// with write access to the installation could between the admission proof and the first write.
-struct RetargetingFs {
+pub(super) struct RetargetingFs {
     inner: StdFs,
     alias: PathBuf,
     other: PathBuf,
-    fired: bool,
+    pub(super) fired: bool,
 }
 
 impl RetargetingFs {
-    fn new(alias: &Path, other: &Path) -> Self {
+    pub(super) fn new(alias: &Path, other: &Path) -> Self {
         RetargetingFs {
             inner: StdFs,
             alias: alias.to_path_buf(),
