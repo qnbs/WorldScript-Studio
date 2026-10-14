@@ -604,3 +604,6 @@ mod final_capture;
 /// The writer journal locator (L1): where the journal of one installation is found, authenticated.
 #[path = "gate4e_phase_transition_test/locator.rs"]
 mod locator;
+/// The `PREPARE`/`DONE` window (W1): an ordinary operation over a bound root, admitted by the journal.
+#[path = "gate4e_phase_transition_test/window.rs"]
+mod window;

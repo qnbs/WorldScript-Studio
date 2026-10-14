@@ -9,6 +9,11 @@
 //! inventory. It is not exclusive operation admission: readers remain admitted during a write.
 //! The ordering is admission -> ordinary-writer serialization -> finite root event, without upgrade.
 //!
+//! A root that binds a live migration refuses every ordinary operation (`MigrationRequired`), except
+//! for a storage that was handed the locator of its journal (`with_journal_locator`): while the journal
+//! the root vouches for is in `PREPARE` or `DONE` and binds exactly what the snapshot root binds, the
+//! operation is admitted for as long as it holds its shared admission (Gate 4E W1).
+//!
 //! A confirmed lock retains exclusive ownership until verified unlock. Otherwise another process's
 //! already-loaded runtime could resume while this session reports LOCKED. The barrier has no durable
 //! body/authority claim; crash release comes from the kernel. Shutdown refuses unresolved authority.
@@ -32,9 +37,11 @@ use crate::admission::{
 use crate::authority::{load_snapshot_catalog, AuthorityError, LoadedCatalog};
 use crate::catalog::CatalogDescriptor;
 use crate::commit::{RecordLocation, RecordStore};
-use crate::durable::DurableFs;
+use crate::durable::{DurableFs, WriteOperationId};
 use crate::error::KeyProviderError;
 use crate::identity::{has_ordinary_marker, RecordIdentity};
+use crate::journal::{ordinary_mutating_writes_admitted, MigrationPhase};
+use crate::journal_locator::{authenticate_journal, JournalLocator, JournalLookup, LocatorError};
 use crate::operation_authority::{
     lock_cell, AuthorityCell, PublishedProvider, Snapshot, SnapshotRetention,
 };
@@ -43,7 +50,7 @@ use crate::protected::{
     ProtectedWrite,
 };
 use crate::provider::{KeyProvider, KeyState};
-use crate::root::KeyEpochEntry;
+use crate::root::{KeyEpochEntry, LiveMigration};
 use crate::root_lock::{sys, RootCommitGuard};
 use crate::root_store::{load_snapshot_root, recover_root, RootLayout, RootStoreError};
 use crate::seal::Key;
@@ -167,6 +174,7 @@ pub struct ProtectedStorage<P> {
     scope: Scope,
     cell: Mutex<AuthorityCell<P>>,
     lifecycle: Mutex<Lifecycle>,
+    journal: Option<JournalLocator>,
 }
 
 /// A reader's opaque snapshot/key and admission. Field order zeroizes the key and releases the pin
@@ -175,8 +183,20 @@ pub struct AuthoritySnapshotGuard {
     key: Key,
     snapshot: Arc<Snapshot>,
     epochs: Vec<KeyEpochEntry>,
+    /// The binding of a bound root that the journal admitted for this operation (Gate 4E W1).
+    window: Option<LiveMigration>,
     admission: SharedAdmissionGuard,
     scope: Scope,
+}
+
+/// What the journal says about an ordinary operation over a bound root.
+enum Window {
+    /// No locator, or the journal does not admit it: the E1 barrier decides.
+    Closed,
+    /// The authenticated phase admits ordinary operations under exactly this binding.
+    Admitted(LiveMigration),
+    /// The finite root event was busy; nothing was observed.
+    Contended,
 }
 
 impl<P: KeyProvider> ProtectedStorage<P> {
@@ -188,7 +208,17 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             },
             cell: Mutex::new(AuthorityCell::new(provider)),
             lifecycle: Mutex::new(Lifecycle::default()),
+            journal: None,
         }
+    }
+
+    /// Names where this installation's writer journal lives (Gate 4E W1). Configuration only: nothing is
+    /// observed. With a locator, an ordinary operation over a bound root is admitted only while the
+    /// authenticated journal is in `PREPARE` or `DONE`; without one the root-bound barrier stands.
+    #[must_use]
+    pub fn with_journal_locator(mut self, locator: JournalLocator) -> Self {
+        self.journal = Some(locator);
+        self
     }
 
     fn ordinary_allowed(&self) -> Result<(), OperationError> {
@@ -273,14 +303,72 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let Some(admission) = SharedAdmissionGuard::try_acquire(self.scope.admission())? else {
             return Ok(None);
         };
-        self.capture(fs, admission).map(Some)
+        self.capture(fs, admission)
+    }
+
+    /// The journal's verdict on an ordinary operation over the bound root `bound`, taken under the
+    /// shared admission the operation already holds: one finite root event, the journal found through
+    /// the locator and authenticated against the committed root, its phase one that admits ordinary
+    /// writes, and its binding exactly `bound`. Any other outcome leaves the E1 barrier standing; only
+    /// an admission fault is an error of its own.
+    fn open_window<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        admission: &mut SharedAdmissionGuard,
+        bound: &LiveMigration,
+    ) -> Result<Window, OperationError> {
+        let Some(locator) = &self.journal else {
+            return Ok(Window::Closed);
+        };
+        let Some(event) = admission.try_root_commit()? else {
+            return Ok(Window::Contended);
+        };
+        let Ok(operation) = WriteOperationId::generate() else {
+            return Ok(Window::Closed);
+        };
+        let provider = PublishedProvider(&self.cell);
+        let lookup = JournalLookup {
+            locator,
+            operation: &operation,
+        };
+        let proof = match authenticate_journal(fs, &provider, &event, lookup) {
+            Ok(proof) => proof,
+            Err(LocatorError::Admission(error)) => return Err(error.into()),
+            Err(_) => return Ok(Window::Closed),
+        };
+        let phase = MigrationPhase::from_wire(proof.manifest().phase);
+        let admitted = ordinary_mutating_writes_admitted(phase)
+            && proof.binding() == bound
+            && proof.is_current();
+        Ok(if admitted {
+            Window::Admitted(bound.clone())
+        } else {
+            Window::Closed
+        })
+    }
+
+    /// A write repeats the journal's verdict immediately before its first root commit, so a binding
+    /// or phase that moved since the operation began is refused instead of written over.
+    fn revalidate_window<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        operation: &mut AuthoritySnapshotGuard,
+    ) -> Result<Option<()>, OperationError> {
+        let Some(bound) = operation.window.clone() else {
+            return Ok(Some(()));
+        };
+        match self.open_window(fs, &mut operation.admission, &bound)? {
+            Window::Admitted(_) => Ok(Some(())),
+            Window::Contended => Ok(None),
+            Window::Closed => Err(OperationError::MigrationRequired),
+        }
     }
 
     fn capture<F: DurableFs>(
         &self,
         fs: &mut F,
-        admission: SharedAdmissionGuard,
-    ) -> Result<AuthoritySnapshotGuard, OperationError> {
+        mut admission: SharedAdmissionGuard,
+    ) -> Result<Option<AuthoritySnapshotGuard>, OperationError> {
         if !admission.guards(self.scope.admission()) {
             return Err(AdmissionError::IdentityChanged.into());
         }
@@ -294,7 +382,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         }
         let (snapshot, key) = cell.capture()?;
         drop(cell);
-        let (_, epochs) = load_snapshot_root(
+        let (view, epochs) = load_snapshot_root(
             fs,
             self.scope.layout(),
             &snapshot.scope,
@@ -302,16 +390,25 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             &key,
             None,
         )?;
+        let window = match &view.root.live_migration {
+            None => None,
+            Some(bound) => match self.open_window(fs, &mut admission, bound)? {
+                Window::Admitted(binding) => Some(binding),
+                Window::Closed => None,
+                Window::Contended => return Ok(None),
+            },
+        };
         if !admission.guards(self.scope.admission()) {
             return Err(AdmissionError::IdentityChanged.into());
         }
-        Ok(AuthoritySnapshotGuard {
+        Ok(Some(AuthoritySnapshotGuard {
             key,
             snapshot,
             epochs,
+            window,
             admission,
             scope: self.scope.clone(),
-        })
+        }))
     }
 
     /// The handoff runs while admission, key and snapshot are all live. Returning None means the
@@ -366,7 +463,9 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let Some(writer) = WriterGuard::try_acquire(fs, &self.scope, &admission)? else {
             return Ok(None);
         };
-        let mut operation = self.capture(fs, admission)?;
+        let Some(mut operation) = self.capture(fs, admission)? else {
+            return Ok(None);
+        };
         let pins = LocationPins::open(&operation.scope, location)?;
         let mut provider = PublishedProvider(&self.cell);
         if self
@@ -376,6 +475,9 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             return Ok(None);
         }
         let catalog = operation.catalog(fs)?;
+        if self.revalidate_window(fs, &mut operation)?.is_none() {
+            return Ok(None);
+        }
         let target = ProtectedTarget {
             layout: operation.scope.layout(),
             store: RecordStore {
@@ -421,7 +523,9 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let Some(writer) = WriterGuard::try_acquire(fs, &self.scope, &admission)? else {
             return Ok(None);
         };
-        let mut operation = self.capture(fs, admission)?;
+        let Some(mut operation) = self.capture(fs, admission)? else {
+            return Ok(None);
+        };
         let pins = LocationPins::open(&operation.scope, location)?;
         let mut provider = PublishedProvider(&self.cell);
         if self
@@ -431,6 +535,9 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             return Ok(None);
         }
         let catalog = operation.catalog(fs)?;
+        if self.revalidate_window(fs, &mut operation)?.is_none() {
+            return Ok(None);
+        }
         let target = ProtectedTarget {
             layout: operation.scope.layout(),
             store: RecordStore {
@@ -680,7 +787,8 @@ impl AuthoritySnapshotGuard {
             &self.key,
             Some(&self.epochs),
         )?;
-        if view.root.live_migration.is_some() {
+        // A bound root is readable and writable only under the binding the journal admitted (W1).
+        if view.root.live_migration.is_some() && view.root.live_migration != self.window {
             return Err(OperationError::MigrationRequired);
         }
         let catalog = load_snapshot_catalog(fs, self.scope.layout(), view, &self.key)?;

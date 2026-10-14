@@ -695,6 +695,8 @@ window is not implemented, deliberately: it needs the root-named manifest (`read
 as writer configuration (the location is caller-supplied everywhere and is not in the root), a fail-closed rule for a
 binding without a location, and a policy for reconciling a pending ordinary write under the barrier. No producer of a
 binding exists yet to need it. `ordinary_mutating_writes_admitted` remains the specification of that relaxation.
+Gate 4E W1 later implements it for a storage that was handed a journal locator (contract §10.3, test module
+`gate4e_phase_transition_test/window.rs`); this table describes a storage without one, where the barrier is unchanged.
 
 Proof (`gate4b_operations_test`, eighteen new cases): write refused twice with the installation tree unchanged; read, list
 and reconcile refused with the tree unchanged; the snapshot guard's list and read refused; lock, unlock and shutdown refused;
