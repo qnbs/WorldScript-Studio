@@ -3,7 +3,12 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { REQUEST_LIMIT } from '../../../scripts/pages-pruning/github.mjs';
+import {
+  assertFunds,
+  createContext,
+  funds,
+  REQUEST_LIMIT,
+} from '../../../scripts/pages-pruning/github.mjs';
 import { EXAMINE_LIMIT, PUBLISH_EVENTS } from '../../../scripts/pages-pruning/provenance.mjs';
 import {
   candidateCeiling,
@@ -34,6 +39,7 @@ import {
   REPO_ID,
   ROOT,
   reads,
+  reconcileShipped,
   record,
   records,
   status,
@@ -209,14 +215,34 @@ test('an explicit dry-run stays read-only even when the destructive gate is open
   assert.deepEqual(writes(github), []);
 });
 
-test('the shipped destructive gate is closed and a scheduled run stays read-only', async () => {
-  assert.equal(DESTRUCTIVE_WRITES_ADMITTED, false);
+test('the shipped destructive gate admits a scheduled main run, and only that, to write', async () => {
+  assert.equal(DESTRUCTIVE_WRITES_ADMITTED, true);
+  const scheduled = client(records(5));
+  const result = await reconcileShipped(scheduled);
+  assert.equal(result.mode, 'delete');
+  assert.equal(result.deleted, 2);
+  assert.equal(result.failed, 0);
+  assert.equal(result.reasons['destructive-gate-closed'], undefined);
+  assert.equal(writes(scheduled).length, 4);
+  // The same code stays read-only for a dispatch, for the explicit dry-run and for an untrusted trigger.
+  for (const options of [
+    { authority: { ...authority, eventName: 'workflow_dispatch' } },
+    { dryRun: true },
+  ]) {
+    const readOnly = client(records(5));
+    const dry = await reconcileShipped(readOnly, options);
+    assert.equal(dry.mode, 'dry-run');
+    assert.equal(dry.deleted, 0);
+    assert.deepEqual(writes(readOnly), []);
+  }
+});
+
+test('the gate constant is the only switch: closed, a scheduled run is read-only and says so', async () => {
   const github = client(records(5));
-  const result = await execute(github);
+  const result = await reconcileShipped(github, { destructive: false });
   assert.equal(result.mode, 'dry-run');
   assert.equal(result.candidate, 2);
   assert.equal(result.deleted, 0);
-  assert.equal(result.failed, 0);
   assert.equal(result.reasons['destructive-gate-closed'], 1);
   assert.deepEqual(writes(github), []);
 });
@@ -802,6 +828,83 @@ test('the same budget refusal after the inactive-status POST stays a failure', a
   assert.deepEqual(
     writes(github).map((call) => call.route),
     [`POST ${ROOT}/deployments/1/statuses`],
+  );
+});
+
+test('an unknown allowance funds nothing and the write boundary names the exact reason', () => {
+  const ctx = createContext({ github: {}, authority });
+  ctx.remaining = null;
+  assert.equal(funds(ctx, 1), false);
+  assert.throws(() => assertFunds(ctx, 1), /rate-unknown/);
+  ctx.remaining = 100;
+  assert.equal(funds(ctx, 1), false);
+  assert.throws(() => assertFunds(ctx, 1), /rate-reserve/);
+  ctx.remaining = 101;
+  assert.equal(funds(ctx, 1), true);
+  assert.doesNotThrow(() => assertFunds(ctx, 1));
+  ctx.remaining = 5000;
+  ctx.used = ctx.limit;
+  assert.equal(funds(ctx, 1), false);
+  assert.throws(() => assertFunds(ctx, 1), /request-budget/);
+});
+
+test('an allowance that the last read before the first write does not report funds no write', async () => {
+  const github = client(records(4), (route) => {
+    if (route.endsWith('/branches/main'))
+      return {
+        data: { commit: { sha: authority.sha } },
+        headers: { 'x-ratelimit-remaining': undefined },
+      };
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 0);
+  assert.ok(result.reasons['budget-limit'] > 0);
+  assert.equal(result.followUpRequired, true);
+  assert.deepEqual(writes(github), []);
+});
+
+for (const [remaining, reason] of [
+  ['100', 'rate-reserve'],
+  [undefined, 'rate-unknown'],
+])
+  test(`the DELETE is funded again after the inactive-status POST: allowance ${remaining ?? 'missing'} stops it as ${reason}`, async () => {
+    let mains = 0;
+    const github = client(records(4), (route) => {
+      if (route.endsWith('/branches/main') && ++mains === 2)
+        return {
+          data: { commit: { sha: authority.sha } },
+          headers: { 'x-ratelimit-remaining': remaining },
+        };
+    });
+    const result = await executeDestructive(github);
+    assert.equal(result.failed, 1);
+    assert.equal(result.reasons[reason], 1);
+    assert.equal(result.deleted, 0);
+    assert.equal(result.inactivated, 1);
+    assert.deepEqual(
+      writes(github).map((call) => call.route),
+      [`POST ${ROOT}/deployments/1/statuses`],
+    );
+    // The record stays inactive and is retired by a later pass without another POST.
+    const next = await executeDestructive(client(github.state));
+    assert.equal(next.failed, 0);
+    assert.equal(next.deleted, 1);
+  });
+
+test('a publication that lands between the two write boundaries stops the DELETE and the run', async () => {
+  let lists = 0;
+  const github = client(records(6), (route, _parameters, state) => {
+    // The third list read is the revalidation that follows the inactive-status POST.
+    if (route.includes('?environment=') && ++lists === 3) state.push(record(99));
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['current-moved'], 1);
+  assert.equal(result.deleted, 0);
+  assert.deepEqual(
+    writes(github).map((call) => call.route),
+    [`POST ${ROOT}/deployments/3/statuses`],
   );
 });
 

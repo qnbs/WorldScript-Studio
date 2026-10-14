@@ -9,6 +9,7 @@ import {
   validId,
 } from './evidence.mjs';
 import {
+  assertFunds,
   createContext,
   funds,
   inventory,
@@ -241,6 +242,8 @@ async function retire(session, candidate) {
     const settled = await settle(session, candidate, fresh);
     if (settled.skip) return skip(run, settled.skip);
   }
+  // QNBS-v3: the inactive-status POST and its revalidation change the allowance, so the DELETE is funded again from the evidence of the last response; an unknown or spent allowance stops the run with the record left inactive.
+  assertFunds(ctx, DELETE_COST);
   await write(ctx, `DELETE ${ROOT}/deployments/${candidate.id}`);
   run.result.deleted += 1;
   session.records = session.records.filter((record) => record.id !== candidate.id);

@@ -10,11 +10,18 @@ const BACKOFF_CAP_MS = 2000;
 export const READ_ATTEMPTS = 3;
 const RATE_RESERVE = 100;
 
-// QNBS-v3: a cost is funded only when it fits both the local request counter and the live rate allowance last reported by GitHub, with a reserve kept for CI.
+// QNBS-v3: a cost is funded only when it fits both the local request counter and a live rate allowance that GitHub reported with the last response, with a reserve kept for CI; an unknown allowance funds nothing, so a response without a usable rate header can never leave a stale budget behind to pay for a write.
 export function funds(ctx, cost) {
   const room = ctx.used + cost <= ctx.limit;
-  const rate = ctx.remaining === null || ctx.remaining >= RATE_RESERVE + cost;
+  const rate = ctx.remaining !== null && ctx.remaining >= RATE_RESERVE + cost;
   return room && rate;
+}
+
+// QNBS-v3: the write boundary re-proves the budget with fresh evidence and stops the run with the exact reason when it cannot be funded.
+export function assertFunds(ctx, cost) {
+  if (funds(ctx, cost)) return;
+  if (ctx.remaining === null) refuse('rate-unknown');
+  refuse(ctx.used + cost > ctx.limit ? 'request-budget' : 'rate-reserve');
 }
 
 export const defaultPause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

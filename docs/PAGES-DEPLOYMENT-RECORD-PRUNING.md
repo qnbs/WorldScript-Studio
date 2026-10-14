@@ -4,13 +4,15 @@ Owner: [#1028](https://github.com/qnbs/WorldScript-Studio/issues/1028).
 This procedure concerns GitHub deployment **records** for `github-pages` only.
 Vercel/provider objects and all other environments are outside its authority.
 
-**Status: implemented, not enabled.** The destructive path is closed twice, independently:
-`DESTRUCTIVE_WRITES_ADMITTED` in `scripts/pages-pruning/policy.mjs` is `false`, and the workflow
-token holds `deployments: read` only. A scheduled run, even if the workflow is switched on in the
-Actions UI, therefore performs the full read-only reconciliation, reports `destructive-gate-closed`,
-and cannot write. Opening the gate needs both reviewed changes plus the owner decision below; a test
-pins that the permission and the constant move together. Manual dispatch has no deletion input and
-always runs read-only. A local read-only inventory needs no workflow enablement:
+**Status: admitted by this reviewed change, switched on separately.** The destructive path is
+open exactly where all of these hold together: `DESTRUCTIVE_WRITES_ADMITTED` in
+`scripts/pages-pruning/policy.mjs` is `true`, the job token holds `deployments: write` (a test pins
+that the permission and the constant move together), the trigger is the `schedule` of `main`, and
+the workflow is enabled in the Actions UI, which is a separate operator step after the
+resulting-`main` proof (owner sequence below). Manual dispatch has no deletion input and always
+runs read-only, as does `--dry-run`. If the constant is set back to `false` the same code runs the
+full read-only reconciliation and reports `destructive-gate-closed`. A local read-only inventory
+needs no workflow enablement:
 
 ```sh
 node scripts/prune-pages-deployments.mjs --dry-run
@@ -165,17 +167,32 @@ A read-only dry-run costs 18, 96, 147 and 349 requests for 6, 50, 100 and 300 re
 ## Writer fence
 
 GitHub offers no compare-and-delete tied to a status version, so no check can make the final read
-and the write atomic. What is and is not protected:
+and the write atomic. The fence is therefore a bounded one, and this is exactly what it covers:
+
+1. **What a DELETE can reach.** Only a record that, at the last read, is not among the newest
+   three, not the current or rollback publication, not held, has proven provenance, and whose
+   latest status is an inactive Pages status that this run recognised. The record is deployment
+   metadata: deleting it does not remove the published site, and the current and rollback records
+   are never candidates.
+2. **Two write boundaries.** Before the inactive-status POST and again before the DELETE, the run
+   re-reads the list, the candidate and both slot histories, re-proves their runs and jobs and
+   re-reads `main`; the last of those reads ends the check, and nothing but a budget decision
+   (no request) stands between it and the DELETE. The exposure is that one round trip.
+3. **Failure is closed.** Any mid-run change in the publication order, the candidate, the slots,
+   the inventory or `main` stops the run before the write; a failed or ambiguous POST never reaches
+   the DELETE; writes are never retried; an unknown or spent rate allowance stops the run after the
+   POST with the record left inactive (`rate-unknown`, `rate-reserve`).
 
 | Writer | Effect on a chosen candidate | Handling |
 | --- | --- | --- |
-| Pages publisher (`ci.yml` `deploy`) | A publication creates a **new** record; it cannot give an old record a success status. A stale snapshot is therefore never less protective than the fresh state (a test checks this for successful, failed and in-flight arrivals). | Structurally safe; mid-run arrivals stop the run (`current-moved`) before any write. |
+| Pages publisher (`ci.yml` `deploy`) | A publication creates a **new** record; it cannot give an old record a success status. A stale snapshot is therefore never less protective than the fresh state (a test checks this for successful, failed and in-flight arrivals). | Structurally safe; a publication that lands anywhere before the last read stops the run (`current-moved`), also between the two boundaries (tested). One landing inside the final round trip cannot make a candidate protected, only add a newer record. |
 | In-repository status writers | None other than the publisher and this workflow exist; a test pins the set of workflows that can write deployment records. | Mechanical. |
-| Changes to the hold list on main | A hold landing between the final trusted-main check and the DELETE would not stop that delete. | **Not fenced.** Gate closed. |
-| External status writers (PAT holders, third-party Apps) | Could add a success status to an old record. | **Not fenced.** Gate closed. |
+| Changes to the hold list on main | A hold landing between the final trusted-main check and the DELETE would not stop that delete. | **Bounded residual:** one round trip. The hold file is read at the executing SHA and `main` is re-read before each write, so a hold merged earlier always stops the run. A hold that must survive a run in progress is protected by disabling the workflow first (`gh workflow disable`), which is the documented procedure for a new hold. |
+| External status writers (PAT holders, third-party Apps) | Could add a success status to an old record. | **Bounded residual:** a write inside the same round trip. The principal holds credentials that can delete the record directly, so this adds no authority (see the publication-proof residual); any earlier write changes the candidate fingerprint or the order and stops the run. |
 
 The pruning concurrency group serializes pruning invocations only. It does not serialize the
-publisher, hold changes or external writers, and must not be read as a fence.
+publisher, hold changes or external writers, and must not be read as a fence. The publisher is
+deliberately not put into a shared group: a queued deploy can be replaced by a newer pending run.
 
 ## Capacity
 
@@ -190,17 +207,19 @@ belong to #550/QNB-41; no monetary or CPU savings are inferred from workflow-sta
 
 ## Owner enablement sequence
 
-1. Merge only after exact-head full CI/security/signature/governance success and substantive
-   independent review; prove resulting-main CI/CodeQL and Production separately.
-2. Record a current, zero-write dry-run; reconcile the evidence holds with their owners.
-3. Decide the open fence items: how hold changes are frozen during the run window, and whether
-   external status writers are excluded by policy or by a shared serialization with the publisher.
-   Adding the publisher to a shared concurrency group needs its own review because a queued
-   deploy can be replaced by a newer pending run.
-4. Obtain a separate explicit owner decision, then open the gate in one reviewed change that sets
-   `DESTRUCTIVE_WRITES_ADMITTED` to `true` and restores `deployments: write` for the job. This
-   PR/CLI does not perform that action. Observe the first admitted scheduled pass and assert
-   counts, protected IDs and unchanged non-Pages inventory.
+1. The reviewed change that sets `DESTRUCTIVE_WRITES_ADMITTED` to `true` and grants
+   `deployments: write` to the job merges only after exact-head full CI/security/signature/
+   governance success and substantive independent review; resulting-`main` CI/CodeQL and the
+   Pages deployment are proven separately. Merging it enables nothing: the workflow stays
+   disabled in the Actions UI.
+2. Record a current, zero-write dry-run on the new `main` (`node scripts/prune-pages-deployments.mjs
+   --dry-run`) with `UNKNOWN = 0`, the current and rollback publication, the six evidence holds and
+   the newest three; check the site over HTTPS.
+3. Enable the workflow (`gh workflow enable prune-deployments.yml`) as a separate operator action
+   and observe the first scheduled or dispatched-with-writes-admitted pass: at most ten records
+   deleted, every protected ID and every other environment unchanged, site still healthy.
+4. Any `UNKNOWN`, 404/409/429, header-less allowance, protected-object change or fence doubt stops
+   the run; the response is `gh workflow disable prune-deployments.yml` until the cause is
+   repaired.
 
-Until those steps are complete, implementation/review/operational verification remain
-separate states.
+Implementation, review and operational verification remain separate states.
