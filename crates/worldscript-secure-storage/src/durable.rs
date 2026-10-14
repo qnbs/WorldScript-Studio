@@ -144,6 +144,16 @@ pub enum DirectoryDurability {
 ///     }
 /// }
 /// ```
+/// What a path is itself, without following a link ([`DurableFs::entry_kind`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryKind {
+    File,
+    Directory,
+    /// A symbolic link, or on Windows a junction or another reparse point.
+    Link,
+    Other,
+}
+
 pub trait DurableFs {
     type File: Write;
     /// Creates `path`, failing if anything already exists there.
@@ -173,6 +183,13 @@ pub trait DurableFs {
     /// [`StdFs`] removes with `std::fs::remove_dir`.
     fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
         let _ = dir;
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
+    /// What `path` is itself, without following a link: a regular file, a directory, a link or
+    /// something else. Provided with a default that states no answer (`Unsupported`), like
+    /// [`Self::remove_dir`]; [`StdFs`] answers with `std::fs::symlink_metadata`.
+    fn entry_kind(&mut self, path: &Path) -> io::Result<EntryKind> {
+        let _ = path;
         Err(io::Error::from(io::ErrorKind::Unsupported))
     }
     /// Persists the directory's entries where the platform can confirm it.
@@ -265,6 +282,19 @@ impl DurableFs for StdFs {
 
     fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
         fs::remove_dir(dir)
+    }
+
+    fn entry_kind(&mut self, path: &Path) -> io::Result<EntryKind> {
+        let kind = fs::symlink_metadata(path)?.file_type();
+        Ok(if kind.is_symlink() {
+            EntryKind::Link
+        } else if kind.is_dir() {
+            EntryKind::Directory
+        } else if kind.is_file() {
+            EntryKind::File
+        } else {
+            EntryKind::Other
+        })
     }
 
     #[cfg(unix)]

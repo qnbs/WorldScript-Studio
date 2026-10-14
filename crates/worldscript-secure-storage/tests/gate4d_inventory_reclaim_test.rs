@@ -74,11 +74,10 @@ fn dead_pending_directories_are_removed_with_their_residue_and_the_parent_is_syn
     assert_eq!(
         (
             done.pending_removed,
-            done.sets_removed,
             done.files_removed,
             done.preserved.is_empty()
         ),
-        (2, 0, 6, true)
+        (2, 6, true)
     );
     assert_eq!(names_in(&scenario.inventory()), BTreeSet::new());
     assert!(fs.synced.contains(&scenario.inventory()));
@@ -153,69 +152,6 @@ fn promote_two_sets(scenario: &mut Scenario) -> Promoted {
     digests
 }
 
-#[test]
-fn a_set_is_removed_only_against_an_authenticated_manifest_that_names_another() {
-    let mut scenario = Scenario::new();
-    let digests = promote_two_sets(&mut scenario);
-    let (committed, orphan) = (set_name(&digests.committed), set_name(&digests.orphan));
-    let done = scenario.sweep(&mut StdFs).unwrap();
-    let names = names_in(&scenario.inventory());
-    assert_eq!(
-        (
-            done.sets_removed,
-            names.contains(&committed),
-            names.contains(&orphan),
-            kept(&done).contains(&(committed.clone(), KeepReason::Committed))
-        ),
-        (1, true, false, true)
-    );
-    // The journal moves on: the committed set is now an older set that its own revision's manifest names.
-    scenario.advance(&manifest_at(5));
-    let later = scenario.sweep(&mut StdFs).unwrap();
-    assert_eq!(
-        (
-            later.sets_removed,
-            kept(&later).contains(&(committed, KeepReason::NamedByManifest))
-        ),
-        (0, true)
-    );
-}
-
-#[test]
-fn a_set_of_the_next_revision_is_kept_until_the_journal_has_moved_past_it() {
-    let scenario = Scenario::new();
-    let staged = scenario.stage(5);
-    scenario.promote(&staged);
-    let name = set_name(&staged.successor().journal_page_set_digest);
-    let done = scenario.sweep(&mut StdFs).unwrap();
-    assert_eq!(
-        (
-            done.sets_removed,
-            kept(&done).contains(&(name, KeepReason::LiveRevision))
-        ),
-        (0, true)
-    );
-}
-
-#[test]
-fn a_set_whose_manifest_cannot_be_read_is_kept() {
-    let mut scenario = Scenario::new();
-    let staged = scenario.stage(5);
-    scenario.promote(&staged);
-    scenario.advance(&manifest_at(4));
-    scenario.advance(&manifest_at(5));
-    std::fs::remove_file(generation_path(scenario.path(), 4)).unwrap();
-    let name = set_name(&staged.successor().journal_page_set_digest);
-    let done = scenario.sweep(&mut StdFs).unwrap();
-    assert_eq!(
-        (
-            done.sets_removed,
-            kept(&done).contains(&(name, KeepReason::ManifestUnproven))
-        ),
-        (0, true)
-    );
-}
-
 /// The first page file of the pending directory of `staged`.
 fn first_page_file(staged: &StagedCapture) -> PathBuf {
     generation_path(&staged.pending_dir().join("page-0"), 4)
@@ -282,18 +218,75 @@ fn a_page_moved_to_another_slot_is_not_ours() {
 }
 
 #[test]
-fn an_empty_set_directory_proves_nothing_and_is_kept() {
+fn stored_page_sets_are_left_to_the_inheritance_slice() {
     let mut scenario = Scenario::new();
-    let name = set_name(&[0x5a; 32]);
-    std::fs::create_dir_all(scenario.inventory().join(&name).join("page-0")).unwrap();
-    scenario.advance(&manifest_at(4));
+    let digests = promote_two_sets(&mut scenario);
+    let sets = [set_name(&digests.committed), set_name(&digests.orphan)];
+    let done = scenario.sweep(&mut StdFs).unwrap();
+    let names = names_in(&scenario.inventory());
+    let expected: BTreeSet<_> = sets
+        .iter()
+        .map(|name| (name.clone(), KeepReason::StoredSet))
+        .collect();
+    assert_eq!(
+        (
+            kept(&done),
+            sets.iter().all(|name| names.contains(name)),
+            done.pending_removed
+        ),
+        (expected, true, 2)
+    );
+}
+
+#[test]
+fn a_journal_in_recovery_required_is_refused_before_anything_is_deleted() {
+    let mut scenario = with_two_dead_pending_dirs();
+    let mut refused = manifest_at(6);
+    refused.phase = phase_code::RECOVERY_REQUIRED;
+    refused.recovery_reason_code = 1;
+    scenario.advance(&refused);
+    let before = tree_under(scenario.path());
+    let mut observed = ObservedFs::new();
+    let outcome = scenario.sweep(&mut observed);
+    assert_eq!(
+        (
+            outcome,
+            observed.created_nothing(),
+            observed.removed_dirs.is_empty(),
+            tree_under(scenario.path())
+        ),
+        (Err(ReclaimError::RecoveryRequired), true, true, before)
+    );
+}
+
+#[test]
+fn asking_for_removal_never_touches_an_inventory_entry() {
+    let scenario = with_two_dead_pending_dirs();
+    let probe = scenario.inventory().join("reclaim-probe");
+    std::fs::create_dir(&probe).unwrap();
     let done = scenario.sweep(&mut StdFs).unwrap();
     assert_eq!(
         (
-            done.sets_removed,
-            kept(&done).contains(&(name, KeepReason::Unproven))
+            probe.is_dir(),
+            kept(&done).contains(&("reclaim-probe".to_owned(), KeepReason::Unrecognised))
         ),
-        (0, true)
+        (true, true)
+    );
+}
+
+#[test]
+fn a_failed_sync_is_repeated_by_the_rerun_even_when_nothing_is_left_to_remove() {
+    let scenario = with_two_dead_pending_dirs();
+    let mut failing = ObservedFs::new();
+    failing.fail_sync_of = Some(scenario.inventory());
+    let stopped = scenario.sweep(&mut failing);
+    assert!(matches!(stopped, Err(ReclaimError::Io(_))), "{stopped:?}");
+    assert_eq!(names_in(&scenario.inventory()), BTreeSet::new());
+    let mut healthy = ObservedFs::new();
+    let rerun = scenario.sweep(&mut healthy).unwrap();
+    assert_eq!(
+        (rerun, healthy.synced.contains(&scenario.inventory())),
+        (Reclaimed::default(), true)
     );
 }
 
@@ -406,3 +399,30 @@ fn a_failed_file_removal_stops_before_any_directory_is_removed() {
     assert!(failing.removed_dirs.is_empty());
     assert_eq!(names_in(&scenario.inventory()).len(), 2);
 }
+
+#[test]
+fn the_real_file_system_removes_only_an_empty_directory() {
+    let dir = TempDir::new();
+    let full = dir.0.join("full");
+    std::fs::create_dir_all(&full).unwrap();
+    std::fs::write(full.join("kept.bin"), b"x").unwrap();
+    let file = dir.0.join("file");
+    std::fs::write(&file, b"x").unwrap();
+    let empty = dir.0.join("empty");
+    std::fs::create_dir(&empty).unwrap();
+    let outcomes = [
+        StdFs.remove_dir(&full).is_err(),
+        StdFs.remove_dir(&file).is_err(),
+        StdFs.remove_dir(&empty).is_ok(),
+        StdFs.remove_dir(&empty).is_err(),
+    ];
+    assert_eq!(
+        (outcomes, full.join("kept.bin").exists(), file.exists()),
+        ([true; 4], true, true)
+    );
+}
+
+/// A link planted below `inventory/` is never followed (Unix only: links need no privilege there).
+#[cfg(unix)]
+#[path = "gate4d_inventory_reclaim_test/links.rs"]
+mod links;

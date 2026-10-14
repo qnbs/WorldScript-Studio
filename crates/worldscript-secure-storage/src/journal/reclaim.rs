@@ -1,52 +1,63 @@
 //! Gate 4 slice R1: reclaiming abandoned inventory staging (§10.1.1).
 //!
-//! Three things under `<journal-dir>/inventory/` outlive the attempt that made them and are never
-//! authority, never named by a manifest that is read and never read themselves:
+//! A streaming capture stages its pages in a private pending directory before the page-set digest, which
+//! names their final place, is known:
 //!
 //! ```text
-//! pending-<revision>-<random>/page-<i>/generation-<g>.wsr1   a streaming capture that was killed or dropped
-//! <hex(page-set digest)>/page-<i>/generation-<g>.wsr1        a stored page set no manifest adopted
-//! page-<i>/ (empty), generation-<g>.wsr1.tmp-<op>-<g>        what either attempt left around its pages
+//! <journal-dir>/inventory/pending-<revision>-<random>/page-<i>/generation-<g>.wsr1
 //! ```
 //!
-//! [`reclaim_abandoned_inventory`] removes exactly what it can prove dead, and preserves everything
-//! else:
+//! A capture that was killed, or finished and dropped without `discard`, leaves its files there, and every
+//! attempt leaves empty `page-<i>` directories. None of it is authority, a manifest never names it and
+//! nothing reads it. [`reclaim_with_binding`] removes exactly what it can prove dead and preserves
+//! everything else:
 //!
 //! * A pending directory of revision `rev <= R` (`R` the committed revision) is dead: a promotion needs
-//!   `rev == R + 1`, and `R` only grows. Revision `R + 1` is never swept: a live attempt, a retry candidate
-//!   or a prepared root may own it.
-//! * A page-set directory is removed only when every page file in it carries one generation `g <= R`
-//!   and the authenticated manifest generation `g`, read by its exact path, names *another* page-set
-//!   digest: the set of a discarded attempt at a revision that was committed with a different set. The
-//!   committed set, a set that its own revision's manifest names, a set whose manifest cannot be read
-//!   and a set at `R + 1` or above are kept. A set is not removed for being older: a later slice may
-//!   let a newer set inherit pages of an older one.
-//! * Every file must open under the journal key as this operation's page at its index and generation,
-//!   with the operation's journal envelope epoch. A set is validated completely before its first removal;
-//!   one entry that is not of the grammar, or does not authenticate, keeps the whole directory.
+//!   `rev == R + 1`, and `R` only grows. Revision `R + 1` and above is never swept: a live attempt, a retry
+//!   candidate or a prepared root may own it. The proof is the name and `R`, so the sweep needs no clock
+//!   and cannot go stale: a caller that is behind the journal sees a smaller `R` and removes less.
+//! * Every file in it must open under the journal key as this operation's page at its index, at the
+//!   directory's revision, with the operation's journal envelope epoch (staging links
+//!   `generation-<g>.wsr1.tmp-<op>-<g>` of the attempt included). A directory is validated completely
+//!   before its first removal; one entry outside the grammar, one that does not authenticate or one that
+//!   is not a plain directory or file keeps the whole directory. Removal then walks the directory again,
+//!   re-authenticating each file just before it is unlinked, so memory stays bounded and a file that
+//!   changed in between stops the sweep.
+//! * Only plain entries are followed: `inventory/`, every directory below it and every page file must be
+//!   what [`DurableFs::entry_kind`] says without following a link. A link, a junction or anything else
+//!   keeps its directory, so a link planted under a pending directory's name can never make the sweep
+//!   authenticate, and then unlink, the pages of another directory through it.
+//! * Stored page sets (`inventory/<hex digest>`) are not touched. Proving a set abandoned from the
+//!   generation of its pages is sound only while a set holds pages of exactly its own revision; once a
+//!   later slice lets a set inherit unchanged pages of older generations, the revision that owns a set can
+//!   no longer be read from its files, so reclaiming sets belongs to that slice.
 //!
-//! The caller is the committed owner under the fence and the journal mutex, and the committed manifest
-//! is read back from the root-named generation. Removal is never retried: a failure stops the sweep, what
-//! was removed stays removed, and a rerun continues. The file system must state a directory removal
-//! ([`DurableFs::remove_dir`]); one that does not is refused before anything is deleted.
+//! The sweep is the committed owner's: the journal mutex and the fence are taken, the root-named manifest
+//! generation is read back and compared, and a journal in `RECOVERY_REQUIRED` is refused (destructive
+//! cleanup is blocked until explicit recovery, §10.3). Callers outside the crate use
+//! [`reclaim_abandoned_inventory`](crate::reclaim_abandoned_inventory), which reads the binding from the
+//! committed root instead of taking it from the caller. Removal is never retried: a failure stops the
+//! sweep, what was removed stays removed and a rerun continues; a rerun always syncs `inventory/` again.
+//! The file system must state a directory removal and an entry kind; one that does not is refused before
+//! anything is deleted.
 
 use std::ffi::OsString;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use crate::durable::{DurableFs, WriteOperationId};
+use crate::durable::{generation_path, DurableFs, EntryKind, WriteOperationId};
 use crate::root::LiveMigration;
 
 use super::durable::{
-    acquire_journal_durable_guard, assert_root_named_manifest, load_manifest_generation,
-    migration_page_identity, JournalDurableContext, JournalDurableError,
+    acquire_journal_durable_guard, assert_root_named_manifest, migration_page_identity,
+    JournalDurableContext, JournalDurableError,
 };
 use super::inventory_read::MAX_PAGE_ENVELOPE_BYTES;
 use super::inventory_store::has_epoch;
 use super::manifest::{journal_envelope_epoch, JournalManifest};
 use super::page::JournalPage;
+use super::phase_code;
 use super::state::{assert_page_promote_authority, MigrationFence};
-use super::MAX_JOURNAL_INVENTORY_ENTRIES;
 
 const INVENTORY_DIR: &str = "inventory";
 const PENDING_PREFIX: &str = "pending-";
@@ -54,10 +65,13 @@ const PAGE_DIR_PREFIX: &str = "page-";
 const GENERATION_PREFIX: &str = "generation-";
 const ENVELOPE_SUFFIX: &str = ".wsr1";
 const STAGING_INFIX: &str = ".tmp-";
-/// A name that matches no directory of the inventory grammar: the probe of the removal support.
+/// A name below a path that cannot exist, used to ask a file system what it supports.
 const PROBE: &str = "reclaim-probe";
 /// The most entries the sweep reads from `inventory/` before it refuses the listing.
 const MAX_INVENTORY_ENTRIES: usize = 65_536;
+/// The most page directories one pending directory holds before the sweep keeps it: the format allows more
+/// pages than any inventory is expected to need, and every name is held in memory during a pass.
+const MAX_PAGE_DIRS: usize = 100_000;
 /// The most files one page directory holds: the page itself and the staging links of earlier attempts.
 const MAX_FILES_PER_PAGE_DIR: usize = 64;
 
@@ -77,10 +91,16 @@ pub enum ReclaimError {
     /// A stale fence, a caller that is not the committed owner, or a manifest that is not the root-named
     /// generation.
     Authority(JournalDurableError),
-    /// The file system states no directory removal; nothing was deleted.
+    /// The journal is in `RECOVERY_REQUIRED`: destructive cleanup waits for explicit recovery.
+    RecoveryRequired,
+    /// The file system states no directory removal or no entry kind; nothing was deleted.
     RemovalUnsupported,
+    /// `inventory/` is a link or not a directory: nothing below it is looked at.
+    UnsafeInventory,
     /// `inventory/` holds more entries than the sweep reads; nothing was deleted.
     TooManyEntries,
+    /// An entry that passed validation no longer does: it changed while the sweep ran. The sweep stopped.
+    Changed,
     /// Removing or syncing failed; what was removed before stays removed and a rerun continues.
     Io(ErrorKind),
 }
@@ -91,18 +111,13 @@ pub enum KeepReason {
     /// The revision is above the committed one: a live attempt, a retry candidate or a prepared root
     /// may own it.
     LiveRevision,
-    /// The page set the committed manifest names.
-    Committed,
-    /// A page set that the manifest of its own revision names.
-    NamedByManifest,
-    /// The manifest generation of the set's revision is absent or does not authenticate, so nothing
-    /// proves the set was abandoned.
-    ManifestUnproven,
-    /// A set with no page file at all, or whose page files carry different generations.
-    Unproven,
+    /// A stored page set, which a later slice reclaims (module docs).
+    StoredSet,
     /// A name or an entry that is not of the inventory grammar.
     Unrecognised,
-    /// A file that does not open as this operation's page.
+    /// A link, a junction or another entry that is not a plain directory or file.
+    Linked,
+    /// A file that does not open as this operation's page at the directory's revision.
     Unauthenticated,
     /// A listing that could not be read, or was larger than the sweep reads.
     Unreadable,
@@ -119,13 +134,15 @@ pub struct Preserved {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Reclaimed {
     pub pending_removed: usize,
-    pub sets_removed: usize,
     pub files_removed: usize,
     pub preserved: Vec<Preserved>,
 }
 
-/// Removes the abandoned staging of the inventory of the journal in `ctx.dir` (module docs).
-pub fn reclaim_abandoned_inventory<F: DurableFs>(
+/// Removes the abandoned pending directories of the inventory of the journal in `ctx.dir` against the
+/// binding in `request` (module docs). Reachable outside the crate only with the test-only `test-support`
+/// feature, so that a production caller cannot supply the binding; the root-bound entry point is
+/// [`reclaim_abandoned_inventory`](crate::reclaim_abandoned_inventory).
+pub fn reclaim_with_binding<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     request: &ReclaimRequest<'_>,
 ) -> Result<Reclaimed, ReclaimError> {
@@ -134,14 +151,21 @@ pub fn reclaim_abandoned_inventory<F: DurableFs>(
     assert_page_promote_authority(manifest, Some(request.committed))
         .map_err(|error| authority(JournalDurableError::Authority(error)))?;
     assert_root_named_manifest(ctx, manifest, request.committed).map_err(authority)?;
+    if manifest.phase == phase_code::RECOVERY_REQUIRED {
+        return Err(ReclaimError::RecoveryRequired);
+    }
     let epoch = journal_envelope_epoch(manifest)
         .map_err(|error| authority(JournalDurableError::Journal(error)))?;
     let inventory = ctx.dir.join(INVENTORY_DIR);
-    probe_removal(ctx.fs, &inventory)?;
+    probe_support(ctx, manifest.journal_revision)?;
+    match ctx.fs.entry_kind(&inventory) {
+        Ok(EntryKind::Directory) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Reclaimed::default()),
+        _ => return Err(ReclaimError::UnsafeInventory),
+    }
     let names = match ctx.fs.list_dir_at_most(&inventory, MAX_INVENTORY_ENTRIES) {
         Ok(Some(names)) => names,
         Ok(None) => return Err(ReclaimError::TooManyEntries),
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Reclaimed::default()),
         Err(error) => return Err(ReclaimError::Io(error.kind())),
     };
     let sweep = Sweep {
@@ -156,14 +180,24 @@ fn authority(error: JournalDurableError) -> ReclaimError {
     ReclaimError::Authority(error)
 }
 
-/// A directory removal on a name that does not exist: a file system without removal answers
-/// `Unsupported`, one with it `NotFound`. Nothing is created or deleted.
-fn probe_removal<F: DurableFs>(fs: &mut F, inventory: &Path) -> Result<(), ReclaimError> {
-    match fs.remove_dir(&inventory.join(PROBE)) {
-        Err(error) if error.kind() == ErrorKind::Unsupported => {
-            Err(ReclaimError::RemovalUnsupported)
-        }
-        _ => Ok(()),
+/// Asks the file system for a directory removal and an entry kind under a path that cannot exist: the
+/// root-named manifest generation is a file, so nothing below it is a directory to remove. A file system
+/// that states neither answers `Unsupported`; any other answer means it does. Nothing is created or
+/// deleted.
+fn probe_support<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    revision: u64,
+) -> Result<(), ReclaimError> {
+    let missing = generation_path(ctx.dir, revision).join(PROBE);
+    let removal = ctx.fs.remove_dir(&missing).err();
+    let kind = ctx.fs.entry_kind(&missing).err();
+    let unsupported = |error: Option<std::io::Error>| {
+        error.is_some_and(|error| error.kind() == ErrorKind::Unsupported)
+    };
+    if unsupported(removal) || unsupported(kind) {
+        Err(ReclaimError::RemovalUnsupported)
+    } else {
+        Ok(())
     }
 }
 
@@ -176,15 +210,52 @@ struct Sweep<'a> {
 /// What a directory below `inventory/` is, by its name alone.
 enum Named {
     Pending { revision: u64 },
-    Set { digest: [u8; 32] },
+    Set,
     Other,
 }
 
-/// A directory that passed the whole validation and may be removed.
-struct Verified {
-    generation: Option<u64>,
-    files: Vec<PathBuf>,
-    page_dirs: Vec<PathBuf>,
+/// One walk over a pending directory: first only checking, then removing.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Walk {
+    Check,
+    Remove,
+}
+
+/// One pass over a pending directory: the revision its files must carry and whether it checks or removes.
+#[derive(Clone, Copy)]
+struct Pass {
+    revision: u64,
+    walk: Walk,
+}
+
+/// Why a walk did not complete: the entry is kept, or the sweep stops.
+enum Stop {
+    Keep(KeepReason),
+    Fatal(ReclaimError),
+}
+
+impl From<ReclaimError> for Stop {
+    fn from(error: ReclaimError) -> Self {
+        Stop::Fatal(error)
+    }
+}
+
+impl Walk {
+    /// What a refusal means: while checking the directory is kept, while removing it changed under us.
+    fn refuse(self, reason: KeepReason) -> Stop {
+        match self {
+            Walk::Check => Stop::Keep(reason),
+            Walk::Remove => Stop::Fatal(ReclaimError::Changed),
+        }
+    }
+}
+
+/// One page file of an attempt: where it is, which page of the operation it stands for and at which
+/// generation.
+struct PageFile<'a> {
+    path: &'a Path,
+    index: u32,
+    generation: u64,
 }
 
 impl Sweep<'_> {
@@ -202,124 +273,119 @@ impl Sweep<'_> {
             };
             let dir = self.inventory.join(text);
             match self.judge(ctx, text, &dir) {
-                Err(reason) => done.keep(text, reason),
-                Ok((verified, pending)) => {
-                    done.files_removed += remove_all(ctx.fs, &dir, &verified)?;
-                    if pending {
-                        done.pending_removed += 1;
-                    } else {
-                        done.sets_removed += 1;
-                    }
+                Ok(files) => {
+                    done.files_removed += files;
+                    done.pending_removed += 1;
                 }
+                Err(Stop::Keep(reason)) => done.keep(text, reason),
+                Err(Stop::Fatal(error)) => return Err(error),
             }
         }
-        if done.pending_removed + done.sets_removed > 0 {
-            ctx.fs
-                .sync_dir(&self.inventory)
-                .map_err(|error| ReclaimError::Io(error.kind()))?;
-        }
+        // Always, so that a rerun after a failed sync establishes the durability the failed run did not.
+        ctx.fs
+            .sync_dir(&self.inventory)
+            .map_err(|error| ReclaimError::Io(error.kind()))?;
         Ok(done)
     }
 
-    /// Whether `dir` is provably abandoned: the validated plan and whether it is a pending directory, or
-    /// the reason to keep it.
+    /// Removes `dir` if it is a provably dead pending directory and returns the number of files removed,
+    /// or says why it is kept.
     fn judge<F: DurableFs>(
         &self,
         ctx: &mut JournalDurableContext<'_, F>,
         name: &str,
         dir: &Path,
-    ) -> Result<(Verified, bool), KeepReason> {
+    ) -> Result<usize, Stop> {
         let committed = self.manifest.journal_revision;
         match parse_name(name) {
-            Named::Other => Err(KeepReason::Unrecognised),
-            Named::Pending { revision } if revision > committed => Err(KeepReason::LiveRevision),
+            Named::Other => Err(Stop::Keep(KeepReason::Unrecognised)),
+            Named::Set => Err(Stop::Keep(KeepReason::StoredSet)),
+            Named::Pending { .. } if !is_plain(ctx.fs, dir, EntryKind::Directory) => {
+                Err(Stop::Keep(KeepReason::Linked))
+            }
+            Named::Pending { revision } if revision > committed => {
+                Err(Stop::Keep(KeepReason::LiveRevision))
+            }
             Named::Pending { revision } => {
-                let verified = self.verify(ctx, dir)?;
-                match verified.generation {
-                    Some(found) if found != revision => Err(KeepReason::Unproven),
-                    _ => Ok((verified, true)),
-                }
-            }
-            Named::Set { digest } if digest == self.manifest.journal_page_set_digest => {
-                Err(KeepReason::Committed)
-            }
-            Named::Set { digest } => {
-                let verified = self.verify(ctx, dir)?;
-                let generation = verified.generation.ok_or(KeepReason::Unproven)?;
-                if generation > committed {
-                    return Err(KeepReason::LiveRevision);
-                }
-                self.assert_other_digest(ctx, generation, &digest)?;
-                Ok((verified, false))
+                let check = Pass {
+                    revision,
+                    walk: Walk::Check,
+                };
+                self.walk(ctx, dir, check)?;
+                let remove = Pass {
+                    revision,
+                    walk: Walk::Remove,
+                };
+                let files = self.walk(ctx, dir, remove)?;
+                removed(ctx.fs.remove_dir(dir))?;
+                Ok(files)
             }
         }
     }
 
-    /// The authenticated manifest of `generation` must exist and name a page set other than `digest`.
-    fn assert_other_digest<F: DurableFs>(
-        &self,
-        ctx: &mut JournalDurableContext<'_, F>,
-        generation: u64,
-        digest: &[u8; 32],
-    ) -> Result<(), KeepReason> {
-        let named =
-            load_manifest_generation(ctx, &self.manifest.operation_id, generation, self.epoch)
-                .map_err(|_| KeepReason::ManifestUnproven)?;
-        if named.journal_page_set_digest == *digest {
-            Err(KeepReason::NamedByManifest)
-        } else {
-            Ok(())
-        }
-    }
-
-    /// Lists and authenticates everything below `dir`; refuses on the first entry that is not ours.
-    fn verify<F: DurableFs>(
+    /// Visits every page directory and file below the pending directory `dir`, holding only the names of
+    /// one directory at a time; while removing, a file is re-authenticated just before it is unlinked and
+    /// a page directory is removed once it is empty.
+    fn walk<F: DurableFs>(
         &self,
         ctx: &mut JournalDurableContext<'_, F>,
         dir: &Path,
-    ) -> Result<Verified, KeepReason> {
-        let max_pages = MAX_JOURNAL_INVENTORY_ENTRIES as usize;
-        let pages = list(ctx.fs, dir, max_pages)?;
-        let mut verified = Verified {
-            generation: None,
-            files: Vec::new(),
-            page_dirs: Vec::new(),
-        };
+        pass: Pass,
+    ) -> Result<usize, Stop> {
+        let walk = pass.walk;
+        let pages = list(ctx.fs, dir, MAX_PAGE_DIRS).map_err(|reason| walk.refuse(reason))?;
+        let mut files = 0;
         for name in pages {
             let index = name
                 .to_str()
                 .and_then(|text| text.strip_prefix(PAGE_DIR_PREFIX))
                 .and_then(canonical_u64)
                 .and_then(|index| u32::try_from(index).ok())
-                .ok_or(KeepReason::Unrecognised)?;
+                .ok_or_else(|| walk.refuse(KeepReason::Unrecognised))?;
             let page_dir = dir.join(&name);
-            self.verify_page_dir(ctx, &page_dir, index, &mut verified)?;
-            verified.page_dirs.push(page_dir);
+            if !is_plain(ctx.fs, &page_dir, EntryKind::Directory) {
+                return Err(walk.refuse(KeepReason::Linked));
+            }
+            files += self.walk_page_dir(ctx, (&page_dir, index), pass)?;
+            if walk == Walk::Remove {
+                removed(ctx.fs.remove_dir(&page_dir))?;
+            }
         }
-        Ok(verified)
+        Ok(files)
     }
 
-    fn verify_page_dir<F: DurableFs>(
+    fn walk_page_dir<F: DurableFs>(
         &self,
         ctx: &mut JournalDurableContext<'_, F>,
-        page_dir: &Path,
-        index: u32,
-        verified: &mut Verified,
-    ) -> Result<(), KeepReason> {
-        for name in list(ctx.fs, page_dir, MAX_FILES_PER_PAGE_DIR)? {
+        (page_dir, index): (&Path, u32),
+        pass: Pass,
+    ) -> Result<usize, Stop> {
+        let Pass { revision, walk } = pass;
+        let names =
+            list(ctx.fs, page_dir, MAX_FILES_PER_PAGE_DIR).map_err(|reason| walk.refuse(reason))?;
+        let mut files = 0;
+        for name in names {
             let generation = name
                 .to_str()
                 .and_then(parse_generation_file)
-                .ok_or(KeepReason::Unrecognised)?;
-            if verified.generation.is_some_and(|seen| seen != generation) {
-                return Err(KeepReason::Unproven);
-            }
+                .filter(|generation| *generation == revision)
+                .ok_or_else(|| walk.refuse(KeepReason::Unrecognised))?;
             let path = page_dir.join(&name);
-            self.assert_ours(ctx, &path, index, generation)?;
-            verified.generation = Some(generation);
-            verified.files.push(path);
+            if !is_plain(ctx.fs, &path, EntryKind::File) {
+                return Err(walk.refuse(KeepReason::Linked));
+            }
+            let file = PageFile {
+                path: &path,
+                index,
+                generation,
+            };
+            self.assert_ours(ctx, &file)
+                .map_err(|reason| walk.refuse(reason))?;
+            if walk == Walk::Remove && removed(ctx.fs.remove_file(&path))? {
+                files += 1;
+            }
         }
-        Ok(())
+        Ok(files)
     }
 
     /// The file opens under the journal key as this operation's page `index` at `generation`, with the
@@ -327,10 +393,13 @@ impl Sweep<'_> {
     fn assert_ours<F: DurableFs>(
         &self,
         ctx: &mut JournalDurableContext<'_, F>,
-        path: &Path,
-        index: u32,
-        generation: u64,
+        file: &PageFile<'_>,
     ) -> Result<(), KeepReason> {
+        let PageFile {
+            path,
+            index,
+            generation,
+        } = *file;
         let envelope = ctx
             .fs
             .read_at_most(path, MAX_PAGE_ENVELOPE_BYTES)
@@ -360,32 +429,19 @@ impl Reclaimed {
     }
 }
 
-/// Files first, then the page directories, then the set directory itself. A name that is already gone
-/// is a rerun of an earlier sweep, not a failure; any other error stops the sweep.
-fn remove_all<F: DurableFs>(
-    fs: &mut F,
-    dir: &Path,
-    verified: &Verified,
-) -> Result<usize, ReclaimError> {
-    let mut files = 0;
-    for file in &verified.files {
-        if removed(fs.remove_file(file))? {
-            files += 1;
-        }
-    }
-    for page_dir in &verified.page_dirs {
-        removed(fs.remove_dir(page_dir))?;
-    }
-    removed(fs.remove_dir(dir))?;
-    Ok(files)
-}
-
+/// A name that is already gone is a rerun of an earlier sweep, not a failure; any other error stops it.
 fn removed(result: std::io::Result<()>) -> Result<bool, ReclaimError> {
     match result {
         Ok(()) => Ok(true),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
         Err(error) => Err(ReclaimError::Io(error.kind())),
     }
+}
+
+/// Whether `path` is itself of the `wanted` kind, not a link to one; a path that cannot be told apart is
+/// not plain.
+fn is_plain<F: DurableFs>(fs: &mut F, path: &Path, wanted: EntryKind) -> bool {
+    fs.entry_kind(path).is_ok_and(|kind| kind == wanted)
 }
 
 fn list<F: DurableFs>(fs: &mut F, dir: &Path, limit: usize) -> Result<Vec<OsString>, KeepReason> {
@@ -405,9 +461,10 @@ fn parse_name(name: &str) -> Named {
             None => Named::Other,
         };
     }
-    match parse_digest(name) {
-        Some(digest) => Named::Set { digest },
-        None => Named::Other,
+    if is_lower_hex(name, 64) {
+        Named::Set
+    } else {
+        Named::Other
     }
 }
 
@@ -423,19 +480,12 @@ fn canonical_u64(text: &str) -> Option<u64> {
     }
 }
 
-fn parse_digest(name: &str) -> Option<[u8; 32]> {
-    if name.len() != 64
-        || !name
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-    {
-        return None;
-    }
-    let mut digest = [0u8; 32];
-    for (slot, pair) in digest.iter_mut().zip(name.as_bytes().chunks(2)) {
-        *slot = u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok()?;
-    }
-    Some(digest)
+/// Lowercase hexadecimal of exactly `length` characters.
+fn is_lower_hex(text: &str, length: usize) -> bool {
+    let all_hex = text
+        .bytes()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+    text.len() == length && all_hex
 }
 
 /// `generation-<g>.wsr1`, or the staging link `generation-<g>.wsr1.tmp-<operation>-<g>` of an attempt.
@@ -473,10 +523,7 @@ mod tests {
         ] {
             assert!(matches!(parse_name(odd), Named::Other), "{odd}");
         }
-        assert!(matches!(
-            parse_name(&"ab".repeat(32)),
-            Named::Set { digest } if digest == [0xab; 32]
-        ));
+        assert!(matches!(parse_name(&"ab".repeat(32)), Named::Set));
         assert!(matches!(parse_name(&"AB".repeat(32)), Named::Other));
         assert!(matches!(parse_name(&"ab".repeat(31)), Named::Other));
     }

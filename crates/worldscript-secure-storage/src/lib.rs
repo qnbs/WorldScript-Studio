@@ -67,9 +67,10 @@ pub use authority::{
     commit_final_inventory_capture, commit_final_streamed_inventory_capture,
     commit_inventory_capture, commit_journal_checkpoint, commit_journal_takeover,
     commit_lease_renewal, commit_phase_transition, commit_streamed_inventory_capture,
-    AuthorityError, BindingAdvance, CatalogChange, CatalogCommit, CatalogRecoveryReason,
-    CatalogStep, CommittedShard, InventoryCapture, JournalCheckpoint, JournalSource,
-    JournalTakeoverCommit, LoadedCatalog, SessionBegin, StagingSession, StreamedInventoryCapture,
+    reclaim_abandoned_inventory, AuthorityError, BindingAdvance, CatalogChange, CatalogCommit,
+    CatalogRecoveryReason, CatalogStep, CommittedShard, InventoryCapture, InventoryReclaim,
+    JournalCheckpoint, JournalSource, JournalTakeoverCommit, LoadedCatalog, SessionBegin,
+    StagingSession, StreamedInventoryCapture,
 };
 #[cfg(feature = "test-support")]
 pub use authority::{list_records, load_catalog};
@@ -91,7 +92,7 @@ pub use conversion::{
 pub use disposition::{disposition, is_r15_record_class, Disposition};
 pub use durable::{
     generation_path, stage_and_promote, stage_and_promote_envelope, staging_path,
-    DirectoryDurability, DurableFs, PromotedGeneration, StageFailure, StageFailureKind,
+    DirectoryDurability, DurableFs, EntryKind, PromotedGeneration, StageFailure, StageFailureKind,
     StageRequest, StageStep, StagingResidue, StdFs, WriteOperationId,
 };
 pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
@@ -110,21 +111,22 @@ pub use journal::{
     mark_done, mark_recovery, operation_type, ordinary_mutating_writes_admitted, page_ref_for,
     phase_code, promote_inventory_set_fenced, promote_manifest_fenced, promote_page_fenced,
     promote_staged_inventory_fenced, publish_manifest_fenced, publish_phase_transition_fenced,
-    publish_renewal_fenced, publish_takeover_fenced, reclaim_abandoned_inventory,
-    root_named_journal_epoch, seal_inventory_pages, source_authority_kind,
-    source_physical_authority_kind, source_scheme_id, transition_phase, verify_stored_inventory,
-    with_fence, CandidateConflict, CaptureStart, ForeignInventoryExtension,
-    InventoryDigestVerifier, InventorySetWrite, JournalCheckpointCursor, JournalDurableContext,
-    JournalDurableError, JournalDurableGuard, JournalError, JournalInventoryEntry,
-    JournalInventoryExtent, JournalInventorySource, JournalManifest, JournalPage, JournalPageRef,
-    JournalRevision, JournalTakeover, KeepReason, ManifestEnvelopeDigest, ManifestRead,
-    MigrationExecutionError, MigrationFence, MigrationPhase, Preserved, PublishedManifest,
-    ReclaimError, ReclaimRequest, Reclaimed, RecoveryReasonCode, SealedPage, StagedCapture,
-    StagedPage, StagedPromotion, StreamedCapture, VerifiedInventory,
+    publish_renewal_fenced, publish_takeover_fenced, root_named_journal_epoch,
+    seal_inventory_pages, source_authority_kind, source_physical_authority_kind, source_scheme_id,
+    transition_phase, verify_stored_inventory, with_fence, CandidateConflict, CaptureStart,
+    ForeignInventoryExtension, InventoryDigestVerifier, InventorySetWrite, JournalCheckpointCursor,
+    JournalDurableContext, JournalDurableError, JournalDurableGuard, JournalError,
+    JournalInventoryEntry, JournalInventoryExtent, JournalInventorySource, JournalManifest,
+    JournalPage, JournalPageRef, JournalRevision, JournalTakeover, KeepReason,
+    ManifestEnvelopeDigest, ManifestRead, MigrationExecutionError, MigrationFence, MigrationPhase,
+    Preserved, PublishedManifest, ReclaimError, Reclaimed, RecoveryReasonCode, SealedPage,
+    StagedCapture, StagedPage, StagedPromotion, StreamedCapture, VerifiedInventory,
     JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION,
     JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES,
     MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES, MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
 };
+#[cfg(feature = "test-support")]
+pub use journal::{reclaim_with_binding, ReclaimRequest};
 pub use journal_locator::{
     authenticate_journal, AuthenticatedJournal, JournalLocator, JournalLookup, LocationFault,
     LocatorError,

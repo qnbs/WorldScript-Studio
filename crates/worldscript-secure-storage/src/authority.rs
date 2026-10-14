@@ -50,10 +50,11 @@ use crate::journal::{
     assert_renewal_successor, assert_takeover_successor, load_authoritative_manifest,
     load_inventory_page, promote_inventory_set_fenced, promote_staged_inventory_fenced,
     publish_manifest_fenced, publish_phase_transition_fenced, publish_renewal_fenced,
-    publish_takeover_fenced, verify_stored_inventory, CandidateConflict, CaptureStart,
-    InventorySetWrite, JournalDurableContext, JournalDurableError, JournalInventoryEntry,
-    JournalManifest, JournalPage, JournalTakeover, MigrationExecutionError, MigrationFence,
-    SealedPage, StagedCapture, StagedPromotion, StreamedCapture, VerifiedInventory,
+    publish_takeover_fenced, reclaim_with_binding, verify_stored_inventory, CandidateConflict,
+    CaptureStart, InventorySetWrite, JournalDurableContext, JournalDurableError,
+    JournalInventoryEntry, JournalManifest, JournalPage, JournalTakeover, MigrationExecutionError,
+    MigrationFence, ReclaimError, ReclaimRequest, Reclaimed, SealedPage, StagedCapture,
+    StagedPromotion, StreamedCapture, VerifiedInventory,
 };
 use crate::journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 use crate::marker::content_digest;
@@ -142,6 +143,8 @@ pub enum AuthorityError {
     /// Another root commit event is in flight, so the phase transition did not start. Nothing was
     /// written; the admission is still held and the call may be repeated.
     RootBusy,
+    /// The sweep of abandoned inventory staging refused or stopped ([`reclaim_abandoned_inventory`]).
+    Reclaim(ReclaimError),
 }
 
 impl From<RootStoreError> for AuthorityError {
@@ -906,6 +909,44 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
         journal_dir: begin.journal.dir.to_path_buf(),
         operation: begin.journal.operation.clone(),
     })
+}
+
+/// Removes the abandoned pending directories of the inventory of the journal the committed root binds,
+/// with the journal key routed from the root (Gate 4 slice R1).
+///
+/// The binding is read from the committed root and the journal key is resolved through the key-epoch
+/// registry, as [`begin_streamed_capture`] does; the committed manifest is loaded by the exact root-named
+/// path under that key, and the caller supplies no key, manifest or binding, only the fence of the owner
+/// it claims to be. A caller that is not the committed owner at the committed revision (a former owner
+/// after a takeover, or an owner whose own checkpoint moved the journal on) is refused before anything is
+/// deleted, and a journal in `RECOVERY_REQUIRED` is refused too. No root lock is held: the sweep removes
+/// only what a smaller or equal committed revision already proves dead, and the committed revision only
+/// grows. See `journal::reclaim` for the rules.
+pub fn reclaim_abandoned_inventory<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    request: InventoryReclaim<'_>,
+) -> Result<Reclaimed, AuthorityError> {
+    let live = committed_route(fs, provider, layout)?.live;
+    let key = route_journal_key(fs, provider, layout, request.journal)?;
+    let mut ctx = journal_context(&mut *fs, request.journal, &key, CandidateConflict::Refuse);
+    let committed =
+        load_authoritative_manifest(&mut ctx, &live).map_err(AuthorityError::Journal)?;
+    let sweep = ReclaimRequest {
+        committed_manifest: &committed,
+        fence: request.fence,
+        committed: &live,
+    };
+    reclaim_with_binding(&mut ctx, &sweep).map_err(AuthorityError::Reclaim)
+}
+
+/// Where the journal is and which owner asks for its inventory staging to be reclaimed.
+#[derive(Clone, Copy)]
+pub struct InventoryReclaim<'a> {
+    pub journal: JournalSource<'a>,
+    /// The owner's token at the committed revision.
+    pub fence: &'a MigrationFence,
 }
 
 /// What the committed root names for a bound migration: the binding, and the key route and active

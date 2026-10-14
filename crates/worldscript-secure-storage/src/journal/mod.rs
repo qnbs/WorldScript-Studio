@@ -140,9 +140,11 @@ pub use inventory_store::{
 };
 pub use manifest::{journal_envelope_epoch, JournalManifest, JournalPageRef, ManifestRead};
 pub use page::JournalPage;
-pub use reclaim::{
-    reclaim_abandoned_inventory, KeepReason, Preserved, ReclaimError, ReclaimRequest, Reclaimed,
-};
+#[cfg(feature = "test-support")]
+pub use reclaim::{reclaim_with_binding, ReclaimRequest};
+#[cfg(not(feature = "test-support"))]
+pub(crate) use reclaim::{reclaim_with_binding, ReclaimRequest};
+pub use reclaim::{KeepReason, Preserved, ReclaimError, Reclaimed};
 pub use renewal::assert_renewal_successor;
 pub use state::{
     allows_phase_transition, assert_binding_successor, assert_fence, assert_live_binding,

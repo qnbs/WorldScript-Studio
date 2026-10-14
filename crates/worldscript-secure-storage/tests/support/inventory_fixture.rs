@@ -111,7 +111,7 @@ impl Scenario {
             fence,
             committed: &self.journal.live,
         };
-        reclaim_abandoned_inventory(&mut ctx, &request)
+        reclaim_with_binding(&mut ctx, &request)
     }
 }
 

@@ -117,6 +117,10 @@ impl DurableFs for ObservedFs {
         self.inner.remove_file(path)
     }
 
+    fn entry_kind(&mut self, path: &Path) -> io::Result<worldscript_secure_storage::EntryKind> {
+        self.inner.entry_kind(path)
+    }
+
     fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
         if self.fail_remove_dir {
             return Err(io::Error::other("injected directory removal failure"));
