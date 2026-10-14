@@ -57,6 +57,10 @@ use crate::seal::Key;
 
 const WRITER_RESOURCE: &str = "ordinary-writers";
 
+/// The identity a journal read presents. It names a write, and a read stages nothing, so the read needs
+/// no fresh randomness: an unavailable entropy source must not turn a list or a read into a failure.
+const JOURNAL_READ_OPERATION: &str = "00000000000000000000000000000000";
+
 /// The logical identity and physical locators of one request. Locators never supply authority.
 #[derive(Clone, Copy)]
 pub struct ProtectedRecord<'a> {
@@ -305,8 +309,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
     /// writes, and its binding exactly `bound`. `Some(bound)` admits the operation; any other outcome
     /// leaves the E1 barrier standing. Only an admission fault or a busy root event is an error of its
     /// own: the provider was observed already, so a busy event cannot be the `None` that the snapshot API
-    /// promises for contention before any observation, and an unavailable randomness source is not a
-    /// refusal of the migration.
+    /// promises for contention before any observation.
     fn open_window<F: DurableFs>(
         &self,
         fs: &mut F,
@@ -319,8 +322,9 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let event = admission
             .try_root_commit()?
             .ok_or(ProtectedError::RootBusy)?;
-        let operation =
-            WriteOperationId::generate().map_err(|_| KeyProviderError::RandomnessUnavailable)?;
+        let Some(operation) = WriteOperationId::parse(JOURNAL_READ_OPERATION) else {
+            return Ok(None);
+        };
         let provider = PublishedProvider(&self.cell);
         let lookup = JournalLookup {
             locator,
