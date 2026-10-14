@@ -607,3 +607,7 @@ mod locator;
 /// The `PREPARE`/`DONE` window (W1): an ordinary operation over a bound root, admitted by the journal.
 #[path = "gate4e_phase_transition_test/window.rs"]
 mod window;
+/// The journal owner's checkpoints against the window (W1): they hold no admission, so they race with it.
+#[cfg(unix)]
+#[path = "gate4e_phase_transition_test/window_races.rs"]
+mod window_races;
