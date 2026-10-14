@@ -1414,10 +1414,13 @@ Gate 5 scanner's obligation (recorded on #923). This slice opens no window; the 
 retarget the root between a check and its use is not excluded (see "Residual, not closed" below). Until
 handle-relative I/O (H1) closes those windows the sweep is part of no production build: the module, the root-bound
 entry, `InventoryReclaim` and the sweep's error and result types are compiled and exported only with the
-test-only `test-support` feature, like `commit_root` and `protected_write`. No crate of the repository depends on
-`worldscript-secure-storage`, and `tests/feature_isolation_test.rs` fails if a manifest outside the crate enables
-a test-only feature for a production build, if `default` enables one, or if a definition or export of the sweep
-loses its gate; the production configuration (`cargo check` without features) compiles without the module, so
+test-only `test-support` feature, like `commit_root` and `protected_write`. No package of the resolved dependency graph of
+the repository depends on `worldscript-secure-storage` (`cargo tree -i` finds it only as its own dev-dependency in
+the `crates/` workspace and not at all in `src-tauri/`), and `tests/feature_isolation_test.rs` fails if any
+`Cargo.lock` lists a dependent (renames, aliases, optional and target dependencies included, because the lockfile
+is what Cargo resolved), if `default` enables a test-only feature directly or through other features, or if a
+definition or export of the sweep loses its gate; a legitimate production dependency (Gate 5) must replace the
+first rule with a feature-graph check against `cargo metadata`. The production configuration (`cargo check` without features) compiles without the module, so
 nothing outside it can name the sweep. The slice delivers and proves the logic below; activating it is gated on
 the H1 acceptance criteria at the end of this section.
 
@@ -1448,7 +1451,7 @@ removes a junction like an empty directory (the Windows case is tested with `mkl
 
 | Entry below `inventory/` | Rule |
 |---|---|
-| `pending-<rev>-<tag>`, `rev <= R` | Dead: a promotion needs `rev == R + 1` and `R` only grows. Removed after a complete check: every page directory and file is a plain entry of the grammar, every file carries generation `rev` and opens as this operation's page at its index with the journal envelope epoch (staging links `generation-<g>.wsr1.tmp-<op>-<g>` included). Removal walks the directory again and re-authenticates each file just before it is unlinked, holding the names of one directory at a time (at most as many page directories as the format admits entries, 1,000,000, with `page-<index>` of an index below that bound, and 64 files per page directory; more keeps the directory). |
+| `pending-<rev>-<tag>`, `rev <= R` | Dead: a promotion needs `rev == R + 1` and `R` only grows. Removed after a complete check: every page directory and file is a plain entry of the grammar, every file carries generation `rev` and opens as this operation's page at its index with the journal envelope epoch (staging links `generation-<g>.wsr1.tmp-<tag>-<g>` included, and only with the tag of the pending directory itself: a link of another operation keeps the whole directory), and the page has entries: an authenticated page without any is something no capture stages and is kept. Removal walks the directory again and re-authenticates each file just before it is unlinked, holding the names of one directory at a time (at most as many page directories as the format admits entries, 1,000,000, with `page-<index>` of an index below that bound, and 64 files per page directory; more keeps the directory). |
 | `pending-<rev>-<tag>`, `rev > R` | Kept (`LiveRevision`): a live attempt, a retry candidate or a prepared root may own revision `R + 1`. |
 | `pending-0-<tag>` | Not recognised (kept): a capture stages for the committed revision plus one, so revision zero is never a capture. |
 | `<hex digest>` (a stored page set) | Kept (`StoredSet`), never read. Proving a set abandoned from the generation of its pages is sound only while a set holds pages of exactly its own revision; a later slice that lets a set inherit unchanged pages of older generations (I1) makes the owning revision unreadable from the files, so that slice owns reclaiming sets. |

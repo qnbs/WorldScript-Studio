@@ -49,6 +49,7 @@ use std::path::{Path, PathBuf};
 use crate::durable::{generation_path, DurableFs, EntryKind, WriteOperationId};
 use crate::root::LiveMigration;
 
+use super::capture::assert_page_not_empty;
 use super::durable::{
     acquire_journal_durable_guard, assert_root_named_manifest, migration_page_identity,
     JournalDurableContext, JournalDurableError,
@@ -212,7 +213,12 @@ struct Sweep<'a> {
 
 /// What a directory below `inventory/` is, by its name alone.
 enum Named {
-    Pending { revision: u64 },
+    /// `pending-<revision>-<tag>`: the tag is the capture's own operation identity, which every staging
+    /// link below the directory carries too.
+    Pending {
+        revision: u64,
+        tag: String,
+    },
     Set,
     Other,
 }
@@ -224,10 +230,12 @@ enum Walk {
     Remove,
 }
 
-/// One pass over a pending directory: the revision its files must carry and whether it checks or removes.
+/// One pass over a pending directory: the revision its files must carry, the tag its staging links must
+/// carry and whether it checks or removes.
 #[derive(Clone, Copy)]
-struct Pass {
+struct Pass<'a> {
     revision: u64,
+    tag: &'a str,
     walk: Walk,
 }
 
@@ -306,17 +314,19 @@ impl Sweep<'_> {
             Named::Pending { .. } if !is_plain(ctx.fs, dir, EntryKind::Directory) => {
                 Err(Stop::Keep(KeepReason::Linked))
             }
-            Named::Pending { revision } if revision > committed => {
+            Named::Pending { revision, .. } if revision > committed => {
                 Err(Stop::Keep(KeepReason::LiveRevision))
             }
-            Named::Pending { revision } => {
+            Named::Pending { revision, tag } => {
                 let check = Pass {
                     revision,
+                    tag: &tag,
                     walk: Walk::Check,
                 };
                 self.walk(ctx, dir, check)?;
                 let remove = Pass {
                     revision,
+                    tag: &tag,
                     walk: Walk::Remove,
                 };
                 let files = self.walk(ctx, dir, remove)?;
@@ -333,7 +343,7 @@ impl Sweep<'_> {
         &self,
         ctx: &mut JournalDurableContext<'_, F>,
         dir: &Path,
-        pass: Pass,
+        pass: Pass<'_>,
     ) -> Result<usize, Stop> {
         let walk = pass.walk;
         let pages = list(ctx.fs, dir, MAX_PAGE_DIRS).map_err(|reason| walk.refuse(reason))?;
@@ -362,16 +372,20 @@ impl Sweep<'_> {
         &self,
         ctx: &mut JournalDurableContext<'_, F>,
         (page_dir, index): (&Path, u32),
-        pass: Pass,
+        pass: Pass<'_>,
     ) -> Result<usize, Stop> {
-        let Pass { revision, walk } = pass;
+        let Pass {
+            revision,
+            tag,
+            walk,
+        } = pass;
         let names =
             list(ctx.fs, page_dir, MAX_FILES_PER_PAGE_DIR).map_err(|reason| walk.refuse(reason))?;
         let mut files = 0;
         for name in names {
             let generation = name
                 .to_str()
-                .and_then(parse_generation_file)
+                .and_then(|text| parse_generation_file(text, tag))
                 .filter(|generation| *generation == revision)
                 .ok_or_else(|| walk.refuse(KeepReason::Unrecognised))?;
             let path = page_dir.join(&name);
@@ -416,11 +430,12 @@ impl Sweep<'_> {
             .map_err(|_| KeepReason::Unauthenticated)?;
         let opened = JournalPage::open(ctx.key, &identity, generation, &envelope)
             .map_err(|_| KeepReason::Unauthenticated)?;
-        if opened.page_index() == index && opened.page_generation() == generation {
-            Ok(())
-        } else {
-            Err(KeepReason::Unauthenticated)
+        if opened.page_index() != index || opened.page_generation() != generation {
+            return Err(KeepReason::Unauthenticated);
         }
+        // A capture never stages an empty page (`StreamedCapture::stage_next`), so an authenticated empty
+        // one is not residue of any capture.
+        assert_page_not_empty(&opened).map_err(|_| KeepReason::Unrecognised)
     }
 }
 
@@ -468,7 +483,10 @@ fn parse_name(name: &str) -> Named {
         });
         return match parsed {
             // A capture stages for the committed revision plus one, so revision zero is never a capture.
-            Some((revision, _)) if revision >= 1 => Named::Pending { revision },
+            Some((revision, tag)) if revision >= 1 => Named::Pending {
+                revision,
+                tag: tag.as_str().to_owned(),
+            },
             _ => Named::Other,
         };
     }
@@ -499,8 +517,9 @@ fn is_lower_hex(text: &str, length: usize) -> bool {
     text.len() == length && all_hex
 }
 
-/// `generation-<g>.wsr1`, or the staging link `generation-<g>.wsr1.tmp-<operation>-<g>` of an attempt.
-fn parse_generation_file(name: &str) -> Option<u64> {
+/// `generation-<g>.wsr1`, or the staging link `generation-<g>.wsr1.tmp-<tag>-<g>` of the capture whose
+/// pending directory carries `tag`: a staging link of another operation is not residue of this capture.
+fn parse_generation_file(name: &str, tag: &str) -> Option<u64> {
     let rest = name.strip_prefix(GENERATION_PREFIX)?;
     let (generation, tail) = rest.split_once(ENVELOPE_SUFFIX)?;
     let generation = canonical_u64(generation)?;
@@ -508,8 +527,7 @@ fn parse_generation_file(name: &str) -> Option<u64> {
         return Some(generation);
     }
     let (operation, again) = tail.strip_prefix(STAGING_INFIX)?.rsplit_once('-')?;
-    (WriteOperationId::parse(operation).is_some() && canonical_u64(again) == Some(generation))
-        .then_some(generation)
+    (operation == tag && canonical_u64(again) == Some(generation)).then_some(generation)
 }
 
 #[cfg(test)]
@@ -521,7 +539,7 @@ mod tests {
         let tag = "0123456789abcdef0123456789abcdef";
         assert!(matches!(
             parse_name(&format!("pending-4-{tag}")),
-            Named::Pending { revision: 4 }
+            Named::Pending { revision: 4, ref tag } if tag == "0123456789abcdef0123456789abcdef"
         ));
         for odd in [
             "pending-0-0123456789abcdef0123456789abcdef",
@@ -543,9 +561,10 @@ mod tests {
     #[test]
     fn generation_files_follow_the_grammar_exactly() {
         let tag = "0123456789abcdef0123456789abcdef";
-        assert_eq!(parse_generation_file("generation-7.wsr1"), Some(7));
+        let other = "fedcba9876543210fedcba9876543210";
+        assert_eq!(parse_generation_file("generation-7.wsr1", tag), Some(7));
         assert_eq!(
-            parse_generation_file(&format!("generation-7.wsr1.tmp-{tag}-7")),
+            parse_generation_file(&format!("generation-7.wsr1.tmp-{tag}-7"), tag),
             Some(7)
         );
         for odd in [
@@ -556,8 +575,10 @@ mod tests {
             &format!("generation-7.wsr1.tmp-{tag}-8"),
             "generation-7.wsr1.tmp-short-7",
             "other-7.wsr1",
+            // A valid operation identity that is not the capture's own.
+            &format!("generation-7.wsr1.tmp-{other}-7"),
         ] {
-            assert_eq!(parse_generation_file(odd), None, "{odd}");
+            assert_eq!(parse_generation_file(odd, tag), None, "{odd}");
         }
     }
 }

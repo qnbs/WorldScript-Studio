@@ -1,8 +1,15 @@
 //! Gate 4 slice R1: the inventory sweep deletes by path, so it is part of no production build until
 //! handle-relative I/O (H1) closes the check-then-use windows. These checks keep it behind the test-only
-//! `test-support` feature: no manifest of the repository enables a test-only feature of this crate outside
-//! `[dev-dependencies]`, `default` does not enable one, and every export or definition of the sweep carries
-//! the feature gate. A production build that compiles without the feature cannot name the sweep at all.
+//! `test-support` feature, and they do it without trusting a hand-written reading of Cargo manifests:
+//!
+//! - No package in the resolved dependency graph of the repository (every `Cargo.lock`, which `--locked`
+//!   keeps equal to what Cargo resolves from the manifests, so renames, aliases, optional and target
+//!   dependencies are all covered) depends on this crate. Nothing can therefore request one of its
+//!   features, directly or through an alias. A legitimate production dependency (Gate 5) must replace
+//!   this rule with a feature-graph check against `cargo metadata`, not widen it silently.
+//! - `default` enables no test-only feature, directly or through other features.
+//! - Every export or definition of the sweep carries the feature gate, so a build without the feature
+//!   cannot name the sweep at all.
 
 use std::ffi::OsStr;
 use std::fs;
@@ -64,15 +71,144 @@ impl File {
     }
 }
 
-/// Text that can name a test-only feature of the crate.
-struct Text(String);
+/// One package of a `Cargo.lock`: its name and the names of the packages it depends on.
+struct Package {
+    name: String,
+    dependencies: Vec<String>,
+}
 
-impl Text {
-    fn enables_a_test_feature(&self) -> bool {
-        TEST_ONLY_FEATURES
-            .iter()
-            .any(|feature| self.0.contains(feature))
+impl Package {
+    fn parse(chunk: &str) -> Self {
+        let name = chunk
+            .lines()
+            .find_map(|line| line.strip_prefix("name = \"")?.strip_suffix('"'))
+            .unwrap_or_else(|| panic!("a lockfile package without a name: {chunk:.80}"));
+        let listed = chunk
+            .split_once("dependencies = [")
+            .map_or("", |(_, rest)| rest.split(']').next().unwrap_or(""));
+        let dependencies = listed
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .filter_map(|entry| entry.split(' ').next())
+            .map(str::to_owned)
+            .collect();
+        Package {
+            name: name.to_owned(),
+            dependencies,
+        }
     }
+
+    fn depends_on_the_crate(&self) -> bool {
+        self.name != CRATE && self.dependencies.iter().any(|name| name == CRATE)
+    }
+}
+
+/// A resolved dependency graph as Cargo records it.
+struct Lockfile {
+    packages: Vec<Package>,
+}
+
+impl Lockfile {
+    /// An unreadable lockfile is a failure, never an empty graph.
+    fn parse(text: &str) -> Self {
+        let packages: Vec<Package> = text
+            .split("\n[[package]]")
+            .skip(1)
+            .map(Package::parse)
+            .collect();
+        assert!(!packages.is_empty(), "a lockfile without packages");
+        Lockfile { packages }
+    }
+
+    fn read(path: &Path) -> Self {
+        Self::parse(&fs::read_to_string(path).unwrap())
+    }
+
+    fn dependents_of_the_crate(&self) -> Vec<&str> {
+        self.packages
+            .iter()
+            .filter(|package| package.depends_on_the_crate())
+            .map(|package| package.name.as_str())
+            .collect()
+    }
+
+    fn lists_the_crate(&self) -> bool {
+        self.packages.iter().any(|package| package.name == CRATE)
+    }
+}
+
+/// The paths directly inside `dir`; none when it cannot be read (the repository directories are absent
+/// when the crate is built outside the repository).
+fn children(dir: &Path) -> Vec<PathBuf> {
+    fs::read_dir(dir)
+        .map(|entries| entries.map(|entry| entry.unwrap().path()).collect())
+        .unwrap_or_default()
+}
+
+fn is_build_output(dir: &Path) -> bool {
+    dir.file_name()
+        .is_some_and(|name| name == "target" || name == "node_modules")
+}
+
+/// Every `Cargo.lock` at or below `dir`, build output excluded.
+fn lockfiles_below(dir: &Path) -> Vec<PathBuf> {
+    let (dirs, files): (Vec<_>, Vec<_>) = children(dir).into_iter().partition(|path| path.is_dir());
+    let here = files
+        .into_iter()
+        .filter(|path| path.file_name() == Some(OsStr::new("Cargo.lock")));
+    let below = dirs
+        .iter()
+        .filter(|path| !is_build_output(path))
+        .flat_map(|path| lockfiles_below(path));
+    here.chain(below).collect()
+}
+
+fn lockfiles_of_the_repository() -> Vec<PathBuf> {
+    let root = crate_dir().join("../..");
+    ["crates", "src-tauri"]
+        .iter()
+        .flat_map(|top| lockfiles_below(&root.join(top)))
+        .collect()
+}
+
+#[test]
+fn no_package_of_the_repository_depends_on_the_crate() {
+    if !crate_dir().join("../../src-tauri").exists() {
+        return;
+    }
+    let lockfiles = lockfiles_of_the_repository();
+    assert!(lockfiles.len() >= 2, "{lockfiles:?}");
+    let offenders: Vec<String> = lockfiles
+        .iter()
+        .flat_map(|path| {
+            Lockfile::read(path)
+                .dependents_of_the_crate()
+                .into_iter()
+                .map(|name| format!("{}: {name}", path.display()))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert!(offenders.is_empty(), "{offenders:?}");
+}
+
+#[test]
+fn the_lockfile_scan_sees_the_workspace_and_a_dependent() {
+    let workspace = crate_dir().join("../Cargo.lock");
+    if workspace.exists() {
+        assert!(Lockfile::read(&workspace).lists_the_crate());
+    }
+    let dependent = "version = 4\n\n[[package]]\nname = \"app\"\nversion = \"1.0.0\"\ndependencies = [\n \"serde\",\n \"worldscript-secure-storage 0.1.0\",\n]\n\n[[package]]\nname = \"worldscript-secure-storage\"\nversion = \"0.1.0\"\ndependencies = [\n \"serde\",\n]\n";
+    let lookalike = "[[package]]\nname = \"worldscript-secure-storage\"\ndependencies = [\n \"serde\",\n]\n\n[[package]]\nname = \"other\"\ndependencies = [\n \"worldscript-secure-storage-extra\",\n]\n";
+    let found =
+        [dependent, lookalike].map(|text| Lockfile::parse(text).dependents_of_the_crate().len());
+    assert_eq!(found, [1, 0]);
+}
+
+#[test]
+#[should_panic(expected = "without packages")]
+fn an_unreadable_lockfile_is_a_failure_not_an_empty_graph() {
+    Lockfile::parse("version = 4\n");
 }
 
 /// One `[section]` of a manifest.
@@ -82,15 +218,6 @@ struct Section {
 }
 
 impl Section {
-    fn is_dev(&self) -> bool {
-        self.header.contains("dev-dependencies")
-    }
-
-    /// A table of one dependency (`[dependencies.name]`) spreads that dependency's keys over its body.
-    fn is_dependency_table(&self) -> bool {
-        self.header.contains("dependencies.")
-    }
-
     /// The entries of the body: a line at bracket depth zero starts one, and an inline table or array
     /// that is spread over several lines stays in it.
     fn entries(&self) -> Vec<String> {
@@ -105,23 +232,6 @@ impl Section {
             depth -= line.matches(['}', ']']).count() as i32;
         }
         entries
-    }
-
-    /// The texts that can enable a feature of this crate: the whole body of a dependency table that names
-    /// the crate (by its table name, `package` or `path`), else each entry that names it.
-    fn texts_naming_the_crate(&self) -> Vec<Text> {
-        if self.is_dependency_table() {
-            let names_it = self.header.contains(CRATE) || self.body.contains(CRATE);
-            return names_it
-                .then(|| Text(self.body.clone()))
-                .into_iter()
-                .collect();
-        }
-        self.entries()
-            .into_iter()
-            .filter(|entry| entry.contains(CRATE))
-            .map(Text)
-            .collect()
     }
 }
 
@@ -145,18 +255,6 @@ impl Manifest {
 
     fn read(path: &Path) -> Self {
         Self::parse(&fs::read_to_string(path).unwrap())
-    }
-
-    /// The dependency entries that name this crate together with a test-only feature outside a
-    /// dev-dependency section.
-    fn test_features_outside_dev_dependencies(&self) -> Vec<String> {
-        self.sections
-            .iter()
-            .filter(|section| !section.is_dev())
-            .flat_map(Section::texts_naming_the_crate)
-            .filter(Text::enables_a_test_feature)
-            .map(|text| text.0.trim().to_owned())
-            .collect()
     }
 
     /// The `[features]` table: each feature with the features it turns on.
@@ -203,59 +301,6 @@ impl Manifest {
     }
 }
 
-/// The paths directly inside `dir`; none when it cannot be read (the repository directories are absent
-/// when the crate is built outside the repository).
-fn children(dir: &Path) -> Vec<PathBuf> {
-    fs::read_dir(dir)
-        .map(|entries| entries.map(|entry| entry.unwrap().path()).collect())
-        .unwrap_or_default()
-}
-
-fn is_build_output(dir: &Path) -> bool {
-    dir.file_name()
-        .is_some_and(|name| name == "target" || name == "node_modules")
-}
-
-/// Every `Cargo.toml` at or below `dir`, build output excluded.
-fn manifests_below(dir: &Path) -> Vec<PathBuf> {
-    let (dirs, files): (Vec<_>, Vec<_>) = children(dir).into_iter().partition(|path| path.is_dir());
-    let here = files
-        .into_iter()
-        .filter(|path| path.file_name() == Some(OsStr::new("Cargo.toml")));
-    let below = dirs
-        .iter()
-        .filter(|path| !is_build_output(path))
-        .flat_map(|path| manifests_below(path));
-    here.chain(below).collect()
-}
-
-fn manifests_of_the_repository() -> Vec<PathBuf> {
-    let root = crate_dir().join("../..");
-    ["crates", "src-tauri"]
-        .iter()
-        .flat_map(|top| manifests_below(&root.join(top)))
-        .collect()
-}
-
-fn is_own_manifest(path: &Path) -> bool {
-    path.canonicalize().unwrap() == File::CargoToml.path().canonicalize().unwrap()
-}
-
-#[test]
-fn no_manifest_enables_a_test_only_feature_of_the_crate_for_a_production_build() {
-    let offenders: Vec<String> = manifests_of_the_repository()
-        .into_iter()
-        .filter(|path| !is_own_manifest(path))
-        .flat_map(|path| {
-            Manifest::read(&path)
-                .test_features_outside_dev_dependencies()
-                .into_iter()
-                .map(move |entry| format!("{}: {entry}", path.display()))
-        })
-        .collect();
-    assert!(offenders.is_empty(), "{offenders:?}");
-}
-
 #[test]
 fn the_default_features_enable_no_test_only_feature() {
     let manifest = Manifest::read(&File::CargoToml.path());
@@ -277,30 +322,6 @@ fn the_default_closure_follows_aliases() {
     ];
     let enabled = cases.map(|text| Manifest::parse(text).default_enables_a_test_feature());
     assert_eq!(enabled, [true, true, false, false, false]);
-}
-
-#[test]
-fn the_scan_tells_a_dev_dependency_from_a_production_one() {
-    let cases = [
-        // A dev-dependency may enable it.
-        "[dev-dependencies]\nworldscript-secure-storage = { path = \"../x\", features = [\"test-support\"] }\n",
-        // Production: inline, as a table, spread over lines, an alias, and the feature before the package.
-        "[dependencies]\nworldscript-secure-storage = { path = \"../x\", features = [\"test-support\"] }\n",
-        "[dependencies.worldscript-secure-storage]\npath = \"../x\"\nfeatures = [\"test-randomness\"]\n",
-        "[dependencies]\nworldscript-secure-storage = {\n  path = \"../x\",\n  features = [\"test-support\"],\n}\n",
-        "[dependencies.secure]\npackage = \"worldscript-secure-storage\"\nfeatures = [\"test-support\"]\n",
-        "[dependencies]\nsecure = {\n  features = [\"test-support\"],\n  package = \"worldscript-secure-storage\",\n}\n",
-        "[target.'cfg(unix)'.dependencies]\nworldscript-secure-storage = { path = \"../x\", features = [\"test-support\"] }\n",
-        // Not this crate, or this crate without a test-only feature.
-        "[dependencies]\nserde = { features = [\"derive\", \"test-support\"] }\nworldscript-secure-storage = { path = \"../x\" }\n",
-        "[dependencies.other]\nfeatures = [\"test-support\"]\n[features]\ntest-support = []\n",
-    ];
-    let counts = cases.map(|text| {
-        Manifest::parse(text)
-            .test_features_outside_dev_dependencies()
-            .len()
-    });
-    assert_eq!(counts, [0, 1, 1, 1, 1, 1, 1, 0, 0]);
 }
 
 /// The lines of a source file.

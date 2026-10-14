@@ -42,11 +42,18 @@ fn name_of(dir: &Path) -> String {
 
 /// The staging link an earlier promotion of `pending`'s first page can leave beside it.
 fn leave_staging_link(pending: &Path, generation: u64) {
+    let tag = pending.file_name().unwrap().to_string_lossy();
+    let tag = tag.rsplit('-').next().unwrap();
+    leave_staging_link_of(pending, generation, tag);
+}
+
+/// A staging link beside the first page of `pending` that carries the operation `tag`, which is the
+/// capture's own for the link a killed attempt leaves.
+fn leave_staging_link_of(pending: &Path, generation: u64, tag: &str) {
     let page = pending.join("page-0");
     let from = page.join(format!("generation-{generation}.wsr1"));
     let to = page.join(format!(
-        "generation-{generation}.wsr1.tmp-{}-{generation}",
-        fresh_tag()
+        "generation-{generation}.wsr1.tmp-{tag}-{generation}"
     ));
     std::fs::copy(from, to).unwrap();
 }
@@ -170,6 +177,14 @@ fn nothing_that_is_not_ours_is_removed() {
     bytes[last] ^= 1;
     std::fs::write(&path, bytes).unwrap();
     std::fs::create_dir(foreign_page.pending_dir().join("not-a-page")).unwrap();
+    // A staging link of another operation is not residue of this capture, whatever its grammar.
+    let foreign_link = scenario.stage(3);
+    leave_staging_link_of(foreign_link.pending_dir(), 4, &fresh_tag());
+    // An authenticated page without entries is something no capture stages.
+    let empty_page = scenario.stage(3);
+    let empty = JournalPage::new(0, 4, Vec::new()).unwrap();
+    let sealed = seal_inventory_pages(&key(), &scenario.committed, &[empty]).unwrap();
+    std::fs::write(first_page_file(&empty_page), &sealed[0]).unwrap();
     let odd = scenario.inventory().join("keep-me");
     std::fs::create_dir_all(&odd).unwrap();
     // Revision zero is never a capture: an empty directory of that name is not ours either.
@@ -193,6 +208,11 @@ fn nothing_that_is_not_ours_is_removed() {
             name_of(foreign_page.pending_dir()),
             KeepReason::Unrecognised,
         ),
+        (
+            name_of(foreign_link.pending_dir()),
+            KeepReason::Unrecognised,
+        ),
+        (name_of(empty_page.pending_dir()), KeepReason::Unrecognised),
         ("keep-me".to_owned(), KeepReason::Unrecognised),
         (name_of(&zero), KeepReason::Unrecognised),
         (name_of(&beyond), KeepReason::Unrecognised),
