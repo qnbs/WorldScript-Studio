@@ -1,7 +1,7 @@
 //! Gate 4E E3a: the final inventory, the capture that runs in `ADMIT` and sets
 //! `final_inventory_captured`, is published only by the exclusively admitted final-capture commit. The
 //! ordinary capture commits publish the preliminary inventory and refuse the final one, the final
-//! commits refuse the preliminary one, and each refusal precedes the first read or write.
+//! commits refuse the preliminary one, and each refusal is decided before the file system is touched.
 
 use worldscript_secure_storage::{
     begin_streamed_capture, capture_inventory, commit_final_inventory_capture,
@@ -10,6 +10,7 @@ use worldscript_secure_storage::{
     StreamedInventoryCapture,
 };
 
+use super::faulty_fs::FaultyFs;
 use super::*;
 
 const FINAL_REFUSED: AuthorityError = AuthorityError::Journal(JournalDurableError::Authority(
@@ -51,6 +52,7 @@ fn capture_empty(
     bound: &mut Bound,
     committed: &JournalManifest,
     commit: Commit,
+    fs: &mut FaultyFs,
 ) -> Result<RootCommitted, AuthorityError> {
     let (successor, token) = empty_capture_of(committed);
     let operation = WriteOperationId::generate().unwrap();
@@ -66,7 +68,7 @@ fn capture_empty(
     let root_dir = bound.installation.root_dir.clone();
     match commit {
         Commit::Ordinary => commit_inventory_capture(
-            &mut StdFs,
+            fs,
             &mut bound.provider,
             RootLayout {
                 root_dir: &root_dir,
@@ -75,7 +77,7 @@ fn capture_empty(
         ),
         Commit::Final => {
             let mut admission = bound.installation.exclusive();
-            commit_final_inventory_capture(&mut admission, &mut StdFs, &mut bound.provider, capture)
+            commit_final_inventory_capture(&mut admission, fs, &mut bound.provider, capture)
         }
     }
 }
@@ -85,6 +87,7 @@ fn capture_empty_streamed(
     bound: &mut Bound,
     committed: &JournalManifest,
     commit: Commit,
+    fs: &mut FaultyFs,
 ) -> Result<RootCommitted, AuthorityError> {
     let operation = WriteOperationId::generate().unwrap();
     let root_dir = bound.installation.root_dir.clone();
@@ -117,7 +120,7 @@ fn capture_empty_streamed(
     };
     match commit {
         Commit::Ordinary => commit_streamed_inventory_capture(
-            &mut StdFs,
+            fs,
             &mut bound.provider,
             RootLayout {
                 root_dir: &root_dir,
@@ -128,7 +131,7 @@ fn capture_empty_streamed(
             let mut admission = bound.installation.exclusive();
             commit_final_streamed_inventory_capture(
                 &mut admission,
-                &mut StdFs,
+                fs,
                 &mut bound.provider,
                 capture,
             )
@@ -158,16 +161,33 @@ fn at_admit(commit_preliminary: Preliminary) -> (Bound, JournalManifest) {
 }
 
 fn preliminary_in_memory(bound: &mut Bound, discover: &JournalManifest) -> JournalManifest {
-    capture_empty(bound, discover, Commit::Ordinary).unwrap();
+    capture_empty(
+        bound,
+        discover,
+        Commit::Ordinary,
+        &mut FaultyFs::observing(),
+    )
+    .unwrap();
     bound.committed()
 }
 
 fn preliminary_streamed(bound: &mut Bound, discover: &JournalManifest) -> JournalManifest {
-    capture_empty_streamed(bound, discover, Commit::Ordinary).unwrap();
+    capture_empty_streamed(
+        bound,
+        discover,
+        Commit::Ordinary,
+        &mut FaultyFs::observing(),
+    )
+    .unwrap();
     bound.committed()
 }
 
-type Capturing = fn(&mut Bound, &JournalManifest, Commit) -> Result<RootCommitted, AuthorityError>;
+type Capturing = fn(
+    &mut Bound,
+    &JournalManifest,
+    Commit,
+    &mut FaultyFs,
+) -> Result<RootCommitted, AuthorityError>;
 
 /// Commits the preliminary inventory of the journal in `DISCOVER` and returns the committed manifest.
 type Preliminary = fn(&mut Bound, &JournalManifest) -> JournalManifest;
@@ -196,12 +216,17 @@ fn the_final_inventory_is_captured_only_under_the_exclusive_admission() {
     for way in both_ways() {
         let (mut bound, admit) = at_admit(way.preliminary);
         let before = snapshot(&bound);
+        let mut refused = FaultyFs::observing();
         assert_eq!(
-            (way.capture)(&mut bound, &admit, Commit::Ordinary).unwrap_err(),
+            (way.capture)(&mut bound, &admit, Commit::Ordinary, &mut refused).unwrap_err(),
             FINAL_REFUSED
         );
+        // The refusal touched neither the file system nor, by the snapshot, any durable resource.
+        assert_eq!(refused.calls(), 0);
         assert_eq!(snapshot(&bound), before);
-        (way.capture)(&mut bound, &admit, Commit::Final).unwrap();
+        let mut published = FaultyFs::observing();
+        (way.capture)(&mut bound, &admit, Commit::Final, &mut published).unwrap();
+        assert!(published.calls() > 0);
         let committed = bound.committed();
         assert!(committed.final_inventory_captured);
         assert_eq!(committed.phase, phase_code::ADMIT);
@@ -214,13 +239,21 @@ fn the_exclusive_final_capture_refuses_a_preliminary_inventory() {
     for way in both_ways() {
         let (mut bound, discover) = at_discover();
         let before = snapshot(&bound);
+        let mut refused = FaultyFs::observing();
         assert_eq!(
-            (way.capture)(&mut bound, &discover, Commit::Final).unwrap_err(),
+            (way.capture)(&mut bound, &discover, Commit::Final, &mut refused).unwrap_err(),
             PRELIMINARY_REFUSED
         );
+        assert_eq!(refused.calls(), 0);
         assert_eq!(snapshot(&bound), before);
         // The ordinary capture still publishes it.
-        (way.capture)(&mut bound, &discover, Commit::Ordinary).unwrap();
+        (way.capture)(
+            &mut bound,
+            &discover,
+            Commit::Ordinary,
+            &mut FaultyFs::observing(),
+        )
+        .unwrap();
         assert!(!bound.committed().final_inventory_captured);
     }
 }

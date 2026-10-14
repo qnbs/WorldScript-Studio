@@ -3131,7 +3131,7 @@ sets `final_inventory_captured`, is published only by `commit_final_inventory_ca
 `commit_final_streamed_inventory_capture`. These take the installation's `ExclusiveAdmissionGuard` by
 mutable borrow, so a shared guard does not compile; they take their root from that admission, so they can
 be given neither another root nor an alias that is retargeted afterwards; and they refuse a successor that
-is the preliminary inventory (`NotAFinalCapture`). Each refusal precedes the first read or write. This opens
+is the preliminary inventory (`NotAFinalCapture`). Each refusal is decided before the file system is touched. This opens
 no window and admits no producer of a binding.
 
 **Owner-approved E2 direction (2026-10-11), not general source admission:** a writer journal locator

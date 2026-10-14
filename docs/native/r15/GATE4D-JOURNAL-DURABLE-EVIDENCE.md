@@ -1385,14 +1385,15 @@ The capture of the inventory is split like the phase change was. `commit_invento
 take the installation's `ExclusiveAdmissionGuard` by mutable borrow and its root, publish the final
 inventory only and refuse the preliminary one (`NotAFinalCapture`). Both kinds are told apart by the
 successor's `final_inventory_captured`, which the capture relation ties to the `ADMIT` phase of the committed
-predecessor, and the check runs before any read or write. The pins, in
+predecessor, and the check is the first step of the commit, before the file system is touched (the tests count the
+adapter's calls and expect none). The pins, in
 `gate4e_phase_transition_test/final_capture.rs`, run for the capture from pages in memory and for the streamed
 capture:
 
 | Claim | Test |
 |---|---|
-| the ordinary commit refuses the final inventory and leaves the root tree, the journal tree and the anchor unchanged; the exclusive commit publishes it, binding the final manifest in `ADMIT` at the next revision | `the_final_inventory_is_captured_only_under_the_exclusive_admission` |
-| the exclusive commit refuses the preliminary inventory and leaves everything unchanged; the ordinary commit still publishes it | `the_exclusive_final_capture_refuses_a_preliminary_inventory` |
+| the ordinary commit refuses the final inventory without a single file system call and leaves the root tree, the journal tree and the anchor unchanged; the exclusive commit publishes it, binding the final manifest in `ADMIT` at the next revision | `the_final_inventory_is_captured_only_under_the_exclusive_admission` |
+| the exclusive commit refuses the preliminary inventory without a single file system call and leaves everything unchanged; the ordinary commit still publishes it | `the_exclusive_final_capture_refuses_a_preliminary_inventory` |
 
 A shared guard does not compile for `commit_final_inventory_capture`: a `compile_fail` doctest pairs with the
 same call, made with the exclusive guard, that compiles. The existing capture tests of

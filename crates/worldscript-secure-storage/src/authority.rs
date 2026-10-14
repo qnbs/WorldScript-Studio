@@ -616,7 +616,7 @@ pub struct InventoryCapture<'a> {
 /// only what is missing and advances the binding. Lock order is the root lock, then the journal
 /// mutex inside each fenced step. This commit publishes the preliminary inventory only: a successor
 /// that is the final inventory (`final_inventory_captured`, the capture that runs in `ADMIT`) is refused
-/// as `FinalCaptureNotExclusive` before anything is read or written. The final capture has its own
+/// as `FinalCaptureNotExclusive` before the file system is touched. The final capture has its own
 /// commit, [`commit_final_inventory_capture`], which holds the installation's exclusive admission by
 /// type (Gate 4E E3a).
 pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
@@ -1067,7 +1067,7 @@ enum CaptureAdmission {
     Exclusive,
 }
 
-/// Refuses a capture on the wrong commit before anything is read or written: the final inventory
+/// Refuses a capture on the wrong commit before the file system is touched: the final inventory
 /// (`final_inventory_captured`) only under the exclusive admission, the preliminary one only without.
 fn assert_capture_kind(
     successor: &JournalManifest,
