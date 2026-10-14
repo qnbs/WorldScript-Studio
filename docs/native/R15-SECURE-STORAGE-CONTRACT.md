@@ -3142,7 +3142,8 @@ most 64 bytes); it holds no path and no search order. `authenticate_journal` res
 event of either admission mode. The admission must still guard the installation and the root; the scope
 of the locator must equal the scope of the anchor, which is judged before any directory is looked at;
 the location `<installation>/<name>` must be a real directory (not a symlink) strictly below the admitted
-installation and outside the authority root, opened as that entry itself (a symlink at the entry is not
+installation and not the authority root (by path and by identity, so another spelling of the root's name on a
+case-insensitive file system is the root too), opened as that entry itself (a symlink at the entry is not
 followed) and pinned, and still the same entry after the reads (a symlink put in its place never counts); the
 committed root, its binding, the root-named manifest and the journal key route are then authenticated by
 the existing keyless read. Every failure is a typed refusal that writes nothing and reads no other

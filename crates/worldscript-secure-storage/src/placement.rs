@@ -43,7 +43,12 @@ impl PinnedDirectory {
         let pin = sys::open_directory(dir).map_err(|error| PlacementError::Io(error.kind()))?;
         let canonical =
             std::fs::canonicalize(dir).map_err(|error| PlacementError::Io(error.kind()))?;
-        Self::confined(installation, root, pin, canonical, false)
+        Self {
+            pin,
+            canonical,
+            exact: false,
+        }
+        .confined(installation, root)
     }
 
     /// Pins the directory `name` directly below the canonical installation, without following a
@@ -58,30 +63,33 @@ impl PinnedDirectory {
         let located = installation.join(name);
         let pin = sys::open_directory_exact(&located)
             .map_err(|error| PlacementError::Io(error.kind()))?;
-        Self::confined(installation, root, pin, located, true)
+        Self {
+            pin,
+            canonical: located,
+            exact: true,
+        }
+        .confined(installation, root)
     }
 
-    fn confined(
-        installation: &Path,
-        root: &Path,
-        pin: File,
-        canonical: PathBuf,
-        exact: bool,
-    ) -> Result<Self, PlacementError> {
-        let below = canonical != installation && canonical.starts_with(installation);
-        if !below || canonical.starts_with(root) {
+    /// Requires the pinned directory to lie strictly below the installation and not to be the
+    /// authority root. The root is excluded by the path and by identity: on a case-insensitive file
+    /// system another spelling of the root's name opens the root itself.
+    fn confined(self, installation: &Path, root: &Path) -> Result<Self, PlacementError> {
+        let below = self.canonical != installation && self.canonical.starts_with(installation);
+        if !below || self.canonical.starts_with(root) || self.is_the_root(root) {
             return Err(PlacementError::Misplaced);
         }
-        let pinned = Self {
-            pin,
-            canonical,
-            exact,
-        };
-        if pinned.is_current() {
-            Ok(pinned)
+        if self.is_current() {
+            Ok(self)
         } else {
             Err(PlacementError::Changed)
         }
+    }
+
+    /// Whether the pinned directory is the authority root. An identity that cannot be read counts as
+    /// the root, so the placement fails closed.
+    fn is_the_root(&self, root: &Path) -> bool {
+        sys::still_named(&self.pin, root).unwrap_or(true)
     }
 
     /// Whether the path still names the directory that was pinned.
@@ -120,6 +128,17 @@ mod tests {
         ));
         assert!(matches!(
             PinnedDirectory::placed_exact(&installation_dir, &root_dir, "authority"),
+            Err(PlacementError::Misplaced)
+        ));
+        // A spelling the path check does not recognise (the case-insensitive alias of the root's name)
+        // is still the root by identity.
+        let alias_of_the_root = PinnedDirectory {
+            pin: sys::open_directory_exact(&root_dir).unwrap(),
+            canonical: installation_dir.join("Authority-alias"),
+            exact: true,
+        };
+        assert!(matches!(
+            alias_of_the_root.confined(&installation_dir, &root_dir),
             Err(PlacementError::Misplaced)
         ));
         // A followed placement accepts the link: the exact one is the stricter of the two.

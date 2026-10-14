@@ -1366,7 +1366,7 @@ The pins, in `gate4e_phase_transition_test/locator.rs`:
 | a missing root-named generation is refused and a sibling is not used instead | `a_missing_root_named_generation_is_recovery_required_and_nothing_else_is_used` |
 | on Unix, a directory swapped for another right after the last read is reported as `Changed` | `a_directory_replaced_after_the_reads_is_not_the_one_that_was_authenticated` |
 | on Unix, a symlink put in place of the moved pinned directory is `Changed`, not current | `a_symlink_put_in_place_of_the_moved_directory_is_not_the_one_that_was_authenticated` |
-| on Unix, an exact placement refuses a symlink entry and the authority root (unit test in `placement.rs`) | `placement::tests::an_exact_placement_refuses_a_symlink_entry_and_the_root` |
+| on Unix, an exact placement refuses a symlink entry, the authority root by path, and a directory that is the root by identity under another spelling (unit test in `placement.rs`) | `placement::tests::an_exact_placement_refuses_a_symlink_entry_and_the_root` |
 
 Every refusal of `authenticate_journal` is compared against a snapshot of the bytes of the root files and of the
 journal files and of the anchor state, by value, and leaves it unchanged; the grammar test needs no snapshot,
