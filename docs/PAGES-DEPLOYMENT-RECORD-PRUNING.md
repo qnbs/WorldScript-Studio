@@ -104,8 +104,8 @@ publication slots, an unchanged publication-order prefix, an unchanged candidate
 the trusted-main SHA. The run and job evidence of the candidate and of both slots is read again
 at each of those two boundaries, bypassing the proof cache, so evidence that was deleted or became
 unreadable since classification stops the run before the write (`unknown-publication`). Other
-records are re-read only when their list entry (including `updated_at`)
-changed; GitHub bumped `updated_at` past the newest status on all six live records, but that is an
+records are re-read only when their list entry changed (the entry includes `updated_at`; one
+without a usable `updated_at` is always reloaded); GitHub bumped `updated_at` past the newest status on all six live records, but that is an
 optimization, not the authority for the candidate or the slots. At most three such unfocused
 records may need a reload in one refresh; more churn than that stops the run
 (`inventory-churn`) before any history is read, so the cost ceilings below always hold. The
@@ -151,8 +151,9 @@ a usable rate header stops it with `rate-unknown` (the allowance is replaced, ne
 the local 450 counter is never the only brake. The rate headers of failed reads
 and writes count too: an error that ends a call replaces the allowance like a success, so a
 header-less 404 leaves it unknown instead of stale, and a run of 404 responses cannot spend the
-reserve unnoticed; only a read that is about to be retried keeps the previous allowance until its
-retry answers. A budget refusal before a candidate's first
+reserve unnoticed; a read that is about to be retried keeps the previous allowance, less one when
+the failure carried no usable header, until its retry answers, and the retry still has to pass the
+reserve check. A budget refusal before a candidate's first
 write (a retry storm in its first revalidation) is the same graceful `budget-limit` stop; after the
 POST it stays a failure. An inventory that alone exceeds the budget fails
 closed with `request-budget` before any write. Measured by the test fixture (GET + POST + DELETE,
@@ -227,8 +228,13 @@ belong to #550/QNB-41; no monetary or CPU savings are inferred from workflow-sta
    and observe the first scheduled pass (a `workflow_dispatch` run is always a dry run and cannot
    exercise a deletion): at most ten records deleted, every protected ID and every other
    environment unchanged, site still healthy.
-4. Any `UNKNOWN`, 404/409/429, header-less allowance, protected-object change or fence doubt stops
-   the run; the response is `gh workflow disable prune-deployments.yml` plus cancelling any active
-   run until the cause is repaired.
+4. Stop criteria for the operator. In the code, a failed API read (403/404/409/429/5xx), a
+   header-less allowance, a moved publication, slot or `main` and a changed candidate stop the run
+   (`failed = 1`, a failed Actions run). A candidate whose publication run or job returns 404 or
+   does not prove is only protected (`unproved-publication`) and the run goes on with the other
+   proven candidates. If the first pass fails, reports any `unproved-publication`, deletes more
+   than ten records or touches a protected ID, the operator runs
+   `gh workflow disable prune-deployments.yml`, cancels any active run, and keeps it disabled until
+   the cause is repaired.
 
 Implementation, review and operational verification remain separate states.

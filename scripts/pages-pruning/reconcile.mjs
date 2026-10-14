@@ -147,8 +147,9 @@ async function prepareOrReport(ctx, run, { holds, records, first }) {
   }
 }
 
+// QNBS-v3: a history is reused only while the list reports a valid updated_at that has not moved, so an entry without a usable one cannot hide a changed history and is reloaded instead; more such records than EXTRA_RELOADS stop the run.
 function reusableStatuses(before, item, focus) {
-  if (!before || focus.has(item.id)) return null;
+  if (!before || focus.has(item.id) || !timestamp(item.updated_at)) return null;
   return listKey(item) === listKey(before) ? before.statuses : null;
 }
 

@@ -1016,6 +1016,20 @@ test('a header-less error on a read that is retried keeps the allowance until th
   assert.equal(result.deleted, 3);
 });
 
+test('a header-less failure that is retried takes one off the known allowance before the retry is admitted', async () => {
+  const github = client(
+    records(4),
+    (_route, _parameters, _state, calls) => {
+      if (calls.length === 2) throw headerlessError(503);
+    },
+    { 'x-ratelimit-remaining': '101' },
+  );
+  const result = await execute(github, { dryRun: true });
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['rate-reserve'], 1);
+  assert.equal(github.calls.length, 2);
+});
+
 test('a throttled response lowers the allowance before any retry can be sent', async () => {
   const github = client(records(4), () => {
     throw Object.assign(apiError(429, '0'), {
@@ -1138,6 +1152,27 @@ test('more changed unfocused records than a refresh can afford stop the run befo
   assert.deepEqual(writes(github), []);
   // The refusal comes before any history of the changed records is read again.
   assert.equal(statusReads(github), 10);
+});
+
+const withoutUpdatedAt = (count) => {
+  const input = records(10);
+  for (const item of input.slice(0, count)) delete item.updated_at;
+  return input;
+};
+
+test('unfocused records without a usable updated_at are reloaded, and more than a refresh can afford stop the run', async () => {
+  const github = client(withoutUpdatedAt(EXTRA_RELOADS + 1));
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['inventory-churn'], 1);
+  assert.deepEqual(writes(github), []);
+});
+
+test('as many records without a usable updated_at as a refresh can afford are reloaded and the run goes on', async () => {
+  const github = client(withoutUpdatedAt(EXTRA_RELOADS));
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 7);
 });
 
 test('as many changed unfocused records as a refresh can afford are reloaded and the run goes on', async () => {

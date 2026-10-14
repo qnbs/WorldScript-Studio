@@ -72,6 +72,12 @@ function replaceRate(ctx, headers) {
   noteRate(ctx, headers);
 }
 
+function noteRetried(ctx, headers) {
+  const reported = Number(headers?.['x-ratelimit-remaining']);
+  if (Number.isFinite(reported)) ctx.remaining = reported;
+  else if (ctx.remaining !== null) ctx.remaining -= 1;
+}
+
 // QNBS-v3: every read, each retry included, passes the live allowance before it is sent; once a response has succeeded the allowance must be known, so a missing rate header stops the run instead of leaving the local counter as the only brake (failed attempts before any success are bounded by READ_ATTEMPTS), and a read never takes the allowance below the CI reserve.
 function spendRead(ctx) {
   if (ctx.answered && ctx.remaining === null) refuse('rate-unknown');
@@ -90,8 +96,8 @@ export async function read(ctx, route, parameters = {}) {
     } catch (error) {
       const delay = retryDelay(error, attempt);
       const retrying = shouldRetry(error, attempt, delay);
-      // QNBS-v3: an error that ends the read replaces the allowance like a success does, so a header-less 404 that a caller turns into an unproved candidate cannot leave a stale allowance behind; only a read that is retried keeps it until the retry answers.
-      if (retrying) noteRate(ctx, error.response?.headers);
+      // QNBS-v3: an error that ends the read replaces the allowance like a success does, so a header-less 404 that a caller turns into an unproved candidate cannot leave a stale allowance behind; a retried failure without a usable header still consumed a request, so the known allowance drops by one before the retry passes the reserve check.
+      if (retrying) noteRetried(ctx, error.response?.headers);
       else replaceRate(ctx, error.response?.headers);
       if (!retrying) throw error;
       await ctx.pause(delay);
