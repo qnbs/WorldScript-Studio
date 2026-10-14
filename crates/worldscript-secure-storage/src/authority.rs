@@ -685,19 +685,28 @@ pub fn commit_final_inventory_capture<F: DurableFs, P: KeyProvider>(
     capture: InventoryCapture<'_>,
 ) -> Result<RootCommitted, AuthorityError> {
     assert_capture_kind(capture.checkpoint.manifest, CaptureAdmission::Exclusive)?;
+    under_exclusive_root(admission, |root| capture_pages(fs, provider, root, capture))
+}
+
+/// Runs `run` on the root of `admission` with the root commit event of that same admission held: the
+/// layout is the admission's own canonical root, so a capture committed through here cannot be given
+/// another root or an alias that is retargeted after the admission.
+fn under_exclusive_root<T>(
+    admission: &mut ExclusiveAdmissionGuard,
+    run: impl FnOnce(CaptureRoot<'_>) -> Result<T, AuthorityError>,
+) -> Result<T, AuthorityError> {
     let root_dir = admission.root_dir().to_path_buf();
     let event = admission
         .try_root_commit()
         .map_err(AuthorityError::Admission)?
         .ok_or(AuthorityError::RootBusy)?;
     let held = event.root_guard().map_err(AuthorityError::Admission)?;
-    let root = CaptureRoot {
+    run(CaptureRoot {
         layout: RootLayout {
             root_dir: &root_dir,
         },
         held: HeldRoot::Held(held),
-    };
-    capture_pages(fs, provider, root, capture)
+    })
 }
 
 /// Stores the pages of `capture`, publishes the manifest that names them and advances the binding.
@@ -782,19 +791,9 @@ pub fn commit_final_streamed_inventory_capture<F: DurableFs, P: KeyProvider>(
     capture: StreamedInventoryCapture<'_>,
 ) -> Result<RootCommitted, AuthorityError> {
     assert_capture_kind(capture.staged.successor(), CaptureAdmission::Exclusive)?;
-    let root_dir = admission.root_dir().to_path_buf();
-    let event = admission
-        .try_root_commit()
-        .map_err(AuthorityError::Admission)?
-        .ok_or(AuthorityError::RootBusy)?;
-    let held = event.root_guard().map_err(AuthorityError::Admission)?;
-    let root = CaptureRoot {
-        layout: RootLayout {
-            root_dir: &root_dir,
-        },
-        held: HeldRoot::Held(held),
-    };
-    capture_staged(fs, provider, root, capture)
+    under_exclusive_root(admission, |root| {
+        capture_staged(fs, provider, root, capture)
+    })
 }
 
 /// Promotes the staged pages of `capture`, publishes the manifest that names them and advances the
