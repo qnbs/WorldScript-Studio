@@ -391,8 +391,8 @@ impl Bound {
     }
 }
 
-/// Everything a refused operation must leave as it was: the bytes of the authority root's files and
-/// of the journal directory's files, and the anchor state by value.
+/// Everything a refused operation must leave as it was: the authority root's and the journal
+/// directory's tree (every file's bytes and every directory), and the anchor state by value.
 #[derive(Debug, PartialEq)]
 struct Snapshot {
     root_files: BTreeMap<String, Vec<u8>>,
@@ -400,8 +400,9 @@ struct Snapshot {
     anchor: AnchorState,
 }
 
-/// Every file below `dir` by its path relative to it; nothing when `dir` is absent.
-fn files_below(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
+/// Every file below `dir` with its bytes and every directory (an empty entry named `…/`), by path
+/// relative to `dir`: creating even an empty directory is a write. Nothing when `dir` is absent.
+fn tree_below(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -409,7 +410,8 @@ fn files_below(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
         let entry = entry.unwrap();
         let name = format!("{prefix}/{}", entry.file_name().to_string_lossy());
         if entry.file_type().unwrap().is_dir() {
-            files_below(&entry.path(), &name, out);
+            out.insert(format!("{name}/"), Vec::new());
+            tree_below(&entry.path(), &name, out);
         } else {
             out.insert(name, fs::read(entry.path()).unwrap());
         }
@@ -418,9 +420,9 @@ fn files_below(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
 
 fn snapshot(bound: &Bound) -> Snapshot {
     let mut root_files = BTreeMap::new();
-    files_below(&bound.installation.root_dir, "", &mut root_files);
+    tree_below(&bound.installation.root_dir, "", &mut root_files);
     let mut journal_files = BTreeMap::new();
-    files_below(&bound.installation.journal_dir, "", &mut journal_files);
+    tree_below(&bound.installation.journal_dir, "", &mut journal_files);
     Snapshot {
         root_files,
         journal_files,

@@ -1368,8 +1368,8 @@ The pins, in `gate4e_phase_transition_test/locator.rs`:
 | on Unix, a symlink put in place of the moved pinned directory is `Changed`, not current | `a_symlink_put_in_place_of_the_moved_directory_is_not_the_one_that_was_authenticated` |
 | on Unix, an exact placement refuses a symlink entry, the authority root by path, and a directory that is the root by identity under another spelling (unit test in `placement.rs`) | `placement::tests::an_exact_placement_refuses_a_symlink_entry_and_the_root` |
 
-Every refusal of `authenticate_journal` is compared against a snapshot of the bytes of the root files and of the
-journal files and of the anchor state, by value, and leaves it unchanged; the grammar test needs no snapshot,
+Every refusal of `authenticate_journal` is compared against a snapshot of the root tree and the journal tree (every file's
+bytes and every directory, so an empty directory counts) and of the anchor state, by value, and leaves it unchanged; the grammar test needs no snapshot,
 since constructing a locator touches nothing. A `compile_fail` doctest on the module pins that the proof cannot outlive the
 event it was authenticated under. The tests were mutation-checked: without the scope check, the
 directory-kind check, the final pin check or the root exclusion of the placement, the named tests fail,

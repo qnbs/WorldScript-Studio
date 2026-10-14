@@ -263,7 +263,7 @@ fn an_ordinary_operation_over_a_prepared_phase_change_is_refused_and_writes_noth
     let identity = RecordIdentity::new(RecordClass::Codex, &["p1"]).unwrap();
     let storage = ProtectedStorage::new(bound.installation.scope(), bound.provider);
     let mut files = BTreeMap::new();
-    files_below(&bound.installation.root_dir, "", &mut files);
+    tree_below(&bound.installation.root_dir, "", &mut files);
     let journal = bound.installation.journal_names();
     // The root recovery that an ordinary operation runs first refuses the prepared phase change.
     for _ in 0..2 {
@@ -279,7 +279,7 @@ fn an_ordinary_operation_over_a_prepared_phase_change_is_refused_and_writes_noth
         );
     }
     let mut after = BTreeMap::new();
-    files_below(&bound.installation.root_dir, "", &mut after);
+    tree_below(&bound.installation.root_dir, "", &mut after);
     assert_eq!(
         (after, bound.installation.journal_names()),
         (files, journal)

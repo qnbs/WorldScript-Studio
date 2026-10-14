@@ -309,3 +309,19 @@ fn a_symlink_put_in_place_of_the_moved_directory_is_not_the_one_that_was_authent
         Err(LocatorError::Changed)
     );
 }
+
+#[test]
+fn the_refusal_snapshot_sees_an_empty_directory_and_a_changed_byte() {
+    let bound = Bound::new();
+    let before = snapshot(&bound);
+    let empty = bound.installation.journal_dir.join("empty");
+    fs::create_dir(&empty).unwrap();
+    assert_ne!(snapshot(&bound), before);
+    fs::remove_dir(&empty).unwrap();
+    assert_eq!(snapshot(&bound), before);
+    let generation = generation_path(&bound.installation.journal_dir, 0);
+    let mut bytes = fs::read(&generation).unwrap();
+    *bytes.last_mut().unwrap() ^= 0xff;
+    fs::write(&generation, bytes).unwrap();
+    assert_ne!(snapshot(&bound), before);
+}
