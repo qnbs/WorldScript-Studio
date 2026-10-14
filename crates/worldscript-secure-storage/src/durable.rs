@@ -195,7 +195,8 @@ pub trait DurableFs {
     ///
     /// Provided, with a default that states no removal (`Unsupported`): an adapter that does not
     /// override it cannot be swept, and the journal's reclamation refuses before it deletes anything.
-    /// [`StdFs`] removes with `std::fs::remove_dir`.
+    /// [`StdFs`] removes with `std::fs::remove_dir` after it asked [`Self::entry_kind`], because on
+    /// Windows that call also removes a junction.
     fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
         let _ = dir;
         Err(io::Error::from(io::ErrorKind::Unsupported))
@@ -296,6 +297,10 @@ impl DurableFs for StdFs {
     }
 
     fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
+        // `RemoveDirectory` removes a junction like an empty directory, so the kind is asked first.
+        if self.entry_kind(dir)? != EntryKind::Directory {
+            return Err(io::Error::from(io::ErrorKind::InvalidInput));
+        }
         fs::remove_dir(dir)
     }
 

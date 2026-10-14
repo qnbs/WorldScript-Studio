@@ -1432,6 +1432,8 @@ asks both under a path that cannot exist (below the root-named manifest generati
 (`RemovalUnsupported`) before it deletes anything; the probe can never touch an inventory entry. `StdFs` removes only
 an empty directory and tells a link from its target with `symlink_metadata`; on Windows every reparse point
 (`FILE_ATTRIBUTE_REPARSE_POINT`), not only the name-surrogate tags `FileType::is_symlink` reports, is a link.
+`StdFs::remove_dir` asks that kind first and refuses anything but a plain directory, because `RemoveDirectory`
+removes a junction like an empty directory (the Windows case is tested with `mklink /J`; hosted Windows CI is its oracle).
 
 | Entry below `inventory/` | Rule |
 |---|---|

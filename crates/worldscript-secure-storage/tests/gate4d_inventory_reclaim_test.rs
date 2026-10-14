@@ -457,6 +457,55 @@ fn the_real_file_system_tells_a_junction_from_its_target() {
     );
 }
 
+/// `RemoveDirectory` removes a junction like an empty directory, so `StdFs::remove_dir` asks for the kind
+/// first: a junction to an empty directory is refused and both stay (Windows, `mklink /J`).
+#[cfg(windows)]
+#[test]
+fn the_real_file_system_does_not_remove_a_junction_as_a_directory() {
+    let dir = TempDir::new();
+    let real = dir.0.join("real");
+    std::fs::create_dir(&real).unwrap();
+    let junction = dir.0.join("junction");
+    let made = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&junction)
+        .arg(&real)
+        .output()
+        .unwrap();
+    assert!(
+        made.status.success(),
+        "{}",
+        String::from_utf8_lossy(&made.stdout)
+    );
+    assert_eq!(
+        (
+            StdFs.remove_dir(&junction).is_err(),
+            StdFs.entry_kind(&junction).unwrap(),
+            real.is_dir()
+        ),
+        (true, EntryKind::Link, true)
+    );
+}
+
+/// The same contract for a symbolic link: refused, and both the link and its empty target stay.
+#[cfg(unix)]
+#[test]
+fn the_real_file_system_does_not_remove_a_symbolic_link_as_a_directory() {
+    let dir = TempDir::new();
+    let real = dir.0.join("real");
+    std::fs::create_dir(&real).unwrap();
+    let link = dir.0.join("link");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    assert_eq!(
+        (
+            StdFs.remove_dir(&link).is_err(),
+            StdFs.entry_kind(&link).unwrap(),
+            real.is_dir()
+        ),
+        (true, EntryKind::Link, true)
+    );
+}
+
 /// A link planted below `inventory/` is never followed (Unix only: links need no privilege there).
 #[cfg(unix)]
 #[path = "gate4d_inventory_reclaim_test/links.rs"]
