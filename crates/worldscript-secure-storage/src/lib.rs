@@ -32,6 +32,7 @@ pub mod envelope;
 pub mod error;
 pub mod identity;
 pub mod journal;
+pub mod journal_locator;
 pub mod journal_route;
 pub mod kdf;
 pub mod marker;
@@ -39,6 +40,7 @@ pub mod marker;
 pub mod memory_provider;
 mod operation_authority;
 pub mod operations;
+mod placement;
 pub mod protected;
 pub mod provider;
 pub mod random;
@@ -120,6 +122,9 @@ pub use journal::{
     JOURNAL_PAGE_FORMAT_VERSION, JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES,
     MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES, MAX_JOURNAL_PAGE_BYTES,
     MAX_JOURNAL_PAGE_DESCRIPTORS,
+};
+pub use journal_locator::{
+    authenticate_journal, AuthenticatedJournal, JournalLocator, LocationFault, LocatorError,
 };
 pub use journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 pub use kdf::{derive_kek, KdfProfile, WSS_ARGON2ID_V1};

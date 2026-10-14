@@ -1342,3 +1342,32 @@ the transition takes the exclusive one, so a shared admission or a bare root loc
 gate's `enter_convert` and `finish_convert` commit through the held form of the transition, and its tests
 are unchanged. This slice adds no producer of a binding, opens no `PREPARE`/`DONE` window and leaves
 the capture writers, the writer journal locator and E3 closed.
+
+### The writer journal locator (Gate 4E L1)
+
+`JournalLocator` names the journal directory of one installation (its scope and one directory name of a
+fixed grammar); `authenticate_journal` resolves it under a root event of either admission mode and returns
+an `AuthenticatedJournal` that borrows the event. The directory is confined by the `placement` module the
+conversion gate now shares: strictly below the admitted installation, outside the authority root, pinned.
+The pins, in `gate4e_phase_transition_test/locator.rs`:
+
+| Claim | Test |
+|---|---|
+| a bound journal authenticates under a shared and under an exclusive event, reporting the root's binding, the root-named manifest and the canonical directory | `a_bound_journal_authenticates_under_a_shared_and_under_an_exclusive_event` |
+| an unbound root has no journal to authenticate | `an_unbound_root_has_no_journal_to_authenticate` |
+| no committed root means nothing is bound | `no_committed_root_means_nothing_is_bound` |
+| a locator of another installation is refused as `ScopeMismatch` before the located directory is looked at | `a_locator_of_another_installation_is_refused_before_any_directory_is_looked_at` |
+| a name must be one component of the fixed grammar (separators, dot segments, capitals, non-ASCII and over-long names are refused) | `a_name_must_be_one_component_of_the_fixed_grammar` |
+| an absent location, a file and the authority root are refused as `Missing`, `NotADirectory` and `Misplaced` | `a_location_that_is_absent_a_file_or_the_root_is_refused` |
+| on Unix, a symlink is not a location | `a_symlink_is_not_a_location` |
+| a root-named generation that is not the bound one is refused and a valid-looking sibling is not used | `a_generation_that_is_not_the_bound_one_is_refused_and_no_sibling_is_read` |
+| a missing root-named generation is refused and a sibling is not used instead | `a_missing_root_named_generation_is_recovery_required_and_nothing_else_is_used` |
+| on Unix, a directory swapped for another right after the last read is reported as `Changed` | `a_directory_replaced_after_the_reads_is_not_the_one_that_was_authenticated` |
+
+Every refusal is compared against a snapshot of the root files, the journal directory names and the anchor
+and leaves it unchanged. A `compile_fail` doctest on the module pins that the proof cannot outlive the
+event it was authenticated under. The tests were mutation-checked: without the scope check, the
+directory-kind check, the final pin check or the root exclusion of the placement, the named tests fail,
+and the doctest fails to be a compile failure without its `drop(event)`. L1 adds no consumer of the
+proof: the E1 barrier, `ProtectedStorage`, the `PREPARE`/`DONE` windows and the E3 capture barrier are
+unchanged.

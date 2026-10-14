@@ -14,37 +14,6 @@ use worldscript_secure_storage::{
 use super::faulty_fs::FaultyFs;
 use super::*;
 
-/// Everything a refused recovery must leave as it was: the authority root's files, the journal
-/// directory and the anchor.
-#[derive(Debug, PartialEq)]
-struct Snapshot {
-    root_files: BTreeMap<String, Vec<u8>>,
-    journal: Vec<String>,
-    anchor: String,
-}
-
-fn files_below(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
-    for entry in fs::read_dir(dir).unwrap() {
-        let entry = entry.unwrap();
-        let name = format!("{prefix}/{}", entry.file_name().to_string_lossy());
-        if entry.file_type().unwrap().is_dir() {
-            files_below(&entry.path(), &name, out);
-        } else {
-            out.insert(name, fs::read(entry.path()).unwrap());
-        }
-    }
-}
-
-fn snapshot(bound: &Bound) -> Snapshot {
-    let mut root_files = BTreeMap::new();
-    files_below(&bound.installation.root_dir, "", &mut root_files);
-    Snapshot {
-        root_files,
-        journal: bound.installation.journal_names(),
-        anchor: format!("{:?}", bound.provider.read_root_anchor_state().unwrap()),
-    }
-}
-
 fn preparation_pending(bound: &Bound) -> bool {
     bound
         .provider

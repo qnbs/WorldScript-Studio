@@ -3136,6 +3136,21 @@ must mechanically hold exclusive admission before those windows can activate; un
 admitted and proven, the E1 barrier remains. Cached journal snapshots never grant authority. This
 direction does not admit E3, other migration phases, read/list policy, Gates 5–7 or release.
 
+**The writer journal locator (Gate 4E L1).** `JournalLocator` is that locator as writer configuration: the
+installation scope it was made for and one directory name (lowercase ASCII letters, digits and `-`, at
+most 64 bytes); it holds no path and no search order. `authenticate_journal` resolves it under a root
+event of either admission mode. The admission must still guard the installation and the root; the scope
+of the locator must equal the scope of the anchor, which is judged before any directory is looked at;
+the location `<installation>/<name>` must be a real directory (not a symlink) strictly below the admitted
+installation and outside the authority root, pinned and still the same directory after the reads; the
+committed root, its binding, the root-named manifest and the journal key route are then authenticated by
+the existing keyless read. Every failure is a typed refusal that writes nothing and reads no other
+directory (no sibling generation, no search for a journal). The result borrows the root event, so it ends
+with the admission: it is a snapshot for one operation, not a cache. Nothing consumes it yet: the E1
+barrier is unchanged and no `PREPARE`/`DONE` window, `ProtectedStorage` change or E3 capture barrier is
+introduced. A rename of the real directory by a local attacker during the call is the recorded
+handle-relative I/O residual and is not claimed to be closed.
+
 | Lifecycle condition | Error priority / authority boundary |
 |---|---|
 | Locked provider / repeated lock | Existing provider refusal or idempotent lock; refused unlock clears runtime keys. |
