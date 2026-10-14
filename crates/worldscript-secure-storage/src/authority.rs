@@ -678,6 +678,12 @@ pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
 /// neither can publish the other's manifest. A root commit event in flight elsewhere is `RootBusy`;
 /// both refusals write nothing. This opens no window: while a migration is bound, the root keeps
 /// refusing every ordinary operation (Gate 4E E1).
+///
+/// What this commit does not know is when the caller scanned: the pages are built before the call. What
+/// ends ordinary writes is the durable `ADMIT` phase, which only the exclusively admitted phase
+/// transition publishes, so a scan taken after that transition is complete. A scan taken earlier (in
+/// `PREPARE`, say) cannot be told apart from a current one here: scanning inside the admission is the
+/// obligation of the first caller, the Gate 5 inventory scanner (acceptance criterion on #923).
 pub fn commit_final_inventory_capture<F: DurableFs, P: KeyProvider>(
     admission: &mut ExclusiveAdmissionGuard,
     fs: &mut F,

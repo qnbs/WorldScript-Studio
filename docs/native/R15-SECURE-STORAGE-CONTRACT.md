@@ -3131,8 +3131,12 @@ sets `final_inventory_captured`, is published only by `commit_final_inventory_ca
 `commit_final_streamed_inventory_capture`. These take the installation's `ExclusiveAdmissionGuard` by
 mutable borrow, so a shared guard does not compile; they take their root from that admission, so they can
 be given neither another root nor an alias that is retargeted afterwards; and they refuse a successor that
-is the preliminary inventory (`NotAFinalCapture`). Each refusal is decided before the file system is touched. This opens
-no window and admits no producer of a binding.
+is the preliminary inventory (`NotAFinalCapture`). Each refusal is decided before the file system is touched. The commit takes pre-built pages and does
+not know when they were scanned: the write barrier is the durable `ADMIT` phase, which only the exclusively
+admitted phase transition publishes, so a scan taken after that transition is complete, and a scan taken
+earlier (in `PREPARE`) cannot be told apart from a current one by the commit. Scanning inside the admission
+is the obligation of the first caller, the Gate 5 inventory scanner. This opens no window and admits no
+producer of a binding.
 
 **Owner-approved E2 direction (2026-10-11), not general source admission:** a writer journal locator
 must be explicit, immutable and scope-bound; the committed operation, key route, exact manifest digest,

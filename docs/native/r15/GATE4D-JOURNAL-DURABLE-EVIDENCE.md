@@ -1399,6 +1399,9 @@ A shared guard does not compile for `commit_final_inventory_capture`: a `compile
 same call, made with the exclusive guard, that compiles. The existing capture tests of
 `gate4d_root_binding_test.rs` publish their final captures through the exclusive commit (their fixture takes
 the admission), which exercises the positive path across the whole earlier matrix. The tests were
-mutation-checked: without either refusal the matching test fails. This slice opens no window; the E1
-barrier, the `PREPARE`/`DONE` windows and the locator's consumers are unchanged.
+mutation-checked: without either refusal the matching test fails, and without the check-first order the
+zero-call assertion fails. What the commit cannot pin is when the caller scanned: it takes pre-built pages, the
+barrier that makes an `ADMIT` scan complete is the durable phase, and scanning inside the admission is the
+Gate 5 scanner's obligation (recorded on #923). This slice opens no window; the E1 barrier, the
+`PREPARE`/`DONE` windows and the locator's consumers are unchanged.
 
