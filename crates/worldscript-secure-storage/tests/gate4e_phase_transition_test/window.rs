@@ -8,11 +8,12 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use worldscript_secure_storage::commit::RecordLocation;
+use worldscript_secure_storage::memory_provider::{AnchorOp, Fault};
 use worldscript_secure_storage::provider::SessionBinding;
 use worldscript_secure_storage::{
     EpochInfo, JournalLocator, Key, KeyProviderError, KeyState, OperationError, PrepareRootAnchor,
-    ProtectedCommitted, ProtectedMutation, ProtectedRead, ProtectedRecord, ProtectedStorage,
-    ProtectedWrite, RecordClass, RecordIdentity,
+    ProtectedCommitted, ProtectedError, ProtectedMutation, ProtectedRead, ProtectedRecord,
+    ProtectedStorage, ProtectedWrite, RecordClass, RecordIdentity,
 };
 
 use super::*;
@@ -92,6 +93,32 @@ pub(super) fn bound_at(phase: u32) -> Bound {
         ..manifest_at(0, phase)
     };
     bound.bind_zero();
+    bound
+}
+
+/// A bound root whose last ordinary catalog commit stopped at the anchor: the preparation is durable
+/// and the committed root is still the previous one.
+fn bound_with_interrupted_commit(phase: u32, fault: Fault) -> Bound {
+    let mut bound = bound_at(phase);
+    bound.provider.inject(fault);
+    let commit = CatalogCommit {
+        change: CatalogChange {
+            upsert: &[],
+            remove: &[],
+        },
+        root_key_ref: &bound.key_ref,
+        active_key_epoch: 1,
+        operation_id: "w1-interrupted",
+    };
+    let layout = RootLayout {
+        root_dir: &bound.installation.root_dir,
+    };
+    assert!(commit_catalog_change(&mut StdFs, &mut bound.provider, layout, commit).is_err());
+    let anchor = bound.provider.read_root_anchor_state().unwrap();
+    assert!(
+        anchor.prepared_root_commit.is_some(),
+        "a durable preparation"
+    );
     bound
 }
 
@@ -331,6 +358,39 @@ fn the_window_admits_every_ordinary_operation_in_prepare_and_in_done() {
         assert_eq!(windowed.journal_tree(), journal, "phase {phase}");
         assert_eq!(windowed.committed(), manifest, "phase {phase}");
     }
+}
+
+#[test]
+fn a_prepared_root_left_by_a_crash_is_recovered_by_a_write_and_the_window_reopens() {
+    for (label, fault) in [
+        ("completed", Fault::BeforePersist(AnchorOp::Commit)),
+        ("discarded", Fault::AfterPersist(AnchorOp::Prepare)),
+    ] {
+        let bound = bound_with_interrupted_commit(phase_code::PREPARE, fault);
+        let locator = locator(&bound);
+        let windowed = Windowed::new(bound, Some(locator));
+        let committed = windowed
+            .write(None, b"after the crash")
+            .map(|done| done.generation);
+        assert_eq!(committed, Ok(1), "{label}");
+        assert_eq!(windowed.read().unwrap(), b"after the crash", "{label}");
+    }
+}
+
+#[test]
+fn a_busy_root_event_is_an_error_to_retry_and_never_the_none_of_a_pre_observation_contention() {
+    let windowed = Windowed::at(phase_code::PREPARE);
+    let held = RootCommitGuard::acquire(&windowed.installation.root_dir).unwrap();
+    let busy = windowed
+        .storage
+        .try_authority_snapshot(&mut StdFs)
+        .map(|_| ());
+    assert_eq!(
+        busy,
+        Err(OperationError::Protected(ProtectedError::RootBusy))
+    );
+    drop(held);
+    assert_eq!(windowed.list(), Ok(0));
 }
 
 #[test]

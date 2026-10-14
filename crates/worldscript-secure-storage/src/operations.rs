@@ -183,20 +183,12 @@ pub struct AuthoritySnapshotGuard {
     key: Key,
     snapshot: Arc<Snapshot>,
     epochs: Vec<KeyEpochEntry>,
+    /// The live-migration binding the snapshot root carries.
+    bound: Option<LiveMigration>,
     /// The binding of a bound root that the journal admitted for this operation (Gate 4E W1).
     window: Option<LiveMigration>,
     admission: SharedAdmissionGuard,
     scope: Scope,
-}
-
-/// What the journal says about an ordinary operation over a bound root.
-enum Window {
-    /// No locator, or the journal does not admit it: the E1 barrier decides.
-    Closed,
-    /// The authenticated phase admits ordinary operations under exactly this binding.
-    Admitted(LiveMigration),
-    /// The finite root event was busy; nothing was observed.
-    Contended,
 }
 
 impl<P: KeyProvider> ProtectedStorage<P> {
@@ -263,19 +255,20 @@ impl<P: KeyProvider> ProtectedStorage<P> {
     }
 
     /// Resolve a durable prepared root under the same admitted root event used for catalog work.
-    /// `None` means root-event contention before any catalog observation.
+    /// `None` means root-event contention before any catalog observation; `Some(true)` that a
+    /// preparation was resolved.
     fn recover_prepared_root_admitted<F: DurableFs>(
         &self,
         fs: &mut F,
         provider: &mut PublishedProvider<'_, P>,
         admission: &mut SharedAdmissionGuard,
-    ) -> Result<Option<()>, OperationError> {
+    ) -> Result<Option<bool>, OperationError> {
         if provider
             .read_root_anchor_state()?
             .prepared_root_commit
             .is_none()
         {
-            return Ok(Some(()));
+            return Ok(Some(false));
         }
         let Some(event) = admission.try_root_commit().map_err(OperationError::from)? else {
             return Ok(None);
@@ -290,7 +283,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         }
         let anchor = provider.read_root_anchor_state()?;
         lock_cell(&self.cell)?.publish(&anchor)?;
-        Ok(Some(()))
+        Ok(Some(true))
     }
 
     /// None is contention BEFORE any provider observation, never record absence. Once admitted,
@@ -303,29 +296,31 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let Some(admission) = SharedAdmissionGuard::try_acquire(self.scope.admission())? else {
             return Ok(None);
         };
-        self.capture(fs, admission)
+        self.capture(fs, admission).map(Some)
     }
 
     /// The journal's verdict on an ordinary operation over the bound root `bound`, taken under the
     /// shared admission the operation already holds: one finite root event, the journal found through
     /// the locator and authenticated against the committed root, its phase one that admits ordinary
-    /// writes, and its binding exactly `bound`. Any other outcome leaves the E1 barrier standing; only
-    /// an admission fault is an error of its own.
+    /// writes, and its binding exactly `bound`. `Some(bound)` admits the operation; any other outcome
+    /// leaves the E1 barrier standing. Only an admission fault or a busy root event is an error of its
+    /// own: the provider was observed already, so a busy event cannot be the `None` that the snapshot API
+    /// promises for contention before any observation, and an unavailable randomness source is not a
+    /// refusal of the migration.
     fn open_window<F: DurableFs>(
         &self,
         fs: &mut F,
         admission: &mut SharedAdmissionGuard,
         bound: &LiveMigration,
-    ) -> Result<Window, OperationError> {
+    ) -> Result<Option<LiveMigration>, OperationError> {
         let Some(locator) = &self.journal else {
-            return Ok(Window::Closed);
+            return Ok(None);
         };
-        let Some(event) = admission.try_root_commit()? else {
-            return Ok(Window::Contended);
-        };
-        let Ok(operation) = WriteOperationId::generate() else {
-            return Ok(Window::Closed);
-        };
+        let event = admission
+            .try_root_commit()?
+            .ok_or(ProtectedError::RootBusy)?;
+        let operation =
+            WriteOperationId::generate().map_err(|_| KeyProviderError::RandomnessUnavailable)?;
         let provider = PublishedProvider(&self.cell);
         let lookup = JournalLookup {
             locator,
@@ -334,17 +329,28 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let proof = match authenticate_journal(fs, &provider, &event, lookup) {
             Ok(proof) => proof,
             Err(LocatorError::Admission(error)) => return Err(error.into()),
-            Err(_) => return Ok(Window::Closed),
+            Err(_) => return Ok(None),
         };
         let phase = MigrationPhase::from_wire(proof.manifest().phase);
         let admitted = ordinary_mutating_writes_admitted(phase)
             && proof.binding() == bound
             && proof.is_current();
-        Ok(if admitted {
-            Window::Admitted(bound.clone())
-        } else {
-            Window::Closed
-        })
+        Ok(admitted.then(|| bound.clone()))
+    }
+
+    /// A prepared root that recovery completed or discarded keeps the binding, so the window that was
+    /// refused while the preparation was pending is judged again.
+    fn reopen_window<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        operation: &mut AuthoritySnapshotGuard,
+    ) -> Result<(), OperationError> {
+        if operation.window.is_none() {
+            if let Some(bound) = operation.bound.clone() {
+                operation.window = self.open_window(fs, &mut operation.admission, &bound)?;
+            }
+        }
+        Ok(())
     }
 
     /// A write repeats the journal's verdict immediately before its first root commit, so a binding
@@ -353,14 +359,13 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         &self,
         fs: &mut F,
         operation: &mut AuthoritySnapshotGuard,
-    ) -> Result<Option<()>, OperationError> {
+    ) -> Result<(), OperationError> {
         let Some(bound) = operation.window.clone() else {
-            return Ok(Some(()));
+            return Ok(());
         };
         match self.open_window(fs, &mut operation.admission, &bound)? {
-            Window::Admitted(_) => Ok(Some(())),
-            Window::Contended => Ok(None),
-            Window::Closed => Err(OperationError::MigrationRequired),
+            Some(_) => Ok(()),
+            None => Err(OperationError::MigrationRequired),
         }
     }
 
@@ -368,7 +373,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         &self,
         fs: &mut F,
         mut admission: SharedAdmissionGuard,
-    ) -> Result<Option<AuthoritySnapshotGuard>, OperationError> {
+    ) -> Result<AuthoritySnapshotGuard, OperationError> {
         if !admission.guards(self.scope.admission()) {
             return Err(AdmissionError::IdentityChanged.into());
         }
@@ -390,25 +395,23 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             &key,
             None,
         )?;
-        let window = match &view.root.live_migration {
+        let bound = view.root.live_migration.clone();
+        let window = match &bound {
             None => None,
-            Some(bound) => match self.open_window(fs, &mut admission, bound)? {
-                Window::Admitted(binding) => Some(binding),
-                Window::Closed => None,
-                Window::Contended => return Ok(None),
-            },
+            Some(bound) => self.open_window(fs, &mut admission, bound)?,
         };
         if !admission.guards(self.scope.admission()) {
             return Err(AdmissionError::IdentityChanged.into());
         }
-        Ok(Some(AuthoritySnapshotGuard {
+        Ok(AuthoritySnapshotGuard {
             key,
             snapshot,
             epochs,
+            bound,
             window,
             admission,
             scope: self.scope.clone(),
-        }))
+        })
     }
 
     /// The handoff runs while admission, key and snapshot are all live. Returning None means the
@@ -463,21 +466,19 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let Some(writer) = WriterGuard::try_acquire(fs, &self.scope, &admission)? else {
             return Ok(None);
         };
-        let Some(mut operation) = self.capture(fs, admission)? else {
-            return Ok(None);
-        };
+        let mut operation = self.capture(fs, admission)?;
         let pins = LocationPins::open(&operation.scope, location)?;
         let mut provider = PublishedProvider(&self.cell);
-        if self
-            .recover_prepared_root_admitted(fs, &mut provider, &mut operation.admission)?
-            .is_none()
-        {
+        let Some(recovered) =
+            self.recover_prepared_root_admitted(fs, &mut provider, &mut operation.admission)?
+        else {
             return Ok(None);
+        };
+        if recovered {
+            self.reopen_window(fs, &mut operation)?;
         }
         let catalog = operation.catalog(fs)?;
-        if self.revalidate_window(fs, &mut operation)?.is_none() {
-            return Ok(None);
-        }
+        self.revalidate_window(fs, &mut operation)?;
         let target = ProtectedTarget {
             layout: operation.scope.layout(),
             store: RecordStore {
@@ -523,21 +524,19 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let Some(writer) = WriterGuard::try_acquire(fs, &self.scope, &admission)? else {
             return Ok(None);
         };
-        let Some(mut operation) = self.capture(fs, admission)? else {
-            return Ok(None);
-        };
+        let mut operation = self.capture(fs, admission)?;
         let pins = LocationPins::open(&operation.scope, location)?;
         let mut provider = PublishedProvider(&self.cell);
-        if self
-            .recover_prepared_root_admitted(fs, &mut provider, &mut operation.admission)?
-            .is_none()
-        {
+        let Some(recovered) =
+            self.recover_prepared_root_admitted(fs, &mut provider, &mut operation.admission)?
+        else {
             return Ok(None);
+        };
+        if recovered {
+            self.reopen_window(fs, &mut operation)?;
         }
         let catalog = operation.catalog(fs)?;
-        if self.revalidate_window(fs, &mut operation)?.is_none() {
-            return Ok(None);
-        }
+        self.revalidate_window(fs, &mut operation)?;
         let target = ProtectedTarget {
             layout: operation.scope.layout(),
             store: RecordStore {

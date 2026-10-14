@@ -3114,14 +3114,18 @@ guard, and `catalog()` admits the bound root only under that binding. Everything
 (`MigrationRequired`) and writes nothing: no locator, a missing, misplaced, replaced, symlinked or
 wrong-scope location, a journal that does not authenticate, any other phase (`DISCOVER`, `ADMIT`, `CONVERT`,
 `VERIFY`, `COMMIT`, `RETIRE_OLD_AUTHORITY`, `FINALIZE`, `RECOVERY_REQUIRED`) and a binding that moved since
-the snapshot. An admission fault stays an admission error, and a busy root event is `None` (retry), not a
-refusal. A write or reconcile repeats the verdict immediately before its first root commit and is refused
+the snapshot. An admission fault stays an admission error, and a busy root event is the error
+`Protected(RootBusy)` to retry, never `None`, because `None` of the snapshot API promises contention before
+any provider observation and the provider was observed by then. A prepared root that an interrupted ordinary
+catalog commit left is completed or discarded by the write or reconcile as before, and the window that was
+refused while the preparation was pending is judged again afterwards. A write or reconcile repeats the verdict immediately before its first root commit and is refused
 if phase or binding changed. The phase cannot change while the operation lives, because every
 phase-changing writer holds the exclusive admission, which the operation's shared admission excludes; the
 journal owner's progress checkpoints hold no admission and may land at any point of the operation, so the
 catalog commits copy the binding of the root they commit on top of forward and compare-and-swap on the root
-generation, and a checkpoint is neither lost nor written over (a test injects one at every read of a
-write). **Reads and lists follow the same two phases as writes** (maintainer-visible decision of the Gate 4
+generation, and a checkpoint is neither lost nor written over (two tests land one between two exact reads,
+and a sweep lands one at every sixth read of a write; the write commits on top of it, is refused before its
+first root commit, or stops transiently with `RootBusy` or a pending preparation and is recoverable). **Reads and lists follow the same two phases as writes** (maintainer-visible decision of the Gate 4
 plan, GH #359): the table above would admit reads in more phases, but the owner direction left read and
 list policy closed, so the stricter set is the default and one predicate can relax it later. Lock, unlock
 and shutdown are unchanged (`RecoveryPending` for a bound root). The path-based identity of the journal
