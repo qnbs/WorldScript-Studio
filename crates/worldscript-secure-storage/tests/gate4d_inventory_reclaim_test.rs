@@ -411,7 +411,7 @@ fn a_failed_file_removal_stops_before_any_directory_is_removed() {
 fn a_directory_that_vanished_before_its_removal_is_not_counted() {
     let scenario = with_two_dead_pending_dirs();
     let mut vanishing = ObservedFs::new();
-    vanishing.report_dirs_vanished = true;
+    vanishing.vanish_before_removal = true;
     let done = scenario.sweep(&mut vanishing).unwrap();
     assert_eq!(
         (

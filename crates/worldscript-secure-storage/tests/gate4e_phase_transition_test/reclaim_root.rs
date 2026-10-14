@@ -188,8 +188,8 @@ fn the_sweep_holds_the_root_event_from_the_read_of_the_binding_to_the_last_remov
         let refused = RootCommitGuard::try_acquire(&root_dir).unwrap().is_none();
         seen.store(refused, Ordering::SeqCst);
     };
-    // The third read is inside the sweep, after it read the binding and before the first removal.
-    let mut fs = FaultyFs::acting_after_served_reads(3, probe);
+    // The probe runs right before the first removal, after everything the sweep read and judged.
+    let mut fs = FaultyFs::acting_before_the_first_removal(probe);
     let done = sweep_over(&mut fs, &bound, &MigrationFence::from_manifest(&progressed)).unwrap();
     let free_again = RootCommitGuard::try_acquire(&bound.installation.root_dir)
         .unwrap()

@@ -1,7 +1,7 @@
 //! A file system that stops a root commit where the anchor does not: it fails the creation of a file
 //! below a named fragment, or the rename onto a named target, and delegates everything else. It also
 //! counts every call it serves, and the bounded reads separately, and can run an action right after the
-//! n-th bounded read.
+//! n-th bounded read, or right before the first file removal.
 
 use std::ffi::OsString;
 use std::fs::File;
@@ -24,6 +24,8 @@ pub struct FaultyFs {
     served: usize,
     #[cfg(unix)]
     after_served: Option<(usize, Box<dyn FnMut()>)>,
+    #[cfg(unix)]
+    before_removal: Option<Box<dyn FnMut()>>,
 }
 
 impl FaultyFs {
@@ -42,6 +44,18 @@ impl FaultyFs {
             served: 0,
             #[cfg(unix)]
             after_served: None,
+            #[cfg(unix)]
+            before_removal: None,
+        }
+    }
+
+    /// Delegates everything and runs `action` once, right before the first file removal. Only Unix
+    /// tests act from inside the file system.
+    #[cfg(unix)]
+    pub fn acting_before_the_first_removal(action: impl FnMut() + 'static) -> Self {
+        FaultyFs {
+            before_removal: Some(Box::new(action)),
+            ..Self::observing()
         }
     }
 
@@ -177,6 +191,10 @@ impl DurableFs for FaultyFs {
 
     fn remove_file(&mut self, path: &Path) -> io::Result<()> {
         self.calls += 1;
+        #[cfg(unix)]
+        if let Some(mut action) = self.before_removal.take() {
+            action();
+        }
         self.inner.remove_file(path)
     }
 
