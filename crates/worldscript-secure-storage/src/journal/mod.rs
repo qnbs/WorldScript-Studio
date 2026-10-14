@@ -14,6 +14,10 @@ mod inventory_store;
 mod manifest;
 mod manifest_verify;
 mod page;
+// The sweep is part of no production build until handle-relative I/O (H1) closes the check-then-use windows
+// of a path-based removal: see the Gate 4D evidence, "Reclaiming abandoned inventory staging".
+#[cfg(feature = "test-support")]
+mod reclaim;
 mod renewal;
 mod state;
 mod stream_capture;
@@ -139,6 +143,10 @@ pub use inventory_store::{
 };
 pub use manifest::{journal_envelope_epoch, JournalManifest, JournalPageRef, ManifestRead};
 pub use page::JournalPage;
+#[cfg(feature = "test-support")]
+pub use reclaim::{
+    reclaim_with_binding, KeepReason, Preserved, ReclaimError, ReclaimRequest, Reclaimed,
+};
 pub use renewal::assert_renewal_successor;
 pub use state::{
     allows_phase_transition, assert_binding_successor, assert_fence, assert_live_binding,

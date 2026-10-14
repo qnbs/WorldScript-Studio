@@ -55,6 +55,8 @@ use crate::journal::{
     JournalManifest, JournalPage, JournalTakeover, MigrationExecutionError, MigrationFence,
     SealedPage, StagedCapture, StagedPromotion, StreamedCapture, VerifiedInventory,
 };
+#[cfg(feature = "test-support")]
+use crate::journal::{reclaim_with_binding, ReclaimError, ReclaimRequest, Reclaimed};
 use crate::journal_route::{resolve_journal_key, JournalRoute, JournalRouteError};
 use crate::marker::content_digest;
 use crate::provider::{InstallationScopeId, KeyProvider, RootKeyRefV1};
@@ -142,6 +144,9 @@ pub enum AuthorityError {
     /// Another root commit event is in flight, so the phase transition did not start. Nothing was
     /// written; the admission is still held and the call may be repeated.
     RootBusy,
+    /// The sweep of abandoned inventory staging refused or stopped (`reclaim_abandoned_inventory`).
+    #[cfg(feature = "test-support")]
+    Reclaim(ReclaimError),
 }
 
 impl From<RootStoreError> for AuthorityError {
@@ -906,6 +911,67 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
         journal_dir: begin.journal.dir.to_path_buf(),
         operation: begin.journal.operation.clone(),
     })
+}
+
+/// Removes the abandoned pending directories of the inventory of the journal the committed root binds,
+/// with the journal key routed from the root (Gate 4 slice R1).
+///
+/// The binding is read from the committed root and the journal key is resolved through the key-epoch
+/// registry, as [`begin_streamed_capture`] does; the committed manifest is loaded by the exact root-named
+/// path under that key, and the caller supplies no key, manifest or binding, only the fence of the owner
+/// it claims to be. A caller that is not the committed owner at the committed revision (a former owner
+/// after a takeover, or an owner whose own checkpoint moved the journal on) is refused before anything is
+/// deleted, and a journal in `RECOVERY_REQUIRED` is refused too. The cross-process root commit event is
+/// held from the read of the binding to the last removal, in the established root-then-journal lock
+/// order, so a takeover or a transition to `RECOVERY_REQUIRED` by another process cannot interleave with
+/// the sweep; root commits wait for it, as they do for the capture commits. See `journal::reclaim` for
+/// the rules.
+///
+/// Available with the `test-support` feature only: the removal is path-based, so a local actor that can
+/// swap a directory or retarget the root between a check and its use is not excluded, and production
+/// builds do not contain the sweep until handle-relative I/O (H1) closes those windows.
+#[cfg(feature = "test-support")]
+pub fn reclaim_abandoned_inventory<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    request: InventoryReclaim<'_>,
+) -> Result<Reclaimed, AuthorityError> {
+    let held = acquire_root_commit(layout)?;
+    assert_held(&held, layout)?;
+    let live = committed_route(fs, provider, layout)?.live;
+    let key = route_journal_key(fs, provider, layout, request.journal)?;
+    let mut ctx = journal_context(&mut *fs, request.journal, &key, CandidateConflict::Refuse);
+    let committed =
+        load_authoritative_manifest(&mut ctx, &live).map_err(AuthorityError::Journal)?;
+    // The lock names the directory that was canonical when it was taken; the reads above went through
+    // the caller's spelling of the root, which a link can retarget meanwhile.
+    assert_held(&held, layout)?;
+    let sweep = ReclaimRequest {
+        committed_manifest: &committed,
+        fence: request.fence,
+        committed: &live,
+    };
+    reclaim_with_binding(&mut ctx, &sweep).map_err(AuthorityError::Reclaim)
+}
+
+/// The guard still names the root of `layout`: its canonical directory and the lock target are unchanged.
+#[cfg(feature = "test-support")]
+fn assert_held(held: &RootCommitGuard, layout: RootLayout<'_>) -> Result<(), AuthorityError> {
+    if held.guards(layout.root_dir) {
+        Ok(())
+    } else {
+        Err(AuthorityError::Root(RootStoreError::MutexNotHeld))
+    }
+}
+
+/// Where the journal is and which owner asks for its inventory staging to be reclaimed.
+#[cfg(feature = "test-support")]
+#[derive(Clone, Copy)]
+pub struct InventoryReclaim<'a> {
+    pub journal: JournalSource<'a>,
+    /// The owner's token at the committed revision.
+    pub fence: &'a MigrationFence,
 }
 
 /// What the committed root names for a bound migration: the binding, and the key route and active

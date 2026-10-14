@@ -72,7 +72,7 @@ pub use authority::{
     JournalTakeoverCommit, LoadedCatalog, SessionBegin, StagingSession, StreamedInventoryCapture,
 };
 #[cfg(feature = "test-support")]
-pub use authority::{list_records, load_catalog};
+pub use authority::{list_records, load_catalog, reclaim_abandoned_inventory, InventoryReclaim};
 pub use catalog::{
     catalog_shard_of, CatalogDescriptor, CatalogError, CatalogPage, PageAddress,
     CATALOG_SHARD_COUNT, MAX_CATALOG_PAGE_DESCRIPTORS,
@@ -91,7 +91,7 @@ pub use conversion::{
 pub use disposition::{disposition, is_r15_record_class, Disposition};
 pub use durable::{
     generation_path, stage_and_promote, stage_and_promote_envelope, staging_path,
-    DirectoryDurability, DurableFs, PromotedGeneration, StageFailure, StageFailureKind,
+    DirectoryDurability, DurableFs, EntryKind, PromotedGeneration, StageFailure, StageFailureKind,
     StageRequest, StageStep, StagingResidue, StdFs, WriteOperationId,
 };
 pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
@@ -123,6 +123,10 @@ pub use journal::{
     JOURNAL_PAGE_FORMAT_VERSION, JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES,
     MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES, MAX_JOURNAL_PAGE_BYTES,
     MAX_JOURNAL_PAGE_DESCRIPTORS,
+};
+#[cfg(feature = "test-support")]
+pub use journal::{
+    reclaim_with_binding, KeepReason, Preserved, ReclaimError, ReclaimRequest, Reclaimed,
 };
 pub use journal_locator::{
     authenticate_journal, AuthenticatedJournal, JournalLocator, JournalLookup, LocationFault,

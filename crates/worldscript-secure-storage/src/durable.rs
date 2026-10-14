@@ -144,6 +144,31 @@ pub enum DirectoryDurability {
 ///     }
 /// }
 /// ```
+/// Whether the entry is a Windows reparse point of any kind: `FileType::is_symlink` covers only the
+/// name-surrogate tags (symbolic links, junctions), while other reparse points (cloud placeholders,
+/// deduplicated files) can redirect reads too.
+#[cfg(windows)]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
+/// What a path is itself, without following a link ([`DurableFs::entry_kind`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryKind {
+    File,
+    Directory,
+    /// A symbolic link, or on Windows a junction or another reparse point.
+    Link,
+    Other,
+}
+
 pub trait DurableFs {
     type File: Write;
     /// Creates `path`, failing if anything already exists there.
@@ -165,6 +190,24 @@ pub trait DurableFs {
     /// replaces an existing file.
     fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()>;
     fn remove_file(&mut self, path: &Path) -> io::Result<()>;
+    /// Removes `dir` only if it is an empty directory; a directory with entries, a file and a link
+    /// are errors, and nothing below `dir` is ever touched.
+    ///
+    /// Provided, with a default that states no removal (`Unsupported`): an adapter that does not
+    /// override it cannot be swept, and the journal's reclamation refuses before it deletes anything.
+    /// [`StdFs`] removes with `std::fs::remove_dir` after it asked [`Self::entry_kind`], because on
+    /// Windows that call also removes a junction.
+    fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
+        let _ = dir;
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
+    /// What `path` is itself, without following a link: a regular file, a directory, a link or
+    /// something else. Provided with a default that states no answer (`Unsupported`), like
+    /// [`Self::remove_dir`]; [`StdFs`] answers with `std::fs::symlink_metadata`.
+    fn entry_kind(&mut self, path: &Path) -> io::Result<EntryKind> {
+        let _ = path;
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
     /// Persists the directory's entries where the platform can confirm it.
     fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability>;
     /// The names of the entries directly inside `dir`, in no particular order.
@@ -251,6 +294,28 @@ impl DurableFs for StdFs {
 
     fn remove_file(&mut self, path: &Path) -> io::Result<()> {
         fs::remove_file(path)
+    }
+
+    fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
+        // `RemoveDirectory` removes a junction like an empty directory, so the kind is asked first.
+        if self.entry_kind(dir)? != EntryKind::Directory {
+            return Err(io::Error::from(io::ErrorKind::InvalidInput));
+        }
+        fs::remove_dir(dir)
+    }
+
+    fn entry_kind(&mut self, path: &Path) -> io::Result<EntryKind> {
+        let metadata = fs::symlink_metadata(path)?;
+        let kind = metadata.file_type();
+        Ok(if kind.is_symlink() || is_reparse_point(&metadata) {
+            EntryKind::Link
+        } else if kind.is_dir() {
+            EntryKind::Directory
+        } else if kind.is_file() {
+            EntryKind::File
+        } else {
+            EntryKind::Other
+        })
     }
 
     #[cfg(unix)]

@@ -3,6 +3,8 @@
 //! or with an interrupted root commit pending. Test-only; the provider is the in-memory one.
 
 use std::path::Path;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::*;
@@ -134,7 +136,17 @@ impl Authority<'_> {
             live_migration: Some(live.clone()),
             ..catalog.root
         };
-        let event = exclusive.try_root_commit().unwrap().unwrap();
+        // The previous holder of this root has released it, but a child process that a concurrently
+        // running test of this binary forks keeps a duplicate of the released descriptor until it
+        // executes, so the lock can still read as held for a moment right after a release.
+        let deadline = Instant::now() + Duration::from_secs(60);
+        let event = loop {
+            match exclusive.try_root_commit().unwrap() {
+                Some(event) => break event,
+                None if Instant::now() < deadline => thread::sleep(Duration::from_millis(5)),
+                None => panic!("the root-commit event stayed held"),
+            }
+        };
         commit_root(
             &mut StdFs,
             provider,

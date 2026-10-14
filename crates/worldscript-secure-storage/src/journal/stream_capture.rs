@@ -17,9 +17,10 @@
 //! reader looks for it, and a staged page is a candidate whose absence is a broken attempt, never a
 //! recovery state of the journal. A failure that the caller can still handle removes the staged page
 //! files on the way out (best effort), and [`StagedCapture::discard`] does the same for a finished
-//! capture that is not going to be promoted. The empty directories stay, because the file system
-//! abstraction has no directory removal, and so do the files of an attempt that was killed: both are
-//! inert and are reclaimed by a separate cleanup (an acceptance criterion on #359).
+//! capture that is not going to be promoted. The empty directories stay, and so do the files of an
+//! attempt that was killed: both are inert, and the owner's sweep (`reclaim_abandoned_inventory`, available
+//! with the `test-support` feature only until handle-relative I/O admits it) removes them once the journal
+//! has committed past the attempt's revision.
 //!
 //! The inventory digest commits to the total entry count before any entry (§5.4), so the total is
 //! given up front and checked at the end. Memory is one page and one reference per page; the builder

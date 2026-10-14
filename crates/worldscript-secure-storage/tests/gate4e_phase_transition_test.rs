@@ -400,10 +400,29 @@ struct Snapshot {
     anchor: AnchorState,
 }
 
+/// The entries of `dir`: none when it is absent, and none (its bytes recorded instead) when it is a file,
+/// a case that replaces a directory with one. Any other failure to read it fails the test instead of
+/// reading as an empty tree.
+fn entries_below(
+    dir: &Path,
+    prefix: &str,
+    out: &mut BTreeMap<String, Vec<u8>>,
+) -> Option<fs::ReadDir> {
+    match fs::read_dir(dir) {
+        Ok(entries) => Some(entries),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) if fs::symlink_metadata(dir).is_ok_and(|metadata| metadata.is_file()) => {
+            out.insert(format!("{prefix}<file>"), fs::read(dir).unwrap());
+            None
+        }
+        Err(error) => panic!("cannot read {}: {error}", dir.display()),
+    }
+}
+
 /// Every file below `dir` with its bytes and every directory (an empty entry named `…/`), by path
-/// relative to `dir`: creating even an empty directory is a write. Nothing when `dir` is absent.
+/// relative to `dir`: creating even an empty directory is a write.
 fn tree_below(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
-    let Ok(entries) = fs::read_dir(dir) else {
+    let Some(entries) = entries_below(dir, prefix, out) else {
         return;
     };
     for entry in entries {
@@ -604,6 +623,9 @@ mod final_capture;
 /// The writer journal locator (L1): where the journal of one installation is found, authenticated.
 #[path = "gate4e_phase_transition_test/locator.rs"]
 mod locator;
+/// The reclamation of abandoned inventory staging through the committed root (R1).
+#[path = "gate4e_phase_transition_test/reclaim_root.rs"]
+mod reclaim_root;
 /// The `PREPARE`/`DONE` window (W1): an ordinary operation over a bound root, admitted by the journal.
 #[path = "gate4e_phase_transition_test/window.rs"]
 mod window;

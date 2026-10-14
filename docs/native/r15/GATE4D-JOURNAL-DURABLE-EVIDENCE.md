@@ -1262,7 +1262,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
 - Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) and the authenticated page access with the page-local cursor (C2c-1: `verify_inventory`, `page`) and the iteration with a caller-supplied idempotent step, the crash/resume evidence and the exit to `VERIFY` (C2c-2: `convert_next`, `finish_convert`) exist, but nothing converts a real record: the `EntryStep` that moves a source record to the target epoch (Gate 5), the `VERIFY` work that reads every record under the target policy and the phases after it.
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers. The ordinary write path already refuses every operation while the root binds a live migration, in every phase (E1, with evidence); what remains is the phase-aware relaxation (`PREPARE`/`DONE` through `ordinary_mutating_writes_admitted`, E2) and the `ADMIT` transition requiring exclusive admission before the final capture has a caller (E3; Gate 4E/5; acceptance criterion on #359).
 - Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
-- Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read. Reclaiming them needs a directory-removal primitive and a sweep that knows no live attempt owns them, as for the orphaned digest directories of a discarded capture (acceptance criterion on #359).
+- Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read as inventory (a live capture's own commit reads back the pages it staged, `load_staged_page`; and only the sweep below, in `test-support` builds, opens an abandoned pending file, to prove it ours before it unlinks it). Delivered by Gate 4 slice R1 (below, "Reclaiming abandoned inventory staging"), which adds the directory-removal primitive and a sweep that proves no live attempt can own what it removes.
 - The cross-process lease CAS.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
 
@@ -1407,3 +1407,92 @@ barrier that makes an `ADMIT` scan complete is the durable phase, and scanning i
 Gate 5 scanner's obligation (recorded on #923). This slice opens no window; the E1 barrier, the
 `PREPARE`/`DONE` windows and the locator's consumers are unchanged.
 
+
+### Reclaiming abandoned inventory staging (Gate 4 slice R1)
+
+**Availability: `test-support` only.** The removal is path-based, so a local actor that can swap a directory or
+retarget the root between a check and its use is not excluded (see "Residual, not closed" below). Until
+handle-relative I/O (H1) closes those windows the sweep is part of no production build: the module, the root-bound
+entry, `InventoryReclaim` and the sweep's error and result types are compiled and exported only with the
+test-only `test-support` feature, like `commit_root` and `protected_write`. No package of the resolved dependency graph of
+the repository depends on `worldscript-secure-storage` (`cargo tree -i` finds it only as its own dev-dependency in
+the `crates/` workspace and not at all in `src-tauri/`), and `tests/feature_isolation_test.rs` fails if any
+`Cargo.lock` lists a dependent (renames, aliases, optional and target dependencies included, because the lockfile
+is what Cargo resolved), if `default` enables a test-only feature directly or through other features, or if a
+definition or export of the sweep loses its gate; a legitimate production dependency (Gate 5) must replace the
+first rule with a feature-graph check against `cargo metadata`. The production configuration (`cargo check` without features) compiles without the module, so
+nothing outside it can name the sweep. The slice delivers and proves the logic below; activating it is gated on
+the H1 acceptance criteria at the end of this section.
+
+`reclaim_abandoned_inventory(fs, provider, layout, InventoryReclaim { journal, fence })` removes what a killed or
+dropped streaming capture left under `<journal-dir>/inventory/pending-<rev>-<tag>/`, and only what it can prove
+dead. Like `begin_streamed_capture` it reads the binding from the committed root, routes the journal key through
+the key-epoch registry and loads the root-named manifest by its exact path; the caller supplies only the fence of
+the owner it claims to be, so a former owner after a takeover, an owner whose own checkpoint moved the journal on
+and a stranger are refused (`AuthorityError::Reclaim(ReclaimError::Authority(_))`) before anything is deleted, and
+a journal in `RECOVERY_REQUIRED` is refused (`ReclaimError::RecoveryRequired`; §10.3 blocks destructive cleanup
+until explicit recovery). The binding-taking sweep underneath (`reclaim_with_binding`, journal mutex and fence,
+root-named generation read back and compared) is exported only with the test-only `test-support` feature. The
+cross-process root commit event is held from the read of the binding to the last removal, in the established
+root-then-journal lock order, so a takeover or a transition to `RECOVERY_REQUIRED` by another process cannot
+interleave with the sweep; root commits wait for it, as they do for the capture commits. The guard is checked
+against the caller's spelling of the root right after it is taken and again after the binding and the manifest were
+read, before the first removal: a root alias that a link retargets in between names another directory than the lock
+(`AuthorityError::Root(RootStoreError::MutexNotHeld)`), and nothing is deleted. The proof of death itself
+depends only on the committed revision `R`, which only grows.
+
+`DurableFs::remove_dir` and `DurableFs::entry_kind` are provided methods whose default is `Unsupported`. The sweep
+asks both under a path that cannot exist (below the root-named manifest generation, which is a file) and refuses
+(`RemovalUnsupported`) before it deletes anything; the probe can never touch an inventory entry. `StdFs` removes only
+an empty directory and tells a link from its target with `symlink_metadata`; on Windows every reparse point
+(`FILE_ATTRIBUTE_REPARSE_POINT`), not only the name-surrogate tags `FileType::is_symlink` reports, is a link.
+`StdFs::remove_dir` asks that kind first and refuses anything but a plain directory, because `RemoveDirectory`
+removes a junction like an empty directory (the Windows case is tested with `mklink /J`; hosted Windows CI is its oracle).
+
+| Entry below `inventory/` | Rule |
+|---|---|
+| `pending-<rev>-<tag>`, `rev <= R` | Dead: a promotion needs `rev == R + 1` and `R` only grows. Removed after a complete check: every page directory and file is a plain entry of the grammar, every file carries generation `rev` and opens as this operation's page at its index with the journal envelope epoch (staging links `generation-<g>.wsr1.tmp-<tag>-<g>` included, and only with the tag of the pending directory itself: a link of another operation keeps the whole directory), and the page has entries: an authenticated page without any is something no capture stages and is kept. Removal walks the directory again and re-authenticates each file just before it is unlinked, holding the names of one directory at a time (at most as many page directories as the format admits entries, 1,000,000, with `page-<index>` of an index below that bound, and 64 files per page directory; more keeps the directory). |
+| `pending-<rev>-<tag>`, `rev > R` | Kept (`LiveRevision`): a live attempt, a retry candidate or a prepared root may own revision `R + 1`. |
+| `pending-0-<tag>` | Not recognised (kept): a capture stages for the committed revision plus one, so revision zero is never a capture. |
+| `<hex digest>` (a stored page set) | Kept (`StoredSet`), never read. Proving a set abandoned from the generation of its pages is sound only while a set holds pages of exactly its own revision; a later slice that lets a set inherit unchanged pages of older generations (I1) makes the owning revision unreadable from the files, so that slice owns reclaiming sets. |
+| a link, junction or any entry that is not a plain directory or file, at any depth | Kept (`Linked`) with its whole directory; nothing is read or unlinked through it. `inventory/` itself being a link refuses the sweep (`UnsafeInventory`). |
+| anything else: a name, a `page-` directory name or a file name outside the grammar, a file that does not open as this operation's page, a listing that cannot be read | Kept (`Unrecognised`, `Unauthenticated`, `Unreadable`); one such entry keeps its whole directory. |
+
+Removal is never retried: files, then each page directory once it is empty, then the pending directory, then one
+sync of `inventory/` that a rerun repeats even when nothing is left to remove (so a failed sync is never reported as
+done by the next sweep). A name that is already gone is a rerun, not a failure; any other failure stops the sweep,
+what was removed stays removed and a rerun converges, because a pending directory is judged by its name and `R`
+alone, never by the files it still holds. An entry that passed the check and no longer passes while it is removed
+stops the sweep (`Changed`).
+
+Proof (`gate4d_inventory_reclaim_test`, with the grammar unit tests in `reclaim.rs`, and
+`gate4e_phase_transition_test::reclaim_root` over a real bound root): the dead pending directories of two abandoned
+captures are removed with a staging link and the parent is synced; a second sweep does nothing; the next and a future
+revision are kept; stored page sets are kept; foreign, tampered, unrecognised and misplaced entries keep their
+directories; a file system without `remove_dir` or `entry_kind`, a stale fence, a wrong key, a stranger's manifest and
+a journal in `RECOVERY_REQUIRED` remove and create nothing; the probe leaves an existing `reclaim-probe` directory
+alone; a failed directory removal, a failed file removal and a failed sync stop the sweep and a rerun converges; through
+the root, the owner at the committed revision reclaims (and not before its own revision commits), a former owner and
+an owner with another fence remove nothing, and `RECOVERY_REQUIRED` is refused. The Unix link cases (a link named like
+a dead pending directory that points at a stored set, a link in place of a pending directory, of a page directory, of
+a page file and of `inventory/` itself) read and unlink nothing through the link; a second holder asks for the root
+event in the middle of a sweep and is refused; a junction is a link (Windows, `mklink /J`).
+
+Residual, not closed (two distinct windows): (1) the check is made on the path just before the use, so a local
+attacker who swaps a plain directory for a link, or renames a directory so that another one (for instance a stored
+set of the same operation at the same revision, whose pages authenticate identically) takes its name, between the
+check and the removal makes the path-based walk read and unlink there; (2) the root guard is checked twice (after
+it is taken and after the binding and the manifest were read), but the root can be renamed or retargeted after the
+last check while the walk continues under the old snapshot. `remove_dir` only removes an empty plain directory
+and the sweep only deletes files whose bytes authenticate as this operation's pages; neither makes the windows
+disappear, which is why the sweep is not part of production builds.
+
+H1 acceptance criteria before the sweep may leave `test-support`: (a) the journal directory, `inventory/` and every
+directory below it are opened once with no-follow semantics and identity (device and inode, or the Windows file
+id) is kept; listing, reading and unlinking go through those handles (`openat`/`unlinkat` on Unix; handles opened
+without delete sharing, or relative `NtCreateFile`, on Windows), never through a path again; (b) a file is
+unlinked only after its identity equals the one that was authenticated; (c) the root identity the authority was
+read from is pinned for the whole sweep, and the sweep stops before the next removal if it no longer is the root
+the lock names; (d) a stored set is never entered by a pending directory's walk, proven by a test that swaps a
+stored set into a dead pending name; (e) the Unix symlink, Windows junction (including a non-empty target),
+crash-after-partial-unlink and sync-failure cases stay covered. Stored page sets are not reclaimed (I1).

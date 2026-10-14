@@ -56,6 +56,13 @@ pub struct ObservedFs {
     pub fail_sync_matching: Option<&'static str>,
     pub fail_create_at: Option<u32>,
     pub fail_remove: bool,
+    /// Fails every directory removal.
+    pub fail_remove_dir: bool,
+    /// Another actor removes each directory right before the removal that is asked for, which then finds
+    /// it gone.
+    pub vanish_before_removal: bool,
+    /// Every directory removed, in order.
+    pub removed_dirs: Vec<PathBuf>,
     /// Every path read, in order.
     pub reads: Vec<PathBuf>,
 }
@@ -71,6 +78,9 @@ impl ObservedFs {
             fail_sync_matching: None,
             fail_create_at: None,
             fail_remove: false,
+            fail_remove_dir: false,
+            vanish_before_removal: false,
+            removed_dirs: Vec::new(),
             reads: Vec::new(),
         }
     }
@@ -109,6 +119,22 @@ impl DurableFs for ObservedFs {
             return Err(io::Error::other("injected file removal failure"));
         }
         self.inner.remove_file(path)
+    }
+
+    fn entry_kind(&mut self, path: &Path) -> io::Result<worldscript_secure_storage::EntryKind> {
+        self.inner.entry_kind(path)
+    }
+
+    fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
+        if self.fail_remove_dir {
+            return Err(io::Error::other("injected directory removal failure"));
+        }
+        if self.vanish_before_removal {
+            std::fs::remove_dir(dir)?;
+        }
+        self.inner.remove_dir(dir)?;
+        self.removed_dirs.push(dir.to_path_buf());
+        Ok(())
     }
 
     fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
