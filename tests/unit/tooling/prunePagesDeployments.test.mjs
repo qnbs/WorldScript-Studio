@@ -282,6 +282,28 @@ test('real workflow admits only main schedule and read-only dispatch with serial
   assert.ok(source.includes('retries: 0'));
 });
 
+// The jobs of a workflow file keyed by their two-space-indented id.
+const jobsOf = (source) => {
+  const parts = source.slice(source.indexOf('\njobs:\n')).split(/^ {2}([a-z][\w-]*):$/m);
+  return Object.fromEntries(
+    parts
+      .slice(1)
+      .map((part, index, all) => (index % 2 === 0 ? [part, all[index + 1]] : null))
+      .filter(Boolean),
+  );
+};
+
+test('only the scheduled job holds deployments:write, the dispatched plan job is read-only', () => {
+  const jobs = jobsOf(workflowSource('prune-deployments.yml'));
+  assert.deepEqual(Object.keys(jobs).sort(), ['plan', 'prune']);
+  assert.match(jobs.prune, /github\.event_name == 'schedule'/);
+  assert.match(jobs.prune, /^\s+deployments:\s*write\s*$/m);
+  assert.match(jobs.plan, /github\.event_name == 'workflow_dispatch'/);
+  assert.match(jobs.plan, /^\s+deployments:\s*read\s*$/m);
+  assert.ok(!/deployments:\s*write/.test(jobs.plan));
+  assert.ok(!/schedule/.test(jobs.plan.replace(/github\.event_name == 'workflow_dispatch'/, '')));
+});
+
 test('inactivates then revalidates before deletion; repeated run is idempotent', async () => {
   const github = client(records(5));
   const first = await executeDestructive(github);

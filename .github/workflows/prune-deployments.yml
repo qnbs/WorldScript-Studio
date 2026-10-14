@@ -6,7 +6,7 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
-# QNBS-v3: top-level read-only; only the job below holds deployments:write, and only while the destructive gate in scripts/pages-pruning/policy.mjs is open (CodeQL Token-Permissions).
+# QNBS-v3: top-level read-only; only the scheduled job below holds deployments:write, so a dispatched run, which the code keeps read-only, never receives a token that could delete (CodeQL Token-Permissions).
 permissions:
   contents: read
 
@@ -15,9 +15,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  plan:
+    name: Plan GitHub Pages records (read-only)
+    if: github.repository == 'qnbs/WorldScript-Studio' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      pages: read
+      deployments: read
+    steps:
+      - name: Check out immutable trusted main execution tree
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Plan bounded Pages records
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          retries: 0
+          script: |
+            const { readFileSync } = require('node:fs');
+            const { pathToFileURL } = require('node:url');
+            const root = process.env.GITHUB_WORKSPACE;
+            const { runAction } = await import(pathToFileURL(`${root}/scripts/prune-pages-deployments.mjs`).href);
+            const holds = JSON.parse(readFileSync(`${root}/.github/pages-pruning-holds.json`, 'utf8'));
+            await runAction({ github, context, core, holds, workflowRef: process.env.GITHUB_WORKFLOW_REF });
   prune:
     name: Reconcile GitHub Pages records only
-    if: github.repository == 'qnbs/WorldScript-Studio' && github.ref == 'refs/heads/main'
+    if: github.repository == 'qnbs/WorldScript-Studio' && github.ref == 'refs/heads/main' && github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -31,7 +58,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Plan or reconcile bounded Pages records
+      - name: Reconcile bounded Pages records
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           retries: 0

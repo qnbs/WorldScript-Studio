@@ -9,8 +9,9 @@ open exactly where all of these hold together: `DESTRUCTIVE_WRITES_ADMITTED` in
 `scripts/pages-pruning/policy.mjs` is `true`, the job token holds `deployments: write` (a test pins
 that the permission and the constant move together), the trigger is the `schedule` of `main`, and
 the workflow is enabled in the Actions UI, which is a separate operator step after the
-resulting-`main` proof (owner sequence below). Manual dispatch has no deletion input and always
-runs read-only, as does `--dry-run`. If the constant is set back to `false` the same code runs the
+resulting-`main` proof (owner sequence below). Only the scheduled job `prune` holds that token.
+Manual dispatch has no deletion input and runs the separate `plan` job, whose token is
+`deployments: read` (a test pins the split), always read-only, as does `--dry-run`. If the constant is set back to `false` the same code runs the
 full read-only reconciliation and reports `destructive-gate-closed`. A local read-only inventory
 needs no workflow enablement:
 
