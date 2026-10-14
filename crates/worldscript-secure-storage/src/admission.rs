@@ -168,6 +168,12 @@ impl<Mode> AdmissionGuard<Mode> {
         self.held.guards(scope)
     }
 
+    /// The canonical authority root this admission was acquired for. A commit that takes its layout
+    /// from here cannot be given another root, nor an alias that is retargeted after the admission.
+    pub(crate) fn root_dir(&self) -> &Path {
+        &self.held.root_dir
+    }
+
     /// One finite root event below the SAME admission. Busy never upgrades or releases admission.
     ///
     /// The event carries the mode of the admission it was taken from, so an operation that needs the

@@ -598,6 +598,9 @@ mod crash_recovery;
 /// The file system that stops a commit where the anchor does not, counts reads and acts after one.
 #[path = "gate4e_phase_transition_test/faulty_fs.rs"]
 mod faulty_fs;
+/// The final inventory capture (E3a): published only under the exclusive admission.
+#[path = "gate4e_phase_transition_test/final_capture.rs"]
+mod final_capture;
 /// The writer journal locator (L1): where the journal of one installation is found, authenticated.
 #[path = "gate4e_phase_transition_test/locator.rs"]
 mod locator;

@@ -64,6 +64,7 @@ pub use admission::{
 };
 pub use authority::{
     advance_live_migration, begin_streamed_capture, commit_catalog_change,
+    commit_final_inventory_capture, commit_final_streamed_inventory_capture,
     commit_inventory_capture, commit_journal_checkpoint, commit_journal_takeover,
     commit_lease_renewal, commit_phase_transition, commit_streamed_inventory_capture,
     AuthorityError, BindingAdvance, CatalogChange, CatalogCommit, CatalogRecoveryReason,

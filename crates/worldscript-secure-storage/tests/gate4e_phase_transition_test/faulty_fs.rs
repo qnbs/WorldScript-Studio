@@ -1,6 +1,7 @@
 //! A file system that stops a root commit where the anchor does not: it fails the creation of a file
 //! below a named fragment, or the rename onto a named target, and delegates everything else. It also
-//! counts the bounded reads it serves and can run an action right after the n-th of them.
+//! counts every call it serves, and the bounded reads separately, and can run an action right after the
+//! n-th bounded read.
 
 use std::ffi::OsString;
 use std::fs::File;
@@ -14,6 +15,7 @@ pub struct FaultyFs {
     inner: StdFs,
     fail_create_below: Option<&'static str>,
     fail_rename_to: Option<&'static str>,
+    calls: usize,
     #[cfg(unix)]
     reads: usize,
     #[cfg(unix)]
@@ -27,6 +29,7 @@ impl FaultyFs {
             inner: StdFs,
             fail_create_below: None,
             fail_rename_to: None,
+            calls: 0,
             #[cfg(unix)]
             reads: 0,
             #[cfg(unix)]
@@ -42,6 +45,11 @@ impl FaultyFs {
             after_reads: Some((count, Box::new(action))),
             ..Self::observing()
         }
+    }
+
+    /// How many calls of any kind were served: zero means the file system was never touched.
+    pub fn calls(&self) -> usize {
+        self.calls
     }
 
     /// How many bounded reads were served.
@@ -89,6 +97,7 @@ impl DurableFs for FaultyFs {
     type File = File;
 
     fn create_new(&mut self, path: &Path) -> io::Result<File> {
+        self.calls += 1;
         if contains(path, self.fail_create_below) {
             return Err(injected());
         }
@@ -96,6 +105,7 @@ impl DurableFs for FaultyFs {
     }
 
     fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.calls += 1;
         if contains(to, self.fail_rename_to) {
             return Err(injected());
         }
@@ -103,14 +113,17 @@ impl DurableFs for FaultyFs {
     }
 
     fn sync_file(&mut self, file: &mut File) -> io::Result<()> {
+        self.calls += 1;
         self.inner.sync_file(file)
     }
 
     fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
+        self.calls += 1;
         self.inner.read(path)
     }
 
     fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        self.calls += 1;
         let served = self.inner.read_at_most(path, limit);
         #[cfg(unix)]
         self.after_read();
@@ -118,26 +131,32 @@ impl DurableFs for FaultyFs {
     }
 
     fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.calls += 1;
         self.inner.link_no_replace(from, to)
     }
 
     fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        self.calls += 1;
         self.inner.remove_file(path)
     }
 
     fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+        self.calls += 1;
         self.inner.sync_dir(dir)
     }
 
     fn list_dir(&mut self, dir: &Path) -> io::Result<Vec<OsString>> {
+        self.calls += 1;
         self.inner.list_dir(dir)
     }
 
     fn list_dir_at_most(&mut self, dir: &Path, limit: usize) -> io::Result<Option<Vec<OsString>>> {
+        self.calls += 1;
         self.inner.list_dir_at_most(dir, limit)
     }
 
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        self.calls += 1;
         self.inner.create_dir_all(dir)
     }
 }

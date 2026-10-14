@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::{
     advance_live_migration, begin_streamed_capture, capture_inventory, commit_catalog_change,
+    commit_final_inventory_capture, commit_final_streamed_inventory_capture,
     commit_inventory_capture, commit_journal_checkpoint, commit_journal_takeover,
     commit_lease_renewal, commit_phase_transition, commit_root, commit_streamed_inventory_capture,
     content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
@@ -465,6 +466,17 @@ impl Fixture {
         )
     }
 
+    /// The installation's exclusive admission, which the final capture needs.
+    fn exclusive(&self) -> ExclusiveAdmissionGuard {
+        let scope = AdmissionScope {
+            installation_dir: &self.base,
+            root_dir: &self.root_dir,
+        };
+        ExclusiveAdmissionGuard::try_acquire(scope)
+            .unwrap()
+            .expect("nothing else holds the admission")
+    }
+
     /// A streamed capture of `staged`, under the successor's own fence and the committed key route and
     /// epoch. The journal directory and the committed manifest are not inputs.
     fn capture_streamed(
@@ -495,6 +507,15 @@ impl Fixture {
             active_key_epoch: 1,
             conflict: self.conflict,
         };
+        if staged.successor().final_inventory_captured {
+            let mut admission = self.exclusive();
+            return commit_final_streamed_inventory_capture(
+                &mut admission,
+                fs,
+                &mut self.provider,
+                capture,
+            );
+        }
         commit_streamed_inventory_capture(
             fs,
             &mut self.provider,
@@ -578,6 +599,10 @@ impl Fixture {
             committed_manifest: &captured.committed,
             pages: &sealed,
         };
+        if captured.successor.final_inventory_captured {
+            let mut admission = self.exclusive();
+            return commit_final_inventory_capture(&mut admission, fs, &mut self.provider, capture);
+        }
         commit_inventory_capture(
             fs,
             &mut self.provider,
