@@ -8,6 +8,7 @@ use worldscript_secure_storage::{
     authenticate_journal, JournalLocator, JournalLookup, LocationFault, LocatorError,
 };
 
+#[cfg(unix)]
 use super::faulty_fs::FaultyFs;
 use super::*;
 

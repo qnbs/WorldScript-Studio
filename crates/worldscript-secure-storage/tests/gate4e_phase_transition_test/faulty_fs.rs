@@ -14,7 +14,9 @@ pub struct FaultyFs {
     inner: StdFs,
     fail_create_below: Option<&'static str>,
     fail_rename_to: Option<&'static str>,
+    #[cfg(unix)]
     reads: usize,
+    #[cfg(unix)]
     after_reads: Option<(usize, Box<dyn FnMut()>)>,
 }
 
@@ -25,12 +27,16 @@ impl FaultyFs {
             inner: StdFs,
             fail_create_below: None,
             fail_rename_to: None,
+            #[cfg(unix)]
             reads: 0,
+            #[cfg(unix)]
             after_reads: None,
         }
     }
 
-    /// Delegates everything and runs `action` right after the `count`-th bounded read.
+    /// Delegates everything and runs `action` right after the `count`-th bounded read. Only Unix tests
+    /// swap a directory under the file system's feet: Windows refuses to rename a pinned directory.
+    #[cfg(unix)]
     pub fn acting_after_reads(count: usize, action: impl FnMut() + 'static) -> Self {
         FaultyFs {
             after_reads: Some((count, Box::new(action))),
@@ -39,8 +45,19 @@ impl FaultyFs {
     }
 
     /// How many bounded reads were served.
+    #[cfg(unix)]
     pub fn reads(&self) -> usize {
         self.reads
+    }
+
+    #[cfg(unix)]
+    fn after_read(&mut self) {
+        self.reads += 1;
+        if let Some((count, action)) = self.after_reads.as_mut() {
+            if self.reads == *count {
+                action();
+            }
+        }
     }
 
     /// Fails the creation of every file whose path contains `fragment`.
@@ -95,12 +112,8 @@ impl DurableFs for FaultyFs {
 
     fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
         let served = self.inner.read_at_most(path, limit);
-        self.reads += 1;
-        if let Some((count, action)) = self.after_reads.as_mut() {
-            if self.reads == *count {
-                action();
-            }
-        }
+        #[cfg(unix)]
+        self.after_read();
         served
     }
 
