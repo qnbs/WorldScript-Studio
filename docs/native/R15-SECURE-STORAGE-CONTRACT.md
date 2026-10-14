@@ -3123,8 +3123,16 @@ write and stays prepared, and the ordinary operation that ran that recovery is r
 `begin_conversion` resolves a pending preparation through it before it reads the journal. The classification
 compares the committed root with the prepared target, both authenticated against the anchor's digests; it is
 the binding and not the phase, because the phase would need the journal locator.
-The capture, takeover and renewal writers are unchanged: they already keep the phase, and the barrier
-of the final (`ADMIT`) capture stays with E3. This opens no window and admits no producer of a binding.
+The takeover and renewal writers are unchanged: they already keep the phase. The capture of the inventory
+is split by the same mechanism (Gate 4E E3a): the preliminary inventory (`DISCOVER`) is published by
+`commit_inventory_capture` and `commit_streamed_inventory_capture`, which refuse a successor that is the
+final inventory (`FinalCaptureNotExclusive`), and the final inventory, the capture that runs in `ADMIT` and
+sets `final_inventory_captured`, is published only by `commit_final_inventory_capture` and
+`commit_final_streamed_inventory_capture`. These take the installation's `ExclusiveAdmissionGuard` by
+mutable borrow, so a shared guard does not compile; they take their root from that admission, so they can
+be given neither another root nor an alias that is retargeted afterwards; and they refuse a successor that
+is the preliminary inventory (`NotAFinalCapture`). Each refusal precedes the first read or write. This opens
+no window and admits no producer of a binding.
 
 **Owner-approved E2 direction (2026-10-11), not general source admission:** a writer journal locator
 must be explicit, immutable and scope-bound; the committed operation, key route, exact manifest digest,

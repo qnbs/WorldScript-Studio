@@ -38,6 +38,12 @@ pub enum MigrationExecutionError {
     PhaseChangeNotACheckpoint,
     /// A phase-transition commit whose successor keeps the phase: that is a progress checkpoint.
     NotAPhaseChange,
+    /// An ordinary capture commit whose successor is the final inventory (`final_inventory_captured`).
+    /// The final capture is published only by the exclusively admitted final-capture commit (§10.3).
+    FinalCaptureNotExclusive,
+    /// A final-capture commit whose successor is the preliminary inventory: that is the ordinary
+    /// capture.
+    NotAFinalCapture,
     Journal(JournalError),
 }
 

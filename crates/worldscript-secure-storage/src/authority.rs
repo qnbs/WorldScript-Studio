@@ -614,19 +614,102 @@ pub struct InventoryCapture<'a> {
 /// them as an inert directory under an unreferenced digest, after the manifest leaves revision
 /// `r + 1` as an unadopted candidate; the same call retried adopts what is already durable, writes
 /// only what is missing and advances the binding. Lock order is the root lock, then the journal
-/// mutex inside each fenced step. This commit takes no admission guard: the write barrier of the
-/// final (`ADMIT`) capture is the durable phase the orchestrator established by draining writers
-/// before publishing the transition into `ADMIT`, and the write path's refusal by that phase is
-/// wired by the first caller (Gate 4E/5; acceptance criterion on #359).
+/// mutex inside each fenced step. This commit publishes the preliminary inventory only: a successor
+/// that is the final inventory (`final_inventory_captured`, the capture that runs in `ADMIT`) is refused
+/// as `FinalCaptureNotExclusive` before anything is read or written. The final capture has its own
+/// commit, [`commit_final_inventory_capture`], which holds the installation's exclusive admission by
+/// type (Gate 4E E3a).
 pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
     layout: RootLayout<'_>,
     capture: InventoryCapture<'_>,
 ) -> Result<RootCommitted, AuthorityError> {
+    assert_capture_kind(capture.checkpoint.manifest, CaptureAdmission::Ordinary)?;
+    let root = CaptureRoot {
+        layout,
+        held: HeldRoot::Acquire,
+    };
+    capture_pages(fs, provider, root, capture)
+}
+
+/// Captures the final inventory: the commit of [`commit_inventory_capture`] for the capture that runs
+/// in `ADMIT` and sets `final_inventory_captured`, behind the write barrier (§10.3).
+///
+/// It takes the installation's [`ExclusiveAdmissionGuard`] by mutable borrow, which no shared holder
+/// can coexist with, and the root commit event from that same admission, so a shared guard does not
+/// compile here:
+///
+/// ```compile_fail
+/// use worldscript_secure_storage::{
+///     commit_final_inventory_capture, InventoryCapture, KeyProvider, SharedAdmissionGuard, StdFs,
+/// };
+///
+/// fn shared_cannot_capture_the_final_inventory<P: KeyProvider>(
+///     admission: &mut SharedAdmissionGuard,
+///     provider: &mut P,
+///     capture: InventoryCapture<'_>,
+/// ) {
+///     let _ = commit_final_inventory_capture(admission, &mut StdFs, provider, capture);
+/// }
+/// ```
+///
+/// The same call with the exclusive guard compiles:
+///
+/// ```
+/// use worldscript_secure_storage::{
+///     commit_final_inventory_capture, ExclusiveAdmissionGuard, InventoryCapture, KeyProvider,
+///     StdFs,
+/// };
+///
+/// fn exclusive_can_capture_the_final_inventory<P: KeyProvider>(
+///     admission: &mut ExclusiveAdmissionGuard,
+///     provider: &mut P,
+///     capture: InventoryCapture<'_>,
+/// ) {
+///     let _ = commit_final_inventory_capture(admission, &mut StdFs, provider, capture);
+/// }
+/// ```
+///
+/// The root is the one the admission was acquired for (its canonical path), so the commit takes no
+/// layout and cannot be given another root or an alias that is retargeted afterwards. Everything else
+/// is as [`commit_inventory_capture`]. The successor must be the final inventory (`NotAFinalCapture`
+/// otherwise); the ordinary capture refuses exactly those successors (`FinalCaptureNotExclusive`), so
+/// neither can publish the other's manifest. A root commit event in flight elsewhere is `RootBusy`;
+/// both refusals write nothing. This opens no window: while a migration is bound, the root keeps
+/// refusing every ordinary operation (Gate 4E E1).
+pub fn commit_final_inventory_capture<F: DurableFs, P: KeyProvider>(
+    admission: &mut ExclusiveAdmissionGuard,
+    fs: &mut F,
+    provider: &mut P,
+    capture: InventoryCapture<'_>,
+) -> Result<RootCommitted, AuthorityError> {
+    assert_capture_kind(capture.checkpoint.manifest, CaptureAdmission::Exclusive)?;
+    let root_dir = admission.root_dir().to_path_buf();
+    let event = admission
+        .try_root_commit()
+        .map_err(AuthorityError::Admission)?
+        .ok_or(AuthorityError::RootBusy)?;
+    let held = event.root_guard().map_err(AuthorityError::Admission)?;
+    let root = CaptureRoot {
+        layout: RootLayout {
+            root_dir: &root_dir,
+        },
+        held: HeldRoot::Held(held),
+    };
+    capture_pages(fs, provider, root, capture)
+}
+
+/// Stores the pages of `capture`, publishes the manifest that names them and advances the binding.
+fn capture_pages<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    root: CaptureRoot<'_>,
+    capture: InventoryCapture<'_>,
+) -> Result<RootCommitted, AuthorityError> {
     let checkpoint = capture.checkpoint;
     let plan = CapturePlan {
-        layout,
+        root,
         checkpoint,
         committed_revision: capture.committed_manifest.journal_revision,
     };
@@ -678,6 +761,50 @@ pub fn commit_streamed_inventory_capture<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     capture: StreamedInventoryCapture<'_>,
 ) -> Result<RootCommitted, AuthorityError> {
+    assert_capture_kind(capture.staged.successor(), CaptureAdmission::Ordinary)?;
+    let root = CaptureRoot {
+        layout,
+        held: HeldRoot::Acquire,
+    };
+    capture_staged(fs, provider, root, capture)
+}
+
+/// Captures a staged final inventory: [`commit_streamed_inventory_capture`] for the capture that runs
+/// in `ADMIT`, under the installation's exclusive admission by type, exactly as
+/// [`commit_final_inventory_capture`] is for the capture from pages in memory (Gate 4E E3a). The root
+/// is the one the admission was acquired for, the successor must be the final inventory
+/// (`NotAFinalCapture` otherwise) and the ordinary streamed capture refuses it
+/// (`FinalCaptureNotExclusive`).
+pub fn commit_final_streamed_inventory_capture<F: DurableFs, P: KeyProvider>(
+    admission: &mut ExclusiveAdmissionGuard,
+    fs: &mut F,
+    provider: &mut P,
+    capture: StreamedInventoryCapture<'_>,
+) -> Result<RootCommitted, AuthorityError> {
+    assert_capture_kind(capture.staged.successor(), CaptureAdmission::Exclusive)?;
+    let root_dir = admission.root_dir().to_path_buf();
+    let event = admission
+        .try_root_commit()
+        .map_err(AuthorityError::Admission)?
+        .ok_or(AuthorityError::RootBusy)?;
+    let held = event.root_guard().map_err(AuthorityError::Admission)?;
+    let root = CaptureRoot {
+        layout: RootLayout {
+            root_dir: &root_dir,
+        },
+        held: HeldRoot::Held(held),
+    };
+    capture_staged(fs, provider, root, capture)
+}
+
+/// Promotes the staged pages of `capture`, publishes the manifest that names them and advances the
+/// binding, then drops the staged files.
+fn capture_staged<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &mut P,
+    root: CaptureRoot<'_>,
+    capture: StreamedInventoryCapture<'_>,
+) -> Result<RootCommitted, AuthorityError> {
     let staged = capture.staged;
     let checkpoint = JournalCheckpoint {
         manifest: staged.successor(),
@@ -692,7 +819,7 @@ pub fn commit_streamed_inventory_capture<F: DurableFs, P: KeyProvider>(
     };
     // The successor is the revision after the one the pages are written under.
     let plan = CapturePlan {
-        layout,
+        root,
         checkpoint,
         committed_revision: staged.successor().journal_revision.saturating_sub(1),
     };
@@ -915,9 +1042,46 @@ impl StagingSession {
 /// pages: where the root lives, the checkpoint to publish, and the revision of the committed manifest
 /// the pages are written under.
 struct CapturePlan<'a> {
-    layout: RootLayout<'a>,
+    root: CaptureRoot<'a>,
     checkpoint: JournalCheckpoint<'a>,
     committed_revision: u64,
+}
+
+/// Where a capture commit runs: the root layout and the root commit lock, which an ordinary capture
+/// takes itself and the final capture already holds through its exclusive admission.
+struct CaptureRoot<'a> {
+    layout: RootLayout<'a>,
+    held: HeldRoot<'a>,
+}
+
+enum HeldRoot<'a> {
+    /// Take the root commit lock for the duration of the commit.
+    Acquire,
+    /// The root commit event of the exclusive admission is already held.
+    Held(&'a RootCommitGuard),
+}
+
+/// Whether a capture commit runs under the exclusive admission.
+#[derive(Clone, Copy)]
+enum CaptureAdmission {
+    Ordinary,
+    Exclusive,
+}
+
+/// Refuses a capture on the wrong commit before anything is read or written: the final inventory
+/// (`final_inventory_captured`) only under the exclusive admission, the preliminary one only without.
+fn assert_capture_kind(
+    successor: &JournalManifest,
+    admission: CaptureAdmission,
+) -> Result<(), AuthorityError> {
+    let refusal = match (admission, successor.final_inventory_captured) {
+        (CaptureAdmission::Ordinary, true) => MigrationExecutionError::FinalCaptureNotExclusive,
+        (CaptureAdmission::Exclusive, false) => MigrationExecutionError::NotAFinalCapture,
+        _ => return Ok(()),
+    };
+    Err(AuthorityError::Journal(JournalDurableError::Authority(
+        refusal,
+    )))
 }
 
 /// The commit shared by the capture from pages in memory and the capture of a staged inventory.
@@ -942,17 +1106,25 @@ where
     ) -> Result<DirectoryDurability, JournalDurableError>,
 {
     let CapturePlan {
-        layout,
+        root,
         checkpoint,
         committed_revision,
     } = plan;
+    let layout = root.layout;
     check_operation_id(&checkpoint.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
     // The caller's token must be the successor's before anything is written, or the pages could be
     // stored under a fence the publish then refuses.
     assert_fence(checkpoint.manifest, checkpoint.fence)
         .map_err(|error| AuthorityError::Journal(JournalDurableError::Fence(error)))?;
-    let held = acquire_root_commit(layout)?;
+    let acquired;
+    let held = match root.held {
+        HeldRoot::Held(held) => held,
+        HeldRoot::Acquire => {
+            acquired = acquire_root_commit(layout)?;
+            &acquired
+        }
+    };
     let commit = journal_catalog_commit(&checkpoint);
     let committed = committed_binding(fs, provider, layout, commit)?;
     let key = route_journal_key(fs, provider, layout, checkpoint.journal)?;
@@ -983,7 +1155,7 @@ where
         provider,
         layout,
         commit,
-        &held,
+        held,
         Some(JournalStep {
             binding: BindingStep::Capture(&advance),
             key: &key,

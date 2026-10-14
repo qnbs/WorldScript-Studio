@@ -1376,3 +1376,28 @@ directory-kind check, the final pin check or the root exclusion of the placement
 and the doctest fails to be a compile failure without its `drop(event)`. L1 adds no consumer of the
 proof: the E1 barrier, `ProtectedStorage`, the `PREPARE`/`DONE` windows and the E3 capture barrier are
 unchanged.
+
+### The final capture is exclusive (Gate 4E E3a)
+
+The capture of the inventory is split like the phase change was. `commit_inventory_capture` and
+`commit_streamed_inventory_capture` publish the preliminary inventory and refuse the final one
+(`FinalCaptureNotExclusive`); `commit_final_inventory_capture` and `commit_final_streamed_inventory_capture`
+take the installation's `ExclusiveAdmissionGuard` by mutable borrow and its root, publish the final
+inventory only and refuse the preliminary one (`NotAFinalCapture`). Both kinds are told apart by the
+successor's `final_inventory_captured`, which the capture relation ties to the `ADMIT` phase of the committed
+predecessor, and the check runs before any read or write. The pins, in
+`gate4e_phase_transition_test/final_capture.rs`, run for the capture from pages in memory and for the streamed
+capture:
+
+| Claim | Test |
+|---|---|
+| the ordinary commit refuses the final inventory and leaves the root tree, the journal tree and the anchor unchanged; the exclusive commit publishes it, binding the final manifest in `ADMIT` at the next revision | `the_final_inventory_is_captured_only_under_the_exclusive_admission` |
+| the exclusive commit refuses the preliminary inventory and leaves everything unchanged; the ordinary commit still publishes it | `the_exclusive_final_capture_refuses_a_preliminary_inventory` |
+
+A shared guard does not compile for `commit_final_inventory_capture`: a `compile_fail` doctest pairs with the
+same call, made with the exclusive guard, that compiles. The existing capture tests of
+`gate4d_root_binding_test.rs` publish their final captures through the exclusive commit (their fixture takes
+the admission), which exercises the positive path across the whole earlier matrix. The tests were
+mutation-checked: without either refusal the matching test fails. This slice opens no window; the E1
+barrier, the `PREPARE`/`DONE` windows and the locator's consumers are unchanged.
+
