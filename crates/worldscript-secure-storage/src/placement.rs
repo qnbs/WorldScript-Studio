@@ -75,8 +75,7 @@ impl PinnedDirectory {
     /// authority root. The root is excluded by the path and by identity: on a case-insensitive file
     /// system another spelling of the root's name opens the root itself.
     fn confined(self, installation: &Path, root: &Path) -> Result<Self, PlacementError> {
-        let below = self.canonical != installation && self.canonical.starts_with(installation);
-        if !below || self.canonical.starts_with(root) || self.is_the_root(root) {
+        if !self.is_below(installation) || self.is_the_root(root) {
             return Err(PlacementError::Misplaced);
         }
         if self.is_current() {
@@ -86,10 +85,15 @@ impl PinnedDirectory {
         }
     }
 
-    /// Whether the pinned directory is the authority root. An identity that cannot be read counts as
-    /// the root, so the placement fails closed.
+    /// Whether the pinned directory lies strictly below the installation.
+    fn is_below(&self, installation: &Path) -> bool {
+        self.canonical != installation && self.canonical.starts_with(installation)
+    }
+
+    /// Whether the pinned directory is the authority root, by path or by identity. An identity that
+    /// cannot be read counts as the root, so the placement fails closed.
     fn is_the_root(&self, root: &Path) -> bool {
-        sys::still_named(&self.pin, root).unwrap_or(true)
+        self.canonical.starts_with(root) || sys::still_named(&self.pin, root).unwrap_or(true)
     }
 
     /// Whether the path still names the directory that was pinned.
