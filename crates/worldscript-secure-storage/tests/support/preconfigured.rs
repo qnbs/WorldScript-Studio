@@ -139,7 +139,7 @@ impl Authority<'_> {
         // The previous holder of this root has released it, but a child process that a concurrently
         // running test of this binary forks keeps a duplicate of the released descriptor until it
         // executes, so the lock can still read as held for a moment right after a release.
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + Duration::from_secs(60);
         let event = loop {
             match exclusive.try_root_commit().unwrap() {
                 Some(event) => break event,

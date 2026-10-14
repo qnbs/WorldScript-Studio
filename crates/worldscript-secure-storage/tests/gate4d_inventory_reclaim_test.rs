@@ -177,6 +177,11 @@ fn nothing_that_is_not_ours_is_removed() {
         .inventory()
         .join(format!("pending-0-{}", fresh_tag()));
     std::fs::create_dir_all(zero.join("page-0")).unwrap();
+    // A page index the format cannot produce (a capture has at most 1,000,000 pages) is not ours either.
+    let beyond = scenario
+        .inventory()
+        .join(format!("pending-4-{}", fresh_tag()));
+    std::fs::create_dir_all(beyond.join("page-1000000")).unwrap();
     scenario.advance(&manifest_at(4));
     scenario.advance(&manifest_at(5));
     let before = tree_under(scenario.path());
@@ -190,6 +195,7 @@ fn nothing_that_is_not_ours_is_removed() {
         ),
         ("keep-me".to_owned(), KeepReason::Unrecognised),
         (name_of(&zero), KeepReason::Unrecognised),
+        (name_of(&beyond), KeepReason::Unrecognised),
     ]
     .into();
     assert_eq!(

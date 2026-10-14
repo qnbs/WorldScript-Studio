@@ -344,6 +344,7 @@ impl Sweep<'_> {
                 .and_then(|text| text.strip_prefix(PAGE_DIR_PREFIX))
                 .and_then(canonical_u64)
                 .and_then(|index| u32::try_from(index).ok())
+                .filter(|index| (*index as usize) < MAX_PAGE_DIRS)
                 .ok_or_else(|| walk.refuse(KeepReason::Unrecognised))?;
             let page_dir = dir.join(&name);
             if !is_plain(ctx.fs, &page_dir, EntryKind::Directory) {

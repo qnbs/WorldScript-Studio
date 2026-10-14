@@ -128,7 +128,6 @@ impl Section {
 /// A manifest split into its sections; the first one is the preamble.
 struct Manifest {
     sections: Vec<Section>,
-    text: String,
 }
 
 impl Manifest {
@@ -141,10 +140,7 @@ impl Manifest {
                 body: body.to_owned(),
             })
             .collect();
-        Manifest {
-            sections,
-            text: text.to_owned(),
-        }
+        Manifest { sections }
     }
 
     fn read(path: &Path) -> Self {
@@ -163,13 +159,47 @@ impl Manifest {
             .collect()
     }
 
-    fn default_features(&self) -> Vec<Text> {
-        self.text
-            .lines()
-            .map(str::trim)
-            .filter(|line| line.starts_with("default"))
-            .map(|line| Text(line.to_owned()))
+    /// The `[features]` table: each feature with the features it turns on.
+    fn feature_table(&self) -> Vec<(String, Vec<String>)> {
+        self.sections
+            .iter()
+            .filter(|section| {
+                section
+                    .header
+                    .trim_start_matches('[')
+                    .starts_with("features")
+            })
+            .flat_map(Section::entries)
+            .filter_map(|entry| {
+                let (name, list) = entry.split_once('=')?;
+                let enabled = list.split('"').skip(1).step_by(2).map(str::to_owned);
+                Some((name.trim().to_owned(), enabled.collect()))
+            })
             .collect()
+    }
+
+    /// `default` and every feature it turns on, directly or through other features.
+    fn default_closure(&self) -> Vec<String> {
+        let table = self.feature_table();
+        let mut closure = vec!["default".to_owned()];
+        let mut next = 0;
+        while let Some(current) = closure.get(next).cloned() {
+            next += 1;
+            let enabled = table
+                .iter()
+                .filter(|(name, _)| *name == current)
+                .flat_map(|(_, enabled)| enabled.clone());
+            let fresh: Vec<String> = enabled.filter(|name| !closure.contains(name)).collect();
+            closure.extend(fresh);
+        }
+        closure
+    }
+
+    fn default_enables_a_test_feature(&self) -> bool {
+        let closure = self.default_closure();
+        TEST_ONLY_FEATURES
+            .iter()
+            .any(|feature| closure.iter().any(|name| name == feature))
     }
 }
 
@@ -228,13 +258,25 @@ fn no_manifest_enables_a_test_only_feature_of_the_crate_for_a_production_build()
 
 #[test]
 fn the_default_features_enable_no_test_only_feature() {
-    let defaults = Manifest::read(&File::CargoToml.path()).default_features();
-    let enabling: Vec<&String> = defaults
-        .iter()
-        .filter(|text| text.enables_a_test_feature())
-        .map(|text| &text.0)
-        .collect();
-    assert!(enabling.is_empty(), "{enabling:?}");
+    let manifest = Manifest::read(&File::CargoToml.path());
+    assert!(
+        !manifest.default_enables_a_test_feature(),
+        "{:?}",
+        manifest.default_closure()
+    );
+}
+
+#[test]
+fn the_default_closure_follows_aliases() {
+    let cases = [
+        "[features]\ndefault = [\"alias\"]\nalias = [\"test-support\"]\ntest-support = []\n",
+        "[features]\ndefault = [\n  \"a\",\n]\na = [\n  \"b\",\n  \"test-randomness\",\n]\nb = []\n",
+        "[features]\ndefault = [\"a\"]\na = [\"b\"]\nb = [\"a\"]\ntest-support = []\n",
+        "[features]\ndefault = []\ntest-support = [\"test-randomness\"]\n",
+        "[package]\nname = \"x\"\n",
+    ];
+    let enabled = cases.map(|text| Manifest::parse(text).default_enables_a_test_feature());
+    assert_eq!(enabled, [true, true, false, false, false]);
 }
 
 #[test]
