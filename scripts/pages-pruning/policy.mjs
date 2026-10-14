@@ -14,8 +14,8 @@ export const SITE = 'https://qnbs.github.io/WorldScript-Studio/';
 export const WORKFLOW = `${REPOSITORY}/.github/workflows/prune-deployments.yml@refs/heads/main`;
 export const MAX_BATCH = 10;
 export const ACTIONS_BOT = 'github-actions[bot]';
-// QNBS-v3: GitHub offers no compare-and-delete; destructive writes stay closed until the owner admits a writer-fence protocol for #1028, and the workflow token carries no deployments:write while this is false.
-export const DESTRUCTIVE_WRITES_ADMITTED = false;
+// QNBS-v3: GitHub offers no compare-and-delete; this reviewed change admits scheduled main runs to write under the bounded writer fence in docs/PAGES-DEPLOYMENT-RECORD-PRUNING.md (#1028), and the job token carries deployments:write exactly while this is true.
+export const DESTRUCTIVE_WRITES_ADMITTED = true;
 
 const FULL_SHA = /^[a-f0-9]{40}$/;
 const JOB_URL =

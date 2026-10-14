@@ -10,11 +10,18 @@ const BACKOFF_CAP_MS = 2000;
 export const READ_ATTEMPTS = 3;
 const RATE_RESERVE = 100;
 
-// QNBS-v3: a cost is funded only when it fits both the local request counter and the live rate allowance last reported by GitHub, with a reserve kept for CI.
+// QNBS-v3: a cost is funded only when it fits both the local request counter and a live rate allowance that GitHub reported with the last response, with a reserve kept for CI; an unknown allowance funds nothing, so a response without a usable rate header can never leave a stale budget behind to pay for a write.
 export function funds(ctx, cost) {
   const room = ctx.used + cost <= ctx.limit;
-  const rate = ctx.remaining === null || ctx.remaining >= RATE_RESERVE + cost;
+  const rate = ctx.remaining !== null && ctx.remaining >= RATE_RESERVE + cost;
   return room && rate;
+}
+
+// QNBS-v3: the write boundary re-proves the budget with fresh evidence and stops the run with the exact reason when it cannot be funded.
+export function assertFunds(ctx, cost) {
+  if (funds(ctx, cost)) return;
+  if (ctx.remaining === null) refuse('rate-unknown');
+  refuse(ctx.used + cost > ctx.limit ? 'request-budget' : 'rate-reserve');
 }
 
 export const defaultPause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -65,6 +72,12 @@ function replaceRate(ctx, headers) {
   noteRate(ctx, headers);
 }
 
+function noteRetried(ctx, headers) {
+  const reported = Number(headers?.['x-ratelimit-remaining']);
+  if (Number.isFinite(reported)) ctx.remaining = reported;
+  else if (ctx.remaining !== null) ctx.remaining -= 1;
+}
+
 // QNBS-v3: every read, each retry included, passes the live allowance before it is sent; once a response has succeeded the allowance must be known, so a missing rate header stops the run instead of leaving the local counter as the only brake (failed attempts before any success are bounded by READ_ATTEMPTS), and a read never takes the allowance below the CI reserve.
 function spendRead(ctx) {
   if (ctx.answered && ctx.remaining === null) refuse('rate-unknown');
@@ -81,9 +94,12 @@ export async function read(ctx, route, parameters = {}) {
       replaceRate(ctx, response.headers);
       return response;
     } catch (error) {
-      noteRate(ctx, error.response?.headers);
       const delay = retryDelay(error, attempt);
-      if (!shouldRetry(error, attempt, delay)) throw error;
+      const retrying = shouldRetry(error, attempt, delay);
+      // QNBS-v3: an error that ends the read replaces the allowance like a success does, so a header-less 404 that a caller turns into an unproved candidate cannot leave a stale allowance behind; a retried failure without a usable header still consumed a request, so the known allowance drops by one before the retry passes the reserve check.
+      if (retrying) noteRetried(ctx, error.response?.headers);
+      else replaceRate(ctx, error.response?.headers);
+      if (!retrying) throw error;
       await ctx.pause(delay);
     }
   }
@@ -97,7 +113,7 @@ export async function write(ctx, route, parameters) {
     replaceRate(ctx, response?.headers);
     return response;
   } catch (error) {
-    noteRate(ctx, error.response?.headers);
+    replaceRate(ctx, error.response?.headers);
     throw error;
   }
 }

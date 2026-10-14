@@ -3,7 +3,12 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { REQUEST_LIMIT } from '../../../scripts/pages-pruning/github.mjs';
+import {
+  assertFunds,
+  createContext,
+  funds,
+  REQUEST_LIMIT,
+} from '../../../scripts/pages-pruning/github.mjs';
 import { EXAMINE_LIMIT, PUBLISH_EVENTS } from '../../../scripts/pages-pruning/provenance.mjs';
 import {
   candidateCeiling,
@@ -25,6 +30,7 @@ import {
   date,
   execute,
   executeDestructive,
+  headerlessError,
   holds,
   job as jobFixture,
   jobUrl,
@@ -34,6 +40,7 @@ import {
   REPO_ID,
   ROOT,
   reads,
+  reconcileShipped,
   record,
   records,
   status,
@@ -209,14 +216,34 @@ test('an explicit dry-run stays read-only even when the destructive gate is open
   assert.deepEqual(writes(github), []);
 });
 
-test('the shipped destructive gate is closed and a scheduled run stays read-only', async () => {
-  assert.equal(DESTRUCTIVE_WRITES_ADMITTED, false);
+test('the shipped destructive gate admits a scheduled main run, and only that, to write', async () => {
+  assert.equal(DESTRUCTIVE_WRITES_ADMITTED, true);
+  const scheduled = client(records(5));
+  const result = await reconcileShipped(scheduled);
+  assert.equal(result.mode, 'delete');
+  assert.equal(result.deleted, 2);
+  assert.equal(result.failed, 0);
+  assert.equal(result.reasons['destructive-gate-closed'], undefined);
+  assert.equal(writes(scheduled).length, 4);
+  // The same code stays read-only for a dispatch, for the explicit dry-run and for an untrusted trigger.
+  for (const options of [
+    { authority: { ...authority, eventName: 'workflow_dispatch' } },
+    { dryRun: true },
+  ]) {
+    const readOnly = client(records(5));
+    const dry = await reconcileShipped(readOnly, options);
+    assert.equal(dry.mode, 'dry-run');
+    assert.equal(dry.deleted, 0);
+    assert.deepEqual(writes(readOnly), []);
+  }
+});
+
+test('the gate constant is the only switch: closed, a scheduled run is read-only and says so', async () => {
   const github = client(records(5));
-  const result = await execute(github);
+  const result = await reconcileShipped(github, { destructive: false });
   assert.equal(result.mode, 'dry-run');
   assert.equal(result.candidate, 2);
   assert.equal(result.deleted, 0);
-  assert.equal(result.failed, 0);
   assert.equal(result.reasons['destructive-gate-closed'], 1);
   assert.deepEqual(writes(github), []);
 });
@@ -253,6 +280,28 @@ test('real workflow admits only main schedule and read-only dispatch with serial
   assert.ok(source.includes(`ref: \${{ github.sha }}`));
   assert.ok(source.includes('persist-credentials: false'));
   assert.ok(source.includes('retries: 0'));
+});
+
+// The jobs of a workflow file keyed by their two-space-indented id.
+const jobsOf = (source) => {
+  const parts = source.slice(source.indexOf('\njobs:\n')).split(/^ {2}([a-z][\w-]*):$/m);
+  return Object.fromEntries(
+    parts
+      .slice(1)
+      .map((part, index, all) => (index % 2 === 0 ? [part, all[index + 1]] : null))
+      .filter(Boolean),
+  );
+};
+
+test('only the scheduled job holds deployments:write, the dispatched plan job is read-only', () => {
+  const jobs = jobsOf(workflowSource('prune-deployments.yml'));
+  assert.deepEqual(Object.keys(jobs).sort(), ['plan', 'prune']);
+  assert.match(jobs.prune, /github\.event_name == 'schedule'/);
+  assert.match(jobs.prune, /^\s+deployments:\s*write\s*$/m);
+  assert.match(jobs.plan, /github\.event_name == 'workflow_dispatch'/);
+  assert.match(jobs.plan, /^\s+deployments:\s*read\s*$/m);
+  assert.ok(!/deployments:\s*write/.test(jobs.plan));
+  assert.ok(!/schedule/.test(jobs.plan.replace(/github\.event_name == 'workflow_dispatch'/, '')));
 });
 
 test('inactivates then revalidates before deletion; repeated run is idempotent', async () => {
@@ -805,6 +854,83 @@ test('the same budget refusal after the inactive-status POST stays a failure', a
   );
 });
 
+test('an unknown allowance funds nothing and the write boundary names the exact reason', () => {
+  const ctx = createContext({ github: {}, authority });
+  ctx.remaining = null;
+  assert.equal(funds(ctx, 1), false);
+  assert.throws(() => assertFunds(ctx, 1), /rate-unknown/);
+  ctx.remaining = 100;
+  assert.equal(funds(ctx, 1), false);
+  assert.throws(() => assertFunds(ctx, 1), /rate-reserve/);
+  ctx.remaining = 101;
+  assert.equal(funds(ctx, 1), true);
+  assert.doesNotThrow(() => assertFunds(ctx, 1));
+  ctx.remaining = 5000;
+  ctx.used = ctx.limit;
+  assert.equal(funds(ctx, 1), false);
+  assert.throws(() => assertFunds(ctx, 1), /request-budget/);
+});
+
+test('an allowance that the last read before the first write does not report funds no write', async () => {
+  const github = client(records(4), (route) => {
+    if (route.endsWith('/branches/main'))
+      return {
+        data: { commit: { sha: authority.sha } },
+        headers: { 'x-ratelimit-remaining': undefined },
+      };
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 0);
+  assert.ok(result.reasons['budget-limit'] > 0);
+  assert.equal(result.followUpRequired, true);
+  assert.deepEqual(writes(github), []);
+});
+
+for (const [remaining, reason] of [
+  ['100', 'rate-reserve'],
+  [undefined, 'rate-unknown'],
+])
+  test(`the DELETE is funded again after the inactive-status POST: allowance ${remaining ?? 'missing'} stops it as ${reason}`, async () => {
+    let mains = 0;
+    const github = client(records(4), (route) => {
+      if (route.endsWith('/branches/main') && ++mains === 2)
+        return {
+          data: { commit: { sha: authority.sha } },
+          headers: { 'x-ratelimit-remaining': remaining },
+        };
+    });
+    const result = await executeDestructive(github);
+    assert.equal(result.failed, 1);
+    assert.equal(result.reasons[reason], 1);
+    assert.equal(result.deleted, 0);
+    assert.equal(result.inactivated, 1);
+    assert.deepEqual(
+      writes(github).map((call) => call.route),
+      [`POST ${ROOT}/deployments/1/statuses`],
+    );
+    // The record stays inactive and is retired by a later pass without another POST.
+    const next = await executeDestructive(client(github.state));
+    assert.equal(next.failed, 0);
+    assert.equal(next.deleted, 1);
+  });
+
+test('a publication that lands between the two write boundaries stops the DELETE and the run', async () => {
+  let lists = 0;
+  const github = client(records(6), (route, _parameters, state) => {
+    // The third list read is the revalidation that follows the inactive-status POST.
+    if (route.includes('?environment=') && ++lists === 3) state.push(record(99));
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['current-moved'], 1);
+  assert.equal(result.deleted, 0);
+  assert.deepEqual(
+    writes(github).map((call) => call.route),
+    [`POST ${ROOT}/deployments/3/statuses`],
+  );
+});
+
 // The allowance falls by one per call, like the real counter.
 const countdown = (start) => (calls) => ({ 'x-ratelimit-remaining': String(start - calls) });
 
@@ -848,6 +974,59 @@ test('a later response without a rate header does not leave a stale allowance be
   const result = await execute(github, { dryRun: true });
   assert.equal(result.failed, 1);
   assert.equal(result.reasons['rate-unknown'], 1);
+  assert.equal(github.calls.length, 2);
+});
+
+// The first candidate's publication run (not a slot) is the read that fails.
+const firstCandidateRun = (slotRuns, fail) => {
+  let failed = false;
+  return (route) => {
+    const run = /\/actions\/runs\/(\d+)$/.exec(route);
+    if (!run || slotRuns.includes(Number(run[1])) || failed) return undefined;
+    failed = true;
+    throw fail();
+  };
+};
+
+test('a header-less error that ends a read leaves the allowance unknown, so no later write is funded', async () => {
+  const control = client(
+    records(6),
+    firstCandidateRun([1005, 1006], () => apiError(404)),
+  );
+  assert.equal((await executeDestructive(control)).deleted, 2);
+  const github = client(
+    records(6),
+    firstCandidateRun([1005, 1006], () => headerlessError(404)),
+  );
+  const result = await executeDestructive(github);
+  assert.equal(result.deleted, 0);
+  assert.deepEqual(writes(github), []);
+});
+
+test('a header-less error on a read that is retried keeps the allowance until the retry answers', async () => {
+  const seen = new Set();
+  const github = client(records(6), (route, parameters) => {
+    const key = `${route}${JSON.stringify(parameters)}`;
+    if (!route.startsWith('GET ') || !route.includes('/actions/') || seen.has(key)) return;
+    seen.add(key);
+    throw headerlessError(503);
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 3);
+});
+
+test('a header-less failure that is retried takes one off the known allowance before the retry is admitted', async () => {
+  const github = client(
+    records(4),
+    (_route, _parameters, _state, calls) => {
+      if (calls.length === 2) throw headerlessError(503);
+    },
+    { 'x-ratelimit-remaining': '101' },
+  );
+  const result = await execute(github, { dryRun: true });
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['rate-reserve'], 1);
   assert.equal(github.calls.length, 2);
 });
 
@@ -907,14 +1086,32 @@ test('main moving invalidates hold and executable authority before mutation', as
   assert.deepEqual(writes(github), []);
 });
 
-test('candidate SHA drift is skipped with zero writes', async () => {
+test('candidate SHA drift stops the run with zero writes instead of deleting its neighbours', async () => {
   let lists = 0;
-  const github = client(records(4), (route, _parameters, state) => {
-    if (route.includes('?environment=') && ++lists === 2) state[0].sha = 'b'.repeat(40);
+  // The candidates of eight records are retired newest first; the second list read is the first revalidation.
+  const github = client(records(8), (route, _parameters, state) => {
+    if (route.includes('?environment=') && ++lists === 2) state[4].sha = 'b'.repeat(40);
   });
   const result = await executeDestructive(github);
-  assert.equal(result.skipped, 1);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['candidate-moved'], 1);
+  assert.equal(result.deleted, 0);
   assert.deepEqual(writes(github), []);
+});
+
+test('a candidate that vanished is skipped and the run goes on with the next one', async () => {
+  let lists = 0;
+  const github = client(records(6), (route, _parameters, state) => {
+    if (route.includes('?environment=') && ++lists === 2) state.splice(2, 1);
+  });
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.deleted, 2);
+  assert.deepEqual(
+    github.state.map((item) => item.id),
+    [4, 5, 6],
+  );
 });
 
 test('status promotion after inactivation prevents deletion', async () => {
@@ -955,6 +1152,27 @@ test('more changed unfocused records than a refresh can afford stop the run befo
   assert.deepEqual(writes(github), []);
   // The refusal comes before any history of the changed records is read again.
   assert.equal(statusReads(github), 10);
+});
+
+const withoutUpdatedAt = (count) => {
+  const input = records(10);
+  for (const item of input.slice(0, count)) delete item.updated_at;
+  return input;
+};
+
+test('unfocused records without a usable updated_at are reloaded, and more than a refresh can afford stop the run', async () => {
+  const github = client(withoutUpdatedAt(EXTRA_RELOADS + 1));
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 1);
+  assert.equal(result.reasons['inventory-churn'], 1);
+  assert.deepEqual(writes(github), []);
+});
+
+test('as many records without a usable updated_at as a refresh can afford are reloaded and the run goes on', async () => {
+  const github = client(withoutUpdatedAt(EXTRA_RELOADS));
+  const result = await executeDestructive(github);
+  assert.equal(result.failed, 0);
+  assert.equal(result.deleted, 7);
 });
 
 test('as many changed unfocused records as a refresh can afford are reloaded and the run goes on', async () => {
@@ -1103,9 +1321,9 @@ test('a candidate pass is reserved at the observed inventory depth before any wr
   assert.equal(done.deleted, 1);
 });
 
-test('the post-POST reservation covers every read at its full retry count', () => {
-  assert.equal(finishCeiling({ observed: { list: 1, status: 1 } }), 70);
-  assert.equal(finishCeiling({ observed: { list: 4, status: 5 } }), 151);
+test('the reservation covers the POST, every later read at its full retry count and the DELETE', () => {
+  assert.equal(finishCeiling({ observed: { list: 1, status: 1 } }), 71);
+  assert.equal(finishCeiling({ observed: { list: 4, status: 5 } }), 152);
 });
 
 test('the POST is only issued when everything after it fits the budget even with retried reads', async () => {

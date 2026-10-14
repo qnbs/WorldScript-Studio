@@ -81,11 +81,15 @@ export const job = (jobId) => ({
   steps: [{ name: 'Deploy to GitHub Pages', conclusion: 'success' }],
 });
 
+// Like the real API, an error response reports the live allowance unless it is built header-less.
 export const apiError = (code, retryAfter) =>
   Object.assign(new Error('PRIVATE provider detail'), {
     status: code,
-    response: { headers: { 'retry-after': retryAfter } },
+    response: { headers: { 'x-ratelimit-remaining': '5000', 'retry-after': retryAfter } },
   });
+
+export const headerlessError = (code) =>
+  Object.assign(new Error('PRIVATE provider detail'), { status: code, response: { headers: {} } });
 
 const page = (items, parameters) => items.slice((parameters.page - 1) * 100, parameters.page * 100);
 const withoutStatuses = ({ statuses: _statuses, ...item }) => item;
@@ -166,11 +170,23 @@ export const writes = (github) => github.calls.filter((call) => !call.route.star
 export const reads = (github, pattern) =>
   github.calls.filter((call) => call.route.startsWith('GET ') && pattern.test(call.route));
 
+// The planning tests run read-only whatever the shipped gate says; `reconcileShipped` and `executeDestructive` are the only ways to write.
 export const execute = (github, options = {}) =>
-  reconcilePages({ github, authority, holds, pause: async () => {}, ...options });
+  reconcilePages({
+    github,
+    authority,
+    holds,
+    pause: async () => {},
+    destructive: false,
+    ...options,
+  });
 
 export const executeDestructive = (github, options = {}) =>
   execute(github, { destructive: true, ...options });
+
+// The run exactly as the shipped code gates it: the destructive default comes from the policy constant.
+export const reconcileShipped = (github, options = {}) =>
+  reconcilePages({ github, authority, holds, pause: async () => {}, ...options });
 
 export const linkHeader = (path, pageNumber, query = 'environment=github-pages') => ({
   link: `<https://api.github.com${path}?${query}&per_page=100&page=${pageNumber}>; rel="next"`,
