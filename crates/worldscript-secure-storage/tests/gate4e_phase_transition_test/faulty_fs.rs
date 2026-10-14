@@ -20,6 +20,10 @@ pub struct FaultyFs {
     reads: usize,
     #[cfg(unix)]
     after_reads: Option<(usize, Box<dyn FnMut()>)>,
+    #[cfg(unix)]
+    served: usize,
+    #[cfg(unix)]
+    after_served: Option<(usize, Box<dyn FnMut()>)>,
 }
 
 impl FaultyFs {
@@ -34,6 +38,10 @@ impl FaultyFs {
             reads: 0,
             #[cfg(unix)]
             after_reads: None,
+            #[cfg(unix)]
+            served: 0,
+            #[cfg(unix)]
+            after_served: None,
         }
     }
 
@@ -44,6 +52,32 @@ impl FaultyFs {
         FaultyFs {
             after_reads: Some((count, Box::new(action))),
             ..Self::observing()
+        }
+    }
+
+    /// Delegates everything and runs `action` right after the `count`-th read of any kind, bounded or
+    /// not. Only Unix tests act from inside the file system.
+    #[cfg(unix)]
+    pub fn acting_after_served_reads(count: usize, action: impl FnMut() + 'static) -> Self {
+        FaultyFs {
+            after_served: Some((count, Box::new(action))),
+            ..Self::observing()
+        }
+    }
+
+    /// How many reads of any kind were served.
+    #[cfg(unix)]
+    pub fn served(&self) -> usize {
+        self.served
+    }
+
+    #[cfg(unix)]
+    fn after_served_read(&mut self) {
+        self.served += 1;
+        if let Some((count, action)) = self.after_served.as_mut() {
+            if self.served == *count {
+                action();
+            }
         }
     }
 
@@ -119,7 +153,10 @@ impl DurableFs for FaultyFs {
 
     fn read(&mut self, path: &Path) -> io::Result<Vec<u8>> {
         self.calls += 1;
-        self.inner.read(path)
+        let served = self.inner.read(path);
+        #[cfg(unix)]
+        self.after_served_read();
+        served
     }
 
     fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
@@ -127,6 +164,8 @@ impl DurableFs for FaultyFs {
         let served = self.inner.read_at_most(path, limit);
         #[cfg(unix)]
         self.after_read();
+        #[cfg(unix)]
+        self.after_served_read();
         served
     }
 

@@ -9,6 +9,11 @@
 //! inventory. It is not exclusive operation admission: readers remain admitted during a write.
 //! The ordering is admission -> ordinary-writer serialization -> finite root event, without upgrade.
 //!
+//! A root that binds a live migration refuses every ordinary operation (`MigrationRequired`), except
+//! for a storage that was handed the locator of its journal (`with_journal_locator`): while the journal
+//! the root vouches for is in `PREPARE` or `DONE` and binds exactly what the snapshot root binds, the
+//! operation is admitted for as long as it holds its shared admission (Gate 4E W1).
+//!
 //! A confirmed lock retains exclusive ownership until verified unlock. Otherwise another process's
 //! already-loaded runtime could resume while this session reports LOCKED. The barrier has no durable
 //! body/authority claim; crash release comes from the kernel. Shutdown refuses unresolved authority.
@@ -32,9 +37,11 @@ use crate::admission::{
 use crate::authority::{load_snapshot_catalog, AuthorityError, LoadedCatalog};
 use crate::catalog::CatalogDescriptor;
 use crate::commit::{RecordLocation, RecordStore};
-use crate::durable::DurableFs;
+use crate::durable::{DurableFs, WriteOperationId};
 use crate::error::KeyProviderError;
 use crate::identity::{has_ordinary_marker, RecordIdentity};
+use crate::journal::{ordinary_mutating_writes_admitted, MigrationPhase};
+use crate::journal_locator::{authenticate_journal, JournalLocator, JournalLookup, LocatorError};
 use crate::operation_authority::{
     lock_cell, AuthorityCell, PublishedProvider, Snapshot, SnapshotRetention,
 };
@@ -43,12 +50,16 @@ use crate::protected::{
     ProtectedWrite,
 };
 use crate::provider::{KeyProvider, KeyState};
-use crate::root::KeyEpochEntry;
+use crate::root::{KeyEpochEntry, LiveMigration};
 use crate::root_lock::{sys, RootCommitGuard};
 use crate::root_store::{load_snapshot_root, recover_root, RootLayout, RootStoreError};
 use crate::seal::Key;
 
 const WRITER_RESOURCE: &str = "ordinary-writers";
+
+/// The identity a journal read presents. It names a write, and a read stages nothing, so the read needs
+/// no fresh randomness: an unavailable entropy source must not turn a list or a read into a failure.
+const JOURNAL_READ_OPERATION: &str = "00000000000000000000000000000000";
 
 /// The logical identity and physical locators of one request. Locators never supply authority.
 #[derive(Clone, Copy)]
@@ -167,6 +178,7 @@ pub struct ProtectedStorage<P> {
     scope: Scope,
     cell: Mutex<AuthorityCell<P>>,
     lifecycle: Mutex<Lifecycle>,
+    journal: Option<JournalLocator>,
 }
 
 /// A reader's opaque snapshot/key and admission. Field order zeroizes the key and releases the pin
@@ -175,6 +187,10 @@ pub struct AuthoritySnapshotGuard {
     key: Key,
     snapshot: Arc<Snapshot>,
     epochs: Vec<KeyEpochEntry>,
+    /// The live-migration binding the snapshot root carries.
+    bound: Option<LiveMigration>,
+    /// The binding of a bound root that the journal admitted for this operation (Gate 4E W1).
+    window: Option<LiveMigration>,
     admission: SharedAdmissionGuard,
     scope: Scope,
 }
@@ -188,7 +204,17 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             },
             cell: Mutex::new(AuthorityCell::new(provider)),
             lifecycle: Mutex::new(Lifecycle::default()),
+            journal: None,
         }
+    }
+
+    /// Names where this installation's writer journal lives (Gate 4E W1). Configuration only: nothing is
+    /// observed. With a locator, an ordinary operation over a bound root is admitted only while the
+    /// authenticated journal is in `PREPARE` or `DONE`; without one the root-bound barrier stands.
+    #[must_use]
+    pub fn with_journal_locator(mut self, locator: JournalLocator) -> Self {
+        self.journal = Some(locator);
+        self
     }
 
     fn ordinary_allowed(&self) -> Result<(), OperationError> {
@@ -233,19 +259,20 @@ impl<P: KeyProvider> ProtectedStorage<P> {
     }
 
     /// Resolve a durable prepared root under the same admitted root event used for catalog work.
-    /// `None` means root-event contention before any catalog observation.
+    /// `None` means root-event contention before any catalog observation; `Some(true)` that a
+    /// preparation was resolved.
     fn recover_prepared_root_admitted<F: DurableFs>(
         &self,
         fs: &mut F,
         provider: &mut PublishedProvider<'_, P>,
         admission: &mut SharedAdmissionGuard,
-    ) -> Result<Option<()>, OperationError> {
+    ) -> Result<Option<bool>, OperationError> {
         if provider
             .read_root_anchor_state()?
             .prepared_root_commit
             .is_none()
         {
-            return Ok(Some(()));
+            return Ok(Some(false));
         }
         let Some(event) = admission.try_root_commit().map_err(OperationError::from)? else {
             return Ok(None);
@@ -260,7 +287,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         }
         let anchor = provider.read_root_anchor_state()?;
         lock_cell(&self.cell)?.publish(&anchor)?;
-        Ok(Some(()))
+        Ok(Some(true))
     }
 
     /// None is contention BEFORE any provider observation, never record absence. Once admitted,
@@ -276,10 +303,80 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         self.capture(fs, admission).map(Some)
     }
 
+    /// The journal's verdict on an ordinary operation over the bound root `bound`, taken under the
+    /// shared admission the operation already holds: one finite root event, the journal found through
+    /// the locator and authenticated against the committed root, its phase one that admits ordinary
+    /// writes, and its binding exactly `bound`. `Some(bound)` admits the operation; any other outcome
+    /// leaves the E1 barrier standing. Only an admission fault or a busy root event is an error of its
+    /// own: the provider was observed already, so a busy event cannot be the `None` that the snapshot API
+    /// promises for contention before any observation.
+    fn open_window<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        admission: &mut SharedAdmissionGuard,
+        bound: &LiveMigration,
+    ) -> Result<Option<LiveMigration>, OperationError> {
+        let Some(locator) = &self.journal else {
+            return Ok(None);
+        };
+        let event = admission
+            .try_root_commit()?
+            .ok_or(ProtectedError::RootBusy)?;
+        let Some(operation) = WriteOperationId::parse(JOURNAL_READ_OPERATION) else {
+            return Ok(None);
+        };
+        let provider = PublishedProvider(&self.cell);
+        let lookup = JournalLookup {
+            locator,
+            operation: &operation,
+        };
+        let proof = match authenticate_journal(fs, &provider, &event, lookup) {
+            Ok(proof) => proof,
+            Err(LocatorError::Admission(error)) => return Err(error.into()),
+            Err(_) => return Ok(None),
+        };
+        let phase = MigrationPhase::from_wire(proof.manifest().phase);
+        let admitted = ordinary_mutating_writes_admitted(phase)
+            && proof.binding() == bound
+            && proof.is_current();
+        Ok(admitted.then(|| bound.clone()))
+    }
+
+    /// A prepared root that recovery completed or discarded keeps the binding, so the window that was
+    /// refused while the preparation was pending is judged again.
+    fn reopen_window<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        operation: &mut AuthoritySnapshotGuard,
+    ) -> Result<(), OperationError> {
+        if operation.window.is_none() {
+            if let Some(bound) = operation.bound.clone() {
+                operation.window = self.open_window(fs, &mut operation.admission, &bound)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// A write repeats the journal's verdict immediately before its first root commit, so a binding
+    /// or phase that moved since the operation began is refused instead of written over.
+    fn revalidate_window<F: DurableFs>(
+        &self,
+        fs: &mut F,
+        operation: &mut AuthoritySnapshotGuard,
+    ) -> Result<(), OperationError> {
+        let Some(bound) = operation.window.clone() else {
+            return Ok(());
+        };
+        match self.open_window(fs, &mut operation.admission, &bound)? {
+            Some(_) => Ok(()),
+            None => Err(OperationError::MigrationRequired),
+        }
+    }
+
     fn capture<F: DurableFs>(
         &self,
         fs: &mut F,
-        admission: SharedAdmissionGuard,
+        mut admission: SharedAdmissionGuard,
     ) -> Result<AuthoritySnapshotGuard, OperationError> {
         if !admission.guards(self.scope.admission()) {
             return Err(AdmissionError::IdentityChanged.into());
@@ -294,7 +391,7 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         }
         let (snapshot, key) = cell.capture()?;
         drop(cell);
-        let (_, epochs) = load_snapshot_root(
+        let (view, epochs) = load_snapshot_root(
             fs,
             self.scope.layout(),
             &snapshot.scope,
@@ -302,6 +399,11 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             &key,
             None,
         )?;
+        let bound = view.root.live_migration.clone();
+        let window = match &bound {
+            None => None,
+            Some(bound) => self.open_window(fs, &mut admission, bound)?,
+        };
         if !admission.guards(self.scope.admission()) {
             return Err(AdmissionError::IdentityChanged.into());
         }
@@ -309,6 +411,8 @@ impl<P: KeyProvider> ProtectedStorage<P> {
             key,
             snapshot,
             epochs,
+            bound,
+            window,
             admission,
             scope: self.scope.clone(),
         })
@@ -369,13 +473,16 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let mut operation = self.capture(fs, admission)?;
         let pins = LocationPins::open(&operation.scope, location)?;
         let mut provider = PublishedProvider(&self.cell);
-        if self
-            .recover_prepared_root_admitted(fs, &mut provider, &mut operation.admission)?
-            .is_none()
-        {
+        let Some(recovered) =
+            self.recover_prepared_root_admitted(fs, &mut provider, &mut operation.admission)?
+        else {
             return Ok(None);
+        };
+        if recovered {
+            self.reopen_window(fs, &mut operation)?;
         }
         let catalog = operation.catalog(fs)?;
+        self.revalidate_window(fs, &mut operation)?;
         let target = ProtectedTarget {
             layout: operation.scope.layout(),
             store: RecordStore {
@@ -424,13 +531,16 @@ impl<P: KeyProvider> ProtectedStorage<P> {
         let mut operation = self.capture(fs, admission)?;
         let pins = LocationPins::open(&operation.scope, location)?;
         let mut provider = PublishedProvider(&self.cell);
-        if self
-            .recover_prepared_root_admitted(fs, &mut provider, &mut operation.admission)?
-            .is_none()
-        {
+        let Some(recovered) =
+            self.recover_prepared_root_admitted(fs, &mut provider, &mut operation.admission)?
+        else {
             return Ok(None);
+        };
+        if recovered {
+            self.reopen_window(fs, &mut operation)?;
         }
         let catalog = operation.catalog(fs)?;
+        self.revalidate_window(fs, &mut operation)?;
         let target = ProtectedTarget {
             layout: operation.scope.layout(),
             store: RecordStore {
@@ -680,7 +790,8 @@ impl AuthoritySnapshotGuard {
             &self.key,
             Some(&self.epochs),
         )?;
-        if view.root.live_migration.is_some() {
+        // A bound root is readable and writable only under the binding the journal admitted (W1).
+        if view.root.live_migration.is_some() && view.root.live_migration != self.window {
             return Err(OperationError::MigrationRequired);
         }
         let catalog = load_snapshot_catalog(fs, self.scope.layout(), view, &self.key)?;

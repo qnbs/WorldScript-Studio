@@ -3092,19 +3092,45 @@ unlocked key, unlock, shutdown) authenticate the committed root first. A live bi
 `RecoveryPending` before catalog pages are observed, including missing or corrupt pages. This is a
 refusal, not permission to ignore corruption. Genuine root-load errors retain their existing
 `Catalog(AuthorityError::Root(...))` envelope; unbound roots still load and verify the catalog and retain
-its errors. No journal lookup or phase-dependent ordinary-operation window is introduced.
-`load_catalog` returns `None`, and the transitions `MigrationRequired`, only when no root is committed at
+its errors. E1 itself introduces no journal lookup and no phase-dependent window; the W1 window below adds
+both for a storage that was handed a journal locator. `load_catalog` returns `None`, and the transitions `MigrationRequired`, only when no root is committed at
 all, which is not a bound root. A provider that starts locked fails before the root is consulted (a write
 with the provider's `Locked`); locking it again is idempotent, since nothing is admitted, and unlocking it
 is refused and leaves its runtime keys cleared. Apart from the root's recovery of an interrupted commit, a
 refused operation writes no record, marker, journal, catalog or root content; its only filesystem effect
 is the admission and writer coordination resources directly under the installation, which hold no data.
-The barrier is durable across a crash and needs no journal read. It is intentionally **stricter than the table above**, which admits ordinary
-reads and writes while `PREPARE` lasts and after `DONE`: that window is not implemented, because it needs
-the root-named manifest (`read_committed_journal`), a journal location as writer configuration and a
-policy for reconciliation under the barrier, and no producer of a binding exists yet to need it
-(`ordinary_mutating_writes_admitted` is the specification of that later relaxation, not a gate in use).
-It also relies on a phase transition out of `PREPARE` happening under exclusive admission.
+The barrier is durable across a crash and needs no journal read. Without a configured journal locator it is
+unchanged by W1 and intentionally **stricter than the table above**, which admits ordinary reads and
+writes while `PREPARE` lasts and after `DONE`. It relies on a phase transition out of `PREPARE` happening
+under exclusive admission.
+
+**The `PREPARE`/`DONE` window (Gate 4E W1).** `ProtectedStorage::with_journal_locator` hands the storage the
+locator of its journal; it is configuration, nothing is observed. With a locator, the ordinary data
+operations (write, reconcile, list, read) over a bound root decide in `capture`, under the shared admission
+they already hold: one finite root event is taken, `authenticate_journal` runs under it, and the operation
+is admitted only if the authenticated phase is `PREPARE` or `DONE` (`ordinary_mutating_writes_admitted`) and
+the binding of the journal is exactly the binding of the snapshot root. The admitted binding travels in the
+guard, and `catalog()` admits the bound root only under that binding. Everything else keeps the E1 refusal
+(`MigrationRequired`) and writes nothing: no locator, a missing, misplaced, replaced, symlinked or
+wrong-scope location, a journal that does not authenticate, any other phase (`DISCOVER`, `ADMIT`, `CONVERT`,
+`VERIFY`, `COMMIT`, `RETIRE_OLD_AUTHORITY`, `FINALIZE`, `RECOVERY_REQUIRED`) and a binding that moved since
+the snapshot. An admission fault stays an admission error, and a busy root event is the error
+`Protected(RootBusy)` to retry, never `None`, because `None` of the snapshot API promises contention before
+any provider observation and the provider was observed by then. A prepared root that an interrupted ordinary
+catalog commit left is completed or discarded by the write or reconcile as before, and the window that was
+refused while the preparation was pending is judged again afterwards. A write or reconcile repeats the verdict immediately before its first root commit and is refused
+if phase or binding changed. The phase cannot change while the operation lives, because every
+phase-changing writer holds the exclusive admission, which the operation's shared admission excludes; the
+journal owner's progress checkpoints hold no admission and may land at any point of the operation, so the
+catalog commits copy the binding of the root they commit on top of forward and compare-and-swap on the root
+generation, and a checkpoint is neither lost nor written over (two tests land one between two exact reads,
+and a sweep lands one at every sixth read of a write; the write commits on top of it, is refused before its
+first root commit, or stops transiently with `RootBusy` or a pending preparation and is recoverable). **Reads and lists follow the same two phases as writes** (maintainer-visible decision of the Gate 4
+plan, GH #359): the table above would admit reads in more phases, but the owner direction left read and
+list policy closed, so the stricter set is the default and one predicate can relax it later. Lock, unlock
+and shutdown are unchanged (`RecoveryPending` for a bound root). The path-based identity of the journal
+directory remains the handle-relative I/O residual (H1). No producer of a binding, no E3 beyond the final
+capture, no Gate 5–7 and no release are admitted by this slice.
 
 **A phase change is published under the exclusive admission (Gate 4E E2 follow-up and E2c).** `commit_phase_transition` takes the
 installation's `ExclusiveAdmissionGuard` by mutable borrow, so a shared guard does not compile. An admission that does not guard the root of its layout is refused as `NotAdmitted`, the commit
@@ -3160,9 +3186,8 @@ followed) and pinned, and still the same entry after the reads (a symlink put in
 committed root, its binding, the root-named manifest and the journal key route are then authenticated by
 the existing keyless read. Every failure is a typed refusal that writes nothing and reads no other
 directory (no sibling generation, no search for a journal). The result borrows the root event, so it ends
-with the admission: it is a snapshot for one operation, not a cache. Nothing consumes it yet: the E1
-barrier is unchanged and no `PREPARE`/`DONE` window, `ProtectedStorage` change or E3 capture barrier is
-introduced. A rename of the real directory by a local attacker during the call is the recorded
+with the admission: it is a snapshot for one operation, not a cache. L1 itself changed neither the E1
+barrier nor `ProtectedStorage`; the W1 window above is its first consumer. A rename of the real directory by a local attacker during the call is the recorded
 handle-relative I/O residual and is not claimed to be closed.
 
 | Lifecycle condition | Error priority / authority boundary |
@@ -3171,7 +3196,7 @@ handle-relative I/O residual and is not claimed to be closed.
 | Root unreadable, malformed, incompatible or unresolved | Preserve the actual root error; no catalog or phase fallback. |
 | Committed bound root, catalog intact/missing/corrupt | `RecoveryPending` before any catalog-page read; no ordinary write. |
 | Bound root, missing/wrong journal or locator | Root-bound refusal remains; unauthenticated journal association never grants a future window. |
-| Future admitted/authenticated window, catalog unusable | Preserve the real catalog error after authority checks; corruption never becomes success. |
+| Admitted/authenticated window (W1), catalog unusable | Preserve the real catalog error after authority checks; corruption never becomes success. |
 | Interrupted root commit / recovery | Existing separately authorized root recovery or refusal only; no uncertain-phase permission. |
 | Admission conflict, changed binding or stale fence | No admission or an authority refusal; stale snapshots cannot grant access. |
 
