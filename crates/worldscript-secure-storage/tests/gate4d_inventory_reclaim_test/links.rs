@@ -2,6 +2,7 @@
 //! reaches: the pages of the committed set, or of anything else outside the abandoned attempt. Only
 //! Unix tests create links without a privilege.
 
+use std::collections::BTreeMap;
 use std::os::unix::fs::symlink;
 
 use super::*;
@@ -18,11 +19,65 @@ fn replace_with_link(real: &Path, elsewhere: &Path) {
     symlink(elsewhere, real).unwrap();
 }
 
-/// What the sweep must leave alone, as it was.
-fn untouched(done: &Reclaimed, name: &str, outside: &Path, before: &BTreeSet<String>) -> bool {
-    kept(done).contains(&(name.to_owned(), KeepReason::Linked))
-        && done.files_removed > 0
-        && tree_under(outside) == *before
+/// Every file below `dir` with its bytes: what a link must never let the sweep touch.
+fn fingerprint(dir: &Path) -> BTreeMap<String, Vec<u8>> {
+    tree_under(dir)
+        .into_iter()
+        .filter(|name| !name.ends_with('/'))
+        .map(|name| {
+            let bytes = std::fs::read(dir.join(&name)).unwrap();
+            (name, bytes)
+        })
+        .collect()
+}
+
+/// Where a link is planted in a dead pending directory: it receives the directory and a directory
+/// outside the journal that the link points into.
+type Plant = fn(&Path, &Path);
+
+fn plant_in_place_of_the_pending_directory(pending: &Path, outside: &Path) {
+    replace_with_link(pending, &outside.join("moved"));
+}
+
+fn plant_in_place_of_a_page_directory(pending: &Path, outside: &Path) {
+    replace_with_link(&pending.join("page-0"), &outside.join("page-moved"));
+}
+
+fn plant_in_place_of_a_page_file(pending: &Path, outside: &Path) {
+    let page = generation_path(&pending.join("page-0"), 4);
+    let target = outside.join("page-file");
+    std::fs::copy(&page, &target).unwrap();
+    std::fs::remove_file(&page).unwrap();
+    symlink(&target, &page).unwrap();
+}
+
+#[test]
+fn a_link_planted_in_a_dead_pending_directory_keeps_it_and_leaves_the_target_untouched() {
+    let cases: [(&str, Plant); 3] = [
+        (
+            "in place of the pending directory",
+            plant_in_place_of_the_pending_directory,
+        ),
+        (
+            "in place of a page directory",
+            plant_in_place_of_a_page_directory,
+        ),
+        ("in place of a page file", plant_in_place_of_a_page_file),
+    ];
+    let wrong: Vec<_> = cases
+        .into_iter()
+        .filter_map(|(name, plant)| {
+            let scenario = with_two_dead_pending_dirs();
+            let pending = first_pending(&scenario);
+            let outside = TempDir::new();
+            plant(&pending, &outside.0);
+            let before = fingerprint(&outside.0);
+            let done = scenario.sweep(&mut StdFs).unwrap();
+            let linked = kept(&done).contains(&(name_of(&pending), KeepReason::Linked));
+            (!(linked && fingerprint(&outside.0) == before)).then_some(name)
+        })
+        .collect();
+    assert_eq!(wrong, Vec::<&str>::new());
 }
 
 #[test]
@@ -42,52 +97,6 @@ fn a_link_named_like_a_dead_pending_directory_cannot_make_the_sweep_unlink_a_sto
             tree_under(&committed)
         ),
         (true, before)
-    );
-}
-
-#[test]
-fn a_link_in_place_of_a_dead_pending_directory_is_kept_and_its_target_untouched() {
-    let scenario = with_two_dead_pending_dirs();
-    let pending = first_pending(&scenario);
-    let outside = TempDir::new();
-    let target = outside.0.join("moved");
-    replace_with_link(&pending, &target);
-    let before = tree_under(&target);
-    let done = scenario.sweep(&mut StdFs).unwrap();
-    // The other, real pending directory is still removed.
-    assert!(untouched(&done, &name_of(&pending), &target, &before));
-}
-
-#[test]
-fn a_link_in_place_of_a_page_directory_keeps_the_whole_pending_directory() {
-    let scenario = with_two_dead_pending_dirs();
-    let pending = first_pending(&scenario);
-    let outside = TempDir::new();
-    let target = outside.0.join("page-moved");
-    replace_with_link(&pending.join("page-0"), &target);
-    let before = tree_under(&target);
-    let done = scenario.sweep(&mut StdFs).unwrap();
-    assert!(untouched(&done, &name_of(&pending), &target, &before));
-}
-
-#[test]
-fn a_link_in_place_of_a_page_file_keeps_the_whole_pending_directory() {
-    let scenario = with_two_dead_pending_dirs();
-    let pending = first_pending(&scenario);
-    let outside = TempDir::new();
-    let target = outside.0.join("page-file");
-    let page = generation_path(&pending.join("page-0"), 4);
-    std::fs::copy(&page, &target).unwrap();
-    std::fs::remove_file(&page).unwrap();
-    symlink(&target, &page).unwrap();
-    let bytes = std::fs::read(&target).unwrap();
-    let done = scenario.sweep(&mut StdFs).unwrap();
-    assert_eq!(
-        (
-            kept(&done).contains(&(name_of(&pending), KeepReason::Linked)),
-            std::fs::read(&target).unwrap()
-        ),
-        (true, bytes)
     );
 }
 
