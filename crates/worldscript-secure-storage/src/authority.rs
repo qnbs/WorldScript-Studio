@@ -919,15 +919,18 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
 /// path under that key, and the caller supplies no key, manifest or binding, only the fence of the owner
 /// it claims to be. A caller that is not the committed owner at the committed revision (a former owner
 /// after a takeover, or an owner whose own checkpoint moved the journal on) is refused before anything is
-/// deleted, and a journal in `RECOVERY_REQUIRED` is refused too. No root lock is held: the sweep removes
-/// only what a smaller or equal committed revision already proves dead, and the committed revision only
-/// grows. See `journal::reclaim` for the rules.
+/// deleted, and a journal in `RECOVERY_REQUIRED` is refused too. The cross-process root commit event is
+/// held from the read of the binding to the last removal, in the established root-then-journal lock
+/// order, so a takeover or a transition to `RECOVERY_REQUIRED` by another process cannot interleave with
+/// the sweep; root commits wait for it, as they do for the capture commits. See `journal::reclaim` for
+/// the rules.
 pub fn reclaim_abandoned_inventory<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,
     layout: RootLayout<'_>,
     request: InventoryReclaim<'_>,
 ) -> Result<Reclaimed, AuthorityError> {
+    let _held = acquire_root_commit(layout)?;
     let live = committed_route(fs, provider, layout)?.live;
     let key = route_journal_key(fs, provider, layout, request.journal)?;
     let mut ctx = journal_context(&mut *fs, request.journal, &key, CandidateConflict::Refuse);

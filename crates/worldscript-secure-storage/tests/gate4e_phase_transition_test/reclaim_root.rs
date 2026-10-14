@@ -61,6 +61,14 @@ fn with_an_abandoned_capture() -> (Bound, JournalManifest) {
 }
 
 fn sweep(bound: &Bound, fence: &MigrationFence) -> Result<Reclaimed, AuthorityError> {
+    sweep_over(&mut StdFs, bound, fence)
+}
+
+fn sweep_over<F: DurableFs>(
+    fs: &mut F,
+    bound: &Bound,
+    fence: &MigrationFence,
+) -> Result<Reclaimed, AuthorityError> {
     let operation = WriteOperationId::generate().unwrap();
     let layout = RootLayout {
         root_dir: &bound.installation.root_dir,
@@ -72,7 +80,7 @@ fn sweep(bound: &Bound, fence: &MigrationFence) -> Result<Reclaimed, AuthorityEr
         },
         fence,
     };
-    reclaim_abandoned_inventory(&mut StdFs, &bound.provider, layout, request)
+    reclaim_abandoned_inventory(fs, &bound.provider, layout, request)
 }
 
 fn inventory_names(bound: &Bound) -> Vec<String> {
@@ -150,5 +158,42 @@ fn a_journal_in_recovery_required_is_not_swept() {
             Err(AuthorityError::Reclaim(ReclaimError::RecoveryRequired)),
             before
         )
+    );
+}
+
+/// From the read of the binding to the last removal the sweep holds the cross-process root event, so a
+/// takeover or a transition to `RECOVERY_REQUIRED` by another process cannot interleave with it: a second
+/// holder asks for the event in the middle of the sweep and is refused, and gets it once the sweep ends.
+#[cfg(unix)]
+#[test]
+fn the_sweep_holds_the_root_event_from_the_read_of_the_binding_to_the_last_removal() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    use super::faulty_fs::FaultyFs;
+
+    let (mut bound, discover) = with_an_abandoned_capture();
+    let progressed = progressing(&discover);
+    bound.checkpoint(&progressed).unwrap();
+    let busy = Arc::new(AtomicBool::new(false));
+    let seen = Arc::clone(&busy);
+    let root_dir = bound.installation.root_dir.clone();
+    let probe = move || {
+        let refused = RootCommitGuard::try_acquire(&root_dir).unwrap().is_none();
+        seen.store(refused, Ordering::SeqCst);
+    };
+    // The third read is inside the sweep, after it read the binding and before the first removal.
+    let mut fs = FaultyFs::acting_after_served_reads(3, probe);
+    let done = sweep_over(&mut fs, &bound, &MigrationFence::from_manifest(&progressed)).unwrap();
+    let free_again = RootCommitGuard::try_acquire(&bound.installation.root_dir)
+        .unwrap()
+        .is_some();
+    assert_eq!(
+        (
+            busy.load(Ordering::SeqCst),
+            done.pending_removed,
+            free_again
+        ),
+        (true, 1, true)
     );
 }

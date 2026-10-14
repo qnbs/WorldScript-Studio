@@ -1418,19 +1418,23 @@ the owner it claims to be, so a former owner after a takeover, an owner whose ow
 and a stranger are refused (`AuthorityError::Reclaim(ReclaimError::Authority(_))`) before anything is deleted, and
 a journal in `RECOVERY_REQUIRED` is refused (`ReclaimError::RecoveryRequired`; §10.3 blocks destructive cleanup
 until explicit recovery). The binding-taking sweep underneath (`reclaim_with_binding`, journal mutex and fence,
-root-named generation read back and compared) is exported only with the test-only `test-support` feature. No root
-lock is held: the proof of death depends only on the committed revision `R`, which only grows, so a caller that is
-behind sees a smaller `R` and removes less.
+root-named generation read back and compared) is exported only with the test-only `test-support` feature. The
+cross-process root commit event is held from the read of the binding to the last removal, in the established
+root-then-journal lock order, so a takeover or a transition to `RECOVERY_REQUIRED` by another process cannot
+interleave with the sweep; root commits wait for it, as they do for the capture commits. The proof of death itself
+depends only on the committed revision `R`, which only grows.
 
 `DurableFs::remove_dir` and `DurableFs::entry_kind` are provided methods whose default is `Unsupported`. The sweep
 asks both under a path that cannot exist (below the root-named manifest generation, which is a file) and refuses
 (`RemovalUnsupported`) before it deletes anything; the probe can never touch an inventory entry. `StdFs` removes only
-an empty directory and tells a link from its target with `symlink_metadata`.
+an empty directory and tells a link from its target with `symlink_metadata`; on Windows every reparse point
+(`FILE_ATTRIBUTE_REPARSE_POINT`), not only the name-surrogate tags `FileType::is_symlink` reports, is a link.
 
 | Entry below `inventory/` | Rule |
 |---|---|
 | `pending-<rev>-<tag>`, `rev <= R` | Dead: a promotion needs `rev == R + 1` and `R` only grows. Removed after a complete check: every page directory and file is a plain entry of the grammar, every file carries generation `rev` and opens as this operation's page at its index with the journal envelope epoch (staging links `generation-<g>.wsr1.tmp-<op>-<g>` included). Removal walks the directory again and re-authenticates each file just before it is unlinked, holding the names of one directory at a time (at most 100,000 page directories and 64 files per page directory; more keeps the directory). |
 | `pending-<rev>-<tag>`, `rev > R` | Kept (`LiveRevision`): a live attempt, a retry candidate or a prepared root may own revision `R + 1`. |
+| `pending-0-<tag>` | Not recognised (kept): a capture stages for the committed revision plus one, so revision zero is never a capture. |
 | `<hex digest>` (a stored page set) | Kept (`StoredSet`), never read. Proving a set abandoned from the generation of its pages is sound only while a set holds pages of exactly its own revision; a later slice that lets a set inherit unchanged pages of older generations (I1) makes the owning revision unreadable from the files, so that slice owns reclaiming sets. |
 | a link, junction or any entry that is not a plain directory or file, at any depth | Kept (`Linked`) with its whole directory; nothing is read or unlinked through it. `inventory/` itself being a link refuses the sweep (`UnsafeInventory`). |
 | anything else: a name, a `page-` directory name or a file name outside the grammar, a file that does not open as this operation's page, a listing that cannot be read | Kept (`Unrecognised`, `Unauthenticated`, `Unreadable`); one such entry keeps its whole directory. |
@@ -1452,7 +1456,8 @@ alone; a failed directory removal, a failed file removal and a failed sync stop 
 the root, the owner at the committed revision reclaims (and not before its own revision commits), a former owner and
 an owner with another fence remove nothing, and `RECOVERY_REQUIRED` is refused. The Unix link cases (a link named like
 a dead pending directory that points at a stored set, a link in place of a pending directory, of a page directory, of
-a page file and of `inventory/` itself) read and unlink nothing through the link.
+a page file and of `inventory/` itself) read and unlink nothing through the link; a second holder asks for the root
+event in the middle of a sweep and is refused; a junction is a link (Windows, `mklink /J`).
 
 Residual, not closed: the check is made on the path just before the use, so a local attacker who swaps a plain
 directory for a link between the check and the removal is the recorded handle-relative I/O residual (H1); `remove_dir`

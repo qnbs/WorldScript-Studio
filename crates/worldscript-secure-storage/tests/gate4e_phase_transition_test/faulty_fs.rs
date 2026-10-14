@@ -7,7 +7,7 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io;
 
-use worldscript_secure_storage::DirectoryDurability;
+use worldscript_secure_storage::{DirectoryDurability, EntryKind};
 
 use super::*;
 
@@ -197,5 +197,15 @@ impl DurableFs for FaultyFs {
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
         self.calls += 1;
         self.inner.create_dir_all(dir)
+    }
+
+    fn remove_dir(&mut self, dir: &Path) -> io::Result<()> {
+        self.calls += 1;
+        self.inner.remove_dir(dir)
+    }
+
+    fn entry_kind(&mut self, path: &Path) -> io::Result<EntryKind> {
+        self.calls += 1;
+        self.inner.entry_kind(path)
     }
 }

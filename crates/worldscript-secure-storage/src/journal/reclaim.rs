@@ -15,7 +15,8 @@
 //! * A pending directory of revision `rev <= R` (`R` the committed revision) is dead: a promotion needs
 //!   `rev == R + 1`, and `R` only grows. Revision `R + 1` and above is never swept: a live attempt, a retry
 //!   candidate or a prepared root may own it. The proof is the name and `R`, so the sweep needs no clock
-//!   and cannot go stale: a caller that is behind the journal sees a smaller `R` and removes less.
+//!   and a caller that is behind the journal sees a smaller `R` and removes less. Revision zero is never
+//!   a capture and is not recognised.
 //! * Every file in it must open under the journal key as this operation's page at its index, at the
 //!   directory's revision, with the operation's journal envelope epoch (staging links
 //!   `generation-<g>.wsr1.tmp-<op>-<g>` of the attempt included). A directory is validated completely
@@ -457,8 +458,9 @@ fn parse_name(name: &str) -> Named {
             Some((canonical_u64(revision)?, WriteOperationId::parse(tag)?))
         });
         return match parsed {
-            Some((revision, _)) => Named::Pending { revision },
-            None => Named::Other,
+            // A capture stages for the committed revision plus one, so revision zero is never a capture.
+            Some((revision, _)) if revision >= 1 => Named::Pending { revision },
+            _ => Named::Other,
         };
     }
     if is_lower_hex(name, 64) {
@@ -513,6 +515,7 @@ mod tests {
             Named::Pending { revision: 4 }
         ));
         for odd in [
+            "pending-0-0123456789abcdef0123456789abcdef",
             "pending-04-0123456789abcdef0123456789abcdef",
             "pending--0123456789abcdef0123456789abcdef",
             "pending-4-0123456789ABCDEF0123456789abcdef",

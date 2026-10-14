@@ -172,6 +172,11 @@ fn nothing_that_is_not_ours_is_removed() {
     std::fs::create_dir(foreign_page.pending_dir().join("not-a-page")).unwrap();
     let odd = scenario.inventory().join("keep-me");
     std::fs::create_dir_all(&odd).unwrap();
+    // Revision zero is never a capture: an empty directory of that name is not ours either.
+    let zero = scenario
+        .inventory()
+        .join(format!("pending-0-{}", fresh_tag()));
+    std::fs::create_dir_all(zero.join("page-0")).unwrap();
     scenario.advance(&manifest_at(4));
     scenario.advance(&manifest_at(5));
     let before = tree_under(scenario.path());
@@ -184,6 +189,7 @@ fn nothing_that_is_not_ours_is_removed() {
             KeepReason::Unrecognised,
         ),
         ("keep-me".to_owned(), KeepReason::Unrecognised),
+        (name_of(&zero), KeepReason::Unrecognised),
     ]
     .into();
     assert_eq!(
@@ -419,6 +425,35 @@ fn the_real_file_system_removes_only_an_empty_directory() {
     assert_eq!(
         (outcomes, full.join("kept.bin").exists(), file.exists()),
         ([true; 4], true, true)
+    );
+}
+
+/// A junction is a reparse point that `FileType::is_symlink` does not always report; every reparse point
+/// is a link to the sweep. Created with `mklink /J`, which needs no privilege.
+#[cfg(windows)]
+#[test]
+fn the_real_file_system_tells_a_junction_from_its_target() {
+    let dir = TempDir::new();
+    let real = dir.0.join("real");
+    std::fs::create_dir(&real).unwrap();
+    let junction = dir.0.join("junction");
+    let made = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&junction)
+        .arg(&real)
+        .output()
+        .unwrap();
+    assert!(
+        made.status.success(),
+        "{}",
+        String::from_utf8_lossy(&made.stdout)
+    );
+    assert_eq!(
+        (
+            StdFs.entry_kind(&real).unwrap(),
+            StdFs.entry_kind(&junction).unwrap()
+        ),
+        (EntryKind::Directory, EntryKind::Link)
     );
 }
 

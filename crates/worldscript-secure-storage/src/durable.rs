@@ -144,6 +144,21 @@ pub enum DirectoryDurability {
 ///     }
 /// }
 /// ```
+/// Whether the entry is a Windows reparse point of any kind: `FileType::is_symlink` covers only the
+/// name-surrogate tags (symbolic links, junctions), while other reparse points (cloud placeholders,
+/// deduplicated files) can redirect reads too.
+#[cfg(windows)]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
 /// What a path is itself, without following a link ([`DurableFs::entry_kind`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKind {
@@ -285,8 +300,9 @@ impl DurableFs for StdFs {
     }
 
     fn entry_kind(&mut self, path: &Path) -> io::Result<EntryKind> {
-        let kind = fs::symlink_metadata(path)?.file_type();
-        Ok(if kind.is_symlink() {
+        let metadata = fs::symlink_metadata(path)?;
+        let kind = metadata.file_type();
+        Ok(if kind.is_symlink() || is_reparse_point(&metadata) {
             EntryKind::Link
         } else if kind.is_dir() {
             EntryKind::Directory
