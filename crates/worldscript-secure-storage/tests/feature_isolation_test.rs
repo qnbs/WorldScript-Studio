@@ -21,13 +21,156 @@ const SWEEP_NAMES: [&str; 8] = [
     "KeepReason",
     "Preserved",
 ];
+/// What starts a statement or an item in the sources that are scanned.
+const STATEMENT_STARTS: [&str; 7] = [
+    "pub use ",
+    "use ",
+    "mod ",
+    "pub fn ",
+    "pub struct ",
+    "fn ",
+    "Reclaim(",
+];
+/// The definitions of the sweep outside its own module, as their lines start in `authority.rs`.
+const SWEEP_DEFINITIONS: [&str; 4] = [
+    "pub fn reclaim_abandoned_inventory",
+    "pub struct InventoryReclaim",
+    "fn assert_held",
+    "Reclaim(ReclaimError)",
+];
 
 fn crate_dir() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn source(relative: &str) -> String {
-    fs::read_to_string(crate_dir().join(relative)).unwrap()
+/// The files of the crate that are read.
+#[derive(Clone, Copy)]
+enum File {
+    CargoToml,
+    Lib,
+    JournalMod,
+    Authority,
+}
+
+impl File {
+    fn path(self) -> PathBuf {
+        let relative = match self {
+            File::CargoToml => "Cargo.toml",
+            File::Lib => "src/lib.rs",
+            File::JournalMod => "src/journal/mod.rs",
+            File::Authority => "src/authority.rs",
+        };
+        crate_dir().join(relative)
+    }
+}
+
+/// Text that can name a test-only feature of the crate.
+struct Text(String);
+
+impl Text {
+    fn enables_a_test_feature(&self) -> bool {
+        TEST_ONLY_FEATURES
+            .iter()
+            .any(|feature| self.0.contains(feature))
+    }
+}
+
+/// One `[section]` of a manifest.
+struct Section {
+    header: String,
+    body: String,
+}
+
+impl Section {
+    fn is_dev(&self) -> bool {
+        self.header.contains("dev-dependencies")
+    }
+
+    /// A table of one dependency (`[dependencies.name]`) spreads that dependency's keys over its body.
+    fn is_dependency_table(&self) -> bool {
+        self.header.contains("dependencies.")
+    }
+
+    /// The entries of the body: a line at bracket depth zero starts one, and an inline table or array
+    /// that is spread over several lines stays in it.
+    fn entries(&self) -> Vec<String> {
+        let mut entries: Vec<String> = Vec::new();
+        let mut depth = 0;
+        for line in self.body.lines() {
+            match entries.last_mut() {
+                Some(entry) if depth > 0 => entry.push_str(line),
+                _ => entries.push(line.to_owned()),
+            }
+            depth += line.matches(['{', '[']).count() as i32;
+            depth -= line.matches(['}', ']']).count() as i32;
+        }
+        entries
+    }
+
+    /// The texts that can enable a feature of this crate: the whole body of a dependency table that names
+    /// the crate (by its table name, `package` or `path`), else each entry that names it.
+    fn texts_naming_the_crate(&self) -> Vec<Text> {
+        if self.is_dependency_table() {
+            let names_it = self.header.contains(CRATE) || self.body.contains(CRATE);
+            return names_it
+                .then(|| Text(self.body.clone()))
+                .into_iter()
+                .collect();
+        }
+        self.entries()
+            .into_iter()
+            .filter(|entry| entry.contains(CRATE))
+            .map(Text)
+            .collect()
+    }
+}
+
+/// A manifest split into its sections; the first one is the preamble.
+struct Manifest {
+    sections: Vec<Section>,
+    text: String,
+}
+
+impl Manifest {
+    fn parse(text: &str) -> Self {
+        let sections = text
+            .split("\n[")
+            .map(|chunk| chunk.split_once('\n').unwrap_or((chunk, "")))
+            .map(|(header, body)| Section {
+                header: header.to_owned(),
+                body: body.to_owned(),
+            })
+            .collect();
+        Manifest {
+            sections,
+            text: text.to_owned(),
+        }
+    }
+
+    fn read(path: &Path) -> Self {
+        Self::parse(&fs::read_to_string(path).unwrap())
+    }
+
+    /// The dependency entries that name this crate together with a test-only feature outside a
+    /// dev-dependency section.
+    fn test_features_outside_dev_dependencies(&self) -> Vec<String> {
+        self.sections
+            .iter()
+            .filter(|section| !section.is_dev())
+            .flat_map(Section::texts_naming_the_crate)
+            .filter(Text::enables_a_test_feature)
+            .map(|text| text.0.trim().to_owned())
+            .collect()
+    }
+
+    fn default_features(&self) -> Vec<Text> {
+        self.text
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.starts_with("default"))
+            .map(|line| Text(line.to_owned()))
+            .collect()
+    }
 }
 
 /// The paths directly inside `dir`; none when it cannot be read (the repository directories are absent
@@ -64,80 +207,8 @@ fn manifests_of_the_repository() -> Vec<PathBuf> {
         .collect()
 }
 
-/// The sections of a manifest as (header, body); the first one is the preamble.
-fn sections(manifest: &str) -> Vec<(&str, &str)> {
-    manifest
-        .split("\n[")
-        .map(|chunk| chunk.split_once('\n').unwrap_or((chunk, "")))
-        .collect()
-}
-
-fn names_a_test_feature(text: &str) -> bool {
-    TEST_ONLY_FEATURES
-        .iter()
-        .any(|feature| text.contains(feature))
-}
-
-/// The change of the bracket depth that `line` makes: an inline table or array that is spread over several
-/// lines stays one entry.
-fn depth_change(line: &str) -> i32 {
-    let opened = line.matches(['{', '[']).count();
-    let closed = line.matches(['}', ']']).count();
-    opened as i32 - closed as i32
-}
-
-/// The entries of a section body: a line at bracket depth zero starts one.
-fn entries(body: &str) -> Vec<String> {
-    let mut entries: Vec<String> = Vec::new();
-    let mut depth = 0;
-    for line in body.lines() {
-        match entries.last_mut() {
-            Some(entry) if depth > 0 => entry.push_str(line),
-            _ => entries.push(line.to_owned()),
-        }
-        depth += depth_change(line);
-    }
-    entries
-}
-
-/// Whether the section `header` is a table of one dependency (`[dependencies.name]`), which spreads that
-/// dependency's keys over its body.
-fn is_dependency_table(header: &str) -> bool {
-    header.contains("dependencies.")
-}
-
-/// The texts of a section that can enable a test-only feature of this crate: the whole body of a
-/// dependency table that names the crate (by its table name, `package` or `path`), else each entry that
-/// names it.
-fn texts_naming_the_crate(header: &str, body: &str) -> Vec<String> {
-    if is_dependency_table(header) {
-        let names_it = header.contains(CRATE) || body.contains(CRATE);
-        return if names_it {
-            vec![body.to_owned()]
-        } else {
-            Vec::new()
-        };
-    }
-    entries(body)
-        .into_iter()
-        .filter(|entry| entry.contains(CRATE))
-        .collect()
-}
-
-/// The dependency entries that name this crate together with a test-only feature outside a
-/// dev-dependency section.
-fn test_features_outside_dev_dependencies(manifest: &str) -> Vec<String> {
-    sections(manifest)
-        .into_iter()
-        .filter(|(header, _)| !header.contains("dev-dependencies"))
-        .flat_map(|(header, body)| texts_naming_the_crate(header, body))
-        .filter(|text| names_a_test_feature(text))
-        .map(|text| text.trim().to_owned())
-        .collect()
-}
-
 fn is_own_manifest(path: &Path) -> bool {
-    path.canonicalize().unwrap() == crate_dir().join("Cargo.toml").canonicalize().unwrap()
+    path.canonicalize().unwrap() == File::CargoToml.path().canonicalize().unwrap()
 }
 
 #[test]
@@ -146,7 +217,8 @@ fn no_manifest_enables_a_test_only_feature_of_the_crate_for_a_production_build()
         .into_iter()
         .filter(|path| !is_own_manifest(path))
         .flat_map(|path| {
-            test_features_outside_dev_dependencies(&fs::read_to_string(&path).unwrap())
+            Manifest::read(&path)
+                .test_features_outside_dev_dependencies()
                 .into_iter()
                 .map(move |entry| format!("{}: {entry}", path.display()))
         })
@@ -156,16 +228,13 @@ fn no_manifest_enables_a_test_only_feature_of_the_crate_for_a_production_build()
 
 #[test]
 fn the_default_features_enable_no_test_only_feature() {
-    let manifest = source("Cargo.toml");
-    let defaults: Vec<&str> = manifest
-        .lines()
-        .map(str::trim)
-        .filter(|line| line.starts_with("default"))
+    let defaults = Manifest::read(&File::CargoToml.path()).default_features();
+    let enabling: Vec<&String> = defaults
+        .iter()
+        .filter(|text| text.enables_a_test_feature())
+        .map(|text| &text.0)
         .collect();
-    assert!(
-        !defaults.iter().any(|line| names_a_test_feature(line)),
-        "{defaults:?}"
-    );
+    assert!(enabling.is_empty(), "{enabling:?}");
 }
 
 #[test]
@@ -184,94 +253,103 @@ fn the_scan_tells_a_dev_dependency_from_a_production_one() {
         "[dependencies]\nserde = { features = [\"derive\", \"test-support\"] }\nworldscript-secure-storage = { path = \"../x\" }\n",
         "[dependencies.other]\nfeatures = [\"test-support\"]\n[features]\ntest-support = []\n",
     ];
-    let counts = cases.map(|text| test_features_outside_dev_dependencies(text).len());
+    let counts = cases.map(|text| {
+        Manifest::parse(text)
+            .test_features_outside_dev_dependencies()
+            .len()
+    });
     assert_eq!(counts, [0, 1, 1, 1, 1, 1, 1, 0, 0]);
 }
 
-/// The attribute, doc and comment lines directly above line `head`.
-fn lines_above(lines: &[&str], head: usize) -> Vec<String> {
-    lines[..head]
-        .iter()
-        .rev()
-        .map(|line| line.trim())
-        .take_while(|line| line.starts_with("#[") || line.starts_with("//"))
-        .map(str::to_owned)
-        .collect()
+/// The lines of a source file.
+struct Source {
+    lines: Vec<String>,
 }
 
-fn starts_a_statement(line: &str) -> bool {
-    let line = line.trim_start();
-    [
-        "pub use ",
-        "use ",
-        "mod ",
-        "pub fn ",
-        "pub struct ",
-        "fn ",
-        "Reclaim(",
-    ]
-    .iter()
-    .any(|start| line.starts_with(start))
-}
+impl Source {
+    fn of(text: &str) -> Self {
+        Source {
+            lines: text.lines().map(str::to_owned).collect(),
+        }
+    }
 
-/// The statement that holds line `at`: the nearest line at or above it that starts a statement.
-fn statement_head(lines: &[&str], at: usize) -> usize {
-    (0..=at)
-        .rev()
-        .find(|&index| starts_a_statement(lines[index]))
-        .unwrap()
-}
+    fn read(file: File) -> Self {
+        Self::of(&fs::read_to_string(file.path()).unwrap())
+    }
 
-fn names_the_sweep(line: &str) -> bool {
-    !line.trim_start().starts_with("//") && SWEEP_NAMES.iter().any(|name| line.contains(name))
-}
+    /// The attribute, doc and comment lines directly above line `head`.
+    fn lines_above(&self, head: usize) -> Vec<&str> {
+        self.lines[..head]
+            .iter()
+            .rev()
+            .map(|line| line.trim())
+            .take_while(|line| line.starts_with("#[") || line.starts_with("//"))
+            .collect()
+    }
 
-fn is_gated(lines: &[&str], head: usize) -> bool {
-    lines_above(lines, head).iter().any(|above| above == GATE)
-}
+    fn is_gated(&self, head: usize) -> bool {
+        self.lines_above(head).iter().any(|above| *above == GATE)
+    }
 
-/// Every non-comment line of `text` that names the sweep and whose statement is not gated.
-fn ungated_mentions(text: &str) -> Vec<String> {
-    let lines: Vec<&str> = text.lines().collect();
-    (0..lines.len())
-        .filter(|&at| names_the_sweep(lines[at]))
-        .filter(|&at| !is_gated(&lines, statement_head(&lines, at)))
-        .map(|at| lines[at].trim().to_owned())
-        .collect()
-}
+    /// The statement that holds line `at`: the nearest line at or above it that starts a statement.
+    fn statement_head(&self, at: usize) -> usize {
+        (0..=at)
+            .rev()
+            .find(|&index| {
+                let line = self.lines[index].trim_start();
+                STATEMENT_STARTS.iter().any(|start| line.starts_with(start))
+            })
+            .unwrap()
+    }
 
-/// Whether the line that starts with `head` is gated.
-fn gated_definition(text: &str, head: &str) -> bool {
-    let lines: Vec<&str> = text.lines().collect();
-    lines
-        .iter()
-        .position(|line| line.trim_start().starts_with(head))
-        .is_some_and(|at| is_gated(&lines, at))
+    fn names_the_sweep(&self, at: usize) -> bool {
+        let line = &self.lines[at];
+        !line.trim_start().starts_with("//") && SWEEP_NAMES.iter().any(|name| line.contains(name))
+    }
+
+    /// Every non-comment line that names the sweep and whose statement is not gated.
+    fn ungated_mentions(&self) -> Vec<&str> {
+        (0..self.lines.len())
+            .filter(|&at| self.names_the_sweep(at))
+            .filter(|&at| !self.is_gated(self.statement_head(at)))
+            .map(|at| self.lines[at].trim())
+            .collect()
+    }
+
+    /// The definitions of the sweep whose line is missing or not gated.
+    fn ungated_definitions(&self) -> Vec<&'static str> {
+        SWEEP_DEFINITIONS
+            .into_iter()
+            .filter(|definition| {
+                let at = self
+                    .lines
+                    .iter()
+                    .position(|line| line.trim_start().starts_with(definition));
+                !at.is_some_and(|at| self.is_gated(at))
+            })
+            .collect()
+    }
+
+    /// Whether the module of the sweep is declared right under the gate.
+    fn declares_the_gated_module(&self) -> bool {
+        let at = self.lines.iter().position(|line| line == "mod reclaim;");
+        at.is_some_and(|at| self.is_gated(at))
+    }
 }
 
 #[test]
 fn every_export_of_the_sweep_carries_the_feature_gate() {
-    let ungated: Vec<String> = ["src/lib.rs", "src/journal/mod.rs"]
-        .iter()
-        .flat_map(|relative| ungated_mentions(&source(relative)))
-        .collect();
+    let lib = Source::read(File::Lib);
+    let journal = Source::read(File::JournalMod);
+    let mut ungated = lib.ungated_mentions();
+    ungated.extend(journal.ungated_mentions());
     assert!(ungated.is_empty(), "{ungated:?}");
-    assert!(source("src/journal/mod.rs").contains(&format!("{GATE}\nmod reclaim;")));
+    assert!(journal.declares_the_gated_module());
 }
 
 #[test]
 fn every_definition_of_the_sweep_carries_the_feature_gate() {
-    let authority = source("src/authority.rs");
-    let heads = [
-        "pub fn reclaim_abandoned_inventory",
-        "pub struct InventoryReclaim",
-        "fn assert_held",
-        "Reclaim(ReclaimError)",
-    ];
-    let missing: Vec<&str> = heads
-        .into_iter()
-        .filter(|head| !gated_definition(&authority, head))
-        .collect();
+    let missing = Source::read(File::Authority).ungated_definitions();
     assert!(missing.is_empty(), "{missing:?}");
 }
 
@@ -280,6 +358,6 @@ fn the_gate_scan_sees_an_ungated_export() {
     let gated =
         "#[cfg(feature = \"test-support\")]\npub use journal::{reclaim_with_binding, Reclaimed};\n";
     let ungated = "pub use journal::{\n    reclaim_with_binding, Reclaimed,\n};\n";
-    let counts = [gated, ungated].map(|text| ungated_mentions(text).len());
+    let counts = [gated, ungated].map(|text| Source::of(text).ungated_mentions().len());
     assert_eq!(counts, [0, 1]);
 }
