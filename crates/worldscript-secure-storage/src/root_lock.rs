@@ -153,6 +153,26 @@ pub(crate) mod sys {
             Err(error) => Err(error),
         }
     }
+
+    /// Opens `path` as a directory without following a symlink at its final component, so the entry
+    /// that is opened is the entry that was named.
+    pub(crate) fn open_directory_exact(path: &Path) -> io::Result<File> {
+        use rustix::fs::{open, Mode, OFlags};
+
+        let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+        let fd = open(path, flags, Mode::empty()).map_err(io::Error::from)?;
+        Ok(File::from(fd))
+    }
+
+    /// Whether the directory entry `path` itself, not the target of a symlink, is the open `file`.
+    pub(crate) fn still_named_exact(file: &File, path: &Path) -> io::Result<bool> {
+        let held = file.metadata()?;
+        match std::fs::symlink_metadata(path) {
+            Ok(named) => Ok(held.dev() == named.dev() && held.ino() == named.ino()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -223,6 +243,16 @@ pub(crate) mod sys {
             return Err(io::Error::from(io::ErrorKind::InvalidInput));
         }
         Ok(file)
+    }
+
+    /// Windows opens a reparse point itself and refuses it, so the plain open is already exact.
+    pub(crate) fn open_directory_exact(path: &Path) -> io::Result<File> {
+        open_directory(path)
+    }
+
+    /// Windows refuses a reparse point at the final component, so the plain check is already exact.
+    pub(crate) fn still_named_exact(file: &File, path: &Path) -> io::Result<bool> {
+        still_named(file, path)
     }
 
     /// No delete sharing pins the direct lock-file entry; `still_named` also validates the full

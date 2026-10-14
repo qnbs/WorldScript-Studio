@@ -485,6 +485,14 @@ fn anchored_root<P: KeyProvider>(provider: &P) -> Result<Option<AnchoredRoot>, R
     }))
 }
 
+/// The installation scope the secure anchor names, with no pending preparation; `None` before the
+/// first root commit.
+pub(crate) fn anchored_installation_scope<P: KeyProvider>(
+    provider: &P,
+) -> Result<Option<InstallationScopeId>, RootStoreError> {
+    Ok(anchored_root(provider)?.map(|anchored| anchored.scope))
+}
+
 /// The committed root together with the key-epoch registry it commits to, authenticated in one read:
 /// the slot opens under the anchor's route and the registry hashes to the root's
 /// `key_epoch_set_digest` with its active epoch bound ([`verify_key_epochs`]). A registry that is

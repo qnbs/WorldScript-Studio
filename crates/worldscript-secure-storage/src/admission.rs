@@ -313,4 +313,14 @@ impl<Mode> AdmittedRootCommitGuard<'_, Mode> {
             Err(AdmissionError::IdentityChanged)
         }
     }
+
+    /// The canonical installation and root directories this admission guards, only while both
+    /// identities still match.
+    pub(crate) fn admitted_dirs(&self) -> Result<(&Path, &Path), AdmissionError> {
+        if self.admission.is_current() && self.root.guards(&self.admission.root_dir) {
+            Ok((&self.admission.installation_dir, &self.admission.root_dir))
+        } else {
+            Err(AdmissionError::IdentityChanged)
+        }
+    }
 }

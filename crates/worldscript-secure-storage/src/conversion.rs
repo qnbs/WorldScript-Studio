@@ -78,7 +78,6 @@
 //! check, and a lost admission is reported first: the step may have committed or left a candidate, and
 //! the caller begins again to learn the state.
 
-use std::fs::File;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 
@@ -95,9 +94,9 @@ use crate::journal::{
     JournalCheckpointCursor, JournalError, JournalInventoryEntry, JournalManifest, JournalPage,
     MigrationExecutionError, MigrationFence, MigrationPhase, VerifiedInventory,
 };
+use crate::placement::{PinnedDirectory, PlacementError};
 use crate::provider::KeyProvider;
 use crate::root::LiveMigration;
-use crate::root_lock::sys;
 use crate::root_store::{recover_root_exclusive, RootCommitted, RootLayout, RootStoreError};
 
 /// What the gate needs from its caller: the scope the admission was acquired for, where the journal
@@ -178,33 +177,11 @@ fn io_error(error: std::io::Error) -> ConversionError {
     ConversionError::Admission(AdmissionError::from(error))
 }
 
-/// A directory held open, so that a later look can tell whether its path still names it.
-#[derive(Debug)]
-struct PinnedDirectory {
-    pin: File,
-    canonical: PathBuf,
-}
-
-impl PinnedDirectory {
-    /// Pins `dir` (before canonicalising it, as the admission does) and requires it to lie strictly
-    /// below the canonical installation directory and outside the canonical authority root.
-    fn placed(installation: &Path, root: &Path, dir: &Path) -> Result<Self, ConversionError> {
-        let pin = sys::open_directory(dir).map_err(io_error)?;
-        let canonical = std::fs::canonicalize(dir).map_err(io_error)?;
-        let below = canonical != installation && canonical.starts_with(installation);
-        if !below || canonical.starts_with(root) {
-            return Err(ConversionError::JournalMisplaced);
-        }
-        let pinned = Self { pin, canonical };
-        if pinned.is_current() {
-            Ok(pinned)
-        } else {
-            Err(ConversionError::NotAdmitted)
-        }
-    }
-
-    fn is_current(&self) -> bool {
-        sys::still_named(&self.pin, &self.canonical).unwrap_or(false)
+fn placement_error(error: PlacementError) -> ConversionError {
+    match error {
+        PlacementError::Io(kind) => ConversionError::Admission(AdmissionError::Io(kind)),
+        PlacementError::Misplaced => ConversionError::JournalMisplaced,
+        PlacementError::Changed => ConversionError::NotAdmitted,
     }
 }
 
@@ -303,7 +280,8 @@ pub fn begin_conversion<'a, F: DurableFs, P: KeyProvider>(
     let installation = std::fs::canonicalize(begin.scope.installation_dir).map_err(io_error)?;
     let root = std::fs::canonicalize(begin.scope.root_dir).map_err(io_error)?;
     ensure_admitted(held, canonical(&installation, &root))?;
-    let journal_pin = PinnedDirectory::placed(&installation, &root, begin.journal.dir)?;
+    let journal_pin = PinnedDirectory::placed(&installation, &root, begin.journal.dir)
+        .map_err(placement_error)?;
     let layout = RootLayout { root_dir: &root };
     let source = JournalSource {
         dir: &journal_pin.canonical,

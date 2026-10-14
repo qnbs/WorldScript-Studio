@@ -4,6 +4,7 @@
 //! is written. The shared and the exclusive admission exclude each other, so a transition cannot
 //! start while an ordinary operation is in flight.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -15,13 +16,13 @@ use worldscript_secure_storage::{
     empty_journal_page_set_digest, generation_path, load_authoritative_manifest, load_catalog,
     operation_type, phase_code, promote_manifest_fenced, publish_manifest_fenced,
     publish_phase_transition_fenced, transition_phase, write_key_epoch, AdmissionScope,
-    AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit, DurableFs,
-    ExclusiveAdmissionGuard, InstallationScopeId, JournalCheckpoint, JournalDurableContext,
-    JournalDurableError, JournalManifest, JournalSource, KeyEpochCommit, KeyEpochRecord,
-    KeyEpochStatus, KeyProvider, LiveMigration, MigrationExecutionError, MigrationFence,
-    MigrationPhase, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
-    RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, SharedAdmissionGuard, StdFs,
-    WriteOperationId,
+    AnchorState, AuthorityError, BindingAdvance, CandidateConflict, CatalogChange, CatalogCommit,
+    DurableFs, ExclusiveAdmissionGuard, InstallationScopeId, JournalCheckpoint,
+    JournalDurableContext, JournalDurableError, JournalManifest, JournalSource, KeyEpochCommit,
+    KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, MigrationExecutionError,
+    MigrationFence, MigrationPhase, RootBody, RootCommitEvidence, RootCommitGuard,
+    RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout,
+    SharedAdmissionGuard, StdFs, WriteOperationId,
 };
 
 const OPERATION: &str = "phase-op";
@@ -151,11 +152,15 @@ impl Installation {
             .expect("nothing else holds the admission")
     }
 
+    /// The names in the journal directory; none when it is absent.
     fn journal_names(&self) -> Vec<String> {
         let mut names: Vec<String> = fs::read_dir(&self.journal_dir)
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-            .collect();
+            .map(|entries| {
+                entries
+                    .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                    .collect()
+            })
+            .unwrap_or_default();
         names.sort();
         names
     }
@@ -386,6 +391,45 @@ impl Bound {
     }
 }
 
+/// Everything a refused operation must leave as it was: the authority root's and the journal
+/// directory's tree (every file's bytes and every directory), and the anchor state by value.
+#[derive(Debug, PartialEq)]
+struct Snapshot {
+    root_files: BTreeMap<String, Vec<u8>>,
+    journal_files: BTreeMap<String, Vec<u8>>,
+    anchor: AnchorState,
+}
+
+/// Every file below `dir` with its bytes and every directory (an empty entry named `…/`), by path
+/// relative to `dir`: creating even an empty directory is a write. Nothing when `dir` is absent.
+fn tree_below(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries {
+        let entry = entry.unwrap();
+        let name = format!("{prefix}/{}", entry.file_name().to_string_lossy());
+        if entry.file_type().unwrap().is_dir() {
+            out.insert(format!("{name}/"), Vec::new());
+            tree_below(&entry.path(), &name, out);
+        } else {
+            out.insert(name, fs::read(entry.path()).unwrap());
+        }
+    }
+}
+
+fn snapshot(bound: &Bound) -> Snapshot {
+    let mut root_files = BTreeMap::new();
+    tree_below(&bound.installation.root_dir, "", &mut root_files);
+    let mut journal_files = BTreeMap::new();
+    tree_below(&bound.installation.journal_dir, "", &mut journal_files);
+    Snapshot {
+        root_files,
+        journal_files,
+        anchor: bound.provider.read_root_anchor_state().unwrap(),
+    }
+}
+
 #[test]
 fn the_exclusive_transition_publishes_a_phase_change_and_binds_the_root_to_it() {
     let mut bound = Bound::new();
@@ -548,9 +592,12 @@ fn no_transition_can_start_while_an_ordinary_operation_holds_the_shared_admissio
 #[path = "gate4e_phase_transition_test/through_an_alias.rs"]
 mod through_an_alias;
 
+/// The crash cases of the recovery of a prepared root: the shared recovery and the exclusive one.
 #[path = "gate4e_phase_transition_test/crash_recovery.rs"]
 mod crash_recovery;
-/// The crash cases of the recovery of a prepared root: the shared recovery, the exclusive one, and
-/// the file system that stops a commit where the anchor does not.
+/// The file system that stops a commit where the anchor does not, counts reads and acts after one.
 #[path = "gate4e_phase_transition_test/faulty_fs.rs"]
 mod faulty_fs;
+/// The writer journal locator (L1): where the journal of one installation is found, authenticated.
+#[path = "gate4e_phase_transition_test/locator.rs"]
+mod locator;

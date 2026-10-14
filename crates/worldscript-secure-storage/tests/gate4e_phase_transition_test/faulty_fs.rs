@@ -1,5 +1,6 @@
 //! A file system that stops a root commit where the anchor does not: it fails the creation of a file
-//! below a named fragment, or the rename onto a named target, and delegates everything else.
+//! below a named fragment, or the rename onto a named target, and delegates everything else. It also
+//! counts the bounded reads it serves and can run an action right after the n-th of them.
 
 use std::ffi::OsString;
 use std::fs::File;
@@ -13,24 +14,65 @@ pub struct FaultyFs {
     inner: StdFs,
     fail_create_below: Option<&'static str>,
     fail_rename_to: Option<&'static str>,
+    #[cfg(unix)]
+    reads: usize,
+    #[cfg(unix)]
+    after_reads: Option<(usize, Box<dyn FnMut()>)>,
 }
 
 impl FaultyFs {
+    /// Delegates everything and counts the bounded reads.
+    pub fn observing() -> Self {
+        FaultyFs {
+            inner: StdFs,
+            fail_create_below: None,
+            fail_rename_to: None,
+            #[cfg(unix)]
+            reads: 0,
+            #[cfg(unix)]
+            after_reads: None,
+        }
+    }
+
+    /// Delegates everything and runs `action` right after the `count`-th bounded read. Only Unix tests
+    /// swap a directory under the file system's feet: Windows refuses to rename a pinned directory.
+    #[cfg(unix)]
+    pub fn acting_after_reads(count: usize, action: impl FnMut() + 'static) -> Self {
+        FaultyFs {
+            after_reads: Some((count, Box::new(action))),
+            ..Self::observing()
+        }
+    }
+
+    /// How many bounded reads were served.
+    #[cfg(unix)]
+    pub fn reads(&self) -> usize {
+        self.reads
+    }
+
+    #[cfg(unix)]
+    fn after_read(&mut self) {
+        self.reads += 1;
+        if let Some((count, action)) = self.after_reads.as_mut() {
+            if self.reads == *count {
+                action();
+            }
+        }
+    }
+
     /// Fails the creation of every file whose path contains `fragment`.
     pub fn failing_creation_below(fragment: &'static str) -> Self {
         FaultyFs {
-            inner: StdFs,
             fail_create_below: Some(fragment),
-            fail_rename_to: None,
+            ..Self::observing()
         }
     }
 
     /// Fails every rename onto a path that contains `fragment`.
     pub fn failing_rename_to(fragment: &'static str) -> Self {
         FaultyFs {
-            inner: StdFs,
-            fail_create_below: None,
             fail_rename_to: Some(fragment),
+            ..Self::observing()
         }
     }
 }
@@ -69,7 +111,10 @@ impl DurableFs for FaultyFs {
     }
 
     fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
-        self.inner.read_at_most(path, limit)
+        let served = self.inner.read_at_most(path, limit);
+        #[cfg(unix)]
+        self.after_read();
+        served
     }
 
     fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
