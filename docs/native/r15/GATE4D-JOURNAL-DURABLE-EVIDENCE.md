@@ -1736,3 +1736,47 @@ production sweep is a decision of the maintainer, to be taken before H1b**.
 
 **Not claimed.** No removal is implemented in this part; no caller exists and the sweep is not ported (H1b); H1c and I1c are not
 started.
+
+#### Part 2: removal of a file on Unix
+
+Status words: `H1A_2_UNIX_FILE_REMOVAL=IMPLEMENTED_TEST_SUPPORT_ONLY`, `H1_PROVED=NO`. The authenticated file is held open with
+identity `(dev, ino)`. A quarantine directory (`.h1q-` and 32 hexadecimal digits from the operating system's random source,
+a directory of the effective user, mode 0700 set explicitly with `fchmod` so that a restrictive umask cannot leave a
+directory nothing can be moved into) is created in the pinned parent and held by descriptor, and
+`renameat2(RENAME_NOREPLACE)` (macOS `renameatx_np(RENAME_EXCL)`) moves whatever the name is bound to at that instant into
+it; nothing is overwritten. Only there is the entry identified: it is looked at (a device node is not opened), opened without
+following a link, and the identity of the open object is compared. If it is the authenticated object it is unlinked from the
+quarantine directory; anything else (a live file, a link, a directory, a file this process cannot open) is moved back
+(`Swapped { restored: true }`) or, if the name was taken meanwhile, kept in the quarantine directory (`restored: false`), and
+never unlinked. A file system without `RENAME_NOREPLACE` answers `Unsupported` before anything is touched (not exercised on
+the hosted runners). **Every failure after the move is handled at one point:** the entry is put back and the error is
+returned, or, if it cannot be put back, the outcome is `Stranded { cause }` (the entry is in the quarantine directory as `x`,
+nothing was removed) and not an error that hides where the entry is. The parent is synced whenever the directory changed; a
+sync that fails is an error although the entry is gone or back, and the caller repeats `PinnedDir::sync` (a rerun of the
+removal finds nothing to do and would not sync).
+
+**The window, stated.** The quarantine directory is not exclusive: another process of the same user can list the parent, find
+it and enter it. The design holds when it is manipulated at every point before the last identification (tests below). After the
+last identification no Unix primitive unlinks "this inode": the unlink removes the name's current binding, so an actor that
+wins that one race can have its own file removed instead. This is **detected after the fact, not prevented**: the link count of
+the open authenticated object must have dropped, otherwise the outcome is `Disturbed` (also when the count cannot be read
+afterwards), which a caller never counts as a success. The check is a heuristic: an actor that also changes the link count of the
+authenticated object in the same window is not noticed (Codex, PR #1068). A directory in that window is not unlinked by a file
+removal (it goes back). Whether this is acceptable for a sweep is the maintainer's decision before H1b.
+
+**Proof (lib unit tests, so that the macOS evidence job runs them too).** The baseline runs the naive check-then-`unlinkat`
+against the same swap and shows the live file destroyed, so the observer forces the race. A swap of the last name; a directory,
+a symlink, a FIFO and a file this process cannot open swapped in (each put back, identified by inode, none left in quarantine);
+a name taken again while the entry is aside (kept in quarantine, both live objects intact); a swap inside the quarantine
+directory before the identification; the last window forced with a foreign file (`Disturbed`, the original intact), a
+directory (goes back) and a hard link (object alive under the other name); a name taken after the move, a vanished name,
+renaming the root during the removal; the quarantine directory is mode 0700 and gone afterwards, and a directory made with
+mode 0500 is made usable; an injected failure at each stage leaves the directory as it was found; a failed sync is reported
+for a removal and for a put-back and repeated by `sync`; a quarantine directory that loses its search permission after the
+move gives `Stranded` with the entry still the authenticated inode. Mutation-checked: skipping the identity comparison fails
+five of these cases, skipping the link-count verification fails the forced last window, and removing the rollback of a
+failed inspection fails the `Stranded` case.
+
+**Not claimed.** Directories and the leftover recovery are part 3 (they answer `Unsupported` here); Windows is part 4; the
+Disturbed window is bounded and detected, not closed; a device node swapped in is refused before it is opened and cannot be
+created by an unprivileged actor, which is argued, not tested.

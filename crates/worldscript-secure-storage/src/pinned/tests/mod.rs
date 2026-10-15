@@ -8,6 +8,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 mod read;
 #[cfg(feature = "test-support")]
 mod remove;
+#[cfg(all(feature = "test-support", unix))]
+mod remove_unix;
 #[cfg(windows)]
 mod windows_redirect;
 
