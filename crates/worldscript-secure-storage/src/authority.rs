@@ -914,7 +914,9 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
 /// and every page the caller then pushes whose entries are exactly those of the predecessor's page of
 /// the same index is kept instead of staged ([`StreamedCapture::push_page_inheriting`]). That read is
 /// proportional to the predecessor's pages, so a capture that rewrites everything should begin with
-/// [`begin_streamed_capture`].
+/// [`begin_streamed_capture`]. The session keeps the predecessor's page references (one per predecessor
+/// page, 48 bytes each) next to the capture's own (one per successor page), so its reference memory is about
+/// twice that of a plain session; the format bounds both.
 pub fn begin_inheriting_streamed_capture<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &P,

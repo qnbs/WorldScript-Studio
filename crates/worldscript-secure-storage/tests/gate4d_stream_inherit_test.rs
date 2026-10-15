@@ -128,15 +128,18 @@ fn promote(
     })
 }
 
+/// The files at or below `dir`; a directory that does not exist has none, any other failure to read it
+/// fails the test instead of counting as zero.
 fn files_below(dir: &Path) -> usize {
-    std::fs::read_dir(dir)
-        .map(|entries| {
-            entries
-                .map(|entry| entry.unwrap().path())
-                .map(|path| if path.is_dir() { files_below(&path) } else { 1 })
-                .sum()
-        })
-        .unwrap_or(0)
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return 0,
+        Err(error) => panic!("cannot read {}: {error}", dir.display()),
+    };
+    let paths = entries.map(|entry| entry.unwrap().path());
+    paths
+        .map(|path| if path.is_dir() { files_below(&path) } else { 1 })
+        .sum()
 }
 
 fn kept(staged: &StagedCapture) -> Vec<bool> {
