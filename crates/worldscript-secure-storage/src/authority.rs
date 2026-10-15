@@ -878,6 +878,9 @@ pub struct StagingSession {
     key: Key,
     journal_dir: PathBuf,
     operation: WriteOperationId,
+    /// The stored page set the root names, verified when the session began, for a session that keeps
+    /// the pages the predecessor names exactly (Gate 4 slice I1b).
+    predecessor: Option<VerifiedInventory>,
 }
 
 // The key is deliberately left out of the debug output.
@@ -903,9 +906,42 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
     layout: RootLayout<'_>,
     begin: SessionBegin<'_>,
 ) -> Result<StagingSession, AuthorityError> {
+    begin_session(fs, provider, (layout, begin), Predecessor::Ignore)
+}
+
+/// As [`begin_streamed_capture`], for a session that keeps the pages the stored predecessor names
+/// exactly (Gate 4 slice I1b): the stored page set the root names is read back and verified once, here,
+/// and every page the caller then pushes whose entries are exactly those of the predecessor's page of
+/// the same index is kept instead of staged ([`StreamedCapture::push_page_inheriting`]). That read is
+/// proportional to the predecessor's pages, so a capture that rewrites everything should begin with
+/// [`begin_streamed_capture`]. The session keeps the predecessor's page references (one per predecessor
+/// page, 48 bytes each) next to the capture's own (one per successor page), so its reference memory is about
+/// twice that of a plain session; the format bounds both.
+pub fn begin_inheriting_streamed_capture<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    layout: RootLayout<'_>,
+    begin: SessionBegin<'_>,
+) -> Result<StagingSession, AuthorityError> {
+    begin_session(fs, provider, (layout, begin), Predecessor::Verify)
+}
+
+/// Whether a session reads back the stored predecessor to keep its unchanged pages.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Predecessor {
+    Ignore,
+    Verify,
+}
+
+fn begin_session<F: DurableFs, P: KeyProvider>(
+    fs: &mut F,
+    provider: &P,
+    (layout, begin): (RootLayout<'_>, SessionBegin<'_>),
+    predecessor: Predecessor,
+) -> Result<StagingSession, AuthorityError> {
     let live = committed_route(fs, provider, layout)?.live;
     let key = route_journal_key(fs, provider, layout, begin.journal)?;
-    let capture = {
+    let (capture, verified) = {
         let mut ctx = journal_context(&mut *fs, begin.journal, &key, CandidateConflict::Refuse);
         let committed =
             load_authoritative_manifest(&mut ctx, &live).map_err(AuthorityError::Journal)?;
@@ -915,13 +951,19 @@ pub fn begin_streamed_capture<F: DurableFs, P: KeyProvider>(
             live: &live,
             entry_count: begin.entry_count,
         };
-        StreamedCapture::begin(&mut ctx, &start).map_err(AuthorityError::Journal)?
+        let capture = StreamedCapture::begin(&mut ctx, &start).map_err(AuthorityError::Journal)?;
+        let verified = (predecessor == Predecessor::Verify)
+            .then(|| verify_stored_inventory(&mut ctx, &live))
+            .transpose()
+            .map_err(AuthorityError::Journal)?;
+        (capture, verified)
     };
     Ok(StagingSession {
         capture,
         key,
         journal_dir: begin.journal.dir.to_path_buf(),
         operation: begin.journal.operation.clone(),
+        predecessor: verified,
     })
 }
 
@@ -1086,7 +1128,9 @@ pub(crate) fn load_committed_page<F: DurableFs, P: KeyProvider>(
 }
 
 impl StagingSession {
-    /// Stages the next page under the session's key and directory; see [`StreamedCapture::push_page`].
+    /// Stages the next page under the session's key and directory; see [`StreamedCapture::push_page`]. A
+    /// session begun with [`begin_inheriting_streamed_capture`] keeps an unchanged page instead
+    /// ([`StreamedCapture::push_page_inheriting`]).
     pub fn push_page<F: DurableFs>(
         self,
         fs: &mut F,
@@ -1097,18 +1141,22 @@ impl StagingSession {
             key,
             journal_dir,
             operation,
+            predecessor,
         } = self;
         let capture = {
             let mut ctx = JournalDurableContext::new(fs, &key, &journal_dir, &operation);
-            capture
-                .push_page(&mut ctx, entries)
-                .map_err(AuthorityError::Journal)?
+            match &predecessor {
+                Some(verified) => capture.push_page_inheriting(&mut ctx, entries, verified),
+                None => capture.push_page(&mut ctx, entries),
+            }
+            .map_err(AuthorityError::Journal)?
         };
         Ok(Self {
             capture,
             key,
             journal_dir,
             operation,
+            predecessor,
         })
     }
 

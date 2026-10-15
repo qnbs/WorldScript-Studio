@@ -11,25 +11,26 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use worldscript_secure_storage::memory_provider::{AnchorOp, Fault, MemoryKeyProvider};
 use worldscript_secure_storage::{
-    advance_live_migration, begin_streamed_capture, capture_inventory, commit_catalog_change,
-    commit_final_inventory_capture, commit_final_streamed_inventory_capture,
-    commit_inventory_capture, commit_journal_checkpoint, commit_journal_takeover,
-    commit_lease_renewal, commit_phase_transition, commit_root, commit_streamed_inventory_capture,
-    content_digest, empty_inventory_digest, empty_journal_page_set_digest, generation_path,
-    inventory_page_dir, load_authoritative_manifest, load_catalog, load_staged_page,
-    operation_type, phase_code, promote_manifest_fenced, seal_inventory_pages,
-    source_authority_kind, source_physical_authority_kind, transition_phase,
-    verify_stored_inventory, write_key_epoch, AdmissionScope, AuthorityError, BindingAdvance,
-    CandidateConflict, CatalogChange, CatalogCommit, CatalogDescriptor, CommitMarker,
-    CommittedGeneration, DirectoryDurability, DurableFs, ExclusiveAdmissionGuard,
-    InstallationScopeId, InventoryCapture, JournalCheckpoint, JournalDurableContext,
-    JournalDurableError, JournalError, JournalInventoryEntry, JournalInventorySource,
-    JournalManifest, JournalPage, JournalSource, JournalTakeoverCommit, KeyEpochCommit,
-    KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog, MarkerBody,
-    MigrationExecutionError, MigrationFence, MigrationPhase, RecordClass, RecordIdentity, RootBody,
-    RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted,
-    RootKeyRefV1, RootLayout, SealedPage, SessionBegin, StageFailureKind, StagedCapture,
-    StagedPage, StagingSession, StdFs, StreamedInventoryCapture, WriteOperationId,
+    advance_live_migration, begin_inheriting_streamed_capture, begin_streamed_capture,
+    capture_inventory, commit_catalog_change, commit_final_inventory_capture,
+    commit_final_streamed_inventory_capture, commit_inventory_capture, commit_journal_checkpoint,
+    commit_journal_takeover, commit_lease_renewal, commit_phase_transition, commit_root,
+    commit_streamed_inventory_capture, content_digest, empty_inventory_digest,
+    empty_journal_page_set_digest, generation_path, inventory_page_dir,
+    load_authoritative_manifest, load_catalog, load_staged_page, operation_type, phase_code,
+    promote_manifest_fenced, seal_inventory_pages, source_authority_kind,
+    source_physical_authority_kind, transition_phase, verify_stored_inventory, write_key_epoch,
+    AdmissionScope, AuthorityError, BindingAdvance, CandidateConflict, CatalogChange,
+    CatalogCommit, CatalogDescriptor, CommitMarker, CommittedGeneration, DirectoryDurability,
+    DurableFs, ExclusiveAdmissionGuard, InstallationScopeId, InventoryCapture, JournalCheckpoint,
+    JournalDurableContext, JournalDurableError, JournalError, JournalInventoryEntry,
+    JournalInventorySource, JournalManifest, JournalPage, JournalSource, JournalTakeoverCommit,
+    KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
+    MarkerBody, MigrationExecutionError, MigrationFence, MigrationPhase, RecordClass,
+    RecordIdentity, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
+    RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, SealedPage, SessionBegin,
+    StageFailureKind, StagedCapture, StagedPage, StagingSession, StdFs, StreamedInventoryCapture,
+    WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -1960,6 +1961,56 @@ fn a_recapture_keeps_the_pages_the_stored_predecessor_names_and_refuses_a_reseal
             verified_generations(&fixture, &advanced)
         ),
         (Some(advanced.clone()), vec![2, 3, 2])
+    );
+}
+
+/// A session over `fixture`'s journal that keeps the pages the stored predecessor names exactly.
+fn begin_inheriting_session(
+    fixture: &Fixture,
+    fence: &MigrationFence,
+    count: u32,
+) -> Result<StagingSession, AuthorityError> {
+    let op = WriteOperationId::generate().unwrap();
+    let begin = SessionBegin {
+        journal: JournalSource {
+            dir: &fixture.journal_dir,
+            operation: &op,
+        },
+        fence,
+        entry_count: count,
+    };
+    let layout = RootLayout {
+        root_dir: &fixture.root_dir,
+    };
+    begin_inheriting_streamed_capture(&mut StdFs, &fixture.provider, layout, begin)
+}
+
+#[test]
+fn a_streamed_recapture_keeps_the_pages_the_stored_predecessor_names_and_commits() {
+    let (mut fixture, one, _) = bound_at_one();
+    let first = Capture::over(&one, 6);
+    fixture.capture(&first).unwrap();
+    let fence = MigrationFence::from_manifest(&first.successor);
+    let mut session = begin_inheriting_session(&fixture, &fence, 6).unwrap();
+    let unchanged =
+        |from: u32| -> Vec<JournalInventoryEntry> { (from..from + 2).map(entry).collect() };
+    let rewritten: Vec<JournalInventoryEntry> = (2..4).map(changed_entry).collect();
+    for entries in [unchanged(0), rewritten, unchanged(4)] {
+        session = session.push_page(&mut StdFs, entries).unwrap();
+    }
+    let staged = session.finish(&mut StdFs).unwrap();
+    // Nothing is staged for the two kept pages.
+    assert_eq!((staged.inherited_pages(), staged_files(&staged)), (2, 1));
+    fixture.capture_streamed(&staged).unwrap();
+    let dir = fixture.journal_dir.clone();
+    let advanced = binding_of(staged.successor(), digest_of(&dir, 3));
+    assert_eq!(
+        (
+            fixture.loaded().root.live_migration,
+            verified_generations(&fixture, &advanced),
+            staged_files(&staged)
+        ),
+        (Some(advanced.clone()), vec![2, 3, 2], 0)
     );
 }
 

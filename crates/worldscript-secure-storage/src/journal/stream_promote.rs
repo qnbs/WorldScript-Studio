@@ -72,7 +72,9 @@ pub fn promote_staged_inventory_fenced<F: DurableFs>(
         for index in 0..successor.page_count {
             let staged = load_staged_page(ctx, promotion.staged, index)?;
             assert_page_not_empty(&staged.page)?;
-            assert_page_generation(successor, &staged.page)?;
+            if !promotion.staged.is_inherited(index) {
+                assert_page_generation(successor, &staged.page)?;
+            }
             verifier.absorb_page(&staged.page)?;
             let sealed = SealedPage {
                 page: &staged.page,

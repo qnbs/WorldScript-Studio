@@ -45,8 +45,11 @@ use super::durable::{
     JournalDurableError,
 };
 use super::inventory::JournalInventoryEntry;
-use super::inventory_read::{open_stored_page, MAX_PAGE_ENVELOPE_BYTES};
-use super::inventory_store::{seal_inventory_pages, store_page_at};
+use super::inventory_read::{
+    load_inventory_page, open_stored_page, read_envelope, VerifiedInventory,
+    MAX_PAGE_ENVELOPE_BYTES,
+};
+use super::inventory_store::{inventory_page_dir, seal_inventory_pages, store_page_at};
 use super::manifest::{JournalManifest, JournalPageRef};
 use super::page::JournalPage;
 use super::state::{assert_page_promote_authority, MigrationExecutionError, MigrationFence};
@@ -69,6 +72,9 @@ pub struct StreamedCapture {
     /// the names a failed promotion can leave behind are known to a later cleanup.
     tag: WriteOperationId,
     refs: Vec<JournalPageRef>,
+    /// Per page: whether it is a page of the stored predecessor that this capture keeps (nothing is
+    /// staged for it), see [`Self::push_page_inheriting`].
+    inherited: Vec<bool>,
     verifier: InventoryDigestVerifier,
 }
 
@@ -95,6 +101,10 @@ pub struct StagedCapture {
     pending: PathBuf,
     tag: WriteOperationId,
     refs: Vec<JournalPageRef>,
+    /// Per page: whether it is kept from the stored predecessor, whose set directory
+    /// (`predecessor_digest`) it is promoted from; no file was staged for it.
+    inherited: Vec<bool>,
+    predecessor_digest: [u8; 32],
 }
 
 /// A staged page read back and confirmed against its reference: the decoded page and the exact
@@ -129,6 +139,16 @@ impl StagedCapture {
     /// The private pending directory the pages are staged in.
     pub fn pending_dir(&self) -> &Path {
         &self.pending
+    }
+
+    /// Whether page `index` is kept from the stored predecessor (nothing is staged for it).
+    pub fn is_inherited(&self, index: u32) -> bool {
+        self.inherited.get(index as usize).copied().unwrap_or(false)
+    }
+
+    /// How many pages are kept from the stored predecessor.
+    pub fn inherited_pages(&self) -> usize {
+        self.inherited.iter().filter(|kept| **kept).count()
     }
 
     /// The journal directory the capture was staged in and belongs to.
@@ -191,6 +211,7 @@ impl StreamedCapture {
             pending,
             tag,
             refs: Vec::new(),
+            inherited: Vec::new(),
             verifier,
         })
     }
@@ -256,7 +277,67 @@ impl StreamedCapture {
             return Err(error);
         }
         self.refs.push(reference);
+        self.inherited.push(false);
         Ok(())
+    }
+
+    /// As [`Self::push_page`], but a page whose entries are exactly those of the stored predecessor's page of
+    /// the same index is kept instead of staged (Gate 4 slice I1b): it keeps the predecessor's reference
+    /// and generation, nothing is sealed or written for it, and its entries still go into the inventory
+    /// digest. The predecessor must have been verified for exactly the manifest the capture started
+    /// from, and its page is read back and authenticated before it is compared, one page at a time.
+    /// A page that differs, or lies beyond the predecessor's pages, is staged as `push_page` does.
+    pub fn push_page_inheriting<F: DurableFs>(
+        mut self,
+        ctx: &mut JournalDurableContext<'_, F>,
+        entries: Vec<JournalInventoryEntry>,
+        predecessor: &VerifiedInventory,
+    ) -> Result<Self, JournalDurableError> {
+        match self.stage_next_inheriting(ctx, entries, predecessor) {
+            Ok(()) => Ok(self),
+            Err(error) => {
+                discard_staged(ctx.fs, &self.pending, &self.refs, &self.tag);
+                Err(error)
+            }
+        }
+    }
+
+    fn stage_next_inheriting<F: DurableFs>(
+        &mut self,
+        ctx: &mut JournalDurableContext<'_, F>,
+        entries: Vec<JournalInventoryEntry>,
+        predecessor: &VerifiedInventory,
+    ) -> Result<(), JournalDurableError> {
+        self.assert_context(ctx)?;
+        if predecessor.manifest() != &self.committed {
+            return Err(JournalDurableError::Authority(
+                MigrationExecutionError::LiveBindingMismatch,
+            ));
+        }
+        let index = u32::try_from(self.refs.len()).map_err(|_| JournalError::InvalidPageIndex)?;
+        let Some(known) = self.unchanged_page(ctx, &entries, predecessor, index)? else {
+            return self.stage_next(ctx, entries);
+        };
+        self.verifier.absorb_page(&known)?;
+        self.refs.push(predecessor.page_refs()[index as usize]);
+        self.inherited.push(true);
+        Ok(())
+    }
+
+    /// The predecessor's page `index`, read back and authenticated, if `entries` are exactly its entries.
+    fn unchanged_page<F: DurableFs>(
+        &self,
+        ctx: &mut JournalDurableContext<'_, F>,
+        entries: &[JournalInventoryEntry],
+        predecessor: &VerifiedInventory,
+        index: u32,
+    ) -> Result<Option<JournalPage>, JournalDurableError> {
+        if predecessor.page_refs().get(index as usize).is_none() {
+            return Ok(None);
+        }
+        let known = load_inventory_page(ctx, predecessor, index)?;
+        let candidate = JournalPage::new(index, known.page_generation(), entries.to_vec())?;
+        Ok((candidate == known).then_some(known))
     }
 
     /// The capture belongs to one journal directory and one key. A context for another journal, or
@@ -289,9 +370,11 @@ impl StreamedCapture {
             pending,
             tag,
             refs,
+            inherited,
             verifier,
             ..
         } = self;
+        let predecessor_digest = committed.journal_page_set_digest;
         let successor = verifier
             .finish_digest()
             .map_err(JournalDurableError::from)
@@ -310,6 +393,8 @@ impl StreamedCapture {
                 pending,
                 tag,
                 refs,
+                inherited,
+                predecessor_digest,
             }),
             Err(error) => {
                 discard_staged(ctx.fs, &pending, &refs, &tag);
@@ -381,8 +466,14 @@ pub fn load_staged_page<F: DurableFs>(
         .ok()
         .and_then(|index| staged.refs.get(index))
         .ok_or(JournalError::InvalidPageIndex)?;
-    let dir = staged.pending.join(format!("page-{page_index}"));
-    let envelope = read_staged_envelope(ctx, &generation_path(&dir, reference.page_generation))?;
+    let envelope = if staged.is_inherited(page_index) {
+        // Kept from the stored predecessor: its bytes are read from the predecessor's set directory.
+        let dir = inventory_page_dir(&staged.journal_dir, &staged.predecessor_digest, page_index);
+        read_envelope(ctx, &generation_path(&dir, reference.page_generation))?
+    } else {
+        let dir = staged.pending.join(format!("page-{page_index}"));
+        read_staged_envelope(ctx, &generation_path(&dir, reference.page_generation))?
+    };
     if content_digest(&envelope) != reference.page_content_digest {
         return Err(JournalError::PageSetMismatch.into());
     }
