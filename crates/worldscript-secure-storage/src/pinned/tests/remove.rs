@@ -1,13 +1,155 @@
-//! Removal, in the slice that only brings the API and the isolation: every call refuses, so nothing is
-//! removed and nothing claims a safety it does not have yet.
+//! Removal on every platform that implements it: only the authenticated object goes, and a refusal
+//! changes nothing. Windows has no implementation in this part yet and keeps the refusal test.
 
 use std::fs;
 
+#[cfg(unix)]
+use super::link_to_dir;
 use super::Scratch;
+#[cfg(unix)]
+use crate::durable::DirectoryDurability;
+#[cfg(unix)]
+use crate::pinned::PinnedFile;
 use crate::pinned::{PinnedDir, PinnedError, RemovalOutcome};
 
+/// Accepts a file whose whole content is `expected`.
+#[cfg(unix)]
+pub(super) fn holds(
+    expected: &'static [u8],
+) -> impl FnOnce(&mut PinnedFile) -> Result<bool, PinnedError> {
+    move |file| Ok(file.read_at_most(64)? == expected)
+}
+
+/// What a completed removal reports on this platform.
+#[cfg(unix)]
+pub(super) fn removed() -> Result<RemovalOutcome, PinnedError> {
+    let durability = if cfg!(unix) {
+        DirectoryDurability::Confirmed
+    } else {
+        DirectoryDurability::NotConfirmed
+    };
+    Ok(RemovalOutcome::Removed(durability))
+}
+
+#[cfg(unix)]
+pub(super) fn names(pinned: &PinnedDir) -> Vec<String> {
+    let mut listed: Vec<String> = pinned
+        .entries(32)
+        .unwrap()
+        .into_iter()
+        .map(|name| name.to_string_lossy().into_owned())
+        .collect();
+    listed.sort();
+    listed
+}
+
+#[cfg(unix)]
 #[test]
-fn every_removal_refuses_until_a_platform_implements_it_and_removes_nothing() {
+fn an_authenticated_file_is_removed_and_nothing_else_is() {
+    let scratch = Scratch::new("remove");
+    let root = scratch.root();
+    fs::write(root.join("a"), b"alpha").unwrap();
+    fs::write(root.join("b"), b"beta").unwrap();
+    let pinned = PinnedDir::open_root(&root).unwrap();
+    let outcome = pinned.remove_authenticated_file("a", holds(b"alpha"));
+    assert_eq!(
+        (outcome, names(&pinned), fs::read(root.join("b")).unwrap()),
+        (removed(), vec!["b".to_string()], b"beta".to_vec())
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_refused_authentication_a_failing_one_and_a_wrong_identity_remove_nothing() {
+    let scratch = Scratch::new("refuse");
+    let root = scratch.root();
+    fs::write(root.join("a"), b"alpha").unwrap();
+    fs::write(root.join("other"), b"alpha").unwrap();
+    let pinned = PinnedDir::open_root(&root).unwrap();
+    let expected = pinned.open_file("other").unwrap().identity();
+    let refused = pinned.remove_authenticated_file("a", holds(b"something else"));
+    let failed = pinned.remove_authenticated_file("a", |_| Err(PinnedError::Busy));
+    // The bytes match, but this is not the object the caller meant.
+    let wrong = pinned.remove_authenticated_file("a", move |file| Ok(file.identity() == expected));
+    assert_eq!(
+        (
+            refused,
+            failed,
+            wrong,
+            fs::read(root.join("a")).unwrap(),
+            names(&pinned)
+        ),
+        (
+            Ok(RemovalOutcome::Refused),
+            Err(PinnedError::Busy),
+            Ok(RemovalOutcome::Refused),
+            b"alpha".to_vec(),
+            vec!["a".to_string(), "other".to_string()]
+        )
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_link_a_directory_and_a_missing_name_are_not_removed_as_files() {
+    let scratch = Scratch::new("not-files");
+    let root = scratch.root();
+    let aside = scratch.aside();
+    fs::create_dir(aside.join("target")).unwrap();
+    fs::write(aside.join("target").join("kept"), b"kept").unwrap();
+    link_to_dir(&aside.join("target"), &root.join("link"));
+    fs::create_dir(root.join("dir")).unwrap();
+    let pinned = PinnedDir::open_root(&root).unwrap();
+    let remove = |name: &str| pinned.remove_authenticated_file(name, |_| Ok(true));
+    assert_eq!(
+        (
+            remove("link"),
+            remove("dir"),
+            remove("missing"),
+            fs::read(aside.join("target").join("kept")).unwrap(),
+            names(&pinned)
+        ),
+        (
+            Err(PinnedError::Redirected),
+            Err(PinnedError::NotRegularFile),
+            Err(PinnedError::NotFound),
+            b"kept".to_vec(),
+            vec!["dir".to_string(), "link".to_string()]
+        )
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn removing_a_hard_linked_name_leaves_the_other_names() {
+    let scratch = Scratch::new("hard-link");
+    let root = scratch.root();
+    fs::write(root.join("a"), b"alpha").unwrap();
+    fs::hard_link(root.join("a"), root.join("a-too")).unwrap();
+    let pinned = PinnedDir::open_root(&root).unwrap();
+    let links = pinned.open_file("a").unwrap().link_count();
+    let outcome = pinned.remove_authenticated_file("a", holds(b"alpha"));
+    assert_eq!(
+        (
+            links,
+            outcome,
+            names(&pinned),
+            fs::read(root.join("a-too")).unwrap(),
+            pinned.open_file("a-too").unwrap().link_count()
+        ),
+        (
+            Ok(2),
+            removed(),
+            vec!["a-too".to_string()],
+            b"alpha".to_vec(),
+            Ok(1)
+        )
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn every_removal_refuses_until_windows_implements_it_and_removes_nothing() {
     let scratch = Scratch::new("remove-stub");
     let root = scratch.root();
     fs::write(root.join("a"), b"alpha").unwrap();
