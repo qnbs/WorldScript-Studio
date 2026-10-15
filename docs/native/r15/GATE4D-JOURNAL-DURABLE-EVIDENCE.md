@@ -1756,7 +1756,10 @@ a removal and after a put-back as a step of the removal (a sync that fails is an
 caller repeats `PinnedDir::sync`; a rerun of the removal finds nothing to do and would not sync), and after a rolled-back or
 stranded failure best-effort (the `BeforeSync` stage is reached; a failing sync does not replace the failure that is reported). The
 quarantine directory is removed by its name only if the name still leads to the directory that was created, so a directory an
-actor put at that name is left alone (what could be removed is at most an empty directory).
+actor put at that name is left alone (what could be removed is at most an empty directory). That the directory behind the name is the one `mkdirat` made cannot be proved (`mkdirat` returns no
+descriptor); it is opened by name and its owner and mode are checked, and since the quarantine directory is not exclusive anyway, an
+actor that wins that earlier race gains nothing the window below does not already give it. An entry that stays in the quarantine
+directory (`restored: false`, `Stranded`) is retained with a best-effort sync of that directory as well as of the parent.
 
 **The window, stated.** The quarantine directory is not exclusive: another process of the same user can list the parent, find
 it and enter it. The design holds when it is manipulated at every point before the last identification (tests below). After the

@@ -48,8 +48,6 @@ enum Inside {
 
 /// How a removal ended before the parent directory was synced.
 enum Step {
-    /// Nothing in the directory changed.
-    Unchanged(RemovalOutcome),
     /// The directory changed (an entry was moved and put back, or a quarantine directory came and
     /// went); the outcome is final.
     Changed(RemovalOutcome),
@@ -283,12 +281,16 @@ impl Removal<'_> {
     /// ([`RemovalOutcome::Stranded`]) instead of reporting an error that hides where the entry is.
     fn detach(&self, observer: Observer<'_>) -> Result<Step, PinnedError> {
         if !self.quarantine.adopt(&self.dir.handle, self.target.name)? {
-            return Ok(Step::Unchanged(RemovalOutcome::Vanished));
+            // The quarantine directory came and went: that changed the parent too.
+            return Ok(Step::Changed(RemovalOutcome::Vanished));
         }
         match self.judge(observer) {
             Err(cause) => match self.restore() {
                 Ok(()) => Ok(Step::RolledBack(cause)),
-                Err(_) => Ok(Step::Stranded(cause)),
+                Err(_) => {
+                    self.keep_the_entry();
+                    Ok(Step::Stranded(cause))
+                }
             },
             step => step,
         }
@@ -306,6 +308,9 @@ impl Removal<'_> {
             }
             Inside::Object(..) | Inside::Foreign => {
                 let restored = self.restore().is_ok();
+                if !restored {
+                    self.keep_the_entry();
+                }
                 Ok(Step::Changed(RemovalOutcome::Swapped { restored }))
             }
         }
@@ -329,6 +334,13 @@ impl Removal<'_> {
 
     fn restore(&self) -> Result<(), PinnedError> {
         self.quarantine.restore(&self.dir.handle, self.target.name)
+    }
+
+    /// The entry stays in the quarantine directory: that directory changed as well as the parent, so
+    /// it is synced too (best effort; a failure here does not replace the outcome that says where the
+    /// entry is).
+    fn keep_the_entry(&self) {
+        let _ = self.quarantine.fd.sync_all();
     }
 }
 
@@ -356,7 +368,6 @@ fn settle(
             sync_after_failure(dir, observer);
             Ok(RemovalOutcome::Stranded { cause })
         }
-        Step::Unchanged(outcome) => Ok(outcome),
         Step::Changed(outcome) => {
             observer(RemovalStage::BeforeSync)?;
             dir.sync()?;

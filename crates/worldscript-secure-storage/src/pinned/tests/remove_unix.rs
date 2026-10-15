@@ -388,24 +388,31 @@ fn a_name_taken_after_the_move_keeps_the_new_file_and_a_vanished_name_is_reporte
         }),
     );
     let gone = fixture("vanish");
-    let vanished = gone.pinned.remove_authenticated_file_observed(
-        "a",
-        holds(b"alpha"),
-        &mut on(At::Checked, |_| {
-            fs::remove_file(gone.root.join("a")).unwrap()
-        }),
-    );
+    let mut synced = false;
+    let vanished =
+        gone.pinned
+            .remove_authenticated_file_observed("a", holds(b"alpha"), &mut |stage| {
+                match at(stage) {
+                    (At::Checked, _) => fs::remove_file(gone.root.join("a")).unwrap(),
+                    // The quarantine directory came and went, which changed the parent.
+                    (At::BeforeSync, _) => synced = true,
+                    _ => {}
+                }
+                Ok(())
+            });
     assert_eq!(
         (
             after,
             fs::read(taken.root.join("a")).unwrap(),
             vanished,
+            synced,
             names(&gone.pinned)
         ),
         (
             removed(),
             b"new".to_vec(),
             Ok(RemovalOutcome::Vanished),
+            true,
             Vec::<String>::new()
         )
     );
