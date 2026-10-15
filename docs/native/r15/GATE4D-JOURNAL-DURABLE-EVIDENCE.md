@@ -1615,3 +1615,45 @@ accepted each fail a test.
 
 Not in this slice: clock-regression detection (the record holds no earlier reading to compare with), a platform-specific
 trusted time source, and any H1 work.
+
+### Handle-relative pinned I/O (Gate 4 slice H1a-1)
+
+Status words: `H1A_PRIMITIVES=IMPLEMENTED_NON_DESTRUCTIVE`, `H1_DELETION_MECHANISMS=NOT_IMPLEMENTED` (H1a-2),
+`H1_PROVED=NO`, `R1_PRODUCTION_RECLAMATION=NOT_ADMITTED`, `GATE4_TERMINAL=NO`. The maintainer cleared H1a to start and
+did not yet clear any deletion mechanism, so this slice changes nothing in the file system and nothing calls it. H1a is
+cut into two PRs by proof boundary: this one (the non-destructive primitives and their Windows/Unix proof) and H1a-2
+(the removal primitives, `test-support` only).
+
+**What exists.** A new module `pinned`, a parallel seam (`DurableFs` is unchanged). `PinnedDir::open_root` opens one
+directory with no-follow semantics, and `open_dir`, `open_file`, `entry_kind`, `entries(limit)` and `is_still_named`
+reach everything below it through the handle of a directory that was opened, never through a path again. A file is read
+through `PinnedFile` (`read_at_most`, `identity`, `link_count`). A name must be exactly one ordinary component (on
+Windows also no data stream, wildcard, trailing dot or space, or device name). A link, junction or other reparse point is
+refused at every component below the root (`Redirected`); the final component of the root is not followed either, and the
+ancestors of the root are resolved once by the operating system, as for every other operation of the crate. A listing is
+bounded by a limit the caller gives, and a file is read only up to a bound.
+
+**Unix.** Every step is an `*at` call on the descriptor of the directory that was opened (`openat` with `O_NOFOLLOW`,
+`statat` with `AT_SYMLINK_NOFOLLOW`, `Dir::read_from` on the descriptor). A file is opened non-blocking and without a
+controlling terminal, so that a FIFO or device that a swap put at the name cannot hang or attach, and is refused after a
+type check on the descriptor.
+
+**Windows.** A directory is pinned by an open handle that does not share delete, so neither it nor any of its ancestors can
+be renamed or replaced while it is held; a reparse point is opened as itself (`FILE_FLAG_OPEN_REPARSE_POINT`) and
+refused. Identity is the volume serial and 128-bit file id of the handle (the existing `file_identity` of `root_lock`,
+made `pub(crate)`); the link count is one more `GetFileInformationByHandleEx` call in a small function with a local
+`#[allow(unsafe_code)]` and a SAFETY comment, the pattern of `root_lock::sys`. No new dependency, feature or package.
+
+**Proof (lib unit tests, so that the macOS and Windows evidence job runs the same cases as Linux).** A link or an entry
+of another kind is refused and never followed for the root, a child directory, a file and `entry_kind`; a FIFO and a
+symlink to a file are not opened (Unix); a name that is not one component is refused by every operation; a listing above
+its limit is refused; a file is read up to its bound only and a hard link is counted; a held directory keeps its object
+when its path is renamed and refilled (Unix) and `is_still_named` says so. Windows: a junction is refused at the root and
+below it, a name the system would reinterpret is refused, and a pinned directory and its ancestors cannot be renamed or
+removed while held. The local environment is Linux, so the hosted Windows job is the only oracle for the Windows cases;
+its result is recorded on the PR.
+
+**Residual, stated.** The root itself is opened by path once, so a caller must hold the root-commit lock and check
+`is_still_named` where that matters. Everything below the root is handle-relative, but reading is not removing: the
+removal primitives, and with them the claim that only the authenticated object is ever removed, are H1a-2. The sweep
+(H1b), the three producer-equivalence invariants (H1c) and stored-set reclamation (I1c) are not started.

@@ -304,7 +304,7 @@ pub(crate) mod sys {
 
     /// Stable 128-bit IDs support NTFS/ReFS; unsupported identity queries are errors, not authority.
     #[allow(unsafe_code)]
-    fn file_identity(file: &File) -> io::Result<(u64, [u8; 16])> {
+    pub(crate) fn file_identity(file: &File) -> io::Result<(u64, [u8; 16])> {
         let mut info = FILE_ID_INFO {
             VolumeSerialNumber: 0,
             FileId: FILE_ID_128 {

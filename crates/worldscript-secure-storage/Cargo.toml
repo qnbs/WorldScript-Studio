@@ -35,6 +35,7 @@ zeroize_derive = "~1.4"
 # Gate 4 slice 4A (§11.1): the cross-process `root_commit_mutex` is an operating-system advisory
 # lock. rustix's safe `flock` on Unix (1.x, MSRV 1.63, already in the lockfile); on Windows one
 # `LockFileEx` call through windows-sys 0.52 (MSRV 1.56, already in the lockfile).
+# Gate 4 slice H1a (`pinned`): the same rustix for `*at` calls; on Windows a few more windows-sys calls.
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1.1", default-features = false, features = ["fs", "std"] }
 

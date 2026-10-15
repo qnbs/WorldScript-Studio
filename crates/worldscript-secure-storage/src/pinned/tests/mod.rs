@@ -1,0 +1,66 @@
+//! Tests of the pinned seam. They are unit tests so that the macOS and Windows evidence job, which runs
+//! the library tests only, exercises the same cases as Linux.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+mod read;
+
+/// A scratch directory below the temp dir, removed when dropped.
+pub(super) struct Scratch(PathBuf);
+
+impl Scratch {
+    pub(super) fn new(label: &str) -> Self {
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+        let unique = NEXT.fetch_add(1, Ordering::Relaxed);
+        let path =
+            std::env::temp_dir().join(format!("wss-h1a-{label}-{}-{unique}", std::process::id()));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).unwrap();
+        Scratch(path)
+    }
+
+    /// The directory the tests pin.
+    pub(super) fn root(&self) -> PathBuf {
+        let root = self.0.join("root");
+        fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    /// A place outside the pinned root.
+    pub(super) fn aside(&self) -> PathBuf {
+        let aside = self.0.join("aside");
+        fs::create_dir_all(&aside).unwrap();
+        aside
+    }
+
+    pub(super) fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A link to the directory `target` at `link`: a symbolic link on Unix, a junction on Windows (which
+/// needs no privilege).
+pub(super) fn link_to_dir(target: &Path, link: &Path) {
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, link).unwrap();
+    #[cfg(windows)]
+    {
+        let made = std::process::Command::new("cmd")
+            .arg("/C")
+            .arg("mklink")
+            .arg("/J")
+            .arg(link)
+            .arg(target)
+            .output()
+            .unwrap();
+        assert!(made.status.success(), "{made:?}");
+    }
+}
