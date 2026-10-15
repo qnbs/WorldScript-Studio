@@ -16,11 +16,11 @@
 //!
 //! **Platforms.** On Unix every step is an `*at` call on the descriptor of the directory that was
 //! opened. On Windows a directory is pinned by an open handle without delete sharing, so neither it nor
-//! any of its ancestors can be renamed or replaced while it is held; a child is opened by the path of
-//! its pinned parent, which was resolved once from the opened object and has no link in it, so a relative
-//! root or a link among the root's ancestors cannot redirect it afterwards. That is the same guarantee
-//! as a relative NT open on a file system that enforces the sharing rule (NTFS, proven on the hosted
-//! runner); it is not claimed for one that does not.
+//! any of its ancestors can be renamed or replaced while it is held, and a child, a listing and an entry
+//! kind are looked up relative to that handle (`NtCreateFile` with the directory as the root, and the
+//! directory information of the handle), so a directory that is turned into a reparse point in place or
+//! whose path is redirected leads nowhere. Only the root is opened by path, once. That is proven on NTFS
+//! by the hosted tests; it is not claimed for a file system that does not enforce the sharing rule.
 //!
 //! This slice (H1a-1) has no removal: nothing here changes the file system, and nothing calls it yet.
 
@@ -148,10 +148,9 @@ impl PinnedDir {
         })
     }
 
-    /// The path of this directory without any link in it, as it was when the directory was opened. On
-    /// Unix no operation uses it but [`is_still_named`](Self::is_still_named); on Windows a child is
-    /// opened by it, which is safe because no directory on it can be renamed or removed while a handle
-    /// below it is open without delete sharing (every `PinnedDir`, a child too, holds its own).
+    /// The path of this directory without any link in it, as it was when the directory was opened. It is
+    /// informational: no operation but [`is_still_named`](Self::is_still_named) uses it, every other one
+    /// goes through the handle.
     pub fn path(&self) -> &Path {
         &self.path
     }

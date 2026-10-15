@@ -3,20 +3,22 @@
 //! junction, mount point) is opened as itself (`FILE_FLAG_OPEN_REPARSE_POINT`) and refused, never
 //! followed. The identity of an object is the volume serial and 128-bit file id of the open handle.
 //!
-//! A child is opened by the path of its pinned parent, not by an NT call relative to the parent handle,
-//! and what was opened is then verified to be where it should be. The root is resolved once, from the
-//! object that was opened, to a path without any link ([`open_root`]). No directory on that path can be
-//! renamed or removed while a handle below it is open without delete sharing, and every `PinnedDir`, a
-//! child too, holds such a handle of its own, so this does not depend on its parent staying alive. The
-//! sharing rule does not stop a writer from turning an empty directory into a reparse point *in place*,
-//! which would make the join lead into another tree: so the parent handle is checked for reparse data
-//! before each use, and every child that is opened must report, by its own handle, a real path whose
-//! parent is the path of the pinned directory (`open_child`); anything reached through a redirection
-//! reports another parent and is refused. A listing and `entry_kind` only name entries; acting on one
-//! goes through such an open. It is proven on NTFS by the tests that a pinned directory and its
-//! ancestors cannot be renamed, also after the parent was dropped, that a retargeted ancestor link does
-//! not redirect a child, and that a directory converted in place is refused; a file system that does
-//! not enforce the sharing rule is outside the claim.
+//! Children and listings go through the handle of the pinned directory, relative to it ([`nt`]):
+//! `NtCreateFile` with the directory as `RootDirectory` and the single name as the object name, and the
+//! directory information of the handle. The system then looks the name up in the directory object the
+//! handle refers to, so a directory that is turned into a reparse point in place after a check, or whose
+//! path is redirected, cannot lead a child or a listing into another tree. Only the root is opened by
+//! path, once, and resolved to a path without any link ([`open_root`]); a child's stored path is the
+//! real path its own handle reports. `entry_kind` is a relative open of the entry as itself. That a
+//! pinned directory and its ancestors cannot be renamed, also after the parent was dropped, and that a
+//! converted directory leads nowhere are proven on NTFS by the tests; a file system that does not
+//! enforce the sharing rule or the relative lookup is outside the claim.
+//!
+//! The parent handle is also checked for reparse data before each use. That check alone would leave a
+//! window between the check and the use; it only turns what the relative lookup would answer anyway
+//! (nothing: such a directory is empty) into an explicit `Redirected`.
+
+pub(in crate::pinned) mod nt;
 
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
@@ -28,15 +30,15 @@ use std::path::{Path, PathBuf};
 
 use windows_sys::Win32::Foundation::{ERROR_DELETE_PENDING, ERROR_SHARING_VIOLATION, HANDLE};
 use windows_sys::Win32::Storage::FileSystem::{
-    FileStandardInfo, GetFinalPathNameByHandleW, FILE_ATTRIBUTE_DIRECTORY,
-    FILE_ATTRIBUTE_REPARSE_POINT, FILE_GENERIC_READ, FILE_INFO_BY_HANDLE_CLASS,
-    FILE_NAME_NORMALIZED, FILE_STANDARD_INFO, VOLUME_NAME_DOS,
+    GetFinalPathNameByHandleW, FILE_ACCESS_RIGHTS, FILE_ATTRIBUTE_DIRECTORY,
+    FILE_ATTRIBUTE_REPARSE_POINT, FILE_GENERIC_READ, FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES,
+    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_STANDARD_INFO, VOLUME_NAME_DOS,
 };
 
 use super::names;
 use super::{ObjectIdentity, PinnedError};
-use crate::durable::{DurableFs, EntryKind, StdFs};
-use crate::root_lock::sys::{file_identity, open_as_itself, query_handle, still_named, HandleInfo};
+use crate::durable::EntryKind;
+use crate::root_lock::sys::{file_identity, open_as_itself, query_handle, still_named};
 
 pub(super) type DirHandle = File;
 
@@ -91,10 +93,9 @@ pub(super) fn open_kind(
     Ok((file, identity))
 }
 
-/// Opens the directory `path` and resolves it once to the path of the object itself, which has no link
-/// in it. No directory on that path can be renamed or removed while the open handle (or one of a child)
-/// is held, so a later join with a child name cannot lead anywhere else, and a relative `path` or a
-/// link among its ancestors cannot redirect it afterwards.
+/// Opens the directory `path` by path, once, and resolves it to the path of the object itself, which
+/// has no link in it (checked to name the object that was opened). Everything below the root goes through
+/// the handle, so that path is only informational.
 pub(super) fn open_root(path: &Path) -> Result<(DirHandle, ObjectIdentity, PathBuf), PinnedError> {
     let (dir, identity) = open_kind(path, FILE_GENERIC_READ, EntryKind::Directory)?;
     let resolved = std::fs::canonicalize(path).map_err(PinnedError::from)?;
@@ -104,27 +105,35 @@ pub(super) fn open_root(path: &Path) -> Result<(DirHandle, ObjectIdentity, PathB
     Ok((dir, identity, resolved))
 }
 
-/// Opens the child `name` as `wanted` (a directory or a regular file) and returns it with its real
-/// path. A reparse point is refused, and so is a child that is not physically directly in the pinned
-/// directory: its own handle must report a path whose parent is `parent_path`.
+/// Opens the child `name` as `wanted` (a directory or a regular file), relative to the handle `parent`,
+/// and returns it with its real path. A reparse point is refused.
 pub(super) fn open_child(
     parent: &DirHandle,
-    parent_path: &Path,
+    _parent_path: &Path,
     name: &OsStr,
     wanted: EntryKind,
 ) -> Result<(File, ObjectIdentity, PathBuf), PinnedError> {
+    open_child_with(parent, name, wanted, FILE_GENERIC_READ)
+}
+
+/// [`open_child`] with the access `access`, sharing read and write but never delete.
+pub(super) fn open_child_with(
+    parent: &DirHandle,
+    name: &OsStr,
+    wanted: EntryKind,
+    access: FILE_ACCESS_RIGHTS,
+) -> Result<(File, ObjectIdentity, PathBuf), PinnedError> {
     assert_not_converted(parent)?;
-    let (file, identity) = open_kind(&parent_path.join(name), FILE_GENERIC_READ, wanted)?;
-    let real = final_path(&file).map_err(PinnedError::from)?;
-    if real.parent() != Some(parent_path) {
-        return Err(PinnedError::Redirected);
-    }
-    Ok((file, identity, real))
+    let child = nt::open_relative(parent, name, access, FILE_SHARE_READ | FILE_SHARE_WRITE)?;
+    let child = expect_kind(child, wanted)?;
+    let identity = identity_of(&child)?;
+    let real = final_path(&child).map_err(PinnedError::from)?;
+    Ok((child, identity, real))
 }
 
 /// The pinned directory must still be a plain directory. Nothing in the sharing rule stops a writer
-/// from converting an empty directory into a reparse point in place, after which a join with a name
-/// would lead into another tree.
+/// from converting an empty directory into a reparse point in place. The relative lookups below do not
+/// depend on this check (a converted directory is empty); it turns their empty answer into `Redirected`.
 fn assert_not_converted(dir: &DirHandle) -> Result<(), PinnedError> {
     let attributes = dir.metadata().map_err(PinnedError::from)?.file_attributes();
     if attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
@@ -163,35 +172,40 @@ fn final_path(file: &File) -> io::Result<PathBuf> {
     }
 }
 
+/// What the entry `name` of `parent` is itself: a relative open of the entry as itself, for its
+/// attributes only.
 pub(super) fn entry_kind(
     parent: &DirHandle,
-    parent_path: &Path,
+    _parent_path: &Path,
     name: &OsStr,
 ) -> Result<Option<EntryKind>, PinnedError> {
     assert_not_converted(parent)?;
-    match StdFs.entry_kind(&parent_path.join(name)) {
-        Ok(kind) => Ok(Some(kind)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(PinnedError::from(error)),
-    }
+    let share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    let entry = match nt::open_relative(parent, name, FILE_READ_ATTRIBUTES, share) {
+        Ok(entry) => entry,
+        Err(PinnedError::NotFound) => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let attributes = entry
+        .metadata()
+        .map_err(PinnedError::from)?
+        .file_attributes();
+    Ok(Some(if attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        EntryKind::Link
+    } else if attributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
+        EntryKind::Directory
+    } else {
+        EntryKind::File
+    }))
 }
 
 pub(super) fn entries(
     parent: &DirHandle,
-    parent_path: &Path,
+    _parent_path: &Path,
     limit: usize,
 ) -> Result<Vec<OsString>, PinnedError> {
     assert_not_converted(parent)?;
-    let mut names = Vec::new();
-    for entry in std::fs::read_dir(parent_path).map_err(PinnedError::from)? {
-        let name = entry.map_err(PinnedError::from)?.file_name();
-        if names.len() == limit {
-            return Err(PinnedError::TooManyEntries);
-        }
-        names.push(name);
-    }
-    assert_not_converted(parent)?;
-    Ok(names)
+    nt::list(parent, limit)
 }
 
 pub(super) fn is_still_named(handle: &DirHandle, path: &Path) -> Result<bool, PinnedError> {
@@ -216,11 +230,4 @@ fn standard_info(file: &File) -> io::Result<FILE_STANDARD_INFO> {
     };
     query_handle(file, &mut info)?;
     Ok(info)
-}
-
-#[allow(unsafe_code)]
-// SAFETY: FILE_STANDARD_INFO is the structure of `FileStandardInfo`: integers and two byte-sized booleans,
-// valid for every bit pattern.
-unsafe impl HandleInfo for FILE_STANDARD_INFO {
-    const CLASS: FILE_INFO_BY_HANDLE_CLASS = FileStandardInfo;
 }

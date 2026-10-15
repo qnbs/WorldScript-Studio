@@ -1640,34 +1640,36 @@ bounded by a limit the caller gives, and a file is read only up to a bound.
 `statat` with `AT_SYMLINK_NOFOLLOW`, `Dir::read_from` on the descriptor). A file is opened non-blocking and without a
 controlling terminal, and it is looked at before it is opened (a device node runs its driver on open, which those flags
 do not prevent), so a link, FIFO, device or directory is refused without an open; the type check on the descriptor still
-catches an entry swapped in between, which has then been opened once. `is_still_named` walks the root's path from `/` one component at a time with `O_NOFOLLOW`,
+catches an entry swapped in between, which has then been opened once. That window cannot be used to run a driver by an
+unprivileged actor: a device node can only be created with `mknod` privilege, and an existing one cannot be linked or
+renamed into the directory across file systems; a privileged actor is outside the model. `is_still_named` walks the root's path from `/` one component at a time with `O_NOFOLLOW`,
 so an ancestor that was renamed away, replaced or turned into a link (to the renamed tree, which a path-based check
 would follow back to the same directory) says no.
 
-**Windows.** A directory is pinned by an open handle that does not share delete, so neither it nor any of its ancestors can
-be renamed or replaced while it is held; a reparse point is opened as itself (`FILE_FLAG_OPEN_REPARSE_POINT`) and
-refused. A root path that ends in a space or a dot is refused too, because the path layer strips them and would
-resolve a link before it. A child is opened by the path of its pinned parent, **not** by an NT open relative to the parent handle: the
-root is resolved once, from the object that was opened (`canonicalize`, then checked to name the same object), to a path
-without any link, so a relative root, a changed working directory or a link among the root's ancestors that is retargeted
-later cannot redirect a child; and no directory on that path can be renamed or removed while a handle below it is open
-without delete sharing, which every `PinnedDir` (a child too) holds on its own, so it does not depend on the parent
-staying alive (a test drops the parent and renames the ancestors). Reviewers asked for `NtCreateFile` with a
-root directory handle instead; it was not taken because it adds a large unsafe surface (`OBJECT_ATTRIBUTES`,
-`UNICODE_STRING`, the `Wdk` feature) for the same effect on a file system that enforces the sharing rule, which is
-proven on the hosted NTFS runner by the tests below. A file system that does not enforce it is outside the claim.
-The sharing rule does not stop a writer from turning an *empty* pinned directory into a reparse point in place (the
-object is not renamed or deleted), which would make the join lead into another tree. Two checks cover it: the parent
-handle is checked for reparse data before each use (and a listing before and after), and every child that is opened must
-report by its own handle a real path whose parent is the path of the pinned directory, so anything reached through a
-redirection reports another parent and is refused (`Redirected`). A listing and `entry_kind` only name entries; acting on
-one goes through such an open. Identity is the volume serial and 128-bit file id of the handle (the existing
-`file_identity` of `root_lock`). The handle queries share one typed helper there: `query_handle<T: HandleInfo>` takes
-no class parameter, the class belongs to the structure through an `unsafe trait` whose contract is "this is the
-structure of that class, valid for every bit pattern", so a safe caller cannot pair a type with another class. The
-module adds one more `unsafe` function (`GetFinalPathNameByHandleW`, with a SAFETY comment) and one `unsafe impl` for
-`FILE_STANDARD_INFO`; no new dependency, feature or package. A Windows name with an unpaired surrogate, which a listing
-can return, is judged by its other characters instead of being unopenable.
+**Windows.** A directory is pinned by an open handle that does not share delete, so neither it nor any of its ancestors
+can be renamed or replaced while it is held (proven below, also after the parent was dropped); a reparse point is opened
+as itself (`FILE_FLAG_OPEN_REPARSE_POINT`) and refused. **Children and listings are handle-relative**: a child is opened
+with `NtCreateFile` and the pinned directory as `RootDirectory` (the single validated name as the object name,
+`FILE_OPEN_REPARSE_POINT`), a listing reads the directory information of the handle (`FileIdBothDirectoryInfo`), and
+`entry_kind` is a relative open of the entry as itself. The system looks the name up in the directory object the handle
+refers to, so an empty pinned directory that a writer turns into a reparse point in place (the sharing rule does not stop
+that; the object is neither renamed nor deleted), a redirected path, a relative root or a link among the root's
+ancestors cannot lead a child or a listing into another tree. Only the root is opened by path, once, and resolved to a
+path without any link (`canonicalize`, then checked to name the same object, else `Redirected`); a child's stored path
+is the real path its own handle reports and is only informational. The parent handle is additionally checked for
+reparse data before each use; that check alone would leave a window, so it only turns what the relative lookup answers
+anyway (nothing: a converted directory is empty) into an explicit `Redirected`, and the tests below do not rely on it.
+This needs the `Wdk_Foundation` and `Wdk_Storage_FileSystem` features of the `windows-sys` already in the lockfile (no
+new package; `Cargo.lock` is unchanged). Identity is the volume serial and 128-bit file id of the handle (the existing
+`file_identity` of `root_lock`). **Unsafe inventory, all local with a SAFETY comment:** `open_relative` (`NtCreateFile`),
+`list` (`GetFileInformationByHandleEx`; the entries are parsed from the byte buffer with checked indexing), `final_path`
+(`GetFinalPathNameByHandleW`), `query_handle` and the `unsafe trait HandleInfo` with exactly two `unsafe impl`s
+(`FILE_ID_INFO`, `FILE_STANDARD_INFO`) in `root_lock`. `query_handle<T: HandleInfo>` takes no class parameter: the class
+belongs to the structure, whose contract is "the structure of that class, valid for every bit pattern" (plain
+integers, layout pinned by a test), so a safe caller cannot pair a type with another class. A Windows name with an
+unpaired surrogate, which a listing can return, is judged by its other characters instead of being unopenable. The
+claim holds for a file system that enforces the sharing rule and the relative lookup (NTFS, proven on the hosted
+runner); it is not made for any other.
 
 **Proof (lib unit tests, so that the macOS and Windows evidence job runs the same cases as Linux).** A link or an entry
 of another kind is refused and never followed for the root, a child directory, a file and `entry_kind`; a FIFO and a
@@ -1677,11 +1679,15 @@ sees the whole file), and a hard link is counted; a held directory keeps its obj
 refilled (Unix) and `is_still_named` says so; a root given through a link is resolved to the object itself, and
 retargeting that link afterwards changes nothing (all platforms); an ancestor turned into a link to the renamed tree is
 no longer the name (Unix); a root path that ends in a separator, `.` or `..` is refused, with a test of the premise that
-the system follows the link there (Unix). Windows: a directory turned into a junction in place (`FSCTL_SET_REPARSE_POINT` on the same object) reaches nothing
-through it, and a child reached through a link in the path is refused by its real path alone; a junction is refused at the
-root and below it, a name with an unpaired surrogate can be opened after a listing, a name the system would
-reinterpret is refused (including `COM¹`..`COM³` and `LPT¹`..`LPT³`; the rule is a pure function that is also tested on
-Linux), and a pinned directory and its ancestors cannot be renamed or removed while held. The local environment is Linux, so the hosted Windows job is the only oracle for the Windows cases;
+the system follows the link there (Unix). every operation follows the held directory, not the path it was stored with (a decoy tree behind the stored path; all
+platforms, and the naive join with the stored path reads the decoy as the counter-proof). Windows: a pinned empty
+directory converted into a junction in place (`FSCTL_SET_REPARSE_POINT` on the same object) is refused by every
+operation while a join with its stored path reads the foreign file (counter-proof), and the relative open and the
+handle listing of that converted directory reach neither the foreign file nor its names even without the check; a
+junction is refused at the root and below it, a name with an unpaired surrogate can be opened after a listing, a name
+the system would reinterpret is refused (including `COM¹`..`COM³` and `LPT¹`..`LPT³`; the rule is a pure function that
+is also tested on Linux), a pinned directory and its ancestors cannot be renamed or removed while held, also after the
+parent was dropped, and the layout of the two handle-information structures is pinned (24 bytes, 8-aligned). The local environment is Linux, so the hosted Windows job is the only oracle for the Windows cases;
 its result is recorded on the PR.
 
 **Residual, stated.** The root itself is opened by path once, so a caller must hold the root-commit lock and check

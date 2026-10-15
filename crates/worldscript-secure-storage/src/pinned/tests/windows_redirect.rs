@@ -1,6 +1,6 @@
 //! Windows: the redirections that the sharing rule does not prevent, and names that a listing returns.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs::{self, OpenOptions};
 use std::os::windows::ffi::OsStringExt;
 use std::os::windows::fs::OpenOptionsExt;
@@ -9,12 +9,13 @@ use std::path::Path;
 
 use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::Storage::FileSystem::{
-    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ,
-    FILE_SHARE_WRITE,
+    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ, FILE_SHARE_DELETE,
+    FILE_SHARE_READ, FILE_SHARE_WRITE,
 };
 use windows_sys::Win32::System::IO::DeviceIoControl;
 
-use super::{link_to_dir, Scratch};
+use super::Scratch;
+use crate::pinned::windows::nt;
 use crate::pinned::{PinnedDir, PinnedError};
 
 const FSCTL_SET_REPARSE_POINT: u32 = 0x0009_00A4;
@@ -74,26 +75,34 @@ fn convert_in_place(dir: &Path, target: &Path) {
     assert_ne!(success, 0, "{}", std::io::Error::last_os_error());
 }
 
-#[test]
-fn a_directory_turned_into_a_junction_in_place_reaches_nothing_through_it() {
-    let scratch = Scratch::new("win-convert");
+/// A pinned empty directory `root` converted in place into a junction to `target`, which holds a
+/// directory `child` and a file `inside`.
+fn converted(scratch: &Scratch) -> PinnedDir {
     let (root, aside) = (scratch.root(), scratch.aside());
     let target = aside.join("target");
     fs::create_dir_all(target.join("child")).unwrap();
     fs::write(target.join("inside"), b"foreign").unwrap();
     let pinned = PinnedDir::open_root(&root).unwrap();
-    let before = pinned.entries(4);
     convert_in_place(&root, &target);
+    pinned
+}
+
+#[test]
+fn a_directory_turned_into_a_junction_in_place_reaches_nothing_through_it() {
+    let scratch = Scratch::new("win-convert");
+    let pinned = converted(&scratch);
+    // The counter-proof: a join with the stored path does reach the foreign tree.
+    let naive = fs::read(pinned.path().join("inside")).ok();
     assert_eq!(
         (
-            before,
+            naive,
             pinned.entries(4),
             pinned.open_dir("child").map(|_| ()),
             pinned.open_file("inside").map(|_| ()),
             pinned.entry_kind("inside")
         ),
         (
-            Ok(Vec::new()),
+            Some(b"foreign".to_vec()),
             Err(PinnedError::Redirected),
             Err(PinnedError::Redirected),
             Err(PinnedError::Redirected),
@@ -103,25 +112,42 @@ fn a_directory_turned_into_a_junction_in_place_reaches_nothing_through_it() {
 }
 
 #[test]
-fn a_child_that_a_redirect_leads_to_is_refused_by_its_real_path_alone() {
-    let scratch = Scratch::new("win-real-path");
-    let aside = scratch.aside();
-    let real = aside.join("real");
-    fs::create_dir_all(real.join("child")).unwrap();
-    fs::write(real.join("inside"), b"inside").unwrap();
-    let link = scratch.path().join("link");
-    link_to_dir(&real, &link);
-    // The directory is a plain one; only the path it is joined by now goes through a link, as it would
-    // after an in-place conversion that was undone before the check of the directory itself.
-    let mut pinned = PinnedDir::open_root(&real).unwrap();
-    pinned.path = link;
-    let refused = Err(PinnedError::Redirected);
+fn a_relative_lookup_under_a_converted_directory_leads_nowhere_even_without_the_check() {
+    let scratch = Scratch::new("win-relative");
+    let pinned = converted(&scratch);
+    let share = FILE_SHARE_READ | FILE_SHARE_WRITE;
+    let opened = nt::open_relative(
+        &pinned.handle,
+        OsStr::new("inside"),
+        FILE_GENERIC_READ,
+        share,
+    );
+    let listed = nt::list(&pinned.handle, 8);
+    // Neither the file nor the names of the foreign tree: the lookup is in the directory the handle
+    // refers to, which is empty.
     assert_eq!(
         (
-            pinned.open_dir("child").map(|_| ()),
-            pinned.open_file("inside").map(|_| ())
+            matches!(opened, Err(PinnedError::NotFound | PinnedError::Redirected)),
+            listed.map_or(true, |names| names.is_empty())
         ),
-        (refused, refused)
+        (true, true)
+    );
+}
+
+#[test]
+fn the_handle_info_structures_have_the_layout_the_system_writes() {
+    use std::mem::{align_of, size_of};
+
+    use windows_sys::Win32::Storage::FileSystem::{FILE_ID_INFO, FILE_STANDARD_INFO};
+
+    assert_eq!(
+        (
+            size_of::<FILE_ID_INFO>(),
+            align_of::<FILE_ID_INFO>(),
+            size_of::<FILE_STANDARD_INFO>(),
+            align_of::<FILE_STANDARD_INFO>()
+        ),
+        (24, 8, 24, 8)
     );
 }
 

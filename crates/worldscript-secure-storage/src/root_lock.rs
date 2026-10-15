@@ -186,10 +186,10 @@ pub(crate) mod sys {
 
     use windows_sys::Win32::Foundation::{ERROR_LOCK_VIOLATION, GENERIC_READ, HANDLE};
     use windows_sys::Win32::Storage::FileSystem::{
-        FileIdInfo, GetFileInformationByHandleEx, LockFileEx, FILE_ATTRIBUTE_REPARSE_POINT,
-        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_128, FILE_ID_INFO,
-        FILE_INFO_BY_HANDLE_CLASS, FILE_SHARE_READ, FILE_SHARE_WRITE, LOCKFILE_EXCLUSIVE_LOCK,
-        LOCKFILE_FAIL_IMMEDIATELY,
+        FileIdInfo, FileStandardInfo, GetFileInformationByHandleEx, LockFileEx,
+        FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+        FILE_ID_128, FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS, FILE_SHARE_READ, FILE_SHARE_WRITE,
+        FILE_STANDARD_INFO, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
     };
     use windows_sys::Win32::System::IO::OVERLAPPED;
 
@@ -319,6 +319,13 @@ pub(crate) mod sys {
     // SAFETY: FILE_ID_INFO is the structure of `FileIdInfo`, a volume serial and 16 identifier bytes.
     unsafe impl HandleInfo for FILE_ID_INFO {
         const CLASS: FILE_INFO_BY_HANDLE_CLASS = FileIdInfo;
+    }
+
+    #[allow(unsafe_code)]
+    // SAFETY: FILE_STANDARD_INFO is the structure of `FileStandardInfo`: integers and two byte-sized
+    // booleans, valid for every bit pattern (its layout is pinned by a test).
+    unsafe impl HandleInfo for FILE_STANDARD_INFO {
+        const CLASS: FILE_INFO_BY_HANDLE_CLASS = FileStandardInfo;
     }
 
     /// One `GetFileInformationByHandleEx` query: fills `info` with the answer for its class.

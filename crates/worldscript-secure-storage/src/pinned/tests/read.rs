@@ -459,3 +459,41 @@ fn a_child_keeps_the_ancestors_pinned_after_its_parent_is_dropped() {
     );
     assert_eq!((attempts, child.is_still_named()), ((true, true), Ok(true)));
 }
+
+#[test]
+fn every_operation_follows_the_held_directory_not_the_path_it_was_stored_with() {
+    let scratch = Scratch::new("held-not-path");
+    let aside = scratch.aside();
+    let (held, decoy) = (aside.join("held"), aside.join("decoy"));
+    for (dir, content) in [(&held, &b"held"[..]), (&decoy, &b"decoy"[..])] {
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        fs::write(dir.join("a"), content).unwrap();
+    }
+    fs::create_dir(decoy.join("only-in-decoy")).unwrap();
+    let mut pinned = PinnedDir::open_root(&held).unwrap();
+    // The stored path now leads to another tree, as a redirected path would.
+    pinned.path = decoy.clone();
+    let naive = fs::read(pinned.path().join("a")).unwrap();
+    let mut listed = pinned.entries(8).unwrap();
+    listed.sort();
+    assert_eq!(
+        (
+            naive,
+            pinned.open_file("a").unwrap().read_at_most(8),
+            listed,
+            pinned.entry_kind("sub"),
+            pinned.entry_kind("only-in-decoy"),
+            pinned.open_dir("sub").map(|_| ()),
+            pinned.open_dir("only-in-decoy").map(|_| ())
+        ),
+        (
+            b"decoy".to_vec(),
+            Ok(b"held".to_vec()),
+            vec!["a".into(), "sub".into()],
+            Ok(Some(EntryKind::Directory)),
+            Ok(None),
+            Ok(()),
+            Err(PinnedError::NotFound)
+        )
+    );
+}
