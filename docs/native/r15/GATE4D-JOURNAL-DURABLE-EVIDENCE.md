@@ -1759,7 +1759,11 @@ quarantine directory is removed by its name only if the name still leads to the 
 actor put at that name is left alone (what could be removed is at most an empty directory). That the directory behind the name is the one `mkdirat` made cannot be proved (`mkdirat` returns no
 descriptor); it is opened by name and its owner and mode are checked, and since the quarantine directory is not exclusive anyway, an
 actor that wins that earlier race gains nothing the window below does not already give it. An entry that stays in the quarantine
-directory (`restored: false`, `Stranded`) is retained with a best-effort sync of that directory as well as of the parent.
+directory (`restored: false`, `Stranded`) is retained with a best-effort sync of that directory as well as of the parent, and
+only reported as being there if the recorded name still leads to that directory; if an actor renamed it away the outcome is
+`Disturbed` (tampered, the entry cannot be found by name). A failure to move the entry at all (`Unsupported`, an error from
+`renameat2`) also syncs the parent, since the quarantine directory came and went. A umask that takes the owner's read access
+away leaves a quarantine directory that cannot be opened: the removal is refused (`PermissionDenied`), fail closed.
 
 **The window, stated.** The quarantine directory is not exclusive: another process of the same user can list the parent, find
 it and enter it. The design holds when it is manipulated at every point before the last identification (tests below). After the

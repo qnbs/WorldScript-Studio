@@ -637,3 +637,47 @@ fn a_quarantine_name_that_leads_somewhere_else_at_the_end_is_not_removed() {
         (removed(), 0, 1)
     );
 }
+
+#[test]
+fn a_quarantine_directory_the_owner_cannot_open_is_refused_and_a_renamed_one_is_reported() {
+    if rustix::process::geteuid().is_root() {
+        eprintln!("skipped: permissions do not apply to root");
+        return;
+    }
+    // A umask that takes the owner's read access away leaves a directory that cannot be opened: the
+    // removal is refused (fail closed) and nothing of the store is touched.
+    let locked = fixture("owner-masked");
+    let name = format!("{QUARANTINE_PREFIX}{}", "b".repeat(32));
+    fs::create_dir(locked.root.join(&name)).unwrap();
+    fs::set_permissions(locked.root.join(&name), fs::Permissions::from_mode(0o000)).unwrap();
+    let refused = make_usable(&locked.pinned.handle, name.as_ref());
+    fs::set_permissions(locked.root.join(&name), fs::Permissions::from_mode(0o700)).unwrap();
+    // The held quarantine directory is renamed away and the name taken again while the observer fails:
+    // the entry cannot go back and cannot be found by the recorded name either.
+    let f = fixture("renamed-quarantine");
+    let outcome = f
+        .pinned
+        .remove_authenticated_file_observed("a", holds(b"alpha"), &mut |stage| {
+            if let (At::MovedAside, Some(inside)) = at(stage) {
+                let directory = inside.parent().unwrap();
+                fs::rename(directory, f.aside.join("held")).unwrap();
+                fs::write(f.root.join("a"), b"taken").unwrap();
+                return Err(denied());
+            }
+            Ok(())
+        });
+    assert_eq!(
+        (
+            refused,
+            outcome,
+            fs::read(f.aside.join("held").join(INSIDE)).unwrap(),
+            fs::read(f.root.join("a")).unwrap()
+        ),
+        (
+            Err(PinnedError::Io(std::io::ErrorKind::PermissionDenied)),
+            Ok(RemovalOutcome::Disturbed),
+            b"alpha".to_vec(),
+            b"taken".to_vec()
+        )
+    );
+}

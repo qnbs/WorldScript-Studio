@@ -174,14 +174,18 @@ impl Quarantine {
     /// whatever the name leads to if that is no longer the directory that was created (the name is all
     /// there is to remove it by; what is removed is at most an empty directory).
     fn discard(&self, parent: &DirHandle) {
-        let still_ours = stat_child(parent, &self.name)
+        if self.is_named(parent) {
+            let _ = unlinkat(parent, &self.name, AtFlags::REMOVEDIR);
+        }
+    }
+
+    /// Whether the name still leads to the directory that was created.
+    fn is_named(&self, parent: &DirHandle) -> bool {
+        stat_child(parent, &self.name)
             .ok()
             .flatten()
             .and_then(|stat| identity_from(&stat).ok())
-            .is_some_and(|found| found == self.identity);
-        if still_ours {
-            let _ = unlinkat(parent, &self.name, AtFlags::REMOVEDIR);
-        }
+            .is_some_and(|found| found == self.identity)
     }
 }
 
@@ -280,17 +284,17 @@ impl Removal<'_> {
     /// the move puts the entry back first; if that is impossible the removal says so
     /// ([`RemovalOutcome::Stranded`]) instead of reporting an error that hides where the entry is.
     fn detach(&self, observer: Observer<'_>) -> Result<Step, PinnedError> {
-        if !self.quarantine.adopt(&self.dir.handle, self.target.name)? {
-            // The quarantine directory came and went: that changed the parent too.
-            return Ok(Step::Changed(RemovalOutcome::Vanished));
+        match self.quarantine.adopt(&self.dir.handle, self.target.name) {
+            // Nothing was moved, but the quarantine directory came and went: the parent changed.
+            Err(cause) => return Ok(Step::RolledBack(cause)),
+            Ok(false) => return Ok(Step::Changed(RemovalOutcome::Vanished)),
+            Ok(true) => {}
         }
         match self.judge(observer) {
             Err(cause) => match self.restore() {
                 Ok(()) => Ok(Step::RolledBack(cause)),
-                Err(_) => {
-                    self.keep_the_entry();
-                    Ok(Step::Stranded(cause))
-                }
+                Err(_) if self.retained() => Ok(Step::Stranded(cause)),
+                Err(_) => Ok(Step::Changed(RemovalOutcome::Disturbed)),
             },
             step => step,
         }
@@ -308,8 +312,8 @@ impl Removal<'_> {
             }
             Inside::Object(..) | Inside::Foreign => {
                 let restored = self.restore().is_ok();
-                if !restored {
-                    self.keep_the_entry();
+                if !restored && !self.retained() {
+                    return Ok(Step::Changed(RemovalOutcome::Disturbed));
                 }
                 Ok(Step::Changed(RemovalOutcome::Swapped { restored }))
             }
@@ -337,10 +341,12 @@ impl Removal<'_> {
     }
 
     /// The entry stays in the quarantine directory: that directory changed as well as the parent, so
-    /// it is synced too (best effort; a failure here does not replace the outcome that says where the
-    /// entry is).
-    fn keep_the_entry(&self) {
+    /// it is synced too (best effort), and the outcome may only say where the entry is if the recorded
+    /// name still leads to the directory that holds it. If an actor renamed that directory away, the
+    /// entry cannot be found by name any more, and that is reported as tampering.
+    fn retained(&self) -> bool {
         let _ = self.quarantine.fd.sync_all();
+        self.quarantine.is_named(&self.dir.handle)
     }
 }
 
