@@ -31,7 +31,7 @@ Gate 3 §9 staging/promotion mechanics, plus an in-process `with_fence` serializ
 | `journal::verify_stored_inventory` / `load_inventory_page` / `VerifiedInventory` | Slice C1b-2: verify the stored page set the root binding names (page by page, one page in memory) and read one page back by its authenticated reference |
 | `journal::assert_takeover_successor` / `assert_takeover_promote_authority` / `assert_binding_takeover` | Pure B2c predicates: a takeover is the committed owner's lease-expired successor with fence + 1 and revision + 1 that changes ownership only |
 | `journal::publish_takeover_fenced` | B2c: takeover authority, the committed generation loaded bounded and authenticated, the takeover successor check, then the same publish-or-adopt step as the checkpoint |
-| `authority::commit_journal_takeover` | B2c: under `root_commit_mutex`, read the committed binding, publish the new owner's claim (lease expired at the caller's `now`, fence + 1), advance the binding to the new fence and record it as the commit evidence |
+| `authority::commit_journal_takeover` | B2c: under `root_commit_mutex`, read the committed binding, publish the new owner's claim (lease expired at the sealed `LeaseClock` reading taken under the root-commit guard, slice Q1; fence + 1), advance the binding to the new fence and record it as the commit evidence |
 | `authority::commit_journal_checkpoint` | B2b-2/B2b-3: under `root_commit_mutex`, read the committed binding, publish the owner's next manifest against it (R4; an identical candidate from a failed attempt is adopted), then advance the binding to that generation (a progress checkpoint: a phase change is refused, see the Gate 4E E2 follow-up) |
 | `authority::commit_phase_transition` | Gate 4E E2 follow-up: under the installation's exclusive admission, publish the owner's next manifest when it changes the phase, then advance the binding to that generation |
 | `journal::load_manifest_generation` | Load one manifest generation from a journal record directory |
@@ -748,7 +748,7 @@ this slice nor a bounded method by itself adds a limit to a caller that does not
 ## Slice C2c-2 — the cursor-driven iteration and the exit to `VERIFY`
 
 The session had every part of the loop but not the loop: no per-entry step, no notion of "done" (the end of the last
-page has no cursor value) and nothing that leaves `CONVERT`. Core reads no clock, so the lease policy stays with the
+page has no cursor value) and nothing that leaves `CONVERT`. The conversion session reads no clock, so the lease policy stays with the
 caller; the iteration is therefore one bounded, testable unit per call.
 
 | Step | Rule |
@@ -860,7 +860,7 @@ is the first step that moves the journal through the gate, and the first real ca
 
 | Step | Rule |
 |---|---|
-| builder | `renewed_lease(manifest, fence, expires)`: the fence checked, the next revision, the expiry replaced, the renewal relation proved (`assert_renewal_successor`: a named lease, an expiry strictly after the held one, not terminal) and the manifest encodable; the expiry is the caller's, Core reads no clock |
+| builder | `renewed_lease(manifest, fence, expires)`: the fence checked, the next revision, the expiry replaced, the renewal relation proved (`assert_renewal_successor`: a named lease, an expiry strictly after the held one, not terminal) and the manifest encodable; the expiry is the caller's and a renewal reads no clock |
 | key route | `read_committed_journal` also returns the root key reference and active epoch the committed root names; the step carries those, so no key, route or epoch comes from the caller and the commit cannot meet `KeyRotationNotAdmitted` |
 | journal directory | pinned at begin (opened before it is canonicalised, as the admission does) and required to lie strictly below the admitted installation directory and outside the authority root (`JournalMisplaced` otherwise, before any read; inside the root a journal generation could collide with a root slot); every step and `is_admitted` look at the pin again, so a directory replaced after begin is `NotAdmitted` before any write |
 | canonical paths | the session canonicalises the installation, the root and the journal directory once at begin, checks the admission against the canonical scope and does every read and write through those paths, so a symlink retargeted after begin cannot redirect a step to a directory that was never pinned |
