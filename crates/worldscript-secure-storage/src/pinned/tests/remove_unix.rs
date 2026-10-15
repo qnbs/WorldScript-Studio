@@ -14,19 +14,19 @@ use rustix::fs::{unlinkat, AtFlags};
 use super::remove::{holds, names, removed};
 use super::Scratch;
 use crate::durable::DirectoryDurability;
-use crate::pinned::unix::removal::{make_usable, INSIDE};
+use crate::pinned::unix::removal::{both_confirmed, make_usable, INSIDE};
 use crate::pinned::{PinnedDir, PinnedError, RemovalOutcome, RemovalStage, QUARANTINE_PREFIX};
 
 /// A pinned directory holding `a` = "alpha", with the paths a swap needs.
-struct Fixture {
+pub(super) struct Fixture {
     /// Keeps the directories until the test ends.
     _scratch: Scratch,
-    root: PathBuf,
-    aside: PathBuf,
-    pinned: PinnedDir,
+    pub(super) root: PathBuf,
+    pub(super) aside: PathBuf,
+    pub(super) pinned: PinnedDir,
 }
 
-fn fixture(label: &str) -> Fixture {
+pub(super) fn fixture(label: &str) -> Fixture {
     let scratch = Scratch::new(label);
     let root = scratch.root();
     let aside = scratch.aside();
@@ -42,7 +42,7 @@ fn fixture(label: &str) -> Fixture {
 
 /// The stages of a removal, without their payload.
 #[derive(Clone, Copy, PartialEq)]
-enum At {
+pub(super) enum At {
     Checked,
     MovedAside,
     Identified,
@@ -50,7 +50,7 @@ enum At {
 }
 
 /// The stage, and the path inside the quarantine directory once there is one.
-fn at(stage: RemovalStage<'_>) -> (At, Option<&Path>) {
+pub(super) fn at(stage: RemovalStage<'_>) -> (At, Option<&Path>) {
     match stage {
         RemovalStage::Checked => (At::Checked, None),
         RemovalStage::MovedAside { quarantined } => (At::MovedAside, Some(quarantined)),
@@ -83,12 +83,12 @@ fn failing_at(here: At) -> impl FnMut(RemovalStage<'_>) -> Result<(), PinnedErro
     }
 }
 
-fn denied() -> PinnedError {
+pub(super) fn denied() -> PinnedError {
     PinnedError::Io(std::io::ErrorKind::PermissionDenied)
 }
 
 /// The last-component swap: the original is renamed out of the way and a live file takes its name.
-fn swap_in_a_live_file(root: &Path, aside: &Path) {
+pub(super) fn swap_in_a_live_file(root: &Path, aside: &Path) {
     fs::rename(root.join("a"), aside.join("original")).unwrap();
     fs::write(root.join("a"), b"live").unwrap();
 }
@@ -99,7 +99,7 @@ fn ino(path: &Path) -> u64 {
 }
 
 /// The quarantine directories a removal left in `root`.
-fn quarantines(root: &Path) -> Vec<PathBuf> {
+pub(super) fn quarantines(root: &Path) -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = fs::read_dir(root)
         .unwrap()
         .map(|entry| entry.unwrap().path())
@@ -115,7 +115,7 @@ fn quarantines(root: &Path) -> Vec<PathBuf> {
 }
 
 /// The content of the entry left in the only quarantine directory of `root`.
-fn held_in_quarantine(root: &Path) -> Option<Vec<u8>> {
+pub(super) fn held_in_quarantine(root: &Path) -> Option<Vec<u8>> {
     let all = quarantines(root);
     assert!(all.len() <= 1, "{all:?}");
     fs::read(all.first()?.join(INSIDE)).ok()
@@ -388,24 +388,31 @@ fn a_name_taken_after_the_move_keeps_the_new_file_and_a_vanished_name_is_reporte
         }),
     );
     let gone = fixture("vanish");
-    let vanished = gone.pinned.remove_authenticated_file_observed(
-        "a",
-        holds(b"alpha"),
-        &mut on(At::Checked, |_| {
-            fs::remove_file(gone.root.join("a")).unwrap()
-        }),
-    );
+    let mut synced = false;
+    let vanished =
+        gone.pinned
+            .remove_authenticated_file_observed("a", holds(b"alpha"), &mut |stage| {
+                match at(stage) {
+                    (At::Checked, _) => fs::remove_file(gone.root.join("a")).unwrap(),
+                    // The quarantine directory came and went, which changed the parent.
+                    (At::BeforeSync, _) => synced = true,
+                    _ => {}
+                }
+                Ok(())
+            });
     assert_eq!(
         (
             after,
             fs::read(taken.root.join("a")).unwrap(),
             vanished,
+            synced,
             names(&gone.pinned)
         ),
         (
             removed(),
             b"new".to_vec(),
             Ok(RemovalOutcome::Vanished),
+            true,
             Vec::<String>::new()
         )
     );
@@ -464,24 +471,35 @@ fn the_quarantine_directory_is_private_usable_under_any_umask_and_gone_afterward
 }
 
 #[test]
-fn a_failure_at_any_stage_leaves_the_directory_as_it_was_found() {
+fn a_failure_at_any_stage_leaves_the_directory_as_it_was_found_and_syncs_it_after_a_move() {
     let outcomes: Vec<_> = [At::Checked, At::MovedAside, At::Identified]
         .into_iter()
         .map(|here| {
             let f = fixture("rollback");
-            let outcome = f.pinned.remove_authenticated_file_observed(
-                "a",
-                holds(b"alpha"),
-                &mut failing_at(here),
-            );
+            let synced = std::cell::Cell::new(false);
+            let outcome =
+                f.pinned
+                    .remove_authenticated_file_observed("a", holds(b"alpha"), &mut |stage| {
+                        if at(stage).0 == At::BeforeSync {
+                            synced.set(true);
+                            return Ok(());
+                        }
+                        failing_at(here)(stage)
+                    });
             (
                 outcome,
                 fs::read(f.root.join("a")).unwrap(),
                 quarantines(&f.root).len(),
+                synced.get(),
             )
         })
         .collect();
-    assert_eq!(outcomes, vec![(Err(denied()), b"alpha".to_vec(), 0); 3]);
+    let rolled_back = |synced| (Err(denied()), b"alpha".to_vec(), 0, synced);
+    // Nothing moved before the check, so there is nothing to sync; after the move the directory changed.
+    assert_eq!(
+        outcomes,
+        vec![rolled_back(false), rolled_back(true), rolled_back(true)]
+    );
 }
 
 #[test]
@@ -533,13 +551,15 @@ fn lock_the_quarantine(quarantined: Option<&Path>) {
 }
 
 #[test]
-fn an_error_after_the_move_that_cannot_be_rolled_back_is_reported_as_stranded() {
+fn a_search_permission_lost_after_the_move_is_reported_as_disturbed_because_nothing_can_be_proved()
+{
     if rustix::process::geteuid().is_root() {
-        // Root is not kept out by permissions; the case is about the permission failure itself.
+        // Root is not kept out by permissions; the proved case (`Stranded`) is covered without them by
+        // the next test.
         eprintln!("skipped: permissions do not apply to root");
         return;
     }
-    let f = fixture("stranded");
+    let f = fixture("unprovable");
     let original = ino(&f.root.join("a"));
     let outcome = f.pinned.remove_authenticated_file_observed(
         "a",
@@ -547,16 +567,202 @@ fn an_error_after_the_move_that_cannot_be_rolled_back_is_reported_as_stranded() 
         &mut on(At::MovedAside, lock_the_quarantine),
     );
     let left = quarantines(&f.root);
-    // Opened up again, the entry is where the outcome said it is, and is the authenticated object.
+    // Opened up again, the entry is in fact still there and is the authenticated object. The removal
+    // could not look at it and so could not prove that, and an outcome that says where an entry is needs
+    // a proof: it is `Disturbed`, conservative, and not `Stranded`.
     fs::set_permissions(&left[0], fs::Permissions::from_mode(0o700)).unwrap();
     let same_object = ino(&left[0].join(INSIDE)) == original;
     assert_eq!(
         (outcome, f.root.join("a").exists(), left.len(), same_object),
+        (Ok(RemovalOutcome::Disturbed), false, 1, true)
+    );
+}
+
+#[test]
+fn an_error_after_the_move_whose_put_back_is_blocked_is_reported_as_stranded_whoever_runs_it() {
+    let f = fixture("stranded-injected");
+    let original = ino(&f.root.join("a"));
+    let mut synced = false;
+    let outcome = f
+        .pinned
+        .remove_authenticated_file_observed("a", holds(b"alpha"), &mut |stage| {
+            match at(stage) {
+                // The name is taken again and the observer fails: the entry cannot go back.
+                (At::MovedAside, _) => {
+                    fs::write(f.root.join("a"), b"taken").unwrap();
+                    return Err(denied());
+                }
+                (At::BeforeSync, _) => synced = true,
+                _ => {}
+            }
+            Ok(())
+        });
+    let left = quarantines(&f.root);
+    assert_eq!(
+        (
+            outcome,
+            fs::read(f.root.join("a")).unwrap(),
+            left.len(),
+            ino(&left[0].join(INSIDE)) == original,
+            synced
+        ),
         (
             Ok(RemovalOutcome::Stranded { cause: denied() }),
-            false,
+            b"taken".to_vec(),
             1,
+            true,
             true
         )
+    );
+}
+
+#[test]
+fn a_quarantine_name_that_leads_somewhere_else_at_the_end_is_not_removed() {
+    // The held directory is renamed away and an empty directory of the actor takes its name: the
+    // removal goes on in the directory it holds and leaves the actor's directory alone.
+    let f = fixture("discard");
+    let outcome = f.pinned.remove_authenticated_file_observed(
+        "a",
+        holds(b"alpha"),
+        &mut on(At::MovedAside, |quarantined| {
+            let directory = quarantined.unwrap().parent().unwrap();
+            fs::rename(directory, f.aside.join("held")).unwrap();
+            fs::create_dir(directory).unwrap();
+        }),
+    );
+    let held = fs::read_dir(f.aside.join("held")).unwrap().count();
+    assert_eq!(
+        (outcome, held, quarantines(&f.root).len()),
+        (removed(), 0, 1)
+    );
+}
+
+#[test]
+fn a_quarantine_directory_the_owner_cannot_open_is_refused_fail_closed() {
+    if rustix::process::geteuid().is_root() {
+        eprintln!("skipped: permissions do not apply to root");
+        return;
+    }
+    // A umask that takes the owner's read access away leaves a directory that cannot be opened: the
+    // removal is refused and nothing of the store is touched.
+    let f = fixture("owner-masked");
+    let name = format!("{QUARANTINE_PREFIX}{}", "b".repeat(32));
+    fs::create_dir(f.root.join(&name)).unwrap();
+    fs::set_permissions(f.root.join(&name), fs::Permissions::from_mode(0o000)).unwrap();
+    let refused = make_usable(&f.pinned.handle, name.as_ref());
+    fs::set_permissions(f.root.join(&name), fs::Permissions::from_mode(0o700)).unwrap();
+    assert_eq!(
+        refused,
+        Err(PinnedError::Io(std::io::ErrorKind::PermissionDenied))
+    );
+}
+
+/// What the actor does to the quarantine directory once the entry is inside, while the put-back is
+/// blocked by taking the name again and the observer fails.
+type Tamper = (&'static str, fn(&Path, &Path, &Path));
+
+#[test]
+fn an_entry_that_is_not_where_the_outcome_would_say_is_reported_as_disturbed() {
+    let tampers: [Tamper; 3] = [
+        // The held directory is renamed away: the recorded name leads somewhere else.
+        ("renamed-away", |directory, _inside, aside| {
+            fs::rename(directory, aside.join("held")).unwrap();
+        }),
+        // The entry itself is removed: the directory is still named, but holds nothing.
+        ("entry-removed", |_directory, inside, _aside| {
+            fs::remove_file(inside).unwrap();
+        }),
+        // The entry is moved away and another object takes its place: something is there, not the
+        // authenticated object.
+        ("entry-replaced", |_directory, inside, aside| {
+            fs::rename(inside, aside.join("authenticated")).unwrap();
+            fs::write(inside, b"foreign").unwrap();
+        }),
+    ];
+    let outcomes: Vec<_> = tampers
+        .into_iter()
+        .map(|(label, tamper)| {
+            let f = fixture(label);
+            let outcome =
+                f.pinned
+                    .remove_authenticated_file_observed("a", holds(b"alpha"), &mut |stage| {
+                        if let (At::MovedAside, Some(inside)) = at(stage) {
+                            tamper(inside.parent().unwrap(), inside, &f.aside);
+                            fs::write(f.root.join("a"), b"taken").unwrap();
+                            return Err(denied());
+                        }
+                        Ok(())
+                    });
+            (label, outcome, fs::read(f.root.join("a")).unwrap())
+        })
+        .collect();
+    let disturbed = |label| (label, Ok(RemovalOutcome::Disturbed), b"taken".to_vec());
+    assert_eq!(
+        outcomes,
+        vec![
+            disturbed("renamed-away"),
+            disturbed("entry-removed"),
+            disturbed("entry-replaced")
+        ]
+    );
+}
+
+#[test]
+fn a_quarantine_directory_an_actor_put_an_entry_into_survives_and_the_removal_still_completes() {
+    // The directory cannot be removed while it holds the actor's entry; the authenticated file is gone
+    // all the same, and the actor's entry is untouched.
+    let f = fixture("occupied-quarantine");
+    let outcome = f.pinned.remove_authenticated_file_observed(
+        "a",
+        holds(b"alpha"),
+        &mut on(At::Identified, |inside| {
+            let directory = inside.unwrap().parent().unwrap();
+            fs::write(directory.join("other"), b"foreign").unwrap();
+        }),
+    );
+    let left = quarantines(&f.root);
+    assert_eq!(
+        (outcome, f.root.join("a").exists(), left.len()),
+        (removed(), false, 1)
+    );
+    assert_eq!(fs::read(left[0].join("other")).unwrap(), b"foreign");
+    assert!(!left[0].join(INSIDE).exists());
+}
+
+#[test]
+fn a_removal_is_confirmed_only_if_both_directories_were_synced() {
+    use DirectoryDurability::{Confirmed, NotConfirmed};
+    let all = [
+        (Confirmed, Confirmed),
+        (Confirmed, NotConfirmed),
+        (NotConfirmed, Confirmed),
+        (NotConfirmed, NotConfirmed),
+    ];
+    assert_eq!(
+        all.map(|(parent, held)| both_confirmed(parent, held)),
+        [Confirmed, NotConfirmed, NotConfirmed, NotConfirmed]
+    );
+}
+
+#[test]
+fn a_quarantine_renamed_away_is_still_removed_through_the_held_directory_and_the_entry_is_gone() {
+    // The removal goes on in the directory it holds even if its name leads elsewhere; the entry is
+    // unlinked there, and that directory is synced as well as the parent.
+    let f = fixture("renamed-held");
+    let outcome = f.pinned.remove_authenticated_file_observed(
+        "a",
+        holds(b"alpha"),
+        &mut on(At::MovedAside, |inside| {
+            let directory = inside.unwrap().parent().unwrap();
+            fs::rename(directory, f.aside.join("held")).unwrap();
+        }),
+    );
+    assert_eq!(
+        (
+            outcome,
+            f.aside.join("held").join(INSIDE).exists(),
+            f.root.join("a").exists()
+        ),
+        (removed(), false, false)
     );
 }

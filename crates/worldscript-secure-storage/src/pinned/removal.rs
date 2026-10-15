@@ -51,27 +51,39 @@ pub const QUARANTINE_PREFIX: &str = ".h1q-";
 pub enum RemovalOutcome {
     /// The authenticated object lost this name (on Unix as far as the check after the unlink can tell,
     /// see [`Disturbed`](Self::Disturbed)); the durability of the directory entry change as far as the
-    /// platform can confirm it.
+    /// platform can confirm it. On Unix that covers the directory and the quarantine directory the
+    /// object was unlinked from: if the latter could not be synced the removal is `NotConfirmed`.
     Removed(DirectoryDurability),
     /// The authentication said no; nothing was changed.
     Refused,
-    /// The name no longer led to an object (someone else removed it); nothing was removed.
+    /// The name no longer led to an object (someone else removed it); nothing was removed. If the entry
+    /// had been moved aside and was gone from there, the quarantine directory was synced as for
+    /// [`Swapped`](Self::Swapped), and a sync that fails is an error.
     Vanished,
     /// The directory still has entries; nothing was removed.
     NotEmpty,
     /// Something other than the authenticated object was bound to the name. It was not removed: it is
     /// back under its name (`restored`) or, if the name was taken meanwhile, kept in the quarantine
-    /// directory (`.h1q-*`, never removed by a sweep).
+    /// directory (`.h1q-*`, never removed by a sweep). Reported only after the directory and the
+    /// quarantine directory the entry moved through were synced. A sync that fails is an error and not
+    /// another outcome: the rename decided `restored`, and the entry is back or aside whatever the sync
+    /// did.
     Swapped { restored: bool },
-    /// Unix only: after the unlink the authenticated object had not lost a name, so the name was bound
-    /// to another object when it was unlinked (see the window in the module documentation). That
-    /// object is gone and nothing can be undone: the caller must treat the directory as tampered with,
-    /// and never count this as a success.
+    /// Unix only: the quarantine directory was tampered with. Either the authenticated object had not
+    /// lost a name after the unlink, so the name was bound to another object when it was unlinked (see
+    /// the window in the module documentation), and that object is gone; or the entry could not be put
+    /// back and is not where the outcome would have said: an actor renamed the quarantine directory
+    /// away, removed the entry, or replaced it with another object, so the authenticated object cannot
+    /// be found by the name that was recorded; or a look at the entry failed (a permission lost), so it
+    /// cannot be shown to be where the outcome would say, whether or not it is. Nothing can be undone:
+    /// the caller must treat the directory as tampered with, and never count this as a success.
     Disturbed,
     /// Unix only: an error happened after the entry was moved into the quarantine directory and it
     /// could not be put back (`cause` is the error that started it). The entry is in the quarantine
-    /// directory (`.h1q-*`, as `x`), found with a listing; [`PinnedDir::remove_leftover_file`] takes it
-    /// from there after authenticating it again. Nothing was removed.
+    /// directory (`.h1q-*`, as `x`; it was looked at there, a look that fails gives
+    /// [`Disturbed`](Self::Disturbed)), found with a listing; [`PinnedDir::remove_leftover_file`] takes it
+    /// from there after authenticating it again. Nothing was removed. This reports a failure by its
+    /// cause, so both directories are synced best effort and a crash may undo where the entry is.
     Stranded { cause: PinnedError },
 }
 
