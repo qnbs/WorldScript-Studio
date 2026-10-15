@@ -176,9 +176,9 @@ fn a_swap_of_the_last_name_after_the_check_destroys_nothing() {
 /// What a swap puts at the name, and whether it is still there afterwards.
 type Swap = (&'static str, fn(&Path, &Path), fn(&Path, &Path) -> bool);
 
-#[test]
-fn whatever_is_swapped_in_is_put_back_untouched() {
-    let swaps: [Swap; 4] = [
+/// The swaps that the removal must put back untouched.
+fn swaps() -> [Swap; 4] {
+    [
         (
             "directory",
             |root, aside| {
@@ -218,8 +218,12 @@ fn whatever_is_swapped_in_is_put_back_untouched() {
             },
             |root, _| fs::metadata(root.join("a")).unwrap().permissions().mode() & 0o777 == 0,
         ),
-    ];
-    let outcomes: Vec<_> = swaps
+    ]
+}
+
+#[test]
+fn whatever_is_swapped_in_is_put_back_untouched() {
+    let outcomes: Vec<_> = swaps()
         .into_iter()
         .map(|(label, swap, intact)| {
             let f = fixture(label);
