@@ -56,7 +56,9 @@ pub enum RemovalOutcome {
     Removed(DirectoryDurability),
     /// The authentication said no; nothing was changed.
     Refused,
-    /// The name no longer led to an object (someone else removed it); nothing was removed.
+    /// The name no longer led to an object (someone else removed it); nothing was removed. If the entry
+    /// had been moved aside and was gone from there, the quarantine directory was synced as for
+    /// [`Swapped`](Self::Swapped), and a sync that fails is an error.
     Vanished,
     /// The directory still has entries; nothing was removed.
     NotEmpty,

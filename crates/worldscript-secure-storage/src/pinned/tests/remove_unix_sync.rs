@@ -34,6 +34,10 @@ enum Scene {
     Stranded,
     /// The name is gone after the check: nothing is moved.
     Vanished,
+    /// An actor removes the entry once it is aside, before it is looked at.
+    GoneBeforeInspection,
+    /// An actor removes the entry once it is identified, before it is unlinked.
+    GoneBeforeUnlink,
     /// The observer fails at the check, before anything is moved.
     FailedEarly,
 }
@@ -57,6 +61,10 @@ fn act(
             swap_in_a_live_file(&f.root, &f.aside);
         }
         (Scene::Vanished, At::Checked) => fs::remove_file(name).unwrap(),
+        (Scene::GoneBeforeInspection, At::MovedAside)
+        | (Scene::GoneBeforeUnlink, At::Identified) => {
+            fs::remove_file(inside.unwrap()).unwrap();
+        }
         (Scene::FailedEarly, At::Checked) | (Scene::RolledBack, At::Identified) => {
             return Err(denied());
         }
@@ -113,9 +121,10 @@ type Expected = (Scene, Result<RemovalOutcome, PinnedError>, usize, bool);
 
 #[test]
 fn every_move_through_the_quarantine_directory_ends_with_one_sync_of_it() {
-    // A removal, a put-back, a kept entry, a rollback and a stranded entry each changed the quarantine
-    // directory, and the sync of the parent does not cover that. Nothing moved, nothing to sync there.
-    let expected: [Expected; 8] = [
+    // A removal, a put-back, a kept entry, a rollback, a stranded entry and an entry an actor removed
+    // again each changed the quarantine directory, and the sync of the parent does not cover that.
+    // Nothing moved, nothing to sync there.
+    let expected: [Expected; 10] = [
         (
             Scene::Removal,
             Ok(RemovalOutcome::Removed(Confirmed)),
@@ -143,6 +152,19 @@ fn every_move_through_the_quarantine_directory_ends_with_one_sync_of_it() {
             true,
         ),
         (Scene::Vanished, Ok(RemovalOutcome::Vanished), 0, true),
+        // The entry was moved here, so this directory changed, although an actor removed the entry again.
+        (
+            Scene::GoneBeforeInspection,
+            Ok(RemovalOutcome::Vanished),
+            1,
+            true,
+        ),
+        (
+            Scene::GoneBeforeUnlink,
+            Ok(RemovalOutcome::Vanished),
+            1,
+            true,
+        ),
         (Scene::FailedEarly, Err(denied()), 0, false),
     ];
     let actual = expected.map(|(scene, ..)| {
@@ -153,19 +175,26 @@ fn every_move_through_the_quarantine_directory_ends_with_one_sync_of_it() {
 }
 
 #[test]
-fn a_failed_sync_of_the_quarantine_directory_is_an_error_after_a_put_back_and_after_a_kept_entry() {
-    // The rename decided where the entry is, whatever the sync did: it is back, or aside, and the parent
-    // was synced. Only the result differs, and it is the sync error, not `Disturbed` or `Stranded`.
-    for scene in [Scene::PutBack, Scene::KeptAside] {
+fn a_failed_sync_of_the_quarantine_directory_is_an_error_after_a_put_back_a_kept_entry_and_a_vanished_one(
+) {
+    // The rename decided where the entry is, whatever the sync did: it is back, aside or gone, and the
+    // parent was synced. Only the result differs, and it is the sync error, not `Disturbed` or `Stranded`.
+    for scene in [
+        Scene::PutBack,
+        Scene::KeptAside,
+        Scene::GoneBeforeInspection,
+        Scene::GoneBeforeUnlink,
+    ] {
         let clean = run(scene, None);
         let failed = run(scene, Some(sync_failure()));
         let (name, kept, left) = match scene {
-            Scene::PutBack => (b"live".to_vec(), None, 0),
-            _ => (b"retaken".to_vec(), Some(b"live".to_vec()), 1),
+            Scene::PutBack => (Some(b"live".to_vec()), None, 0),
+            Scene::KeptAside => (Some(b"retaken".to_vec()), Some(b"live".to_vec()), 1),
+            _ => (None, None, 0),
         };
         assert_eq!(
             (failed.name.clone(), failed.kept.clone(), failed.left),
-            (Some(name), kept, left),
+            (name, kept, left),
             "{scene:?}"
         );
         assert_eq!(
