@@ -362,3 +362,57 @@ fn an_ancestor_turned_into_a_link_to_the_renamed_tree_is_no_longer_the_name() {
         (Ok(true), true, Ok(false))
     );
 }
+
+#[test]
+fn a_root_path_that_does_not_end_in_a_name_is_refused_so_a_link_is_never_followed() {
+    let scratch = Scratch::new("trailing");
+    let aside = scratch.aside();
+    let real = aside.join("real");
+    fs::create_dir(&real).unwrap();
+    let link = scratch.path().join("link");
+    link_to_dir(&real, &link);
+    let separator = std::path::MAIN_SEPARATOR;
+    let with_separator = std::path::PathBuf::from(format!("{}{separator}", link.display()));
+    let forms = [
+        with_separator.clone(),
+        link.join("."),
+        link.join(".."),
+        std::path::PathBuf::from("."),
+        std::path::PathBuf::from(".."),
+        std::path::PathBuf::new(),
+    ];
+    let refused: Vec<_> = forms
+        .iter()
+        .map(|path| PinnedDir::open_root(path).map(|_| ()))
+        .collect();
+    assert_eq!(
+        (
+            refused,
+            PinnedDir::open_root(&link).map(|_| ()),
+            PinnedDir::open_root(&real).map(|_| ())
+        ),
+        (
+            vec![Err(PinnedError::InvalidName); 6],
+            Err(PinnedError::Redirected),
+            Ok(())
+        )
+    );
+}
+
+/// The premise of the test above: with a trailing separator the system follows the link even though the
+/// open asks not to.
+#[cfg(unix)]
+#[test]
+fn a_trailing_separator_makes_the_system_follow_a_link_despite_no_follow() {
+    use rustix::fs::{open, Mode, OFlags};
+
+    let scratch = Scratch::new("trailing-premise");
+    let real = scratch.aside().join("real");
+    fs::create_dir(&real).unwrap();
+    let link = scratch.path().join("link");
+    link_to_dir(&real, &link);
+    let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+    let plain = open(&link, flags, Mode::empty());
+    let with_separator = open(format!("{}/", link.display()), flags, Mode::empty());
+    assert_eq!((plain.is_err(), with_separator.is_ok()), (true, true));
+}

@@ -1630,7 +1630,9 @@ directory with no-follow semantics and resolves it once to the path of the objec
 directory that is held open (the descriptor on Unix, see below for Windows). A file is read through `PinnedFile`
 (`read_at_most`, which reads from the start on every call, `identity`, `link_count`). A name must be exactly one ordinary component (on
 Windows also no data stream, wildcard, trailing dot or space, or device name). A link, junction or other reparse point is
-refused at every component below the root (`Redirected`); the final component of the root is not followed either, and the
+refused at every component below the root (`Redirected`); the final component of the root is not followed either (and a
+root path must end in a name: a trailing separator, `.` or `..` makes the system resolve the link before it even under
+`O_NOFOLLOW`, so it is refused as `InvalidName`), and the
 ancestors of the root are resolved once by the operating system, as for every other operation of the crate. A listing is
 bounded by a limit the caller gives, and a file is read only up to a bound.
 
@@ -1661,7 +1663,8 @@ its limit is refused; a file is read up to its bound only, every read starts at 
 sees the whole file), and a hard link is counted; a held directory keeps its object when its path is renamed and
 refilled (Unix) and `is_still_named` says so; a root given through a link is resolved to the object itself, and
 retargeting that link afterwards changes nothing (all platforms); an ancestor turned into a link to the renamed tree is
-no longer the name (Unix). Windows: a junction is refused at the root and below it, a name the system would
+no longer the name (Unix); a root path that ends in a separator, `.` or `..` is refused, with a test of the premise that
+the system follows the link there (Unix). Windows: a junction is refused at the root and below it, a name the system would
 reinterpret is refused (including `COM¹`..`COM³` and `LPT¹`..`LPT³`; the rule is a pure function that is also tested on
 Linux), and a pinned directory and its ancestors cannot be renamed or removed while held. The local environment is Linux, so the hosted Windows job is the only oracle for the Windows cases;
 its result is recorded on the PR.

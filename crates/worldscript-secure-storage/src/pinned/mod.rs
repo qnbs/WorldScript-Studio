@@ -119,10 +119,26 @@ fn checked_name(name: &OsStr) -> Result<&OsStr, PinnedError> {
     }
 }
 
+/// Whether `path` ends in a name. A trailing separator, `.` or `..` makes the system resolve the entry
+/// before it (a link there is followed even under `O_NOFOLLOW`), so such a path cannot be checked for a
+/// link at its final component.
+fn ends_in_a_name(path: &Path) -> bool {
+    let text = path.as_os_str().to_string_lossy();
+    let is_separator = |c: char| c == '/' || (cfg!(windows) && c == '\\');
+    !matches!(
+        text.rsplit(is_separator).next(),
+        None | Some("" | "." | "..")
+    )
+}
+
 impl PinnedDir {
     /// Opens the directory `path`. A symbolic link, junction or reparse point as the final component is
-    /// refused. The ancestors of `path` are resolved once, by the operating system.
+    /// refused, and so is a path that does not end in a name (a trailing separator, `.` or `..`). The
+    /// ancestors of `path` are resolved once, by the operating system.
     pub fn open_root(path: &Path) -> Result<Self, PinnedError> {
+        if !ends_in_a_name(path) {
+            return Err(PinnedError::InvalidName);
+        }
         let (handle, identity, path) = sys::open_root(path)?;
         Ok(PinnedDir {
             handle,
