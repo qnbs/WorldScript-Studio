@@ -1754,13 +1754,21 @@ returned, or, if it cannot be put back, the outcome is `Stranded { cause }` (the
 nothing was removed) and not an error that hides where the entry is. The parent is synced whenever the directory changed: after
 a removal and after a put-back as a step of the removal (a sync that fails is an error although the entry is gone or back, and the
 caller repeats `PinnedDir::sync`; a rerun of the removal finds nothing to do and would not sync), and after a rolled-back or
-stranded failure best-effort (the `BeforeSync` stage is reached; a failing sync does not replace the failure that is reported). The
+stranded failure best-effort (the `BeforeSync` stage is reached; a failing sync does not replace the failure that is reported). **The
+quarantine directory changes with every move, and the sync of the parent does not cover it:** the rename that moves an entry in
+and the rename that puts it back each change it as well as the parent, so it is synced after the rename was tried. For a put-back
+and a kept entry (`Swapped`) a sync that fails is an error reported after the parent was synced, like a failing parent sync, and
+not another outcome: the rename alone decides `restored`, so the entry is back or aside whatever the sync did, and the failure is
+neither a put-back that did not happen (a `sync_all()?` inside the rename step would make it one, and report `Disturbed`) nor
+`Stranded`. It is reported whether or not the directory is removed afterwards, since a failed sync proves nothing about what
+reached the disk. For a rollback and a stranded entry the sync is best effort and does not replace the failure that is reported,
+and tampering (`Disturbed`) outranks a failed sync. Where nothing moved, nothing is synced in it. The
 quarantine directory is removed by its name only if the name still leads to the directory that was created, so a directory an
 actor put at that name is left alone (what could be removed is at most an empty directory). That the directory behind the name is the one `mkdirat` made cannot be proved (`mkdirat` returns no
 descriptor); it is opened by name and its owner and mode are checked, and since the quarantine directory is not exclusive anyway, an
 actor that wins that earlier race gains nothing the window below does not already give it. An entry that stays in the quarantine
-directory (`restored: false`, `Stranded`) is retained with a best-effort sync of that directory as well as of the parent, and
-only reported as being there if the recorded name still leads to that directory and the entry in it is still the object the
+directory (`restored: false`, `Stranded`) is only reported as being there if the recorded name still leads to that directory and
+the entry in it is still the object the
 outcome names (the authenticated object, or for a swapped-in object the identity it was seen with; an entry that cannot be looked
 at counts as there, since an error proves neither); if an actor renamed the directory away, removed the entry or replaced it with
 another object the outcome is `Disturbed` (tampered, the entry cannot be found where the outcome would say). The check is itself
@@ -1789,12 +1797,19 @@ directory before the identification; the last window forced with a foreign file 
 directory (goes back) and a hard link (object alive under the other name); a name taken after the move, a vanished name,
 renaming the root during the removal; the quarantine directory is mode 0700 and gone afterwards, and a directory made with
 mode 0500 is made usable; an injected failure at each stage leaves the directory as it was found; a failed sync is reported
-for a removal and for a put-back and repeated by `sync`; a quarantine directory that loses its search permission after the
+for a removal and for a put-back and repeated by `sync`; the quarantine directory is synced once after a removal, a put-back, a
+kept entry, a rollback and a stranded entry and not when nothing moved, and a sync of it that fails is an error for the put-back and
+the kept entry (the entry where the rename left it), leaves a rollback, a stranded entry, tampering and the outcomes before the move
+as they are, and makes a removal `NotConfirmed` (an `fsync` error on a directory cannot be provoked portably, so these cases fail
+the sync through a test-only seam, which models the failure; the cases without a failure run the real sync); a quarantine
+directory that loses its search permission after the
 move gives `Stranded` with the entry still the authenticated inode, and the same case without permissions (an observer that
 fails while the name is taken again, so it runs the same for root); a quarantine directory renamed away and replaced by an empty
 directory of the actor is not removed. Mutation-checked: skipping the identity comparison fails
 five of these cases, skipping the link-count verification fails the forced last window, and removing the rollback of a
-failed inspection fails the `Stranded` case.
+failed inspection fails the `Stranded` case; leaving out the sync of the quarantine directory after a put-back or after a rollback,
+dropping a failed sync of it, a `sync_all()?` inside the rename step and confirming a removal despite a failed sync each fail at
+least one of the sync cases.
 
 **Not claimed.** Directories and the leftover recovery are part 3 (they answer `Unsupported` here); Windows is part 4; the
 Disturbed window is bounded and detected, not closed; a device node swapped in is refused before it is opened and cannot be

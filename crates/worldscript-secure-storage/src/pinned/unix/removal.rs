@@ -48,9 +48,14 @@ enum Inside {
 
 /// How a removal ended before the parent directory was synced.
 enum Step {
-    /// The directory changed (an entry was moved and put back, or a quarantine directory came and
-    /// went); the outcome is final.
+    /// The directory changed (a quarantine directory came and went, or the entry was found gone); the
+    /// outcome is final.
     Changed(RemovalOutcome),
+    /// The entry was moved aside and then put back or kept aside, so the quarantine directory changed as
+    /// well as the parent; the outcome is final, and `held` is how syncing the quarantine directory went.
+    /// A sync that failed does not change what the outcome says about where the entry is, and is reported
+    /// after the parent was synced.
+    Moved(RemovalOutcome, Result<(), PinnedError>),
     /// The object lost its name; whether the quarantine directory it was unlinked from was synced.
     Unlinked(DirectoryDurability),
     /// The entry was moved aside and put back; this is why the removal stopped.
@@ -165,9 +170,21 @@ impl Quarantine {
     }
 
     /// Moves the entry back under `name`; an error if that was not possible (the name is taken, or
-    /// anything else prevents it), in which case the entry stays here.
+    /// anything else prevents it), in which case the entry stays here. Only the rename: the sync of this
+    /// directory is [`sync`](Self::sync), kept apart so that a sync that fails cannot be taken for a
+    /// put-back that did not happen.
     fn restore(&self, parent: &DirHandle, name: &OsStr) -> Result<(), PinnedError> {
         renameat_with(&self.fd, INSIDE, parent, name, RenameFlags::NOREPLACE).map_err(io_error)
+    }
+
+    /// Syncs this directory. Every move into or out of it changes it, and the sync of the parent does
+    /// not cover that: without it a crash can undo the removal of `x` after the parent shows the name
+    /// again (or leave `x` missing after the parent shows the name gone).
+    fn sync(&self) -> Result<(), PinnedError> {
+        if let Some(error) = forced_sync_failure() {
+            return Err(error);
+        }
+        self.fd.sync_all().map_err(PinnedError::from)
     }
 
     fn path_inside(&self, parent_path: &Path) -> PathBuf {
@@ -322,11 +339,18 @@ impl Removal<'_> {
             Ok(true) => {}
         }
         match self.judge(observer) {
-            Err(cause) => match self.restore() {
-                Ok(()) => Ok(Step::RolledBack(cause)),
-                Err(_) if self.retained(Some(self.target.expected)) => Ok(Step::Stranded(cause)),
-                Err(_) => Ok(Step::Changed(RemovalOutcome::Disturbed)),
-            },
+            Err(cause) => {
+                let put_back = self.restore();
+                // The failure that is reported is `cause`, and a sync that fails does not replace it.
+                let _ = self.quarantine.sync();
+                match put_back {
+                    Ok(()) => Ok(Step::RolledBack(cause)),
+                    Err(_) if self.retained(Some(self.target.expected)) => {
+                        Ok(Step::Stranded(cause))
+                    }
+                    Err(_) => Ok(Step::Changed(RemovalOutcome::Disturbed)),
+                }
+            }
             step => step,
         }
     }
@@ -348,12 +372,16 @@ impl Removal<'_> {
 
     /// What arrived is not the authenticated object: it goes back under its name, or stays aside if
     /// that is impossible (and is then still `arrived`, the identity it was seen with if it was opened).
+    /// Either way the quarantine directory changed (the entry left it, or arrived in it), and it is synced
+    /// after the rename was tried: the rename alone decides `restored`, so a sync that fails is neither a
+    /// put-back that did not happen nor a reason to call the entry tampered with.
     fn swapped(&self, arrived: Option<ObjectIdentity>) -> Result<Step, PinnedError> {
         let restored = self.restore().is_ok();
+        let held = self.quarantine.sync();
         if !restored && !self.retained(arrived) {
             return Ok(Step::Changed(RemovalOutcome::Disturbed));
         }
-        Ok(Step::Changed(RemovalOutcome::Swapped { restored }))
+        Ok(Step::Moved(RemovalOutcome::Swapped { restored }, held))
     }
 
     /// The last window: the entry in the quarantine directory is the authenticated object.
@@ -366,14 +394,17 @@ impl Removal<'_> {
             // A directory that filled after the check goes back where it was.
             RemovalOutcome::NotEmpty => {
                 self.restore()?;
-                Ok(Step::Changed(RemovalOutcome::NotEmpty))
+                Ok(Step::Moved(
+                    RemovalOutcome::NotEmpty,
+                    self.quarantine.sync(),
+                ))
             }
             outcome => {
                 // The unlink changed the directory that is held, and that directory can outlive the
                 // removal (an actor renamed it away, or put an entry into it so that it cannot be
                 // removed). The parent sync does not cover it, so it is synced here, and a sync that
                 // fails leaves the removal unconfirmed.
-                let held = match self.quarantine.fd.sync_all() {
+                let held = match self.quarantine.sync() {
                     Ok(()) => DirectoryDurability::Confirmed,
                     Err(_) => DirectoryDurability::NotConfirmed,
                 };
@@ -386,13 +417,12 @@ impl Removal<'_> {
         self.quarantine.restore(&self.dir.handle, self.target.name)
     }
 
-    /// The entry stays in the quarantine directory: that directory changed as well as the parent, so
-    /// it is synced too (best effort), and the outcome may only say where the entry is if the recorded
-    /// name still leads to the directory that holds it and the entry in it is still `expected` (or
-    /// cannot be looked at). If an actor renamed that directory away, or removed or replaced the entry,
-    /// the entry cannot be found where the outcome would say, and that is reported as tampering.
+    /// The entry stays in the quarantine directory: the outcome may only say where the entry is if the
+    /// recorded name still leads to the directory that holds it and the entry in it is still `expected`
+    /// (or cannot be looked at). If an actor renamed that directory away, or removed or replaced the
+    /// entry, the entry cannot be found where the outcome would say, and that is reported as tampering.
+    /// Syncing that directory, which changed as well as the parent, is up to the caller.
     fn retained(&self, expected: Option<ObjectIdentity>) -> bool {
-        let _ = self.quarantine.fd.sync_all();
         self.quarantine.is_named(&self.dir.handle) && self.quarantine.holds(expected)
     }
 }
@@ -406,7 +436,9 @@ fn unlinked(outcome: RemovalOutcome, held: DirectoryDurability) -> Step {
 
 /// Syncs the parent directory if anything in it changed. A sync that fails is an error although the
 /// entry is gone or back: a crash may undo that, and the caller repeats [`PinnedDir::sync`] (a rerun of
-/// the removal finds nothing to do and would not sync).
+/// the removal finds nothing to do and would not sync). The same holds for the quarantine directory of an
+/// entry that was put back or kept aside; it is reported after the parent was synced, whether or not the
+/// directory is removed afterwards, since a sync that failed proves nothing about what reached the disk.
 fn settle(
     dir: &PinnedDir,
     step: Step,
@@ -425,6 +457,11 @@ fn settle(
             observer(RemovalStage::BeforeSync)?;
             dir.sync()?;
             Ok(outcome)
+        }
+        Step::Moved(outcome, held) => {
+            observer(RemovalStage::BeforeSync)?;
+            dir.sync()?;
+            held.map(|()| outcome)
         }
         Step::Unlinked(held) => {
             observer(RemovalStage::BeforeSync)?;
@@ -457,4 +494,57 @@ pub(in crate::pinned) fn remove_leftover(
 fn sync_after_failure(dir: &PinnedDir, observer: Observer<'_>) {
     let _ = observer(RemovalStage::BeforeSync);
     let _ = dir.sync();
+}
+
+/// The failure a test forced on the sync of a quarantine directory, if any. An `fsync` error on a
+/// directory cannot be provoked portably, so the sync asks here first; a build without tests never does.
+#[cfg(test)]
+fn forced_sync_failure() -> Option<PinnedError> {
+    sync_fault::asked()
+}
+
+#[cfg(not(test))]
+fn forced_sync_failure() -> Option<PinnedError> {
+    None
+}
+
+/// The seam behind [`forced_sync_failure`]: a test runs a removal with the sync of the quarantine
+/// directory failing (or not), and learns how often that sync was asked for.
+#[cfg(test)]
+pub(in crate::pinned) mod sync_fault {
+    use std::cell::Cell;
+
+    use crate::pinned::PinnedError;
+
+    thread_local! {
+        static FAILURE: Cell<Option<PinnedError>> = const { Cell::new(None) };
+        static ASKED: Cell<usize> = const { Cell::new(0) };
+    }
+
+    /// Disarms the seam when the removal under test ends, also by a panic.
+    struct Disarm;
+
+    impl Drop for Disarm {
+        fn drop(&mut self) {
+            FAILURE.set(None);
+        }
+    }
+
+    /// Runs `body` with every sync of a quarantine directory failing with `failure` (none: succeeding),
+    /// and returns what it returned with the number of syncs that were asked for.
+    pub(in crate::pinned) fn during<T>(
+        failure: Option<PinnedError>,
+        body: impl FnOnce() -> T,
+    ) -> (T, usize) {
+        FAILURE.set(failure);
+        ASKED.set(0);
+        let _disarm = Disarm;
+        let result = body();
+        (result, ASKED.get())
+    }
+
+    pub(super) fn asked() -> Option<PinnedError> {
+        ASKED.set(ASKED.get() + 1);
+        FAILURE.get()
+    }
 }

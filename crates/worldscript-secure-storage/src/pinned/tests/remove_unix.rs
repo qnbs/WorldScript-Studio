@@ -18,15 +18,15 @@ use crate::pinned::unix::removal::{both_confirmed, make_usable, INSIDE};
 use crate::pinned::{PinnedDir, PinnedError, RemovalOutcome, RemovalStage, QUARANTINE_PREFIX};
 
 /// A pinned directory holding `a` = "alpha", with the paths a swap needs.
-struct Fixture {
+pub(super) struct Fixture {
     /// Keeps the directories until the test ends.
     _scratch: Scratch,
-    root: PathBuf,
-    aside: PathBuf,
-    pinned: PinnedDir,
+    pub(super) root: PathBuf,
+    pub(super) aside: PathBuf,
+    pub(super) pinned: PinnedDir,
 }
 
-fn fixture(label: &str) -> Fixture {
+pub(super) fn fixture(label: &str) -> Fixture {
     let scratch = Scratch::new(label);
     let root = scratch.root();
     let aside = scratch.aside();
@@ -42,7 +42,7 @@ fn fixture(label: &str) -> Fixture {
 
 /// The stages of a removal, without their payload.
 #[derive(Clone, Copy, PartialEq)]
-enum At {
+pub(super) enum At {
     Checked,
     MovedAside,
     Identified,
@@ -50,7 +50,7 @@ enum At {
 }
 
 /// The stage, and the path inside the quarantine directory once there is one.
-fn at(stage: RemovalStage<'_>) -> (At, Option<&Path>) {
+pub(super) fn at(stage: RemovalStage<'_>) -> (At, Option<&Path>) {
     match stage {
         RemovalStage::Checked => (At::Checked, None),
         RemovalStage::MovedAside { quarantined } => (At::MovedAside, Some(quarantined)),
@@ -83,12 +83,12 @@ fn failing_at(here: At) -> impl FnMut(RemovalStage<'_>) -> Result<(), PinnedErro
     }
 }
 
-fn denied() -> PinnedError {
+pub(super) fn denied() -> PinnedError {
     PinnedError::Io(std::io::ErrorKind::PermissionDenied)
 }
 
 /// The last-component swap: the original is renamed out of the way and a live file takes its name.
-fn swap_in_a_live_file(root: &Path, aside: &Path) {
+pub(super) fn swap_in_a_live_file(root: &Path, aside: &Path) {
     fs::rename(root.join("a"), aside.join("original")).unwrap();
     fs::write(root.join("a"), b"live").unwrap();
 }
@@ -99,7 +99,7 @@ fn ino(path: &Path) -> u64 {
 }
 
 /// The quarantine directories a removal left in `root`.
-fn quarantines(root: &Path) -> Vec<PathBuf> {
+pub(super) fn quarantines(root: &Path) -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = fs::read_dir(root)
         .unwrap()
         .map(|entry| entry.unwrap().path())
@@ -115,7 +115,7 @@ fn quarantines(root: &Path) -> Vec<PathBuf> {
 }
 
 /// The content of the entry left in the only quarantine directory of `root`.
-fn held_in_quarantine(root: &Path) -> Option<Vec<u8>> {
+pub(super) fn held_in_quarantine(root: &Path) -> Option<Vec<u8>> {
     let all = quarantines(root);
     assert!(all.len() <= 1, "{all:?}");
     fs::read(all.first()?.join(INSIDE)).ok()

@@ -62,7 +62,10 @@ pub enum RemovalOutcome {
     NotEmpty,
     /// Something other than the authenticated object was bound to the name. It was not removed: it is
     /// back under its name (`restored`) or, if the name was taken meanwhile, kept in the quarantine
-    /// directory (`.h1q-*`, never removed by a sweep).
+    /// directory (`.h1q-*`, never removed by a sweep). Reported only after the directory and the
+    /// quarantine directory the entry moved through were synced. A sync that fails is an error and not
+    /// another outcome: the rename decided `restored`, and the entry is back or aside whatever the sync
+    /// did.
     Swapped { restored: bool },
     /// Unix only: the quarantine directory was tampered with. Either the authenticated object had not
     /// lost a name after the unlink, so the name was bound to another object when it was unlinked (see
@@ -75,7 +78,8 @@ pub enum RemovalOutcome {
     /// Unix only: an error happened after the entry was moved into the quarantine directory and it
     /// could not be put back (`cause` is the error that started it). The entry is in the quarantine
     /// directory (`.h1q-*`, as `x`), found with a listing; [`PinnedDir::remove_leftover_file`] takes it
-    /// from there after authenticating it again. Nothing was removed.
+    /// from there after authenticating it again. Nothing was removed. This reports a failure by its
+    /// cause, so both directories are synced best effort and a crash may undo where the entry is.
     Stranded { cause: PinnedError },
 }
 
