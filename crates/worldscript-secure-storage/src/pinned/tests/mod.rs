@@ -10,6 +10,8 @@ mod read;
 mod remove;
 #[cfg(all(feature = "test-support", unix))]
 mod remove_unix;
+#[cfg(all(feature = "test-support", windows))]
+mod remove_windows;
 #[cfg(windows)]
 mod windows_redirect;
 
