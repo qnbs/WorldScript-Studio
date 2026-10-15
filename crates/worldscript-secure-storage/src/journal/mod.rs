@@ -144,8 +144,8 @@ pub use inventory_store::{
     seal_inventory_pages, InventorySetWrite,
 };
 #[cfg(feature = "test-support")]
-pub use lease_clock::FixedLeaseClock;
-pub use lease_clock::{LeaseClock, LeaseClockError, TrustedLeaseTimeObservation};
+pub use lease_clock::{FixedLeaseClock, UnreadableLeaseClock};
+pub use lease_clock::{LeaseClock, LeaseClockError, SystemLeaseClock, TrustedLeaseTimeObservation};
 pub use manifest::{journal_envelope_epoch, JournalManifest, JournalPageRef, ManifestRead};
 pub use page::JournalPage;
 #[cfg(feature = "test-support")]

@@ -1305,9 +1305,9 @@ where
 #[derive(Clone, Copy)]
 pub struct JournalTakeoverCommit<'a> {
     pub claim: JournalCheckpoint<'a>,
-    /// The adapter's clock, read once inside the takeover under the root-commit event; Core never reads
-    /// the system clock and takes no bare timestamp (Gate 4 slice Q1). A lease is expired when
-    /// `now >= lease_expires`.
+    /// The clock, read once inside the takeover while the root-commit event is held. It is a sealed
+    /// [`LeaseClock`] (in production [`SystemLeaseClock`]), so no caller can pass a timestamp of its own
+    /// choosing (Gate 4 slice Q1). A lease is expired when `now >= lease_expires`.
     pub clock: &'a dyn LeaseClock,
 }
 
@@ -1333,10 +1333,11 @@ pub fn commit_journal_takeover<F: DurableFs, P: KeyProvider>(
     check_operation_id(&claim.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
     let held = acquire_root_commit(layout)?;
-    // Read under the root-commit event and before any I/O: an unavailable or implausible clock refuses
-    // here, and the same reading judges the publish and the binding advance.
-    let now =
-        TrustedLeaseTimeObservation::observe(takeover.clock).map_err(AuthorityError::LeaseClock)?;
+    // Read while the root-commit event is held and before any journal or authority write: an unavailable
+    // or implausible clock refuses here, and the same reading judges the publish and the binding advance.
+    // (Taking the lock itself is coordination, not state.)
+    let now = TrustedLeaseTimeObservation::observe(takeover.clock, &held)
+        .map_err(AuthorityError::LeaseClock)?;
     let commit = journal_catalog_commit(&claim);
     let committed = committed_binding(fs, provider, layout, commit)?;
     let key = route_journal_key(fs, provider, layout, claim.journal)?;

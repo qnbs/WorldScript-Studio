@@ -12,11 +12,11 @@ use worldscript_secure_storage::{
     load_authoritative_manifest, load_manifest_generation, operation_type, parse_envelope,
     phase_code, promote_manifest_fenced, promote_page_fenced, publish_manifest_fenced,
     publish_phase_transition_fenced, publish_takeover_fenced, seal_record, DirectoryDurability,
-    DurableFs, FixedLeaseClock, JournalDurableContext, JournalDurableError, JournalError,
-    JournalManifest, JournalPage, JournalTakeover, LiveMigration, MigrationExecutionError,
-    MigrationFence, OpenError, RecordClass, RecordIdentity, RecordMeta, StageFailureKind,
-    StagingResidue, StdFs, TrustedLeaseTimeObservation, WriteOperationId,
-    JOURNAL_MANIFEST_RECORD_SCHEMA, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
+    DurableFs, JournalDurableContext, JournalDurableError, JournalError, JournalManifest,
+    JournalPage, JournalTakeover, LiveMigration, MigrationExecutionError, MigrationFence,
+    OpenError, RecordClass, RecordIdentity, RecordMeta, StageFailureKind, StagingResidue, StdFs,
+    TrustedLeaseTimeObservation, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -1191,7 +1191,7 @@ fn takeover_with<F: DurableFs>(
     let op = write_op();
     let key = key();
     let mut ctx = JournalDurableContext::new(fs, &key, dir, &op);
-    let now = TrustedLeaseTimeObservation::observe(&FixedLeaseClock(now_unix_ms)).unwrap();
+    let now = TrustedLeaseTimeObservation::for_test(now_unix_ms);
     publish_takeover_fenced(
         &mut ctx,
         &JournalTakeover {

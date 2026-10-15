@@ -97,8 +97,6 @@ pub use durable::{
 pub use envelope::{parse_envelope, EnvelopeHeader, ParsedEnvelope};
 pub use error::{AadError, KdfError, KeyProviderError, OpenError, RecoveryError, SealError};
 pub use identity::{IdentityError, RecordIdentity};
-#[cfg(feature = "test-support")]
-pub use journal::FixedLeaseClock;
 pub use journal::{
     acquire_journal_durable_guard, allows_phase_transition, assert_binding_successor,
     assert_binding_takeover, assert_capture_successor, assert_checkpoint_successor, assert_fence,
@@ -122,15 +120,17 @@ pub use journal::{
     JournalRevision, JournalTakeover, LeaseClock, LeaseClockError, ManifestEnvelopeDigest,
     ManifestRead, MigrationExecutionError, MigrationFence, MigrationPhase, PublishedManifest,
     RecoveryReasonCode, SealedPage, StagedCapture, StagedPage, StagedPromotion, StreamedCapture,
-    TrustedLeaseTimeObservation, VerifiedInventory, JOURNAL_MANIFEST_FORMAT_VERSION,
-    JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION, JOURNAL_PAGE_RECORD_SCHEMA,
-    MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
-    MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
+    SystemLeaseClock, TrustedLeaseTimeObservation, VerifiedInventory,
+    JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION,
+    JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES,
+    MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES, MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
 };
 #[cfg(feature = "test-support")]
 pub use journal::{
     reclaim_with_binding, KeepReason, Preserved, ReclaimError, ReclaimRequest, Reclaimed,
 };
+#[cfg(feature = "test-support")]
+pub use journal::{FixedLeaseClock, UnreadableLeaseClock};
 pub use journal_locator::{
     authenticate_journal, AuthenticatedJournal, JournalLocator, JournalLookup, LocationFault,
     LocatorError,
