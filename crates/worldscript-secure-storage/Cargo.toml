@@ -42,7 +42,7 @@ zeroize_derive = "~1.4"
 rustix = { version = "1.1", default-features = false, features = ["fs", "process", "std"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Wdk_Foundation", "Wdk_Storage_FileSystem"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Wdk_Foundation", "Wdk_Storage_FileSystem"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Secret Service only: never `linux-native` / keyutils (not persistent, never a fallback).
