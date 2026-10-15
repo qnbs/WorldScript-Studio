@@ -464,24 +464,35 @@ fn the_quarantine_directory_is_private_usable_under_any_umask_and_gone_afterward
 }
 
 #[test]
-fn a_failure_at_any_stage_leaves_the_directory_as_it_was_found() {
+fn a_failure_at_any_stage_leaves_the_directory_as_it_was_found_and_syncs_it_after_a_move() {
     let outcomes: Vec<_> = [At::Checked, At::MovedAside, At::Identified]
         .into_iter()
         .map(|here| {
             let f = fixture("rollback");
-            let outcome = f.pinned.remove_authenticated_file_observed(
-                "a",
-                holds(b"alpha"),
-                &mut failing_at(here),
-            );
+            let synced = std::cell::Cell::new(false);
+            let outcome =
+                f.pinned
+                    .remove_authenticated_file_observed("a", holds(b"alpha"), &mut |stage| {
+                        if at(stage).0 == At::BeforeSync {
+                            synced.set(true);
+                            return Ok(());
+                        }
+                        failing_at(here)(stage)
+                    });
             (
                 outcome,
                 fs::read(f.root.join("a")).unwrap(),
                 quarantines(&f.root).len(),
+                synced.get(),
             )
         })
         .collect();
-    assert_eq!(outcomes, vec![(Err(denied()), b"alpha".to_vec(), 0); 3]);
+    let rolled_back = |synced| (Err(denied()), b"alpha".to_vec(), 0, synced);
+    // Nothing moved before the check, so there is nothing to sync; after the move the directory changed.
+    assert_eq!(
+        outcomes,
+        vec![rolled_back(false), rolled_back(true), rolled_back(true)]
+    );
 }
 
 #[test]
@@ -533,11 +544,12 @@ fn lock_the_quarantine(quarantined: Option<&Path>) {
 }
 
 #[test]
-fn an_error_after_the_move_that_cannot_be_rolled_back_is_reported_as_stranded() {
-    assert!(
-        !rustix::process::geteuid().is_root(),
-        "the permission checks of this case do not apply to root; run the tests as a normal user"
-    );
+fn a_search_permission_lost_after_the_move_is_reported_as_stranded() {
+    if rustix::process::geteuid().is_root() {
+        // Root is not kept out by permissions; the same logic is covered without them by the next test.
+        eprintln!("skipped: permissions do not apply to root");
+        return;
+    }
     let f = fixture("stranded");
     let original = ino(&f.root.join("a"));
     let outcome = f.pinned.remove_authenticated_file_observed(
@@ -557,5 +569,64 @@ fn an_error_after_the_move_that_cannot_be_rolled_back_is_reported_as_stranded() 
             1,
             true
         )
+    );
+}
+
+#[test]
+fn an_error_after_the_move_whose_put_back_is_blocked_is_reported_as_stranded_whoever_runs_it() {
+    let f = fixture("stranded-injected");
+    let original = ino(&f.root.join("a"));
+    let mut synced = false;
+    let outcome = f
+        .pinned
+        .remove_authenticated_file_observed("a", holds(b"alpha"), &mut |stage| {
+            match at(stage) {
+                // The name is taken again and the observer fails: the entry cannot go back.
+                (At::MovedAside, _) => {
+                    fs::write(f.root.join("a"), b"taken").unwrap();
+                    return Err(denied());
+                }
+                (At::BeforeSync, _) => synced = true,
+                _ => {}
+            }
+            Ok(())
+        });
+    let left = quarantines(&f.root);
+    assert_eq!(
+        (
+            outcome,
+            fs::read(f.root.join("a")).unwrap(),
+            left.len(),
+            ino(&left[0].join(INSIDE)) == original,
+            synced
+        ),
+        (
+            Ok(RemovalOutcome::Stranded { cause: denied() }),
+            b"taken".to_vec(),
+            1,
+            true,
+            true
+        )
+    );
+}
+
+#[test]
+fn a_quarantine_name_that_leads_somewhere_else_at_the_end_is_not_removed() {
+    // The held directory is renamed away and an empty directory of the actor takes its name: the
+    // removal goes on in the directory it holds and leaves the actor's directory alone.
+    let f = fixture("discard");
+    let outcome = f.pinned.remove_authenticated_file_observed(
+        "a",
+        holds(b"alpha"),
+        &mut on(At::MovedAside, |quarantined| {
+            let directory = quarantined.unwrap().parent().unwrap();
+            fs::rename(directory, f.aside.join("held")).unwrap();
+            fs::create_dir(directory).unwrap();
+        }),
+    );
+    let held = fs::read_dir(f.aside.join("held")).unwrap().count();
+    assert_eq!(
+        (outcome, held, quarantines(&f.root).len()),
+        (removed(), 0, 1)
     );
 }
