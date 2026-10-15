@@ -60,7 +60,7 @@ pub(super) fn at(stage: RemovalStage<'_>) -> (At, Option<&Path>) {
 }
 
 /// An observer that runs `action` at the stage `here` and otherwise does nothing.
-fn on(
+pub(super) fn on(
     here: At,
     mut action: impl FnMut(Option<&Path>),
 ) -> impl FnMut(RemovalStage<'_>) -> Result<(), PinnedError> {
@@ -94,7 +94,7 @@ pub(super) fn swap_in_a_live_file(root: &Path, aside: &Path) {
 }
 
 /// The inode of the object at `path` (not following a link): who is who, whatever the content says.
-fn ino(path: &Path) -> u64 {
+pub(super) fn ino(path: &Path) -> u64 {
     fs::symlink_metadata(path).unwrap().ino()
 }
 

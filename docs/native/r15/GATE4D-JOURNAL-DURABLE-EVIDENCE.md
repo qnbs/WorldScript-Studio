@@ -1828,6 +1828,38 @@ dropping a failed sync of it, a `sync_all()?` inside the rename step, confirming
 sync for an entry found gone at the inspection, dropping it for one gone at the unlink and passing no identity for a foreign
 entry each fail at least one of the sync cases, and counting a failed look as present fails the permission case.
 
-**Not claimed.** Directories and the leftover recovery are part 3 (they answer `Unsupported` here); Windows is part 4; the
+**Not claimed.** Directories and the leftover recovery are part 3 (below); Windows is part 4; the
 Disturbed window is bounded and detected, not closed; a device node swapped in is refused before it is opened and cannot be
 created by an unprivileged actor, which is argued, not tested.
+
+#### Part 3: removal of a directory on Unix, leftovers and crashes
+
+Status words: `H1A_2_UNIX_DIRECTORY_AND_LEFTOVERS=IMPLEMENTED_TEST_SUPPORT_ONLY`, `H1_PROVED=NO`. `remove_empty_dir` opens the child
+directory (no link followed), refuses one that has entries (`NotEmpty`) and moves it through the same quarantine directory:
+identified by the open directory, then `unlinkat(AT_REMOVEDIR)`; a directory that fills after the check goes back
+(`NotEmpty`). The same window exists and is detected the same way: the link count of the held directory must have dropped
+(`Disturbed` otherwise; for a directory it falls to zero). An empty foreign directory that wins the race in the last window
+is removed instead of the authenticated one, and the removal says so; it holds no data.
+
+**Leftovers and crashes.** A crash after the move, or an entry that could not be put back (`Swapped { restored: false }`,
+`Stranded`), leaves a `.h1q-*` directory holding the entry as `x`. A sweep never removes it by itself.
+`remove_leftover_file(name, authenticate)` takes it by its **generated name only** (`.h1q-` and exactly 32 lowercase
+hexadecimal digits; any other name, including an unrelated private directory, is `InvalidName` and untouched), requires a
+directory of the effective user without access for group or others, authenticates the file in it again and, only if
+accepted, unlinks it with the same link-count check. A file that does not authenticate (a foreign object left by a refused
+put-back) stays; an empty generated quarantine directory is removed.
+
+**Proof.** A directory swapped in the first window and one filled after the check are put back and not removed; an empty
+directory that wins the last window gives `Disturbed` with the original directory intact; a simulated crash (the observer
+panics once the entry is in the quarantine directory) leaves the entry there under no name of the store, a leftover removal
+with a failing authentication refuses and leaves it, and with the right one finishes it; names without the generated grammar
+(`.h1q-empty`, too few or too many digits, upper case, non-hexadecimal digits, other directories, plain files) are refused
+before anything is opened; a foreign object left in a quarantine directory by a refused put-back, and a link left there, are
+never removed by it; an entry stranded by a blocked put-back (the name taken again, so it is proved to be in the quarantine
+directory) is finished after the file authenticates again. The leftover removal syncs the quarantine directory it unlinks
+in, like any removal, and says `NotConfirmed` if that fails (modelled through the same test-only seam). Mutation-checked:
+syncing nothing in the leftover removal, not refusing a foreign entry, loosening the name grammar to any length, and
+ignoring the authentication result each fail at least one of these cases. An entry stranded by a lost search permission is
+`Disturbed`, not `Stranded`: a failed look proves nothing (see part 2).
+
+**Not claimed.** Windows creates no quarantine directory (part 4); the Disturbed window is bounded and detected, not closed.

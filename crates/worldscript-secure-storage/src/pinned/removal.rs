@@ -4,9 +4,10 @@
 //! **Availability.** Everything in this module exists only with the test-only `test-support` feature,
 //! has no caller, and is not part of any production build. Reclamation of a real store is not admitted.
 //!
-//! **Status of this slice.** The API and its isolation. Every call answers [`PinnedError::Unsupported`]
-//! until the platform implementations land in the successor slices (Unix files; Unix directories and
-//! leftovers; Windows), so nothing is removed and nothing claims a safety it does not have yet.
+//! **Status of this slice.** The API and its isolation, and on Unix the removal of files, of
+//! directories and of the leftovers of a crash. A call on Windows answers [`PinnedError::Unsupported`]
+//! until the Windows implementation lands in its own slice, so nothing is removed there and nothing
+//! claims a safety it does not have yet.
 //!
 //! **The two designs the platform slices do not use.** Removing "the entry that was checked" with
 //! `unlinkat(parent, name)` after a check on the name is exposed to a swap of the last component: POSIX
