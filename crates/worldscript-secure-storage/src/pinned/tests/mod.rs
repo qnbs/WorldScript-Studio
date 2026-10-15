@@ -10,6 +10,10 @@ mod read;
 mod remove;
 #[cfg(all(feature = "test-support", unix))]
 mod remove_unix;
+#[cfg(all(feature = "test-support", unix))]
+mod remove_unix_cleanup;
+#[cfg(all(feature = "test-support", unix))]
+mod remove_unix_sync;
 #[cfg(windows)]
 mod windows_redirect;
 
