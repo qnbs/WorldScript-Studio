@@ -1780,3 +1780,30 @@ failed inspection fails the `Stranded` case.
 **Not claimed.** Directories and the leftover recovery are part 3 (they answer `Unsupported` here); Windows is part 4; the
 Disturbed window is bounded and detected, not closed; a device node swapped in is refused before it is opened and cannot be
 created by an unprivileged actor, which is argued, not tested.
+
+#### Part 3: removal of a directory on Unix, leftovers and crashes
+
+Status words: `H1A_2_UNIX_DIRECTORY_AND_LEFTOVERS=IMPLEMENTED_TEST_SUPPORT_ONLY`, `H1_PROVED=NO`. `remove_empty_dir` opens the child
+directory (no link followed), refuses one that has entries (`NotEmpty`) and moves it through the same quarantine directory:
+identified by the open directory, then `unlinkat(AT_REMOVEDIR)`; a directory that fills after the check goes back
+(`NotEmpty`). The same window exists and is detected the same way: the link count of the held directory must have dropped
+(`Disturbed` otherwise; for a directory it falls to zero). An empty foreign directory that wins the race in the last window
+is removed instead of the authenticated one, and the removal says so; it holds no data.
+
+**Leftovers and crashes.** A crash after the move, or an entry that could not be put back (`Swapped { restored: false }`,
+`Stranded`), leaves a `.h1q-*` directory holding the entry as `x`. A sweep never removes it by itself.
+`remove_leftover_file(name, authenticate)` takes it by its **generated name only** (`.h1q-` and exactly 32 lowercase
+hexadecimal digits; any other name, including an unrelated private directory, is `InvalidName` and untouched), requires a
+directory of the effective user without access for group or others, authenticates the file in it again and, only if
+accepted, unlinks it with the same link-count check. A file that does not authenticate (a foreign object left by a refused
+put-back) stays; an empty generated quarantine directory is removed.
+
+**Proof.** A directory swapped in the first window and one filled after the check are put back and not removed; an empty
+directory that wins the last window gives `Disturbed` with the original directory intact; a simulated crash (the observer
+panics once the entry is in the quarantine directory) leaves the entry there under no name of the store, a leftover removal
+with a failing authentication refuses and leaves it, and with the right one finishes it; names without the generated grammar
+(`.h1q-empty`, non-hexadecimal digits, other directories, plain files) are refused; a foreign object left in a quarantine
+directory by a refused put-back is never removed by it; an entry stranded by a quarantine directory that lost its search
+permission is finished after the permission is back and the file authenticates again.
+
+**Not claimed.** Windows creates no quarantine directory (part 4); the Disturbed window is bounded and detected, not closed.

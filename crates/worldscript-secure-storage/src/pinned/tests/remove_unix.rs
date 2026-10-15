@@ -1,4 +1,4 @@
-//! Unix removal of a file under the swap the design exists for: another actor replaces the last
+//! Unix removal of a file, a directory and of a leftover quarantine directory under the swap the design exists for: another actor replaces the last
 //! component of the name, or the entry inside the quarantine directory, between the steps of the
 //! removal. Each case forces the swap through the observer at a chosen stage and pins what happens to
 //! every object (by identity where the content could be mistaken). The counter-proofs show that the swap
@@ -7,6 +7,7 @@
 use std::fs;
 use std::os::fd::AsFd;
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use rustix::fs::{unlinkat, AtFlags};
@@ -552,6 +553,193 @@ fn an_error_after_the_move_that_cannot_be_rolled_back_is_reported_as_stranded() 
             false,
             1,
             true
+        )
+    );
+}
+
+#[test]
+fn a_directory_swapped_or_filled_after_the_check_is_put_back_and_not_removed() {
+    let f = fixture("dir-swap");
+    fs::create_dir(f.root.join("d")).unwrap();
+    fs::create_dir(f.root.join("e")).unwrap();
+    let swapped = f.pinned.remove_empty_dir_observed(
+        "d",
+        &mut on(At::Checked, |_| {
+            fs::rename(f.root.join("d"), f.aside.join("original-d")).unwrap();
+            fs::create_dir(f.root.join("d")).unwrap();
+            fs::write(f.root.join("d").join("live"), b"live").unwrap();
+        }),
+    );
+    let filled = f.pinned.remove_empty_dir_observed(
+        "e",
+        &mut on(At::Checked, |_| {
+            fs::write(f.root.join("e").join("late"), b"late").unwrap()
+        }),
+    );
+    assert_eq!(
+        (
+            swapped,
+            fs::read(f.root.join("d").join("live")).unwrap(),
+            f.aside.join("original-d").is_dir(),
+            filled,
+            fs::read(f.root.join("e").join("late")).unwrap(),
+            names(&f.pinned)
+        ),
+        (
+            Ok(RemovalOutcome::Swapped { restored: true }),
+            b"live".to_vec(),
+            true,
+            Ok(RemovalOutcome::NotEmpty),
+            b"late".to_vec(),
+            vec!["a".to_string(), "d".to_string(), "e".to_string()]
+        )
+    );
+}
+
+#[test]
+fn an_empty_directory_swapped_in_the_last_window_is_reported_as_disturbed() {
+    let f = fixture("window-empty-dir");
+    fs::create_dir(f.root.join("d")).unwrap();
+    let original = ino(&f.root.join("d"));
+    let outcome = f.pinned.remove_empty_dir_observed(
+        "d",
+        &mut on(At::Identified, |quarantined| {
+            let quarantined = quarantined.unwrap();
+            fs::rename(quarantined, f.aside.join("original-d")).unwrap();
+            fs::create_dir(quarantined).unwrap();
+        }),
+    );
+    assert_eq!(
+        (
+            outcome,
+            f.root.join("d").exists(),
+            ino(&f.aside.join("original-d")) == original,
+            quarantines(&f.root).len()
+        ),
+        (Ok(RemovalOutcome::Disturbed), false, true, 0)
+    );
+}
+
+/// A removal that "crashes" (the observer panics) once the object is in the quarantine directory.
+fn crash_after_the_move(f: &Fixture) {
+    let crashed = catch_unwind(AssertUnwindSafe(|| {
+        let _ = f.pinned.remove_authenticated_file_observed(
+            "a",
+            holds(b"alpha"),
+            &mut on(At::MovedAside, |_| panic!("simulated crash")),
+        );
+    }));
+    assert!(crashed.is_err());
+}
+
+#[test]
+fn a_crash_leaves_the_object_in_quarantine_and_a_leftover_removal_finishes_it_after_authenticating()
+{
+    let f = fixture("crash");
+    crash_after_the_move(&f);
+    let left = quarantines(&f.root);
+    let name = left[0].file_name().unwrap().to_owned();
+    let before = (names(&f.pinned).len(), held_in_quarantine(&f.root));
+    let refused = f
+        .pinned
+        .remove_leftover_file(&name, holds(b"something else"));
+    let finished = f.pinned.remove_leftover_file(&name, holds(b"alpha"));
+    assert_eq!(
+        (before, refused, finished, names(&f.pinned)),
+        (
+            (1, Some(b"alpha".to_vec())),
+            Ok(RemovalOutcome::Refused),
+            removed(),
+            Vec::<String>::new()
+        )
+    );
+}
+
+#[test]
+fn a_leftover_is_taken_by_its_generated_name_only_and_an_empty_one_is_removed() {
+    let f = fixture("leftover-names");
+    let generated = format!("{QUARANTINE_PREFIX}{}", "0".repeat(32));
+    for name in [generated.as_str(), ".h1q-empty", "not-a-quarantine"] {
+        fs::create_dir(f.root.join(name)).unwrap();
+        fs::set_permissions(f.root.join(name), fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let taken = |name: &str| f.pinned.remove_leftover_file(name, |_| Ok(true));
+    assert_eq!(
+        (
+            taken("a"),
+            taken("not-a-quarantine"),
+            taken(".h1q-empty"),
+            taken(&format!("{QUARANTINE_PREFIX}{}", "G".repeat(32))),
+            taken(&generated),
+            names(&f.pinned)
+        ),
+        (
+            Err(PinnedError::InvalidName),
+            Err(PinnedError::InvalidName),
+            Err(PinnedError::InvalidName),
+            Err(PinnedError::InvalidName),
+            Ok(RemovalOutcome::Vanished),
+            vec![
+                ".h1q-empty".to_string(),
+                "a".to_string(),
+                "not-a-quarantine".to_string()
+            ]
+        )
+    );
+}
+
+#[test]
+fn a_foreign_object_left_in_quarantine_is_never_removed_by_a_leftover_removal() {
+    let f = fixture("leftover-foreign");
+    let mut at_checked = on(At::Checked, |_| swap_in_a_live_file(&f.root, &f.aside));
+    let mut at_moved = on(At::MovedAside, |_| {
+        fs::write(f.root.join("a"), b"retaken").unwrap()
+    });
+    let first = f
+        .pinned
+        .remove_authenticated_file_observed("a", holds(b"alpha"), &mut |stage| {
+            at_checked(stage)?;
+            at_moved(stage)
+        });
+    let name = quarantines(&f.root)[0].file_name().unwrap().to_owned();
+    // The object in the quarantine directory is the live file, not an object of the sweep.
+    let refused = f.pinned.remove_leftover_file(&name, holds(b"alpha"));
+    assert_eq!(
+        (first, refused, held_in_quarantine(&f.root)),
+        (
+            Ok(RemovalOutcome::Swapped { restored: false }),
+            Ok(RemovalOutcome::Refused),
+            Some(b"live".to_vec())
+        )
+    );
+}
+
+#[test]
+fn a_stranded_entry_is_finished_by_the_leftover_removal_after_authenticating_it() {
+    assert!(
+        !rustix::process::geteuid().is_root(),
+        "the permission checks of this case do not apply to root; run the tests as a normal user"
+    );
+    let f = fixture("stranded-recovery");
+    let stranded = f.pinned.remove_authenticated_file_observed(
+        "a",
+        holds(b"alpha"),
+        &mut on(At::MovedAside, lock_the_quarantine),
+    );
+    let left = quarantines(&f.root);
+    fs::set_permissions(&left[0], fs::Permissions::from_mode(0o700)).unwrap();
+    let name = left[0].file_name().unwrap().to_owned();
+    let refused = f
+        .pinned
+        .remove_leftover_file(&name, holds(b"something else"));
+    let finished = f.pinned.remove_leftover_file(&name, holds(b"alpha"));
+    assert_eq!(
+        (stranded.is_ok(), refused, finished, names(&f.pinned)),
+        (
+            true,
+            Ok(RemovalOutcome::Refused),
+            removed(),
+            Vec::<String>::new()
         )
     );
 }

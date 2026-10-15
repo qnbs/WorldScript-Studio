@@ -1,10 +1,10 @@
 //! Unix removal, test-support only: move the entry into a quarantine directory, identify the open
 //! object there, and only then unlink it. See the parent `removal` module for the reasoning and for the
-//! one window that no Unix primitive closes. This part removes files; directories and the leftover
-//! recovery follow and refuse with `Unsupported` until then.
+//! one window that no Unix primitive closes.
 
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
@@ -24,6 +24,9 @@ use crate::random::{OsRandom, RandomSource};
 
 /// The name an entry has inside the quarantine directory.
 pub(in crate::pinned) const INSIDE: &str = "x";
+
+/// How many hexadecimal digits follow the prefix in the name of a quarantine directory.
+const SUFFIX_DIGITS: usize = 32;
 
 /// A quarantine directory inside the pinned parent, held by descriptor. Whatever it holds is outside
 /// every name grammar of the store and is never removed by a sweep.
@@ -51,6 +54,17 @@ enum Step {
     Changed(RemovalOutcome),
     /// The object lost its name.
     Unlinked,
+}
+
+/// Whether `name` is exactly what [`Quarantine::create`] produces.
+fn is_generated_name(name: &OsStr) -> bool {
+    let bytes = name.as_bytes();
+    let prefix = QUARANTINE_PREFIX.as_bytes();
+    bytes.len() == prefix.len() + SUFFIX_DIGITS
+        && bytes.starts_with(prefix)
+        && bytes[prefix.len()..]
+            .iter()
+            .all(|digit| matches!(digit, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 impl Quarantine {
@@ -82,6 +96,21 @@ impl Quarantine {
         } else {
             Err(PinnedError::Unsupported)
         }
+    }
+
+    /// An existing quarantine directory of `parent`, found by its generated name.
+    fn open_existing(parent: &DirHandle, name: &OsStr) -> Result<Self, PinnedError> {
+        if !is_generated_name(name) {
+            return Err(PinnedError::InvalidName);
+        }
+        let fd = Self::open_owned(parent, name)?;
+        if Self::mode_of(&fd)? & 0o077 != 0 {
+            return Err(PinnedError::Unsupported);
+        }
+        Ok(Quarantine {
+            fd,
+            name: name.to_os_string(),
+        })
     }
 
     /// The directory `name`, if it is a directory of this process's user (one of another user that was
@@ -239,6 +268,65 @@ pub(in crate::pinned) fn remove_file(
     remove_moved(dir, target, observer)
 }
 
+pub(in crate::pinned) fn remove_dir(
+    dir: &PinnedDir,
+    name: &OsStr,
+    observer: Observer<'_>,
+) -> Result<RemovalOutcome, PinnedError> {
+    let child = dir.open_dir(name)?;
+    match child.entries(0) {
+        Ok(_) => {}
+        Err(PinnedError::TooManyEntries) => return Ok(RemovalOutcome::NotEmpty),
+        Err(error) => return Err(error),
+    }
+    observer(RemovalStage::Checked)?;
+    let target = Target {
+        name,
+        expected: child.identity(),
+        kind: EntryKind::Directory,
+    };
+    remove_moved(dir, target, observer)
+}
+
+/// Removes the leftover file of the quarantine directory `quarantine` after authenticating it again.
+pub(in crate::pinned) fn remove_leftover(
+    dir: &PinnedDir,
+    quarantine: &OsStr,
+    authenticate: impl FnOnce(&mut PinnedFile) -> Result<bool, PinnedError>,
+    observer: Observer<'_>,
+) -> Result<RemovalOutcome, PinnedError> {
+    let held = Quarantine::open_existing(&dir.handle, quarantine)?;
+    let step = leftover_step(&held, dir, authenticate, observer);
+    held.discard(&dir.handle);
+    settle(dir, step?, observer)
+}
+
+fn leftover_step(
+    held: &Quarantine,
+    dir: &PinnedDir,
+    authenticate: impl FnOnce(&mut PinnedFile) -> Result<bool, PinnedError>,
+    observer: Observer<'_>,
+) -> Result<Step, PinnedError> {
+    let (file, identity) = match held.inspect(EntryKind::File)? {
+        // An empty quarantine directory is junk and goes with `discard`.
+        Inside::Absent => return Ok(Step::Changed(RemovalOutcome::Vanished)),
+        Inside::Foreign => return Ok(Step::Unchanged(RemovalOutcome::Refused)),
+        Inside::Object(file, identity) => (file, identity),
+    };
+    let mut pinned = PinnedFile { file, identity };
+    if !authenticate(&mut pinned)? {
+        return Ok(Step::Unchanged(RemovalOutcome::Refused));
+    }
+    observer(RemovalStage::Identified {
+        quarantined: &held.path_inside(&dir.path),
+    })?;
+    Ok(unlinked(unlink_verified(
+        held,
+        &pinned.file,
+        EntryKind::File,
+    )?))
+}
+
 /// Removes the entry of `target` from `dir` if, once moved aside, it is the object it must be.
 fn remove_moved(
     dir: &PinnedDir,
@@ -337,23 +425,4 @@ fn settle(
             Ok(RemovalOutcome::Removed(dir.sync()?))
         }
     }
-}
-
-/// Removing a directory follows in the next part.
-pub(in crate::pinned) fn remove_dir(
-    _dir: &PinnedDir,
-    _name: &OsStr,
-    _observer: Observer<'_>,
-) -> Result<RemovalOutcome, PinnedError> {
-    Err(PinnedError::Unsupported)
-}
-
-/// Finishing a leftover quarantine directory follows in the next part.
-pub(in crate::pinned) fn remove_leftover(
-    _dir: &PinnedDir,
-    _quarantine: &OsStr,
-    _authenticate: impl FnOnce(&mut PinnedFile) -> Result<bool, PinnedError>,
-    _observer: Observer<'_>,
-) -> Result<RemovalOutcome, PinnedError> {
-    Err(PinnedError::Unsupported)
 }
