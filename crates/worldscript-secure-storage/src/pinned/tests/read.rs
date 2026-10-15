@@ -497,3 +497,17 @@ fn every_operation_follows_the_held_directory_not_the_path_it_was_stored_with() 
         )
     );
 }
+
+#[test]
+fn a_directory_can_be_synced_where_the_platform_confirms_it() {
+    use crate::durable::DirectoryDurability;
+
+    let scratch = Scratch::new("sync");
+    let pinned = PinnedDir::open_root(&scratch.root()).unwrap();
+    let expected = if cfg!(unix) {
+        DirectoryDurability::Confirmed
+    } else {
+        DirectoryDurability::NotConfirmed
+    };
+    assert_eq!(pinned.sync(), Ok(expected));
+}

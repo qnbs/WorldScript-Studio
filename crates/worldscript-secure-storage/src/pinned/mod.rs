@@ -29,12 +29,16 @@ use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Component, Path, PathBuf};
 
-use crate::durable::EntryKind;
+use crate::durable::{DirectoryDurability, EntryKind};
 
 #[cfg(any(windows, test))]
 mod dirbuf;
 #[cfg(any(windows, test))]
 mod names;
+#[cfg(feature = "test-support")]
+mod removal;
+#[cfg(feature = "test-support")]
+pub use removal::{Observer, RemovalOutcome, RemovalStage, QUARANTINE_PREFIX};
 #[cfg(unix)]
 mod unix;
 #[cfg(unix)]
@@ -190,6 +194,12 @@ impl PinnedDir {
     /// The names of the entries of this directory if there are at most `limit` of them.
     pub fn entries(&self, limit: usize) -> Result<Vec<OsString>, PinnedError> {
         sys::entries(&self.handle, &self.path, limit)
+    }
+
+    /// Persists the entries of this directory where the platform can confirm it (`fsync` on the
+    /// directory on Unix; Windows offers no directory sync, so the change is not confirmed durable).
+    pub fn sync(&self) -> Result<DirectoryDurability, PinnedError> {
+        sys::sync_dir(&self.handle)
     }
 
     /// Whether [`path`](Self::path) still names this very directory. `false` when it was renamed away,

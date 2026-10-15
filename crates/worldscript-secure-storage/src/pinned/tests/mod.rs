@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 mod read;
+#[cfg(feature = "test-support")]
+mod remove;
 #[cfg(windows)]
 mod windows_redirect;
 

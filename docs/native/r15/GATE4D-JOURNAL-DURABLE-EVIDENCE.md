@@ -1696,3 +1696,43 @@ its result is recorded on the PR.
 `is_still_named` where that matters. Everything below the root is handle-relative, but reading is not removing: the
 removal primitives, and with them the claim that only the authenticated object is ever removed, are H1a-2. The sweep
 (H1b), the three producer-equivalence invariants (H1c) and stored-set reclamation (I1c) are not started.
+
+### Bound removal through a pinned directory (Gate 4 slice H1a-2), part 1: the API and its isolation
+
+Status words: `H1A_2_REMOVAL=API_AND_ISOLATION_ONLY`, `H1_PROVED=NO`, `R1_PRODUCTION_RECLAMATION=NOT_ADMITTED`,
+`I1C_PRODUCTION_GC=NOT_ADMITTED`, `GATE4_TERMINAL=NO`. The maintainer admitted H1a-2 on 2026-10-15 for the
+`test-support` feature only, without a production caller or a production deletion release. A first draft of the whole slice
+was 2,172 meaningful lines in one pull request, over the 1,200-line hard-advisory tier; it is cut along proof boundaries into
+four stacked pull requests, each with the tests of its own behaviour:
+
+| Part | Content | Prerequisite |
+|---|---|---|
+| 1 (this) | `PinnedDir::{remove_authenticated_file, remove_empty_dir, remove_leftover_file}`, `RemovalOutcome`, `RemovalStage`, `Observer`, `QUARANTINE_PREFIX` behind `test-support`; `PinnedDir::sync` (no deletion) in every build; the isolation proofs; every call answers `Unsupported` | main |
+| 2 | Unix removal of a file: quarantine directory, identification of the open object, unlink, rollback, `Stranded`, `Disturbed`, forced-swap tests | 1 |
+| 3 | Unix removal of a directory, the leftover recovery and the crash cases | 2 |
+| 4 | Windows: the delete handle through the relative lookup, read-only sharing, the POSIX disposition on that handle | 3 |
+
+**Isolation.** `feature_isolation_removal_test` scans the sources: the modules that hold the primitives are declared under
+the gate on every platform, no other file names them, and no other module named `removal` exists (with a scan that proves it
+sees an ungated declaration and export). `feature_isolation_compile_test` proves it with the compiler: the crate is built the
+way a dependent gets it (default features) and with `test-support`, and a small crate that calls a removal method or imports
+`RemovalOutcome` fails with E0599 and E0432 against the first and compiles against the second, while a control that names only
+`PinnedDir::open_root` compiles against both; the nested builds use a target directory of their own (about 100 s). The
+no-dependent and default-closure checks of `feature_isolation_test` still decide who can request the feature. A lib test
+shows that in this part every removal answers `Unsupported` and removes nothing; `PinnedDir::sync` is `Confirmed` on Unix and
+`NotConfirmed` on Windows.
+
+**The contract the later parts implement, and its limit.** Unix moves the entry into a private quarantine directory with
+`RENAME_NOREPLACE`, identifies the open object there and only then unlinks it; anything else is put back, and a failure after
+the move rolls back or is reported as `Stranded` (where the entry is). Windows opens the object through the handle-relative
+lookup with delete access and read-only sharing, authenticates on that handle and sets the POSIX delete disposition on it.
+**No Unix primitive unlinks "this inode"**, and the quarantine directory is not exclusive (mode 0700 and a random name keep out
+other users and accidents, not another process of the same user): between the last identification and the unlink an actor that
+can write into it and wins that one race can have its own object removed instead. That is detected after the fact, not
+prevented (`RemovalOutcome::Disturbed`, by the link count of the authenticated object, a heuristic that an actor which also
+changes that link count is not caught by), and it is not counted as a success. That the same user could delete the object
+directly is a statement about a threat model, not a guarantee of identity: **whether this residual is acceptable for a
+production sweep is a decision of the maintainer, to be taken before H1b**.
+
+**Not claimed.** No removal is implemented in this part; no caller exists and the sweep is not ported (H1b); H1c and I1c are not
+started.
