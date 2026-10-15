@@ -551,13 +551,15 @@ fn lock_the_quarantine(quarantined: Option<&Path>) {
 }
 
 #[test]
-fn a_search_permission_lost_after_the_move_is_reported_as_stranded() {
+fn a_search_permission_lost_after_the_move_is_reported_as_disturbed_because_nothing_can_be_proved()
+{
     if rustix::process::geteuid().is_root() {
-        // Root is not kept out by permissions; the same logic is covered without them by the next test.
+        // Root is not kept out by permissions; the proved case (`Stranded`) is covered without them by
+        // the next test.
         eprintln!("skipped: permissions do not apply to root");
         return;
     }
-    let f = fixture("stranded");
+    let f = fixture("unprovable");
     let original = ino(&f.root.join("a"));
     let outcome = f.pinned.remove_authenticated_file_observed(
         "a",
@@ -565,17 +567,14 @@ fn a_search_permission_lost_after_the_move_is_reported_as_stranded() {
         &mut on(At::MovedAside, lock_the_quarantine),
     );
     let left = quarantines(&f.root);
-    // Opened up again, the entry is where the outcome said it is, and is the authenticated object.
+    // Opened up again, the entry is in fact still there and is the authenticated object. The removal
+    // could not look at it and so could not prove that, and an outcome that says where an entry is needs
+    // a proof: it is `Disturbed`, conservative, and not `Stranded`.
     fs::set_permissions(&left[0], fs::Permissions::from_mode(0o700)).unwrap();
     let same_object = ino(&left[0].join(INSIDE)) == original;
     assert_eq!(
         (outcome, f.root.join("a").exists(), left.len(), same_object),
-        (
-            Ok(RemovalOutcome::Stranded { cause: denied() }),
-            false,
-            1,
-            true
-        )
+        (Ok(RemovalOutcome::Disturbed), false, 1, true)
     );
 }
 

@@ -1774,9 +1774,13 @@ actor that wins that earlier race gains nothing the window below does not alread
 directory (`restored: false`, `Stranded`) is only reported as being there if the recorded name still leads to that directory and
 the entry in it is still the object the
 outcome names (the authenticated object, or for a swapped-in object the identity it was seen with, also one that is not the kind
-asked for, by a look that does not follow a link, where a look that fails is a failed inspection and not a retained entry; an
-entry that cannot be looked at when it is checked again counts as there, since an error proves neither); if an actor renamed the directory away, removed the entry or replaced it with
-another object the outcome is `Disturbed` (tampered, the entry cannot be found where the outcome would say). The check is itself
+asked for, by a look that does not follow a link, where a look that fails is a failed inspection and not a retained entry). An
+entry that cannot be looked at when it is checked again is not reported as there either: a failed look proves nothing, and an outcome
+that says where the entry is needs a proof. If an actor renamed the directory away, removed the entry or replaced it with
+another object, or the look fails, the outcome is `Disturbed` (tampered, or at least the entry cannot be shown where the outcome
+would say). The identity of a foreign entry is weaker than that of an opened object: it is not opened (opening a link, a FIFO or a
+device node has effects, and no handle can be taken for every kind without them), so nothing holds its identity unique and a file
+system may give the identity of a removed object to its replacement, which the check cannot tell apart. The check is itself
 a look at a name and does not close the same-user race. The quarantine directory the unlink happened in is synced as well as the
 parent before `Removed` is reported, whether it is removed afterwards, survives because an actor put an entry into it, or was
 renamed away; if that sync fails the removal is `Removed(NotConfirmed)`. The identity check before the
@@ -1812,8 +1816,9 @@ directory) that an actor replaces after the inspection, while the put-back is bl
 untouched is kept (`Swapped { restored: false }`; the replacement runs at the sync of the quarantine directory, the one point
 between the inspection and the check that a test can reach); a quarantine
 directory that loses its search permission after the
-move gives `Stranded` with the entry still the authenticated inode, and the same case without permissions (an observer that
-fails while the name is taken again, so it runs the same for root); a quarantine directory renamed away and replaced by an empty
+move gives `Disturbed` although the entry is in fact still the authenticated inode (the removal could not look at it and cannot
+prove it; skipped for root), and the proved case, `Stranded`, without permissions (an observer that fails while the name is taken
+again, so it runs the same for root); a quarantine directory renamed away and replaced by an empty
 directory of the actor is not removed, and the removal of a directory by its name is exercised on its own (the directory that was
 made goes, one renamed away and replaced, a non-empty one and a name without an identity stay; the setup failure that reaches
 it in `create` cannot be provoked without changing the process umask and is not forced). Mutation-checked: skipping the identity comparison fails
@@ -1821,7 +1826,7 @@ five of these cases, skipping the link-count verification fails the forced last 
 failed inspection fails the `Stranded` case; leaving out the sync of the quarantine directory after a put-back or after a rollback,
 dropping a failed sync of it, a `sync_all()?` inside the rename step, confirming a removal despite a failed sync, skipping the
 sync for an entry found gone at the inspection, dropping it for one gone at the unlink and passing no identity for a foreign
-entry each fail at least one of the sync cases.
+entry each fail at least one of the sync cases, and counting a failed look as present fails the permission case.
 
 **Not claimed.** Directories and the leftover recovery are part 3 (they answer `Unsupported` here); Windows is part 4; the
 Disturbed window is bounded and detected, not closed; a device node swapped in is refused before it is opened and cannot be

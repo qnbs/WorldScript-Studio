@@ -41,8 +41,10 @@ enum Inside {
     Absent,
     /// Not the kind that was asked for (a link, a directory instead of a file, a FIFO), or not openable
     /// by this process although the authenticated object was. It carries what the name led to when this
-    /// was seen (a look that does not follow a link), so that the entry can be told from a replacement
-    /// later, as for an opened object.
+    /// was seen (a look that does not follow a link), so that a replacement can be noticed later. That is
+    /// weaker than for an opened object: a foreign entry is not opened (opening a link, a FIFO or a device
+    /// node has effects), so no handle keeps its identity unique, and a file system may give the identity
+    /// of an object that was removed to its replacement, which this look cannot tell apart.
     Foreign(ObjectIdentity),
     /// Opened, with the identity of the open object.
     Object(File, ObjectIdentity),
@@ -215,18 +217,14 @@ impl Quarantine {
         remove_if_named(parent, &self.name, Some(self.identity));
     }
 
-    /// Whether the entry may still be inside: `false` only if it is known to be gone, or to be another
-    /// object than `expected` (an actor removed or replaced it); an error while looking (a permission
-    /// lost) proves neither. Without an expectation any object counts.
-    fn holds(&self, expected: Option<ObjectIdentity>) -> bool {
-        match stat_child(&self.fd, OsStr::new(INSIDE)) {
-            Ok(None) => false,
-            Ok(Some(stat)) => match expected {
-                None => true,
-                Some(wanted) => identity_from(&stat).is_ok_and(|found| found == wanted),
-            },
-            Err(_) => true,
-        }
+    /// Whether the entry is inside, as far as a look at the name can prove it: it was looked at and is
+    /// `expected`. Gone, another object, and a look that fails (a permission lost) all give `false`: an
+    /// outcome that says where the entry is needs a proof, and a failed look proves nothing.
+    fn holds(&self, expected: ObjectIdentity) -> bool {
+        matches!(
+            stat_child(&self.fd, OsStr::new(INSIDE)),
+            Ok(Some(stat)) if identity_from(&stat).is_ok_and(|found| found == expected)
+        )
     }
 
     /// Whether the name still leads to the directory that was created.
@@ -377,9 +375,7 @@ impl Removal<'_> {
                 let _ = self.quarantine.sync();
                 match put_back {
                     Ok(()) => Ok(Step::RolledBack(cause)),
-                    Err(_) if self.retained(Some(self.target.expected)) => {
-                        Ok(Step::Stranded(cause))
-                    }
+                    Err(_) if self.retained(self.target.expected) => Ok(Step::Stranded(cause)),
                     Err(_) => Ok(Step::Changed(RemovalOutcome::Disturbed)),
                 }
             }
@@ -402,17 +398,17 @@ impl Removal<'_> {
             Inside::Object(object, found) if found == self.target.expected => {
                 self.conclude(&object, observer)
             }
-            Inside::Object(_, found) => self.swapped(Some(found)),
-            Inside::Foreign(seen) => self.swapped(Some(seen)),
+            Inside::Object(_, found) => self.swapped(found),
+            Inside::Foreign(seen) => self.swapped(seen),
         }
     }
 
     /// What arrived is not the authenticated object: it goes back under its name, or stays aside if
-    /// that is impossible (and is then still `arrived`, the identity it was seen with if it was opened).
-    /// Either way the quarantine directory changed (the entry left it, or arrived in it), and it is synced
-    /// after the rename was tried: the rename alone decides `restored`, so a sync that fails is neither a
-    /// put-back that did not happen nor a reason to call the entry tampered with.
-    fn swapped(&self, arrived: Option<ObjectIdentity>) -> Result<Step, PinnedError> {
+    /// that is impossible (and is then still `arrived`, the identity it was seen with). Either way the
+    /// quarantine directory changed (the entry left it, or arrived in it), and it is synced after the
+    /// rename was tried: the rename alone decides `restored`, so a sync that fails is neither a put-back
+    /// that did not happen nor a reason to call the entry tampered with.
+    fn swapped(&self, arrived: ObjectIdentity) -> Result<Step, PinnedError> {
         let restored = self.restore().is_ok();
         let held = self.quarantine.sync();
         if !restored && !self.retained(arrived) {
@@ -451,11 +447,12 @@ impl Removal<'_> {
     }
 
     /// The entry stays in the quarantine directory: the outcome may only say where the entry is if the
-    /// recorded name still leads to the directory that holds it and the entry in it is still `expected`
-    /// (or cannot be looked at). If an actor renamed that directory away, or removed or replaced the
-    /// entry, the entry cannot be found where the outcome would say, and that is reported as tampering.
-    /// Syncing that directory, which changed as well as the parent, is up to the caller.
-    fn retained(&self, expected: Option<ObjectIdentity>) -> bool {
+    /// recorded name still leads to the directory that holds it and the entry in it was looked at and is
+    /// still `expected`. If an actor renamed that directory away, or removed or replaced the entry, or
+    /// the look fails, the entry cannot be shown where the outcome would say, and that is reported as
+    /// tampering (it is not known to be absent, but nothing can be proved). Syncing that directory,
+    /// which changed as well as the parent, is up to the caller.
+    fn retained(&self, expected: ObjectIdentity) -> bool {
         self.quarantine.is_named(&self.dir.handle) && self.quarantine.holds(expected)
     }
 }

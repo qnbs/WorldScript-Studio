@@ -74,12 +74,14 @@ pub enum RemovalOutcome {
     /// the window in the module documentation), and that object is gone; or the entry could not be put
     /// back and is not where the outcome would have said: an actor renamed the quarantine directory
     /// away, removed the entry, or replaced it with another object, so the authenticated object cannot
-    /// be found by the name that was recorded. Nothing can be undone: the caller must treat the
-    /// directory as tampered with, and never count this as a success.
+    /// be found by the name that was recorded; or a look at the entry failed (a permission lost), so it
+    /// cannot be shown to be where the outcome would say, whether or not it is. Nothing can be undone:
+    /// the caller must treat the directory as tampered with, and never count this as a success.
     Disturbed,
     /// Unix only: an error happened after the entry was moved into the quarantine directory and it
     /// could not be put back (`cause` is the error that started it). The entry is in the quarantine
-    /// directory (`.h1q-*`, as `x`), found with a listing; [`PinnedDir::remove_leftover_file`] takes it
+    /// directory (`.h1q-*`, as `x`; it was looked at there, a look that fails gives
+    /// [`Disturbed`](Self::Disturbed)), found with a listing; [`PinnedDir::remove_leftover_file`] takes it
     /// from there after authenticating it again. Nothing was removed. This reports a failure by its
     /// cause, so both directories are synced best effort and a crash may undo where the entry is.
     Stranded { cause: PinnedError },
