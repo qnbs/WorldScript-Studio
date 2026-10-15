@@ -1261,7 +1261,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   separate slice, recorded as an acceptance criterion on #359.
 - Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) and the authenticated page access with the page-local cursor (C2c-1: `verify_inventory`, `page`) and the iteration with a caller-supplied idempotent step, the crash/resume evidence and the exit to `VERIFY` (C2c-2: `convert_next`, `finish_convert`) exist, but nothing converts a real record: the `EntryStep` that moves a source record to the target epoch (Gate 5), the `VERIFY` work that reads every record under the target policy and the phases after it.
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers. The ordinary write path already refuses every operation while the root binds a live migration, in every phase (E1, with evidence); what remains is the phase-aware relaxation (`PREPARE`/`DONE` through `ordinary_mutating_writes_admitted`, E2) and the `ADMIT` transition requiring exclusive admission before the final capture has a caller (E3; Gate 4E/5; acceptance criterion on #359).
-- Inheriting unchanged pages: the C1b-2 reader now returns the authenticated page references, so the store may accept a page that keeps an earlier generation if those references name exactly its bytes (acceptance criterion on #359, a follow-up slice). Until then every page of a capture is rewritten at the new revision.
+- Inheriting unchanged pages: delivered for the in-memory capture path by Gate 4 slice I1a (below, "Inheriting unchanged pages"); the streamed path (I1b) still rewrites every page at the new revision.
 - Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read as inventory (a live capture's own commit reads back the pages it staged, `load_staged_page`; and only the sweep below, in `test-support` builds, opens an abandoned pending file, to prove it ours before it unlinks it). Delivered by Gate 4 slice R1 (below, "Reclaiming abandoned inventory staging"), which adds the directory-removal primitive and a sweep that proves no live attempt can own what it removes.
 - The cross-process lease CAS.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
@@ -1496,3 +1496,39 @@ read from is pinned for the whole sweep, and the sweep stops before the next rem
 the lock names; (d) a stored set is never entered by a pending directory's walk, proven by a test that swaps a
 stored set into a dead pending name; (e) the Unix symlink, Windows junction (including a non-empty target),
 crash-after-partial-unlink and sync-failure cases stay covered. Stored page sets are not reclaimed (I1).
+
+### Inheriting unchanged pages (Gate 4 slice I1a)
+
+`capture_inventory` has always allowed a page to keep "the earlier generation that still names it" (a generation in
+`1..=revision`), and the reader reads any generation through the authenticated page references. What refused it was
+the store: a page had to carry exactly the successor's revision, because the predecessor's authenticated references
+were not available to prove that an older page is the predecessor's page. `VerifiedInventory::page_refs` now
+provides them.
+
+`promote_inventory_set_inheriting_fenced(ctx, set, predecessor)` accepts a page whose generation is not the
+successor's revision only if its reference (index, generation, entry count and the content digest of its exact
+envelope bytes) equals the reference at the same index in `predecessor`, and `predecessor` was verified for exactly
+the committed manifest the set is written under. Refused, before the first byte and with `GenerationMismatch`: no
+predecessor (the strict `promote_inventory_set_fenced` keeps its rule), a predecessor of another manifest (even one
+whose pages are the same), an index beyond its page count, a re-sealed copy of the same entries (other bytes) and a
+changed page that claims an older generation. An inherited page is stored again under the new set's own
+`page-<i>/generation-<old>.wsr1` through the usual staging and promotion path, so each stored set stays
+self-contained: nothing refers across sets, deleting a set never changes another one, and no reference counting
+is needed (the disk cost of unchanged pages is accepted; a hard link can follow). The root-bound
+`commit_inventory_capture` (and the exclusive final capture that shares it) reads back and verifies the stored page
+set the root names when, and only when, a page keeps an earlier generation; a capture whose pages are all at the
+successor's revision reads nothing back. A set with inherited pages reads back with the mixed generations
+(`verify_stored_inventory`, `load_inventory_page`).
+
+Proof: `gate4d_inventory_inherit_test` (four cases: an inherited page stored again and read back with generations
+`[g, g', g]`, the strict store still refusing and creating nothing, the three ways to claim inheritance wrongly, a
+predecessor of another manifest) and `gate4d_root_binding_test::a_recapture_keeps_the_pages_the_stored_predecessor_names…`
+(a re-sealed copy is refused with the root and the journal tree unchanged, the honest recapture advances the binding
+and verifies with generations `[2, 3, 2]`); mutation-checked for the reference equality, the manifest equality and
+the root-bound branch.
+
+Not in this slice: the streamed path (I1b: the builder would compare each pushed page with the predecessor's page of
+the same index), and reclaiming stored sets (I1c: with inheritance the generation-based proof of an abandoned set no
+longer holds, so the proof becomes "no live, prepared or retryable manifest names this digest"; it deletes, so it
+stays behind `test-support` until H1, like the R1 sweep). The R1 sweep is unaffected: an inherited page never lives in
+a pending directory, and a pending page whose generation is not the pending revision is kept.

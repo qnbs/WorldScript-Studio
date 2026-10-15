@@ -1873,6 +1873,96 @@ fn a_capture_stores_the_pages_publishes_the_manifest_and_advances_the_binding() 
     assert!(page_dir.is_dir());
 }
 
+/// Entry `n` as `entry` builds it, with other evidence: the same record, changed.
+fn changed_entry(n: u32) -> JournalInventoryEntry {
+    let unchanged = entry(n);
+    let source = JournalInventorySource {
+        authority_kind: source_authority_kind::LEGACY_PLAINTEXT,
+        physical_authority_kind: source_physical_authority_kind::TAURI_FILESYSTEM,
+        generation: None,
+        evidence_digest: Some([0xEE; 32]),
+        foreign: None,
+    };
+    JournalInventoryEntry::new(unchanged.record, source).unwrap()
+}
+
+/// A second capture over `first`'s successor: its page 1 is rewritten at the new revision, its pages 0
+/// and 2 keep `first`'s own bytes, except that `reseal_first` seals page 0 again.
+fn recapture(first: &Capture, reseal_first: bool) -> Capture {
+    let committed = first.successor.clone();
+    let revision = committed.journal_revision + 1;
+    let rewritten =
+        JournalPage::new(1, revision, vec![changed_entry(2), changed_entry(3)]).unwrap();
+    let rewritten_bytes =
+        seal_inventory_pages(&journal_key(), &committed, std::slice::from_ref(&rewritten))
+            .unwrap()
+            .remove(0);
+    let first_bytes = if reseal_first {
+        seal_inventory_pages(
+            &journal_key(),
+            &committed,
+            std::slice::from_ref(&first.pages[0]),
+        )
+        .unwrap()
+        .remove(0)
+    } else {
+        first.envelopes[0].clone()
+    };
+    let pages = vec![first.pages[0].clone(), rewritten, first.pages[2].clone()];
+    let envelopes = vec![first_bytes, rewritten_bytes, first.envelopes[2].clone()];
+    let fence = MigrationFence::from_manifest(&committed);
+    let successor = capture_inventory(&committed, &fence, &seal_all(&pages, &envelopes)).unwrap();
+    Capture {
+        committed,
+        successor,
+        pages,
+        envelopes,
+    }
+}
+
+fn verified_generations(fixture: &Fixture, binding: &LiveMigration) -> Vec<u64> {
+    let op = WriteOperationId::generate().unwrap();
+    let key = journal_key();
+    let mut fs = StdFs;
+    let mut ctx = JournalDurableContext::new(&mut fs, &key, &fixture.journal_dir, &op);
+    let verified = verify_stored_inventory(&mut ctx, binding).unwrap();
+    let generations = verified.page_refs().iter();
+    generations
+        .map(|reference| reference.page_generation)
+        .collect()
+}
+
+#[test]
+fn a_recapture_keeps_the_pages_the_stored_predecessor_names_and_refuses_a_resealed_copy() {
+    let (mut fixture, one, _) = bound_at_one();
+    let first = Capture::over(&one, 5);
+    fixture.capture(&first).unwrap();
+    let (tree, root) = (fixture.journal_tree(), fixture.loaded().root);
+    // Page 0 sealed again has the same entries and other bytes: not the page the predecessor names.
+    let resealed = fixture.capture(&recapture(&first, true));
+    assert_eq!(
+        resealed,
+        Err(AuthorityError::Journal(JournalDurableError::Journal(
+            JournalError::GenerationMismatch
+        )))
+    );
+    assert_eq!(
+        (fixture.journal_tree(), fixture.loaded().root),
+        (tree, root)
+    );
+    let second = recapture(&first, false);
+    fixture.capture(&second).unwrap();
+    let dir = fixture.journal_dir.clone();
+    let advanced = binding_of(&second.successor, digest_of(&dir, 3));
+    assert_eq!(
+        (
+            fixture.loaded().root.live_migration,
+            verified_generations(&fixture, &advanced)
+        ),
+        (Some(advanced.clone()), vec![2, 3, 2])
+    );
+}
+
 #[test]
 fn a_capture_refuses_without_a_bound_migration_and_writes_nothing() {
     let mut fixture = Fixture::new();

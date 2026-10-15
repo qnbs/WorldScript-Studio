@@ -1,16 +1,15 @@
 //! Shared Gate 4D inventory fixtures: a captured and sealed inventory over a committed journal (see
 //! `journal_fixture`) and the fenced store drivers.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::journal_fixture::*;
 use worldscript_secure_storage::{
-    capture_inventory, inventory_page_dir, journal_page_set_digest, page_ref_for, parse_envelope,
-    promote_inventory_set_fenced, seal_inventory_pages, source_authority_kind,
-    source_physical_authority_kind, DirectoryDurability, DurableFs, InventorySetWrite,
-    JournalDurableContext, JournalDurableError, JournalInventoryEntry, JournalInventorySource,
-    JournalManifest, JournalPage, Key, LiveMigration, MigrationFence, RecordClass, RecordIdentity,
-    RecordMeta, SealedPage, WriteOperationId,
+    capture_inventory, parse_envelope, promote_inventory_set_fenced, seal_inventory_pages,
+    source_authority_kind, source_physical_authority_kind, DirectoryDurability, DurableFs,
+    InventorySetWrite, JournalDurableContext, JournalDurableError, JournalInventoryEntry,
+    JournalInventorySource, JournalManifest, JournalPage, Key, LiveMigration, MigrationFence,
+    RecordClass, RecordIdentity, RecordMeta, SealedPage, WriteOperationId,
 };
 
 pub fn entry(n: u32) -> JournalInventoryEntry {
@@ -161,15 +160,6 @@ pub fn promote_as<F: DurableFs>(
     promote_inventory_set_fenced(&mut ctx, set)
 }
 
-pub fn page_file(dir: &Path, digest: &[u8; 32], index: u32) -> PathBuf {
-    inventory_page_dir(dir, digest, index).join("generation-4.wsr1")
-}
-
-/// Page 0's envelope sealed for `epoch` under the journal key.
-pub fn sealed_at_epoch(captured: &Captured, epoch: u64) -> Vec<u8> {
-    sealed_under(captured, &key(), epoch)
-}
-
 /// Page 0's envelope sealed for `epoch` under `key`: with another key it is what a page of another
 /// epoch really looks like, which authenticates only under that epoch's own key.
 pub fn sealed_under(captured: &Captured, key: &Key, epoch: u64) -> Vec<u8> {
@@ -181,27 +171,4 @@ pub fn sealed_under(captured: &Captured, key: &Key, epoch: u64) -> Vec<u8> {
     };
     let identity = RecordIdentity::new(RecordClass::MigrationPage, &[OPERATION, "0"]).unwrap();
     captured.pages[0].seal(key, &identity, meta).unwrap()
-}
-
-/// Replaces the captured pages by `page`, sealed; the successor is left as it was.
-pub fn reseal(captured: &mut Captured, page: JournalPage) {
-    captured.envelopes = seal_inventory_pages(
-        &key(),
-        &captured.committed_manifest,
-        std::slice::from_ref(&page),
-    )
-    .unwrap();
-    captured.pages = vec![page];
-}
-
-/// Binds the successor's page-set digest to the pages as they are now, as a hand-built manifest
-/// would.
-pub fn rebind(captured: &mut Captured) {
-    let refs: Vec<_> = captured
-        .pages
-        .iter()
-        .zip(&captured.envelopes)
-        .map(|(page, envelope)| page_ref_for(page, envelope).unwrap())
-        .collect();
-    captured.successor.journal_page_set_digest = journal_page_set_digest(&refs).unwrap();
 }

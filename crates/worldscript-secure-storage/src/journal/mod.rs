@@ -139,7 +139,8 @@ pub use durable::{
 pub use inventory::{ForeignInventoryExtension, JournalInventoryEntry, JournalInventorySource};
 pub use inventory_read::{load_inventory_page, verify_stored_inventory, VerifiedInventory};
 pub use inventory_store::{
-    inventory_page_dir, promote_inventory_set_fenced, seal_inventory_pages, InventorySetWrite,
+    inventory_page_dir, promote_inventory_set_fenced, promote_inventory_set_inheriting_fenced,
+    seal_inventory_pages, InventorySetWrite,
 };
 pub use manifest::{journal_envelope_epoch, JournalManifest, JournalPageRef, ManifestRead};
 pub use page::JournalPage;
