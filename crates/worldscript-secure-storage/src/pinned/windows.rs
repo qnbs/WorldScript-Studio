@@ -19,6 +19,8 @@
 //! (nothing: such a directory is empty) into an explicit `Redirected`.
 
 pub(in crate::pinned) mod nt;
+#[cfg(feature = "test-support")]
+pub(super) mod removal;
 
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
@@ -37,7 +39,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 
 use super::names;
 use super::{ObjectIdentity, PinnedError};
-use crate::durable::EntryKind;
+use crate::durable::{DirectoryDurability, EntryKind};
 use crate::root_lock::sys::{file_identity, open_as_itself, query_handle, still_named};
 
 pub(super) type DirHandle = File;
@@ -216,6 +218,11 @@ pub(super) fn entries(
 
 pub(super) fn is_still_named(handle: &DirHandle, path: &Path) -> Result<bool, PinnedError> {
     still_named(handle, path).map_err(PinnedError::from)
+}
+
+/// Windows offers no directory sync through a handle that is open for reading.
+pub(super) fn sync_dir(_dir: &DirHandle) -> Result<DirectoryDurability, PinnedError> {
+    Ok(DirectoryDurability::NotConfirmed)
 }
 
 pub(super) fn link_count(file: &File) -> Result<u64, PinnedError> {

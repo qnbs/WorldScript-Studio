@@ -12,7 +12,10 @@ use rustix::fs::{fstat, open, openat, statat, AtFlags, Dir, FileType, Mode, OFla
 use rustix::io::Errno;
 
 use super::{ObjectIdentity, PinnedError};
-use crate::durable::EntryKind;
+use crate::durable::{DirectoryDurability, EntryKind};
+
+#[cfg(feature = "test-support")]
+pub(super) mod removal;
 
 pub(super) type DirHandle = File;
 
@@ -208,6 +211,11 @@ pub(super) fn is_still_named(handle: &DirHandle, path: &Path) -> Result<bool, Pi
         };
     }
     Ok(identity_of(&current)? == held)
+}
+
+pub(super) fn sync_dir(dir: &DirHandle) -> Result<DirectoryDurability, PinnedError> {
+    dir.sync_all().map_err(PinnedError::from)?;
+    Ok(DirectoryDurability::Confirmed)
 }
 
 pub(super) fn link_count(file: &File) -> Result<u64, PinnedError> {
