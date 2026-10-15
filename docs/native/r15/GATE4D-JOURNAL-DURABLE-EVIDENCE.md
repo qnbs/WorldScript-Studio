@@ -1261,7 +1261,7 @@ this API's reach; the journal key route of D2b-3 fails closed on a `Revoked` or 
   separate slice, recorded as an acceptance criterion on #359.
 - Conversion over the verified page set: the entry gate (C2a: exclusive admission by construction, the root-bound manifest re-read, `final_inventory_captured = 1`; maintainer decision D) the lease renewal, entering `CONVERT` and the cursor through it (C2b-1 and C2b-2: `ConversionSession::renew_lease`, `enter_convert`, `advance_cursor`) and the authenticated page access with the page-local cursor (C2c-1: `verify_inventory`, `page`) and the iteration with a caller-supplied idempotent step, the crash/resume evidence and the exit to `VERIFY` (C2c-2: `convert_next`, `finish_convert`) exist, but nothing converts a real record: the `EntryStep` that moves a source record to the target epoch (Gate 5), the `VERIFY` work that reads every record under the target policy and the phases after it.
 - Write barrier of the final capture: `commit_inventory_capture` takes no admission guard; the barrier is the durable `ADMIT` phase the orchestrator establishes by draining writers. The ordinary write path already refuses every operation while the root binds a live migration, in every phase (E1, with evidence); what remains is the phase-aware relaxation (`PREPARE`/`DONE` through `ordinary_mutating_writes_admitted`, E2) and the `ADMIT` transition requiring exclusive admission before the final capture has a caller (E3; Gate 4E/5; acceptance criterion on #359).
-- Inheriting unchanged pages: delivered for the in-memory capture path by Gate 4 slice I1a (below, "Inheriting unchanged pages"); the streamed path (I1b) still rewrites every page at the new revision.
+- Inheriting unchanged pages: delivered for the in-memory capture path by Gate 4 slice I1a (below, "Inheriting unchanged pages"); the streamed path is delivered by Gate 4 slice I1b ("Inheriting unchanged pages in a streamed capture", below).
 - Reclaiming abandoned pending directories: an attempt that was killed, or a finished capture dropped without `discard`, leaves inert files under `inventory/pending-*`, and every attempt leaves its empty page directories; none is authority or ever read as inventory (a live capture's own commit reads back the pages it staged, `load_staged_page`; and only the sweep below, in `test-support` builds, opens an abandoned pending file, to prove it ours before it unlinks it). Delivered by Gate 4 slice R1 (below, "Reclaiming abandoned inventory staging"), which adds the directory-removal primitive and a sweep that proves no live attempt can own what it removes.
 - The cross-process lease CAS.
 - Mixed-key conversion, Gate 4E/5/6/7, production authority switch.
@@ -1527,8 +1527,40 @@ predecessor of another manifest) and `gate4d_root_binding_test::a_recapture_keep
 and verifies with generations `[2, 3, 2]`); mutation-checked for the reference equality, the manifest equality and
 the root-bound branch.
 
-Not in this slice: the streamed path (I1b: the builder would compare each pushed page with the predecessor's page of
-the same index), and reclaiming stored sets (I1c: with inheritance the generation-based proof of an abandoned set no
+Not in this slice: the streamed path (I1b, below), and reclaiming stored sets (I1c: with inheritance the generation-based proof of an abandoned set no
 longer holds, so the proof becomes "no live, prepared or retryable manifest names this digest"; it deletes, so it
 stays behind `test-support` until H1, like the R1 sweep). The R1 sweep is unaffected: an inherited page never lives in
 a pending directory, and a pending page whose generation is not the pending revision is kept.
+
+### Inheriting unchanged pages in a streamed capture (Gate 4 slice I1b)
+
+`StreamedCapture::push_page_inheriting(ctx, entries, predecessor)` is `push_page` for a capture over a stored
+predecessor: the next page's entries are compared with the predecessor's page of the same index, which is read back
+and authenticated first (`load_inventory_page`: the envelope must hash to the reference and open as that page), one
+page at a time. If the entries are exactly the predecessor's, the page is **kept**: it takes the predecessor's
+reference and generation, nothing is sealed or written for it, and its entries still go into the inventory digest
+(so the successor is exactly what `capture_inventory` builds from the same pages; a test compares them). A page that
+differs, or lies beyond the predecessor's pages, is staged as before at the new revision. The predecessor must have
+been verified for exactly the manifest the capture started from (`LiveBindingMismatch` otherwise, nothing created),
+and the usual context check (journal directory, a key that opens the starting manifest) applies first.
+
+`StagedCapture` remembers which pages are kept (`is_inherited`, `inherited_pages`) and the predecessor's page-set
+digest. `load_staged_page` reads a kept page from the predecessor's set directory (the envelope must still hash to
+the reference), and `promote_staged_inventory_fenced` stores it under the new set's own directory like any other
+page, without the strict "generation equals the revision" rule for exactly those pages, so the set stays
+self-contained. Discarding a capture removes only what it staged: the pending directory never held a kept page, and
+the predecessor's set is untouched. The root-bound session starts with `begin_inheriting_streamed_capture`, which
+verifies the stored set the root names once (a read proportional to the predecessor's pages) and then keeps unchanged
+pages on every `push_page`; `begin_streamed_capture` is unchanged.
+
+Proof: `gate4d_stream_inherit_test` (five cases: kept and staged pages with mixed generations `[g, g', g]`, successor
+equal to the in-memory capture, promotion and read-back; an unchanged inventory that stages nothing; a longer
+inventory and a shifted page cut that keep only what is equal; a predecessor of another manifest or a foreign key
+that creates nothing; a discard that leaves the predecessor's set verifying) and
+`gate4d_root_binding_test::a_streamed_recapture_keeps_the_pages_the_stored_predecessor_names_and_commits` (one staged
+file for three pages, the root binding advances and the set verifies with generations `[2, 3, 2]`). Mutation-checked:
+keeping every page that has a predecessor page, the strict generation rule on a kept page, reading a kept page from
+the pending directory, and a session that never takes the inheriting path each fail a test.
+
+The R1 sweep is unaffected: a pending directory of an inheriting capture simply holds fewer pages, and everything in
+it still has to be this capture's own staged page at the pending revision. Stored-set reclamation (I1c) stays next.
