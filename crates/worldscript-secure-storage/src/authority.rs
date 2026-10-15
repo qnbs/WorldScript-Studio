@@ -52,8 +52,9 @@ use crate::journal::{
     promote_staged_inventory_fenced, publish_manifest_fenced, publish_phase_transition_fenced,
     publish_renewal_fenced, publish_takeover_fenced, verify_stored_inventory, CandidateConflict,
     CaptureStart, InventorySetWrite, JournalDurableContext, JournalDurableError,
-    JournalInventoryEntry, JournalManifest, JournalPage, JournalTakeover, MigrationExecutionError,
-    MigrationFence, SealedPage, StagedCapture, StagedPromotion, StreamedCapture, VerifiedInventory,
+    JournalInventoryEntry, JournalManifest, JournalPage, JournalTakeover, LeaseClock,
+    LeaseClockError, MigrationExecutionError, MigrationFence, SealedPage, StagedCapture,
+    StagedPromotion, StreamedCapture, TrustedLeaseTimeObservation, VerifiedInventory,
 };
 #[cfg(feature = "test-support")]
 use crate::journal::{reclaim_with_binding, ReclaimError, ReclaimRequest, Reclaimed};
@@ -144,6 +145,9 @@ pub enum AuthorityError {
     /// Another root commit event is in flight, so the phase transition did not start. Nothing was
     /// written; the admission is still held and the call may be repeated.
     RootBusy,
+    /// The clock of a takeover could not be read, or answered with a value no clock gives (Gate 4 slice
+    /// Q1). Returned before any journal write.
+    LeaseClock(LeaseClockError),
     /// The sweep of abandoned inventory staging refused or stopped (`reclaim_abandoned_inventory`).
     #[cfg(feature = "test-support")]
     Reclaim(ReclaimError),
@@ -1301,8 +1305,10 @@ where
 #[derive(Clone, Copy)]
 pub struct JournalTakeoverCommit<'a> {
     pub claim: JournalCheckpoint<'a>,
-    /// The caller's clock; Core never reads one. A lease is expired when `now >= lease_expires`.
-    pub now_unix_ms: u64,
+    /// The adapter's clock, read once inside the takeover under the root-commit event; Core never reads
+    /// the system clock and takes no bare timestamp (Gate 4 slice Q1). A lease is expired when
+    /// `now >= lease_expires`.
+    pub clock: &'a dyn LeaseClock,
 }
 
 /// Takes over the journal for a new owner and advances the root binding to the claim (§5.4, §10.1).
@@ -1327,6 +1333,10 @@ pub fn commit_journal_takeover<F: DurableFs, P: KeyProvider>(
     check_operation_id(&claim.manifest.operation_id)
         .map_err(|_| AuthorityError::InvalidOperationId)?;
     let held = acquire_root_commit(layout)?;
+    // Read under the root-commit event and before any I/O: an unavailable or implausible clock refuses
+    // here, and the same reading judges the publish and the binding advance.
+    let now =
+        TrustedLeaseTimeObservation::observe(takeover.clock).map_err(AuthorityError::LeaseClock)?;
     let commit = journal_catalog_commit(&claim);
     let committed = committed_binding(fs, provider, layout, commit)?;
     let key = route_journal_key(fs, provider, layout, claim.journal)?;
@@ -1338,7 +1348,7 @@ pub fn commit_journal_takeover<F: DurableFs, P: KeyProvider>(
                 manifest: claim.manifest,
                 fence: claim.fence,
                 committed: &committed,
-                now_unix_ms: takeover.now_unix_ms,
+                now: &now,
             },
         )
         .map_err(AuthorityError::Journal)?
@@ -1348,7 +1358,7 @@ pub fn commit_journal_takeover<F: DurableFs, P: KeyProvider>(
     let step = JournalStep {
         binding: BindingStep::Takeover {
             advance: &advance,
-            now_unix_ms: takeover.now_unix_ms,
+            now_unix_ms: now.unix_ms(),
         },
         key: &key,
     };

@@ -16,6 +16,7 @@ mod manifest_verify;
 mod page;
 // The sweep is part of no production build until handle-relative I/O (H1) closes the check-then-use windows
 // of a path-based removal: see the Gate 4D evidence, "Reclaiming abandoned inventory staging".
+mod lease_clock;
 #[cfg(feature = "test-support")]
 mod reclaim;
 mod renewal;
@@ -142,6 +143,9 @@ pub use inventory_store::{
     inventory_page_dir, promote_inventory_set_fenced, promote_inventory_set_inheriting_fenced,
     seal_inventory_pages, InventorySetWrite,
 };
+#[cfg(feature = "test-support")]
+pub use lease_clock::FixedLeaseClock;
+pub use lease_clock::{LeaseClock, LeaseClockError, TrustedLeaseTimeObservation};
 pub use manifest::{journal_envelope_epoch, JournalManifest, JournalPageRef, ManifestRead};
 pub use page::JournalPage;
 #[cfg(feature = "test-support")]

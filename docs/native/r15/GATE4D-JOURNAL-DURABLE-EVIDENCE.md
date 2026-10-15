@@ -1564,3 +1564,42 @@ the pending directory, and a session that never takes the inheriting path each f
 
 The R1 sweep is unaffected: a pending directory of an inheriting capture simply holds fewer pages, and everything in
 it still has to be this capture's own staged page at the pending revision. Stored-set reclamation (I1c) stays next.
+
+### Takeover with a trusted clock observation (Gate 4 slice Q1)
+
+The normative direction is the maintainer's delegated decision Q1-D1, mirrored on GH #359 before this code: lease
+expiry makes a new owner *eligible*, the authority is the fence advanced under the root lock, and Core reads no clock.
+
+**Ingress.** The mutation-capable takeover no longer takes a number. `JournalTakeoverCommit` carries a
+`&dyn LeaseClock` (the native adapter implements it), and `commit_journal_takeover` reads it once, right after the
+root-commit event is taken and before any I/O, into an opaque `TrustedLeaseTimeObservation`; the same reading judges
+the journal publish (`publish_takeover_fenced` takes the observation, not a `u64`) and the binding advance. The
+observation has no constructor from a number outside the crate (two `compile_fail` doctests pin that), so no UI,
+WebView, plugin, file or remote timestamp can be passed as a clock; whoever implements `LeaseClock` is the trust
+boundary, which is native code. A clock that cannot be read (`AuthorityError::LeaseClock(Unavailable)`) or answers
+zero, an unset clock (`Implausible`), refuses before anything is written. `FixedLeaseClock` exists with `test-support`
+only. The pure predicate `assert_takeover_successor` keeps its `now_unix_ms` input and stays testable.
+
+**Boundary, stated plainly.** The wall clock of the operating system is not attested. A clock set back only makes a
+takeover refuse; one set forward can make it eligible early. Protection against a compromised OS clock is not claimed,
+and no new time service, grace period or heuristic clock was added.
+
+**Predicate hardening.** A takeover whose new lease owner is the committed lease owner is refused
+(`InvalidTakeoverLease`): extending one's own lease is a renewal, which needs no clock and stays as it was. A
+committed lease whose fields contradict each other (an owner flag without a named owner or without an expiry, or an
+owner or an expiry without the flag) is refused rather than guessed at. Unchanged and already proven: eligible only if
+the lease has no owner or `now >= lease_expires` (equal is eligible), the new expiry strictly after `now`, fence + 1 and
+revision + 1 with checked arithmetic, ownership-only change, a terminal journal refused.
+
+**Proof.** `gate4d_root_binding_test`: an unset or unreadable clock refuses with the journal tree and the root
+unchanged; the lease owner cannot take over its own lease through the root; of two competing takeovers over the same
+committed state the first wins and the second is stale (`StaleMigrationOwner`) and writes nothing. `gate4d_migration_state_test`:
+self-takeover and the three contradicting leases. `lease_clock` unit test and doctests. The existing proofs (expiry
+boundary, retry adoption, former owner refused, a takeover prepared before a renewal is stale) run against the
+observation unchanged. Mutation-checked: a zero clock accepted, a self-takeover accepted and contradicting lease fields
+accepted each fail a test.
+
+Not in this slice: the native adapter's `LeaseClock` (no caller of the crate exists yet; Gate 5 provides it and has to
+show the clock source on each supported OS), clock-regression detection (the record holds no earlier reading to compare
+with), and any H1 work.
+

@@ -22,15 +22,15 @@ use worldscript_secure_storage::{
     source_physical_authority_kind, transition_phase, verify_stored_inventory, write_key_epoch,
     AdmissionScope, AuthorityError, BindingAdvance, CandidateConflict, CatalogChange,
     CatalogCommit, CatalogDescriptor, CommitMarker, CommittedGeneration, DirectoryDurability,
-    DurableFs, ExclusiveAdmissionGuard, InstallationScopeId, InventoryCapture, JournalCheckpoint,
-    JournalDurableContext, JournalDurableError, JournalError, JournalInventoryEntry,
-    JournalInventorySource, JournalManifest, JournalPage, JournalSource, JournalTakeoverCommit,
-    KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
-    MarkerBody, MigrationExecutionError, MigrationFence, MigrationPhase, RecordClass,
-    RecordIdentity, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
-    RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, SealedPage, SessionBegin,
-    StageFailureKind, StagedCapture, StagedPage, StagingSession, StdFs, StreamedInventoryCapture,
-    WriteOperationId,
+    DurableFs, ExclusiveAdmissionGuard, FixedLeaseClock, InstallationScopeId, InventoryCapture,
+    JournalCheckpoint, JournalDurableContext, JournalDurableError, JournalError,
+    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, JournalSource,
+    JournalTakeoverCommit, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LeaseClock,
+    LeaseClockError, LiveMigration, LoadedCatalog, MarkerBody, MigrationExecutionError,
+    MigrationFence, MigrationPhase, RecordClass, RecordIdentity, RootBody, RootCommitEvidence,
+    RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout,
+    SealedPage, SessionBegin, StageFailureKind, StagedCapture, StagedPage, StagingSession, StdFs,
+    StreamedInventoryCapture, WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -395,6 +395,15 @@ impl Fixture {
         now_unix_ms: u64,
         route: Route<'_>,
     ) -> Result<RootCommitted, AuthorityError> {
+        self.takeover_clocked(claim, &FixedLeaseClock(now_unix_ms), route)
+    }
+
+    fn takeover_clocked(
+        &mut self,
+        claim: &JournalManifest,
+        clock: &dyn LeaseClock,
+        route: Route<'_>,
+    ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
         let op = self
             .operation
@@ -413,7 +422,7 @@ impl Fixture {
                 active_key_epoch: route.epoch,
                 conflict: self.conflict,
             },
-            now_unix_ms,
+            clock,
         };
         commit_journal_takeover(
             &mut StdFs,
@@ -1428,6 +1437,96 @@ fn a_lease_that_has_not_expired_refuses_the_takeover_before_any_journal_write() 
             .live_migration
             .map(|binding| binding.fencing_generation),
         Some(FENCE + 1)
+    );
+}
+
+/// A clock that cannot be read.
+struct UnreadableClock;
+
+impl LeaseClock for UnreadableClock {
+    fn unix_ms(&self) -> Result<u64, LeaseClockError> {
+        Err(LeaseClockError::Unavailable)
+    }
+}
+
+#[test]
+fn a_clock_that_cannot_be_read_or_is_unset_refuses_the_takeover_before_any_write() {
+    let mut zero = manifest_at(OPERATION, 0, FENCE);
+    zero.has_lease_owner = true;
+    zero.lease_owner_id = Some("old-owner".into());
+    zero.lease_expires_unix_ms = Some(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let (before, journal_before) = (fixture.loaded().root, fixture.journal_files());
+    let claim = claim_over(&zero, 20_000);
+    let key_ref = fixture.key_ref.clone();
+    let route = || Route {
+        key_ref: &key_ref,
+        epoch: 1,
+    };
+    let unset = fixture.takeover_clocked(&claim, &FixedLeaseClock(0), route());
+    let unreadable = fixture.takeover_clocked(&claim, &UnreadableClock, route());
+    assert_eq!(
+        (
+            unset,
+            unreadable,
+            fixture.journal_files() == journal_before,
+            fixture.loaded().root == before
+        ),
+        (
+            Err(AuthorityError::LeaseClock(LeaseClockError::Implausible)),
+            Err(AuthorityError::LeaseClock(LeaseClockError::Unavailable)),
+            true,
+            true
+        )
+    );
+}
+
+#[test]
+fn the_lease_owner_cannot_take_over_its_own_lease_through_the_root() {
+    let mut zero = manifest_at(OPERATION, 0, FENCE);
+    zero.has_lease_owner = true;
+    zero.lease_owner_id = Some("old-owner".into());
+    zero.lease_expires_unix_ms = Some(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let (before, journal_before) = (fixture.loaded().root, fixture.journal_files());
+    let mut own = claim_over(&zero, 20_000);
+    own.lease_owner_id = Some("old-owner".into());
+    assert_eq!(
+        fixture.takeover(&own, 20_000),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::InvalidTakeoverLease
+        )))
+    );
+    assert_eq!(
+        (
+            fixture.journal_files() == journal_before,
+            fixture.loaded().root == before
+        ),
+        (true, true)
+    );
+}
+
+#[test]
+fn of_two_competing_takeovers_the_first_wins_and_the_second_is_stale_and_writes_nothing() {
+    let (mut fixture, _) = bound_at_zero();
+    let zero = manifest_at(OPERATION, 0, FENCE);
+    let first = claim_over(&zero, 1_000);
+    let mut second = claim_over(&zero, 1_000);
+    second.lease_owner_id = Some("other-owner".into());
+    fixture.takeover(&first, 1_000).unwrap();
+    let (after_first, journal_after_first) = (fixture.loaded().root, fixture.journal_files());
+    assert_eq!(
+        fixture.takeover(&second, 1_000),
+        Err(AuthorityError::Journal(JournalDurableError::Authority(
+            MigrationExecutionError::StaleMigrationOwner
+        )))
+    );
+    assert_eq!(
+        (
+            fixture.journal_files() == journal_after_first,
+            fixture.loaded().root == after_first
+        ),
+        (true, true)
     );
 }
 

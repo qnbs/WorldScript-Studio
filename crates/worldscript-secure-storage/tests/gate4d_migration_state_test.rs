@@ -667,6 +667,28 @@ fn a_takeover_needs_an_expired_lease() {
 }
 
 #[test]
+fn the_lease_owner_cannot_take_over_its_own_lease_and_a_contradicting_lease_is_not_guessed_at() {
+    let prev = leased_until(1_000);
+    let own = |m: &mut JournalManifest| m.lease_owner_id = prev.lease_owner_id.clone();
+    // An owner flag without a named owner, without an expiry, and an owner id without the flag.
+    let mut flag_without_owner = leased_until(1_000);
+    flag_without_owner.lease_owner_id = None;
+    let mut flag_without_expiry = leased_until(1_000);
+    flag_without_expiry.lease_expires_unix_ms = None;
+    let mut owner_without_flag = leased_until(1_000);
+    owner_without_flag.has_lease_owner = false;
+    let contradicting = [flag_without_owner, flag_without_expiry, owner_without_flag];
+    let mut outcomes = vec![claim_with(&prev, 2_000, own)];
+    outcomes.extend(
+        contradicting
+            .iter()
+            .map(|lease| assert_takeover_successor(lease, &claim(lease, 2_000), 2_000)),
+    );
+    let refused = Err(MigrationExecutionError::InvalidTakeoverLease);
+    assert_eq!(outcomes, vec![refused; 4]);
+}
+
+#[test]
 fn a_takeover_advances_the_fence_and_the_revision_by_exactly_one() {
     let prev = leased_until(1_000);
     let now = 2_000;
