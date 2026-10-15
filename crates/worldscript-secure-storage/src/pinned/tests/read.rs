@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use super::{link_to_dir, Scratch};
+use super::{link_to_dir, remove_dir_link, Scratch};
 use crate::durable::EntryKind;
 use crate::pinned::{PinnedDir, PinnedError};
 
@@ -16,7 +16,7 @@ fn a_directory_opens_names_itself_and_lists_its_entries() {
         (
             pinned.is_still_named(),
             pinned.entries(4),
-            pinned.path() == root.as_path()
+            pinned.path() == fs::canonicalize(&root).unwrap()
         ),
         (Ok(true), Ok(vec!["a".into()]), true)
     );
@@ -52,7 +52,20 @@ fn a_windows_name_that_the_system_would_reinterpret_is_refused() {
     let pinned = PinnedDir::open_root(&scratch.root()).unwrap();
     // A data stream, a device name, a name Win32 normalises, and a name of wildcard characters.
     let refused: Vec<Result<(), PinnedError>> = [
-        "a:stream", "con", "NUL.txt", "Com1", "lpt9", "a.", "a ", "a*", "a?", "a<b", "a|b", "a\"b",
+        "a:stream",
+        "con",
+        "NUL.txt",
+        "Com1",
+        "lpt9",
+        "COM\u{b9}",
+        "lpt\u{b2}.txt",
+        "a.",
+        "a ",
+        "a*",
+        "a?",
+        "a<b",
+        "a|b",
+        "a\"b",
     ]
     .into_iter()
     .map(|name| pinned.open_file(name).map(|_| ()))
@@ -143,14 +156,11 @@ fn a_symlink_to_a_file_and_a_fifo_are_refused() {
     let aside = scratch.aside();
     fs::write(aside.join("outside"), b"outside").unwrap();
     std::os::unix::fs::symlink(aside.join("outside"), root.join("link-to-file")).unwrap();
-    rustix::fs::mknodat(
-        rustix::fs::CWD,
-        root.join("fifo"),
-        rustix::fs::FileType::Fifo,
-        rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
-        0,
-    )
-    .unwrap();
+    let made = std::process::Command::new("mkfifo")
+        .arg(root.join("fifo"))
+        .status()
+        .unwrap();
+    assert!(made.success());
     let pinned = PinnedDir::open_root(&root).unwrap();
     assert_eq!(
         (
@@ -290,5 +300,65 @@ fn a_pinned_directory_and_its_ancestors_cannot_be_renamed_or_removed_while_held(
     assert_eq!(
         (attempts, pinned.is_still_named(), child.is_still_named()),
         ((true, true, true, true), Ok(true), Ok(true))
+    );
+}
+
+#[test]
+fn every_read_starts_at_the_beginning_of_the_file() {
+    let scratch = Scratch::new("rewind");
+    let root = scratch.root();
+    fs::write(root.join("a"), b"alpha").unwrap();
+    let mut file = PinnedDir::open_root(&root).unwrap().open_file("a").unwrap();
+    let too_small = file.read_at_most(4);
+    let retried = file.read_at_most(5);
+    let again = file.read_at_most(5);
+    assert_eq!(
+        (too_small, retried, again),
+        (
+            Err(PinnedError::TooLarge),
+            Ok(b"alpha".to_vec()),
+            Ok(b"alpha".to_vec())
+        )
+    );
+}
+
+#[test]
+fn a_root_given_through_a_link_is_resolved_once_and_a_retargeted_link_changes_nothing() {
+    let scratch = Scratch::new("ancestor-link");
+    let aside = scratch.aside();
+    for (side, content) in [("real", &b"original"[..]), ("decoy", &b"decoy"[..])] {
+        fs::create_dir_all(aside.join(side).join("root")).unwrap();
+        fs::write(aside.join(side).join("root").join("a"), content).unwrap();
+    }
+    let link = scratch.path().join("link");
+    link_to_dir(&aside.join("real"), &link);
+    let pinned = PinnedDir::open_root(&link.join("root")).unwrap();
+    let resolved_to_the_object =
+        pinned.path() == fs::canonicalize(aside.join("real").join("root")).unwrap();
+    remove_dir_link(&link);
+    link_to_dir(&aside.join("decoy"), &link);
+    let read = pinned.open_file("a").unwrap().read_at_most(16);
+    assert_eq!(
+        (resolved_to_the_object, read, pinned.is_still_named()),
+        (true, Ok(b"original".to_vec()), Ok(true))
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_ancestor_turned_into_a_link_to_the_renamed_tree_is_no_longer_the_name() {
+    let scratch = Scratch::new("ancestor-swap");
+    let parent = scratch.path().join("parent");
+    fs::create_dir_all(parent.join("root")).unwrap();
+    let pinned = PinnedDir::open_root(&parent.join("root")).unwrap();
+    let before = pinned.is_still_named();
+    let moved = scratch.path().join("parent-moved");
+    fs::rename(&parent, &moved).unwrap();
+    std::os::unix::fs::symlink(&moved, &parent).unwrap();
+    // A path-based check follows the new link and finds the same directory again; the walk does not.
+    let followed_by_path = fs::metadata(pinned.path()).is_ok();
+    assert_eq!(
+        (before, followed_by_path, pinned.is_still_named()),
+        (Ok(true), true, Ok(false))
     );
 }

@@ -1625,9 +1625,10 @@ cut into two PRs by proof boundary: this one (the non-destructive primitives and
 (the removal primitives, `test-support` only).
 
 **What exists.** A new module `pinned`, a parallel seam (`DurableFs` is unchanged). `PinnedDir::open_root` opens one
-directory with no-follow semantics, and `open_dir`, `open_file`, `entry_kind`, `entries(limit)` and `is_still_named`
-reach everything below it through the handle of a directory that was opened, never through a path again. A file is read
-through `PinnedFile` (`read_at_most`, `identity`, `link_count`). A name must be exactly one ordinary component (on
+directory with no-follow semantics and resolves it once to the path of the object itself, without any link in it;
+`open_dir`, `open_file`, `entry_kind`, `entries(limit)` and `is_still_named` reach everything below it through a
+directory that is held open (the descriptor on Unix, see below for Windows). A file is read through `PinnedFile`
+(`read_at_most`, which reads from the start on every call, `identity`, `link_count`). A name must be exactly one ordinary component (on
 Windows also no data stream, wildcard, trailing dot or space, or device name). A link, junction or other reparse point is
 refused at every component below the root (`Redirected`); the final component of the root is not followed either, and the
 ancestors of the root are resolved once by the operating system, as for every other operation of the crate. A listing is
@@ -1636,21 +1637,33 @@ bounded by a limit the caller gives, and a file is read only up to a bound.
 **Unix.** Every step is an `*at` call on the descriptor of the directory that was opened (`openat` with `O_NOFOLLOW`,
 `statat` with `AT_SYMLINK_NOFOLLOW`, `Dir::read_from` on the descriptor). A file is opened non-blocking and without a
 controlling terminal, so that a FIFO or device that a swap put at the name cannot hang or attach, and is refused after a
-type check on the descriptor.
+type check on the descriptor. `is_still_named` walks the root's path from `/` one component at a time with `O_NOFOLLOW`,
+so an ancestor that was renamed away, replaced or turned into a link (to the renamed tree, which a path-based check
+would follow back to the same directory) says no.
 
 **Windows.** A directory is pinned by an open handle that does not share delete, so neither it nor any of its ancestors can
 be renamed or replaced while it is held; a reparse point is opened as itself (`FILE_FLAG_OPEN_REPARSE_POINT`) and
-refused. Identity is the volume serial and 128-bit file id of the handle (the existing `file_identity` of `root_lock`,
-made `pub(crate)`); the link count is one more `GetFileInformationByHandleEx` call in a small function with a local
-`#[allow(unsafe_code)]` and a SAFETY comment, the pattern of `root_lock::sys`. No new dependency, feature or package.
+refused. A child is opened by the path of its pinned parent, **not** by an NT open relative to the parent handle: the
+root is resolved once, from the object that was opened (`canonicalize`, then checked to name the same object), to a path
+without any link, so a relative root, a changed working directory or a link among the root's ancestors that is retargeted
+later cannot redirect a child; and every directory on that path is pinned. Reviewers asked for `NtCreateFile` with a
+root directory handle instead; it was not taken because it adds a large unsafe surface (`OBJECT_ATTRIBUTES`,
+`UNICODE_STRING`, the `Wdk` feature) for the same effect on a file system that enforces the sharing rule, which is
+proven on the hosted NTFS runner by the tests below. A file system that does not enforce it is outside the claim.
+Identity is the volume serial and 128-bit file id of the handle (the existing `file_identity` of `root_lock`); both it and
+the link count now go through one generic `query_handle` helper there, so the module adds no `unsafe` of its own. No new
+dependency, feature or package.
 
 **Proof (lib unit tests, so that the macOS and Windows evidence job runs the same cases as Linux).** A link or an entry
 of another kind is refused and never followed for the root, a child directory, a file and `entry_kind`; a FIFO and a
 symlink to a file are not opened (Unix); a name that is not one component is refused by every operation; a listing above
-its limit is refused; a file is read up to its bound only and a hard link is counted; a held directory keeps its object
-when its path is renamed and refilled (Unix) and `is_still_named` says so. Windows: a junction is refused at the root and
-below it, a name the system would reinterpret is refused, and a pinned directory and its ancestors cannot be renamed or
-removed while held. The local environment is Linux, so the hosted Windows job is the only oracle for the Windows cases;
+its limit is refused; a file is read up to its bound only, every read starts at the beginning (a retry after `TooLarge`
+sees the whole file), and a hard link is counted; a held directory keeps its object when its path is renamed and
+refilled (Unix) and `is_still_named` says so; a root given through a link is resolved to the object itself, and
+retargeting that link afterwards changes nothing (all platforms); an ancestor turned into a link to the renamed tree is
+no longer the name (Unix). Windows: a junction is refused at the root and below it, a name the system would
+reinterpret is refused (including `COM¹`..`COM³` and `LPT¹`..`LPT³`; the rule is a pure function that is also tested on
+Linux), and a pinned directory and its ancestors cannot be renamed or removed while held. The local environment is Linux, so the hosted Windows job is the only oracle for the Windows cases;
 its result is recorded on the PR.
 
 **Residual, stated.** The root itself is opened by path once, so a caller must hold the root-commit lock and check

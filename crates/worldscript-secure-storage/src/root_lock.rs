@@ -188,7 +188,8 @@ pub(crate) mod sys {
     use windows_sys::Win32::Storage::FileSystem::{
         FileIdInfo, GetFileInformationByHandleEx, LockFileEx, FILE_ATTRIBUTE_REPARSE_POINT,
         FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_128, FILE_ID_INFO,
-        FILE_SHARE_READ, FILE_SHARE_WRITE, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
+        FILE_INFO_BY_HANDLE_CLASS, FILE_SHARE_READ, FILE_SHARE_WRITE, LOCKFILE_EXCLUSIVE_LOCK,
+        LOCKFILE_FAIL_IMMEDIATELY,
     };
     use windows_sys::Win32::System::IO::OVERLAPPED;
 
@@ -302,8 +303,31 @@ pub(crate) mod sys {
         Ok(file_identity(file)? == file_identity(&named)?)
     }
 
-    /// Stable 128-bit IDs support NTFS/ReFS; unsupported identity queries are errors, not authority.
+    /// One `GetFileInformationByHandleEx` query: fills `info` with the answer for `class`.
     #[allow(unsafe_code)]
+    pub(crate) fn query_handle<T>(
+        file: &File,
+        class: FILE_INFO_BY_HANDLE_CLASS,
+        info: &mut T,
+    ) -> io::Result<()> {
+        // SAFETY: `file` keeps the handle open; `info` is an exclusively borrowed, aligned buffer of
+        // exactly `size_of::<T>()` bytes that outlives this synchronous call, and the system refuses a
+        // class whose structure does not fit that size instead of writing past it. No key/body is read.
+        let success = unsafe {
+            GetFileInformationByHandleEx(
+                file.as_raw_handle() as HANDLE,
+                class,
+                (info as *mut T).cast(),
+                std::mem::size_of::<T>() as u32,
+            )
+        };
+        if success == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    /// Stable 128-bit IDs support NTFS/ReFS; unsupported identity queries are errors, not authority.
     pub(crate) fn file_identity(file: &File) -> io::Result<(u64, [u8; 16])> {
         let mut info = FILE_ID_INFO {
             VolumeSerialNumber: 0,
@@ -311,19 +335,7 @@ pub(crate) mod sys {
                 Identifier: [0; 16],
             },
         };
-        // SAFETY: `file` keeps the handle open; the correctly aligned FILE_ID_INFO buffer has the
-        // exact size required by FileIdInfo and outlives this synchronous call. No key/body is read.
-        let success = unsafe {
-            GetFileInformationByHandleEx(
-                file.as_raw_handle() as HANDLE,
-                FileIdInfo,
-                (&mut info as *mut FILE_ID_INFO).cast(),
-                std::mem::size_of::<FILE_ID_INFO>() as u32,
-            )
-        };
-        if success == 0 {
-            return Err(io::Error::last_os_error());
-        }
+        query_handle(file, FileIdInfo, &mut info)?;
         Ok((info.VolumeSerialNumber, info.FileId.Identifier))
     }
 

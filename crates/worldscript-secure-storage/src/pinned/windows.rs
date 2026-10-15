@@ -2,48 +2,36 @@
 //! its ancestors can be renamed or replaced while the handle is held. A reparse point (symbolic link,
 //! junction, mount point) is opened as itself (`FILE_FLAG_OPEN_REPARSE_POINT`) and refused, never
 //! followed. The identity of an object is the volume serial and 128-bit file id of the open handle.
+//!
+//! A child is opened by the path of its pinned parent, not by an NT call relative to the parent handle:
+//! the root is resolved once, from the object that was opened, to a path without any link
+//! ([`open_root`]), and every directory on that path is pinned. This is proven on NTFS by the tests
+//! that a pinned directory and its ancestors cannot be renamed and that a retargeted ancestor link
+//! does not redirect a child; a file system that does not enforce it is outside the claim.
 
 use std::ffi::{OsStr, OsString};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
-use std::os::windows::io::AsRawHandle;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use windows_sys::Win32::Foundation::{ERROR_DELETE_PENDING, ERROR_SHARING_VIOLATION, HANDLE};
+use windows_sys::Win32::Foundation::{ERROR_DELETE_PENDING, ERROR_SHARING_VIOLATION};
 use windows_sys::Win32::Storage::FileSystem::{
-    FileStandardInfo, GetFileInformationByHandleEx, FILE_ATTRIBUTE_DIRECTORY,
-    FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-    FILE_GENERIC_READ, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_STANDARD_INFO,
+    FileStandardInfo, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
+    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ, FILE_SHARE_READ,
+    FILE_SHARE_WRITE, FILE_STANDARD_INFO,
 };
 
+use super::names;
 use super::{ObjectIdentity, PinnedError};
 use crate::durable::{DurableFs, EntryKind, StdFs};
-use crate::root_lock::sys::{file_identity, still_named};
+use crate::root_lock::sys::{file_identity, query_handle, still_named};
 
 pub(super) type DirHandle = File;
 
-/// Names the Win32 path layer maps to a device whatever the directory or extension.
-const DEVICE_NAMES: [&str; 24] = [
-    "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$", "COM1", "COM2", "COM3", "COM4", "COM5",
-    "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8",
-    "LPT9",
-];
-
-/// Whether Win32 takes `name` as exactly the entry it spells: no stream (`:`), wildcard, control
-/// character or separator, no trailing dot or space that the path layer strips, and no device name.
+/// Whether Win32 takes `name` as exactly the entry it spells (see [`names`]).
 pub(super) fn name_is_plain(name: &OsStr) -> bool {
-    let Some(text) = name.to_str() else {
-        return false;
-    };
-    let forbidden = |c: char| c.is_control() || "<>:\"/\\|?*".contains(c);
-    !text.chars().any(forbidden) && !text.ends_with(['.', ' ']) && !is_device_name(text)
-}
-
-fn is_device_name(text: &str) -> bool {
-    let stem = text.split('.').next().unwrap_or(text).trim_end_matches(' ');
-    let upper = stem.to_ascii_uppercase();
-    DEVICE_NAMES.contains(&upper.as_str())
+    name.to_str().is_some_and(names::is_plain_windows_name)
 }
 
 /// The error a failed open or delete maps to.
@@ -95,20 +83,27 @@ pub(super) fn open_kind(
     Ok((file, identity))
 }
 
-pub(super) fn open_root(path: &Path) -> Result<(DirHandle, ObjectIdentity), PinnedError> {
-    open_kind(path, FILE_GENERIC_READ, EntryKind::Directory)
+/// Opens the directory `path` and resolves it once to the path of the object itself, which has no link
+/// in it. Every directory on that path is pinned by the open handle (an open handle beneath a directory
+/// forbids renaming or removing it), so a later join with a child name cannot lead anywhere else, and a
+/// relative `path` or a link among its ancestors cannot redirect it afterwards.
+pub(super) fn open_root(path: &Path) -> Result<(DirHandle, ObjectIdentity, PathBuf), PinnedError> {
+    let (dir, identity) = open_kind(path, FILE_GENERIC_READ, EntryKind::Directory)?;
+    let resolved = std::fs::canonicalize(path).map_err(PinnedError::from)?;
+    if !still_named(&dir, &resolved).map_err(PinnedError::from)? {
+        return Err(PinnedError::Redirected);
+    }
+    Ok((dir, identity, resolved))
 }
 
-pub(super) fn open_dir(
+/// Opens the child `name` as `wanted` (a directory or a regular file); a reparse point is refused.
+pub(super) fn open_child(
     _parent: &DirHandle,
     parent_path: &Path,
     name: &OsStr,
-) -> Result<(DirHandle, ObjectIdentity), PinnedError> {
-    open_kind(
-        &parent_path.join(name),
-        FILE_GENERIC_READ,
-        EntryKind::Directory,
-    )
+    wanted: EntryKind,
+) -> Result<(File, ObjectIdentity), PinnedError> {
+    open_kind(&parent_path.join(name), FILE_GENERIC_READ, wanted)
 }
 
 pub(super) fn entry_kind(
@@ -121,14 +116,6 @@ pub(super) fn entry_kind(
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(PinnedError::from(error)),
     }
-}
-
-pub(super) fn open_file(
-    _parent: &DirHandle,
-    parent_path: &Path,
-    name: &OsStr,
-) -> Result<(File, ObjectIdentity), PinnedError> {
-    open_kind(&parent_path.join(name), FILE_GENERIC_READ, EntryKind::File)
 }
 
 pub(super) fn entries(
@@ -159,7 +146,6 @@ pub(super) fn link_count(file: &File) -> Result<u64, PinnedError> {
     ))
 }
 
-#[allow(unsafe_code)]
 fn standard_info(file: &File) -> io::Result<FILE_STANDARD_INFO> {
     let mut info = FILE_STANDARD_INFO {
         AllocationSize: 0,
@@ -168,19 +154,6 @@ fn standard_info(file: &File) -> io::Result<FILE_STANDARD_INFO> {
         DeletePending: 0,
         Directory: 0,
     };
-    // SAFETY: `file` keeps the handle open for the whole call; `info` is a correctly sized and aligned
-    // FILE_STANDARD_INFO buffer, which is exactly what FileStandardInfo writes, and it outlives this
-    // synchronous call.
-    let success = unsafe {
-        GetFileInformationByHandleEx(
-            file.as_raw_handle() as HANDLE,
-            FileStandardInfo,
-            (&mut info as *mut FILE_STANDARD_INFO).cast(),
-            std::mem::size_of::<FILE_STANDARD_INFO>() as u32,
-        )
-    };
-    if success == 0 {
-        return Err(io::Error::last_os_error());
-    }
+    query_handle(file, FileStandardInfo, &mut info)?;
     Ok(info)
 }

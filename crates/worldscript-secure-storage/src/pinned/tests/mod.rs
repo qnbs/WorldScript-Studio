@@ -46,6 +46,14 @@ impl Drop for Scratch {
     }
 }
 
+/// Removes the link `link` to a directory, not its target.
+pub(super) fn remove_dir_link(link: &Path) {
+    #[cfg(unix)]
+    fs::remove_file(link).unwrap();
+    #[cfg(windows)]
+    fs::remove_dir(link).unwrap();
+}
+
 /// A link to the directory `target` at `link`: a symbolic link on Unix, a junction on Windows (which
 /// needs no privilege).
 pub(super) fn link_to_dir(target: &Path, link: &Path) {

@@ -3,10 +3,10 @@
 
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
-use std::os::fd::OwnedFd;
+use std::os::fd::AsFd;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use rustix::fs::{fstat, open, openat, statat, AtFlags, Dir, FileType, Mode, OFlags, Stat};
 use rustix::io::Errno;
@@ -14,7 +14,7 @@ use rustix::io::Errno;
 use super::{ObjectIdentity, PinnedError};
 use crate::durable::EntryKind;
 
-pub(super) type DirHandle = OwnedFd;
+pub(super) type DirHandle = File;
 
 pub(super) fn name_is_plain(name: &OsStr) -> bool {
     !name.as_bytes().contains(&0)
@@ -55,11 +55,23 @@ pub(super) fn kind_of(stat: &Stat) -> EntryKind {
     }
 }
 
-fn identity_of(fd: &OwnedFd) -> Result<ObjectIdentity, PinnedError> {
+fn identity_of(fd: &impl AsFd) -> Result<ObjectIdentity, PinnedError> {
     identity_from(&fstat(fd).map_err(io_error)?)
 }
 
-pub(super) fn open_root(path: &Path) -> Result<(DirHandle, ObjectIdentity), PinnedError> {
+/// The error for an entry that exists but is not of the kind that was asked for.
+fn wrong_kind(wanted: EntryKind) -> PinnedError {
+    if wanted == EntryKind::Directory {
+        PinnedError::NotDirectory
+    } else {
+        PinnedError::NotRegularFile
+    }
+}
+
+/// Opens the directory `path` and resolves it once to the path of the object itself, which has no link
+/// in it. Children are reached through the descriptor, never through this path; it serves
+/// [`is_still_named`].
+pub(super) fn open_root(path: &Path) -> Result<(DirHandle, ObjectIdentity, PathBuf), PinnedError> {
     let fd = open(path, dir_flags(), Mode::empty()).map_err(|errno| match errno {
         Errno::LOOP | Errno::NOTDIR => match std::fs::symlink_metadata(path) {
             Ok(named) if named.file_type().is_symlink() => PinnedError::Redirected,
@@ -68,12 +80,18 @@ pub(super) fn open_root(path: &Path) -> Result<(DirHandle, ObjectIdentity), Pinn
         },
         other => io_error(other),
     })?;
-    let identity = identity_of(&fd)?;
-    Ok((fd, identity))
+    let dir = File::from(fd);
+    let identity = identity_of(&dir)?;
+    let resolved = std::fs::canonicalize(path).map_err(PinnedError::from)?;
+    let named = std::fs::metadata(&resolved).map_err(PinnedError::from)?;
+    if ObjectIdentity::new(named.dev(), u128::from(named.ino())) != identity {
+        return Err(PinnedError::Redirected);
+    }
+    Ok((dir, identity, resolved))
 }
 
 /// Why `openat` refused `name`: a link, an entry of another kind, or an ordinary error.
-fn refuse_open(parent: &OwnedFd, name: &OsStr, errno: Errno, wanted: EntryKind) -> PinnedError {
+fn refuse_open(parent: &DirHandle, name: &OsStr, errno: Errno, wanted: EntryKind) -> PinnedError {
     if !matches!(
         errno,
         Errno::LOOP | Errno::NOTDIR | Errno::ISDIR | Errno::NXIO
@@ -84,26 +102,14 @@ fn refuse_open(parent: &OwnedFd, name: &OsStr, errno: Errno, wanted: EntryKind) 
         Ok(Some(stat)) => match kind_of(&stat) {
             EntryKind::Link => PinnedError::Redirected,
             found if found == wanted => io_error(errno),
-            _ if wanted == EntryKind::Directory => PinnedError::NotDirectory,
-            _ => PinnedError::NotRegularFile,
+            _ => wrong_kind(wanted),
         },
         Ok(None) => PinnedError::NotFound,
         Err(error) => error,
     }
 }
 
-pub(super) fn open_dir(
-    parent: &DirHandle,
-    _parent_path: &Path,
-    name: &OsStr,
-) -> Result<(DirHandle, ObjectIdentity), PinnedError> {
-    let fd = openat(parent, name, dir_flags(), Mode::empty())
-        .map_err(|errno| refuse_open(parent, name, errno, EntryKind::Directory))?;
-    let identity = identity_of(&fd)?;
-    Ok((fd, identity))
-}
-
-fn stat_child(parent: &OwnedFd, name: &OsStr) -> Result<Option<Stat>, PinnedError> {
+fn stat_child(parent: &DirHandle, name: &OsStr) -> Result<Option<Stat>, PinnedError> {
     match statat(parent, name, AtFlags::SYMLINK_NOFOLLOW) {
         Ok(stat) => Ok(Some(stat)),
         Err(Errno::NOENT) => Ok(None),
@@ -119,17 +125,30 @@ pub(super) fn entry_kind(
     Ok(stat_child(parent, name)?.map(|stat| kind_of(&stat)))
 }
 
-pub(super) fn open_file(
+/// Opens the child `name` of `parent` as `wanted` (a directory or a regular file), never following a
+/// link, and identifies it.
+pub(super) fn open_child(
     parent: &DirHandle,
     _parent_path: &Path,
     name: &OsStr,
+    wanted: EntryKind,
 ) -> Result<(File, ObjectIdentity), PinnedError> {
-    let fd = openat(parent, name, file_flags(), Mode::empty())
-        .map_err(|errno| refuse_open(parent, name, errno, EntryKind::File))?;
+    let flags = if wanted == EntryKind::Directory {
+        dir_flags()
+    } else {
+        file_flags()
+    };
+    let fd = openat(parent, name, flags, Mode::empty())
+        .map_err(|errno| refuse_open(parent, name, errno, wanted))?;
     let file = File::from(fd);
     let metadata = file.metadata().map_err(PinnedError::from)?;
-    if !metadata.is_file() {
-        return Err(PinnedError::NotRegularFile);
+    let kind_matches = if wanted == EntryKind::Directory {
+        metadata.is_dir()
+    } else {
+        metadata.is_file()
+    };
+    if !kind_matches {
+        return Err(wrong_kind(wanted));
     }
     let identity = ObjectIdentity::new(metadata.dev(), u128::from(metadata.ino()));
     Ok((file, identity))
@@ -155,13 +174,24 @@ pub(super) fn entries(
     Ok(names)
 }
 
+/// Whether `path`, walked from `/` one component at a time without following a link, still leads to
+/// the directory of `handle`: an ancestor that was renamed away, replaced or turned into a link says no.
 pub(super) fn is_still_named(handle: &DirHandle, path: &Path) -> Result<bool, PinnedError> {
     let held = identity_of(handle)?;
-    match std::fs::symlink_metadata(path) {
-        Ok(named) => Ok(ObjectIdentity::new(named.dev(), u128::from(named.ino())) == held),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(PinnedError::from(error)),
+    let mut current = File::from(open("/", dir_flags(), Mode::empty()).map_err(io_error)?);
+    for component in path.components() {
+        let name = match component {
+            Component::RootDir => continue,
+            Component::Normal(name) => name,
+            _ => return Ok(false),
+        };
+        current = match openat(&current, name, dir_flags(), Mode::empty()) {
+            Ok(next) => File::from(next),
+            Err(Errno::NOENT | Errno::LOOP | Errno::NOTDIR) => return Ok(false),
+            Err(errno) => return Err(io_error(errno)),
+        };
     }
+    Ok(identity_of(&current)? == held)
 }
 
 pub(super) fn link_count(file: &File) -> Result<u64, PinnedError> {
