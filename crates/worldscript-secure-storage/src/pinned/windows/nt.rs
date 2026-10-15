@@ -17,11 +17,11 @@ use windows_sys::Wdk::Storage::FileSystem::{
 use windows_sys::Win32::Foundation::{ERROR_NO_MORE_FILES, HANDLE, UNICODE_STRING};
 use windows_sys::Win32::Storage::FileSystem::{
     FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo, GetFileInformationByHandleEx,
-    FILE_ACCESS_RIGHTS, FILE_ID_BOTH_DIR_INFO, FILE_SHARE_MODE, SYNCHRONIZE,
+    FILE_ACCESS_RIGHTS, FILE_INFO_BY_HANDLE_CLASS, FILE_SHARE_MODE, SYNCHRONIZE,
 };
 use windows_sys::Win32::System::IO::{IO_STATUS_BLOCK, IO_STATUS_BLOCK_0};
 
-use crate::pinned::PinnedError;
+use crate::pinned::{dirbuf, PinnedError};
 
 /// `OBJ_CASE_INSENSITIVE`, as `CreateFile` asks for it.
 const CASE_INSENSITIVE: u32 = 0x40;
@@ -106,67 +106,51 @@ pub(in crate::pinned) fn open_relative(
 
 /// The names in the directory of the handle `parent`, read through that handle, if there are at most
 /// `limit` of them.
-#[allow(unsafe_code)]
 pub(in crate::pinned) fn list(parent: &File, limit: usize) -> Result<Vec<OsString>, PinnedError> {
     const SIZE: usize = 32 * 1024;
+    // The system writes the records 8-aligned, so the buffer starts on an 8-byte boundary.
     let mut backing = vec![0u8; SIZE + 8];
     let start = backing.as_ptr().align_offset(8);
     let buffer = &mut backing[start..start + SIZE];
-    let name_at = std::mem::offset_of!(FILE_ID_BOTH_DIR_INFO, FileName);
-    let length_at = std::mem::offset_of!(FILE_ID_BOTH_DIR_INFO, FileNameLength);
     let mut names = Vec::new();
     let mut class = FileIdBothDirectoryRestartInfo;
-    loop {
-        // SAFETY: the handle stays valid because `parent` is borrowed; `buffer` is a writable, 8-aligned
-        // buffer of exactly `SIZE` bytes, which is the size passed.
-        let success = unsafe {
-            GetFileInformationByHandleEx(
-                parent.as_raw_handle() as HANDLE,
-                class,
-                buffer.as_mut_ptr().cast(),
-                SIZE as u32,
-            )
-        };
-        if success == 0 {
-            let error = io::Error::last_os_error();
-            if error.raw_os_error() == Some(ERROR_NO_MORE_FILES as i32) {
-                return Ok(names);
-            }
-            return Err(PinnedError::from(error));
-        }
+    while read_batch(parent, buffer, class)? {
         class = FileIdBothDirectoryInfo;
-        let mut entry = 0usize;
-        loop {
-            let word = |at: usize| {
-                buffer.get(entry + at..entry + at + 4).map(|bytes| {
-                    u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize
-                })
-            };
-            let (Some(next), Some(length)) = (word(0), word(length_at)) else {
-                return Err(PinnedError::Io(io::ErrorKind::InvalidData));
-            };
-            let units: Option<Vec<u16>> = buffer
-                .get(entry + name_at..entry + name_at + length)
-                .map(|bytes| {
-                    bytes
-                        .chunks_exact(2)
-                        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-                        .collect()
-                });
-            let Some(units) = units else {
-                return Err(PinnedError::Io(io::ErrorKind::InvalidData));
-            };
-            let name = OsString::from_wide(&units);
-            if name != "." && name != ".." {
-                if names.len() == limit {
-                    return Err(PinnedError::TooManyEntries);
-                }
-                names.push(name);
+        let batch =
+            dirbuf::names(buffer).map_err(|_| PinnedError::Io(io::ErrorKind::InvalidData))?;
+        for units in batch {
+            if names.len() == limit {
+                return Err(PinnedError::TooManyEntries);
             }
-            if next == 0 {
-                break;
-            }
-            entry += next;
+            names.push(OsString::from_wide(&units));
         }
     }
+    Ok(names)
+}
+
+/// Fills `buffer` with the next batch of directory records of `parent`; `false` when there are no more.
+#[allow(unsafe_code)]
+fn read_batch(
+    parent: &File,
+    buffer: &mut [u8],
+    class: FILE_INFO_BY_HANDLE_CLASS,
+) -> Result<bool, PinnedError> {
+    // SAFETY: the handle stays valid because `parent` is borrowed; `buffer` is a writable, 8-aligned
+    // buffer of exactly `buffer.len()` bytes, which is the size passed.
+    let success = unsafe {
+        GetFileInformationByHandleEx(
+            parent.as_raw_handle() as HANDLE,
+            class,
+            buffer.as_mut_ptr().cast(),
+            buffer.len() as u32,
+        )
+    };
+    if success != 0 {
+        return Ok(true);
+    }
+    let error = io::Error::last_os_error();
+    if error.raw_os_error() == Some(ERROR_NO_MORE_FILES as i32) {
+        return Ok(false);
+    }
+    Err(PinnedError::from(error))
 }

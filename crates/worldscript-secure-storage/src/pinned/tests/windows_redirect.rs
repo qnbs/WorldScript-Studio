@@ -116,21 +116,42 @@ fn a_relative_lookup_under_a_converted_directory_leads_nowhere_even_without_the_
     let scratch = Scratch::new("win-relative");
     let pinned = converted(&scratch);
     let share = FILE_SHARE_READ | FILE_SHARE_WRITE;
+    // What the lookup answered, read to the end if it opened anything: the foreign file would show.
     let opened = nt::open_relative(
         &pinned.handle,
         OsStr::new("inside"),
         FILE_GENERIC_READ,
         share,
-    );
+    )
+    .map(|mut file| {
+        let mut content = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut content).unwrap();
+        content
+    });
     let listed = nt::list(&pinned.handle, 8);
-    // Neither the file nor the names of the foreign tree: the lookup is in the directory the handle
-    // refers to, which is empty.
+    // The lookup is in the directory the handle refers to, which is empty: it finds neither the file nor
+    // the names of the foreign tree (any refusal is a safe answer).
+    assert!(
+        opened.is_err() && listed.as_ref().map_or(true, |names| names.is_empty()),
+        "opened = {opened:?}, listed = {listed:?}"
+    );
+}
+
+#[test]
+fn the_directory_record_offsets_match_the_structure_of_the_system() {
+    use std::mem::offset_of;
+
+    use windows_sys::Win32::Storage::FileSystem::FILE_ID_BOTH_DIR_INFO;
+
+    use crate::pinned::dirbuf::{FILE_NAME_AT, FILE_NAME_LENGTH_AT, NEXT_ENTRY_AT};
+
     assert_eq!(
         (
-            matches!(opened, Err(PinnedError::NotFound | PinnedError::Redirected)),
-            listed.map_or(true, |names| names.is_empty())
+            offset_of!(FILE_ID_BOTH_DIR_INFO, NextEntryOffset),
+            offset_of!(FILE_ID_BOTH_DIR_INFO, FileNameLength),
+            offset_of!(FILE_ID_BOTH_DIR_INFO, FileName)
         ),
-        (true, true)
+        (NEXT_ENTRY_AT, FILE_NAME_LENGTH_AT, FILE_NAME_AT)
     );
 }
 

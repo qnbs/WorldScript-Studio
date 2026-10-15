@@ -127,7 +127,13 @@ pub(super) fn open_child_with(
     let child = nt::open_relative(parent, name, access, FILE_SHARE_READ | FILE_SHARE_WRITE)?;
     let child = expect_kind(child, wanted)?;
     let identity = identity_of(&child)?;
+    // A second, object-level guard (not the mechanism): the real path of the child, as its own handle
+    // reports it, must lie directly in the real path the parent's handle reports.
     let real = final_path(&child).map_err(PinnedError::from)?;
+    let home = final_path(parent).map_err(PinnedError::from)?;
+    if real.parent() != Some(home.as_path()) {
+        return Err(PinnedError::Redirected);
+    }
     Ok((child, identity, real))
 }
 

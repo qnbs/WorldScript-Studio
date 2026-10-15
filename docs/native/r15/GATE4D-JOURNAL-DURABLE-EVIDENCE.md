@@ -1656,9 +1656,11 @@ refers to, so an empty pinned directory that a writer turns into a reparse point
 that; the object is neither renamed nor deleted), a redirected path, a relative root or a link among the root's
 ancestors cannot lead a child or a listing into another tree. Only the root is opened by path, once, and resolved to a
 path without any link (`canonicalize`, then checked to name the same object, else `Redirected`); a child's stored path
-is the real path its own handle reports and is only informational. The parent handle is additionally checked for
-reparse data before each use; that check alone would leave a window, so it only turns what the relative lookup answers
-anyway (nothing: a converted directory is empty) into an explicit `Redirected`, and the tests below do not rely on it.
+is the real path its own handle reports and is only informational. Two guards sit on top and are not the mechanism: the parent handle is
+checked for reparse data before each use, which alone would leave a window and only turns what the relative lookup
+answers anyway (nothing: a converted directory is empty) into an explicit `Redirected`; and a child's real path, as its
+own handle reports it, must lie directly in the real path the parent's handle reports. The tests below show the lookup
+itself, without either guard.
 This needs the `Wdk_Foundation` and `Wdk_Storage_FileSystem` features of the `windows-sys` already in the lockfile (no
 new package; `Cargo.lock` is unchanged). Identity is the volume serial and 128-bit file id of the handle (the existing
 `file_identity` of `root_lock`). **Unsafe inventory, all local with a SAFETY comment:** `open_relative` (`NtCreateFile`),

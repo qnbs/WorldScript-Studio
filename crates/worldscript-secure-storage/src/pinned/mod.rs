@@ -32,6 +32,8 @@ use std::path::{Component, Path, PathBuf};
 use crate::durable::EntryKind;
 
 #[cfg(any(windows, test))]
+mod dirbuf;
+#[cfg(any(windows, test))]
 mod names;
 #[cfg(unix)]
 mod unix;
