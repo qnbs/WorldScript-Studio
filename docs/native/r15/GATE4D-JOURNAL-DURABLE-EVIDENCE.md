@@ -1751,19 +1751,9 @@ quarantine directory; anything else (a live file, a link, a directory, a file th
 never unlinked. A file system without `RENAME_NOREPLACE` answers `Unsupported` before anything is touched (not exercised on
 the hosted runners). **Every failure after the move is handled at one point:** the entry is put back and the error is
 returned, or, if it cannot be put back, the outcome is `Stranded { cause }` (the entry is in the quarantine directory as `x`,
-nothing was removed) and not an error that hides where the entry is. The parent is synced whenever the directory changed: after
-a removal and after a put-back as a step of the removal (a sync that fails is an error although the entry is gone or back, and the
-caller repeats `PinnedDir::sync`; a rerun of the removal finds nothing to do and would not sync), and after a rolled-back or
-stranded failure best-effort (the `BeforeSync` stage is reached; a failing sync does not replace the failure that is reported). The
-quarantine directory is removed by its name only if the name still leads to the directory that was created, so a directory an
-actor put at that name is left alone (what could be removed is at most an empty directory). That the directory behind the name is the one `mkdirat` made cannot be proved (`mkdirat` returns no
-descriptor); it is opened by name and its owner and mode are checked, and since the quarantine directory is not exclusive anyway, an
-actor that wins that earlier race gains nothing the window below does not already give it. An entry that stays in the quarantine
-directory (`restored: false`, `Stranded`) is retained with a best-effort sync of that directory as well as of the parent, and
-only reported as being there if the recorded name still leads to that directory; if an actor renamed it away the outcome is
-`Disturbed` (tampered, the entry cannot be found by name). A failure to move the entry at all (`Unsupported`, an error from
-`renameat2`) also syncs the parent, since the quarantine directory came and went. A umask that takes the owner's read access
-away leaves a quarantine directory that cannot be opened: the removal is refused (`PermissionDenied`), fail closed.
+nothing was removed) and not an error that hides where the entry is. The parent is synced whenever the directory changed; a
+sync that fails is an error although the entry is gone or back, and the caller repeats `PinnedDir::sync` (a rerun of the
+removal finds nothing to do and would not sync).
 
 **The window, stated.** The quarantine directory is not exclusive: another process of the same user can list the parent, find
 it and enter it. The design holds when it is manipulated at every point before the last identification (tests below). After the
@@ -1783,9 +1773,7 @@ directory (goes back) and a hard link (object alive under the other name); a nam
 renaming the root during the removal; the quarantine directory is mode 0700 and gone afterwards, and a directory made with
 mode 0500 is made usable; an injected failure at each stage leaves the directory as it was found; a failed sync is reported
 for a removal and for a put-back and repeated by `sync`; a quarantine directory that loses its search permission after the
-move gives `Stranded` with the entry still the authenticated inode, and the same case without permissions (an observer that
-fails while the name is taken again, so it runs the same for root); a quarantine directory renamed away and replaced by an empty
-directory of the actor is not removed. Mutation-checked: skipping the identity comparison fails
+move gives `Stranded` with the entry still the authenticated inode. Mutation-checked: skipping the identity comparison fails
 five of these cases, skipping the link-count verification fails the forced last window, and removing the rollback of a
 failed inspection fails the `Stranded` case.
 

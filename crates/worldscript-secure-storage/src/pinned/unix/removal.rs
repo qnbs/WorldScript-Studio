@@ -14,9 +14,7 @@ use rustix::fs::{
 use rustix::io::Errno;
 use rustix::process::geteuid;
 
-use super::{
-    dir_flags, file_flags, identity_from, io_error, kind_of, stat_child, widen, DirHandle,
-};
+use super::{dir_flags, file_flags, io_error, kind_of, stat_child, widen, DirHandle};
 use crate::durable::{DirectoryDurability, EntryKind};
 use crate::pinned::{
     ObjectIdentity, Observer, PinnedDir, PinnedError, PinnedFile, RemovalOutcome, RemovalStage,
@@ -32,8 +30,6 @@ pub(in crate::pinned) const INSIDE: &str = "x";
 struct Quarantine {
     fd: File,
     name: OsString,
-    /// The directory that was created, to tell it from whatever the name leads to later.
-    identity: ObjectIdentity,
 }
 
 /// What is bound to the quarantine name right now.
@@ -48,15 +44,13 @@ enum Inside {
 
 /// How a removal ended before the parent directory was synced.
 enum Step {
+    /// Nothing in the directory changed.
+    Unchanged(RemovalOutcome),
     /// The directory changed (an entry was moved and put back, or a quarantine directory came and
     /// went); the outcome is final.
     Changed(RemovalOutcome),
     /// The object lost its name.
     Unlinked,
-    /// The entry was moved aside and put back; this is why the removal stopped.
-    RolledBack(PinnedError),
-    /// The entry could not be put back and stays in the quarantine directory.
-    Stranded(PinnedError),
 }
 
 impl Quarantine {
@@ -68,18 +62,13 @@ impl Quarantine {
         let suffix: String = bits.iter().map(|byte| format!("{byte:02x}")).collect();
         let name = OsString::from(format!("{QUARANTINE_PREFIX}{suffix}"));
         mkdirat(parent, &name, Mode::RWXU).map_err(io_error)?;
-        match Self::made_usable(parent, &name).and_then(|fd| Self::held(fd, name.clone())) {
-            Ok(held) => Ok(held),
+        match Self::made_usable(parent, &name) {
+            Ok(fd) => Ok(Quarantine { fd, name }),
             Err(error) => {
                 let _ = unlinkat(parent, &name, AtFlags::REMOVEDIR);
                 Err(error)
             }
         }
-    }
-
-    fn held(fd: File, name: OsString) -> Result<Self, PinnedError> {
-        let identity = identity_from(&fstat(&fd).map_err(io_error)?)?;
-        Ok(Quarantine { fd, name, identity })
     }
 
     /// The directory just created, with the owner's access set explicitly (a restrictive umask would
@@ -170,22 +159,9 @@ impl Quarantine {
         parent_path.join(&self.name).join(INSIDE)
     }
 
-    /// Removes this directory if it is empty. A directory that still holds an entry is left, and so is
-    /// whatever the name leads to if that is no longer the directory that was created (the name is all
-    /// there is to remove it by; what is removed is at most an empty directory).
+    /// Removes this directory if it is empty. A directory that still holds an entry is left.
     fn discard(&self, parent: &DirHandle) {
-        if self.is_named(parent) {
-            let _ = unlinkat(parent, &self.name, AtFlags::REMOVEDIR);
-        }
-    }
-
-    /// Whether the name still leads to the directory that was created.
-    fn is_named(&self, parent: &DirHandle) -> bool {
-        stat_child(parent, &self.name)
-            .ok()
-            .flatten()
-            .and_then(|stat| identity_from(&stat).ok())
-            .is_some_and(|found| found == self.identity)
+        let _ = unlinkat(parent, &self.name, AtFlags::REMOVEDIR);
     }
 }
 
@@ -284,17 +260,13 @@ impl Removal<'_> {
     /// the move puts the entry back first; if that is impossible the removal says so
     /// ([`RemovalOutcome::Stranded`]) instead of reporting an error that hides where the entry is.
     fn detach(&self, observer: Observer<'_>) -> Result<Step, PinnedError> {
-        match self.quarantine.adopt(&self.dir.handle, self.target.name) {
-            // Nothing was moved, but the quarantine directory came and went: the parent changed.
-            Err(cause) => return Ok(Step::RolledBack(cause)),
-            Ok(false) => return Ok(Step::Changed(RemovalOutcome::Vanished)),
-            Ok(true) => {}
+        if !self.quarantine.adopt(&self.dir.handle, self.target.name)? {
+            return Ok(Step::Unchanged(RemovalOutcome::Vanished));
         }
         match self.judge(observer) {
             Err(cause) => match self.restore() {
-                Ok(()) => Ok(Step::RolledBack(cause)),
-                Err(_) if self.retained() => Ok(Step::Stranded(cause)),
-                Err(_) => Ok(Step::Changed(RemovalOutcome::Disturbed)),
+                Ok(()) => Err(cause),
+                Err(_) => Ok(Step::Unchanged(RemovalOutcome::Stranded { cause })),
             },
             step => step,
         }
@@ -312,9 +284,6 @@ impl Removal<'_> {
             }
             Inside::Object(..) | Inside::Foreign => {
                 let restored = self.restore().is_ok();
-                if !restored && !self.retained() {
-                    return Ok(Step::Changed(RemovalOutcome::Disturbed));
-                }
                 Ok(Step::Changed(RemovalOutcome::Swapped { restored }))
             }
         }
@@ -339,15 +308,6 @@ impl Removal<'_> {
     fn restore(&self) -> Result<(), PinnedError> {
         self.quarantine.restore(&self.dir.handle, self.target.name)
     }
-
-    /// The entry stays in the quarantine directory: that directory changed as well as the parent, so
-    /// it is synced too (best effort), and the outcome may only say where the entry is if the recorded
-    /// name still leads to the directory that holds it. If an actor renamed that directory away, the
-    /// entry cannot be found by name any more, and that is reported as tampering.
-    fn retained(&self) -> bool {
-        let _ = self.quarantine.fd.sync_all();
-        self.quarantine.is_named(&self.dir.handle)
-    }
 }
 
 fn unlinked(outcome: RemovalOutcome) -> Step {
@@ -366,14 +326,7 @@ fn settle(
     observer: Observer<'_>,
 ) -> Result<RemovalOutcome, PinnedError> {
     match step {
-        Step::RolledBack(cause) => {
-            sync_after_failure(dir, observer);
-            Err(cause)
-        }
-        Step::Stranded(cause) => {
-            sync_after_failure(dir, observer);
-            Ok(RemovalOutcome::Stranded { cause })
-        }
+        Step::Unchanged(outcome) => Ok(outcome),
         Step::Changed(outcome) => {
             observer(RemovalStage::BeforeSync)?;
             dir.sync()?;
@@ -403,11 +356,4 @@ pub(in crate::pinned) fn remove_leftover(
     _observer: Observer<'_>,
 ) -> Result<RemovalOutcome, PinnedError> {
     Err(PinnedError::Unsupported)
-}
-
-/// After a failure that moved an entry aside and back (or left it aside) the directory has changed too:
-/// the sync is attempted, and its own failure does not replace the failure that is being reported.
-fn sync_after_failure(dir: &PinnedDir, observer: Observer<'_>) {
-    let _ = observer(RemovalStage::BeforeSync);
-    let _ = dir.sync();
 }

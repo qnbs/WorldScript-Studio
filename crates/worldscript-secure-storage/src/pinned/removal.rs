@@ -63,12 +63,10 @@ pub enum RemovalOutcome {
     /// back under its name (`restored`) or, if the name was taken meanwhile, kept in the quarantine
     /// directory (`.h1q-*`, never removed by a sweep).
     Swapped { restored: bool },
-    /// Unix only: the quarantine directory was tampered with. Either the authenticated object had not
-    /// lost a name after the unlink, so the name was bound to another object when it was unlinked (see
-    /// the window in the module documentation), and that object is gone; or the entry stayed in the
-    /// quarantine directory but an actor renamed that directory away, so the entry cannot be found by
-    /// the name that was recorded. Nothing can be undone: the caller must treat the directory as
-    /// tampered with, and never count this as a success.
+    /// Unix only: after the unlink the authenticated object had not lost a name, so the name was bound
+    /// to another object when it was unlinked (see the window in the module documentation). That
+    /// object is gone and nothing can be undone: the caller must treat the directory as tampered with,
+    /// and never count this as a success.
     Disturbed,
     /// Unix only: an error happened after the entry was moved into the quarantine directory and it
     /// could not be put back (`cause` is the error that started it). The entry is in the quarantine
