@@ -19,6 +19,7 @@ use crate::root::LiveMigration;
 use crate::seal::{Key, RecordMeta};
 
 use super::capture::assert_capture_successor;
+use super::lease_clock::TrustedLeaseTimeObservation;
 use super::manifest::{header_key_epoch, journal_envelope_epoch, JournalManifest, ManifestRead};
 use super::page::JournalPage;
 use super::renewal::assert_renewal_successor;
@@ -340,14 +341,15 @@ fn publish_successor<F: DurableFs>(
 }
 
 /// A new owner's claim of the journal: the takeover manifest, its fence, the committed binding it
-/// takes over from, and the caller's clock.
+/// takes over from, and the trusted observation of the clock it is judged against.
 #[derive(Clone, Copy)]
 pub struct JournalTakeover<'a> {
     pub manifest: &'a JournalManifest,
     pub fence: &'a MigrationFence,
     pub committed: &'a LiveMigration,
-    /// The caller's clock; Core never reads one. A lease is expired when `now >= lease_expires`.
-    pub now_unix_ms: u64,
+    /// The observation of the adapter's clock; Core never reads one and takes no bare number. A lease is
+    /// expired when `now >= lease_expires`.
+    pub now: &'a TrustedLeaseTimeObservation,
 }
 
 /// Fenced publication of a takeover manifest (§10.1): the next owner atomically advances the fence.
@@ -367,7 +369,7 @@ pub fn publish_takeover_fenced<F: DurableFs>(
         assert_takeover_promote_authority(takeover.manifest, Some(takeover.committed))
             .map_err(JournalDurableError::Authority)?;
         let current = load_authoritative_manifest(ctx, takeover.committed)?;
-        assert_takeover_successor(&current, takeover.manifest, takeover.now_unix_ms)
+        assert_takeover_successor(&current, takeover.manifest, takeover.now.unix_ms())
             .map_err(JournalDurableError::Authority)?;
         publish_or_adopt(ctx, takeover.manifest)
     })

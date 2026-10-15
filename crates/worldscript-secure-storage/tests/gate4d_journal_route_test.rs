@@ -20,15 +20,15 @@ use worldscript_secure_storage::{
     empty_inventory_digest, empty_journal_page_set_digest, generation_path, load_catalog,
     operation_type, phase_code, resolve_journal_key, write_key_epoch, AdmissionScope,
     AuthorityError, BindingAdvance, CandidateConflict, CaptureStart, CatalogChange, CatalogCommit,
-    ConversionBegin, ConversionError, ExclusiveAdmissionGuard, InstallationScopeId,
-    InventoryCapture, JournalCheckpoint, JournalDurableContext, JournalDurableError, JournalError,
-    JournalManifest, JournalRoute, JournalRouteError, JournalSource, JournalTakeoverCommit, Key,
-    KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, ManifestRead,
-    MigrationExecutionError, MigrationFence, OpenError, RecordClass, RecordIdentity, RecordMeta,
-    RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest, RootCommitState,
-    RootKeyRefV1, RootLayout, SessionBegin, StagedCapture, StdFs, StreamedCapture,
-    StreamedInventoryCapture, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
-    OPERATION_ADMISSION_LOCK_FILE,
+    ConversionBegin, ConversionError, ExclusiveAdmissionGuard, FixedLeaseClock,
+    InstallationScopeId, InventoryCapture, JournalCheckpoint, JournalDurableContext,
+    JournalDurableError, JournalError, JournalManifest, JournalRoute, JournalRouteError,
+    JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus,
+    KeyProvider, LiveMigration, ManifestRead, MigrationExecutionError, MigrationFence, OpenError,
+    RecordClass, RecordIdentity, RecordMeta, RootBody, RootCommitEvidence, RootCommitGuard,
+    RootCommitRequest, RootCommitState, RootKeyRefV1, RootLayout, SessionBegin, StagedCapture,
+    StdFs, StreamedCapture, StreamedInventoryCapture, WriteOperationId,
+    JOURNAL_MANIFEST_RECORD_SCHEMA, OPERATION_ADMISSION_LOCK_FILE,
 };
 
 const OPERATION: &str = "route-op";
@@ -680,7 +680,7 @@ impl Fixture {
                 layout,
                 JournalTakeoverCommit {
                     claim: takeover,
-                    now_unix_ms: NOW,
+                    clock: &FixedLeaseClock(NOW),
                 },
             )
             .unwrap_err(),

@@ -15,7 +15,8 @@ use worldscript_secure_storage::{
     DurableFs, JournalDurableContext, JournalDurableError, JournalError, JournalManifest,
     JournalPage, JournalTakeover, LiveMigration, MigrationExecutionError, MigrationFence,
     OpenError, RecordClass, RecordIdentity, RecordMeta, StageFailureKind, StagingResidue, StdFs,
-    WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA, MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
+    TrustedLeaseTimeObservation, WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA,
+    MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES,
 };
 
 fn key() -> worldscript_secure_storage::Key {
@@ -1190,13 +1191,14 @@ fn takeover_with<F: DurableFs>(
     let op = write_op();
     let key = key();
     let mut ctx = JournalDurableContext::new(fs, &key, dir, &op);
+    let now = TrustedLeaseTimeObservation::for_test(now_unix_ms);
     publish_takeover_fenced(
         &mut ctx,
         &JournalTakeover {
             manifest: claim,
             fence: &fence,
             committed,
-            now_unix_ms,
+            now: &now,
         },
     )
 }

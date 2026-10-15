@@ -22,15 +22,15 @@ use worldscript_secure_storage::{
     source_physical_authority_kind, transition_phase, verify_stored_inventory, write_key_epoch,
     AdmissionScope, AuthorityError, BindingAdvance, CandidateConflict, CatalogChange,
     CatalogCommit, CatalogDescriptor, CommitMarker, CommittedGeneration, DirectoryDurability,
-    DurableFs, ExclusiveAdmissionGuard, InstallationScopeId, InventoryCapture, JournalCheckpoint,
-    JournalDurableContext, JournalDurableError, JournalError, JournalInventoryEntry,
-    JournalInventorySource, JournalManifest, JournalPage, JournalSource, JournalTakeoverCommit,
-    KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LiveMigration, LoadedCatalog,
-    MarkerBody, MigrationExecutionError, MigrationFence, MigrationPhase, RecordClass,
-    RecordIdentity, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
-    RootCommitState, RootCommitted, RootKeyRefV1, RootLayout, SealedPage, SessionBegin,
-    StageFailureKind, StagedCapture, StagedPage, StagingSession, StdFs, StreamedInventoryCapture,
-    WriteOperationId,
+    DurableFs, ExclusiveAdmissionGuard, FixedLeaseClock, InstallationScopeId, InventoryCapture,
+    JournalCheckpoint, JournalDurableContext, JournalDurableError, JournalError,
+    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, JournalSource,
+    JournalTakeoverCommit, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus, KeyProvider, LeaseClock,
+    LeaseClockError, LiveMigration, LoadedCatalog, MarkerBody, MigrationExecutionError,
+    MigrationFence, MigrationPhase, RecordClass, RecordIdentity, RootBody, RootCommitEvidence,
+    RootCommitGuard, RootCommitRequest, RootCommitState, RootCommitted, RootKeyRefV1, RootLayout,
+    SealedPage, SessionBegin, StageFailureKind, StagedCapture, StagedPage, StagingSession, StdFs,
+    StreamedInventoryCapture, UnreadableLeaseClock, WriteOperationId,
 };
 
 const OPERATION: &str = "binding-op";
@@ -395,6 +395,24 @@ impl Fixture {
         now_unix_ms: u64,
         route: Route<'_>,
     ) -> Result<RootCommitted, AuthorityError> {
+        self.takeover_clocked(claim, &FixedLeaseClock(now_unix_ms), route)
+    }
+
+    fn takeover_clocked(
+        &mut self,
+        claim: &JournalManifest,
+        clock: &dyn LeaseClock,
+        route: Route<'_>,
+    ) -> Result<RootCommitted, AuthorityError> {
+        self.takeover_through(&mut StdFs, (claim, clock), route)
+    }
+
+    fn takeover_through<F: DurableFs>(
+        &mut self,
+        fs: &mut F,
+        (claim, clock): (&JournalManifest, &dyn LeaseClock),
+        route: Route<'_>,
+    ) -> Result<RootCommitted, AuthorityError> {
         let root_dir = self.root_dir.clone();
         let op = self
             .operation
@@ -413,16 +431,37 @@ impl Fixture {
                 active_key_epoch: route.epoch,
                 conflict: self.conflict,
             },
-            now_unix_ms,
+            clock,
         };
         commit_journal_takeover(
-            &mut StdFs,
+            fs,
             &mut self.provider,
             RootLayout {
                 root_dir: &root_dir,
             },
             takeover,
         )
+    }
+
+    /// A takeover that must be refused: its outcome, the file-system writes it made through the durable
+    /// layer (the journal and the root), and whether the whole journal tree (nested files included) and the
+    /// decoded root are as they were. (Taking the root lock is coordination, not state, and is not a durable
+    /// write.)
+    fn refused_takeover(
+        &mut self,
+        claim: &JournalManifest,
+        clock: &dyn LeaseClock,
+    ) -> (Result<RootCommitted, AuthorityError>, usize, bool) {
+        let (root_before, tree_before) = (self.loaded().root, self.journal_tree());
+        let key_ref = self.key_ref.clone();
+        let route = Route {
+            key_ref: &key_ref,
+            epoch: 1,
+        };
+        let mut fs = RecordingFs::new();
+        let outcome = self.takeover_through(&mut fs, (claim, clock), route);
+        let unchanged = self.journal_tree() == tree_before && self.loaded().root == root_before;
+        (outcome, fs.writes, unchanged)
     }
 
     /// A renewal of the lease in `renewal` under its own fence and the committed key route and epoch.
@@ -632,6 +671,8 @@ struct Route<'a> {
 struct RecordingFs {
     inner: StdFs,
     log: Vec<String>,
+    /// Every call that creates, links, removes, renames or syncs something.
+    writes: usize,
 }
 
 impl RecordingFs {
@@ -639,6 +680,7 @@ impl RecordingFs {
         Self {
             inner: StdFs,
             log: Vec::new(),
+            writes: 0,
         }
     }
 }
@@ -647,10 +689,12 @@ impl DurableFs for RecordingFs {
     type File = File;
 
     fn create_new(&mut self, path: &Path) -> io::Result<File> {
+        self.writes += 1;
         self.inner.create_new(path)
     }
 
     fn sync_file(&mut self, file: &mut File) -> io::Result<()> {
+        self.writes += 1;
         self.inner.sync_file(file)
     }
 
@@ -659,14 +703,17 @@ impl DurableFs for RecordingFs {
     }
 
     fn link_no_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.writes += 1;
         self.inner.link_no_replace(from, to)
     }
 
     fn remove_file(&mut self, path: &Path) -> io::Result<()> {
+        self.writes += 1;
         self.inner.remove_file(path)
     }
 
     fn sync_dir(&mut self, dir: &Path) -> io::Result<DirectoryDurability> {
+        self.writes += 1;
         self.log.push(format!("sync_dir {}", dir.display()));
         self.inner.sync_dir(dir)
     }
@@ -676,11 +723,13 @@ impl DurableFs for RecordingFs {
     }
 
     fn rename_replace(&mut self, from: &Path, to: &Path) -> io::Result<()> {
+        self.writes += 1;
         self.log.push(format!("rename_replace {}", to.display()));
         self.inner.rename_replace(from, to)
     }
 
     fn create_dir_all(&mut self, dir: &Path) -> io::Result<()> {
+        self.writes += 1;
         self.inner.create_dir_all(dir)
     }
     fn read_at_most(&mut self, path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
@@ -1428,6 +1477,77 @@ fn a_lease_that_has_not_expired_refuses_the_takeover_before_any_journal_write() 
             .live_migration
             .map(|binding| binding.fencing_generation),
         Some(FENCE + 1)
+    );
+}
+
+#[test]
+fn a_clock_that_cannot_be_read_or_is_unset_refuses_the_takeover_before_any_write() {
+    let mut zero = manifest_at(OPERATION, 0, FENCE);
+    zero.has_lease_owner = true;
+    zero.lease_owner_id = Some("old-owner".into());
+    zero.lease_expires_unix_ms = Some(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let claim = claim_over(&zero, 20_000);
+    let clocks: [&dyn LeaseClock; 2] = [&FixedLeaseClock(0), &UnreadableLeaseClock];
+    let outcomes: Vec<_> = clocks
+        .into_iter()
+        .map(|clock| fixture.refused_takeover(&claim, clock))
+        .collect();
+    assert_eq!(
+        outcomes,
+        vec![
+            (
+                Err(AuthorityError::LeaseClock(LeaseClockError::Implausible)),
+                0,
+                true
+            ),
+            (
+                Err(AuthorityError::LeaseClock(LeaseClockError::Unavailable)),
+                0,
+                true
+            ),
+        ]
+    );
+}
+
+#[test]
+fn the_lease_owner_cannot_take_over_its_own_lease_through_the_root() {
+    let mut zero = manifest_at(OPERATION, 0, FENCE);
+    zero.has_lease_owner = true;
+    zero.lease_owner_id = Some("old-owner".into());
+    zero.lease_expires_unix_ms = Some(10_000);
+    let (mut fixture, _) = bound_with(&zero);
+    let mut own = claim_over(&zero, 20_000);
+    own.lease_owner_id = Some("old-owner".into());
+    assert_eq!(
+        fixture.refused_takeover(&own, &FixedLeaseClock(20_000)),
+        (
+            Err(AuthorityError::Journal(JournalDurableError::Authority(
+                MigrationExecutionError::InvalidTakeoverLease
+            ))),
+            0,
+            true
+        )
+    );
+}
+
+#[test]
+fn of_two_competing_takeovers_the_first_wins_and_the_second_is_stale_and_writes_nothing() {
+    let (mut fixture, _) = bound_at_zero();
+    let zero = manifest_at(OPERATION, 0, FENCE);
+    let first = claim_over(&zero, 1_000);
+    let mut second = claim_over(&zero, 1_000);
+    second.lease_owner_id = Some("other-owner".into());
+    fixture.takeover(&first, 1_000).unwrap();
+    assert_eq!(
+        fixture.refused_takeover(&second, &FixedLeaseClock(1_000)),
+        (
+            Err(AuthorityError::Journal(JournalDurableError::Authority(
+                MigrationExecutionError::StaleMigrationOwner
+            ))),
+            0,
+            true
+        )
     );
 }
 

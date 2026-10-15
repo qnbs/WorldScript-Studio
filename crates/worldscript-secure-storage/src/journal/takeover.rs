@@ -89,7 +89,13 @@ fn assert_takeover_step(
 /// and the revision plus one, a lease owner whose expiry lies after `now`, and changes nothing else:
 /// the phase, cursor, inventory, target key and recovery reason are the committed ones, because a
 /// takeover moves ownership only and the new owner makes progress through ordinary checkpoints. A
-/// terminal journal has nothing left to own. The clock is the caller's, never read here.
+/// terminal journal has nothing left to own. The new owner is a different identity from the committed lease
+/// owner (extending one's own lease is a renewal, not a takeover), and a committed lease whose fields
+/// contradict each other (an owner flag without a named owner or an expiry, an owner or an expiry
+/// without the flag) is refused rather than guessed at. The clock is the caller's, never read here; the
+/// mutation-capable takeover obtains it from a trusted observation ([`TrustedLeaseTimeObservation`]).
+///
+/// [`TrustedLeaseTimeObservation`]: super::TrustedLeaseTimeObservation
 pub fn assert_takeover_successor(
     prev: &JournalManifest,
     next: &JournalManifest,
@@ -97,6 +103,9 @@ pub fn assert_takeover_successor(
 ) -> Result<(), MigrationExecutionError> {
     if is_terminal_phase(manifest_phase(prev)) {
         return Err(MigrationExecutionError::TerminalPhase);
+    }
+    if !lease_is_consistent(prev) {
+        return Err(MigrationExecutionError::InvalidTakeoverLease);
     }
     if !lease_expired(prev, now_unix_ms) {
         return Err(MigrationExecutionError::LeaseNotExpired);
@@ -113,7 +122,7 @@ pub fn assert_takeover_successor(
             prev.journal_revision,
         ),
     )?;
-    if !holds_live_lease(next, now_unix_ms) {
+    if !holds_live_lease(next, now_unix_ms) || keeps_the_lease_owner(prev, next) {
         return Err(MigrationExecutionError::InvalidTakeoverLease);
     }
     if takeover_changes_only_ownership(prev, next) {
@@ -121,6 +130,25 @@ pub fn assert_takeover_successor(
     } else {
         Err(MigrationExecutionError::FrozenFieldChanged)
     }
+}
+
+/// The lease fields agree: either no owner (flag off, no owner id, no expiry) or a named owner with an
+/// expiry.
+fn lease_is_consistent(manifest: &JournalManifest) -> bool {
+    let named = manifest
+        .lease_owner_id
+        .as_deref()
+        .is_some_and(|owner| !owner.is_empty());
+    if manifest.has_lease_owner {
+        named && manifest.lease_expires_unix_ms.is_some()
+    } else {
+        manifest.lease_owner_id.is_none() && manifest.lease_expires_unix_ms.is_none()
+    }
+}
+
+/// Whether the claim is the committed lease owner's own: that is a renewal, never a takeover.
+fn keeps_the_lease_owner(prev: &JournalManifest, next: &JournalManifest) -> bool {
+    prev.has_lease_owner && prev.lease_owner_id == next.lease_owner_id
 }
 
 /// A lease with a named owner that still runs at `now_unix_ms`.

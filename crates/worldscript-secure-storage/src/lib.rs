@@ -117,9 +117,10 @@ pub use journal::{
     InventoryDigestVerifier, InventorySetWrite, JournalCheckpointCursor, JournalDurableContext,
     JournalDurableError, JournalDurableGuard, JournalError, JournalInventoryEntry,
     JournalInventoryExtent, JournalInventorySource, JournalManifest, JournalPage, JournalPageRef,
-    JournalRevision, JournalTakeover, ManifestEnvelopeDigest, ManifestRead,
-    MigrationExecutionError, MigrationFence, MigrationPhase, PublishedManifest, RecoveryReasonCode,
-    SealedPage, StagedCapture, StagedPage, StagedPromotion, StreamedCapture, VerifiedInventory,
+    JournalRevision, JournalTakeover, LeaseClock, LeaseClockError, ManifestEnvelopeDigest,
+    ManifestRead, MigrationExecutionError, MigrationFence, MigrationPhase, PublishedManifest,
+    RecoveryReasonCode, SealedPage, StagedCapture, StagedPage, StagedPromotion, StreamedCapture,
+    SystemLeaseClock, TrustedLeaseTimeObservation, VerifiedInventory,
     JOURNAL_MANIFEST_FORMAT_VERSION, JOURNAL_MANIFEST_RECORD_SCHEMA, JOURNAL_PAGE_FORMAT_VERSION,
     JOURNAL_PAGE_RECORD_SCHEMA, MAX_JOURNAL_ENTRY_BYTES, MAX_JOURNAL_INVENTORY_ENTRIES,
     MAX_JOURNAL_MANIFEST_ENVELOPE_BYTES, MAX_JOURNAL_PAGE_BYTES, MAX_JOURNAL_PAGE_DESCRIPTORS,
@@ -128,6 +129,8 @@ pub use journal::{
 pub use journal::{
     reclaim_with_binding, KeepReason, Preserved, ReclaimError, ReclaimRequest, Reclaimed,
 };
+#[cfg(feature = "test-support")]
+pub use journal::{FixedLeaseClock, UnreadableLeaseClock};
 pub use journal_locator::{
     authenticate_journal, AuthenticatedJournal, JournalLocator, JournalLookup, LocationFault,
     LocatorError,

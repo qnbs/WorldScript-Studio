@@ -24,14 +24,14 @@ use worldscript_secure_storage::{
     seal_inventory_pages, source_authority_kind, source_physical_authority_kind, write_key_epoch,
     AdmissionScope, AuthorityError, CandidateConflict, CatalogChange, CatalogCommit,
     ConversionBegin, ConversionError, ConversionSession, ConvertBatch, ConvertError,
-    DirectoryDurability, DurableFs, EntryStep, ExclusiveAdmissionGuard, InstallationScopeId,
-    JournalCheckpoint, JournalCheckpointCursor, JournalDurableError, JournalError,
-    JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage, JournalRouteError,
-    JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit, KeyEpochRecord, KeyEpochStatus,
-    KeyProvider, LiveMigration, MigrationExecutionError, MigrationFence, Progress, RecordClass,
-    RecordIdentity, RecordMeta, RootBody, RootCommitEvidence, RootCommitGuard, RootCommitRequest,
-    RootCommitState, RootKeyRefV1, RootLayout, SealedPage, StdFs, WriteOperationId,
-    JOURNAL_MANIFEST_RECORD_SCHEMA, OPERATION_ADMISSION_LOCK_FILE,
+    DirectoryDurability, DurableFs, EntryStep, ExclusiveAdmissionGuard, FixedLeaseClock,
+    InstallationScopeId, JournalCheckpoint, JournalCheckpointCursor, JournalDurableError,
+    JournalError, JournalInventoryEntry, JournalInventorySource, JournalManifest, JournalPage,
+    JournalRouteError, JournalSource, JournalTakeoverCommit, Key, KeyEpochCommit, KeyEpochRecord,
+    KeyEpochStatus, KeyProvider, LiveMigration, MigrationExecutionError, MigrationFence, Progress,
+    RecordClass, RecordIdentity, RecordMeta, RootBody, RootCommitEvidence, RootCommitGuard,
+    RootCommitRequest, RootCommitState, RootKeyRefV1, RootLayout, SealedPage, StdFs,
+    WriteOperationId, JOURNAL_MANIFEST_RECORD_SCHEMA, OPERATION_ADMISSION_LOCK_FILE,
 };
 
 const OPERATION: &str = "conversion-op";
@@ -349,6 +349,7 @@ impl Fixture {
         claim.lease_expires_unix_ms = Some(LEASE_EXPIRY + 10_000);
         let (journal_dir, operation) = (self.journal_dir(), WriteOperationId::generate().unwrap());
         let fence = MigrationFence::from_manifest(&claim);
+        let clock = FixedLeaseClock(LEASE_EXPIRY + 1);
         let takeover = JournalTakeoverCommit {
             claim: JournalCheckpoint {
                 manifest: &claim,
@@ -361,7 +362,7 @@ impl Fixture {
                 active_key_epoch: EPOCH,
                 conflict: CandidateConflict::Refuse,
             },
-            now_unix_ms: LEASE_EXPIRY + 1,
+            clock: &clock,
         };
         let root_dir = self.root_dir();
         let layout = RootLayout {
