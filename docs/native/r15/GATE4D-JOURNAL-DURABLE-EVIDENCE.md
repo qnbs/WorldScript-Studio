@@ -1697,95 +1697,42 @@ its result is recorded on the PR.
 removal primitives, and with them the claim that only the authenticated object is ever removed, are H1a-2. The sweep
 (H1b), the three producer-equivalence invariants (H1c) and stored-set reclamation (I1c) are not started.
 
-### Bound removal through a pinned directory (Gate 4 slice H1a-2)
+### Bound removal through a pinned directory (Gate 4 slice H1a-2), part 1: the API and its isolation
 
-Status words: `H1A_2_REMOVAL=IMPLEMENTED_TEST_SUPPORT_ONLY`, `H1_PROVED=NO` (H1b has not ported the sweep),
-`R1_PRODUCTION_RECLAMATION=NOT_ADMITTED`, `I1C_PRODUCTION_GC=NOT_ADMITTED`, `GATE4_TERMINAL=NO`. The maintainer admitted this
-slice on 2026-10-15 for the `test-support` feature only, without a production caller or a production deletion release.
-With `test-support`, `PinnedDir` gains `remove_authenticated_file`, `remove_empty_dir` and `remove_leftover_file`
-(each with an observer form where it matters), `RemovalOutcome`, `RemovalStage`, `Observer` and `QUARANTINE_PREFIX`.
-`PinnedDir::sync` (no deletion; `fsync` of the directory, not confirmed on Windows) is in every build.
+Status words: `H1A_2_REMOVAL=API_AND_ISOLATION_ONLY`, `H1_PROVED=NO`, `R1_PRODUCTION_RECLAMATION=NOT_ADMITTED`,
+`I1C_PRODUCTION_GC=NOT_ADMITTED`, `GATE4_TERMINAL=NO`. The maintainer admitted H1a-2 on 2026-10-15 for the
+`test-support` feature only, without a production caller or a production deletion release. A first draft of the whole slice
+was 2,172 meaningful lines in one pull request, over the 1,200-line hard-advisory tier; it is cut along proof boundaries into
+four stacked pull requests, each with the tests of its own behaviour:
 
-**The two designs this slice does not use.** (1) `fstatat` then `unlinkat(parent, name)` on Unix: POSIX has no
-unlink-by-inode, so a swap of the last component between the two calls removes whatever has the name by then.
-(2) `FILE_FLAG_DELETE_ON_CLOSE` on Windows: it is chosen when the handle is opened and cannot be taken back, so a
-file opened that way before the authentication is deleted at close even if the authentication fails.
+| Part | Content | Prerequisite |
+|---|---|---|
+| 1 (this) | `PinnedDir::{remove_authenticated_file, remove_empty_dir, remove_leftover_file}`, `RemovalOutcome`, `RemovalStage`, `Observer`, `QUARANTINE_PREFIX` behind `test-support`; `PinnedDir::sync` (no deletion) in every build; the isolation proofs; every call answers `Unsupported` | main |
+| 2 | Unix removal of a file: quarantine directory, identification of the open object, unlink, rollback, `Stranded`, `Disturbed`, forced-swap tests | 1 |
+| 3 | Unix removal of a directory, the leftover recovery and the crash cases | 2 |
+| 4 | Windows: the delete handle through the relative lookup, read-only sharing, the POSIX disposition on that handle | 3 |
 
-**Unix: move aside, identify the open object, then unlink.** The authenticated file is held open with identity
-`(dev, ino)`. A quarantine directory (`.h1q-<128 random bits>`, mode 0700, checked to be a directory of the effective
-user without group or other access) is created in the pinned parent and held by descriptor, and
-`renameat2(RENAME_NOREPLACE)` (macOS `renameatx_np(RENAME_EXCL)`) moves whatever the name is bound to at that instant
-into it; nothing is ever overwritten. Only there is the object identified: it is looked at (a device node is not
-opened), opened without following a link, and the identity of the open object is compared. If it is the authenticated
-object it is unlinked from the quarantine directory, and the link count of the open object must have dropped by
-one; otherwise it is moved back under its name (`Swapped { restored: true }`) or, if the name was taken meanwhile,
-kept in the quarantine directory (`restored: false`), and in no case unlinked. A file system without
-`RENAME_NOREPLACE` answers `Unsupported` before anything is touched (that answer is not exercised on the hosted
-runners). A failure at any step after the move (an I/O error, a refused sync is separate) puts the object back first
-(rollback). A directory is moved and removed the same way with `unlinkat(AT_REMOVEDIR)`; one that fills after the check
-is moved back (`NotEmpty`). The parent is synced after the removal (`Removed(DirectoryDurability)`); a sync that fails is
-an error although the object is gone, and a rerun converges (`NotFound`).
+**Isolation.** `feature_isolation_removal_test` scans the sources: the modules that hold the primitives are declared under
+the gate on every platform, no other file names them, and no other module named `removal` exists (with a scan that proves it
+sees an ungated declaration and export). `feature_isolation_compile_test` proves it with the compiler: the crate is built the
+way a dependent gets it (default features) and with `test-support`, and a small crate that calls a removal method or imports
+`RemovalOutcome` fails with E0599 and E0432 against the first and compiles against the second, while a control that names only
+`PinnedDir::open_root` compiles against both; the nested builds use a target directory of their own (about 100 s). The
+no-dependent and default-closure checks of `feature_isolation_test` still decide who can request the feature. A lib test
+shows that in this part every removal answers `Unsupported` and removes nothing; `PinnedDir::sync` is `Confirmed` on Unix and
+`NotConfirmed` on Windows.
 
-**No exclusivity is assumed.** The mode and the random name keep out other users and accidental interference, not another
-process of the same user, which can list the parent, find the directory and enter it. The design therefore holds when
-the quarantine directory is manipulated at every point before the last identification (tests below), and its one
-irreducible window is stated instead of hidden. *Residual:* no Unix primitive unlinks "this inode"; between the last
-identification and the unlink, an actor that can write into the quarantine directory and wins that one-syscall race
-can have its own regular file unlinked instead. The link count of the authenticated object then did not drop and the
-removal reports `RemovalOutcome::Disturbed`; it cannot be undone. The actor gains nothing it could not do directly
-(it can unlink its own file, and, being the same user, the live one). A directory in that window is never unlinked (the
-unlink fails, the directory is put back). Hard links: removing one name leaves the other names (the link count is
-exposed as `PinnedFile::link_count` for a caller that must refuse a linked file); the accounting tolerates a link made
-in the window.
+**The contract the later parts implement, and its limit.** Unix moves the entry into a private quarantine directory with
+`RENAME_NOREPLACE`, identifies the open object there and only then unlinks it; anything else is put back, and a failure after
+the move rolls back or is reported as `Stranded` (where the entry is). Windows opens the object through the handle-relative
+lookup with delete access and read-only sharing, authenticates on that handle and sets the POSIX delete disposition on it.
+**No Unix primitive unlinks "this inode"**, and the quarantine directory is not exclusive (mode 0700 and a random name keep out
+other users and accidents, not another process of the same user): between the last identification and the unlink an actor that
+can write into it and wins that one race can have its own object removed instead. That is detected after the fact, not
+prevented (`RemovalOutcome::Disturbed`, by the link count of the authenticated object, a heuristic that an actor which also
+changes that link count is not caught by), and it is not counted as a success. That the same user could delete the object
+directly is a statement about a threat model, not a guarantee of identity: **whether this residual is acceptable for a
+production sweep is a decision of the maintainer, to be taken before H1b**.
 
-**Leftovers and crashes.** A crash after the move, or an object that could not be put back, leaves a `.h1q-*` directory
-holding the object as `x`. A sweep never removes it by itself. `remove_leftover_file(name, authenticate)` takes that
-directory by its name (a name without the prefix is `InvalidName`), authenticates the file in it again and, only if
-accepted, removes it like any other (an object that does not authenticate stays, an empty quarantine directory is
-removed). Windows creates no quarantine directory (`Unsupported`).
-
-**Windows: authenticate on the handle, then a disposition on that handle.** The object is opened through the same
-handle-relative lookup as every child (`NtCreateFile` with the pinned directory as `RootDirectory`), with delete
-access and a share mode of **read only**. With write sharing another handle could change the bytes between the
-authentication and the delete; with read-only sharing a writer that already has the file open makes this open fail
-(`Busy`), no later writer can open it while the handle is held, and without delete sharing the name cannot be renamed,
-deleted or replaced. Only then `FileDispositionInfoEx` (delete, POSIX semantics) is set on that same handle. Failing
-authentication, an error or dropping the handle deletes nothing; there is no fallback to the classic disposition (a Windows
-or file system without POSIX delete semantics is `Unsupported`), and a read-only file is refused, not forced. The
-disposition is the only new `unsafe` (`SetFileInformationByHandle` with one fixed structure, its layout pinned by a test;
-no generic or safe wrapper over another class); the `process` feature of `rustix` (already locked) is added for
-`geteuid`, and nothing else changes in `Cargo.lock`.
-
-**Proof (lib unit tests, so that the macOS and Windows evidence job runs the same cases).** Unix: the baseline runs the
-naive check-then-`unlinkat` against the same swap and shows the live file destroyed, so the observer forces the race; a
-swap of the last name, a directory, a symlink and a FIFO swapped in, a name taken again while the object is aside (kept
-in the quarantine directory), a name taken after the authenticated file moved aside, a swap inside the quarantine
-directory before the identification, renaming the root during the removal, a vanished name, a swapped or filled
-directory; the last window is forced and `Disturbed` is the pinned answer, a directory in it is put back, a hard link
-made in it leaves the object alive; the quarantine directory is mode 0700 and gone afterwards; an injected failure at
-each stage after the move rolls back and leaves no quarantine directory, a failed sync is reported and a rerun converges;
-a simulated crash (the observer panics) leaves the object in quarantine, a leftover removal refuses what does not
-authenticate and finishes what does, and a foreign object left by a refused put-back is never removed by it.
-Mutation-checked: skipping the identity comparison fails five of those cases, and skipping the link-count verification
-fails the forced last window. Windows (hosted runner is the only oracle): the name of the authenticated file cannot be
-renamed, deleted or replaced while the handle is held; nobody can open the file for writing during the authentication
-and at the check (the share-mode proof), with the counter-proof that a handle opened with write sharing lets a writer
-change the bytes; a writer that already has the file open makes the removal `Busy` and changes nothing; a reader that
-shares delete does not stop it and the name is free at once; a directory is removed only while empty; a read-only file is
-refused. Everywhere: only the authenticated object goes; a refused, failing or wrong-identity authentication removes
-nothing; links, directories and missing names are not removed as files; hard-linked names; an injected failure before
-anything changed changes nothing.
-
-**Isolation.** `feature_isolation_removal_test` scans the sources: the modules that hold the primitives are declared
-under the gate on every platform, no other file names them, and no other module named `removal` exists (with a scan that
-proves it sees an ungated declaration and export). `feature_isolation_compile_test` proves it with the compiler: the
-crate is built the way a dependent gets it (default features) and with `test-support`, and a small crate that calls a
-removal method or imports `RemovalOutcome` fails with E0599 and E0432 against the first and compiles against the second,
-while a control that names only `PinnedDir::open_root` compiles against both. The no-dependent and default-closure checks
-of `feature_isolation_test` still decide who can request the feature.
-
-**Not claimed.** No caller exists and the sweep is not ported (H1b); the producer-equivalence invariants (H1c) and
-stored-set reclamation (I1c) are not started; a device node swapped in is refused before it is opened, and cannot be
-created by an unprivileged actor, but that is argued, not tested (it needs privilege); the `Unsupported` answers of
-file systems without `RENAME_NOREPLACE` or POSIX delete are not exercised on the hosted runners; the Disturbed window is
-bounded and detected, not closed.
+**Not claimed.** No removal is implemented in this part; no caller exists and the sweep is not ported (H1b); H1c and I1c are not
+started.
