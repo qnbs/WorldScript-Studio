@@ -71,7 +71,11 @@ impl Quarantine {
         match Self::made_usable(parent, &name).and_then(|fd| Self::held(fd, name.clone())) {
             Ok(held) => Ok(held),
             Err(error) => {
-                let _ = unlinkat(parent, &name, AtFlags::REMOVEDIR);
+                if unlinkat(parent, &name, AtFlags::REMOVEDIR).is_ok() {
+                    // The directory came and went: sync the parent best effort, so the error does not
+                    // leave an unsynced quarantine directory behind.
+                    let _ = parent.sync_all();
+                }
                 Err(error)
             }
         }
@@ -171,12 +175,19 @@ impl Quarantine {
     }
 
     /// Removes this directory if it is empty. A directory that still holds an entry is left, and so is
-    /// whatever the name leads to if that is no longer the directory that was created (the name is all
-    /// there is to remove it by; what is removed is at most an empty directory).
+    /// whatever the name leads to if that is no longer the directory that was created. The check narrows
+    /// the race and does not close it (`rmdir` takes a name, not a descriptor): what a lost race can
+    /// remove is at most an empty directory.
     fn discard(&self, parent: &DirHandle) {
         if self.is_named(parent) {
             let _ = unlinkat(parent, &self.name, AtFlags::REMOVEDIR);
         }
+    }
+
+    /// Whether the entry may still be inside: `false` only if it is known to be gone (an actor removed
+    /// it); an error while looking (a permission lost) is not a proof that it is gone.
+    fn holds_entry(&self) -> bool {
+        !matches!(stat_child(&self.fd, OsStr::new(INSIDE)), Ok(None))
     }
 
     /// Whether the name still leads to the directory that was created.
@@ -332,7 +343,14 @@ impl Removal<'_> {
                 self.restore()?;
                 Ok(Step::Changed(RemovalOutcome::NotEmpty))
             }
-            outcome => Ok(unlinked(outcome)),
+            outcome => {
+                // The unlink changed the directory that is held; if an actor renamed it away it is not
+                // the one the parent sync covers, so it is synced as well (best effort).
+                if !self.quarantine.is_named(&self.dir.handle) {
+                    let _ = self.quarantine.fd.sync_all();
+                }
+                Ok(unlinked(outcome))
+            }
         }
     }
 
@@ -346,7 +364,7 @@ impl Removal<'_> {
     /// entry cannot be found by name any more, and that is reported as tampering.
     fn retained(&self) -> bool {
         let _ = self.quarantine.fd.sync_all();
-        self.quarantine.is_named(&self.dir.handle)
+        self.quarantine.is_named(&self.dir.handle) && self.quarantine.holds_entry()
     }
 }
 

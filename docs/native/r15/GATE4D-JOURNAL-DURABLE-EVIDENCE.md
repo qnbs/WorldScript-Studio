@@ -1760,8 +1760,11 @@ actor put at that name is left alone (what could be removed is at most an empty 
 descriptor); it is opened by name and its owner and mode are checked, and since the quarantine directory is not exclusive anyway, an
 actor that wins that earlier race gains nothing the window below does not already give it. An entry that stays in the quarantine
 directory (`restored: false`, `Stranded`) is retained with a best-effort sync of that directory as well as of the parent, and
-only reported as being there if the recorded name still leads to that directory; if an actor renamed it away the outcome is
-`Disturbed` (tampered, the entry cannot be found by name). A failure to move the entry at all (`Unsupported`, an error from
+only reported as being there if the recorded name still leads to that directory and the entry is not known to be gone; if an
+actor renamed the directory away or removed the entry the outcome is `Disturbed` (tampered, the entry cannot be found by name).
+If the held directory was renamed away but the removal went on in it, that directory is synced too. The identity check before the
+name-based `rmdir` of the quarantine directory narrows the race and does not close it: a lost race removes at most an empty
+directory. A failure to move the entry at all (`Unsupported`, an error from
 `renameat2`) also syncs the parent, since the quarantine directory came and went. A umask that takes the owner's read access
 away leaves a quarantine directory that cannot be opened: the removal is refused (`PermissionDenied`), fail closed.
 
