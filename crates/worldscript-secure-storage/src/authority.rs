@@ -48,12 +48,12 @@ use crate::journal::{
     assert_binding_successor, assert_binding_takeover, assert_capture_successor,
     assert_checkpoint_successor, assert_fence, assert_phase_transition_successor,
     assert_renewal_successor, assert_takeover_successor, load_authoritative_manifest,
-    load_inventory_page, promote_inventory_set_fenced, promote_staged_inventory_fenced,
-    publish_manifest_fenced, publish_phase_transition_fenced, publish_renewal_fenced,
-    publish_takeover_fenced, verify_stored_inventory, CandidateConflict, CaptureStart,
-    InventorySetWrite, JournalDurableContext, JournalDurableError, JournalInventoryEntry,
-    JournalManifest, JournalPage, JournalTakeover, MigrationExecutionError, MigrationFence,
-    SealedPage, StagedCapture, StagedPromotion, StreamedCapture, VerifiedInventory,
+    load_inventory_page, promote_inventory_set_fenced, promote_inventory_set_inheriting_fenced,
+    promote_staged_inventory_fenced, publish_manifest_fenced, publish_phase_transition_fenced,
+    publish_renewal_fenced, publish_takeover_fenced, verify_stored_inventory, CandidateConflict,
+    CaptureStart, InventorySetWrite, JournalDurableContext, JournalDurableError,
+    JournalInventoryEntry, JournalManifest, JournalPage, JournalTakeover, MigrationExecutionError,
+    MigrationFence, SealedPage, StagedCapture, StagedPromotion, StreamedCapture, VerifiedInventory,
 };
 #[cfg(feature = "test-support")]
 use crate::journal::{reclaim_with_binding, ReclaimError, ReclaimRequest, Reclaimed};
@@ -623,7 +623,10 @@ pub struct InventoryCapture<'a> {
 /// that is the final inventory (`final_inventory_captured`, the capture that runs in `ADMIT`) is refused
 /// as `FinalCaptureNotExclusive` before the file system is touched. The final capture has its own
 /// commit, [`commit_final_inventory_capture`], which holds the installation's exclusive admission by
-/// type (Gate 4E E3a).
+/// type (Gate 4E E3a). A page that keeps the earlier generation that still names it (Gate 4 slice I1a)
+/// makes the commit read back and verify the stored page set the root names, and is accepted only if its
+/// reference is exactly the one that set holds at its index ([`promote_inventory_set_inheriting_fenced`]);
+/// a capture whose pages are all at the successor's revision reads nothing back.
 pub fn commit_inventory_capture<F: DurableFs, P: KeyProvider>(
     fs: &mut F,
     provider: &mut P,
@@ -734,16 +737,25 @@ fn capture_pages<F: DurableFs, P: KeyProvider>(
         committed_revision: capture.committed_manifest.journal_revision,
     };
     commit_capture(fs, provider, plan, |journal, committed, fence| {
-        promote_inventory_set_fenced(
-            journal,
-            &InventorySetWrite {
-                committed_manifest: capture.committed_manifest,
-                fence,
-                committed: Some(committed),
-                successor: checkpoint.manifest,
-                pages: capture.pages,
-            },
-        )
+        let set = InventorySetWrite {
+            committed_manifest: capture.committed_manifest,
+            fence,
+            committed: Some(committed),
+            successor: checkpoint.manifest,
+            pages: capture.pages,
+        };
+        let revision = checkpoint.manifest.journal_revision;
+        if capture
+            .pages
+            .iter()
+            .all(|sealed| sealed.page.page_generation() == revision)
+        {
+            return promote_inventory_set_fenced(journal, &set);
+        }
+        // A page keeps an earlier generation: the committed set is read back and verified, and only the
+        // pages its authenticated references name exactly may do so.
+        let predecessor = verify_stored_inventory(journal, committed)?;
+        promote_inventory_set_inheriting_fenced(journal, &set, &predecessor)
     })
 }
 

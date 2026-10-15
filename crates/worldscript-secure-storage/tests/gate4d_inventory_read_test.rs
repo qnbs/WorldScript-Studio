@@ -4,11 +4,14 @@
 mod journal_fixture;
 #[path = "support/inventory.rs"]
 mod support;
+#[path = "support/inventory_tamper.rs"]
+mod tamper;
 
 use std::path::PathBuf;
 
 use journal_fixture::*;
 use support::*;
+use tamper::*;
 use worldscript_secure_storage::*;
 
 /// A journal in which a first capture was stored and the root advanced to the manifest naming it.

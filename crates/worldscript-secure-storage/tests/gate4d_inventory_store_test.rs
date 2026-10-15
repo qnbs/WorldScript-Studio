@@ -4,11 +4,14 @@
 mod journal_fixture;
 #[path = "support/inventory.rs"]
 mod support;
+#[path = "support/inventory_tamper.rs"]
+mod tamper;
 
 use std::path::Path;
 
 use journal_fixture::*;
 use support::*;
+use tamper::*;
 use worldscript_secure_storage::*;
 
 /// Stores `captured` into `journal` and returns the refusal, requiring that nothing was created.

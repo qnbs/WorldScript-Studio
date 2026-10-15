@@ -32,6 +32,7 @@ use super::durable::{
     assert_root_named_manifest, migration_page_identity, page_meta, stage_io, stage_request,
     with_fence, JournalDurableContext, JournalDurableError,
 };
+use super::inventory_read::VerifiedInventory;
 use super::manifest::{header_key_epoch, journal_envelope_epoch, JournalManifest};
 use super::page::JournalPage;
 use super::state::{assert_page_promote_authority, MigrationExecutionError, MigrationFence};
@@ -97,7 +98,8 @@ pub struct InventorySetWrite<'a> {
 /// (inventory still open, only the revision and the inventory fields changed) and must encode; the
 /// pages must be indexed `0..n`, non-empty, and exactly the page set and inventory `successor` names
 /// (so the directory key cannot disagree with the pages); each page generation must be exactly the
-/// successor's revision (no page is inherited from the predecessor yet); and each envelope must open
+/// successor's revision (a page kept from the predecessor needs
+/// [`promote_inventory_set_inheriting_fenced`]); and each envelope must open
 /// under the journal key, at the operation's journal envelope epoch (checked before the key is used), to
 /// exactly its page. A store refused by these checks creates nothing, not even the directory.
 ///
@@ -111,13 +113,40 @@ pub fn promote_inventory_set_fenced<F: DurableFs>(
     ctx: &mut JournalDurableContext<'_, F>,
     set: &InventorySetWrite<'_>,
 ) -> Result<DirectoryDurability, JournalDurableError> {
+    promote_set(ctx, set, None)
+}
+
+/// As [`promote_inventory_set_fenced`], but a page may keep the earlier generation that still names
+/// it (Gate 4 slice I1a).
+///
+/// A page whose generation is not the successor's revision is accepted only if its reference (index,
+/// generation, entry count and the content digest of its exact envelope bytes) equals the reference of
+/// the same index in `predecessor`, and `predecessor` was verified for exactly the committed manifest the
+/// set is written under. A re-sealed copy of the same entries has other bytes and is refused, as is a
+/// page beyond the predecessor's page count, so one page identity and generation never stands for
+/// different content across page sets. Everything else is as for the strict store: the refusal happens
+/// before the first byte, and an inherited page is stored again under the new set's own directory (each
+/// stored set stays self-contained, nothing refers across sets).
+pub fn promote_inventory_set_inheriting_fenced<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    set: &InventorySetWrite<'_>,
+    predecessor: &VerifiedInventory,
+) -> Result<DirectoryDurability, JournalDurableError> {
+    promote_set(ctx, set, Some(predecessor))
+}
+
+fn promote_set<F: DurableFs>(
+    ctx: &mut JournalDurableContext<'_, F>,
+    set: &InventorySetWrite<'_>,
+    predecessor: Option<&VerifiedInventory>,
+) -> Result<DirectoryDurability, JournalDurableError> {
     with_fence(set.committed_manifest, set.fence, || {
         assert_page_promote_authority(set.committed_manifest, set.committed)
             .map_err(JournalDurableError::Authority)?;
         assert_root_named_predecessor(ctx, set)?;
         assert_capture_successor(set.committed_manifest, set.successor)
             .map_err(JournalDurableError::Authority)?;
-        let ordered = verify_set(ctx, set)?;
+        let ordered = verify_set(ctx, set, predecessor)?;
         let mut durability = DirectoryDurability::Confirmed;
         for sealed in ordered {
             durability = both(durability, store_page(ctx, set, sealed)?);
@@ -143,6 +172,7 @@ fn assert_root_named_predecessor<F: DurableFs>(
 fn verify_set<'a, F: DurableFs>(
     ctx: &JournalDurableContext<'_, F>,
     set: &InventorySetWrite<'a>,
+    predecessor: Option<&VerifiedInventory>,
 ) -> Result<Vec<&'a SealedPage<'a>>, JournalDurableError> {
     // The successor must be a manifest that can be sealed: the successor relation leaves the lease
     // fields unconstrained, so a set could otherwise be stored for a manifest that never encodes.
@@ -153,7 +183,7 @@ fn verify_set<'a, F: DurableFs>(
         InventoryDigestVerifier::new(set.successor.inventory_version, set.successor.entry_count)?;
     for sealed in &ordered {
         assert_page_not_empty(sealed.page)?;
-        assert_page_generation(set.successor, sealed.page)?;
+        assert_page_provenance(set, sealed, predecessor)?;
         assert_envelope_is_page(ctx, set.committed_manifest, sealed)?;
         refs.push(page_ref_for(sealed.page, sealed.envelope)?);
         verifier.absorb_page(sealed.page)?;
@@ -163,12 +193,37 @@ fn verify_set<'a, F: DurableFs>(
     Ok(ordered)
 }
 
-/// A page of this capture carries exactly the successor's revision as its generation. `capture_inventory`
-/// also lets an unchanged page keep the earlier generation that still names it, but proving that the
-/// predecessor's page set really contains those bytes needs the predecessor's authenticated page
-/// references, which only a verified reader of the stored set can provide (the next slice). Until then
-/// an older generation is refused, so one page identity and generation can never stand for different
-/// content across page sets.
+/// A page of this capture carries exactly the successor's revision as its generation, or it is a page
+/// the predecessor's authenticated references name exactly ([`promote_inventory_set_inheriting_fenced`]).
+fn assert_page_provenance(
+    set: &InventorySetWrite<'_>,
+    sealed: &SealedPage<'_>,
+    predecessor: Option<&VerifiedInventory>,
+) -> Result<(), JournalDurableError> {
+    if assert_page_generation(set.successor, sealed.page).is_ok() {
+        return Ok(());
+    }
+    let reference = page_ref_for(sealed.page, sealed.envelope)?;
+    let index = sealed.page.page_index() as usize;
+    let inherited = predecessor
+        .filter(|verified| verified.manifest() == set.committed_manifest)
+        .and_then(|verified| verified.page_refs().get(index))
+        .is_some_and(|known| *known == reference);
+    if inherited {
+        Ok(())
+    } else {
+        Err(JournalDurableError::Journal(
+            JournalError::GenerationMismatch,
+        ))
+    }
+}
+
+/// A page written for this capture carries exactly the successor's revision as its generation.
+/// `capture_inventory` also lets an unchanged page keep the earlier generation that still names it;
+/// that is [`assert_page_provenance`]'s second case, because proving that the predecessor's page set
+/// really contains those bytes needs the predecessor's authenticated page references. The streamed
+/// promotion has no such proof yet and keeps this strict rule, so one page identity and generation can
+/// never stand for different content across page sets.
 pub(super) fn assert_page_generation(
     successor: &JournalManifest,
     page: &JournalPage,
