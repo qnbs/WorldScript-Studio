@@ -10,22 +10,21 @@
 //! does not redirect a child; a file system that does not enforce it is outside the claim.
 
 use std::ffi::{OsStr, OsString};
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io;
-use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use windows_sys::Win32::Foundation::{ERROR_DELETE_PENDING, ERROR_SHARING_VIOLATION};
 use windows_sys::Win32::Storage::FileSystem::{
-    FileStandardInfo, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
-    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ, FILE_SHARE_READ,
-    FILE_SHARE_WRITE, FILE_STANDARD_INFO,
+    FileStandardInfo, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_GENERIC_READ,
+    FILE_STANDARD_INFO,
 };
 
 use super::names;
 use super::{ObjectIdentity, PinnedError};
 use crate::durable::{DurableFs, EntryKind, StdFs};
-use crate::root_lock::sys::{file_identity, query_handle, still_named};
+use crate::root_lock::sys::{file_identity, open_as_itself, query_handle, still_named};
 
 pub(super) type DirHandle = File;
 
@@ -44,12 +43,7 @@ pub(super) fn io_error(error: io::Error) -> PinnedError {
 
 /// Opens `path` as itself with `access`, sharing read and write but never delete.
 pub(super) fn open_exact(path: &Path, access: u32) -> Result<File, PinnedError> {
-    OpenOptions::new()
-        .access_mode(access)
-        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(path)
-        .map_err(io_error)
+    open_as_itself(path, access).map_err(io_error)
 }
 
 /// `file` if it is neither a reparse point nor of another kind than `wanted`.

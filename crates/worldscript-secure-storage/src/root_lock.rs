@@ -184,7 +184,7 @@ pub(crate) mod sys {
     use std::os::windows::io::AsRawHandle;
     use std::path::{Path, PathBuf};
 
-    use windows_sys::Win32::Foundation::{ERROR_LOCK_VIOLATION, HANDLE};
+    use windows_sys::Win32::Foundation::{ERROR_LOCK_VIOLATION, GENERIC_READ, HANDLE};
     use windows_sys::Win32::Storage::FileSystem::{
         FileIdInfo, GetFileInformationByHandleEx, LockFileEx, FILE_ATTRIBUTE_REPARSE_POINT,
         FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_128, FILE_ID_INFO,
@@ -232,13 +232,19 @@ pub(crate) mod sys {
         installation_dir.join(crate::admission::OPERATION_ADMISSION_LOCK_FILE)
     }
 
-    /// Pins the directory name itself without delete sharing.
-    pub(crate) fn open_directory(path: &Path) -> io::Result<File> {
-        let file = OpenOptions::new()
-            .read(true)
+    /// Opens `path` as itself with `access` (a reparse point is opened, not followed), sharing read and
+    /// write but never delete, so the name cannot be renamed or removed while the handle is held.
+    pub(crate) fn open_as_itself(path: &Path, access: u32) -> io::Result<File> {
+        OpenOptions::new()
+            .access_mode(access)
             .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
             .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
-            .open(path)?;
+            .open(path)
+    }
+
+    /// Pins the directory name itself without delete sharing.
+    pub(crate) fn open_directory(path: &Path) -> io::Result<File> {
+        let file = open_as_itself(path, GENERIC_READ)?;
         let metadata = file.metadata()?;
         if !metadata.is_dir() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
             return Err(io::Error::from(io::ErrorKind::InvalidInput));
@@ -287,12 +293,7 @@ pub(crate) mod sys {
 
     /// Compare kernel object identities, not path existence: ancestor redirection must fail closed.
     pub(crate) fn still_named(file: &File, path: &Path) -> io::Result<bool> {
-        let named = match OpenOptions::new()
-            .read(true)
-            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
-            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
-            .open(path)
-        {
+        let named = match open_as_itself(path, GENERIC_READ) {
             Ok(named) => named,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
             Err(error) => return Err(error),
