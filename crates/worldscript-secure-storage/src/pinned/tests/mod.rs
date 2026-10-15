@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 mod read;
+#[cfg(windows)]
+mod windows_redirect;
 
 /// A scratch directory below the temp dir, removed when dropped.
 pub(super) struct Scratch(PathBuf);

@@ -24,8 +24,8 @@ fn dir_flags() -> OFlags {
     OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC
 }
 
-/// Non-blocking and without a controlling terminal, so that opening a FIFO or a device that a swap put
-/// at the name cannot hang or attach; the type is checked on the descriptor right after.
+/// Non-blocking and without a controlling terminal, so that opening a FIFO that a swap put at the name
+/// cannot hang or attach; the type is checked on the descriptor right after (see `open_child`).
 fn file_flags() -> OFlags {
     OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::NOCTTY | OFlags::CLOEXEC
 }
@@ -126,16 +126,20 @@ pub(super) fn entry_kind(
 }
 
 /// Opens the child `name` of `parent` as `wanted` (a directory or a regular file), never following a
-/// link, and identifies it.
+/// link, and identifies it. A file is looked at before it is opened: opening a device node runs its
+/// driver, which `O_NONBLOCK` and `O_NOCTTY` do not prevent, so anything but a regular file is refused
+/// without an open. An entry swapped in between the look and the open is still caught by the type check
+/// on the descriptor, but then it has been opened once.
 pub(super) fn open_child(
     parent: &DirHandle,
-    _parent_path: &Path,
+    parent_path: &Path,
     name: &OsStr,
     wanted: EntryKind,
-) -> Result<(File, ObjectIdentity), PinnedError> {
+) -> Result<(File, ObjectIdentity, PathBuf), PinnedError> {
     let flags = if wanted == EntryKind::Directory {
         dir_flags()
     } else {
+        look_before_opening(parent, name)?;
         file_flags()
     };
     let fd = openat(parent, name, flags, Mode::empty())
@@ -151,7 +155,19 @@ pub(super) fn open_child(
         return Err(wrong_kind(wanted));
     }
     let identity = ObjectIdentity::new(metadata.dev(), u128::from(metadata.ino()));
-    Ok((file, identity))
+    Ok((file, identity, parent_path.join(name)))
+}
+
+/// Refuses a link or an entry that is not a regular file before it is opened as one.
+fn look_before_opening(parent: &DirHandle, name: &OsStr) -> Result<(), PinnedError> {
+    match stat_child(parent, name)? {
+        None => Err(PinnedError::NotFound),
+        Some(stat) => match kind_of(&stat) {
+            EntryKind::File => Ok(()),
+            EntryKind::Link => Err(PinnedError::Redirected),
+            _ => Err(PinnedError::NotRegularFile),
+        },
+    }
 }
 
 pub(super) fn entries(

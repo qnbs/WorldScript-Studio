@@ -1638,8 +1638,9 @@ bounded by a limit the caller gives, and a file is read only up to a bound.
 
 **Unix.** Every step is an `*at` call on the descriptor of the directory that was opened (`openat` with `O_NOFOLLOW`,
 `statat` with `AT_SYMLINK_NOFOLLOW`, `Dir::read_from` on the descriptor). A file is opened non-blocking and without a
-controlling terminal, so that a FIFO or device that a swap put at the name cannot hang or attach, and is refused after a
-type check on the descriptor. `is_still_named` walks the root's path from `/` one component at a time with `O_NOFOLLOW`,
+controlling terminal, and it is looked at before it is opened (a device node runs its driver on open, which those flags
+do not prevent), so a link, FIFO, device or directory is refused without an open; the type check on the descriptor still
+catches an entry swapped in between, which has then been opened once. `is_still_named` walks the root's path from `/` one component at a time with `O_NOFOLLOW`,
 so an ancestor that was renamed away, replaced or turned into a link (to the renamed tree, which a path-based check
 would follow back to the same directory) says no.
 
@@ -1655,9 +1656,18 @@ staying alive (a test drops the parent and renames the ancestors). Reviewers ask
 root directory handle instead; it was not taken because it adds a large unsafe surface (`OBJECT_ATTRIBUTES`,
 `UNICODE_STRING`, the `Wdk` feature) for the same effect on a file system that enforces the sharing rule, which is
 proven on the hosted NTFS runner by the tests below. A file system that does not enforce it is outside the claim.
-Identity is the volume serial and 128-bit file id of the handle (the existing `file_identity` of `root_lock`); both it and
-the link count now go through one generic `query_handle` helper there, so the module adds no `unsafe` of its own. No new
-dependency, feature or package.
+The sharing rule does not stop a writer from turning an *empty* pinned directory into a reparse point in place (the
+object is not renamed or deleted), which would make the join lead into another tree. Two checks cover it: the parent
+handle is checked for reparse data before each use (and a listing before and after), and every child that is opened must
+report by its own handle a real path whose parent is the path of the pinned directory, so anything reached through a
+redirection reports another parent and is refused (`Redirected`). A listing and `entry_kind` only name entries; acting on
+one goes through such an open. Identity is the volume serial and 128-bit file id of the handle (the existing
+`file_identity` of `root_lock`). The handle queries share one typed helper there: `query_handle<T: HandleInfo>` takes
+no class parameter, the class belongs to the structure through an `unsafe trait` whose contract is "this is the
+structure of that class, valid for every bit pattern", so a safe caller cannot pair a type with another class. The
+module adds one more `unsafe` function (`GetFinalPathNameByHandleW`, with a SAFETY comment) and one `unsafe impl` for
+`FILE_STANDARD_INFO`; no new dependency, feature or package. A Windows name with an unpaired surrogate, which a listing
+can return, is judged by its other characters instead of being unopenable.
 
 **Proof (lib unit tests, so that the macOS and Windows evidence job runs the same cases as Linux).** A link or an entry
 of another kind is refused and never followed for the root, a child directory, a file and `entry_kind`; a FIFO and a
@@ -1667,7 +1677,9 @@ sees the whole file), and a hard link is counted; a held directory keeps its obj
 refilled (Unix) and `is_still_named` says so; a root given through a link is resolved to the object itself, and
 retargeting that link afterwards changes nothing (all platforms); an ancestor turned into a link to the renamed tree is
 no longer the name (Unix); a root path that ends in a separator, `.` or `..` is refused, with a test of the premise that
-the system follows the link there (Unix). Windows: a junction is refused at the root and below it, a name the system would
+the system follows the link there (Unix). Windows: a directory turned into a junction in place (`FSCTL_SET_REPARSE_POINT` on the same object) reaches nothing
+through it, and a child reached through a link in the path is refused by its real path alone; a junction is refused at the
+root and below it, a name with an unpaired surrogate can be opened after a listing, a name the system would
 reinterpret is refused (including `COM¹`..`COM³` and `LPT¹`..`LPT³`; the rule is a pure function that is also tested on
 Linux), and a pinned directory and its ancestors cannot be renamed or removed while held. The local environment is Linux, so the hosted Windows job is the only oracle for the Windows cases;
 its result is recorded on the PR.

@@ -304,20 +304,33 @@ pub(crate) mod sys {
         Ok(file_identity(file)? == file_identity(&named)?)
     }
 
-    /// One `GetFileInformationByHandleEx` query: fills `info` with the answer for `class`.
+    /// A structure that `GetFileInformationByHandleEx` fills for one information class.
+    ///
+    /// # Safety
+    /// `Self` must be the C structure the system writes for `CLASS`, and every bit pattern must be a
+    /// valid value of it (plain integers only). That is what makes [`query_handle`] safe to call: the
+    /// class is not a parameter, so a structure can never be paired with another class.
     #[allow(unsafe_code)]
-    pub(crate) fn query_handle<T>(
-        file: &File,
-        class: FILE_INFO_BY_HANDLE_CLASS,
-        info: &mut T,
-    ) -> io::Result<()> {
+    pub(crate) unsafe trait HandleInfo {
+        const CLASS: FILE_INFO_BY_HANDLE_CLASS;
+    }
+
+    #[allow(unsafe_code)]
+    // SAFETY: FILE_ID_INFO is the structure of `FileIdInfo`, a volume serial and 16 identifier bytes.
+    unsafe impl HandleInfo for FILE_ID_INFO {
+        const CLASS: FILE_INFO_BY_HANDLE_CLASS = FileIdInfo;
+    }
+
+    /// One `GetFileInformationByHandleEx` query: fills `info` with the answer for its class.
+    #[allow(unsafe_code)]
+    pub(crate) fn query_handle<T: HandleInfo>(file: &File, info: &mut T) -> io::Result<()> {
         // SAFETY: `file` keeps the handle open; `info` is an exclusively borrowed, aligned buffer of
-        // exactly `size_of::<T>()` bytes that outlives this synchronous call, and the system refuses a
-        // class whose structure does not fit that size instead of writing past it. No key/body is read.
+        // exactly `size_of::<T>()` bytes that outlives this synchronous call, `T` is the structure of
+        // `T::CLASS` (the `HandleInfo` contract), and the system refuses a buffer that is too small.
         let success = unsafe {
             GetFileInformationByHandleEx(
                 file.as_raw_handle() as HANDLE,
-                class,
+                T::CLASS,
                 (info as *mut T).cast(),
                 std::mem::size_of::<T>() as u32,
             )
@@ -336,7 +349,7 @@ pub(crate) mod sys {
                 Identifier: [0; 16],
             },
         };
-        query_handle(file, FileIdInfo, &mut info)?;
+        query_handle(file, &mut info)?;
         Ok((info.VolumeSerialNumber, info.FileId.Identifier))
     }
 

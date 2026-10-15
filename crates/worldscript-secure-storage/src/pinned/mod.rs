@@ -163,11 +163,11 @@ impl PinnedDir {
     /// Opens the child directory `name` through this directory. A link or reparse point is refused.
     pub fn open_dir(&self, name: impl AsRef<OsStr>) -> Result<PinnedDir, PinnedError> {
         let name = checked_name(name.as_ref())?;
-        let (handle, identity) =
+        let (handle, identity, path) =
             sys::open_child(&self.handle, &self.path, name, EntryKind::Directory)?;
         Ok(PinnedDir {
             handle,
-            path: self.path.join(name),
+            path,
             identity,
         })
     }
@@ -182,7 +182,7 @@ impl PinnedDir {
     /// that is not a regular file is refused.
     pub fn open_file(&self, name: impl AsRef<OsStr>) -> Result<PinnedFile, PinnedError> {
         let name = checked_name(name.as_ref())?;
-        let (file, identity) = sys::open_child(&self.handle, &self.path, name, EntryKind::File)?;
+        let (file, identity, _) = sys::open_child(&self.handle, &self.path, name, EntryKind::File)?;
         Ok(PinnedFile { file, identity })
     }
 
