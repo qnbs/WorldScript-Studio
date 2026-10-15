@@ -51,8 +51,8 @@ enum Step {
     /// The directory changed (an entry was moved and put back, or a quarantine directory came and
     /// went); the outcome is final.
     Changed(RemovalOutcome),
-    /// The object lost its name.
-    Unlinked,
+    /// The object lost its name; whether the quarantine directory it was unlinked from was synced.
+    Unlinked(DirectoryDurability),
     /// The entry was moved aside and put back; this is why the removal stopped.
     RolledBack(PinnedError),
     /// The entry could not be put back and stays in the quarantine directory.
@@ -184,10 +184,18 @@ impl Quarantine {
         }
     }
 
-    /// Whether the entry may still be inside: `false` only if it is known to be gone (an actor removed
-    /// it); an error while looking (a permission lost) is not a proof that it is gone.
-    fn holds_entry(&self) -> bool {
-        !matches!(stat_child(&self.fd, OsStr::new(INSIDE)), Ok(None))
+    /// Whether the entry may still be inside: `false` only if it is known to be gone, or to be another
+    /// object than `expected` (an actor removed or replaced it); an error while looking (a permission
+    /// lost) proves neither. Without an expectation any object counts.
+    fn holds(&self, expected: Option<ObjectIdentity>) -> bool {
+        match stat_child(&self.fd, OsStr::new(INSIDE)) {
+            Ok(None) => false,
+            Ok(Some(stat)) => match expected {
+                None => true,
+                Some(wanted) => identity_from(&stat).is_ok_and(|found| found == wanted),
+            },
+            Err(_) => true,
+        }
     }
 
     /// Whether the name still leads to the directory that was created.
@@ -205,6 +213,18 @@ impl Quarantine {
 #[cfg(test)]
 pub(in crate::pinned) fn make_usable(parent: &DirHandle, name: &OsStr) -> Result<(), PinnedError> {
     Quarantine::made_usable(parent, name).map(|_| ())
+}
+
+/// The durability of a removal that touched two directories: confirmed only if both were synced.
+pub(in crate::pinned) fn both_confirmed(
+    first: DirectoryDurability,
+    second: DirectoryDurability,
+) -> DirectoryDurability {
+    if first == DirectoryDurability::Confirmed && second == DirectoryDurability::Confirmed {
+        DirectoryDurability::Confirmed
+    } else {
+        DirectoryDurability::NotConfirmed
+    }
 }
 
 /// Unlinks the entry that was identified in the quarantine directory and asks the open object whether
@@ -304,7 +324,7 @@ impl Removal<'_> {
         match self.judge(observer) {
             Err(cause) => match self.restore() {
                 Ok(()) => Ok(Step::RolledBack(cause)),
-                Err(_) if self.retained() => Ok(Step::Stranded(cause)),
+                Err(_) if self.retained(Some(self.target.expected)) => Ok(Step::Stranded(cause)),
                 Err(_) => Ok(Step::Changed(RemovalOutcome::Disturbed)),
             },
             step => step,
@@ -321,14 +341,19 @@ impl Removal<'_> {
             Inside::Object(object, found) if found == self.target.expected => {
                 self.conclude(&object, observer)
             }
-            Inside::Object(..) | Inside::Foreign => {
-                let restored = self.restore().is_ok();
-                if !restored && !self.retained() {
-                    return Ok(Step::Changed(RemovalOutcome::Disturbed));
-                }
-                Ok(Step::Changed(RemovalOutcome::Swapped { restored }))
-            }
+            Inside::Object(_, found) => self.swapped(Some(found)),
+            Inside::Foreign => self.swapped(None),
         }
+    }
+
+    /// What arrived is not the authenticated object: it goes back under its name, or stays aside if
+    /// that is impossible (and is then still `arrived`, the identity it was seen with if it was opened).
+    fn swapped(&self, arrived: Option<ObjectIdentity>) -> Result<Step, PinnedError> {
+        let restored = self.restore().is_ok();
+        if !restored && !self.retained(arrived) {
+            return Ok(Step::Changed(RemovalOutcome::Disturbed));
+        }
+        Ok(Step::Changed(RemovalOutcome::Swapped { restored }))
     }
 
     /// The last window: the entry in the quarantine directory is the authenticated object.
@@ -344,12 +369,15 @@ impl Removal<'_> {
                 Ok(Step::Changed(RemovalOutcome::NotEmpty))
             }
             outcome => {
-                // The unlink changed the directory that is held; if an actor renamed it away it is not
-                // the one the parent sync covers, so it is synced as well (best effort).
-                if !self.quarantine.is_named(&self.dir.handle) {
-                    let _ = self.quarantine.fd.sync_all();
-                }
-                Ok(unlinked(outcome))
+                // The unlink changed the directory that is held, and that directory can outlive the
+                // removal (an actor renamed it away, or put an entry into it so that it cannot be
+                // removed). The parent sync does not cover it, so it is synced here, and a sync that
+                // fails leaves the removal unconfirmed.
+                let held = match self.quarantine.fd.sync_all() {
+                    Ok(()) => DirectoryDurability::Confirmed,
+                    Err(_) => DirectoryDurability::NotConfirmed,
+                };
+                Ok(unlinked(outcome, held))
             }
         }
     }
@@ -360,17 +388,18 @@ impl Removal<'_> {
 
     /// The entry stays in the quarantine directory: that directory changed as well as the parent, so
     /// it is synced too (best effort), and the outcome may only say where the entry is if the recorded
-    /// name still leads to the directory that holds it. If an actor renamed that directory away, the
-    /// entry cannot be found by name any more, and that is reported as tampering.
-    fn retained(&self) -> bool {
+    /// name still leads to the directory that holds it and the entry in it is still `expected` (or
+    /// cannot be looked at). If an actor renamed that directory away, or removed or replaced the entry,
+    /// the entry cannot be found where the outcome would say, and that is reported as tampering.
+    fn retained(&self, expected: Option<ObjectIdentity>) -> bool {
         let _ = self.quarantine.fd.sync_all();
-        self.quarantine.is_named(&self.dir.handle) && self.quarantine.holds_entry()
+        self.quarantine.is_named(&self.dir.handle) && self.quarantine.holds(expected)
     }
 }
 
-fn unlinked(outcome: RemovalOutcome) -> Step {
+fn unlinked(outcome: RemovalOutcome, held: DirectoryDurability) -> Step {
     match outcome {
-        RemovalOutcome::Removed(_) => Step::Unlinked,
+        RemovalOutcome::Removed(_) => Step::Unlinked(held),
         other => Step::Changed(other),
     }
 }
@@ -397,9 +426,9 @@ fn settle(
             dir.sync()?;
             Ok(outcome)
         }
-        Step::Unlinked => {
+        Step::Unlinked(held) => {
             observer(RemovalStage::BeforeSync)?;
-            Ok(RemovalOutcome::Removed(dir.sync()?))
+            Ok(RemovalOutcome::Removed(both_confirmed(dir.sync()?, held)))
         }
     }
 }

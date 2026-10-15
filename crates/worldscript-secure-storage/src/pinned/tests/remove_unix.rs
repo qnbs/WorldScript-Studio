@@ -14,7 +14,7 @@ use rustix::fs::{unlinkat, AtFlags};
 use super::remove::{holds, names, removed};
 use super::Scratch;
 use crate::durable::DirectoryDurability;
-use crate::pinned::unix::removal::{make_usable, INSIDE};
+use crate::pinned::unix::removal::{both_confirmed, make_usable, INSIDE};
 use crate::pinned::{PinnedDir, PinnedError, RemovalOutcome, RemovalStage, QUARANTINE_PREFIX};
 
 /// A pinned directory holding `a` = "alpha", with the paths a swap needs.
@@ -663,8 +663,8 @@ fn a_quarantine_directory_the_owner_cannot_open_is_refused_fail_closed() {
 type Tamper = (&'static str, fn(&Path, &Path, &Path));
 
 #[test]
-fn an_entry_that_cannot_be_found_where_the_outcome_would_say_is_reported_as_disturbed() {
-    let tampers: [Tamper; 2] = [
+fn an_entry_that_is_not_where_the_outcome_would_say_is_reported_as_disturbed() {
+    let tampers: [Tamper; 3] = [
         // The held directory is renamed away: the recorded name leads somewhere else.
         ("renamed-away", |directory, _inside, aside| {
             fs::rename(directory, aside.join("held")).unwrap();
@@ -672,6 +672,12 @@ fn an_entry_that_cannot_be_found_where_the_outcome_would_say_is_reported_as_dist
         // The entry itself is removed: the directory is still named, but holds nothing.
         ("entry-removed", |_directory, inside, _aside| {
             fs::remove_file(inside).unwrap();
+        }),
+        // The entry is moved away and another object takes its place: something is there, not the
+        // authenticated object.
+        ("entry-replaced", |_directory, inside, aside| {
+            fs::rename(inside, aside.join("authenticated")).unwrap();
+            fs::write(inside, b"foreign").unwrap();
         }),
     ];
     let outcomes: Vec<_> = tampers
@@ -694,7 +700,48 @@ fn an_entry_that_cannot_be_found_where_the_outcome_would_say_is_reported_as_dist
     let disturbed = |label| (label, Ok(RemovalOutcome::Disturbed), b"taken".to_vec());
     assert_eq!(
         outcomes,
-        vec![disturbed("renamed-away"), disturbed("entry-removed")]
+        vec![
+            disturbed("renamed-away"),
+            disturbed("entry-removed"),
+            disturbed("entry-replaced")
+        ]
+    );
+}
+
+#[test]
+fn a_quarantine_directory_an_actor_put_an_entry_into_survives_and_the_removal_still_completes() {
+    // The directory cannot be removed while it holds the actor's entry; the authenticated file is gone
+    // all the same, and the actor's entry is untouched.
+    let f = fixture("occupied-quarantine");
+    let outcome = f.pinned.remove_authenticated_file_observed(
+        "a",
+        holds(b"alpha"),
+        &mut on(At::Identified, |inside| {
+            let directory = inside.unwrap().parent().unwrap();
+            fs::write(directory.join("other"), b"foreign").unwrap();
+        }),
+    );
+    let left = quarantines(&f.root);
+    assert_eq!(
+        (outcome, f.root.join("a").exists(), left.len()),
+        (removed(), false, 1)
+    );
+    assert_eq!(fs::read(left[0].join("other")).unwrap(), b"foreign");
+    assert!(!left[0].join(INSIDE).exists());
+}
+
+#[test]
+fn a_removal_is_confirmed_only_if_both_directories_were_synced() {
+    use DirectoryDurability::{Confirmed, NotConfirmed};
+    let all = [
+        (Confirmed, Confirmed),
+        (Confirmed, NotConfirmed),
+        (NotConfirmed, Confirmed),
+        (NotConfirmed, NotConfirmed),
+    ];
+    assert_eq!(
+        all.map(|(parent, held)| both_confirmed(parent, held)),
+        [Confirmed, NotConfirmed, NotConfirmed, NotConfirmed]
     );
 }
 

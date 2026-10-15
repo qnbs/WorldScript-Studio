@@ -51,7 +51,8 @@ pub const QUARANTINE_PREFIX: &str = ".h1q-";
 pub enum RemovalOutcome {
     /// The authenticated object lost this name (on Unix as far as the check after the unlink can tell,
     /// see [`Disturbed`](Self::Disturbed)); the durability of the directory entry change as far as the
-    /// platform can confirm it.
+    /// platform can confirm it. On Unix that covers the directory and the quarantine directory the
+    /// object was unlinked from: if the latter could not be synced the removal is `NotConfirmed`.
     Removed(DirectoryDurability),
     /// The authentication said no; nothing was changed.
     Refused,
@@ -65,10 +66,11 @@ pub enum RemovalOutcome {
     Swapped { restored: bool },
     /// Unix only: the quarantine directory was tampered with. Either the authenticated object had not
     /// lost a name after the unlink, so the name was bound to another object when it was unlinked (see
-    /// the window in the module documentation), and that object is gone; or the entry stayed in the
-    /// quarantine directory but an actor renamed that directory away, so the entry cannot be found by
-    /// the name that was recorded. Nothing can be undone: the caller must treat the directory as
-    /// tampered with, and never count this as a success.
+    /// the window in the module documentation), and that object is gone; or the entry could not be put
+    /// back and is not where the outcome would have said: an actor renamed the quarantine directory
+    /// away, removed the entry, or replaced it with another object, so the authenticated object cannot
+    /// be found by the name that was recorded. Nothing can be undone: the caller must treat the
+    /// directory as tampered with, and never count this as a success.
     Disturbed,
     /// Unix only: an error happened after the entry was moved into the quarantine directory and it
     /// could not be put back (`cause` is the error that started it). The entry is in the quarantine
