@@ -1645,10 +1645,13 @@ would follow back to the same directory) says no.
 
 **Windows.** A directory is pinned by an open handle that does not share delete, so neither it nor any of its ancestors can
 be renamed or replaced while it is held; a reparse point is opened as itself (`FILE_FLAG_OPEN_REPARSE_POINT`) and
-refused. A child is opened by the path of its pinned parent, **not** by an NT open relative to the parent handle: the
+refused. A root path that ends in a space or a dot is refused too, because the path layer strips them and would
+resolve a link before it. A child is opened by the path of its pinned parent, **not** by an NT open relative to the parent handle: the
 root is resolved once, from the object that was opened (`canonicalize`, then checked to name the same object), to a path
 without any link, so a relative root, a changed working directory or a link among the root's ancestors that is retargeted
-later cannot redirect a child; and every directory on that path is pinned. Reviewers asked for `NtCreateFile` with a
+later cannot redirect a child; and no directory on that path can be renamed or removed while a handle below it is open
+without delete sharing, which every `PinnedDir` (a child too) holds on its own, so it does not depend on the parent
+staying alive (a test drops the parent and renames the ancestors). Reviewers asked for `NtCreateFile` with a
 root directory handle instead; it was not taken because it adds a large unsafe surface (`OBJECT_ATTRIBUTES`,
 `UNICODE_STRING`, the `Wdk` feature) for the same effect on a file system that enforces the sharing rule, which is
 proven on the hosted NTFS runner by the tests below. A file system that does not enforce it is outside the claim.

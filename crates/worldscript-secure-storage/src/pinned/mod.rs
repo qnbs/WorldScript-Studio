@@ -121,14 +121,15 @@ fn checked_name(name: &OsStr) -> Result<&OsStr, PinnedError> {
 
 /// Whether `path` ends in a name. A trailing separator, `.` or `..` makes the system resolve the entry
 /// before it (a link there is followed even under `O_NOFOLLOW`), so such a path cannot be checked for a
-/// link at its final component.
-fn ends_in_a_name(path: &Path) -> bool {
+/// link at its final component. On Windows (`windows`) the path layer also strips trailing dots and
+/// spaces, so `link\. ` means `link\.`; no name ends that way.
+fn ends_in_a_name(path: &Path, windows: bool) -> bool {
     let text = path.as_os_str().to_string_lossy();
-    let is_separator = |c: char| c == '/' || (cfg!(windows) && c == '\\');
-    !matches!(
-        text.rsplit(is_separator).next(),
-        None | Some("" | "." | "..")
-    )
+    let is_separator = |c: char| c == '/' || (windows && c == '\\');
+    match text.rsplit(is_separator).next() {
+        None | Some("" | "." | "..") => false,
+        Some(last) => !(windows && last.ends_with(['.', ' '])),
+    }
 }
 
 impl PinnedDir {
@@ -136,7 +137,7 @@ impl PinnedDir {
     /// refused, and so is a path that does not end in a name (a trailing separator, `.` or `..`). The
     /// ancestors of `path` are resolved once, by the operating system.
     pub fn open_root(path: &Path) -> Result<Self, PinnedError> {
-        if !ends_in_a_name(path) {
+        if !ends_in_a_name(path, cfg!(windows)) {
             return Err(PinnedError::InvalidName);
         }
         let (handle, identity, path) = sys::open_root(path)?;
@@ -149,7 +150,8 @@ impl PinnedDir {
 
     /// The path of this directory without any link in it, as it was when the directory was opened. On
     /// Unix no operation uses it but [`is_still_named`](Self::is_still_named); on Windows a child is
-    /// opened by it, which is safe because every directory on it is pinned.
+    /// opened by it, which is safe because no directory on it can be renamed or removed while a handle
+    /// below it is open without delete sharing (every `PinnedDir`, a child too, holds its own).
     pub fn path(&self) -> &Path {
         &self.path
     }

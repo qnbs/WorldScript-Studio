@@ -61,12 +61,24 @@ pub(super) fn link_to_dir(target: &Path, link: &Path) {
     std::os::unix::fs::symlink(target, link).unwrap();
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
+
+        // `mklink` is a command of the shell, so both paths are quoted and anything the shell would still
+        // interpret inside quotes is refused instead of run.
+        let quoted = |path: &Path| {
+            let text = path.to_str().unwrap();
+            assert!(
+                !text.contains(['"', '%', '^', '!']),
+                "a path the shell would interpret: {text}"
+            );
+            format!("\"{text}\"")
+        };
         let made = std::process::Command::new("cmd")
             .arg("/C")
             .arg("mklink")
             .arg("/J")
-            .arg(link)
-            .arg(target)
+            .raw_arg(quoted(link))
+            .raw_arg(quoted(target))
             .output()
             .unwrap();
         assert!(made.status.success(), "{made:?}");

@@ -416,3 +416,46 @@ fn a_trailing_separator_makes_the_system_follow_a_link_despite_no_follow() {
     let with_separator = open(format!("{}/", link.display()), flags, Mode::empty());
     assert_eq!((plain.is_err(), with_separator.is_ok()), (true, true));
 }
+
+#[test]
+fn the_rules_for_the_end_of_a_root_path_follow_the_platform() {
+    use std::path::Path;
+
+    use crate::pinned::ends_in_a_name;
+
+    let cases: [(&str, bool, bool); 9] = [
+        ("/a/link", false, true),
+        ("/a/link/", false, false),
+        ("/a/link/.", false, false),
+        ("/a/link.", false, true),
+        ("/a/link ", false, true),
+        ("C:\\a\\link\\. ", true, false),
+        ("C:\\a\\link\\.. ", true, false),
+        ("C:\\a\\link.", true, false),
+        ("C:\\a\\link", true, true),
+    ];
+    let verdicts: Vec<(&str, bool)> = cases
+        .iter()
+        .map(|(path, windows, _)| (*path, ends_in_a_name(Path::new(path), *windows)))
+        .collect();
+    let expected: Vec<(&str, bool)> = cases.iter().map(|(path, _, ok)| (*path, *ok)).collect();
+    assert_eq!(verdicts, expected);
+}
+
+#[cfg(windows)]
+#[test]
+fn a_child_keeps_the_ancestors_pinned_after_its_parent_is_dropped() {
+    let scratch = Scratch::new("win-orphan");
+    let root = scratch.root();
+    fs::create_dir(root.join("child")).unwrap();
+    let child = PinnedDir::open_root(&root)
+        .unwrap()
+        .open_dir("child")
+        .unwrap();
+    // The parent handle is gone; the child's own handle is all that is left.
+    let attempts = (
+        fs::rename(&root, scratch.aside().join("moved-root")).is_err(),
+        fs::rename(scratch.path(), scratch.path().with_extension("moved")).is_err(),
+    );
+    assert_eq!((attempts, child.is_still_named()), ((true, true), Ok(true)));
+}

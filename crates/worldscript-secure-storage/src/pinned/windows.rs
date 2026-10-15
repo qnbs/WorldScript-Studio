@@ -5,9 +5,12 @@
 //!
 //! A child is opened by the path of its pinned parent, not by an NT call relative to the parent handle:
 //! the root is resolved once, from the object that was opened, to a path without any link
-//! ([`open_root`]), and every directory on that path is pinned. This is proven on NTFS by the tests
-//! that a pinned directory and its ancestors cannot be renamed and that a retargeted ancestor link
-//! does not redirect a child; a file system that does not enforce it is outside the claim.
+//! ([`open_root`]). No directory on that path can be renamed or removed while a handle below it is open
+//! without delete sharing, and every `PinnedDir`, a child too, holds such a handle of its own, so this
+//! does not depend on its parent staying alive. It is proven on NTFS by the tests that a pinned
+//! directory and its ancestors cannot be renamed, also after the parent was dropped, and that a
+//! retargeted ancestor link does not redirect a child; a file system that does not enforce the sharing
+//! rule is outside the claim.
 
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
@@ -78,9 +81,9 @@ pub(super) fn open_kind(
 }
 
 /// Opens the directory `path` and resolves it once to the path of the object itself, which has no link
-/// in it. Every directory on that path is pinned by the open handle (an open handle beneath a directory
-/// forbids renaming or removing it), so a later join with a child name cannot lead anywhere else, and a
-/// relative `path` or a link among its ancestors cannot redirect it afterwards.
+/// in it. No directory on that path can be renamed or removed while the open handle (or one of a child)
+/// is held, so a later join with a child name cannot lead anywhere else, and a relative `path` or a
+/// link among its ancestors cannot redirect it afterwards.
 pub(super) fn open_root(path: &Path) -> Result<(DirHandle, ObjectIdentity, PathBuf), PinnedError> {
     let (dir, identity) = open_kind(path, FILE_GENERIC_READ, EntryKind::Directory)?;
     let resolved = std::fs::canonicalize(path).map_err(PinnedError::from)?;
