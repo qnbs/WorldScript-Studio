@@ -1615,3 +1615,84 @@ accepted each fail a test.
 
 Not in this slice: clock-regression detection (the record holds no earlier reading to compare with), a platform-specific
 trusted time source, and any H1 work.
+
+### Handle-relative pinned I/O (Gate 4 slice H1a-1)
+
+Status words: `H1A_PRIMITIVES=IMPLEMENTED_NON_DESTRUCTIVE`, `H1_DELETION_MECHANISMS=NOT_IMPLEMENTED` (H1a-2),
+`H1_PROVED=NO`, `R1_PRODUCTION_RECLAMATION=NOT_ADMITTED`, `GATE4_TERMINAL=NO`. The maintainer cleared H1a to start and
+did not yet clear any deletion mechanism, so this slice changes nothing in the file system and nothing calls it. H1a is
+cut into two PRs by proof boundary: this one (the non-destructive primitives and their Windows/Unix proof) and H1a-2
+(the removal primitives, `test-support` only).
+
+**What exists.** A new module `pinned`, a parallel seam (`DurableFs` is unchanged). `PinnedDir::open_root` opens one
+directory with no-follow semantics and resolves it once to the path of the object itself, without any link in it;
+`open_dir`, `open_file`, `entry_kind`, `entries(limit)` and `is_still_named` reach everything below it through a
+directory that is held open (the descriptor on Unix, see below for Windows). A file is read through `PinnedFile`
+(`read_at_most`, which reads from the start on every call, `identity`, `link_count`). A name must be exactly one ordinary component (on
+Windows also no data stream, wildcard, trailing dot or space, or device name). A link, junction or other reparse point is
+refused at every component below the root (`Redirected`); the final component of the root is not followed either (and a
+root path must end in a name: a trailing separator, `.` or `..` makes the system resolve the link before it even under
+`O_NOFOLLOW`, so it is refused as `InvalidName`), and the
+ancestors of the root are resolved once by the operating system, as for every other operation of the crate. A listing is
+bounded by a limit the caller gives, and a file is read only up to a bound.
+
+**Unix.** Every step is an `*at` call on the descriptor of the directory that was opened (`openat` with `O_NOFOLLOW`,
+`statat` with `AT_SYMLINK_NOFOLLOW`, `Dir::read_from` on the descriptor). A file is opened non-blocking and without a
+controlling terminal, and it is looked at before it is opened (a device node runs its driver on open, which those flags
+do not prevent), so a link, FIFO, device or directory is refused without an open; the type check on the descriptor still
+catches an entry swapped in between, which has then been opened once. That window cannot be used to run a driver by an
+unprivileged actor: a device node can only be created with `mknod` privilege, and an existing one cannot be linked or
+renamed into the directory across file systems; a privileged actor is outside the model. `is_still_named` walks the root's path from `/` one component at a time with `O_NOFOLLOW`,
+so an ancestor that was renamed away, replaced or turned into a link (to the renamed tree, which a path-based check
+would follow back to the same directory) says no.
+
+**Windows.** A directory is pinned by an open handle that does not share delete, so neither it nor any of its ancestors
+can be renamed or replaced while it is held (proven below, also after the parent was dropped); a reparse point is opened
+as itself (`FILE_FLAG_OPEN_REPARSE_POINT`) and refused. **Children and listings are handle-relative**: a child is opened
+with `NtCreateFile` and the pinned directory as `RootDirectory` (the single validated name as the object name,
+`FILE_OPEN_REPARSE_POINT`), a listing reads the directory information of the handle (`FileIdBothDirectoryInfo`), and
+`entry_kind` is a relative open of the entry as itself. The system looks the name up in the directory object the handle
+refers to, so an empty pinned directory that a writer turns into a reparse point in place (the sharing rule does not stop
+that; the object is neither renamed nor deleted), a redirected path, a relative root or a link among the root's
+ancestors cannot lead a child or a listing into another tree. Only the root is opened by path, once, and resolved to a
+path without any link (`canonicalize`, then checked to name the same object, else `Redirected`); a child's stored path
+is the real path its own handle reports and is only informational. Two guards sit on top and are not the mechanism: the parent handle is
+checked for reparse data before each use, which alone would leave a window and only turns what the relative lookup
+answers anyway (nothing: a converted directory is empty) into an explicit `Redirected`; and a child's real path, as its
+own handle reports it, must lie directly in the real path the parent's handle reports. The tests below show the lookup
+itself, without either guard.
+This needs the `Wdk_Foundation` and `Wdk_Storage_FileSystem` features of the `windows-sys` already in the lockfile (no
+new package; `Cargo.lock` is unchanged). Identity is the volume serial and 128-bit file id of the handle (the existing
+`file_identity` of `root_lock`). **Unsafe inventory, all local with a SAFETY comment:** `open_relative` (`NtCreateFile`),
+`list` (`GetFileInformationByHandleEx`; the entries are parsed from the byte buffer with checked indexing), `final_path`
+(`GetFinalPathNameByHandleW`), `query_handle` and the `unsafe trait HandleInfo` with exactly two `unsafe impl`s
+(`FILE_ID_INFO`, `FILE_STANDARD_INFO`) in `root_lock`. `query_handle<T: HandleInfo>` takes no class parameter: the class
+belongs to the structure, whose contract is "the structure of that class, valid for every bit pattern" (plain
+integers, layout pinned by a test), so a safe caller cannot pair a type with another class. A Windows name with an
+unpaired surrogate, which a listing can return, is judged by its other characters instead of being unopenable. The
+claim holds for a file system that enforces the sharing rule and the relative lookup (NTFS, proven on the hosted
+runner); it is not made for any other.
+
+**Proof (lib unit tests, so that the macOS and Windows evidence job runs the same cases as Linux).** A link or an entry
+of another kind is refused and never followed for the root, a child directory, a file and `entry_kind`; a FIFO and a
+symlink to a file are not opened (Unix); a name that is not one component is refused by every operation; a listing above
+its limit is refused; a file is read up to its bound only, every read starts at the beginning (a retry after `TooLarge`
+sees the whole file), and a hard link is counted; a held directory keeps its object when its path is renamed and
+refilled (Unix) and `is_still_named` says so; a root given through a link is resolved to the object itself, and
+retargeting that link afterwards changes nothing (all platforms); an ancestor turned into a link to the renamed tree is
+no longer the name (Unix); a root path that ends in a separator, `.` or `..` is refused, with a test of the premise that
+the system follows the link there (Unix). every operation follows the held directory, not the path it was stored with (a decoy tree behind the stored path; all
+platforms, and the naive join with the stored path reads the decoy as the counter-proof). Windows: a pinned empty
+directory converted into a junction in place (`FSCTL_SET_REPARSE_POINT` on the same object) is refused by every
+operation while a join with its stored path reads the foreign file (counter-proof), and the relative open and the
+handle listing of that converted directory reach neither the foreign file nor its names even without the check; a
+junction is refused at the root and below it, a name with an unpaired surrogate can be opened after a listing, a name
+the system would reinterpret is refused (including `COM¹`..`COM³` and `LPT¹`..`LPT³`; the rule is a pure function that
+is also tested on Linux), a pinned directory and its ancestors cannot be renamed or removed while held, also after the
+parent was dropped, and the layout of the two handle-information structures is pinned (24 bytes, 8-aligned). The local environment is Linux, so the hosted Windows job is the only oracle for the Windows cases;
+its result is recorded on the PR.
+
+**Residual, stated.** The root itself is opened by path once, so a caller must hold the root-commit lock and check
+`is_still_named` where that matters. Everything below the root is handle-relative, but reading is not removing: the
+removal primitives, and with them the claim that only the authenticated object is ever removed, are H1a-2. The sweep
+(H1b), the three producer-equivalence invariants (H1c) and stored-set reclamation (I1c) are not started.

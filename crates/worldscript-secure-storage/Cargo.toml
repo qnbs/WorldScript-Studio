@@ -35,11 +35,13 @@ zeroize_derive = "~1.4"
 # Gate 4 slice 4A (§11.1): the cross-process `root_commit_mutex` is an operating-system advisory
 # lock. rustix's safe `flock` on Unix (1.x, MSRV 1.63, already in the lockfile); on Windows one
 # `LockFileEx` call through windows-sys 0.52 (MSRV 1.56, already in the lockfile).
+# Gate 4 slice H1a (`pinned`): the same rustix for `*at` calls; on Windows the relative `NtCreateFile` open
+# (the `Wdk_*` features of windows-sys, no new package) and a few more calls.
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1.1", default-features = false, features = ["fs", "std"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO"] }
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Wdk_Foundation", "Wdk_Storage_FileSystem"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Secret Service only: never `linux-native` / keyutils (not persistent, never a fallback).

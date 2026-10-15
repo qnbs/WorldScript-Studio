@@ -40,6 +40,7 @@ pub mod marker;
 pub mod memory_provider;
 mod operation_authority;
 pub mod operations;
+pub mod pinned;
 mod placement;
 pub mod protected;
 pub mod provider;

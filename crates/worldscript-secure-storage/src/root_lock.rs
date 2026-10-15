@@ -184,11 +184,12 @@ pub(crate) mod sys {
     use std::os::windows::io::AsRawHandle;
     use std::path::{Path, PathBuf};
 
-    use windows_sys::Win32::Foundation::{ERROR_LOCK_VIOLATION, HANDLE};
+    use windows_sys::Win32::Foundation::{ERROR_LOCK_VIOLATION, GENERIC_READ, HANDLE};
     use windows_sys::Win32::Storage::FileSystem::{
-        FileIdInfo, GetFileInformationByHandleEx, LockFileEx, FILE_ATTRIBUTE_REPARSE_POINT,
-        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_128, FILE_ID_INFO,
-        FILE_SHARE_READ, FILE_SHARE_WRITE, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
+        FileIdInfo, FileStandardInfo, GetFileInformationByHandleEx, LockFileEx,
+        FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+        FILE_ID_128, FILE_ID_INFO, FILE_INFO_BY_HANDLE_CLASS, FILE_SHARE_READ, FILE_SHARE_WRITE,
+        FILE_STANDARD_INFO, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
     };
     use windows_sys::Win32::System::IO::OVERLAPPED;
 
@@ -231,13 +232,19 @@ pub(crate) mod sys {
         installation_dir.join(crate::admission::OPERATION_ADMISSION_LOCK_FILE)
     }
 
-    /// Pins the directory name itself without delete sharing.
-    pub(crate) fn open_directory(path: &Path) -> io::Result<File> {
-        let file = OpenOptions::new()
-            .read(true)
+    /// Opens `path` as itself with `access` (a reparse point is opened, not followed), sharing read and
+    /// write but never delete, so the name cannot be renamed or removed while the handle is held.
+    pub(crate) fn open_as_itself(path: &Path, access: u32) -> io::Result<File> {
+        OpenOptions::new()
+            .access_mode(access)
             .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
             .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
-            .open(path)?;
+            .open(path)
+    }
+
+    /// Pins the directory name itself without delete sharing.
+    pub(crate) fn open_directory(path: &Path) -> io::Result<File> {
+        let file = open_as_itself(path, GENERIC_READ)?;
         let metadata = file.metadata()?;
         if !metadata.is_dir() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
             return Err(io::Error::from(io::ErrorKind::InvalidInput));
@@ -286,12 +293,7 @@ pub(crate) mod sys {
 
     /// Compare kernel object identities, not path existence: ancestor redirection must fail closed.
     pub(crate) fn still_named(file: &File, path: &Path) -> io::Result<bool> {
-        let named = match OpenOptions::new()
-            .read(true)
-            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
-            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
-            .open(path)
-        {
+        let named = match open_as_itself(path, GENERIC_READ) {
             Ok(named) => named,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
             Err(error) => return Err(error),
@@ -302,28 +304,59 @@ pub(crate) mod sys {
         Ok(file_identity(file)? == file_identity(&named)?)
     }
 
-    /// Stable 128-bit IDs support NTFS/ReFS; unsupported identity queries are errors, not authority.
+    /// A structure that `GetFileInformationByHandleEx` fills for one information class.
+    ///
+    /// # Safety
+    /// `Self` must be the C structure the system writes for `CLASS`, and every bit pattern must be a
+    /// valid value of it (plain integers only). That is what makes [`query_handle`] safe to call: the
+    /// class is not a parameter, so a structure can never be paired with another class.
     #[allow(unsafe_code)]
-    fn file_identity(file: &File) -> io::Result<(u64, [u8; 16])> {
+    pub(crate) unsafe trait HandleInfo {
+        const CLASS: FILE_INFO_BY_HANDLE_CLASS;
+    }
+
+    #[allow(unsafe_code)]
+    // SAFETY: FILE_ID_INFO is the structure of `FileIdInfo`, a volume serial and 16 identifier bytes.
+    unsafe impl HandleInfo for FILE_ID_INFO {
+        const CLASS: FILE_INFO_BY_HANDLE_CLASS = FileIdInfo;
+    }
+
+    #[allow(unsafe_code)]
+    // SAFETY: FILE_STANDARD_INFO is the structure of `FileStandardInfo`: integers and two byte-sized
+    // booleans, valid for every bit pattern (its layout is pinned by a test).
+    unsafe impl HandleInfo for FILE_STANDARD_INFO {
+        const CLASS: FILE_INFO_BY_HANDLE_CLASS = FileStandardInfo;
+    }
+
+    /// One `GetFileInformationByHandleEx` query: fills `info` with the answer for its class.
+    #[allow(unsafe_code)]
+    pub(crate) fn query_handle<T: HandleInfo>(file: &File, info: &mut T) -> io::Result<()> {
+        // SAFETY: `file` keeps the handle open; `info` is an exclusively borrowed, aligned buffer of
+        // exactly `size_of::<T>()` bytes that outlives this synchronous call, `T` is the structure of
+        // `T::CLASS` (the `HandleInfo` contract), and the system refuses a buffer that is too small.
+        let success = unsafe {
+            GetFileInformationByHandleEx(
+                file.as_raw_handle() as HANDLE,
+                T::CLASS,
+                (info as *mut T).cast(),
+                std::mem::size_of::<T>() as u32,
+            )
+        };
+        if success == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    /// Stable 128-bit IDs support NTFS/ReFS; unsupported identity queries are errors, not authority.
+    pub(crate) fn file_identity(file: &File) -> io::Result<(u64, [u8; 16])> {
         let mut info = FILE_ID_INFO {
             VolumeSerialNumber: 0,
             FileId: FILE_ID_128 {
                 Identifier: [0; 16],
             },
         };
-        // SAFETY: `file` keeps the handle open; the correctly aligned FILE_ID_INFO buffer has the
-        // exact size required by FileIdInfo and outlives this synchronous call. No key/body is read.
-        let success = unsafe {
-            GetFileInformationByHandleEx(
-                file.as_raw_handle() as HANDLE,
-                FileIdInfo,
-                (&mut info as *mut FILE_ID_INFO).cast(),
-                std::mem::size_of::<FILE_ID_INFO>() as u32,
-            )
-        };
-        if success == 0 {
-            return Err(io::Error::last_os_error());
-        }
+        query_handle(file, &mut info)?;
         Ok((info.VolumeSerialNumber, info.FileId.Identifier))
     }
 
