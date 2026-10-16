@@ -1,5 +1,6 @@
-//! Windows removal: while the authenticated handle is held the name cannot be rebound and the bytes
-//! cannot be written, a competing handle makes the removal fail closed, and the delete is a disposition
+//! Windows removal: while the authenticated handle is held the name cannot be rebound and no handle can
+//! be opened to write the bytes (a writable mapped view that existed before is not stopped, see the
+//! documentation of the removal), a competing handle makes the removal fail closed, and the delete is a disposition
 //! of the authenticated handle. The counter-proof shows what a share mode that allowed writing would
 //! have let through.
 
