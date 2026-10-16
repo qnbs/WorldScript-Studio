@@ -5,6 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
+#[cfg(all(feature = "test-support", target_vendor = "apple"))]
+mod macos_probe;
 mod read;
 #[cfg(feature = "test-support")]
 mod remove;
