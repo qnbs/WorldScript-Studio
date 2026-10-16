@@ -1883,3 +1883,39 @@ stranded by a lost search permission is `Disturbed`, not `Stranded`: a failed lo
 **Not claimed.** Windows creates no quarantine directory (part 4); the Disturbed window is bounded and detected, not closed.
 A foreign entry that is neither a file nor an empty directory (a link, a FIFO) stays in its `.h1q-*` directory: the recovery
 refuses it (`Refused`) and no sweep touches it, so nothing removes it until a person decides.
+
+#### Part 4: removal on Windows
+
+Status words: `H1A_2_WINDOWS_REMOVAL=IMPLEMENTED_TEST_SUPPORT_ONLY`, `H1_PROVED=NO`. The object is opened through the handle-relative
+lookup of every child (`NtCreateFile` with the pinned directory as `RootDirectory`), with delete access and a share mode of
+**read only**. With write sharing another handle could change the bytes between the authentication and the delete;
+with read-only sharing a writer that already has the file open makes this open fail (`Busy`), no later writer can open it
+while the handle is held, and without delete sharing the name cannot be renamed, deleted or replaced. Only after the caller
+authenticated the bytes on that handle, `FileDispositionInfoEx` (delete, POSIX semantics) is set on **that same handle**.
+Failing authentication, an error or dropping the handle deletes nothing: there is no `FILE_FLAG_DELETE_ON_CLOSE` and no fallback
+to the classic disposition (a Windows or file system without POSIX delete semantics answers `Unsupported`), and a read-only
+file is refused, not forced. A directory is removed the same way and only while empty (`NotEmpty` otherwise). There is no
+quarantine directory and none of the Unix window: the guarantee is the one the system gives for a held handle. The result
+reports `DirectoryDurability::NotConfirmed`, since Windows offers no directory sync through a handle opened for reading.
+
+**FFI.** The disposition is the only new `unsafe` (`SetFileInformationByHandle` with one fixed `FILE_DISPOSITION_INFO_EX`;
+no generic or safe wrapper over another class). Its SAFETY comment states the handle lifetime (the borrowed `File`), the
+rights (opened with delete access), the structure and its size (pinned by a test: 4 bytes, 4-aligned) and that it outlives
+the synchronous call.
+
+**Proof (hosted Windows runner; the local environment compiles only).** While the authenticated handle is held the name cannot
+be renamed, deleted or replaced; nobody can open the file for writing during the authentication and at the check (the
+share-mode proof), with the **counter-proof** that a handle opened with write sharing lets a writer change the bytes; a writer
+that already has the file open makes the removal `Busy` and changes nothing; a reader that shares delete does not stop it and
+the name is free at once; a directory is removed only while empty and its name cannot be rebound meanwhile; a read-only file is
+refused; a leftover removal is `Unsupported`. The neutral cases of `remove.rs` now run on Windows as well (a refused, failing
+or wrong-identity authentication removes nothing; links, junctions, directories and missing names are not removed as files;
+hard-linked names; a filled directory and a junction are not removed).
+
+**Not claimed.** A file system without POSIX delete semantics is `Unsupported`, which the hosted runner does not exercise; the
+codes that mean it (`ERROR_INVALID_PARAMETER`, `ERROR_NOT_SUPPORTED` and `ERROR_INVALID_FUNCTION`, the last for a Windows or a
+driver that does not implement the information class at all) are mapped by one function that a test pins. The Unix window does
+not exist here, but the claim holds for a file system that enforces the sharing rule (NTFS), and the sharing rule is about
+handles: a writable memory-mapped view that another process created earlier and keeps after closing its handle is not stopped by
+it, so such a writer can still change the authenticated bytes before the disposition (a same-user residual, like the Unix
+window; no sharing mode closes it, and it is not tested because a hosted run cannot be made to hold such a mapping reliably).

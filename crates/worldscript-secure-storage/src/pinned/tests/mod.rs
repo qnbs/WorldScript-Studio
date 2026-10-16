@@ -18,6 +18,8 @@ mod remove_unix_cleanup;
 mod remove_unix_dir;
 #[cfg(all(feature = "test-support", unix))]
 mod remove_unix_sync;
+#[cfg(all(feature = "test-support", windows))]
+mod remove_windows;
 #[cfg(windows)]
 mod windows_redirect;
 

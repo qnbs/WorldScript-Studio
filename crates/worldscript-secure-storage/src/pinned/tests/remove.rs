@@ -1,19 +1,14 @@
-//! Removal on every platform that implements it: only the authenticated object goes, and a refusal
-//! changes nothing. Windows has no implementation in this part yet and keeps the refusal test.
+//! Removal on every platform: only the authenticated object goes, and a refusal changes nothing.
 
 use std::fs;
 
-#[cfg(unix)]
 use super::link_to_dir;
 use super::Scratch;
-#[cfg(unix)]
 use crate::durable::DirectoryDurability;
-#[cfg(unix)]
 use crate::pinned::PinnedFile;
 use crate::pinned::{PinnedDir, PinnedError, RemovalOutcome};
 
 /// Accepts a file whose whole content is `expected`.
-#[cfg(unix)]
 pub(super) fn holds(
     expected: &'static [u8],
 ) -> impl FnOnce(&mut PinnedFile) -> Result<bool, PinnedError> {
@@ -21,7 +16,6 @@ pub(super) fn holds(
 }
 
 /// What a completed removal reports on this platform.
-#[cfg(unix)]
 pub(super) fn removed() -> Result<RemovalOutcome, PinnedError> {
     let durability = if cfg!(unix) {
         DirectoryDurability::Confirmed
@@ -31,7 +25,6 @@ pub(super) fn removed() -> Result<RemovalOutcome, PinnedError> {
     Ok(RemovalOutcome::Removed(durability))
 }
 
-#[cfg(unix)]
 pub(super) fn names(pinned: &PinnedDir) -> Vec<String> {
     let mut listed: Vec<String> = pinned
         .entries(32)
@@ -43,7 +36,6 @@ pub(super) fn names(pinned: &PinnedDir) -> Vec<String> {
     listed
 }
 
-#[cfg(unix)]
 #[test]
 fn an_authenticated_file_is_removed_and_nothing_else_is() {
     let scratch = Scratch::new("remove");
@@ -58,7 +50,6 @@ fn an_authenticated_file_is_removed_and_nothing_else_is() {
     );
 }
 
-#[cfg(unix)]
 #[test]
 fn a_refused_authentication_a_failing_one_and_a_wrong_identity_remove_nothing() {
     let scratch = Scratch::new("refuse");
@@ -89,7 +80,6 @@ fn a_refused_authentication_a_failing_one_and_a_wrong_identity_remove_nothing() 
     );
 }
 
-#[cfg(unix)]
 #[test]
 fn a_link_a_directory_and_a_missing_name_are_not_removed_as_files() {
     let scratch = Scratch::new("not-files");
@@ -119,7 +109,6 @@ fn a_link_a_directory_and_a_missing_name_are_not_removed_as_files() {
     );
 }
 
-#[cfg(unix)]
 #[test]
 fn removing_a_hard_linked_name_leaves_the_other_names() {
     let scratch = Scratch::new("hard-link");
@@ -147,7 +136,6 @@ fn removing_a_hard_linked_name_leaves_the_other_names() {
     );
 }
 
-#[cfg(unix)]
 #[test]
 fn an_empty_directory_is_removed_and_a_filled_one_or_a_link_is_not() {
     let scratch = Scratch::new("dirs");
@@ -159,9 +147,10 @@ fn an_empty_directory_is_removed_and_a_filled_one_or_a_link_is_not() {
     fs::create_dir(aside.join("target")).unwrap();
     link_to_dir(&aside.join("target"), &root.join("link"));
     let pinned = PinnedDir::open_root(&root).unwrap();
-    // Only Linux can tell afterwards that the open directory was the one removed; elsewhere the removal
-    // of an empty directory is refused before anything is moved, and the other cases are the same.
-    let (empty_removal, left) = if cfg!(target_os = "linux") {
+    // Linux (a link count) and Windows (the delete is the disposition of the open handle) can tell that
+    // the directory they removed is the one they opened; on any other Unix system the removal of an empty
+    // directory is refused before anything is moved, and the other cases are the same.
+    let (empty_removal, left) = if cfg!(any(target_os = "linux", windows)) {
         (removed(), vec!["filled".to_string(), "link".to_string()])
     } else {
         (
@@ -192,28 +181,5 @@ fn an_empty_directory_is_removed_and_a_filled_one_or_a_link_is_not() {
             true,
             left
         )
-    );
-}
-
-#[cfg(windows)]
-#[test]
-fn every_removal_refuses_until_windows_implements_it_and_removes_nothing() {
-    let scratch = Scratch::new("remove-stub");
-    let root = scratch.root();
-    fs::write(root.join("a"), b"alpha").unwrap();
-    fs::create_dir(root.join("d")).unwrap();
-    let pinned = PinnedDir::open_root(&root).unwrap();
-    let refusals: [Result<RemovalOutcome, PinnedError>; 3] = [
-        pinned.remove_authenticated_file("a", |_| Ok(true)),
-        pinned.remove_empty_dir("d"),
-        pinned.remove_leftover_file(".h1q-00000000000000000000000000000000", |_| Ok(true)),
-    ];
-    assert_eq!(
-        (
-            refusals,
-            fs::read(root.join("a")).unwrap(),
-            root.join("d").is_dir()
-        ),
-        ([Err(PinnedError::Unsupported); 3], b"alpha".to_vec(), true)
     );
 }
