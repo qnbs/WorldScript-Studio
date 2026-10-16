@@ -4,11 +4,12 @@
 //! **Availability.** Everything in this module exists only with the test-only `test-support` feature,
 //! has no caller, and is not part of any production build. Reclamation of a real store is not admitted.
 //!
-//! **Status of this slice.** The API and its isolation, and on Unix the removal of files and of the
-//! leftovers of a crash, and on Linux the removal of directories. A call on Windows, and the removal of
-//! a directory on any other system, answers [`PinnedError::Unsupported`] (see
-//! [`PinnedDir::remove_empty_dir`]), so nothing is removed there and nothing claims a safety it does not
-//! have yet.
+//! **Status of this slice.** The API and its isolation; on Unix the removal of files and of the leftovers
+//! of a crash, on Linux the removal of directories, and on Windows the removal of files and directories
+//! through the authenticated handle. The removal of a directory on any other Unix system, and the
+//! leftover recovery on Windows (which creates no quarantine directory), answer
+//! [`PinnedError::Unsupported`] (see [`PinnedDir::remove_empty_dir`]), so nothing is removed there and
+//! nothing claims a safety it does not have.
 //!
 //! **The two designs the platform slices do not use.** Removing "the entry that was checked" with
 //! `unlinkat(parent, name)` after a check on the name is exposed to a swap of the last component: POSIX
@@ -36,6 +37,13 @@
 //!
 //! A hard link is one name: removing it leaves the other names. [`PinnedFile::link_count`] lets a caller
 //! refuse a file with more than one.
+//!
+//! **What is bound is the object, not its bytes.** `authenticate` reads the open file, and the removal
+//! then removes that object. On Unix there is no sharing mode, so a process of the same user that has a
+//! writable descriptor or a writable shared mapping of the file can change its bytes between the two. On
+//! Windows the read-only share mode stops every writer that opens the file, but not a writable
+//! memory-mapped view that another process created earlier and keeps after closing its handle. Neither is
+//! closed here; both belong to the same-user residual that is decided before any production use.
 
 use std::ffi::OsStr;
 use std::path::Path;
