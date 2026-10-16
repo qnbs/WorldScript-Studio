@@ -1912,6 +1912,12 @@ refused; a leftover removal is `Unsupported`. The neutral cases of `remove.rs` n
 or wrong-identity authentication removes nothing; links, junctions, directories and missing names are not removed as files;
 hard-linked names; a filled directory and a junction are not removed).
 
+**What is bound is the object, not its bytes, on every platform.** `authenticate` reads the open file and the removal then removes
+that object. On Unix there is no sharing mode, so a process of the same user with a writable descriptor or a writable shared
+mapping of the file can change its bytes between the two (this was not stated for the Unix removal before). On Windows the
+read-only share mode stops every writer that opens the file, and the counter-proof shows what write sharing would have let
+through, but not a mapped writer, below. Neither is closed here.
+
 **Not claimed.** A file system without POSIX delete semantics is `Unsupported`, which the hosted runner does not exercise; the
 codes that mean it (`ERROR_INVALID_PARAMETER`, `ERROR_NOT_SUPPORTED` and `ERROR_INVALID_FUNCTION`, the last for a Windows or a
 driver that does not implement the information class at all) are mapped by one function that a test pins. The Unix window does

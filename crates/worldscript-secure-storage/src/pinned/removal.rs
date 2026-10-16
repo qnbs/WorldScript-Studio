@@ -37,6 +37,13 @@
 //!
 //! A hard link is one name: removing it leaves the other names. [`PinnedFile::link_count`] lets a caller
 //! refuse a file with more than one.
+//!
+//! **What is bound is the object, not its bytes.** `authenticate` reads the open file, and the removal
+//! then removes that object. On Unix there is no sharing mode, so a process of the same user that has a
+//! writable descriptor or a writable shared mapping of the file can change its bytes between the two. On
+//! Windows the read-only share mode stops every writer that opens the file, but not a writable
+//! memory-mapped view that another process created earlier and keeps after closing its handle. Neither is
+//! closed here; both belong to the same-user residual that is decided before any production use.
 
 use std::ffi::OsStr;
 use std::path::Path;
