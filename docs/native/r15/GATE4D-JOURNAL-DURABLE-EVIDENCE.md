@@ -1837,9 +1837,11 @@ created by an unprivileged actor, which is argued, not tested.
 Status words: `H1A_2_UNIX_DIRECTORY_AND_LEFTOVERS=IMPLEMENTED_TEST_SUPPORT_ONLY`, `H1_PROVED=NO`. `remove_empty_dir` opens the child
 directory (no link followed), refuses one that has entries (`NotEmpty`) and moves it through the same quarantine directory:
 identified by the open directory, then `unlinkat(AT_REMOVEDIR)`; a directory that fills after the check goes back
-(`NotEmpty`). The same window exists and is detected the same way: the link count of the held directory must have dropped
-(`Disturbed` otherwise; for a directory it falls to zero). An empty foreign directory that wins the race in the last window
-is removed instead of the authenticated one, and the removal says so; it holds no data.
+(`NotEmpty`), but only if what is inside is still the authenticated directory: if an actor swapped a non-empty directory in,
+the refusal was about that one, it goes back under the name all the same and the outcome is `Disturbed`. The same window exists
+and is detected the same way: the link count of the held directory must have dropped (`Disturbed` otherwise; for a directory
+it falls to zero). An empty foreign directory that wins the race in the last window is removed instead of the authenticated
+one, and the removal says so; it holds no data.
 
 **Leftovers and crashes.** A crash after the move, or an entry that could not be put back (`Swapped { restored: false }`,
 `Stranded`), leaves a `.h1q-*` directory holding the entry as `x`. A sweep never removes it by itself.
@@ -1850,7 +1852,8 @@ accepted, unlinks it with the same link-count check. A file that does not authen
 put-back) stays; an empty generated quarantine directory is removed.
 
 **Proof.** A directory swapped in the first window and one filled after the check are put back and not removed; an empty
-directory that wins the last window gives `Disturbed` with the original directory intact; a simulated crash (the observer
+directory that wins the last window gives `Disturbed` with the original directory intact, and so does a non-empty one (not
+`NotEmpty`); a simulated crash (the observer
 panics once the entry is in the quarantine directory) leaves the entry there under no name of the store, a leftover removal
 with a failing authentication refuses and leaves it, and with the right one finishes it; names without the generated grammar
 (`.h1q-empty`, too few or too many digits, upper case, non-hexadecimal digits, other directories, plain files) are refused
@@ -1859,7 +1862,9 @@ never removed by it; an entry stranded by a blocked put-back (the name taken aga
 directory) is finished after the file authenticates again. The leftover removal syncs the quarantine directory it unlinks
 in, like any removal, and says `NotConfirmed` if that fails (modelled through the same test-only seam). Mutation-checked:
 syncing nothing in the leftover removal, not refusing a foreign entry, loosening the name grammar to any length, and
-ignoring the authentication result each fail at least one of these cases. An entry stranded by a lost search permission is
-`Disturbed`, not `Stranded`: a failed look proves nothing (see part 2).
+ignoring the authentication result, and reporting `NotEmpty` for any directory fail at least one of these cases. An entry
+stranded by a lost search permission is `Disturbed`, not `Stranded`: a failed look proves nothing (see part 2).
 
 **Not claimed.** Windows creates no quarantine directory (part 4); the Disturbed window is bounded and detected, not closed.
+The leftover recovery reclaims **files**: an empty directory that a crashed directory removal left in a `.h1q-*` directory
+(no data, but no recovery for it) stays there and is never touched by a sweep; a recovery for it is not part of this slice.

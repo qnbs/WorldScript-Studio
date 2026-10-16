@@ -511,14 +511,7 @@ impl Removal<'_> {
             quarantined: &inside,
         })?;
         match unlink_verified(&self.quarantine, object, self.target.kind)? {
-            // A directory that filled after the check goes back where it was.
-            RemovalOutcome::NotEmpty => {
-                self.restore()?;
-                Ok(Step::Moved(
-                    RemovalOutcome::NotEmpty,
-                    self.quarantine.sync(),
-                ))
-            }
+            RemovalOutcome::NotEmpty => self.filled(),
             outcome => {
                 // The unlink changed the directory that is held, and that directory can outlive the
                 // removal (an actor renamed it away, or put an entry into it so that it cannot be
@@ -527,6 +520,21 @@ impl Removal<'_> {
                 Ok(unlinked(outcome, self.quarantine.sync()))
             }
         }
+    }
+
+    /// The unlink was refused because the directory has entries. What is inside goes back where it was;
+    /// it is the authenticated directory that filled after the check only if it still is that directory
+    /// (the open one keeps its identity unique). If an actor swapped a non-empty directory in, the refusal
+    /// was about that one and says nothing about ours: the outcome is tampering, not `NotEmpty`.
+    fn filled(&self) -> Result<Step, PinnedError> {
+        let authenticated = self.quarantine.holds(self.target.expected);
+        self.restore()?;
+        let held = self.quarantine.sync();
+        Ok(if authenticated {
+            Step::Moved(RemovalOutcome::NotEmpty, held)
+        } else {
+            Step::Changed(RemovalOutcome::Disturbed)
+        })
     }
 
     fn restore(&self) -> Result<(), PinnedError> {

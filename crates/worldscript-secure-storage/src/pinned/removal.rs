@@ -152,8 +152,10 @@ impl PinnedDir {
 
     /// Finishes what a crash or a refused put-back left in the quarantine directory `quarantine` (a
     /// `.h1q-*` entry of this directory): the file in it is authenticated again and, if `authenticate`
-    /// accepts it, removed like any other. A file that is not accepted stays; an empty quarantine
-    /// directory is removed. Unix only: Windows creates none (`Unsupported`).
+    /// accepts it, removed like any other. A file that is not accepted stays, and so does anything that
+    /// is not a regular file (a link; an empty directory that a crashed directory removal left is not
+    /// reclaimed); an empty quarantine directory is removed. Unix only: Windows creates none
+    /// (`Unsupported`).
     pub fn remove_leftover_file(
         &self,
         quarantine: impl AsRef<OsStr>,

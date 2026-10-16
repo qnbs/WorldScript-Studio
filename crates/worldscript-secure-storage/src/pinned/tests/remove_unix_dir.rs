@@ -77,6 +77,39 @@ fn an_empty_directory_swapped_in_the_last_window_is_reported_as_disturbed() {
     );
 }
 
+#[test]
+fn a_non_empty_directory_swapped_in_the_last_window_is_not_reported_as_not_empty() {
+    // The refusal to remove a directory with entries is about the directory an actor put there, not about
+    // the authenticated one, which the actor moved away. What is there goes back under the name, and
+    // the outcome is tampering, not `NotEmpty`.
+    let f = fixture("window-filled-dir");
+    fs::create_dir(f.root.join("d")).unwrap();
+    let original = ino(&f.root.join("d"));
+    let outcome = f.pinned.remove_empty_dir_observed(
+        "d",
+        &mut on(At::Identified, |quarantined| {
+            let quarantined = quarantined.unwrap();
+            fs::rename(quarantined, f.aside.join("original-d")).unwrap();
+            fs::create_dir(quarantined).unwrap();
+            fs::write(quarantined.join("late"), b"late").unwrap();
+        }),
+    );
+    assert_eq!(
+        (
+            outcome,
+            fs::read(f.root.join("d").join("late")).ok(),
+            ino(&f.aside.join("original-d")) == original,
+            quarantines(&f.root).len()
+        ),
+        (
+            Ok(RemovalOutcome::Disturbed),
+            Some(b"late".to_vec()),
+            true,
+            0
+        )
+    );
+}
+
 /// A removal that "crashes" (the observer panics) once the object is in the quarantine directory.
 fn crash_after_the_move(f: &Fixture) {
     let crashed = catch_unwind(AssertUnwindSafe(|| {
