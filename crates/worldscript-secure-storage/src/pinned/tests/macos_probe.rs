@@ -8,18 +8,24 @@ use rustix::fs::{fstat, getpath, openat, statat, AtFlags, Mode, OFlags};
 
 use super::Scratch;
 
-fn describe(label: &str, dir: &File) -> String {
+fn describe(label: &str, dir: &File, try_create: bool) -> String {
     let nlink = fstat(dir).map(|stat| stat.st_nlink as u64);
     let path = getpath(dir);
     let dotdot = openat(dir, "..", OFlags::RDONLY | OFlags::DIRECTORY, Mode::empty()).map(|_| ());
     let dot = statat(dir, ".", AtFlags::empty()).map(|stat| stat.st_nlink as u64);
-    let create = openat(
-        dir,
-        "probe-file",
-        OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL,
-        Mode::RUSR | Mode::WUSR,
-    )
-    .map(|_| ());
+    let create = if try_create {
+        Some(
+            openat(
+                dir,
+                "probe-file",
+                OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL,
+                Mode::RUSR | Mode::WUSR,
+            )
+            .map(|_| ()),
+        )
+    } else {
+        None
+    };
     format!(
         "{label}: fstat_nlink={nlink:?} getpath={path:?} openat_dotdot={dotdot:?} statat_dot_nlink={dot:?} create_in_dir={create:?}"
     )
@@ -38,14 +44,14 @@ fn probe() {
     let live_fd = File::open(&live).unwrap();
     let moved_fd = File::open(&moved).unwrap();
     let removed_fd = File::open(&removed).unwrap();
-    let before = describe("before-removal", &removed_fd);
+    let before = describe("before-removal", &removed_fd, false);
     fs::rename(&moved, root.join("moved-to")).unwrap();
     fs::remove_dir(&removed).unwrap();
     let lines = [
         before,
-        describe("live", &live_fd),
-        describe("moved", &moved_fd),
-        describe("removed", &removed_fd),
+        describe("live", &live_fd, true),
+        describe("moved", &moved_fd, true),
+        describe("removed", &removed_fd, true),
     ];
     panic!("PROBE\n{}", lines.join("\n"));
 }
