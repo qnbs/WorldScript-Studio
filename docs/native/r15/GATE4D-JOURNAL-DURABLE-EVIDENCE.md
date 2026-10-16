@@ -1840,7 +1840,9 @@ identified by the open directory, then `unlinkat(AT_REMOVEDIR)`; a directory tha
 (`NotEmpty`), but only if what is inside is still the authenticated directory: if an actor swapped a non-empty directory in,
 the refusal was about that one, it goes back under the name all the same and the outcome is `Disturbed`. The same window exists
 and is detected the same way: the link count of the held directory must have dropped (`Disturbed` otherwise; for a directory
-it falls to zero). An empty foreign directory that wins the race in the last window is removed instead of the authenticated
+it falls to zero on Linux). macOS keeps reporting the old count for a removed directory that is still open (the first hosted
+macOS run showed a removed empty directory as untouched), so there the signal is that the open descriptor no longer has a path:
+`F_GETPATH` fails with "no such file" for a removed directory and still answers for one that was only moved away. An empty foreign directory that wins the race in the last window is removed instead of the authenticated
 one, and the removal says so; it holds no data.
 
 **Leftovers and crashes.** A crash after the move, or an entry that could not be put back (`Swapped { restored: false }`,
