@@ -1832,17 +1832,23 @@ entry each fail at least one of the sync cases, and counting a failed look as pr
 Disturbed window is bounded and detected, not closed; a device node swapped in is refused before it is opened and cannot be
 created by an unprivileged actor, which is argued, not tested.
 
-#### Part 3: removal of a directory on Unix, leftovers and crashes
+#### Part 3: removal of a directory on Linux, leftovers and crashes on Unix
 
-Status words: `H1A_2_UNIX_DIRECTORY_AND_LEFTOVERS=IMPLEMENTED_TEST_SUPPORT_ONLY`, `H1_PROVED=NO`. `remove_empty_dir` opens the child
+Status words: `H1A_2_UNIX_DIRECTORY_AND_LEFTOVERS=IMPLEMENTED_TEST_SUPPORT_ONLY` (directories: Linux only), `H1_PROVED=NO`.
+**Directories are Linux only.** The removal counts only if the open directory can be asked afterwards whether it was the one that
+lost its name. A hosted macOS probe of an open directory that was removed, one that was only moved and one that was untouched
+showed: the link count stays 2 for all three; `F_GETPATH` keeps answering with the old path for the removed one; `openat("..")` and
+`statat(".")` succeed for all three; only creating an entry in the removed one fails (`ENOENT`). The only signal is therefore a write
+into a directory that, in the attack case, an actor moved away and that belongs to another path, and it would fail for lack of
+permission on a read-only directory, so it is not used. Where the answer is not available an empty directory gives `Unsupported`
+before anything is moved (`NotEmpty`, a link and a missing name are told the same everywhere); whether and how macOS
+gets directory removal is left to the decision about the production use (H1b). `remove_empty_dir` opens the child
 directory (no link followed), refuses one that has entries (`NotEmpty`) and moves it through the same quarantine directory:
 identified by the open directory, then `unlinkat(AT_REMOVEDIR)`; a directory that fills after the check goes back
 (`NotEmpty`), but only if what is inside is still the authenticated directory: if an actor swapped a non-empty directory in,
 the refusal was about that one, it goes back under the name all the same and the outcome is `Disturbed`. The same window exists
 and is detected the same way: the link count of the held directory must have dropped (`Disturbed` otherwise; for a directory
-it falls to zero on Linux). macOS keeps reporting the old count for a removed directory that is still open (the first hosted
-macOS run showed a removed empty directory as untouched), so there the signal is that the open descriptor no longer has a path:
-`F_GETPATH` fails with "no such file" for a removed directory and still answers for one that was only moved away. An empty foreign directory that wins the race in the last window is removed instead of the authenticated
+it falls to zero). An empty foreign directory that wins the race in the last window is removed instead of the authenticated
 one, and the removal says so; it holds no data.
 
 **Leftovers and crashes.** A crash after the move, or an entry that could not be put back (`Swapped { restored: false }`,
@@ -1853,7 +1859,7 @@ directory of the effective user without access for group or others, authenticate
 accepted, unlinks it with the same link-count check. A file that does not authenticate (a foreign object left by a refused
 put-back) stays; an empty generated quarantine directory is removed.
 
-**Proof.** A directory swapped in the first window and one filled after the check are put back and not removed; an empty
+**Proof.** The directory cases run on Linux; on any other Unix system the same call is pinned to `Unsupported` with nothing moved. A directory swapped in the first window and one filled after the check are put back and not removed; an empty
 directory that wins the last window gives `Disturbed` with the original directory intact, and so does a non-empty one (not
 `NotEmpty`); a simulated crash (the observer
 panics once the entry is in the quarantine directory) leaves the entry there under no name of the store, a leftover removal

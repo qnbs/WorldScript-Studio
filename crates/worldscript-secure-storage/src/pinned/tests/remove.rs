@@ -159,6 +159,20 @@ fn an_empty_directory_is_removed_and_a_filled_one_or_a_link_is_not() {
     fs::create_dir(aside.join("target")).unwrap();
     link_to_dir(&aside.join("target"), &root.join("link"));
     let pinned = PinnedDir::open_root(&root).unwrap();
+    // Only Linux can tell afterwards that the open directory was the one removed; elsewhere the removal
+    // of an empty directory is refused before anything is moved, and the other cases are the same.
+    let (empty_removal, left) = if cfg!(target_os = "linux") {
+        (removed(), vec!["filled".to_string(), "link".to_string()])
+    } else {
+        (
+            Err(PinnedError::Unsupported),
+            vec![
+                "empty".to_string(),
+                "filled".to_string(),
+                "link".to_string(),
+            ],
+        )
+    };
     assert_eq!(
         (
             pinned.remove_empty_dir("empty"),
@@ -170,13 +184,13 @@ fn an_empty_directory_is_removed_and_a_filled_one_or_a_link_is_not() {
             names(&pinned)
         ),
         (
-            removed(),
+            empty_removal,
             Ok(RemovalOutcome::NotEmpty),
             Err(PinnedError::Redirected),
             Err(PinnedError::NotFound),
             b"inside".to_vec(),
             true,
-            vec!["filled".to_string(), "link".to_string()]
+            left
         )
     );
 }

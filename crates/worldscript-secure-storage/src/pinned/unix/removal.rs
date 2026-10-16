@@ -8,8 +8,6 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
-#[cfg(target_vendor = "apple")]
-use rustix::fs::getpath;
 use rustix::fs::{
     fchmod, fstat, mkdirat, openat, renameat_with, unlinkat, AtFlags, Mode, RenameFlags,
 };
@@ -305,28 +303,10 @@ pub(in crate::pinned) fn both_confirmed(
     }
 }
 
-/// Whether the open `object`, a directory that was just removed, was the one that lost its name. Where a
-/// removed directory that is still open reports a link count that dropped (Linux), that is the signal. macOS
-/// keeps reporting the old count for it (the hosted run showed a removed empty directory as untouched), so
-/// there the signal is that the descriptor no longer has a path: `F_GETPATH` fails with "no such file"
-/// for a removed directory and still answers for one that was moved away and is merely not the one removed.
-#[cfg(target_vendor = "apple")]
-fn directory_lost_its_name(object: &File, _before: u64) -> bool {
-    matches!(getpath(object), Err(Errno::NOENT))
-}
-
-#[cfg(not(target_vendor = "apple"))]
-fn directory_lost_its_name(object: &File, before: u64) -> bool {
-    object
-        .metadata()
-        .is_ok_and(|metadata| metadata.nlink() < before)
-}
-
 /// Unlinks the entry that was identified in the quarantine directory and asks the open object whether
-/// it was the one that lost a name: its link count must have dropped (for a directory, see
-/// [`directory_lost_its_name`]). That is a check after the fact and a heuristic, not a proof of identity
-/// (see the residual in the parent module): an actor that also changes the link count of the
-/// authenticated object in the same window is not noticed.
+/// it was the one that lost a name: its link count must have dropped. That is a check after the fact
+/// and a heuristic, not a proof of identity (see the residual in the parent module): an actor that also
+/// changes the link count of the authenticated object in the same window is not noticed.
 fn unlink_verified(
     quarantine: &Quarantine,
     object: &File,
@@ -347,14 +327,10 @@ fn unlink_verified(
         Err(errno) => return Err(io_error(errno)),
     }
     // Nothing can be said about a removal that cannot be checked afterwards.
-    let lost_its_name = if kind == EntryKind::Directory {
-        directory_lost_its_name(object, before)
-    } else {
-        object
-            .metadata()
-            .is_ok_and(|metadata| metadata.nlink() < before)
+    let Ok(after) = object.metadata().map(|metadata| metadata.nlink()) else {
+        return Ok(RemovalOutcome::Disturbed);
     };
-    if lost_its_name {
+    if after < before {
         Ok(RemovalOutcome::Removed(DirectoryDurability::Confirmed))
     } else {
         Ok(RemovalOutcome::Disturbed)
@@ -394,6 +370,14 @@ pub(in crate::pinned) fn remove_file(
     remove_moved(dir, target, observer)
 }
 
+/// Removes the empty child directory `name`. Linux only: the removal is only counted if the open
+/// directory can be asked afterwards whether it was the one that lost its name, and only Linux answers
+/// that without writing into the directory (a removed directory that is still open reports a link count of
+/// zero). On macOS the count stays at 2, `F_GETPATH` keeps answering with the old path, and only creating
+/// an entry in it fails (`ENOENT`), which would write into a directory an actor may have moved away and
+/// fails for lack of permission on a read-only one (hosted macOS probe). Elsewhere the call answers
+/// `Unsupported` after the checks that need no such signal (a link, a missing name, a directory that has
+/// entries) and before anything is moved.
 pub(in crate::pinned) fn remove_dir(
     dir: &PinnedDir,
     name: &OsStr,
@@ -404,6 +388,9 @@ pub(in crate::pinned) fn remove_dir(
         Ok(_) => {}
         Err(PinnedError::TooManyEntries) => return Ok(RemovalOutcome::NotEmpty),
         Err(error) => return Err(error),
+    }
+    if !cfg!(target_os = "linux") {
+        return Err(PinnedError::Unsupported);
     }
     observer(RemovalStage::Checked)?;
     let target = Target {

@@ -5,11 +5,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-#[cfg(all(feature = "test-support", target_vendor = "apple"))]
-mod macos_probe;
 mod read;
 #[cfg(feature = "test-support")]
 mod remove;
+#[cfg(all(feature = "test-support", target_os = "linux"))]
+mod remove_linux_dir;
 #[cfg(all(feature = "test-support", unix))]
 mod remove_unix;
 #[cfg(all(feature = "test-support", unix))]
