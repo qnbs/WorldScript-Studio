@@ -1852,7 +1852,8 @@ it falls to zero). An empty foreign directory that wins the race in the last win
 one, and the removal says so; it holds no data.
 
 **Leftovers and crashes.** A crash after the move, or an entry that could not be put back (`Swapped { restored: false }`,
-`Stranded`), leaves a `.h1q-*` directory holding the entry as `x`. A sweep never removes it by itself.
+`Stranded`), leaves a `.h1q-*` directory holding the entry as `x`. No sweep removes it by itself (a sweep skips the
+`.h1q-` prefix); only an explicit call of the recovery below takes it.
 `remove_leftover_file(name, authenticate)` takes it by its **generated name only** (`.h1q-` and exactly 32 lowercase
 hexadecimal digits; any other name, including an unrelated private directory, is `InvalidName` and untouched), requires a
 directory of the effective user without access for group or others, authenticates the file in it again and, only if
@@ -1880,5 +1881,5 @@ of these cases. An entry
 stranded by a lost search permission is `Disturbed`, not `Stranded`: a failed look proves nothing (see part 2).
 
 **Not claimed.** Windows creates no quarantine directory (part 4); the Disturbed window is bounded and detected, not closed.
-A foreign entry that is neither a file nor an empty directory (a link, a FIFO) stays in its `.h1q-*` directory and is never
-touched by a sweep.
+A foreign entry that is neither a file nor an empty directory (a link, a FIFO) stays in its `.h1q-*` directory: the recovery
+refuses it (`Refused`) and no sweep touches it, so nothing removes it until a person decides.
