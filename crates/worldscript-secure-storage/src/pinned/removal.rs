@@ -4,9 +4,11 @@
 //! **Availability.** Everything in this module exists only with the test-only `test-support` feature,
 //! has no caller, and is not part of any production build. Reclamation of a real store is not admitted.
 //!
-//! **Status of this slice.** The API and its isolation. Every call answers [`PinnedError::Unsupported`]
-//! until the platform implementations land in the successor slices (Unix files; Unix directories and
-//! leftovers; Windows), so nothing is removed and nothing claims a safety it does not have yet.
+//! **Status of this slice.** The API and its isolation, and on Unix the removal of files and of the
+//! leftovers of a crash, and on Linux the removal of directories. A call on Windows, and the removal of
+//! a directory on any other system, answers [`PinnedError::Unsupported`] (see
+//! [`PinnedDir::remove_empty_dir`]), so nothing is removed there and nothing claims a safety it does not
+//! have yet.
 //!
 //! **The two designs the platform slices do not use.** Removing "the entry that was checked" with
 //! `unlinkat(parent, name)` after a check on the name is exposed to a swap of the last component: POSIX
@@ -134,7 +136,11 @@ impl PinnedDir {
     }
 
     /// Removes the child directory `name` if it has no entries, and exactly the directory that was
-    /// opened.
+    /// opened. On Unix this is available on Linux only: the removal counts only if the open directory can
+    /// be asked afterwards whether it was the one removed, and no other Unix system answers that without
+    /// writing into the directory (macOS keeps the old link count and the old path of a removed directory
+    /// that is still open). There an empty directory answers [`PinnedError::Unsupported`] before anything is
+    /// moved; a link, a missing name and a directory with entries are told the same everywhere.
     pub fn remove_empty_dir(&self, name: impl AsRef<OsStr>) -> Result<RemovalOutcome, PinnedError> {
         self.remove_empty_dir_observed(name, &mut |_| Ok(()))
     }
@@ -151,8 +157,11 @@ impl PinnedDir {
 
     /// Finishes what a crash or a refused put-back left in the quarantine directory `quarantine` (a
     /// `.h1q-*` entry of this directory): the file in it is authenticated again and, if `authenticate`
-    /// accepts it, removed like any other. A file that is not accepted stays; an empty quarantine
-    /// directory is removed. Unix only: Windows creates none (`Unsupported`).
+    /// accepts it, removed like any other. A file that is not accepted stays, and so does anything that
+    /// is neither a regular file nor an empty directory (a link, a directory with entries); an empty
+    /// directory that a crashed directory removal left holds nothing, needs no authentication and is
+    /// removed on Linux; an empty quarantine directory is removed. Unix only: Windows creates none
+    /// (`Unsupported`).
     pub fn remove_leftover_file(
         &self,
         quarantine: impl AsRef<OsStr>,

@@ -1828,6 +1828,58 @@ dropping a failed sync of it, a `sync_all()?` inside the rename step, confirming
 sync for an entry found gone at the inspection, dropping it for one gone at the unlink and passing no identity for a foreign
 entry each fail at least one of the sync cases, and counting a failed look as present fails the permission case.
 
-**Not claimed.** Directories and the leftover recovery are part 3 (they answer `Unsupported` here); Windows is part 4; the
+**Not claimed.** Directories and the leftover recovery are part 3 (below); Windows is part 4; the
 Disturbed window is bounded and detected, not closed; a device node swapped in is refused before it is opened and cannot be
 created by an unprivileged actor, which is argued, not tested.
+
+#### Part 3: removal of a directory on Linux, leftovers and crashes on Unix
+
+Status words: `H1A_2_UNIX_DIRECTORY_AND_LEFTOVERS=IMPLEMENTED_TEST_SUPPORT_ONLY` (directories: Linux only), `H1_PROVED=NO`.
+**Directories are Linux only.** The removal counts only if the open directory can be asked afterwards whether it was the one that
+lost its name. A hosted macOS probe of an open directory that was removed, one that was only moved and one that was untouched
+showed: the link count stays 2 for all three; `F_GETPATH` keeps answering with the old path for the removed one; `openat("..")` and
+`statat(".")` succeed for all three; only creating an entry in the removed one fails (`ENOENT`). The only signal is therefore a write
+into a directory that, in the attack case, an actor moved away and that belongs to another path, and it would fail for lack of
+permission on a read-only directory, so it is not used. Where the answer is not available an empty directory gives `Unsupported`
+before anything is moved (`NotEmpty`, a link and a missing name are told the same everywhere); whether and how macOS
+gets directory removal is left to the decision about the production use (H1b). `remove_empty_dir` opens the child
+directory (no link followed), refuses one that has entries (`NotEmpty`) and moves it through the same quarantine directory:
+identified by the open directory, then `unlinkat(AT_REMOVEDIR)`; a directory that fills after the check goes back
+(`NotEmpty`), but only if what is inside is still the authenticated directory: if an actor swapped a non-empty directory in,
+the refusal was about that one, it goes back under the name all the same and the outcome is `Disturbed`. The same window exists
+and is detected the same way: the link count of the held directory must have dropped (`Disturbed` otherwise; for a directory
+it falls to zero). An empty foreign directory that wins the race in the last window is removed instead of the authenticated
+one, and the removal says so; it holds no data.
+
+**Leftovers and crashes.** A crash after the move, or an entry that could not be put back (`Swapped { restored: false }`,
+`Stranded`), leaves a `.h1q-*` directory holding the entry as `x`. No sweep removes it by itself (a sweep skips the
+`.h1q-` prefix); only an explicit call of the recovery below takes it.
+`remove_leftover_file(name, authenticate)` takes it by its **generated name only** (`.h1q-` and exactly 32 lowercase
+hexadecimal digits; any other name, including an unrelated private directory, is `InvalidName` and untouched), requires a
+directory of the effective user without access for group or others, authenticates the file in it again and, only if
+accepted, unlinks it with the same link-count check. A file that does not authenticate (a foreign object left by a refused
+put-back) stays; an empty generated quarantine directory is removed. An empty directory that a crashed directory removal left as
+`x` holds nothing, so it needs no authentication (the callback is not asked) and goes with the same unlink and the same check as
+the removal of a directory (Linux; elsewhere it is refused); a directory with entries stays (`NotEmpty`). Removing the empty
+quarantine directory changes the parent whatever the leftover removal came to (an actor can take the entry away while it is
+looked at), so the parent is synced then too, for a refusal and for an error, and the result is kept.
+
+**Proof.** The directory cases run on Linux; on any other Unix system the same call is pinned to `Unsupported` with nothing moved. A directory swapped in the first window and one filled after the check are put back and not removed; an empty
+directory that wins the last window gives `Disturbed` with the original directory intact, and so does a non-empty one (not
+`NotEmpty`); a simulated crash (the observer
+panics once the entry is in the quarantine directory) leaves the entry there under no name of the store, a leftover removal
+with a failing authentication refuses and leaves it, and with the right one finishes it; names without the generated grammar
+(`.h1q-empty`, too few or too many digits, upper case, non-hexadecimal digits, other directories, plain files) are refused
+before anything is opened; a foreign object left in a quarantine directory by a refused put-back, and a link left there, are
+never removed by it; an entry stranded by a blocked put-back (the name taken again, so it is proved to be in the quarantine
+directory) is finished after the file authenticates again. The leftover removal syncs the quarantine directory it unlinks
+in, like any removal, and says `NotConfirmed` if that fails (modelled through the same test-only seam). Mutation-checked:
+syncing nothing in the leftover removal, not refusing a foreign entry, loosening the name grammar to any length, and
+ignoring the authentication result, reporting `NotEmpty` for any directory, not looking at a directory again once it went back,
+not recovering an empty directory leftover, and ignoring that the discard removed the quarantine directory each fail at least one
+of these cases. An entry
+stranded by a lost search permission is `Disturbed`, not `Stranded`: a failed look proves nothing (see part 2).
+
+**Not claimed.** Windows creates no quarantine directory (part 4); the Disturbed window is bounded and detected, not closed.
+A foreign entry that is neither a file nor an empty directory (a link, a FIFO) stays in its `.h1q-*` directory: the recovery
+refuses it (`Refused`) and no sweep touches it, so nothing removes it until a person decides.

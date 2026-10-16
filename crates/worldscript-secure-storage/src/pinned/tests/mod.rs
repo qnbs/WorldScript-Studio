@@ -8,10 +8,14 @@ use std::sync::atomic::{AtomicU32, Ordering};
 mod read;
 #[cfg(feature = "test-support")]
 mod remove;
+#[cfg(all(feature = "test-support", target_os = "linux"))]
+mod remove_linux_dir;
 #[cfg(all(feature = "test-support", unix))]
 mod remove_unix;
 #[cfg(all(feature = "test-support", unix))]
 mod remove_unix_cleanup;
+#[cfg(all(feature = "test-support", unix))]
+mod remove_unix_dir;
 #[cfg(all(feature = "test-support", unix))]
 mod remove_unix_sync;
 #[cfg(windows)]
