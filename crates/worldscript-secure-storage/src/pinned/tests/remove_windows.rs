@@ -17,6 +17,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 
 use super::remove::{holds, names, removed};
+use super::windows_redirect::convert_in_place;
 use super::Scratch;
 use crate::pinned::windows::{nt, removal::known_refusal};
 use crate::pinned::{PinnedDir, PinnedError, RemovalOutcome, RemovalStage};
@@ -236,5 +237,33 @@ fn every_code_that_means_no_posix_delete_is_unsupported_and_other_codes_stay_err
             None,
             None,
         ]
+    );
+}
+
+#[test]
+fn a_directory_converted_into_a_junction_after_the_check_is_not_deleted() {
+    // Nothing in the sharing rule stops a writer from converting the empty directory into a reparse point in
+    // place. The caller's code runs between the check and the disposition (the observer), so the held handle
+    // is looked at again right before it: the junction is left, the target it leads to is untouched, and the
+    // removal says it was redirected.
+    let scratch = Scratch::new("win-dir-convert");
+    let (root, aside) = (scratch.root(), scratch.aside());
+    fs::create_dir(root.join("d")).unwrap();
+    fs::create_dir(aside.join("target")).unwrap();
+    fs::write(aside.join("target").join("keep"), b"keep").unwrap();
+    let pinned = PinnedDir::open_root(&root).unwrap();
+    let outcome = pinned.remove_empty_dir_observed("d", &mut |stage| {
+        if stage == RemovalStage::Checked {
+            convert_in_place(&root.join("d"), &aside.join("target"));
+        }
+        Ok(())
+    });
+    assert_eq!(
+        (
+            outcome,
+            fs::symlink_metadata(root.join("d")).is_ok(),
+            fs::read(aside.join("target").join("keep")).unwrap()
+        ),
+        (Err(PinnedError::Redirected), true, b"keep".to_vec())
     );
 }

@@ -49,7 +49,7 @@ fn mount_point_data(target: &Path) -> Vec<u8> {
 /// Turns the empty directory `dir` into a junction to `target` in place: not renamed, not deleted, the
 /// same object, which a handle that shares writes does not prevent.
 #[allow(unsafe_code)]
-fn convert_in_place(dir: &Path, target: &Path) {
+pub(super) fn convert_in_place(dir: &Path, target: &Path) {
     let data = mount_point_data(target);
     let writer = OpenOptions::new()
         .write(true)

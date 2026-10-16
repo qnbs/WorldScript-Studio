@@ -1912,6 +1912,13 @@ refused; a leftover removal is `Unsupported`. The neutral cases of `remove.rs` n
 or wrong-identity authentication removes nothing; links, junctions, directories and missing names are not removed as files;
 hard-linked names; a filled directory and a junction are not removed).
 
+**A directory is looked at again right before the disposition.** The share mode of a directory handle cannot stop a writer from
+converting the empty directory into a reparse point in place (the module says so for the pinned directory too), and the observer
+runs between the check and the disposition. The held handle is therefore checked a second time right before the disposition:
+a junction made in that window is left, its target is untouched, and the removal answers `Redirected`. This narrows the window
+and does not close it, and it is proven by the hosted Windows run (it cannot run on Linux); a file cannot be converted, because
+its handle shares no write access.
+
 **What is bound is the object, not its bytes, on every platform.** `authenticate` reads the open file and the removal then removes
 that object. On Unix there is no sharing mode, so a process of the same user with a writable descriptor or a writable shared
 mapping of the file can change its bytes between the two (this was not stated for the Unix removal before). On Windows the

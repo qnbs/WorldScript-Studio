@@ -69,6 +69,11 @@ pub(in crate::pinned) fn remove_dir(
     )?;
     let handle = expect_kind(handle, EntryKind::Directory)?;
     observer(RemovalStage::Checked)?;
+    // Nothing in the sharing rule stops a writer from converting the empty directory into a reparse point
+    // in place, and the observer (a caller's code) runs in between: the held handle is looked at again right
+    // before the disposition. That narrows the window and does not close it; a file cannot be converted,
+    // because its handle shares no write access.
+    let handle = expect_kind(handle, EntryKind::Directory)?;
     dispose(&handle)
 }
 
