@@ -5,10 +5,13 @@
 //! writing into the directory, that the open one is the directory that was removed.
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use super::remove::names;
+use super::remove::{names, removed};
 use super::remove_unix::{fixture, ino, on, quarantines, At};
-use crate::pinned::RemovalOutcome;
+use crate::pinned::unix::removal::INSIDE;
+use crate::pinned::{RemovalOutcome, QUARANTINE_PREFIX};
 
 #[test]
 fn a_directory_swapped_or_filled_after_the_check_is_put_back_and_not_removed() {
@@ -103,5 +106,49 @@ fn a_non_empty_directory_swapped_in_the_last_window_is_not_reported_as_not_empty
             true,
             0
         )
+    );
+}
+
+#[test]
+fn an_empty_directory_left_by_a_crashed_directory_removal_is_finished_by_the_leftover_recovery() {
+    let f = fixture("crash-dir");
+    fs::create_dir(f.root.join("d")).unwrap();
+    let crashed = catch_unwind(AssertUnwindSafe(|| {
+        let _ = f
+            .pinned
+            .remove_empty_dir_observed("d", &mut on(At::MovedAside, |_| panic!("simulated crash")));
+    }));
+    assert!(crashed.is_err());
+    let left = quarantines(&f.root);
+    let name = left[0].file_name().unwrap().to_owned();
+    let before = (left[0].join(INSIDE).is_dir(), f.root.join("d").exists());
+    // An empty directory holds nothing to authenticate: the callback is never asked.
+    let finished = f.pinned.remove_leftover_file(&name, |_| panic!("asked"));
+    assert_eq!(
+        (
+            before,
+            finished,
+            names(&f.pinned),
+            quarantines(&f.root).len()
+        ),
+        ((true, false), removed(), vec!["a".to_string()], 0)
+    );
+}
+
+#[test]
+fn a_directory_with_entries_left_in_a_quarantine_directory_is_never_removed_by_the_recovery() {
+    let f = fixture("leftover-filled-dir");
+    let name = format!("{QUARANTINE_PREFIX}{}", "3".repeat(32));
+    fs::create_dir(f.root.join(&name)).unwrap();
+    fs::set_permissions(f.root.join(&name), fs::Permissions::from_mode(0o700)).unwrap();
+    fs::create_dir(f.root.join(&name).join(INSIDE)).unwrap();
+    fs::write(f.root.join(&name).join(INSIDE).join("inside"), b"inside").unwrap();
+    let outcome = f.pinned.remove_leftover_file(&name, |_| Ok(true));
+    assert_eq!(
+        (
+            outcome,
+            fs::read(f.root.join(&name).join(INSIDE).join("inside")).unwrap()
+        ),
+        (Ok(RemovalOutcome::NotEmpty), b"inside".to_vec())
     );
 }

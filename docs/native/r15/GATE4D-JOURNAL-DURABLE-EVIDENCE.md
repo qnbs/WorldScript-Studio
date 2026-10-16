@@ -1857,7 +1857,11 @@ one, and the removal says so; it holds no data.
 hexadecimal digits; any other name, including an unrelated private directory, is `InvalidName` and untouched), requires a
 directory of the effective user without access for group or others, authenticates the file in it again and, only if
 accepted, unlinks it with the same link-count check. A file that does not authenticate (a foreign object left by a refused
-put-back) stays; an empty generated quarantine directory is removed.
+put-back) stays; an empty generated quarantine directory is removed. An empty directory that a crashed directory removal left as
+`x` holds nothing, so it needs no authentication (the callback is not asked) and goes with the same unlink and the same check as
+the removal of a directory (Linux; elsewhere it is refused); a directory with entries stays (`NotEmpty`). Removing the empty
+quarantine directory changes the parent whatever the leftover removal came to (an actor can take the entry away while it is
+looked at), so the parent is synced then too, for a refusal and for an error, and the result is kept.
 
 **Proof.** The directory cases run on Linux; on any other Unix system the same call is pinned to `Unsupported` with nothing moved. A directory swapped in the first window and one filled after the check are put back and not removed; an empty
 directory that wins the last window gives `Disturbed` with the original directory intact, and so does a non-empty one (not
@@ -1870,9 +1874,11 @@ never removed by it; an entry stranded by a blocked put-back (the name taken aga
 directory) is finished after the file authenticates again. The leftover removal syncs the quarantine directory it unlinks
 in, like any removal, and says `NotConfirmed` if that fails (modelled through the same test-only seam). Mutation-checked:
 syncing nothing in the leftover removal, not refusing a foreign entry, loosening the name grammar to any length, and
-ignoring the authentication result, and reporting `NotEmpty` for any directory fail at least one of these cases. An entry
+ignoring the authentication result, reporting `NotEmpty` for any directory, not looking at a directory again once it went back,
+not recovering an empty directory leftover, and ignoring that the discard removed the quarantine directory each fail at least one
+of these cases. An entry
 stranded by a lost search permission is `Disturbed`, not `Stranded`: a failed look proves nothing (see part 2).
 
 **Not claimed.** Windows creates no quarantine directory (part 4); the Disturbed window is bounded and detected, not closed.
-The leftover recovery reclaims **files**: an empty directory that a crashed directory removal left in a `.h1q-*` directory
-(no data, but no recovery for it) stays there and is never touched by a sweep; a recovery for it is not part of this slice.
+A foreign entry that is neither a file nor an empty directory (a link, a FIFO) stays in its `.h1q-*` directory and is never
+touched by a sweep.

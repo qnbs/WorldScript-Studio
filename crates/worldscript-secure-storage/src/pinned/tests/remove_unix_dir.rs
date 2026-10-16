@@ -12,7 +12,7 @@ use super::remove_unix::{
     at, denied, fixture, held_in_quarantine, on, quarantines, swap_in_a_live_file, At, Fixture,
 };
 use crate::durable::DirectoryDurability::NotConfirmed;
-use crate::pinned::unix::removal::sync_fault;
+use crate::pinned::unix::removal::{remove_leftover, sync_fault, INSIDE};
 use crate::pinned::{PinnedError, RemovalOutcome, QUARANTINE_PREFIX};
 
 #[cfg(not(target_os = "linux"))]
@@ -220,5 +220,74 @@ fn a_link_left_in_a_quarantine_directory_is_refused_and_not_followed() {
             Some(f.aside.join("target")),
             b"target".to_vec()
         )
+    );
+}
+
+/// One leftover removal after a crash, with the entry taken away by an actor while it is authenticated
+/// (or not), and what the authentication says: the outcome, whether the parent was about to be synced,
+/// and how many quarantine directories are left.
+fn leftover_run(
+    label: &str,
+    take_entry: bool,
+    verdict: Result<bool, PinnedError>,
+) -> (Result<RemovalOutcome, PinnedError>, bool, usize) {
+    let f = fixture(label);
+    crash_after_the_move(&f);
+    let q = quarantines(&f.root)[0].clone();
+    let name = q.file_name().unwrap().to_owned();
+    let mut synced = false;
+    let outcome = remove_leftover(
+        &f.pinned,
+        &name,
+        |_file| {
+            if take_entry {
+                fs::remove_file(q.join(INSIDE)).unwrap();
+            }
+            verdict
+        },
+        &mut |stage| {
+            if at(stage).0 == At::BeforeSync {
+                synced = true;
+            }
+            Ok(())
+        },
+    );
+    (outcome, synced, quarantines(&f.root).len())
+}
+
+#[test]
+fn a_leftover_whose_empty_quarantine_directory_goes_with_the_discard_syncs_the_parent_whatever_the_result(
+) {
+    // When the entry stays, nothing changed and nothing is synced. When an actor takes it away while it
+    // is looked at, the quarantine directory is empty and is removed, which changes the parent: the
+    // parent is synced, for a refusal and for an error, and the result is kept.
+    assert_eq!(
+        [
+            leftover_run("kept", false, Ok(false)),
+            leftover_run("taken-refused", true, Ok(false)),
+            leftover_run("taken-error", true, Err(denied())),
+        ],
+        [
+            (Ok(RemovalOutcome::Refused), false, 1),
+            (Ok(RemovalOutcome::Refused), true, 0),
+            (Err(denied()), true, 0),
+        ]
+    );
+}
+
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn an_empty_directory_left_in_a_quarantine_directory_is_refused_where_its_removal_cannot_be_checked(
+) {
+    use std::os::unix::fs::PermissionsExt;
+    let f = fixture("leftover-dir-unsupported");
+    let name = format!("{QUARANTINE_PREFIX}{}", "2".repeat(32));
+    fs::create_dir(f.root.join(&name)).unwrap();
+    fs::set_permissions(f.root.join(&name), fs::Permissions::from_mode(0o700)).unwrap();
+    fs::create_dir(f.root.join(&name).join(INSIDE)).unwrap();
+    let outcome = f.pinned.remove_leftover_file(&name, |_| Ok(true));
+    assert_eq!(
+        (outcome, f.root.join(&name).join(INSIDE).is_dir()),
+        (Ok(RemovalOutcome::Refused), true)
     );
 }
