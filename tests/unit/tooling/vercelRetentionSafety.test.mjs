@@ -14,6 +14,7 @@ import {
   preview,
   production,
   standardWorld,
+  withRetentionRuntime,
 } from './support/vercelRetentionFixture.mjs';
 
 const OTHER = 'c'.repeat(40);
@@ -466,7 +467,9 @@ test('reconcile prints the whole manifest before its first write, then one summa
   world.hooks.onWrite = () => {
     seenAtFirstWrite ??= [...lines];
   };
-  await main(['reconcile'], makeDeps(world), { log: (line) => lines.push(line) });
+  await withRetentionRuntime(() =>
+    main(['reconcile'], makeDeps(world), { log: (line) => lines.push(line) }),
+  );
   assert.equal(seenAtFirstWrite.length, 8);
   assert.ok(seenAtFirstWrite.every((line) => line.startsWith('RETENTION_MANIFEST ')));
   assert.equal(lines.filter((line) => line.startsWith('RETENTION_SUMMARY')).length, 1);
@@ -475,7 +478,9 @@ test('reconcile prints the whole manifest before its first write, then one summa
 
 test('a manifest row shows the state, target, age and alias hosts the gates looked at', async () => {
   const lines = [];
-  await main(['dry-run'], makeDeps(standardWorld()), { log: (line) => lines.push(line) });
+  await withRetentionRuntime(() =>
+    main(['dry-run'], makeDeps(standardWorld()), { log: (line) => lines.push(line) }),
+  );
   const row = lines.find((line) => line.includes('dpl_prev12 | SAFE'));
   assert.match(row, /\| READY\/preview \| 1970-01-01T00:00:01\.012Z \|/);
   assert.match(row, /aliases=worldscript-studio-git-fix-gone-qnbs-projects\.vercel\.app/);
