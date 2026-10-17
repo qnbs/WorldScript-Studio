@@ -102,16 +102,27 @@ for (const mode of ['dry-run', 'reconcile']) {
     assert.equal(summary.writeAttempts, mode === 'dry-run' ? 0 : world.writes.length);
     assert.equal(world.released, mode === 'dry-run' ? 0 : 1);
     assert.ok(world.calls.some((call) => call.startsWith('vercel api')));
+    if (mode === 'reconcile') {
+      const expectedDeleted = ['dpl_prev12', 'dpl_prev11', 'dpl_prev2', 'dpl_prev1'];
+      const deploymentWrites = world.writes
+        .filter((write) => write.startsWith('remove dpl_'))
+        .map((write) => write.split(' ')[1]);
+      assert.ok(summary.writeAttempts > 0);
+      assert.deepEqual(summary.deleted, expectedDeleted);
+      assert.deepEqual(deploymentWrites, expectedDeleted);
+    }
   });
 }
 
 test('the actual matrix runtime refuses before tools, locks and runner imports', () => {
-  const supported = /^22\./.test(process.versions.node);
-  const argv = supported ? ['--execute'] : ['reconcile'];
-  const stderr = guardedChild(argv);
-  assert.ok(
-    stderr.includes(`RETENTION_STOP: ${supported ? 'invalid-arguments' : 'runtime-mismatch'}`),
-  );
+  let expectedStop = 'invalid-arguments';
+  try {
+    assertRuntime();
+  } catch (error) {
+    expectedStop = error.reason;
+  }
+  const stderr = guardedChild(['--execute']);
+  assert.ok(stderr.includes(`RETENTION_STOP: ${expectedStop}`));
 });
 
 test('supported runtime still rejects a modified source before provider calls or locks', async () => {
