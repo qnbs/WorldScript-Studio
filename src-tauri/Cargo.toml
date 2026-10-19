@@ -30,7 +30,10 @@ tauri-plugin-http = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 # 2.13 requires Rust 1.90, above this package's rust-version 1.77.2.
-tauri-plugin-updater = "~2.12.0"
+# No `zip` feature (#911): it only unpacks the v1 `.zip` / `.tar.gz` updater bundles, and
+# `createUpdaterArtifacts: true` ships the raw `-setup.exe` / `.msi` / `.AppImage` instead. macOS
+# keeps its `.app.tar.gz` path, whose `tar` and `flate2` are not behind this feature.
+tauri-plugin-updater = { version = "~2.12.0", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-window-state = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
