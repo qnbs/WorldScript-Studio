@@ -114,6 +114,21 @@ for (const mode of ['dry-run', 'reconcile']) {
   });
 }
 
+test('the runtime guard rejects invalid arguments before parsing on unsupported runtimes', () => {
+  for (const version of [
+    '24.18.0',
+    '20.19.0',
+    '21.9.0',
+    '23.0.0',
+    '22.18.9',
+    'private-invalid-value',
+  ]) {
+    const stderr = guardedChild(['--execute'], version);
+    assert.match(stderr, /RETENTION_STOP: runtime-mismatch/);
+    assert.ok(!stderr.includes('invalid-arguments'));
+  }
+});
+
 test('the actual matrix runtime refuses before tools, locks and runner imports', () => {
   let expectedStop = 'invalid-arguments';
   try {
