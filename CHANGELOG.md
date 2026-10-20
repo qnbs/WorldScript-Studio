@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies:** Update @google/genai from 2.22.0 to 2.28.0 (PR #1091; Dependabot source PR #1059, which by then proposed 2.29.0). 2.28.0 is the last release before 2.29.0 made automatic continuation the default for `generateContent` / `generateContentStream`; that path has defects fixed only in 2.30.0, which is still inside the 7-day minimum-release-age. The version is pinned exactly so no lockfile re-resolution can move to 2.29.x. Releases 2.23–2.28 list features and bug fixes only; lockfile and manifest only.
+
 - **Dependencies:** Update ai (Vercel AI SDK) from 7.0.109 to 7.0.138 (PR #1090; Dependabot source PR #1057, rebased by Dependabot after the cohort freeze; same 7.0 patch line). Manifest range `^7.0.130`; lockfile and manifest only.
 
 - **Dependencies:** Update @ai-sdk/google from 4.0.85 to 4.0.90 (PR #1089; Dependabot source PR #1058). Patch releases; lockfile and manifest only.
