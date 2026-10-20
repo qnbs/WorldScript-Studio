@@ -519,7 +519,7 @@ jobs:
           toolchain: '1.90'
       - name: MSRV (Rust 1.90) compile check
         working-directory: src-tauri
-        run: cargo +1.90 check --locked
+        run: cargo +1.90 check --locked --all-targets
 
   # ----------------------------------------------------------
   # 1c. CORE-RUST: worldscript-project crate Gate (fmt/check/clippy/test), path-scoped via `changes`
