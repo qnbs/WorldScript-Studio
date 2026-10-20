@@ -42,7 +42,7 @@ updates:
           - 'stryker*'
           - '@stryker-mutator/*'
       # Every other minor/patch update in one PR. vite, @huggingface/transformers and zod keep their
-      # own PRs because docs/DEPENDABOT-TRIAGE.md requires extra checks for them; majors stay separate.
+      # own PRs because docs/DEPENDABOT-TRIAGE.md requires extra checks for them; majors that are not ignored stay separate.
       npm-minor-patch:
         update-types:
           - 'minor'
