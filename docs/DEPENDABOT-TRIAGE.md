@@ -39,7 +39,7 @@ workflow or dependency is added.
 
 | Ecosystem | `directory` | Groups configured | Notes |
 |---|---|---|---|
-| npm | `/` | `react` (react/react-dom/@types; all update types, lockstep), `dev-tooling` (vitest/playwright/storybook/biome/stryker; minor/patch), `npm-minor-patch` (every other package; minor/patch; excludes `vite`, `@huggingface/transformers`, `zod`) | Root workspace; `open-pull-requests-limit: 10` |
+| npm | `/` | `react` (react/react-dom/@types; all update types, lockstep), `dev-tooling` (vitest/playwright/storybook/`@biomejs/*`/stryker; minor/patch), `npm-minor-patch` (every other package; minor/patch; excludes `vite`, `@huggingface/transformers`, `zod`) | Root workspace; `open-pull-requests-limit: 10` |
 | cargo | `/src-tauri` | `tauri-deps` (tauri*/wry/tao; minor/patch), `cargo-minor-patch` (everything else; minor/patch) | Tauri desktop backend, Rust floor 1.90; `open-pull-requests-limit: 5` |
 | cargo | `/crates` | `core-minor-patch` (minor/patch) | Rust Core workspace, floor 1.77.2; minor/major of the documented MSRV pins ignored (see "Grouped monthly version updates"); `open-pull-requests-limit: 5` |
 | github-actions | `/` | `codeql-action` (`github/codeql-action*`; all update types, subpaths move together), `actions-minor-patch` (everything else; minor/patch) | See incident above |
@@ -75,7 +75,7 @@ each merge. About a third of the PRs could never merge because they needed a new
 - **Groups (minor + patch):** npm `npm-minor-patch` (all packages not already in `react` or
   `dev-tooling`), Cargo `cargo-minor-patch` (`src-tauri`, next to `tauri-deps`) and
   `core-minor-patch` (`crates`), Actions `actions-minor-patch` (next to `codeql-action`), and
-  `tauri-deps` restricted to minor/patch. Majors arrive as separate PRs for the full manual review
+  `tauri-deps` restricted to minor/patch. Majors that are not ignored arrive as separate PRs for the full manual review
   above, except in the two lockstep groups: `react` and `codeql-action` deliberately include every
   update type, because their members must move together even across a major. `vite`,
   `@huggingface/transformers` and `zod` are excluded from the npm group because the

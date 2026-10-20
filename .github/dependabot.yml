@@ -38,6 +38,7 @@ updates:
           - 'storybook*'
           - '@storybook/*'
           - 'biome*'
+          - '@biomejs/*'
           - 'stryker*'
           - '@stryker-mutator/*'
       # Every other minor/patch update in one PR. vite, @huggingface/transformers and zod keep their
