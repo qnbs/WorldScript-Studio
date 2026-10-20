@@ -20,6 +20,7 @@ minimumReleaseAgeExclude:
   - source-map-js@1.2.2
 
 # QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
+
 # Overrides with security justifications:
 # - typescript: pin ecosystem TypeScript dependencies/peers to the existing TypeScript 6.0.3
 #     compatibility compiler while tsgo/native-preview remains the primary repository typechecker
@@ -62,10 +63,11 @@ minimumReleaseAgeExclude:
 # - playwright / playwright-core: dedup to a single version. @playwright/test bumped to 1.61
 #     while @axe-core/playwright (peer >=1.0.0) + the transitive `playwright` runner stayed on
 #     playwright-core@1.60.0, producing two copies whose nominally-distinct Page/ElementHandle
-#     types break the typecheck in tests/e2e/a11y.spec.ts (TS2322). Pin both to 1.61.0.
+#     types break the typecheck in tests/e2e/a11y.spec.ts (TS2322). Pin both to the exact
+#     @playwright/test version and move all three together (1.64.0 since PR #1095).
 overrides:
-  playwright: "1.61.0"
-  playwright-core: "1.61.0"
+  playwright: "1.64.0"
+  playwright-core: "1.64.0"
   esbuild: ">=0.28.1"
   joi: ">=18.2.6 <19" # GHSA-6w3j-5fw6-r9vr + GHSA-gg4h-3hg2-grpc + GHSA-6h2x-m376-mqjq; capped at major 18 (wait-on's own declared range) so a future major can't force-install
   typescript: "6.0.3"
