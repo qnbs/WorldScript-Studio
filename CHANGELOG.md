@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Maintenance (Vercel quota):** Skip Vercel builds for `dependabot/*` and `deptrain/*` branches through `vercel.json` `ignoreCommand` (PR #1092). Dependabot's per-merge rebases produced 30 of 47 deployments in 24 hours on the Hobby plan. Dependency PRs are qualified by the GitHub Actions jobs; Production builds of `main` and Previews of other branches are unchanged. Documented in `docs/VERCEL-PREVIEW-RETENTION-POLICY.md`.
+- **Maintenance (Vercel quota):** Turn off Git-triggered Vercel deployments for `dependabot/**` and `deptrain/**` branches through `vercel.json` `git.deploymentEnabled` (PR #1092). In the 24 hours before 2026-10-20 10:55 UTC, 38 of the project's 47 deployments came from these branches (30 Dependabot rebases, 8 cohort successors) on the Hobby plan. An `ignoreCommand` was not used because canceled builds still count as deployments. Dependency PRs are qualified by the required GitHub Actions checks; Production builds of `main` and Previews of other branches are unchanged. Documented in `docs/VERCEL-PREVIEW-RETENTION-POLICY.md`.
 
 - **Dependencies:** Update ai (Vercel AI SDK) from 7.0.109 to 7.0.138 (PR #1090; Dependabot source PR #1057, rebased by Dependabot after the cohort freeze; same 7.0 patch line). Manifest range `^7.0.130`; lockfile and manifest only.
 

@@ -338,12 +338,17 @@ or delete across all projects reachable by a broad credential.
 
 ## Preview build scope
 
-`vercel.json` `ignoreCommand` skips the Vercel build for branches named
-`dependabot/*` and `deptrain/*` (exit 0 cancels the build). Dependabot rebases
-every open bot PR after each merge to `main`, and on 2026-10-20 those rebases
-were 30 of 47 deployments in 24 hours against the Hobby deployment quota.
-Dependency PRs are qualified by the GitHub Actions build, E2E and Storybook
-jobs, not by a Vercel Preview, and no required check depends on one.
+`vercel.json` `git.deploymentEnabled` turns off Git-triggered deployments for
+branches matching `dependabot/**` and `deptrain/**` (minimatch; `**` spans the
+nested Dependabot branch names). No deployment is created for them at all.
+An `ignoreCommand` would not be enough: a build canceled by the ignore step
+still counts as a deployment. In the 24 hours before 2026-10-20 10:55 UTC the
+project created 47 deployments; 38 of them came from these branches (30
+`dependabot/*`, 8 `deptrain/*`). Dependabot rebases every open bot PR after each
+merge to `main`, and each rebase built a new Preview. Dependency PRs are
+qualified by the required GitHub Actions checks (`CI Success`, which aggregates
+security, quality, build and E2E, plus CodeQL); Storybook and browser quality
+run as advisory jobs. No required check depends on a Vercel Preview.
 Production builds of `main` and Previews of every other branch are unchanged.
 A PR without a Preview simply has an empty protected set (`min(3, available)`).
 
