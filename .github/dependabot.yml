@@ -3,9 +3,11 @@ updates:
   # npm / pnpm workspaces
   - package-ecosystem: npm
     directory: /
+    # Monthly version updates: each merge runs the full successor/CI/retention procedure in
+    # docs/DEPENDABOT-TRIAGE.md, so fewer, grouped PRs. Security updates are not scheduled and still
+    # open immediately.
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     # QNBS-v3: cooldown delays Dependabot PRs until a release has aged 7 days — matched to the
     # .npmrc `minimum-release-age=10080` (7-day) supply-chain policy, so a freshly-published
     # version is never PR'd before `pnpm install --frozen-lockfile` would accept it (avoids
@@ -38,6 +40,18 @@ updates:
           - 'biome*'
           - 'stryker*'
           - '@stryker-mutator/*'
+      # Every other minor/patch update in one PR. vite, @huggingface/transformers and zod keep their
+      # own PRs because docs/DEPENDABOT-TRIAGE.md requires extra checks for them; majors stay separate.
+      npm-minor-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*'
+        exclude-patterns:
+          - 'vite'
+          - '@huggingface/transformers'
+          - 'zod'
     ignore:
       - dependency-name: '@stryker-mutator/api'
         update-types:
@@ -55,8 +69,7 @@ updates:
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
@@ -67,23 +80,59 @@ updates:
           - 'tauri-*'
           - 'wry'
           - 'tao'
+      cargo-minor-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*'
 
   # Cargo / Rust (renderer-neutral Core, independent workspace — see docs/native/CORE-MIGRATION-LEDGER.md)
   - package-ecosystem: cargo
     directory: /crates
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
+    groups:
+      core-minor-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*'
+    # The pins documented in crates/worldscript-secure-storage/Cargo.toml: each next line needs Rust
+    # above the Core floor 1.77.2 (or, for windows-sys and getrandom, is not admitted). `ignore` also
+    # applies to security updates, so only minor/major are ignored: patches inside a held line still
+    # arrive, and the required OSV gate reports any advisory regardless.
+    ignore:
+      - dependency-name: 'argon2'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'base64ct'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'getrandom'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'sha2'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'zeroize'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'zeroize_derive'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'keyring'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'dbus-secret-service'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'security-framework'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'windows-sys'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
 
   # GitHub Actions
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
@@ -92,3 +141,9 @@ updates:
       codeql-action:
         patterns:
           - 'github/codeql-action*'
+      actions-minor-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*'

@@ -64,6 +64,32 @@ failure mode above.
 If PR backlog becomes a problem again, prefer widening the `groups:` blocks (cheap, targeted) over
 reinstating blanket auto-merge.
 
+### Grouped monthly version updates (2026-10-20)
+
+The October 2026 cohort showed the cost of one PR per package: every merge to `main` runs the full
+successor, CI, resulting-main and retention procedure. Dependabot also rebased every open bot PR after
+each merge. About a third of the PRs could never merge because they needed a newer Rust. So:
+
+- **Monthly** version updates for every ecosystem. Security updates are not scheduled and still open
+  immediately; `cooldown` applies to version updates only.
+- **Groups (minor + patch):** npm `npm-minor-patch` (all packages not already in `react` or
+  `dev-tooling`), Cargo `cargo-minor-patch` (`src-tauri`, next to `tauri-deps`) and
+  `core-minor-patch` (`crates`), Actions `actions-minor-patch` (next to `codeql-action`). Majors stay
+  separate PRs so they get the full manual review above. `vite`, `@huggingface/transformers` and
+  `zod` are excluded from the npm group because the special-attention table requires their own
+  checks.
+- **Core MSRV ignores (minor/major only):** `argon2`, `base64ct`, `getrandom`, `sha2`, `zeroize`,
+  `zeroize_derive`, `keyring`, `dbus-secret-service`, `security-framework` and `windows-sys` in
+  `/crates`, the documented pins in `crates/worldscript-secure-storage/Cargo.toml`. In
+  `dependabot.yml`, `ignore` also applies to security updates, so patches inside a held line still
+  arrive; a fix that exists only in a newer line would not open a PR, but it still shows up as a
+  Dependabot alert and in the required OSV gate. Remove an entry when its floor is raised.
+- `src-tauri` has no MSRV ignores: its floor is Rust 1.90 (#572), which admits the current Tauri
+  plugin lines.
+
+A grouped PR is still integrated through a signed successor. When one member of a group fails, pin
+that package back on the successor branch (documented in `AUDIT.md`) rather than dropping the group.
+
 ---
 
 ## Triage matrix — what's required before merging
