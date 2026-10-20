@@ -17,7 +17,7 @@ aes-gcm = { version = "0.10.3", default-features = false, features = ["aes", "al
 # minimum (0.6 needs 1.85); default features (password-hash/PHC strings) are not used.
 argon2 = { version = "0.5.3", default-features = false, features = ["alloc", "zeroize"] }
 # argon2 requires base64ct; 1.7+ needs Rust 1.81+, so hold the 1.6 line (MSRV 1.60).
-base64ct = "~1.6"
+base64ct = "~1.8"
 # 0.3.4 keeps rust-version 1.63. The 0.4 line is not admitted. `getrandom()` is `fill` on this line.
 getrandom = "0.3"
 # §8.2.1 passphrase encoding (NFC) — MSRV 1.36.
