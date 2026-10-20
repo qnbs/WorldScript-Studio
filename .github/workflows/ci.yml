@@ -411,7 +411,7 @@ jobs:
 
       - name: Upload Vitest JSON results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vitest-results-node${{ matrix.node-version }}
           path: test-results.json
@@ -420,7 +420,7 @@ jobs:
 
       - name: Upload Vitest JUnit results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vitest-junit-node${{ matrix.node-version }}
           path: reports/junit.xml
@@ -430,7 +430,7 @@ jobs:
       - name: Upload coverage report
         # QNBS-v3: matrix value stays literal 'lts/*' — one upload per workflow suffices (Codecov optional).
         if: always() && matrix.node-version == '22'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-report
           path: coverage/
@@ -682,14 +682,14 @@ jobs:
           CODECOV_BUNDLE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Upload bundle analysis HTML
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bundle-analysis
           path: dist/bundle-analysis.html
           retention-days: 14
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: ./dist
@@ -868,7 +868,7 @@ jobs:
 
       - name: Upload Playwright HTML report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report
           path: tests/e2e/html-report/
@@ -878,7 +878,7 @@ jobs:
       # QNBS-v3: JUnit output from playwright.config.ts reporter — enables per-test annotation in GitHub PR checks
       - name: Upload E2E JUnit results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-junit
           path: tests/e2e/results/junit.xml
@@ -944,7 +944,7 @@ jobs:
 
       - name: Upload deep E2E report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-deep-report
           path: tests/e2e/html-report/
@@ -954,7 +954,7 @@ jobs:
       # QNBS-v3: same playwright.config.ts reporter as the required e2e job, produced independently on this runner — previously never uploaded.
       - name: Upload deep E2E JUnit results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-deep-junit
           path: tests/e2e/results/junit.xml
@@ -1026,7 +1026,7 @@ jobs:
 
       - name: Upload VRT screenshots
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vrt-screenshots
           # QNBS-v3: upload both baselines and diff outputs so PR reviewers can compare visually — playwright.config.ts sets no outputDir, so Playwright's default (repo-root test-results/, not tests/e2e/test-results/) is where actual/diff failure images actually land.
@@ -1038,7 +1038,7 @@ jobs:
       # QNBS-v3: same playwright.config.ts reporter as the required e2e job, produced independently on this runner — previously never uploaded.
       - name: Upload VRT JUnit results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vrt-junit
           path: tests/e2e/results/junit.xml
@@ -1077,7 +1077,7 @@ jobs:
 
       - name: Upload Lighthouse report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lighthouse-report
           path: .lighthouseci/
@@ -1158,7 +1158,7 @@ jobs:
       #          interactive investigation (see .github/workflows/storybook-debug.yml).
       - name: Upload Storybook build + test results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: storybook-build-and-test-results
           path: |

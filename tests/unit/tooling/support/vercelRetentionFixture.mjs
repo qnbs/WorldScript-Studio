@@ -106,6 +106,17 @@ export function standardWorld() {
   };
 }
 
+// QNBS-v3: behavior fixtures exercise the supported operator runtime even in the application Node 24 matrix; separate subprocess tests cover the real runtime refusal.
+export async function withRetentionRuntime(action) {
+  const descriptor = Object.getOwnPropertyDescriptor(process.versions, 'node');
+  Object.defineProperty(process.versions, 'node', { ...descriptor, value: '22.23.3' });
+  try {
+    return await action();
+  } finally {
+    Object.defineProperty(process.versions, 'node', descriptor);
+  }
+}
+
 const stamp = (item) => item.createdAt ?? item.created;
 
 function page(items, params, key, size) {

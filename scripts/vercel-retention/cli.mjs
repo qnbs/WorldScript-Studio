@@ -13,6 +13,19 @@ const stop = (reason) => {
   throw Object.assign(new Error(reason), { reason });
 };
 
+// QNBS-v3: retention is a Node 22 operator contract, independent of the application's Node 22/24 CI matrix; reject the actual runtime before tools, locks or runner imports.
+export function assertRuntime(version = process.versions.node) {
+  const match = typeof version === 'string' && /^22\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version);
+  if (
+    !match ||
+    match[0] !== version ||
+    !Number.isSafeInteger(Number(match[1])) ||
+    !Number.isSafeInteger(Number(match[2])) ||
+    Number(match[1]) < 19
+  )
+    stop('runtime-mismatch');
+}
+
 function parse(text, what) {
   try {
     return JSON.parse(text);
@@ -71,6 +84,7 @@ export function report(io, summary) {
 
 // QNBS-v3: the manifest is printed from the plan, before the first write, so an operator can read exactly what a reconcile pass is about to do; the summary line follows the pass.
 export async function main(argv, deps, io = console) {
+  assertRuntime();
   const mode = parseMode(argv);
   if (mode === 'reconcile') assertTrustedSource(deps);
   const { runRetention } = await import('./apply.mjs');

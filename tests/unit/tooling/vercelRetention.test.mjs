@@ -21,6 +21,7 @@ import {
   production,
   SECRET,
   standardWorld,
+  withRetentionRuntime,
 } from './support/vercelRetentionFixture.mjs';
 
 const OTHER = 'c'.repeat(40);
@@ -385,7 +386,9 @@ test('a modified, unmerged or divergent runner never mutates', async () => {
 test('reconcile from an untrusted checkout performs no provider call at all', async () => {
   const world = standardWorld();
   world.differs = true;
-  const error = await stop(() => main(['reconcile'], makeDeps(world), { log() {} }));
+  const error = await stop(() =>
+    withRetentionRuntime(() => main(['reconcile'], makeDeps(world), { log() {} })),
+  );
   assert.equal(error.reason, 'runner-source-differs-from-main');
   assert.ok(world.calls.every((call) => !call.startsWith('vercel')));
 });
@@ -426,7 +429,8 @@ test('the command line refuses an unknown mode before touching any tool', () => 
   });
   assert.equal(result.status, 1);
   assert.equal(result.stdout, '');
-  assert.match(result.stderr, /RETENTION_STOP: invalid-arguments/);
+  const reason = process.versions.node.startsWith('22.') ? 'invalid-arguments' : 'runtime-mismatch';
+  assert.ok(result.stderr.includes(`RETENTION_STOP: ${reason}`));
 });
 
 test('mutations accept only an exact deployment ID or alias host and always pass --safe', () => {
@@ -522,7 +526,9 @@ test('a provider page without pagination metadata is malformed, not the final pa
 
 test('the dry-run reports one manifest line per preview with its verdict and reasons', async () => {
   const lines = [];
-  await main(['dry-run'], makeDeps(standardWorld()), { log: (line) => lines.push(line) });
+  await withRetentionRuntime(() =>
+    main(['dry-run'], makeDeps(standardWorld()), { log: (line) => lines.push(line) }),
+  );
   const manifest = lines.filter((line) => line.startsWith('RETENTION_MANIFEST'));
   assert.equal(manifest.length, 8);
   assert.ok(manifest.some((line) => line.includes('dpl_prev1 | SAFE')));
