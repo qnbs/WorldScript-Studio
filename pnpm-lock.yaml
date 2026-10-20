@@ -16,7 +16,7 @@ overrides:
   '@xmldom/xmldom': '>=0.9.12'
   protobufjs: '>=8.6.6'
   axios: '>=1.20.0'
-  follow-redirects: '>=1.16.1 <2'
+  follow-redirects: 1.16.1
   basic-ftp: '>=6.2.1'
   fast-uri: '>=3.1.8 <4'
   ip-address: 10.7.2
