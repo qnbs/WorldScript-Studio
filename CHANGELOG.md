@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies:** Update serde_json from 1.0.151 to 1.0.154 in the Tauri lockfile (PR #1086; Dependabot source PR #1080). serde_json 1.0.154 declares Rust 1.71, inside the 1.77.2 floor. No manifest or source changes.
+
 - **Maintenance:** Require the Vercel retention operator to run Node 22.19.0 or later in the 22.x line before source checks or provider/child-process access; the application's Node 22/24 CI matrix is unchanged. Issue #627. PR #1078.
 
 - **Security (desktop updater):** Build `tauri-plugin-updater` without its `zip` feature (PR #1079, part of #911). The feature only unpacks the v1 `.zip` / `.tar.gz` updater bundles; with `createUpdaterArtifacts: true` the release ships the raw `-setup.exe` / `.msi` / `.AppImage`, and the macOS `.app.tar.gz` path does not depend on it. `zip 4.6.1` (RUSTSEC-2026-0367/-0368/-0369) and its `arbitrary` helpers leave `src-tauri/Cargo.lock`. No version change; Rust 1.77.2 stays the declared floor.
