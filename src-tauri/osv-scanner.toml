@@ -1,6 +1,6 @@
-# osv-scanner ignore list for src-tauri/Cargo.lock + pnpm-lock.yaml
+# osv-scanner ignore list for src-tauri/Cargo.lock + crates/Cargo.lock + pnpm-lock.yaml
 # All entries have been evaluated and accepted by the maintainer.
-# Reviewed: 2026-09-20 (Rust) / 2026-09-19 (npm)
+# Reviewed: 2026-09-20 (Rust) / 2026-09-19 (npm) / 2026-10-20 (zbus family, #911)
 
 # ─── GTK3 Rust bindings (Linux WebKit stack) ────────────────────────────────
 # webkit2gtk 2.0.2 (required by wry 0.55.x / Tauri 2.x for Linux) depends on
@@ -31,16 +31,41 @@ id = "RUSTSEC-2024-0370"
 ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "proc-macro-error 1.0.4: unmaintained build-time proc-macro helper; no runtime exposure; no newer version exists"
 
-# ─── paste ───────────────────────────────────────────────────────────────────
-# Build-time declarative-macro helper (token pasting) pulled in transitively by
-# the Tauri/Rust macro stack. Advisory classification is "unmaintained" — no CVE,
-# no CVSS score, no fixed version (1.0.15 is the final release; crate is archived).
-# Compile-time only; there is no runtime footprint or exploitable attack surface.
+## RUSTSEC-2024-0436 (paste 1.0.15) was removed on 2026-10-20: paste came only
+## through the Candle subtree, which left src-tauri/Cargo.lock with the
+## `rust-compute` feature (#911). No scanned lockfile contains paste any more.
+
+# ─── zbus 4/5 sub-crates: zvariant, zbus_names, zvariant_derive ──────────────
+# RUSTSEC-2026-0370/-0371/-0372 are "unmaintained" notices with no CVE, no CVSS
+# and no fixed version: the three crates were folded into zbus 6.0 (its `wire`
+# and `names` modules and derive macros), so they stop receiving releases.
+# src-tauri/Cargo.lock (5.12 / 4.3.2): Linux-only, through
+# tauri-plugin-notification and tauri-plugin-single-instance. Every published
+# line of both plugins, including 2.7.0 / 2.5.4 and the 3.0.0 alphas, requires
+# zbus ^5, so no dependency update reaches zbus 6 today.
+# crates/Cargo.lock (4.2.0 / 3.0.0): a lockfile-only edge. keyring 3.6.3's
+# `crypto-rust` feature also names `secret-service?/crypto-rust`, which keeps
+# secret-service 4 -> zbus 4 in the lockfile although no target compiles it
+# (WorldScript uses the dbus-secret-service backend). Dropping `crypto-rust`
+# is not an option: keyring would then open the Secret Service session as
+# `Plain` instead of the encrypted `Dh` session.
+# Drop these entries once Tauri's Linux plugins move to zbus 6 and keyring no
+# longer names secret-service.
 
 [[IgnoredVulns]]
-id = "RUSTSEC-2024-0436"
+id = "RUSTSEC-2026-0370"
 ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "paste 1.0.15: unmaintained build-time proc-macro helper; no runtime exposure; final version, no fix available"
+reason = "zvariant 5.12.0 / 4.2.0: unmaintained (merged into zbus 6.0); no CVE or fix. Linux-only via Tauri notification/single-instance (zbus ^5 on every plugin line) and a never-compiled keyring weak edge in crates/Cargo.lock"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0371"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "zbus_names 4.3.2 / 3.0.0: unmaintained (merged into zbus 6.0); no CVE or fix. Same Linux-only Tauri plugin path and never-compiled keyring weak edge as RUSTSEC-2026-0370"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0372"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "zvariant_derive 5.12.0 / 4.2.0: unmaintained (macros provided by zbus 6.0); no CVE or fix. Same Linux-only Tauri plugin path and never-compiled keyring weak edge as RUSTSEC-2026-0370"
 
 # ─── unic-* Unicode data crates ──────────────────────────────────────────────
 # unic-* 0.9.0 is the final version of this crate series (archived).
