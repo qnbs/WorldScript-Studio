@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies:** Update serde_json from 1.0.151 to 1.0.154 in the Core lockfile (PR #1087; Dependabot source PR #1081). serde_json 1.0.154 declares Rust 1.71, inside the Core floor 1.77.2. No manifest or source changes.
+
 - **Dependencies:** Update serde_json from 1.0.151 to 1.0.154 in the Tauri lockfile (PR #1086; Dependabot source PR #1080). serde_json 1.0.154 declares Rust 1.71, inside the 1.77.2 floor. No manifest or source changes.
 
 - **Maintenance:** Require the Vercel retention operator to run Node 22.19.0 or later in the 22.x line before source checks or provider/child-process access; the application's Node 22/24 CI matrix is unchanged. Issue #627. PR #1078.
