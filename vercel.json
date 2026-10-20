@@ -4,6 +4,7 @@
   "buildCommand": "NODE_OPTIONS=--max-old-space-size=3072 pnpm run build:edge",
   "outputDirectory": "dist",
   "framework": null,
+  "ignoreCommand": "case \"$VERCEL_GIT_COMMIT_REF\" in dependabot/*|deptrain/*) exit 0;; *) exit 1;; esac",
   "github": {
     "silent": true
   },

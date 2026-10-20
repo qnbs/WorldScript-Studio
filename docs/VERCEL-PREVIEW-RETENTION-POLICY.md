@@ -336,6 +336,17 @@ outside this scope, or any missing or contradictory identity metadata, is
 `UNKNOWN_REVIEW_REQUIRED` and is never eligible for deletion. Do not enumerate
 or delete across all projects reachable by a broad credential.
 
+## Preview build scope
+
+`vercel.json` `ignoreCommand` skips the Vercel build for branches named
+`dependabot/*` and `deptrain/*` (exit 0 cancels the build). Dependabot rebases
+every open bot PR after each merge to `main`, and on 2026-10-20 those rebases
+were 30 of 47 deployments in 24 hours against the Hobby deployment quota.
+Dependency PRs are qualified by the GitHub Actions build, E2E and Storybook
+jobs, not by a Vercel Preview, and no required check depends on one.
+Production builds of `main` and Previews of every other branch are unchanged.
+A PR without a Preview simply has an empty protected set (`min(3, available)`).
+
 ## Protected state
 
 The cleanup must never delete or modify:
