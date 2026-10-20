@@ -39,12 +39,12 @@ workflow or dependency is added.
 
 | Ecosystem | `directory` | Groups configured | Notes |
 |---|---|---|---|
-| npm | `/` | `react` (react/react-dom/@types), `dev-tooling` (vitest/playwright/storybook/biome/stryker) | Root workspace; `open-pull-requests-limit: 10` |
-| cargo | `/src-tauri` | `tauri-deps` (tauri*/wry/tao) | Tauri desktop backend; `open-pull-requests-limit: 5` |
-| cargo | `/crates` | none yet | Wave 2 Rust Core workspace (`crates/worldscript-project`); currently only `serde`/`serde_json` — add a group if this workspace grows a same-repo-multi-path dependency |
-| github-actions | `/` | `codeql-action` (`github/codeql-action*`) | See incident above |
+| npm | `/` | `react` (react/react-dom/@types; all update types, lockstep), `dev-tooling` (vitest/playwright/storybook/biome/stryker; minor/patch), `npm-minor-patch` (every other package; minor/patch; excludes `vite`, `@huggingface/transformers`, `zod`) | Root workspace; `open-pull-requests-limit: 10` |
+| cargo | `/src-tauri` | `tauri-deps` (tauri*/wry/tao; minor/patch), `cargo-minor-patch` (everything else; minor/patch) | Tauri desktop backend, Rust floor 1.90; `open-pull-requests-limit: 5` |
+| cargo | `/crates` | `core-minor-patch` (minor/patch) | Rust Core workspace, floor 1.77.2; minor/major of the documented MSRV pins ignored (see "Grouped monthly version updates"); `open-pull-requests-limit: 5` |
+| github-actions | `/` | `codeql-action` (`github/codeql-action*`; all update types, subpaths move together), `actions-minor-patch` (everything else; minor/patch) | See incident above |
 
-All four entries share `cooldown: default-days: 7` (matches `.npmrc`'s
+All four entries run **monthly** and share `cooldown: default-days: 7` (matches `.npmrc`'s
 `minimum-release-age=10080` for npm; applied uniformly to cargo/github-actions too so a freshly-cut
 release doesn't land in a PR before it's had a week to get pulled if broken).
 
@@ -74,21 +74,26 @@ each merge. About a third of the PRs could never merge because they needed a new
   immediately; `cooldown` applies to version updates only.
 - **Groups (minor + patch):** npm `npm-minor-patch` (all packages not already in `react` or
   `dev-tooling`), Cargo `cargo-minor-patch` (`src-tauri`, next to `tauri-deps`) and
-  `core-minor-patch` (`crates`), Actions `actions-minor-patch` (next to `codeql-action`). Majors stay
-  separate PRs so they get the full manual review above. `vite`, `@huggingface/transformers` and
-  `zod` are excluded from the npm group because the special-attention table requires their own
-  checks.
+  `core-minor-patch` (`crates`), Actions `actions-minor-patch` (next to `codeql-action`), and
+  `tauri-deps` restricted to minor/patch. Majors arrive as separate PRs for the full manual review
+  above, except in the two lockstep groups: `react` and `codeql-action` deliberately include every
+  update type, because their members must move together even across a major. `vite`,
+  `@huggingface/transformers` and `zod` are excluded from the npm group because the
+  special-attention table requires their own checks.
 - **Core MSRV ignores (minor/major only):** `argon2`, `base64ct`, `getrandom`, `sha2`, `zeroize`,
   `zeroize_derive`, `keyring`, `dbus-secret-service`, `security-framework` and `windows-sys` in
-  `/crates`, the documented pins in `crates/worldscript-secure-storage/Cargo.toml`. In
-  `dependabot.yml`, `ignore` also applies to security updates, so patches inside a held line still
-  arrive; a fix that exists only in a newer line would not open a PR, but it still shows up as a
-  Dependabot alert and in the required OSV gate. Remove an entry when its floor is raised.
+  `/crates`, the documented pins in `crates/worldscript-secure-storage/Cargo.toml`. Only minor and
+  major version updates are ignored, so patches inside a held line still arrive. GitHub documents
+  `update-types` as a version-update control and does not say that an `ignore` rule with it
+  suppresses security updates, so do not rely on it either way. A fix that exists only in a newer
+  line still shows as a Dependabot alert and fails the required OSV gate. Remove an entry when its
+  floor is raised.
 - `src-tauri` has no MSRV ignores: its floor is Rust 1.90 (#572), which admits the current Tauri
   plugin lines.
 
-A grouped PR is still integrated through a signed successor. When one member of a group fails, pin
-that package back on the successor branch (documented in `AUDIT.md`) rather than dropping the group.
+A grouped PR is integrated like any other update, through a signed successor (see "Merge
+discipline"). When one member of a group fails, pin that package back on the successor branch and
+record the hold in `AUDIT.md`, rather than dropping the whole group.
 
 ---
 
@@ -174,18 +179,23 @@ These need more than a changelog skim because of documented quirks elsewhere in 
 | `vite` | Production build uses **rolldown**, not esbuild/rollup; verify the current `vite.config.ts` and `package.json` `sideEffects` contract. Rolldown ignores `rollupOptions.treeshake` and ties tree-shaking to `package.json "sideEffects"` — a Vite bump that changes how a dependency's `sideEffects` field is honored can produce a blank-screen prod build that CI's `vite dev`-based E2E suite won't catch. Run `pnpm run build && pnpm run smoke:prod` after any Vite bump, not just CI green. |
 | `zod` | Has a repo-local patch (`patches/zod@4.4.3.patch`, forces `"sideEffects": true`) applied via `pnpm patch`. A version bump may need the patch re-applied/re-verified against the new version. |
 | `react` / `react-dom` | Already grouped — must stay in lockstep, split bumps cause version-mismatch errors at test time. |
-| `tauri-plugin-*` (Cargo) and `@tauri-apps/plugin-*` (npm) | **Not coupled — investigated and reverted (2026-09-10), not a documentation gap.** GitHub supports multi-ecosystem groups, but under the currently documented Dependabot configuration constraints there is no safely verified way to selectively route only these Tauri plugin dependencies into a multi-ecosystem group while simultaneously preserving the existing broad npm `/` and Cargo `/src-tauri` update coverage without overlapping update entries. A first implementation added `patterns: ['tauri-plugin-*']`/`patterns: ['@tauri-apps/plugin-*']` plus `multi-ecosystem-group: tauri-plugins` directly onto the existing broad cargo and npm update entries; this passed schema validation but was caught by review (Cubic) as very likely disabling Dependabot for every *other* dependency in those two entries (React, dev-tooling, `tauri`/`wry`/`tao`, and all other root npm/Cargo packages) — GitHub's multi-ecosystem tutorial's "Use `[\"*\"]` to include all dependencies" note strongly implies the top-level `patterns` key restricts an entry's *entire* scope, not just multi-ecosystem-group membership, and the standalone `patterns` key isn't even documented on GitHub's main `dependabot.yml` configuration-options reference page (only the multi-ecosystem tutorial page), suggesting genuinely new, not-yet-fully-reconciled behavior. A safer "separate dedicated entry per directory" architecture was also considered, but GitHub's own docs state plainly that two `updates:` entries for the same ecosystem+directory are not permitted, with no confirmed exception for multi-ecosystem-group participants. Neither variant could be verified safe without live-testing against a real Dependabot-enabled repository, which isn't observable synchronously from this tooling — schema validity alone is not proof of runtime scanning behavior. Given the severe, silent blast radius of guessing wrong, the coupling was reverted entirely rather than shipped unverified. **This does not weaken the actual safety net**, which was never contingent on Dependabot config: `pnpm run tauri-plugins:check` (`scripts/check-tauri-plugin-versions.mjs`) runs unconditionally in `ci.yml`'s `quality` job on every PR — including a Cargo-only or npm-only Dependabot PR — and fails closed on any mismatch; `tauri-build.yml` additionally runs the same check as a cheap `parity-preflight` job before its ~45min cross-platform bundle matrix. If a one-sided Dependabot PR fails this check, the fix must land **on that same PR's branch** (Dependabot PRs accept additional pushed commits) — a separate companion PR cannot make the failing PR's own CI pass, since each PR's CI only sees its own branch; never dismiss or loosen the check itself. Revisit multi-ecosystem coupling only with hands-on verification against a real Dependabot-enabled sandbox repository. |
+| `tauri-plugin-*` (Cargo) and `@tauri-apps/plugin-*` (npm) | **Not coupled — investigated and reverted (2026-09-10), not a documentation gap.** GitHub supports multi-ecosystem groups, but under the currently documented Dependabot configuration constraints there is no safely verified way to selectively route only these Tauri plugin dependencies into a multi-ecosystem group while simultaneously preserving the existing broad npm `/` and Cargo `/src-tauri` update coverage without overlapping update entries. A first implementation added `patterns: ['tauri-plugin-*']`/`patterns: ['@tauri-apps/plugin-*']` plus `multi-ecosystem-group: tauri-plugins` directly onto the existing broad cargo and npm update entries; this passed schema validation but was caught by review (Cubic) as very likely disabling Dependabot for every *other* dependency in those two entries (React, dev-tooling, `tauri`/`wry`/`tao`, and all other root npm/Cargo packages) — GitHub's multi-ecosystem tutorial's "Use `[\"*\"]` to include all dependencies" note strongly implies the top-level `patterns` key restricts an entry's *entire* scope, not just multi-ecosystem-group membership, and the standalone `patterns` key isn't even documented on GitHub's main `dependabot.yml` configuration-options reference page (only the multi-ecosystem tutorial page), suggesting genuinely new, not-yet-fully-reconciled behavior. A safer "separate dedicated entry per directory" architecture was also considered, but GitHub's own docs state plainly that two `updates:` entries for the same ecosystem+directory are not permitted, with no confirmed exception for multi-ecosystem-group participants. Neither variant could be verified safe without live-testing against a real Dependabot-enabled repository, which isn't observable synchronously from this tooling — schema validity alone is not proof of runtime scanning behavior. Given the severe, silent blast radius of guessing wrong, the coupling was reverted entirely rather than shipped unverified. **This does not weaken the actual safety net**, which was never contingent on Dependabot config: `pnpm run tauri-plugins:check` (`scripts/check-tauri-plugin-versions.mjs`) runs unconditionally in `ci.yml`'s `quality` job on every PR — including a Cargo-only or npm-only Dependabot PR — and fails closed on any mismatch; `tauri-build.yml` additionally runs the same check as a cheap `parity-preflight` job before its ~45min cross-platform bundle matrix. If a one-sided Dependabot update fails this check, the fix must land **on the branch that carries the update**, which is the signed successor branch (see "Merge discipline"); a separate companion PR cannot make that PR's own CI pass, since each PR's CI only sees its own branch. Never dismiss or loosen the check itself. Revisit multi-ecosystem coupling only with hands-on verification against a real Dependabot-enabled sandbox repository. |
 | `github/codeql-action*` | Already grouped — see incident above. |
 | `@biomejs/biome` | Check the installed package version against `biome.json`'s `$schema` URL after every bump; the schema URL is versioned independently from the npm dependency declaration. |
 | Any WASM/WebGPU-adjacent package (`@huggingface/transformers`, `@mlc-ai/web-llm`, `onnxruntime-web`) | These ship in `vendor-*` SW-excluded chunks (`vite.config.ts` `globIgnores`) — verify a version bump didn't change the package's exported chunk structure in a way that breaks the manual-chunk mapping. |
 
 ## Merge discipline — one at a time, sequenced
 
-Per standing policy for this session: **do not stack merges**. For each Dependabot PR, in order:
+Per standing policy for this session: **do not stack merges**. Each Dependabot update is integrated
+through a **signed successor PR** cut from current `main`. The successor cherry-picks the bot commit
+and adds its own CHANGELOG entry ("PR #N; Dependabot source PR #M"), because the required CHANGELOG
+guard needs the merging PR's own number and bot-authored PRs get no substantive bot review. Every
+fix, CI run, review and the merge happen on the successor; the source PR is closed once the
+successor is merged and its resulting `main` is green. For each update, in order:
 
-1. Confirm the PR's own CI is fully green (see triage matrix above for what "ready" means at that
-   semver level).
-2. Merge (squash).
+1. Confirm the successor PR's own CI is fully green (see triage matrix above for what "ready" means at
+   that semver level).
+2. Merge it (protected squash).
 3. Wait for the resulting **push-triggered** CI run on `main` (not just the PR's own run — a squash
    merge produces a new commit SHA that reruns the full pipeline) to reach **CI green as defined
    above** — the full suite, not just the required `ci-success` aggregate, which explicitly

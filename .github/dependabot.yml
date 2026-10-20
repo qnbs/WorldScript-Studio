@@ -74,7 +74,11 @@ updates:
       default-days: 7
     open-pull-requests-limit: 5
     groups:
+      # Minor/patch only: a Tauri major arrives as its own PR for a full review.
       tauri-deps:
+        update-types:
+          - 'minor'
+          - 'patch'
         patterns:
           - 'tauri*'
           - 'tauri-*'
@@ -103,9 +107,9 @@ updates:
         patterns:
           - '*'
     # The pins documented in crates/worldscript-secure-storage/Cargo.toml: each next line needs Rust
-    # above the Core floor 1.77.2 (or, for windows-sys and getrandom, is not admitted). `ignore` also
-    # applies to security updates, so only minor/major are ignored: patches inside a held line still
-    # arrive, and the required OSV gate reports any advisory regardless.
+    # above the Core floor 1.77.2 (or, for windows-sys and getrandom, is not admitted). Only minor and
+    # major version updates are ignored, so patches inside a held line still arrive. A fix that exists
+    # only in a newer line still shows as a Dependabot alert and fails the required OSV gate.
     ignore:
       - dependency-name: 'argon2'
         update-types: ['version-update:semver-minor', 'version-update:semver-major']

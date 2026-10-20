@@ -336,7 +336,7 @@ once a manual run demonstrates the flakiness is resolved — concretely, three c
 | **OpenSSF Scorecard** (`ossf/scorecard-action`) | Weekly cron + `main` push | SARIF → GitHub Code Scanning; separate `scorecard.yml` workflow |
 | **CodeQL** (`github/codeql-action`) | Every push/PR + weekly | JS/TS SAST → GitHub Code Scanning; `codeql.yml` workflow |
 | **SHA-pinned actions** | Every job | All `uses:` references pinned to commit SHA (`# vN` comment) — immune to tag-mutable supply-chain attacks; Dependabot updates SHAs automatically |
-| **Dependabot** | Weekly (Monday) | PRs for npm deps (dev-tooling grouped) + GitHub Actions SHA bumps (max 5 open PRs) |
+| **Dependabot** | Monthly; security updates immediately | Grouped minor/patch PRs for npm, Cargo (`src-tauri`, `crates`) and GitHub Actions SHA bumps; majors separate (see `docs/DEPENDABOT-TRIAGE.md`) |
 | **`dependency-review-action`** | PRs only (security job) | Blocks PRs that introduce new high/critical vulnerabilities |
 | **pnpm v11 build-script policy** | Dependency installation | `pnpm-workspace.yaml` uses the sole supported, default-deny `allowBuilds` map; legacy build-script lists are intentionally absent |
 | **Branch protection** | Always | `main` requires 1 approved review, required status checks including the `CI Success` aggregator, no force-push |
@@ -546,7 +546,7 @@ act pull_request -j quality -s CODECOV_TOKEN="$CODECOV_TOKEN" -W .github/workflo
 | `scripts/check-bundle-budget.mjs` | Chunk size budget after `pnpm run build` |
 | `renovate.json` | Renovate Bot: patch auto-merge policy |
 | `.github/actions/setup/action.yml` | Composite action: Node + pnpm setup reused by all jobs |
-| `.github/dependabot.yml` | Dependabot: npm + GitHub Actions weekly updates, dev-tooling grouped |
+| `.github/dependabot.yml` | Dependabot: npm, Cargo (`src-tauri`, `crates`) and GitHub Actions, monthly, grouped minor/patch per ecosystem |
 | `.github/workflows/scorecard.yml` | OpenSSF Scorecard weekly run → Code Scanning SARIF |
 | `playwright.config.ts` | E2E projects (CI: Chromium desktop + Pixel 5; local: Chromium + Firefox, optional mobile via `RUN_MOBILE_E2E=1`), `snapshotPathTemplate`, reporters |
 | `tests/e2e/helpers.ts` | SPA-ready waits (avoid `networkidle` with Vite/HMR), EN locale, blank project bootstrap, `#sidebar` scope |
