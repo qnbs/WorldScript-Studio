@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies (CI):** Update `actions/download-artifact` from 8.0.1 to 8.0.2 in `ci.yml`, `mutation.yml` and `tauri-build.yml` (PR #1077; Dependabot source PR #1051). Patch release; every `uses:` reference moves to the same pinned commit.
+
 - **Dependencies (CI):** Update `actions/upload-artifact` from 7.0.1 to 7.0.2 in every workflow that uses it (PR #1096; Dependabot source PR #1049). Patch release; every `uses:` reference moves to the same pinned commit, so no workflow keeps the older version.
 
 - **Dependencies:** Update the dev-tooling group (PR #1095; Dependabot source PR #1083): `@playwright/test` 1.63.0 → 1.64.0, Storybook 10.6.0 → 10.6.2 (core, addon-a11y, builder-vite, react, react-vite), `@storybook/test-runner` 0.24.5 → 0.26.0, `vitest` and `@vitest/coverage-v8` 5.0.2 → 5.0.4. The `playwright` / `playwright-core` overrides in `pnpm-workspace.yaml` move to 1.64.0 with it, so the runner and the core stay one version (they had pinned 1.61.0). Playwright 1.64 now forwards `screen` from device descriptors, so emulated `window.screen` and media queries follow the device. Upstream marked `@storybook/test-runner` as no longer officially supported in 0.26 (#610 there); a later move to the Storybook Vitest addon is the replacement path.
