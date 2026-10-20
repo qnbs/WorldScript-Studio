@@ -147,8 +147,8 @@ importers:
         specifier: ^6.1.0
         version: 6.1.0(@types/react@19.3.0)(react@19.3.0)(xstate@5.33.0)
       ai:
-        specifier: ^7.0.109
-        version: 7.0.109(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
+        specifier: ^7.0.138
+        version: 7.0.138(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
       diff-match-patch:
         specifier: ^1.0.5
         version: 1.0.5
@@ -422,14 +422,14 @@ packages:
   '@adobe/css-tools@4.4.4':
     resolution: {integrity: sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==}
 
-  '@ai-sdk/gateway@4.0.73':
-    resolution: {integrity: sha512-1Gp6QtVHfegKoMcf1pjk4fpgDg1cUdK5NnrEiUsYhLWa6owDMmF7kP+qL7ZgQNDYKTOijT+5cTeHrL281kUiiQ==}
+  '@ai-sdk/gateway@4.0.111':
+    resolution: {integrity: sha512-+Uq8GgAsEkq3rv1AoYyqpCeHSOXG5ZP7KnsquM8yyIXkn1oBeZbFZvTtNE6gC9Eg1VK34KwImv8NrtB6tfm2wA==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/gateway@4.0.88':
-    resolution: {integrity: sha512-hpEdOAqrp3FOShSytk6n8BZVZ/xrCV7L9hqYA6Q55h7sQknvh99QfC0uQAIbQWjh+66tmo1Fo6ndQla8uCJGyA==}
+  '@ai-sdk/gateway@4.0.73':
+    resolution: {integrity: sha512-1Gp6QtVHfegKoMcf1pjk4fpgDg1cUdK5NnrEiUsYhLWa6owDMmF7kP+qL7ZgQNDYKTOijT+5cTeHrL281kUiiQ==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -458,12 +458,6 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/provider-utils@5.0.45':
-    resolution: {integrity: sha512-gLuaCups8OCIRz3eO6WWz5op7VLYNNtFzyH0sWUr0FE9v7cTxR0qxDpQdrKnGcql+9WWttobjnZsJVsuEbsPQQ==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
   '@ai-sdk/provider-utils@5.0.51':
     resolution: {integrity: sha512-z0IsEsDx+dxlZqyCtDjMbBj16NGmxFVTgQcP3+n3EFm9ttNU6wjOgL/kgvaPwtmZM6F7JbtRuLyzr6WOfo5DMw==}
     engines: {node: '>=22'}
@@ -476,12 +470,14 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.59':
+    resolution: {integrity: sha512-eaXBTkguxBFzS+KvxGRsbdkX9A7+R1g/C4jWx9mup0oSs3Cx5Mb427/byGpD2XL8SnMYT9O8LmXBmrgo+N3TJw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@4.0.10':
     resolution: {integrity: sha512-fX2ENAc7iDpZ+Wp4+Rk06Usn/Ys7dI9uAkGv0jlF6XVrW13NkRWx5Ou+U6lIM2E1fTLkCs16GGrUAaVvroag7A==}
-    engines: {node: '>=22'}
-
-  '@ai-sdk/provider@4.0.17':
-    resolution: {integrity: sha512-VYMBxIQdcHqbIf1j+YZlI9Ati6LZ4wJe0GGd4z4a5H/KxTggjeOiyaVYTnfF7LHZK5jMQ+rofmzz4QPqf++NUw==}
     engines: {node: '>=22'}
 
   '@ai-sdk/provider@4.0.19':
@@ -490,6 +486,10 @@ packages:
 
   '@ai-sdk/provider@4.0.24':
     resolution: {integrity: sha512-iztFqJTdxNN0ZzqZAAnVPMhRMaL1bfQFa3GIPAffWQ0+dP2FXIkyMD8kHeEI7EpB/C6TR45cqOkrS7YZZ1sATA==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/provider@4.0.27':
+    resolution: {integrity: sha512-TtWwm6SxFiPomlMIbTQa+yhJte+w4/oCsW+wJrJzMC3MqHpAY9e5dJF1Y4HxyKt3W2Csac0KiI76Ckio11TFYw==}
     engines: {node: '>=22'}
 
   '@ai-sdk/react@4.0.94':
@@ -3733,8 +3733,8 @@ packages:
     resolution: {integrity: sha512-4I7Td01quW/RpocfNayFdFVk1qSuoh0E7JrbRJ16nH01HhKFQ88INq9Sd+nd72zqRySlr9BmDA8xlEJ6vJMrYA==}
     engines: {node: '>=8'}
 
-  ai@7.0.109:
-    resolution: {integrity: sha512-hTnm8K4GIT0R6gHrnDJHr1KRnGVAtFa26mLtjqn/TGy+ufD5Y5XXerTEabLXVgmb9iunWxSFRCPOZUZ/VeXYLQ==}
+  ai@7.0.138:
+    resolution: {integrity: sha512-rB2grfrM9se2GY/au4e5Eq0xadPM4+a+ip3EZ0ofedIPU8/GETWGjXO6gbzQDA+7nMaZnaUVaX2f+ByAj/LF8w==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -5734,8 +5734,8 @@ packages:
     resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
     engines: {node: '>=6'}
 
-  legacy-javascript@0.0.1:
-    resolution: {integrity: sha512-lPyntS4/aS7jpuvOlitZDFifBCb4W8L/3QU0PLbUTUj+zYah8rfVjYic88yG7ZKTxhS5h9iz7duT8oUXKszLhg==}
+  legacy-javascript@0.0.3:
+    resolution: {integrity: sha512-1r6MT4dVaJyXt4G07Cm2cQ0AUaLJdefiEp4SmIAylA++gnEQ82YvmzE58RkM5EP0fk5hROLCslUPGnwIYdZQVA==}
 
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
@@ -7994,17 +7994,17 @@ snapshots:
 
   '@adobe/css-tools@4.4.4': {}
 
+  '@ai-sdk/gateway@4.0.111(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))':
+    dependencies:
+      '@ai-sdk/provider': 4.0.27
+      '@ai-sdk/provider-utils': 5.0.59(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
+      '@vercel/oidc': 3.2.0
+      zod: 4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)
+
   '@ai-sdk/gateway@4.0.73(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))':
     dependencies:
       '@ai-sdk/provider': 4.0.10
       '@ai-sdk/provider-utils': 5.0.36(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
-      '@vercel/oidc': 3.2.0
-      zod: 4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)
-
-  '@ai-sdk/gateway@4.0.88(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))':
-    dependencies:
-      '@ai-sdk/provider': 4.0.17
-      '@ai-sdk/provider-utils': 5.0.45(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
       '@vercel/oidc': 3.2.0
       zod: 4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)
 
@@ -8037,15 +8037,6 @@ snapshots:
       undici: 7.29.1
       zod: 4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)
 
-  '@ai-sdk/provider-utils@5.0.45(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))':
-    dependencies:
-      '@ai-sdk/provider': 4.0.17
-      '@standard-schema/spec': 1.1.0
-      '@workflow/serde': 4.1.0
-      eventsource-parser: 3.1.1
-      undici: 7.29.1
-      zod: 4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)
-
   '@ai-sdk/provider-utils@5.0.51(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))':
     dependencies:
       '@ai-sdk/provider': 4.0.19
@@ -8064,11 +8055,16 @@ snapshots:
       undici: 7.30.0
       zod: 4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)
 
-  '@ai-sdk/provider@4.0.10':
+  '@ai-sdk/provider-utils@5.0.59(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))':
     dependencies:
-      json-schema: 0.4.0
+      '@ai-sdk/provider': 4.0.27
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.1
+      undici: 7.30.0
+      zod: 4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)
 
-  '@ai-sdk/provider@4.0.17':
+  '@ai-sdk/provider@4.0.10':
     dependencies:
       json-schema: 0.4.0
 
@@ -8077,6 +8073,10 @@ snapshots:
       json-schema: 0.4.0
 
   '@ai-sdk/provider@4.0.24':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@4.0.27':
     dependencies:
       json-schema: 0.4.0
 
@@ -10085,7 +10085,7 @@ snapshots:
 
   '@paulirish/trace_engine@0.0.65':
     dependencies:
-      legacy-javascript: 0.0.1
+      legacy-javascript: 0.0.3
       third-party-web: 0.30.0
 
   '@pkgjs/parseargs@0.11.0':
@@ -11152,11 +11152,11 @@ snapshots:
       clean-stack: 2.2.0
       indent-string: 4.0.0
 
-  ai@7.0.109(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)):
+  ai@7.0.138(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)):
     dependencies:
-      '@ai-sdk/gateway': 4.0.88(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
-      '@ai-sdk/provider': 4.0.17
-      '@ai-sdk/provider-utils': 5.0.45(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
+      '@ai-sdk/gateway': 4.0.111(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
+      '@ai-sdk/provider': 4.0.27
+      '@ai-sdk/provider-utils': 5.0.59(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93))
       zod: 4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)
 
   ai@7.0.91(zod@4.4.3(patch_hash=338616f6b312752cd87f1779a712517e6ffff9fc470a3f3e69d1cdc5a8ca0d93)):
@@ -13580,7 +13580,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  legacy-javascript@0.0.1: {}
+  legacy-javascript@0.0.3: {}
 
   leven@3.1.0: {}
 

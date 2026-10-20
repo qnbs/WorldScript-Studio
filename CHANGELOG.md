@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies:** Update ai (Vercel AI SDK) from 7.0.109 to 7.0.138 (PR #1090; Dependabot source PR #1057, rebased by Dependabot after the cohort freeze; same 7.0 patch line). Manifest range `^7.0.130`; lockfile and manifest only.
+
 - **Dependencies:** Update @ai-sdk/google from 4.0.85 to 4.0.90 (PR #1089; Dependabot source PR #1058). Patch releases; lockfile and manifest only.
 
 - **Dependencies:** Update yjs from 13.6.32 to 13.6.33 (PR #1088; Dependabot source PR #1060). Patch release; lockfile and manifest only.
