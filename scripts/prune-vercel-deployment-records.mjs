@@ -33,12 +33,12 @@ export function refuse(reason) {
 const isSha = (value) => typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);
 
 function validRecord(record) {
-  return (
-    Number.isSafeInteger(record?.id) &&
-    isSha(record.sha) &&
-    !Number.isNaN(Date.parse(record.created_at)) &&
-    typeof record.creator?.login === 'string'
-  );
+  return [
+    Number.isSafeInteger(record?.id),
+    isSha(record?.sha),
+    !Number.isNaN(Date.parse(record?.created_at)),
+    typeof record?.creator?.login === 'string',
+  ].every(Boolean);
 }
 
 const inScope = (record, environment) =>
@@ -69,10 +69,13 @@ export function planRecords({ records, mainSha, openHeads, keep = KEEP_PER_ENVIR
 }
 
 export function admission({ repository, ref, eventName, sha, workflowRef }) {
-  if (repository !== REPOSITORY) refuse('repository-unexpected');
-  if (ref !== 'refs/heads/main') refuse('ref-unexpected');
-  if (workflowRef !== WORKFLOW) refuse('workflow-unexpected');
-  if (!isSha(sha)) refuse('sha-invalid');
+  const checks = [
+    [repository === REPOSITORY, 'repository-unexpected'],
+    [ref === 'refs/heads/main', 'ref-unexpected'],
+    [workflowRef === WORKFLOW, 'workflow-unexpected'],
+    [isSha(sha), 'sha-invalid'],
+  ];
+  for (const [ok, reason] of checks) if (!ok) refuse(reason);
   return { writes: eventName === 'schedule' };
 }
 
@@ -146,18 +149,19 @@ async function assertSameRecord(ctx, record) {
   const current = await call(ctx, 'GET /repos/{owner}/{repo}/deployments/{deployment_id}', {
     deployment_id: record.id,
   });
-  const same =
-    current?.environment === record.environment &&
-    current?.sha === record.sha &&
-    current?.creator?.login === CREATOR;
+  const same = [
+    current?.environment === record.environment,
+    current?.sha === record.sha,
+    current?.creator?.login === CREATOR,
+  ].every(Boolean);
   if (!same) refuse('record-changed');
 }
 
 // One candidate: identity, fresh protection and a proven inactive status before the DELETE.
-async function retire(ctx, record, authority) {
+async function retire(ctx, record) {
   await assertSameRecord(ctx, record);
   const protection = await readProtection(ctx);
-  assertBound(protection, authority);
+  assertBound(protection, ctx.authority);
   assertStillCandidate(record, protection);
   await ensureInactive(ctx, record.id);
   await call(ctx, 'DELETE /repos/{owner}/{repo}/deployments/{deployment_id}', {
@@ -167,18 +171,18 @@ async function retire(ctx, record, authority) {
 
 const funded = (ctx) => ctx.remaining !== null && ctx.remaining >= RATE_RESERVE + CANDIDATE_COST;
 
-async function retireBatch(ctx, candidates, authority, summary, maxDeletes) {
-  for (const record of candidates.slice(0, maxDeletes)) {
+async function retireBatch(ctx, candidates, summary) {
+  for (const record of candidates.slice(0, ctx.maxDeletes)) {
     if (!funded(ctx)) return 'budget-limit';
     try {
-      await retire(ctx, record, authority);
+      await retire(ctx, record);
       summary.deleted.push(record.id);
     } catch (error) {
       summary.failed = true;
       return error?.reason ?? 'request-failed';
     }
   }
-  return candidates.length > maxDeletes ? 'batch-limit' : null;
+  return candidates.length > ctx.maxDeletes ? 'batch-limit' : null;
 }
 
 export async function reconcileVercelRecords({
@@ -188,7 +192,7 @@ export async function reconcileVercelRecords({
 }) {
   const { writes } = admission(authority);
   const [owner, repo] = REPOSITORY.split('/');
-  const ctx = { github, base: { owner, repo }, remaining: null };
+  const ctx = { github, base: { owner, repo }, remaining: null, authority, maxDeletes };
   const records = await readAll(ctx, 'GET /repos/{owner}/{repo}/deployments');
   const protection = await readProtection(ctx);
   if (writes) assertBound(protection, authority);
@@ -202,7 +206,7 @@ export async function reconcileVercelRecords({
     failed: false,
     reason: null,
   };
-  if (writes) summary.reason = await retireBatch(ctx, candidates, authority, summary, maxDeletes);
+  if (writes) summary.reason = await retireBatch(ctx, candidates, summary);
   return summary;
 }
 
