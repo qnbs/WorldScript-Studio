@@ -84,7 +84,7 @@ coverage ratchet remains informational.
 `.github/actions/setup/action.yml` centralises pnpm + Node.js bootstrap into one reusable step used by every job:
 
 ```
-pnpm/setup (version: 11.28.5, install: false) → actions/setup-node (cache: pnpm) → toolchain check → pnpm install --frozen-lockfile
+pnpm/setup (version: 12.13.0, install: false) → actions/setup-node (cache: pnpm) → toolchain check → pnpm install --frozen-lockfile
 ```
 
 Each job that uses the composite must call `actions/checkout@v6` first (local composite actions are resolved from the workspace, so the repo must be checked out before `uses: ./.github/actions/setup` can be used). The `quality` job additionally passes `node-version: ${{ matrix.node-version }}` to cover the LTS matrix.
