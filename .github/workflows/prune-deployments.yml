@@ -24,6 +24,7 @@ jobs:
       contents: read
       actions: read
       pages: read
+      pull-requests: read
       deployments: read
     steps:
       - name: Check out immutable trusted main execution tree
@@ -42,6 +43,15 @@ jobs:
             const { runAction } = await import(pathToFileURL(`${root}/scripts/prune-pages-deployments.mjs`).href);
             const holds = JSON.parse(readFileSync(`${root}/.github/pages-pruning-holds.json`, 'utf8'));
             await runAction({ github, context, core, holds, workflowRef: process.env.GITHUB_WORKFLOW_REF });
+      - name: Plan Vercel deployment records
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          retries: 0
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const root = process.env.GITHUB_WORKSPACE;
+            const { runAction } = await import(pathToFileURL(`${root}/scripts/prune-vercel-deployment-records.mjs`).href);
+            await runAction({ github, context, core });
   prune:
     name: Reconcile GitHub Pages records only
     if: github.repository == 'qnbs/WorldScript-Studio' && github.ref == 'refs/heads/main' && github.event_name == 'schedule'
@@ -51,6 +61,7 @@ jobs:
       contents: read
       actions: read
       pages: read
+      pull-requests: read
       deployments: write
     steps:
       - name: Check out immutable trusted main execution tree
@@ -69,3 +80,12 @@ jobs:
             const { runAction } = await import(pathToFileURL(`${root}/scripts/prune-pages-deployments.mjs`).href);
             const holds = JSON.parse(readFileSync(`${root}/.github/pages-pruning-holds.json`, 'utf8'));
             await runAction({ github, context, core, holds, workflowRef: process.env.GITHUB_WORKFLOW_REF });
+      - name: Keep only the newest Vercel deployment records
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          retries: 0
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const root = process.env.GITHUB_WORKSPACE;
+            const { runAction } = await import(pathToFileURL(`${root}/scripts/prune-vercel-deployment-records.mjs`).href);
+            await runAction({ github, context, core });

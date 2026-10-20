@@ -238,3 +238,26 @@ belong to #550/QNB-41; no monetary or CPU savings are inferred from workflow-sta
    the cause is repaired.
 
 Implementation, review and operational verification remain separate states.
+
+## Vercel-created records
+
+Vercel for GitHub creates one GitHub deployment record per Vercel deployment (environments
+`Production` and `Preview`, creator `vercel[bot]`) and has no setting to stop it. Those records only
+mirror deployments; they gate nothing, and no workflow reads them. Before 2026-10-20 they had piled
+up to 139. Since #1092, `dependabot/**` and `deptrain/**` branches create no Vercel deployment and
+therefore no record.
+
+The same workflow bounds the rest with a second step in each job
+(`scripts/prune-vercel-deployment-records.mjs`):
+
+- **Scope:** environments `Production` and `Preview` whose creator is `vercel[bot]`. `github-pages`
+  records, other environments and other creators are never candidates.
+- **Kept:** the newest ten records per environment (by `created_at`, then ID), the record of the
+  current `main` commit, and every Preview record whose commit is the head of an open PR.
+- **Writes:** only in the scheduled `prune` job, which already holds `deployments: write`. The
+  dispatched `plan` job reads and reports. Each candidate is re-read first; a changed environment,
+  commit or creator stops the run (`record-changed`). An active record gets an `inactive` status
+  (GitHub requires it), then it is deleted. Writes are never retried; a failed request stops the run.
+- **Capacity:** at most 40 deletions per pass, oldest first (`batch-limit` otherwise). The daily
+  schedule absorbs a backlog.
+- **Order:** the Pages step runs first; if it fails closed, the Vercel step does not run that day.
