@@ -187,7 +187,7 @@ pub fn diff_text(old_text: &str, new_text: &str) -> Result<Vec<TextDiffOp>, Stri
 
     let exceeds_dp_budget = old_len
         .checked_mul(new_len)
-        .map_or(true, |cells| cells > MAX_DIFF_DP_CELLS);
+        .is_none_or(|cells| cells > MAX_DIFF_DP_CELLS);
     if exceeds_dp_budget {
         let mut ops = Vec::with_capacity(2);
         if old_len > 0 {
