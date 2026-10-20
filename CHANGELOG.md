@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies:** Update @ai-sdk/google from 4.0.85 to 4.0.90 (PR #1089; Dependabot source PR #1058). Patch releases; lockfile and manifest only.
+
 - **Dependencies:** Update yjs from 13.6.32 to 13.6.33 (PR #1088; Dependabot source PR #1060). Patch release; lockfile and manifest only.
 
 - **Dependencies:** Update serde_json from 1.0.151 to 1.0.154 in the Core lockfile (PR #1087; Dependabot source PR #1081). serde_json 1.0.154 declares Rust 1.71, inside the Core floor 1.77.2. No manifest or source changes.
