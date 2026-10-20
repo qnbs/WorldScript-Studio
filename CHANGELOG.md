@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies:** Update @huggingface/transformers from 4.2.0 to 4.3.1 in `packages/ai-core` (PR #1093; Dependabot source PR #1055). The `dist/transformers.web.js` entry used by the `vite.config.ts` alias and the `exports` map are unchanged, and the `vendor-*` chunks key on our own source paths. It brings onnxruntime-web 1.31-dev and onnxruntime-node 1.30.0; `adm-zip >=0.6.1` and `allowBuilds: onnxruntime-node=false` still apply. Release notes list no breaking change.
+
 - **Maintenance (Vercel quota):** Turn off Git-triggered Vercel deployments for `dependabot/**` and `deptrain/**` branches through `vercel.json` `git.deploymentEnabled` (PR #1092). In the 24 hours before 2026-10-20 10:55 UTC, 38 of the project's 47 deployments came from these branches (30 Dependabot rebases, 8 cohort successors) on the Hobby plan. An `ignoreCommand` was not used because canceled builds still count as deployments. Dependency PRs are qualified by the required GitHub Actions checks; Production builds of `main` and Previews of other branches are unchanged. Documented in `docs/VERCEL-PREVIEW-RETENTION-POLICY.md`.
 
 - **Dependencies:** Update @google/genai from 2.22.0 to 2.28.0 (PR #1091; Dependabot source PR #1059, which by then proposed 2.29.0). 2.28.0 is the last release before 2.29.0 made automatic continuation the default for `generateContent` / `generateContentStream`; that path has defects fixed only in 2.30.0, which is still inside the 7-day minimum-release-age. The version is pinned exactly so no lockfile re-resolution can move to 2.29.x. Releases 2.23–2.28 list features and bug fixes only; lockfile and manifest only.
