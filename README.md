@@ -792,7 +792,7 @@ The normal web PR pipeline is not the complete native release qualification surf
 | UI | React 19 | Main application UI |
 | Type system | TypeScript native preview (`tsgo`), strict configuration | Static correctness |
 | Build | Vite 8 | Web/PWA application build |
-| Workspace | pnpm 11.22.0 + Turborepo | Dependency/workspace orchestration |
+| Workspace | pnpm 11.28.5 + Turborepo | Dependency/workspace orchestration |
 | Persistent app state | Redux Toolkit + redux-undo | Project/settings/undoable domain state |
 | Transient UI state | Zustand | Ephemeral UI-only state |
 | Styling | Tailwind CSS 4 + CSS custom properties/design tokens | Theming and design system |
@@ -905,7 +905,7 @@ WorldScript-Studio/
 ## Requirements
 
 - **Node.js ≥ 22.19.0**
-- **pnpm 11.22.0** (the repository's exact `packageManager` pin)
+- **pnpm 11.28.5** (the repository's exact `packageManager` pin)
 - recent evergreen browser
 - **Rust + Tauri prerequisites** only if developing the desktop app
 
