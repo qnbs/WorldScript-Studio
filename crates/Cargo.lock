@@ -1500,7 +1500,7 @@ dependencies = [
  "security-framework 3.6.0",
  "sha2",
  "unicode-normalization",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
  "worldscript-secure-storage",
  "zeroize",
  "zeroize_derive",
