@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies (CI):** Update the `github/codeql-action` group from 4.38.2 to 4.38.3 (`init`, `autobuild`, `analyze`, `upload-sarif`) in `codeql.yml` and `scorecard.yml` (PR #1097; Dependabot source PR #1084). Patch release; all four subpaths move to the same pinned commit together, as `docs/DEPENDABOT-TRIAGE.md` requires.
+
 - **Dependencies (CI):** Update `actions/download-artifact` from 8.0.1 to 8.0.2 in `ci.yml`, `mutation.yml` and `tauri-build.yml` (PR #1077; Dependabot source PR #1051). Patch release; every `uses:` reference moves to the same pinned commit.
 
 - **Dependencies (CI):** Update `actions/upload-artifact` from 7.0.1 to 7.0.2 in every workflow that uses it (PR #1096; Dependabot source PR #1049). Patch release; every `uses:` reference moves to the same pinned commit, so no workflow keeps the older version.
