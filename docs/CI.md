@@ -336,7 +336,7 @@ once a manual run demonstrates the flakiness is resolved — concretely, three c
 | **OpenSSF Scorecard** (`ossf/scorecard-action`) | Weekly cron + `main` push | SARIF → GitHub Code Scanning; separate `scorecard.yml` workflow |
 | **CodeQL** (`github/codeql-action`) | Every push/PR + weekly | JS/TS SAST → GitHub Code Scanning; `codeql.yml` workflow |
 | **SHA-pinned actions** | Every job | All `uses:` references pinned to commit SHA (`# vN` comment) — immune to tag-mutable supply-chain attacks; Dependabot updates SHAs automatically |
-| **Dependabot** | Monthly; security updates immediately | Grouped minor/patch PRs for npm, Cargo (`src-tauri`, `crates`) and GitHub Actions SHA bumps; majors separate (see `docs/DEPENDABOT-TRIAGE.md`) |
+| **Dependabot** | Monthly; security updates immediately | Grouped minor/patch PRs for npm, Cargo (`src-tauri`, `crates`) and GitHub Actions SHA bumps; majors separate, except the lockstep `react` and `github/codeql-action` groups, which cover all update types (see `docs/DEPENDABOT-TRIAGE.md`) |
 | **`dependency-review-action`** | PRs only (security job) | Blocks PRs that introduce new high/critical vulnerabilities |
 | **pnpm v11 build-script policy** | Dependency installation | `pnpm-workspace.yaml` uses the sole supported, default-deny `allowBuilds` map; legacy build-script lists are intentionally absent |
 | **Branch protection** | Always | `main` requires 1 approved review, required status checks including the `CI Success` aggregator, no force-push |
