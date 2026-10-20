@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Maintenance (Vercel quota):** Turn off Git-triggered Vercel deployments for `dependabot/**` and `deptrain/**` branches through `vercel.json` `git.deploymentEnabled` (PR #1092). In the 24 hours before 2026-10-20 10:55 UTC, 38 of the project's 47 deployments came from these branches (30 Dependabot rebases, 8 cohort successors) on the Hobby plan. An `ignoreCommand` was not used because canceled builds still count as deployments. Dependency PRs are qualified by the required GitHub Actions checks; Production builds of `main` and Previews of other branches are unchanged. Documented in `docs/VERCEL-PREVIEW-RETENTION-POLICY.md`.
+
 - **Dependencies:** Update @google/genai from 2.22.0 to 2.28.0 (PR #1091; Dependabot source PR #1059, which by then proposed 2.29.0). 2.28.0 is the last release before 2.29.0 made automatic continuation the default for `generateContent` / `generateContentStream`; that path has defects fixed only in 2.30.0, which is still inside the 7-day minimum-release-age. The version is pinned exactly so no lockfile re-resolution can move to 2.29.x. Releases 2.23–2.28 list features and bug fixes only; lockfile and manifest only.
 
 - **Dependencies:** Update ai (Vercel AI SDK) from 7.0.109 to 7.0.138 (PR #1090; Dependabot source PR #1057, rebased by Dependabot after the cohort freeze; same 7.0 patch line). Manifest range `^7.0.130`; lockfile and manifest only.
