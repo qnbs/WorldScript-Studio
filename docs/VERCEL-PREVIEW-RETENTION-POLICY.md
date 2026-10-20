@@ -346,9 +346,10 @@ still counts as a deployment. In the 24 hours before 2026-10-20 10:55 UTC the
 project created 47 deployments; 38 of them came from these branches (30
 `dependabot/*`, 8 `deptrain/*`). Dependabot rebases every open bot PR after each
 merge to `main`, and each rebase built a new Preview. Dependency PRs are
-qualified by the required GitHub Actions checks (`CI Success`, which aggregates
-security, quality, build and E2E, plus CodeQL); Storybook and browser quality
-run as advisory jobs. No required check depends on a Vercel Preview.
+qualified by the required GitHub Actions checks: `CI Success`, which requires
+workflow policy, PR size, security, signatures, quality, build, E2E, browser
+quality and the path-scoped Rust gates, plus CodeQL. Storybook and the deep
+E2E matrix run as advisory jobs. No required check depends on a Vercel Preview.
 Production builds of `main` and Previews of every other branch are unchanged.
 A PR without a Preview simply has an empty protected set (`min(3, available)`).
 
