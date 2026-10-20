@@ -8,6 +8,14 @@ record reconciler ([`PAGES-DEPLOYMENT-RECORD-PRUNING.md`](PAGES-DEPLOYMENT-RECOR
 
 ## Commands
 
+Run the operator with Node **22.19.0 or a later 22.x patch/minor**, matching `.nvmrc`.
+Both entry points check `process.versions.node` before source checks, external tools, runner
+imports or lock acquisition. Node 24 and malformed/unsupported runtimes stop with
+`RETENTION_STOP: runtime-mismatch`; there is no override. The application's Node 22/24 CI matrix
+and general package engine range are unchanged. In a VS Code terminal, activate Node 22 first
+and check `node -p 'process.versions.node'`; a shell's separate `node --version` is not proof of
+an already running operator's runtime.
+
 Two fixed commands, no arguments. Any other argument is refused, so a command-line allow rule for
 them cannot be widened by appending text.
 
@@ -141,6 +149,7 @@ authentication stop, not something an allow rule fixes.
 
 | Reason | Meaning |
 | --- | --- |
+| `runtime-mismatch` | The actual operator runtime is not Node 22 at or above 22.19.0. No external call or lock acquisition occurs. |
 | `gate-not-green:<workflow>` | A required push run on `main` for the exact SHA is missing, in flight or not a success. |
 | `runs-unreadable`, `runs-incomplete` | The run list could not be read, or was as long as the request limit and may be truncated. |
 | `invalid-holds` | The hold file is missing, malformed or lists something other than deployment IDs. |
