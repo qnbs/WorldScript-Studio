@@ -226,14 +226,15 @@ belong to #550/QNB-41; no monetary or CPU savings are inferred from workflow-sta
    the newest three; check the site over HTTPS.
 3. Enable the workflow (`gh workflow enable prune-deployments.yml`) as a separate operator action
    and observe the first scheduled pass (a `workflow_dispatch` run is always a dry run and cannot
-   exercise a deletion): at most ten records deleted, every protected ID and every other
-   environment unchanged, site still healthy.
+   exercise a deletion): at most ten `github-pages` records deleted by the Pages step, every
+   Pages-protected ID untouched, no record outside `github-pages` deleted by the Pages step, site
+   still healthy. The Vercel step has its own bounds (see "Vercel-created records").
 4. Stop criteria for the operator. In the code, a failed API read (403/404/409/429/5xx), a
    header-less allowance, a moved publication, slot or `main` and a changed candidate stop the run
    (`failed = 1`, a failed Actions run). A candidate whose publication run or job returns 404 or
    does not prove is only protected (`unproved-publication`) and the run goes on with the other
    proven candidates. If the first pass fails, reports any `unproved-publication`, deletes more
-   than ten records or touches a protected ID, the operator runs
+   than ten `github-pages` records or touches a Pages-protected ID, the operator runs
    `gh workflow disable prune-deployments.yml`, cancels any active run, and keeps it disabled until
    the cause is repaired.
 
@@ -254,10 +255,18 @@ The same workflow bounds the rest with a second step in each job
   records, other environments and other creators are never candidates.
 - **Kept:** the newest ten records per environment (by `created_at`, then ID), the record of the
   current `main` commit, and every Preview record whose commit is the head of an open PR.
-- **Writes:** only in the scheduled `prune` job, which already holds `deployments: write`. The
-  dispatched `plan` job reads and reports. Each candidate is re-read first; a changed environment,
-  commit or creator stops the run (`record-changed`). An active record gets an `inactive` status
-  (GitHub requires it), then it is deleted. Writes are never retried; a failed request stops the run.
-- **Capacity:** at most 40 deletions per pass, oldest first (`batch-limit` otherwise). The daily
-  schedule absorbs a backlog.
+- **Authority:** writes only in the scheduled `prune` job, which already holds
+  `deployments: write`, of the trusted workflow (`workflowRef`) on the commit that is still `main`
+  (`main-moved` otherwise, at the start and before every candidate). The dispatched `plan` job reads
+  and reports.
+- **Per candidate, before any write:** the record is re-read (a changed environment, commit or
+  creator stops with `record-changed`); `main` and every open PR head are read again, every head must
+  be a full SHA (`pull-head-malformed`), and a record that became protected stops the run
+  (`protection-changed`). The newest status must be a recognized state; an active record gets an
+  `inactive` status, which must be confirmed by the response and by a re-read
+  (`inactive-status-unrecognized` / `inactive-status-unproven`) before the DELETE. Writes are never
+  retried; a failed request stops the run.
+- **Capacity:** at most 40 deletions per pass, oldest first (`batch-limit` otherwise), and a candidate
+  starts only while the live `x-ratelimit-remaining` keeps the shared reserve of 100 plus its own 8
+  requests (`budget-limit`, a graceful stop). The daily schedule absorbs a backlog.
 - **Order:** the Pages step runs first; if it fails closed, the Vercel step does not run that day.

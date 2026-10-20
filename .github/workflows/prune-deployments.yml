@@ -51,7 +51,7 @@ jobs:
             const { pathToFileURL } = require('node:url');
             const root = process.env.GITHUB_WORKSPACE;
             const { runAction } = await import(pathToFileURL(`${root}/scripts/prune-vercel-deployment-records.mjs`).href);
-            await runAction({ github, context, core });
+            await runAction({ github, context, core, workflowRef: process.env.GITHUB_WORKFLOW_REF });
   prune:
     name: Reconcile GitHub Pages records only
     if: github.repository == 'qnbs/WorldScript-Studio' && github.ref == 'refs/heads/main' && github.event_name == 'schedule'
@@ -88,4 +88,4 @@ jobs:
             const { pathToFileURL } = require('node:url');
             const root = process.env.GITHUB_WORKSPACE;
             const { runAction } = await import(pathToFileURL(`${root}/scripts/prune-vercel-deployment-records.mjs`).href);
-            await runAction({ github, context, core });
+            await runAction({ github, context, core, workflowRef: process.env.GITHUB_WORKFLOW_REF });

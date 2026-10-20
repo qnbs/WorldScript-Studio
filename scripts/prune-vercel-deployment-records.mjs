@@ -1,71 +1,184 @@
 // Bounded retention for the GitHub deployment records that Vercel for GitHub creates
-// (environments `Production` and `Preview`, creator `vercel[bot]`). Vercel keeps adding one
-// record per deployment and has no setting to stop it. This keeps the newest records per
-// environment, the record of the current `main` commit and every Preview record of an open
-// PR head; `github-pages` and every other environment or creator are out of scope and never
-// read for deletion. Writes happen only on the scheduled run; a dispatched run plans only.
+// (environments `Production` and `Preview`, creator `vercel[bot]`). Vercel adds one record per
+// deployment and has no setting to stop it. This keeps the newest records per environment, the
+// record of the current `main` commit and every Preview record of an open PR head. `github-pages`
+// and every other environment or creator are never candidates. Writes happen only on the
+// scheduled run of the trusted workflow on the commit that is still `main`; a dispatched run plans.
 
 export const REPOSITORY = 'qnbs/WorldScript-Studio';
+export const WORKFLOW = `${REPOSITORY}/.github/workflows/prune-deployments.yml@refs/heads/main`;
 export const KEEP_PER_ENVIRONMENT = 10;
 export const MAX_DELETES_PER_RUN = 40;
 export const ENVIRONMENTS = Object.freeze(['Production', 'Preview']);
 export const CREATOR = 'vercel[bot]';
+// The Pages step before this one stops at the same reserve; a candidate costs at most this many
+// requests (record, main, open PRs, status, POST, status re-read, DELETE).
+export const RATE_RESERVE = 100;
+export const CANDIDATE_COST = 8;
 const MAX_PAGES = 20;
+const STATES = new Set([
+  'error',
+  'failure',
+  'inactive',
+  'in_progress',
+  'queued',
+  'pending',
+  'success',
+]);
 
 export function refuse(reason) {
   throw Object.assign(new Error(reason), { reason });
 }
 
+const isSha = (value) => typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);
+
 function validRecord(record) {
   return (
     Number.isSafeInteger(record?.id) &&
-    typeof record.environment === 'string' &&
-    /^[0-9a-f]{40}$/.test(record.sha ?? '') &&
-    typeof record.created_at === 'string' &&
+    isSha(record.sha) &&
     !Number.isNaN(Date.parse(record.created_at)) &&
     typeof record.creator?.login === 'string'
   );
 }
 
+const inScope = (record, environment) =>
+  record?.environment === environment && record?.creator?.login === CREATOR;
+
+const newestFirst = (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id;
+const oldestFirst = (a, b) => newestFirst(b, a);
+
+function isProtected(record, index, protection, keep) {
+  if (index < keep || record.sha === protection.mainSha) return true;
+  return record.environment === 'Preview' && protection.openHeads.has(record.sha);
+}
+
 // Pure classification. A malformed record anywhere in scope refuses the whole plan.
 export function planRecords({ records, mainSha, openHeads, keep = KEEP_PER_ENVIRONMENT }) {
-  if (!/^[0-9a-f]{40}$/.test(mainSha ?? '')) refuse('main-sha-invalid');
+  if (!isSha(mainSha)) refuse('main-sha-invalid');
+  const protection = { mainSha, openHeads };
   const kept = [];
   const candidates = [];
   for (const environment of ENVIRONMENTS) {
-    const scoped = records.filter(
-      (record) => record?.environment === environment && record?.creator?.login === CREATOR,
-    );
+    const scoped = records.filter((record) => inScope(record, environment));
     if (!scoped.every(validRecord)) refuse('record-malformed');
-    scoped.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id);
-    scoped.forEach((record, index) => {
-      const protectedRecord =
-        index < keep ||
-        record.sha === mainSha ||
-        (environment === 'Preview' && openHeads.has(record.sha));
-      (protectedRecord ? kept : candidates).push(record);
+    scoped.sort(newestFirst).forEach((record, index) => {
+      (isProtected(record, index, protection, keep) ? kept : candidates).push(record);
     });
   }
-  // Oldest first, so a bounded pass removes the longest-retired records.
-  candidates.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || a.id - b.id);
-  return { kept, candidates };
+  return { kept, candidates: candidates.sort(oldestFirst) };
 }
 
-export function admission({ repository, ref, eventName }) {
+export function admission({ repository, ref, eventName, sha, workflowRef }) {
   if (repository !== REPOSITORY) refuse('repository-unexpected');
   if (ref !== 'refs/heads/main') refuse('ref-unexpected');
+  if (workflowRef !== WORKFLOW) refuse('workflow-unexpected');
+  if (!isSha(sha)) refuse('sha-invalid');
   return { writes: eventName === 'schedule' };
 }
 
-async function readAll(github, route, params) {
+// Every request reports the live allowance; a response without it cannot fund a write.
+async function call(ctx, route, params = {}) {
+  const response = await ctx.github.request(route, { ...ctx.base, ...params });
+  const remaining = Number(response?.headers?.['x-ratelimit-remaining']);
+  ctx.remaining = Number.isFinite(remaining) ? remaining : null;
+  return response?.data;
+}
+
+async function readAll(ctx, route, params = {}) {
   const all = [];
   for (let page = 1; page <= MAX_PAGES; page += 1) {
-    const { data } = await github.request(route, { ...params, per_page: 100, page });
+    const data = await call(ctx, route, { ...params, per_page: 100, page });
     if (!Array.isArray(data)) refuse('inventory-malformed');
     all.push(...data);
     if (data.length < 100) return all;
   }
-  refuse('inventory-too-large');
+  return refuse('inventory-too-large');
+}
+
+// The protection inputs: the live `main` commit and every open PR head, all validated.
+export async function readProtection(ctx) {
+  const head = await call(ctx, 'GET /repos/{owner}/{repo}/commits/{ref}', { ref: 'main' });
+  if (!isSha(head?.sha)) refuse('main-sha-invalid');
+  const pulls = await readAll(ctx, 'GET /repos/{owner}/{repo}/pulls', { state: 'open' });
+  const heads = pulls.map((pull) => pull?.head?.sha);
+  if (!heads.every(isSha)) refuse('pull-head-malformed');
+  return { mainSha: head.sha, openHeads: new Set(heads) };
+}
+
+function assertBound(protection, authority) {
+  if (protection.mainSha !== authority.sha) refuse('main-moved');
+}
+
+function assertStillCandidate(record, protection) {
+  if (isProtected(record, Number.POSITIVE_INFINITY, protection, 0)) refuse('protection-changed');
+}
+
+async function readState(ctx, id) {
+  const statuses = await call(
+    ctx,
+    'GET /repos/{owner}/{repo}/deployments/{deployment_id}/statuses',
+    {
+      deployment_id: id,
+      per_page: 1,
+    },
+  );
+  if (!Array.isArray(statuses)) refuse('status-malformed');
+  if (statuses.length === 0) return 'none';
+  if (!STATES.has(statuses[0]?.state)) refuse('status-unrecognized');
+  return statuses[0].state;
+}
+
+async function ensureInactive(ctx, id) {
+  if ((await readState(ctx, id)) === 'inactive') return;
+  const created = await call(
+    ctx,
+    'POST /repos/{owner}/{repo}/deployments/{deployment_id}/statuses',
+    {
+      deployment_id: id,
+      state: 'inactive',
+    },
+  );
+  if (created?.state !== 'inactive') refuse('inactive-status-unrecognized');
+  if ((await readState(ctx, id)) !== 'inactive') refuse('inactive-status-unproven');
+}
+
+async function assertSameRecord(ctx, record) {
+  const current = await call(ctx, 'GET /repos/{owner}/{repo}/deployments/{deployment_id}', {
+    deployment_id: record.id,
+  });
+  const same =
+    current?.environment === record.environment &&
+    current?.sha === record.sha &&
+    current?.creator?.login === CREATOR;
+  if (!same) refuse('record-changed');
+}
+
+// One candidate: identity, fresh protection and a proven inactive status before the DELETE.
+async function retire(ctx, record, authority) {
+  await assertSameRecord(ctx, record);
+  const protection = await readProtection(ctx);
+  assertBound(protection, authority);
+  assertStillCandidate(record, protection);
+  await ensureInactive(ctx, record.id);
+  await call(ctx, 'DELETE /repos/{owner}/{repo}/deployments/{deployment_id}', {
+    deployment_id: record.id,
+  });
+}
+
+const funded = (ctx) => ctx.remaining !== null && ctx.remaining >= RATE_RESERVE + CANDIDATE_COST;
+
+async function retireBatch(ctx, candidates, authority, summary, maxDeletes) {
+  for (const record of candidates.slice(0, maxDeletes)) {
+    if (!funded(ctx)) return 'budget-limit';
+    try {
+      await retire(ctx, record, authority);
+      summary.deleted.push(record.id);
+    } catch (error) {
+      summary.failed = true;
+      return error?.reason ?? 'request-failed';
+    }
+  }
+  return candidates.length > maxDeletes ? 'batch-limit' : null;
 }
 
 export async function reconcileVercelRecords({
@@ -75,18 +188,11 @@ export async function reconcileVercelRecords({
 }) {
   const { writes } = admission(authority);
   const [owner, repo] = REPOSITORY.split('/');
-  const base = { owner, repo };
-  const records = await readAll(github, 'GET /repos/{owner}/{repo}/deployments', base);
-  const pulls = await readAll(github, 'GET /repos/{owner}/{repo}/pulls', {
-    ...base,
-    state: 'open',
-  });
-  const { data: head } = await github.request('GET /repos/{owner}/{repo}/commits/{ref}', {
-    ...base,
-    ref: 'main',
-  });
-  const openHeads = new Set(pulls.map((pull) => pull?.head?.sha).filter(Boolean));
-  const { kept, candidates } = planRecords({ records, mainSha: head?.sha, openHeads });
+  const ctx = { github, base: { owner, repo }, remaining: null };
+  const records = await readAll(ctx, 'GET /repos/{owner}/{repo}/deployments');
+  const protection = await readProtection(ctx);
+  if (writes) assertBound(protection, authority);
+  const { kept, candidates } = planRecords({ records, ...protection });
   const summary = {
     writes,
     inventory: records.length,
@@ -96,48 +202,25 @@ export async function reconcileVercelRecords({
     failed: false,
     reason: null,
   };
-  if (!writes) return summary;
-  for (const record of candidates.slice(0, maxDeletes)) {
-    const params = { ...base, deployment_id: record.id };
-    try {
-      const { data: current } = await github.request(
-        'GET /repos/{owner}/{repo}/deployments/{deployment_id}',
-        params,
-      );
-      if (
-        current?.environment !== record.environment ||
-        current?.sha !== record.sha ||
-        current?.creator?.login !== CREATOR
-      )
-        refuse('record-changed');
-      const { data: statuses } = await github.request(
-        'GET /repos/{owner}/{repo}/deployments/{deployment_id}/statuses',
-        { ...params, per_page: 1 },
-      );
-      if (statuses?.[0]?.state !== 'inactive')
-        await github.request('POST /repos/{owner}/{repo}/deployments/{deployment_id}/statuses', {
-          ...params,
-          state: 'inactive',
-        });
-      await github.request('DELETE /repos/{owner}/{repo}/deployments/{deployment_id}', params);
-      summary.deleted.push(record.id);
-    } catch (error) {
-      summary.failed = true;
-      summary.reason = error?.reason ?? 'request-failed';
-      break;
-    }
-  }
-  if (!summary.failed && candidates.length > maxDeletes) summary.reason = 'batch-limit';
+  if (writes) summary.reason = await retireBatch(ctx, candidates, authority, summary, maxDeletes);
   return summary;
 }
 
-export async function runAction({ github, context, core, reconcile = reconcileVercelRecords }) {
+export async function runAction({
+  github,
+  context,
+  core,
+  workflowRef,
+  reconcile = reconcileVercelRecords,
+}) {
   const summary = await reconcile({
     github,
     authority: {
       repository: `${context.repo.owner}/${context.repo.repo}`,
       ref: context.ref,
       eventName: context.eventName,
+      sha: context.sha,
+      workflowRef,
     },
   });
   core.info(JSON.stringify(summary));
