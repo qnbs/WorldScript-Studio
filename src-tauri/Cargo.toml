@@ -6,7 +6,9 @@ authors = ["QNBS"]
 license = "MIT"
 repository = "https://github.com/QNBS/WorldScript-Studio"
 edition = "2021"
-rust-version = "1.77.2"
+# Declared floor for the desktop app (#572): the locked graph already needs 1.89 (notify-rust 4.18),
+# and the current Tauri plugin lines need 1.90. CI builds it with exactly this toolchain.
+rust-version = "1.90"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -29,7 +31,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-http = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
-# 2.13 requires Rust 1.90, above this package's rust-version 1.77.2.
+# Held at 2.12.x until the Tauri plugin group update is admitted (#572).
 # No `zip` feature (#911): it only unpacks the v1 `.zip` / `.tar.gz` updater bundles, and
 # `createUpdaterArtifacts: true` ships the raw `-setup.exe` / `.msi` / `.AppImage` instead. macOS
 # keeps its `.app.tar.gz` path, whose `tar` and `flate2` are not behind this feature.
