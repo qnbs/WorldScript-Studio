@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Security:** Pin `follow-redirects` to exactly 1.16.1 through an override (PR #1102) for GHSA-8r9p-f939-6h3c and GHSA-q3jh-wrc6-jgq8 (both High, CVSS 8.2, published 2026-10-20). In 1.16.0, credential headers could survive cross-origin redirects. The package is transitive via `axios` and `http-proxy`, whose ranges already allow 1.16.1 (published 2026-10-01, outside the 7-day release-age floor). The required OSV scan reported both advisories on every head; the lockfile change is `follow-redirects` 1.16.0 → 1.16.1 only.
+- **Security:** Pin `follow-redirects` to exactly 1.16.1 through an override (PR #1102) for GHSA-8r9p-f939-6h3c and GHSA-q3jh-wrc6-jgq8 (both High, CVSS 8.2, published 2026-10-20). In 1.16.0, credential headers could survive cross-origin redirects. The package is transitive via `axios` and `http-proxy`, whose ranges already allow 1.16.1 (published 2026-10-01, outside the 7-day release-age floor). Before this override, the required OSV scan reported both advisories on every PR head; with it, the scan passes with no findings. The lockfile change is `follow-redirects` 1.16.0 → 1.16.1 only.
 
 - **Dependencies:** Update `vite` from 8.2.1 to 8.3.4 (PR #1098; Dependabot source PR #1054). Releases 8.3.0–8.3.4 list features, bug fixes and Rolldown dependency updates, no breaking change. Because the production build uses Rolldown, the required Build job’s production `smoke:prod` check (the real bundle must mount in headless Chromium) is the release check for this bump, as `docs/DEPENDABOT-TRIAGE.md` requires.
 
