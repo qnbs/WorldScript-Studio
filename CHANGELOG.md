@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Toolchain:** Update the pinned pnpm from 11.22.0 to 11.28.5 (PR #1101): `packageManager`, `engines.pnpm`, the `pnpm/setup` steps in `ci.yml`, `reviewer-governance-trust.yml` and the shared setup action, and the docs that state the pin. 11.28.6 is newer but still inside the 7-day minimum release age. The lockfile is unchanged; the frozen reconcile accepts it as is.
+- **Toolchain:** Update the pinned pnpm from 11.22.0 to 11.28.5 (PR #1101): `packageManager`, `engines.pnpm`, the `pnpm/setup` steps in `ci.yml` and the shared setup action, and the docs that state the pin. 11.28.6 is newer but still inside the 7-day minimum release age. The lockfile is unchanged; the frozen reconcile accepts it as is. `reviewer-governance-trust.yml` is a protected trust-boundary workflow and keeps `pnpm/setup` 11.22.0 until a base-owned transition authorizes the change; pnpm follows `packageManager` and runs 11.28.5 there too.
 
 - **Dependencies:** Update `vite` from 8.2.1 to 8.3.4 (PR #1098; Dependabot source PR #1054). Releases 8.3.0–8.3.4 list features, bug fixes and Rolldown dependency updates, no breaking change. Because the production build uses Rolldown, the required Build job’s production `smoke:prod` check (the real bundle must mount in headless Chromium) is the release check for this bump, as `docs/DEPENDABOT-TRIAGE.md` requires.
 
