@@ -94,7 +94,7 @@ describe('PrivacySection', () => {
       screen.getByRole('switch', { name: 'settings.privacy.analyticsEnabled' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('switch', { name: 'settings.privacy.localStorageOnly' }),
+      screen.getByRole('switch', { name: 'settings.privacy.dataEncryption' }),
     ).toBeInTheDocument();
   });
 
@@ -110,12 +110,10 @@ describe('PrivacySection', () => {
   it('calls handleSettingChange when a toggle is clicked', async () => {
     const user = userEvent.setup();
     render(<PrivacySection />);
-    // QNBS-v3: localStorageOnly replaces the removed crashReporting toggle here; the mock has it
-    // off, so clicking flips it on.
-    await user.click(screen.getByRole('switch', { name: 'settings.privacy.localStorageOnly' }));
+    await user.click(screen.getByRole('switch', { name: 'settings.privacy.analyticsEnabled' }));
     expect(mockHandleSettingChange).toHaveBeenCalledWith(
       'privacy',
-      expect.objectContaining({ localStorageOnly: true }),
+      expect.objectContaining({ analyticsEnabled: false }),
     );
   });
 });

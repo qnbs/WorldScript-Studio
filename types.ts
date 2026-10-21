@@ -556,15 +556,29 @@ export interface AccessibilitySettings {
 
 export interface PrivacySettings {
   analyticsEnabled: boolean;
-  dataEncryption: boolean;
-  localStorageOnly: boolean;
-  euDataResidency: boolean;
+  /**
+   * @deprecated Never read: at-rest encryption is driven by the IndexedDB encryption flag and
+   * passphrase. Optional so stored records keep round-tripping (preserve-first).
+   */
+  dataEncryption?: boolean;
+  /**
+   * @deprecated Replaced by `aiMode` as the single cloud authority; a one-time migration turns a
+   * stored `true` into `aiMode: 'local'` (see `cloudAuthorityMigrated`). Never read otherwise.
+   */
+  localStorageOnly?: boolean;
+  /**
+   * @deprecated It never enforced where data is processed, only blocked two providers. Never read;
+   * optional so stored records keep round-tripping.
+   */
+  euDataResidency?: boolean;
   // QNBS-v3: SEC one-time migration marker. Before the analytics gate existed, analyticsEnabled was
   // cosmetic (persistence was controlled solely by enableDuckDbAnalytics, default on), so legacy
   // persisted settings hold a meaningless value. On the first load after the gate ships we reset
   // analyticsEnabled to the new default to preserve prior behavior, then set this flag so the user's
   // real choice is respected on every subsequent load. Optional for back-compat with old payloads.
   analyticsGateMigrated?: boolean;
+  /** One-time migration marker: the legacy `localStorageOnly` choice has been carried into `aiMode`. */
+  cloudAuthorityMigrated?: boolean;
 }
 
 export interface CollaborationSettings {

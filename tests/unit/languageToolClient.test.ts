@@ -116,10 +116,14 @@ describe('languageToolClient', () => {
     ).not.toThrow();
   });
 
-  it('blocks remote URLs when local-only privacy is on', () => {
+  it('allows a remote server the user enabled and entered when the CSP admits it (#818)', () => {
     expect(() =>
       assertLanguageToolAllowed(baseSettings(), 'https://api.languagetool.org/'),
-    ).toThrow(/blocked/i);
+    ).not.toThrow();
+  });
+
+  it('still refuses endpoints outside the CSP connect-src allowlist', () => {
+    expect(() => assertLanguageToolAllowed(baseSettings(), 'https://untrusted.example/')).toThrow();
   });
 
   it('throws when disabled', () => {
