@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Docs:** The in-app help (19 locales) now names the real Early Access Features section instead of "Experimental flags", says which features are on by default, drops switches that no longer exist (cross-project search, Plot Board), describes the flag reset correctly, and lists the actual appearance options instead of non-existent specialty themes (PR #1123).
+
 - **Settings:** The Top P and Rate Limit sliders under Settings → Advanced AI are removed; their values were stored but never sent to a provider or used by any limiter (PR #1119, #818). The unused `frequencyPenalty`, `presencePenalty` and `customPrompts` fields are gone too. Temperature and Max Tokens stay.
 
 - **Settings:** Theme Customization now works (PR #1116, #702, #818). Its colors and custom CSS were saved but never applied; they now map onto the design tokens (base theme → appearance preset → customization → accessibility; high contrast, in the app or from the system setting, pauses the custom colors while custom CSS stays active; labels on fixed status fills keep their own color). Custom CSS runs in one app-owned stylesheet with `@import` and remote `url()` stripped; the stored settings keep the original source and any unknown fields unchanged. Button text on a custom primary color and text on a custom background without a text color are picked to reach at least 4.5:1 contrast. The never-applied old defaults are treated as unset, so existing installs do not change. New installs use the plain writing surface (#701); an explicit textured choice is kept.
