@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Docs:** WorldScript has no user accounts, by design. The README and the in-app help (19 locales) now say so plainly instead of "no account required" (PR #1114). The help no longer describes a Cloud Sync feature that does not exist (article removed, 2947 → 2945 keys) or lists "cloud sync providers". The feature-flag article names all 8 opt-in flags instead of stale counts. The broken DeepWiki and i18n README badges are fixed.
 
+- **Maintenance (Dependabot):** `vite-plugin-pwa` 1.3.0 → 2.0.0 (PR #1115, successor of #1109). The major version only raises the Node floor to 20.19 (the repo requires ≥ 22.19) and allows `@vite-pwa/assets-generator` ^2 as a peer; the plugin source is unchanged between the two releases and Workbox stays at 7.4.1.
+
 - **Maintenance (Dependabot):** `google/osv-scanner-action` 2.6.0 → 2.7.0 and `ossf/scorecard-action` 2.4.4 → 2.5.0 (`actions-minor-patch` group; PR #1113, successor of #1107), with the OSV pin in `workflowPolicy.test.ts` moved to match. OSV 2.7.0 scans the same 1673 npm, 583 `src-tauri` and 175 Core Cargo packages as 2.6.0.
 
 - **Maintenance (Dependabot):** `tokio` 1.53.2 → 1.53.3 in `src-tauri` (`cargo-minor-patch` group; PR #1112, successor of #1105). Patch release (Rust 1.71, below the 1.90 floor); lockfile only.
