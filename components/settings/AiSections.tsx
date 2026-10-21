@@ -621,63 +621,6 @@ export const AdvancedAiSection: FC = () => {
                 <span>16 384</span>
               </div>
             </div>
-            <div>
-              <label
-                htmlFor="settings-ai-top-p"
-                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-1 block"
-              >
-                {t('settings.advancedAi.topP')} ({settings.advancedAi.topP})
-              </label>
-              <p className="text-xs text-[var(--sc-text-muted)] mb-2">
-                {t('settings.advancedAi.topPDescription')}
-              </p>
-              <input
-                id="settings-ai-top-p"
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={settings.advancedAi.topP}
-                onChange={(e) =>
-                  handleSettingChange('advancedAi', {
-                    ...settings.advancedAi,
-                    topP: parseFloat(e.target.value),
-                  })
-                }
-                className="w-full"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="settings-ai-rate-limit"
-                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-1 block"
-              >
-                {t('settings.advancedAi.rateLimit')} ({settings.advancedAi.rateLimit}/min)
-              </label>
-              <p className="text-xs text-[var(--sc-text-muted)] mb-2">
-                {t('settings.advancedAi.rateLimitDescription')}
-              </p>
-              <input
-                id="settings-ai-rate-limit"
-                type="range"
-                min="10"
-                max="120"
-                step="10"
-                value={settings.advancedAi.rateLimit}
-                onChange={(e) =>
-                  handleSettingChange('advancedAi', {
-                    ...settings.advancedAi,
-                    rateLimit: parseInt(e.target.value, 10),
-                  })
-                }
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-[var(--sc-text-muted)] mt-1">
-                <span>10</span>
-                <span>60</span>
-                <span>120</span>
-              </div>
-            </div>
           </div>
 
           <div className="border-t border-[var(--sc-border-subtle)] pt-4 space-y-3">
