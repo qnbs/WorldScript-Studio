@@ -30,6 +30,8 @@ describe('runtime asset steps', () => {
   it('runs every step in the edge build before vite build', () => {
     const edge = read('scripts/build-edge.mjs');
     expect(edge).toContain("from './runtime-asset-steps.mjs'");
-    expect(edge.indexOf('RUNTIME_ASSET_SCRIPTS')).toBeLessThan(edge.indexOf("'vite', 'build'"));
+    const loop = edge.indexOf('for (const script of RUNTIME_ASSET_SCRIPTS)');
+    expect(loop).toBeGreaterThan(-1);
+    expect(loop).toBeLessThan(edge.indexOf("'vite', 'build'"));
   });
 });
