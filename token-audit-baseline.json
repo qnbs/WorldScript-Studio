@@ -1,7 +1,7 @@
 {
-  "total": 252,
+  "total": 247,
   "summary": {
-    "raw-hex": 120,
+    "raw-hex": 115,
     "raw-rgb": 1,
     "raw-hsl": 0,
     "dark-prefix": 0,
@@ -9,5 +9,5 @@
     "inline-svg": 102,
     "ambient-glass-token": 29
   },
-  "updatedAt": "2026-09-23T07:00:39.605Z"
+  "updatedAt": "2026-10-21T11:05:31.335Z"
 }

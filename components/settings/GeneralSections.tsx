@@ -138,8 +138,12 @@ export const GeneralSection: FC = () => {
 
 export const AppearanceSection: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
-  // QNBS-v3: Defensive merge — old persisted states may lack themeCustomization entirely.
-  const themeCustomization = settings.themeCustomization ?? defaultThemeCustomization;
+  // QNBS-v3: Defensive merge — old persisted states may lack themeCustomization, and a malformed stored value is preserved as-is (#702); edits then start from the defaults.
+  const stored: unknown = settings.themeCustomization;
+  const themeCustomization =
+    stored && typeof stored === 'object' && !Array.isArray(stored)
+      ? settings.themeCustomization
+      : defaultThemeCustomization;
   return (
     <div className="space-y-6">
       <Card>

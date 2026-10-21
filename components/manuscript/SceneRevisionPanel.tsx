@@ -102,7 +102,7 @@ const RevisionItem: FC<{
               <button
                 type="button"
                 onClick={handleRestore}
-                className="text-xs px-2 py-1 rounded bg-[var(--sc-warning-fg)] text-[var(--sc-text-on-accent)] hover:opacity-80"
+                className="text-xs px-2 py-1 rounded bg-[var(--sc-warning-fg)] text-[var(--sc-text-on-status)] hover:opacity-80"
               >
                 {t('revisions.confirmRestore')}
               </button>

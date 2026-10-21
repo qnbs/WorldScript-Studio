@@ -216,7 +216,7 @@ export const PipelineReviewPanel: React.FC = () => {
             <button
               type="button"
               onClick={handleAcceptAllCritical}
-              className="px-2 py-0.5 text-xs rounded-sc-sm bg-[var(--sc-error)] text-[var(--sc-text-on-accent)] hover:opacity-80 transition-opacity"
+              className="px-2 py-0.5 text-xs rounded-sc-sm bg-[var(--sc-error)] text-[var(--sc-text-on-status)] hover:opacity-80 transition-opacity"
             >
               {t('proforge.review.acceptAllCritical')}
             </button>

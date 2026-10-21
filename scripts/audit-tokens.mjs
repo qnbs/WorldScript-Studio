@@ -87,6 +87,8 @@ const EXCLUDED_FILES = new Set([
   path.join(root, 'services', 'epubApiService.ts'),
   // QNBS-v3 (post-Visual qualification tranche): the TypeScript mirror of the CSS custom-property scale (docs/Design-System.md's own "TypeScript mirrors live in packages/ui/src/tokens.ts") is a source-of-truth for raw values, the same rationale as index.css.
   path.join(root, 'packages', 'ui', 'src', 'tokens.ts'),
+  // QNBS-v3 (#702): the persisted pre-fix defaults a one-time settings migration recognizes and clears — stored data, not styling.
+  path.join(root, 'services', 'themeCustomizationMigration.ts'),
   // QNBS-v3: the Tailwind design-token preset defines the raw theme scale itself; same source-of-truth rationale.
   path.join(root, 'packages', 'ui', 'tailwind-preset.ts'),
   // QNBS-v3 (Codex, PR #817): Lighthouse CI config at the repo root — the widened .cjs extension coverage would otherwise newly pull these into the corpus; they don't match the *.config.* basename convention (no "config" substring in the name) so need their own explicit exclusion, the same as every other named exemption in this set.
