@@ -60,6 +60,8 @@ describe('Vercel ignored build step (previews on demand)', () => {
       'packages/ui/package.json',
       'patches/some-dep@1.0.0.patch',
       'scripts/vercel-ignore-build.mjs',
+      'scripts/resolve-deploy-base.mjs',
+      'config/resolveViteBase.ts',
     ]) {
       expect(decideBuild({ env: preview, changedFiles: ['README.md', file] })).toEqual({
         build: true,

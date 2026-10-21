@@ -26,7 +26,9 @@ export const BUILD_RELEVANT = [
   // Workspace package manifests and pnpm patches change what the install step resolves.
   /^packages\/[^/]+\/package\.json$/,
   /^patches\//,
-  /^scripts\/(build-edge|runtime-asset-steps|sync-deploy-base|dependency-state|vercel-ignore-build)\.mjs$/,
+  /^scripts\/(build-edge|runtime-asset-steps|sync-deploy-base|resolve-deploy-base|dependency-state|vercel-ignore-build)\.mjs$/,
+  // vite.config.ts imports the deploy base from here.
+  /^config\/resolveViteBase\.ts$/,
   /^scripts\/copy-[\w-]+\.mjs$/,
   /^api\//,
 ];
