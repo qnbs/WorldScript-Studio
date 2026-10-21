@@ -12,6 +12,7 @@ import { DebouncedInput } from '../ui/DebouncedInput';
 import { DictationButton } from '../ui/DictationButton';
 import { Icon } from '../ui/Icon';
 import { Textarea } from '../ui/Textarea';
+import { EditorStatsBadge } from './EditorStatsBadge';
 
 // Mock Dictionary for simple spell check (English)
 const TYPOS_EN: Record<string, string> = {
@@ -407,9 +408,10 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
         </div>
         <DictationButton targetRef={editorRef} />
       </div>
-      <div className="absolute bottom-20 left-6 md:bottom-4 text-xs text-[var(--sc-text-muted)] bg-[var(--sc-surface-raised)]/90 border border-[var(--sc-border-subtle)] px-3 py-1 rounded-full pointer-events-none backdrop-blur-sm shadow-sm transition-opacity duration-300">
-        {activeSectionStats.wordCount} {t('common.words')}
-      </div>
+      <EditorStatsBadge
+        wordCount={activeSectionStats.wordCount}
+        readTime={activeSectionStats.readTime}
+      />
       {mentions.length > 0 && (mentionPosition !== null || isMobile) && (
         <div
           className={`absolute z-20 bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] shadow-2xl overflow-hidden flex flex-col ${!isMobile ? 'rounded-md w-64' : ''}`}
