@@ -18,13 +18,16 @@ describe('idbProjectStore', () => {
       expect(result.fontSize).toBe(16);
     });
 
+    it('keeps an unknown persisted writing surface instead of rewriting it (#701)', () => {
+      const result = normalizePersistedSettings({ writingSurfaceStyle: 'paper' });
+      expect(result.writingSurfaceStyle as string).toBe('paper');
+    });
+
     it('keeps an explicit persisted writing surface while new installs default to plain (#701)', () => {
       expect(
         normalizePersistedSettings({ writingSurfaceStyle: 'textured' }).writingSurfaceStyle,
       ).toBe('textured');
-      expect(normalizePersistedSettings({ writingSurfaceStyle: 'bogus' }).writingSurfaceStyle).toBe(
-        'plain',
-      );
+      expect(normalizePersistedSettings({}).writingSurfaceStyle).toBe('plain');
     });
 
     it('preserves the stored theme customization and only drops the never-applied legacy defaults (#702)', () => {

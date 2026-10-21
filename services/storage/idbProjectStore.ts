@@ -74,9 +74,7 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   if (!['default', 'sepia'].includes(validSettings.appearancePreset)) {
     validSettings.appearancePreset = 'default';
   }
-  if (!['textured', 'plain'].includes(validSettings.writingSurfaceStyle)) {
-    validSettings.writingSurfaceStyle = 'plain';
-  }
+  // QNBS-v3 (#701): preserve-first — an unknown (e.g. newer-client) writing surface stays stored; the runtime renders anything but 'textured' as plain.
 
   validSettings.accessibility = normalizeAccessibilitySettings(incoming['accessibility']);
   // QNBS-v3 (#702): preserve-first — the stored record (even a malformed one) round-trips; the runtime only applies its normalized view.

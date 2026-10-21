@@ -164,9 +164,24 @@ describe('useAppearanceBodyClasses — presentation toggles', () => {
     expect(document.body.classList.contains('portal-active')).toBe(false);
   });
 
-  it('toggles writing-surface-plain only for the plain style', () => {
-    renderWith(buildSettings({ writingSurfaceStyle: 'plain' }));
+  it('renders every style except textured as the plain surface', () => {
+    const { rerender } = renderWith(buildSettings({ writingSurfaceStyle: 'plain' }));
     expect(document.body.classList.contains('writing-surface-plain')).toBe(true);
+    const future = 'paper' as Settings['writingSurfaceStyle'];
+    rerender({
+      s: buildSettings({ writingSurfaceStyle: future }),
+      portal: false,
+      lang: 'en',
+      rtl: false,
+    });
+    expect(document.body.classList.contains('writing-surface-plain')).toBe(true);
+    rerender({
+      s: buildSettings({ writingSurfaceStyle: 'textured' }),
+      portal: false,
+      lang: 'en',
+      rtl: false,
+    });
+    expect(document.body.classList.contains('writing-surface-plain')).toBe(false);
   });
 });
 

@@ -165,10 +165,10 @@ function usePortalActiveClass(isPortalActive: boolean): void {
   }, [isPortalActive]);
 }
 
-// QNBS-v3: Decorative fixed layers are opt-out so long-form writers can keep a neutral canvas.
+// QNBS-v3: Decorative fixed layers are opt-in (#701) so long-form writers get a neutral canvas; an unknown stored value renders plain.
 function useWritingSurfacePlainClass(writingSurfaceStyle: Settings['writingSurfaceStyle']): void {
   useEffect(() => {
-    document.body.classList.toggle('writing-surface-plain', writingSurfaceStyle === 'plain');
+    document.body.classList.toggle('writing-surface-plain', writingSurfaceStyle !== 'textured');
   }, [writingSurfaceStyle]);
 }
 
