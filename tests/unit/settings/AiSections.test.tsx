@@ -20,8 +20,6 @@ const baseAdvancedAi = {
   model: 'gemini-2.5-flash',
   temperature: 0.7,
   maxTokens: 2048,
-  topP: 0.9,
-  rateLimit: 60,
   hybridFallbackEnabled: false,
   hybridFallbackChain: [] as string[],
   ragMode: 'hybrid' as const,
@@ -228,6 +226,12 @@ describe('AdvancedAiSection', () => {
   it('renders max tokens slider', () => {
     render(<AdvancedAiSection />);
     expect(screen.getByText('settings.advancedAi.maxTokens (2048)')).toBeInTheDocument();
+  });
+
+  it('no longer offers the Top P and rate-limit sliders that had no effect (#818)', () => {
+    render(<AdvancedAiSection />);
+    expect(screen.queryByLabelText(/settings\.advancedAi\.topP/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/settings\.advancedAi\.rateLimit/)).not.toBeInTheDocument();
   });
 
   it('renders local RAG section title', () => {
