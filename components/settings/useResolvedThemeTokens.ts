@@ -48,6 +48,8 @@ export function readTokenHex(token: string): string {
   return cssColorToHex(resolved);
 }
 
+const SYSTEM_QUERIES = ['(prefers-color-scheme: dark)', '(prefers-contrast: more)'];
+
 function readAll(tokens: readonly string[]): Record<string, string> {
   return Object.fromEntries(tokens.map((token) => [token, readTokenHex(token)]));
 }
@@ -66,6 +68,21 @@ export function useResolvedThemeTokens(
   useEffect(() => {
     const frame = requestAnimationFrame(() => setResolved({ version, values: readAll(tokens) }));
     return () => cancelAnimationFrame(frame);
+  }, [tokens, version]);
+  // The Auto theme and the OS contrast preference change the tokens without any settings change.
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    let frame = 0;
+    const refresh = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setResolved({ version, values: readAll(tokens) }));
+    };
+    const queries = SYSTEM_QUERIES.map((query) => window.matchMedia(query));
+    for (const mq of queries) mq.addEventListener('change', refresh);
+    return () => {
+      cancelAnimationFrame(frame);
+      for (const mq of queries) mq.removeEventListener('change', refresh);
+    };
   }, [tokens, version]);
   return resolved.values;
 }

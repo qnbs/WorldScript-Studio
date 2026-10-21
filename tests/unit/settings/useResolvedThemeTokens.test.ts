@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import { formatContrastRatio } from '../../../components/settings/ThemeCustomizationCard';
 import {
   cssColorToHex,
   useResolvedThemeTokens,
@@ -17,6 +18,14 @@ describe('cssColorToHex (#818)', () => {
     ['', ''],
   ])('%s → %s', (input, expected) => {
     expect(cssColorToHex(input)).toBe(expected);
+  });
+});
+
+describe('formatContrastRatio (#818)', () => {
+  it('rounds down so a failing ratio never reads as 4.5', () => {
+    expect(formatContrastRatio(4.48)).toBe('4.4');
+    expect(formatContrastRatio(3.999)).toBe('3.9');
+    expect(formatContrastRatio(2)).toBe('2.0');
   });
 });
 
@@ -38,5 +47,26 @@ describe('useResolvedThemeTokens (#818)', () => {
       await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
     });
     expect(result.current['--sc-surface-base']).toBe('#fafafa');
+  });
+
+  it('re-reads the tokens when the system color scheme changes (Auto theme)', async () => {
+    const listeners: Array<() => void> = [];
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: (_: string, cb: () => void) => listeners.push(cb),
+      removeEventListener: () => undefined,
+    })) as unknown as typeof window.matchMedia;
+    document.body.style.setProperty('--sc-surface-base', '#111111');
+    const tokens = ['--sc-surface-base'] as const;
+    const { result } = renderHook(() => useResolvedThemeTokens(tokens, 'auto'));
+    document.body.style.setProperty('--sc-surface-base', '#eeeeee');
+    await act(async () => {
+      for (const listener of listeners) listener();
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+    expect(result.current['--sc-surface-base']).toBe('#eeeeee');
+    window.matchMedia = original;
   });
 });

@@ -77,6 +77,11 @@ function editableThemeCustomization(stored: unknown): {
 
 const TOKENS = Object.values(FIELDS).map((field) => field.token);
 
+/** One decimal, rounded down, so a ratio just under 4.5:1 never reads as 4.5. */
+export function formatContrastRatio(ratio: number): string {
+  return (Math.floor(ratio * 10) / 10).toFixed(1);
+}
+
 export const ThemeCustomizationCard: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
   const { record, cssText } = editableThemeCustomization(settings.themeCustomization);
@@ -152,7 +157,7 @@ export const ThemeCustomizationCard: FC = () => {
             role="status"
             className="text-sm rounded p-2 bg-[var(--sc-warning-bg)] text-[var(--sc-warning-fg)]"
           >
-            {t('settings.appearance.contrastWarning', { ratio: lowContrast.toFixed(1) })}
+            {t('settings.appearance.contrastWarning', { ratio: formatContrastRatio(lowContrast) })}
           </p>
         )}
         <div>
@@ -171,7 +176,6 @@ export const ThemeCustomizationCard: FC = () => {
             value={cssText}
             maxLength={MAX_CUSTOM_CSS_LENGTH}
             onChange={(e) => update({ customCss: e.target.value })}
-            placeholder="/* Custom CSS */"
             spellCheck={false}
             className="w-full h-32 p-3 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] font-mono text-sm"
           />
