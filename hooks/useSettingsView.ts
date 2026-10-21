@@ -81,6 +81,11 @@ async function performFactoryReset(
   }
 }
 
+// QNBS-v3: useApp.ts listens for this event and re-opens the WelcomePortal; module-level, so it needs no memoization inside the hook.
+function repeatOnboarding(): void {
+  window.dispatchEvent(new CustomEvent('worldscript:openPortal'));
+}
+
 export const useSettingsView = () => {
   const { t, language, setLanguage } = useTranslation();
   const dispatch = useAppDispatch();
@@ -372,11 +377,6 @@ export const useSettingsView = () => {
     await performFactoryReset(t, toast);
   }, [t, toast]);
 
-  const handleRepeatOnboarding = useCallback(() => {
-    // QNBS-v3: useApp.ts listens for this event and re-opens the WelcomePortal.
-    window.dispatchEvent(new CustomEvent('worldscript:openPortal'));
-  }, []);
-
   const handleCreateSnapshot = useCallback(async () => {
     await createCanonicalProjectSnapshot(snapshotName, project.id, project);
     setSnapshotName('');
@@ -473,7 +473,7 @@ export const useSettingsView = () => {
       handleResetProject,
       handleRestoreDefaultSettings,
       handleFactoryReset,
-      handleRepeatOnboarding,
+      handleRepeatOnboarding: repeatOnboarding,
       handleCreateSnapshot,
       handleRestoreSnapshot,
       handleDeleteSnapshot,
@@ -503,7 +503,6 @@ export const useSettingsView = () => {
       handleResetProject,
       handleRestoreDefaultSettings,
       handleFactoryReset,
-      handleRepeatOnboarding,
       handleCreateSnapshot,
       handleRestoreSnapshot,
       handleDeleteSnapshot,
