@@ -24,9 +24,7 @@ const makeSettings = () => ({
   paragraphSpacing: 1.0,
   indentFirstLine: false,
   advancedEditor: {
-    autoComplete: true,
-    spellCheck: true,
-    grammarCheck: false,
+    nativeSpellCheck: false,
     wordCount: true,
     readingTime: false,
     writingStats: false,
@@ -155,14 +153,26 @@ describe('AdvancedEditorSection', () => {
     expect(screen.getByText('settings.advancedEditor.title')).toBeInTheDocument();
   });
 
-  it('renders auto-complete toggle', () => {
+  it('renders the browser spell check toggle with its privacy hint', () => {
     render(<AdvancedEditorSection />);
-    expect(screen.getByText('settings.advancedEditor.autoComplete')).toBeInTheDocument();
+    expect(screen.getByText('settings.advancedEditor.nativeSpellCheck')).toBeInTheDocument();
+    expect(screen.getByText('settings.advancedEditor.nativeSpellCheckHint')).toBeInTheDocument();
   });
 
-  it('renders spell check toggle', () => {
+  it('shows browser spell check as off for settings saved before the field existed', () => {
+    settingsRef.current = {
+      advancedEditor: { ...makeSettings().advancedEditor, nativeSpellCheck: undefined },
+    };
     render(<AdvancedEditorSection />);
-    expect(screen.getByText('settings.advancedEditor.spellCheck')).toBeInTheDocument();
+    expect(
+      screen.getByRole('switch', { name: 'settings.advancedEditor.nativeSpellCheck' }),
+    ).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('no longer offers the auto-complete and grammar toggles that had no effect (#818)', () => {
+    render(<AdvancedEditorSection />);
+    expect(screen.queryByText('settings.advancedEditor.autoComplete')).not.toBeInTheDocument();
+    expect(screen.queryByText('settings.advancedEditor.grammarCheck')).not.toBeInTheDocument();
   });
 
   it('renders word count toggle', () => {
@@ -188,10 +198,12 @@ describe('AdvancedEditorSection', () => {
   it('calls handleSettingChange when a toggle is clicked', async () => {
     const user = userEvent.setup();
     render(<AdvancedEditorSection />);
-    await user.click(screen.getByRole('switch', { name: 'settings.advancedEditor.autoComplete' }));
+    await user.click(
+      screen.getByRole('switch', { name: 'settings.advancedEditor.nativeSpellCheck' }),
+    );
     expect(mockHandleSettingChange).toHaveBeenCalledWith(
       'advancedEditor',
-      expect.objectContaining({ autoComplete: false }),
+      expect.objectContaining({ nativeSpellCheck: true }),
     );
   });
 });
