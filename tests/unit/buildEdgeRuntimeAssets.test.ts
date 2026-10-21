@@ -13,7 +13,11 @@ const scriptsDir = resolve(root, 'scripts');
 
 /** A spawnSync stand-in that records each command and answers with the status `statusFor` picks. */
 function recordingSpawn(statusFor: (args: readonly string[]) => number | null = () => 0) {
-  const calls: { command: string; args: readonly string[]; env?: Record<string, unknown> }[] = [];
+  const calls: {
+    command: string;
+    args: readonly string[];
+    env: Record<string, string | undefined> | undefined;
+  }[] = [];
   const spawn: EdgeBuildSpawn = (command, args, options) => {
     calls.push({ command, args, env: options.env });
     return { status: statusFor(args) };
