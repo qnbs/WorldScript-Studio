@@ -90,6 +90,14 @@ describe('sanitizeCustomCss', () => {
     );
     const local = '.a { background: image-set("data:image/png;base64,AAAA" 1x); }';
     expect(sanitizeCustomCss(local)).toBe(local);
+    const typed =
+      '.a { background: image-set("data:image/avif;base64,AAAA" type("image/avif") 1x, "data:image/png;base64,AAAA" type("image/png") 1x); }';
+    expect(sanitizeCustomCss(typed)).toBe(typed);
+    expect(
+      sanitizeCustomCss(
+        '.a { background: image-set("https://x.example/a.avif" type("image/avif") 1x); }',
+      ),
+    ).toBe('');
   });
 
   it('caps the stylesheet length and ignores non-strings', () => {

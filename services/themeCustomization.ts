@@ -62,8 +62,10 @@ const REMOTE_URL_CALL = /url\(\s*(?!\s)(?!['"]?\s*data:)[^)]*\)/gi;
 /** @import, remote url(), or an image-set() string (it fetches without url()) that is not a data: URL. */
 function hasRemoteReference(css: string): boolean {
   if (REMOTE_IMPORT.test(css) || REMOTE_URL.test(css)) return true;
-  for (const [, args = ''] of css.matchAll(/image-set\(([^)]*)\)/gi)) {
-    for (const [, , value = ''] of args.matchAll(/(['"])(.*?)\1/g)) {
+  for (const [, args = ''] of css.matchAll(/image-set\(((?:[^()]|\([^()]*\))*)\)/gi)) {
+    // type("image/avif") names a MIME type, not a resource.
+    const sources = args.replace(/type\(\s*(['"]).*?\1\s*\)/gi, '');
+    for (const [, , value = ''] of sources.matchAll(/(['"])(.*?)\1/g)) {
       if (!value.trim().toLowerCase().startsWith('data:')) return true;
     }
   }
