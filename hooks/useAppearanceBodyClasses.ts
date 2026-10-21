@@ -112,7 +112,11 @@ function applyThemeCustomization(customization: ThemeCustomization, highContrast
     style.setProperty(name, value);
     appliedThemeVars.add(name);
   }
-  document.body.toggleAttribute('data-custom-highlight', customization.accentColor !== '');
+  // QNBS-v3 (#702): the ::selection rule reads --sc-selection-bg, which high contrast removes; native highlighting returns with it.
+  document.body.toggleAttribute(
+    'data-custom-highlight',
+    !highContrast && customization.accentColor !== '',
+  );
   customThemeColor = highContrast ? null : customization.backgroundColor || null;
   const chromeColor = customThemeColor ?? themeChromeColor;
   if (chromeColor) setThemeColorMeta(chromeColor);

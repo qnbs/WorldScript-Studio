@@ -299,10 +299,12 @@ describe('theme customization (#702)', () => {
       ...custom({
         primaryColor: '#ffffff',
         backgroundColor: '#ffffff',
+        accentColor: '#dda15e',
         customCss: '.p { color: red; }',
       }),
       accessibility: { ...baseAccessibility, highContrast: true },
     });
+    expect(document.body.hasAttribute('data-custom-highlight')).toBe(false);
     expect(document.body.style.getPropertyValue('--sc-accent')).toBe('');
     expect(document.body.style.getPropertyValue('--sc-surface-base')).toBe('');
     expect(document.getElementById('worldscript-user-css')?.textContent).toContain('.p');

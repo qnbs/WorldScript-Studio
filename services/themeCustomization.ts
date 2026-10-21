@@ -41,33 +41,27 @@ function normalizeColor(value: unknown): string {
   return isHexColor(value) ? value.toLowerCase() : '';
 }
 
-// QNBS-v3 (#702): CSS Syntax §4.3.7 — zero, surrogate and out-of-range escapes become U+FFFD; String.fromCodePoint would throw above U+10FFFF.
-function isValidCodePoint(codePoint: number): boolean {
-  if (codePoint <= 0 || codePoint > 0x10ffff) return false;
-  return codePoint < 0xd800 || codePoint > 0xdfff;
-}
-
-function decodeEscapedCodePoint(hex: string): string {
-  const codePoint = Number.parseInt(hex, 16);
-  return String.fromCodePoint(isValidCodePoint(codePoint) ? codePoint : 0xfffd);
-}
-
 /** Decodes CSS escapes (`\75 rl`, `\@`) the way the CSS tokenizer would, for detection only. */
 function decodeCssEscapes(css: string): string {
   return css
-    .replace(/\\([0-9a-f]{1,6})\s?/gi, (_, hex: string) => decodeEscapedCodePoint(hex))
+    .replace(/\\([0-9a-f]{1,6})\s?/gi, (_, hex: string) => {
+      // QNBS-v3 (#702): CSS Syntax §4.3.7 — zero, surrogate and out-of-range escapes become U+FFFD; String.fromCodePoint would throw above U+10FFFF.
+      const codePoint = Number.parseInt(hex, 16);
+      const inRange = codePoint > 0 && codePoint <= 0x10ffff;
+      const surrogate = codePoint >= 0xd800 && codePoint <= 0xdfff;
+      return String.fromCodePoint(inRange && !surrogate ? codePoint : 0xfffd);
+    })
     .replace(/\\(.)/g, '$1');
 }
 
 const REMOTE_IMPORT = /@import/i;
-const REMOTE_URL = /url\(\s*(?!['"]?\s*data:)/i;
+// QNBS-v3 (#702): (?!\s) makes \s* consume all whitespace, so the data: lookahead cannot be skipped by backtracking (`url( "data:…")`).
+const REMOTE_URL = /url\(\s*(?!\s)(?!['"]?\s*data:)/i;
+const REMOTE_URL_CALL = /url\(\s*(?!\s)(?!['"]?\s*data:)[^)]*\)/gi;
 
+/** @import, remote url(), or an image-set() string (it fetches without url()) that is not a data: URL. */
 function hasRemoteReference(css: string): boolean {
-  return REMOTE_IMPORT.test(css) || REMOTE_URL.test(css) || hasRemoteImageSet(css);
-}
-
-/** image-set() can fetch from plain strings without url(); every string in it must be a data: URL. */
-function hasRemoteImageSet(css: string): boolean {
+  if (REMOTE_IMPORT.test(css) || REMOTE_URL.test(css)) return true;
   for (const [, args = ''] of css.matchAll(/image-set\(([^)]*)\)/gi)) {
     for (const [, , value = ''] of args.matchAll(/(['"])(.*?)\1/g)) {
       if (!value.trim().toLowerCase().startsWith('data:')) return true;
@@ -85,7 +79,7 @@ export function sanitizeCustomCss(css: unknown): string {
   const stripped = css
     .slice(0, MAX_CUSTOM_CSS_LENGTH)
     .replace(/@import[^;]*;?/gi, '')
-    .replace(/url\(\s*(?!['"]?\s*data:)[^)]*\)/gi, 'none');
+    .replace(REMOTE_URL_CALL, 'none');
   return hasRemoteReference(decodeCssEscapes(stripped)) ? '' : stripped;
 }
 
@@ -97,16 +91,12 @@ export function normalizeThemeCustomization(raw: unknown): ThemeCustomization {
   return result;
 }
 
-function channelToLinear(channel: number): number {
-  const c = channel / 255;
-  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-}
-
 export function relativeLuminance(hex: string): number {
   const n = Number.parseInt(hex.slice(1), 16);
-  const r = channelToLinear((n >> 16) & 0xff);
-  const g = channelToLinear((n >> 8) & 0xff);
-  const b = channelToLinear(n & 0xff);
+  const [r = 0, g = 0, b = 0] = [16, 8, 0].map((shift) => {
+    const c = ((n >> shift) & 0xff) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
@@ -126,28 +116,30 @@ export function contrastRatio(a: string, b: string): number {
 export const ON_ACCENT_LIGHT_LUMINANCE = 1;
 export const ON_ACCENT_DARK_LUMINANCE = 0.008815176790098227;
 
-/** Picks the button text token with the higher contrast against the actual token colors. */
-export function pickOnAccentText(primary: string): string {
-  const background = relativeLuminance(primary);
-  const light = luminanceContrast(background, ON_ACCENT_LIGHT_LUMINANCE);
-  const dark = luminanceContrast(background, ON_ACCENT_DARK_LUMINANCE);
-  return dark > light ? 'var(--sc-on-accent-dark)' : 'var(--sc-on-accent-light)';
-}
-
 export interface ThemeOverrideOptions {
   /** High contrast (in-app toggle or OS preference) pauses color customization; accessibility wins. */
   highContrast: boolean;
 }
 
+/**
+ * Button text takes the on-accent token with the higher contrast against the actual token colors.
+ * Hover moves the background away from that text (lighter under dark text, darker under light
+ * text), so the label keeps at least its resting contrast.
+ */
 function addPrimary(
   vars: Record<string, string>,
   { primaryColor: primary }: ThemeCustomization,
 ): void {
+  const background = relativeLuminance(primary);
+  const darkText =
+    luminanceContrast(background, ON_ACCENT_DARK_LUMINANCE) >
+    luminanceContrast(background, ON_ACCENT_LIGHT_LUMINANCE);
+  const hoverMix = darkText ? 'var(--sc-on-accent-light)' : 'var(--sc-shade)';
   vars['--sc-accent'] = primary;
-  vars['--sc-accent-hover'] = `color-mix(in srgb, ${primary} 85%, var(--sc-shade))`;
+  vars['--sc-accent-hover'] = `color-mix(in srgb, ${primary} 85%, ${hoverMix})`;
   vars['--sc-accent-subtle'] = `color-mix(in srgb, ${primary} 12%, transparent)`;
   vars['--sc-accent-glow'] = `0 0 40px -10px color-mix(in srgb, ${primary} 35%, transparent)`;
-  vars['--sc-text-on-accent'] = pickOnAccentText(primary);
+  vars['--sc-text-on-accent'] = darkText ? 'var(--sc-on-accent-dark)' : 'var(--sc-on-accent-light)';
   vars['--nav-border-active'] = primary;
   vars['--sc-border-focus'] = primary;
   vars['--sc-ring-focus'] = `color-mix(in srgb, ${primary} 55%, transparent)`;

@@ -10,7 +10,6 @@ import {
   normalizeThemeCustomization,
   ON_ACCENT_DARK_LUMINANCE,
   ON_ACCENT_LIGHT_LUMINANCE,
-  pickOnAccentText,
   relativeLuminance,
   sanitizeCustomCss,
 } from '../../../services/themeCustomization';
@@ -76,6 +75,15 @@ describe('sanitizeCustomCss', () => {
     }
   });
 
+  it('keeps quoted data: URLs regardless of whitespace inside url()', () => {
+    const css =
+      '.a { background: url( "data:image/png;base64,AAAA" ); }\n.b { src: url(\n  data:font/woff2;base64,AAAA); }';
+    expect(sanitizeCustomCss(css)).toBe(css);
+    expect(sanitizeCustomCss('.a { background: url(  "https://x.example/p.png"); }')).toBe(
+      '.a { background: none; }',
+    );
+  });
+
   it('drops image-set() with remote strings but keeps data: sources', () => {
     expect(sanitizeCustomCss('.a { background: image-set("https://x.example/a.png" 1x); }')).toBe(
       '',
@@ -98,15 +106,28 @@ describe('contrast helpers', () => {
     expect(contrastRatio('#777777', '#777777')).toBeCloseTo(1, 5);
   });
 
-  it('picks the more readable text color for a custom primary', () => {
-    expect(pickOnAccentText('#fde047')).toBe('var(--sc-on-accent-dark)');
-    expect(pickOnAccentText('#1e3a8a')).toBe('var(--sc-on-accent-light)');
+  const primary = (primaryColor: string) =>
+    buildThemeOverrides({ ...EMPTY_THEME_CUSTOMIZATION, primaryColor }, off);
+
+  it('picks the more readable button text for a custom primary', () => {
+    expect(primary('#fde047')['--sc-text-on-accent']).toBe('var(--sc-on-accent-dark)');
+    expect(primary('#1e3a8a')['--sc-text-on-accent']).toBe('var(--sc-on-accent-light)');
   });
 
   it('compares against the real token colors, not black and white', () => {
     // #767676: white reaches 4.54:1, the dark token #0f172a only 3.93:1.
-    expect(pickOnAccentText('#767676')).toBe('var(--sc-on-accent-light)');
-    expect(pickOnAccentText('#888888')).toBe('var(--sc-on-accent-dark)');
+    expect(primary('#767676')['--sc-text-on-accent']).toBe('var(--sc-on-accent-light)');
+    expect(primary('#888888')['--sc-text-on-accent']).toBe('var(--sc-on-accent-dark)');
+  });
+
+  it('moves the hover background away from the button text', () => {
+    // Dark text on #888888 (5.04:1) would drop to ~3.8:1 if hover darkened it.
+    expect(primary('#888888')['--sc-accent-hover']).toBe(
+      'color-mix(in srgb, #888888 85%, var(--sc-on-accent-light))',
+    );
+    expect(primary('#1e3a8a')['--sc-accent-hover']).toBe(
+      'color-mix(in srgb, #1e3a8a 85%, var(--sc-shade))',
+    );
   });
 
   it('keeps the on-accent luminances in sync with the index.css tokens', () => {
