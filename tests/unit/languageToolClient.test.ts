@@ -117,6 +117,16 @@ describe('languageToolClient', () => {
     ).not.toThrow();
   });
 
+  it('blocks remote servers while the AI execution mode is local-only, but not localhost', () => {
+    for (const aiMode of ['local', 'eco'] as const) {
+      const s = { ...baseSettings(), aiMode };
+      expect(() => assertLanguageToolAllowed(s, 'https://api.languagetool.org/')).toThrow(
+        /local-only/,
+      );
+      expect(() => assertLanguageToolAllowed(s, 'http://localhost:8010')).not.toThrow();
+    }
+  });
+
   it('still refuses endpoints outside the CSP connect-src allowlist', () => {
     expect(() => assertLanguageToolAllowed(baseSettings(), 'https://untrusted.example/')).toThrow();
   });
