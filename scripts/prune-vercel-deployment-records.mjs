@@ -7,7 +7,8 @@
 
 export const REPOSITORY = 'qnbs/WorldScript-Studio';
 export const WORKFLOW = `${REPOSITORY}/.github/workflows/prune-deployments.yml@refs/heads/main`;
-export const KEEP_PER_ENVIRONMENT = 10;
+// Three per environment (owner decision 2026-10-21, was ten): enough for a rollback view; open PR heads and `main` are kept on top.
+export const KEEP_PER_ENVIRONMENT = 3;
 export const MAX_DELETES_PER_RUN = 40;
 export const ENVIRONMENTS = Object.freeze(['Production', 'Preview']);
 export const CREATOR = 'vercel[bot]';
