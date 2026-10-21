@@ -343,7 +343,7 @@ describe('CI workflow policy', () => {
     expect(scanStep).toContain('id: osv');
     expect(scanStep).toContain('continue-on-error: true');
     expect(scanStep).toContain(
-      'google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc',
+      'google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36',
     );
     for (const lockfile of ['pnpm-lock.yaml', 'src-tauri/Cargo.lock', 'crates/Cargo.lock']) {
       expect(scanStep).toContain(`--lockfile=${lockfile}`);
