@@ -102,8 +102,8 @@ describe('sanitizeCustomCss', () => {
 
 describe('contrast helpers', () => {
   it('computes WCAG contrast ratios', () => {
-    expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 5);
-    expect(contrastRatio('#777777', '#777777')).toBeCloseTo(1, 5);
+    expect(contrastRatio({ foreground: '#000000', background: '#ffffff' })).toBeCloseTo(21, 5);
+    expect(contrastRatio({ foreground: '#777777', background: '#777777' })).toBeCloseTo(1, 5);
   });
 
   const primary = (primaryColor: string) =>
@@ -114,10 +114,24 @@ describe('contrast helpers', () => {
     expect(primary('#1e3a8a')['--sc-text-on-accent']).toBe('var(--sc-on-accent-light)');
   });
 
-  it('compares against the real token colors, not black and white', () => {
-    // #767676: white reaches 4.54:1, the dark token #0f172a only 3.93:1.
-    expect(primary('#767676')['--sc-text-on-accent']).toBe('var(--sc-on-accent-light)');
+  it('uses the softer dark token only where it reaches AA, black otherwise', () => {
+    // #888888: dark token 5.04:1. #767676: dark token 3.93:1, black 4.63:1. #7c7c7c: neither token reaches 4.5:1.
     expect(primary('#888888')['--sc-text-on-accent']).toBe('var(--sc-on-accent-dark)');
+    expect(primary('#767676')['--sc-text-on-accent']).toBe('var(--sc-on-accent-black)');
+    expect(primary('#7c7c7c')['--sc-text-on-accent']).toBe('var(--sc-on-accent-black)');
+  });
+
+  it('reaches WCAG AA button text for every gray level', () => {
+    const tokens: Record<string, string> = {
+      'var(--sc-on-accent-light)': '#ffffff',
+      'var(--sc-on-accent-dark)': '#0f172a',
+      'var(--sc-on-accent-black)': '#000000',
+    };
+    for (let level = 0; level < 256; level += 1) {
+      const hex = `#${level.toString(16).padStart(2, '0').repeat(3)}`;
+      const text = tokens[primary(hex)['--sc-text-on-accent'] ?? ''] ?? '';
+      expect(contrastRatio({ foreground: text, background: hex })).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it('moves the hover background away from the button text', () => {
@@ -135,6 +149,7 @@ describe('contrast helpers', () => {
     const expected = [
       ['light', ON_ACCENT_LIGHT_LUMINANCE],
       ['dark', ON_ACCENT_DARK_LUMINANCE],
+      ['black', 0],
     ] as const;
     for (const [variant, luminance] of expected) {
       const hex = new RegExp(`--sc-on-accent-${variant}:\\s*(#[0-9a-f]{6})`, 'i').exec(css)?.[1];
@@ -180,6 +195,20 @@ describe('buildThemeOverrides', () => {
     expect(vars['--sc-text-primary']).toBe('#283618');
     expect(vars['--sc-fg']).toBe('#283618');
     expect(vars['--sc-text-secondary']).toContain('#283618');
+  });
+
+  it('gives a background-only customization contrast-safe text', () => {
+    const onBlack = buildThemeOverrides(
+      { ...EMPTY_THEME_CUSTOMIZATION, backgroundColor: '#000000' },
+      off,
+    );
+    expect(onBlack['--sc-text-primary']).toBe('var(--sc-on-accent-light)');
+    expect(onBlack['--sc-prose-fg']).toBe('var(--sc-on-accent-light)');
+    const onCream = buildThemeOverrides(
+      { ...EMPTY_THEME_CUSTOMIZATION, backgroundColor: '#fefae0' },
+      off,
+    );
+    expect(onCream['--sc-text-primary']).toBe('var(--sc-on-accent-dark)');
   });
 
   it('lets an explicit secondary color win over the text-derived one', () => {

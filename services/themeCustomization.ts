@@ -104,17 +104,45 @@ function luminanceContrast(la: number, lb: number): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-/** WCAG 2.x contrast ratio between two #rrggbb colors (1–21). */
-export function contrastRatio(a: string, b: string): number {
-  return luminanceContrast(relativeLuminance(a), relativeLuminance(b));
+export interface ColorPair {
+  foreground: string;
+  background: string;
 }
 
+/** WCAG 2.x contrast ratio between two #rrggbb colors (1–21). */
+export function contrastRatio({ foreground, background }: ColorPair): number {
+  return luminanceContrast(relativeLuminance(foreground), relativeLuminance(background));
+}
+
+export const WCAG_AA_TEXT_CONTRAST = 4.5;
+
 /**
- * Relative luminance of the --sc-on-accent-light/-dark tokens in index.css (#ffffff, #0f172a).
+ * Relative luminance of the --sc-on-accent-light/-dark tokens in index.css (#ffffff, #0f172a;
+ * --sc-on-accent-black is #000000, luminance 0).
  * QNBS-v3 (#702): kept as luminances so the token values stay in index.css; a unit test fails if they drift.
  */
 export const ON_ACCENT_LIGHT_LUMINANCE = 1;
 export const ON_ACCENT_DARK_LUMINANCE = 0.008815176790098227;
+
+interface ReadableText {
+  token: string;
+  isDark: boolean;
+}
+
+/**
+ * Text token for a custom surface color that always reaches WCAG AA: the better of white and
+ * black is at least 4.58:1 for any color, and the softer dark token is used only when it also
+ * reaches 4.5:1.
+ */
+function readableTextOn(color: string): ReadableText {
+  const background = relativeLuminance(color);
+  const isDark =
+    luminanceContrast(background, 0) > luminanceContrast(background, ON_ACCENT_LIGHT_LUMINANCE);
+  if (!isDark) return { token: 'var(--sc-on-accent-light)', isDark };
+  const softReadable =
+    luminanceContrast(background, ON_ACCENT_DARK_LUMINANCE) >= WCAG_AA_TEXT_CONTRAST;
+  return { token: softReadable ? 'var(--sc-on-accent-dark)' : 'var(--sc-on-accent-black)', isDark };
+}
 
 export interface ThemeOverrideOptions {
   /** High contrast (in-app toggle or OS preference) pauses color customization; accessibility wins. */
@@ -122,24 +150,21 @@ export interface ThemeOverrideOptions {
 }
 
 /**
- * Button text takes the on-accent token with the higher contrast against the actual token colors.
- * Hover moves the background away from that text (lighter under dark text, darker under light
- * text), so the label keeps at least its resting contrast.
+ * Button text always reaches WCAG AA (readableTextOn). Hover moves the background away from that
+ * text (lighter under dark text, darker under light text), so the label keeps at least its
+ * resting contrast.
  */
 function addPrimary(
   vars: Record<string, string>,
   { primaryColor: primary }: ThemeCustomization,
 ): void {
-  const background = relativeLuminance(primary);
-  const darkText =
-    luminanceContrast(background, ON_ACCENT_DARK_LUMINANCE) >
-    luminanceContrast(background, ON_ACCENT_LIGHT_LUMINANCE);
-  const hoverMix = darkText ? 'var(--sc-on-accent-light)' : 'var(--sc-shade)';
+  const label = readableTextOn(primary);
+  const hoverMix = label.isDark ? 'var(--sc-on-accent-light)' : 'var(--sc-shade)';
   vars['--sc-accent'] = primary;
   vars['--sc-accent-hover'] = `color-mix(in srgb, ${primary} 85%, ${hoverMix})`;
   vars['--sc-accent-subtle'] = `color-mix(in srgb, ${primary} 12%, transparent)`;
   vars['--sc-accent-glow'] = `0 0 40px -10px color-mix(in srgb, ${primary} 35%, transparent)`;
-  vars['--sc-text-on-accent'] = darkText ? 'var(--sc-on-accent-dark)' : 'var(--sc-on-accent-light)';
+  vars['--sc-text-on-accent'] = label.token;
   vars['--nav-border-active'] = primary;
   vars['--sc-border-focus'] = primary;
   vars['--sc-ring-focus'] = `color-mix(in srgb, ${primary} 55%, transparent)`;
@@ -180,6 +205,12 @@ function addText(vars: Record<string, string>, tc: ThemeCustomization): void {
   vars['--sc-muted'] = vars['--sc-text-muted'];
 }
 
+/** A custom background without a text color gets contrast-safe text; the theme's text may not suit it. */
+function withReadableText(tc: ThemeCustomization): ThemeCustomization {
+  if (tc.textColor || !tc.backgroundColor) return tc;
+  return { ...tc, textColor: readableTextOn(tc.backgroundColor).token };
+}
+
 /**
  * Maps a normalized customization onto semantic design tokens. Theme blocks redefine the alias
  * tokens (--sc-bg, --sc-prose-*) on <body>, so overrides set them explicitly instead of relying
@@ -192,11 +223,12 @@ export function buildThemeOverrides(
   const vars: Record<string, string> = {};
   // QNBS-v3 (#702/#818): high-contrast tokens derive from --sc-accent and the surfaces, so any user color could undo them; colors pause, custom CSS stays.
   if (highContrast) return vars;
-  if (tc.primaryColor) addPrimary(vars, tc);
-  if (tc.secondaryColor) addSecondary(vars, tc);
-  if (tc.accentColor) addAccent(vars, tc);
-  if (tc.backgroundColor) addBackground(vars, tc);
-  if (tc.textColor) addText(vars, tc);
+  const effective = withReadableText(tc);
+  if (effective.primaryColor) addPrimary(vars, effective);
+  if (effective.secondaryColor) addSecondary(vars, effective);
+  if (effective.accentColor) addAccent(vars, effective);
+  if (effective.backgroundColor) addBackground(vars, effective);
+  if (effective.textColor) addText(vars, effective);
   return vars;
 }
 
