@@ -133,6 +133,21 @@ export { defaultDesktopSettings, defaultVoiceSettings };
 // QNBS-v3: exported so components + IDB rehydration can backfill missing nested objects
 // (older persisted settings lacked advancedEditor/themeCustomization → page crash on read).
 export const defaultAdvancedEditorSettings = defaultSettings.advancedEditor;
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Default value for one settings group (#818). Fields this version does not know, e.g. from a
+ * newer client, stay as stored (preserve-first); every known field takes its default.
+ */
+function resetGroup(current: unknown, fallback: unknown): unknown {
+  const fresh: unknown = structuredClone(fallback);
+  if (!isPlainRecord(current) || !isPlainRecord(fresh)) return fresh;
+  const unknownFields = Object.entries(current).filter(([key]) => !(key in fresh));
+  return { ...Object.fromEntries(unknownFields), ...fresh };
+}
+
 export const defaultThemeCustomization = defaultSettings.themeCustomization;
 
 const initialState: Settings = { ...defaultSettings };
@@ -153,7 +168,13 @@ const settingsSlice = createSlice({
         collaboration: state.collaboration,
         language: state.language,
       };
-      Object.assign(state, structuredClone(defaultSettings), kept);
+      const target = state as unknown as Record<string, unknown>;
+      for (const [key, value] of Object.entries(defaultSettings)) {
+        target[key] = resetGroup(target[key], value);
+      }
+      // A known setting without a default: the reset returns the editor to the built-in fonts.
+      delete state.customFont;
+      Object.assign(state, kept);
     },
     setSettings(state, action: PayloadAction<Settings>) {
       Object.assign(state, action.payload);

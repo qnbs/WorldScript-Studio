@@ -404,4 +404,36 @@ describe('settingsSlice', () => {
     expect(reset.collaboration.webrtcSignalingUrls).toEqual(['wss://own.example']);
     expect(reset.language).toBe('de');
   });
+
+  it('resetToDefaults keeps fields a newer client stored inside a settings group (preserve-first)', () => {
+    const state = {
+      ...initState(),
+      advancedAi: { ...initState().advancedAi, temperature: 1.2, futureKnob: 3 },
+      themeCustomization: {
+        ...initState().themeCustomization,
+        primaryColor: '#123456',
+        futureField: 'x',
+      },
+    } as ReturnType<typeof initState>;
+    const reset = settingsReducer(state, settingsActions.resetToDefaults()) as unknown as {
+      advancedAi: Record<string, unknown>;
+      themeCustomization: Record<string, unknown>;
+    };
+    expect(reset.advancedAi['temperature']).toBe(initState().advancedAi.temperature);
+    expect(reset.advancedAi['futureKnob']).toBe(3);
+    expect(reset.themeCustomization['primaryColor']).toBe('');
+    expect(reset.themeCustomization['futureField']).toBe('x');
+  });
+
+  it('resetToDefaults removes a custom font', () => {
+    const state = settingsReducer(
+      initState(),
+      settingsActions.setCustomFont({
+        name: 'Mine',
+        url: 'https://x.example/f.woff2',
+        format: 'woff2',
+      }),
+    );
+    expect(settingsReducer(state, settingsActions.resetToDefaults()).customFont).toBeUndefined();
+  });
 });
