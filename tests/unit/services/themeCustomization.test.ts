@@ -66,6 +66,16 @@ describe('sanitizeCustomCss', () => {
     );
   });
 
+  it('treats out-of-range and surrogate escapes as replacement characters instead of throwing', () => {
+    for (const css of [
+      '.a { content: "\\110000"; }',
+      '/* \\ffffff */ .a {}',
+      '.a { content: "\\d800"; }',
+    ]) {
+      expect(sanitizeCustomCss(css)).toBe(css);
+    }
+  });
+
   it('drops image-set() with remote strings but keeps data: sources', () => {
     expect(sanitizeCustomCss('.a { background: image-set("https://x.example/a.png" 1x); }')).toBe(
       '',

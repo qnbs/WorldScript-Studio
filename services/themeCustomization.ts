@@ -41,12 +41,21 @@ function normalizeColor(value: unknown): string {
   return isHexColor(value) ? value.toLowerCase() : '';
 }
 
+// QNBS-v3 (#702): CSS Syntax §4.3.7 — zero, surrogate and out-of-range escapes become U+FFFD; String.fromCodePoint would throw above U+10FFFF.
+function isValidCodePoint(codePoint: number): boolean {
+  if (codePoint <= 0 || codePoint > 0x10ffff) return false;
+  return codePoint < 0xd800 || codePoint > 0xdfff;
+}
+
+function decodeEscapedCodePoint(hex: string): string {
+  const codePoint = Number.parseInt(hex, 16);
+  return String.fromCodePoint(isValidCodePoint(codePoint) ? codePoint : 0xfffd);
+}
+
 /** Decodes CSS escapes (`\75 rl`, `\@`) the way the CSS tokenizer would, for detection only. */
 function decodeCssEscapes(css: string): string {
   return css
-    .replace(/\\([0-9a-f]{1,6})\s?/gi, (_, hex: string) =>
-      String.fromCodePoint(Number.parseInt(hex, 16) || 0xfffd),
-    )
+    .replace(/\\([0-9a-f]{1,6})\s?/gi, (_, hex: string) => decodeEscapedCodePoint(hex))
     .replace(/\\(.)/g, '$1');
 }
 
