@@ -46,6 +46,10 @@ export const InspectorPanel = React.memo(() => {
       : [],
   );
   const inspectorAiBusy = isAiLoading || isProofreading || isSceneVisualizing;
+  // QNBS-v3 (#818): Settings → Advanced Editor → Writing Statistics shows or hides this card.
+  const showWritingStats = useAppSelector(
+    (state) => state.settings.advancedEditor?.writingStats ?? true,
+  );
 
   return (
     <>
@@ -103,29 +107,31 @@ export const InspectorPanel = React.memo(() => {
             {t('dashboard.details.aiLoglineButton')}
           </Button>
         </div>
-        <Card>
-          <CardHeader className="flex justify-between items-center">
-            <h3 className="text-base font-semibold">{t('manuscript.inspector.statsTitle')}</h3>
-          </CardHeader>
-          <CardContent className="text-sm space-y-3">
-            <div className="flex justify-between border-b border-[var(--sc-border-subtle)]/50 pb-2">
-              <span>{t('dashboard.stats.totalWordCount')}</span>
-              <span className="font-bold">{activeSectionStats.wordCount.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between border-b border-[var(--sc-border-subtle)]/50 pb-2">
-              <span>{t('manuscript.inspector.charCount')}</span>
-              <span className="font-bold">{activeSectionStats.charCount.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>{t('manuscript.inspector.readTime')}</span>
-              <span className="font-bold">
-                {t('manuscript.inspector.readTimeValue', {
-                  time: String(activeSectionStats.readTime),
-                })}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+        {showWritingStats && (
+          <Card>
+            <CardHeader className="flex justify-between items-center">
+              <h3 className="text-base font-semibold">{t('manuscript.inspector.statsTitle')}</h3>
+            </CardHeader>
+            <CardContent className="text-sm space-y-3">
+              <div className="flex justify-between border-b border-[var(--sc-border-subtle)]/50 pb-2">
+                <span>{t('dashboard.stats.totalWordCount')}</span>
+                <span className="font-bold">{activeSectionStats.wordCount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between border-b border-[var(--sc-border-subtle)]/50 pb-2">
+                <span>{t('manuscript.inspector.charCount')}</span>
+                <span className="font-bold">{activeSectionStats.charCount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>{t('manuscript.inspector.readTime')}</span>
+                <span className="font-bold">
+                  {t('manuscript.inspector.readTimeValue', {
+                    time: String(activeSectionStats.readTime),
+                  })}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         {activeSection ? (
           <Card>
             <CardHeader className="flex justify-between items-center pb-2">
