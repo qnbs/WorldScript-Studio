@@ -22,6 +22,10 @@ export const BUILD_RELEVANT = [
   /^pnpm-lock\.yaml$/,
   /^pnpm-workspace\.yaml$/,
   /^\.npmrc$/,
+  /^\.nvmrc$/,
+  // Workspace package manifests and pnpm patches change what the install step resolves.
+  /^packages\/[^/]+\/package\.json$/,
+  /^patches\//,
   /^scripts\/(build-edge|runtime-asset-steps|sync-deploy-base|dependency-state)\.mjs$/,
   /^scripts\/copy-[\w-]+\.mjs$/,
   /^api\//,

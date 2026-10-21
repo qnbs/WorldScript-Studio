@@ -55,6 +55,9 @@ describe('Vercel ignored build step (previews on demand)', () => {
       'scripts/runtime-asset-steps.mjs',
       'scripts/copy-duckdb-assets.mjs',
       'api/claude-proxy.ts',
+      '.nvmrc',
+      'packages/ui/package.json',
+      'patches/some-dep@1.0.0.patch',
     ]) {
       expect(decideBuild({ env: preview, changedFiles: ['README.md', file] })).toEqual({
         build: true,
@@ -71,6 +74,7 @@ describe('Vercel ignored build step (previews on demand)', () => {
       'CHANGELOG.md',
       '.github/workflows/ci.yml',
       'scripts/check-pr-size.mjs',
+      'packages/ui/src/tokens.ts',
     ];
     expect(decideBuild({ env: preview, changedFiles })).toEqual({
       build: false,

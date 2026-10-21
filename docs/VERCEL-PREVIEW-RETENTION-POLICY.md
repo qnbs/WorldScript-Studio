@@ -365,7 +365,8 @@ builds, exit 0 skips).
   - on the branch's first deployment (no `VERCEL_GIT_PREVIOUS_SHA`);
   - when the commit message contains `[preview]`;
   - when a deployment input changed since the branch's last successful deployment: `vercel.json`,
-    `vite.config.*`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, the edge
+    `vite.config.*`, `package.json`, `packages/*/package.json`, `patches/**`, `pnpm-lock.yaml`,
+    `pnpm-workspace.yaml`, `.npmrc`, `.nvmrc`, the edge
     build scripts (`build-edge`, `runtime-asset-steps`, `sync-deploy-base`, `dependency-state`,
     `copy-*`) or `api/**`.
 - **Unknown state builds (fail-open):** a missing or non-SHA previous commit, or a previous commit
