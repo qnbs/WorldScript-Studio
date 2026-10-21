@@ -385,7 +385,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
           onClick={handleSelectionEvents}
           onKeyDown={handleKeyDown}
           onScroll={handleTextareaScroll}
-          className={`h-full w-full leading-relaxed resize-none p-4 sm:p-6 md:p-12 pt-2 bg-transparent border-0 focus:ring-0 flex-grow caret-[var(--sc-text-primary)] text-transparent max-w-3xl mx-auto selection:bg-[var(--sc-accent)]/30 ${isFocusMode ? 'max-w-4xl pt-12' : ''}`}
+          className={`h-full w-full leading-relaxed resize-none p-4 sm:p-6 md:p-12 pt-2 bg-transparent border-0 focus:ring-0 flex-grow caret-[var(--sc-text-primary)] text-transparent max-w-3xl mx-auto selection:bg-[var(--sc-accent)]/30 ${isFocusMode ? 'max-w-4xl pt-12' : ''} ${settings.advancedEditor?.nativeSpellCheck ? 'relative z-[5]' : ''}`}
           placeholder={
             activeSection.prompt ||
             t('manuscript.contentPlaceholder', { title: activeSection.title })
@@ -394,7 +394,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
             fontSize: `${settings.fontSize}px`,
             lineHeight: settings.lineSpacing,
           }}
-          spellCheck={false}
+          spellCheck={settings.advancedEditor?.nativeSpellCheck ?? false}
         />
         <div
           ref={highlightRef}
