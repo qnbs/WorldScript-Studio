@@ -125,7 +125,7 @@ const defaultSettings: Settings = {
     customDictionary: [],
     writingStats: true,
   },
-  themeCustomization: { ...EMPTY_THEME_CUSTOMIZATION },
+  themeCustomization: { ...EMPTY_THEME_CUSTOMIZATION, legacyDefaultsCleared: true },
   voice: defaultVoiceSettings,
   // QNBS-v3 (T2): desktop-only behavior; default off so the web/PWA is unaffected.
   desktop: defaultDesktopSettings,

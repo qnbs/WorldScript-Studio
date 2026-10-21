@@ -13,17 +13,10 @@ import {
 const off = { highContrast: false };
 
 describe('normalizeThemeCustomization', () => {
-  it('treats the never-applied pre-#702 defaults as unset', () => {
-    expect(
-      normalizeThemeCustomization({
-        primaryColor: '#3b82f6',
-        secondaryColor: '#64748b',
-        accentColor: '#f59e0b',
-        backgroundColor: '#0f172a',
-        textColor: '#f8fafc',
-        customCss: '',
-      }),
-    ).toEqual(EMPTY_THEME_CUSTOMIZATION);
+  it('keeps every explicit color at runtime, including the former defaults', () => {
+    const tc = normalizeThemeCustomization({ primaryColor: '#3B82F6', backgroundColor: '#0f172a' });
+    expect(tc.primaryColor).toBe('#3b82f6');
+    expect(tc.backgroundColor).toBe('#0f172a');
   });
 
   it('keeps valid colors lowercased and drops invalid ones', () => {
@@ -75,8 +68,8 @@ describe('contrast helpers', () => {
   });
 
   it('picks the more readable text color for a custom primary', () => {
-    expect(pickOnAccentText('#fde047')).toBe('#0f172a');
-    expect(pickOnAccentText('#1e3a8a')).toBe('#ffffff');
+    expect(pickOnAccentText('#fde047')).toBe('var(--sc-on-accent-dark)');
+    expect(pickOnAccentText('#1e3a8a')).toBe('var(--sc-on-accent-light)');
   });
 });
 
@@ -91,7 +84,7 @@ describe('buildThemeOverrides', () => {
       off,
     );
     expect(vars['--sc-accent']).toBe('#1e3a8a');
-    expect(vars['--sc-text-on-accent']).toBe('#ffffff');
+    expect(vars['--sc-text-on-accent']).toBe('var(--sc-on-accent-light)');
     expect(vars['--sc-border-focus']).toBe('#1e3a8a');
     expect(vars['--sc-ring-focus']).toContain('#1e3a8a');
   });

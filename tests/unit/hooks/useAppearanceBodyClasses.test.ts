@@ -111,9 +111,14 @@ describe('useAppearanceBodyClasses — theme', () => {
     const addEventListener = vi.fn((event: string, handler: (e: MediaQueryListEvent) => void) => {
       if (event === 'change') changeHandler = handler;
     });
+    // QNBS-v3: per-query lists like a real browser; the theme listener must not be confused with the prefers-contrast one.
     vi.stubGlobal(
       'matchMedia',
-      vi.fn().mockReturnValue({ matches: true, addEventListener, removeEventListener }),
+      vi.fn((query: string) =>
+        query === '(prefers-color-scheme: dark)'
+          ? { matches: true, addEventListener, removeEventListener }
+          : { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() },
+      ),
     );
 
     const { unmount } = renderWith(buildSettings({ theme: 'auto' }));
@@ -267,10 +272,27 @@ describe('theme customization (#702)', () => {
     expect(document.body.style.getPropertyValue('--sc-bg')).toBe('');
   });
 
-  it('ignores the legacy defaults that were persisted before the fix', () => {
-    renderWith(custom({ primaryColor: '#3b82f6', backgroundColor: '#0f172a' }));
-    expect(document.body.style.getPropertyValue('--sc-accent')).toBe('');
-    expect(document.body.style.getPropertyValue('--sc-surface-base')).toBe('');
+  it('applies an explicit color even when it equals a former default', () => {
+    renderWith(custom({ primaryColor: '#3b82f6' }));
+    expect(document.body.style.getPropertyValue('--sc-accent')).toBe('#3b82f6');
+  });
+
+  it('yields borders and focus rings to the OS-level prefers-contrast: more', () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(prefers-contrast: more)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      renderWith(custom({ primaryColor: '#1e3a8a', backgroundColor: '#ffffff' }));
+      expect(document.body.style.getPropertyValue('--sc-accent')).toBe('#1e3a8a');
+      expect(document.body.style.getPropertyValue('--sc-border-focus')).toBe('');
+      expect(document.body.style.getPropertyValue('--sc-border-subtle')).toBe('');
+    } finally {
+      window.matchMedia = original;
+    }
   });
 
   it('keeps borders and focus rings for high contrast', () => {
@@ -301,12 +323,18 @@ describe('theme customization (#702)', () => {
     expect(document.getElementById('worldscript-user-css')).toBeNull();
   });
 
-  it('reflects a custom background in the browser theme-color', () => {
-    const existing = document.querySelector('meta[name="theme-color"]');
-    const meta = existing ?? document.head.appendChild(document.createElement('meta'));
-    meta.setAttribute('name', 'theme-color');
+  it('writes a custom background into every theme-color tag', () => {
+    for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.remove();
+    const dark = document.head.appendChild(document.createElement('meta'));
+    dark.setAttribute('name', 'theme-color');
+    dark.setAttribute('media', '(prefers-color-scheme: dark)');
+    const light = document.head.appendChild(document.createElement('meta'));
+    light.setAttribute('name', 'theme-color');
+    light.setAttribute('media', '(prefers-color-scheme: light)');
     renderWith(custom({ backgroundColor: '#fefae0' }));
-    expect(meta.getAttribute('content')).toBe('#fefae0');
-    if (!existing) meta.remove();
+    expect(dark.getAttribute('content')).toBe('#fefae0');
+    expect(light.getAttribute('content')).toBe('#fefae0');
+    dark.remove();
+    light.remove();
   });
 });

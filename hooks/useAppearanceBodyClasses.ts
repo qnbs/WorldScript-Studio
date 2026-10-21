@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { RTL_LOCALES } from '../contexts/I18nContext';
 import type { Language } from '../i18n/locales';
 import { buildThemeOverrides, normalizeThemeCustomization } from '../services/themeCustomization';
@@ -16,7 +16,11 @@ export interface UseAppearanceBodyClassesParams {
 export function useAppearanceBodyClasses(params: UseAppearanceBodyClassesParams): void {
   const { settings, isPortalActive, language, enableRtlLayout } = params;
   useThemeClass(settings.theme, settings.appearancePreset);
-  useThemeCustomization(settings.themeCustomization, settings.accessibility.highContrast);
+  const prefersMoreContrast = usePrefersMoreContrast();
+  useThemeCustomization(
+    settings.themeCustomization,
+    settings.accessibility.highContrast || prefersMoreContrast,
+  );
   useSepiaClass(settings.appearancePreset);
   usePortalActiveClass(isPortalActive);
   useWritingSurfacePlainClass(settings.writingSurfaceStyle);
@@ -40,13 +44,18 @@ function resolveThemeColor(
   return isDark ? '#020617' : '#ffffff';
 }
 
+// QNBS-v3 (#702): index.html ships one theme-color per prefers-color-scheme; the app's own theme can differ from the OS scheme, so every tag must carry it.
+function setThemeColorMeta(color: string): void {
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+    meta.setAttribute('content', color);
+  }
+}
+
 function applyThemeClass(appearancePreset: Settings['appearancePreset'], isDark: boolean): void {
   document.body.classList.remove('light-theme', 'dark-theme');
   document.body.classList.add(isDark ? 'dark-theme' : 'light-theme');
   // QNBS-v3: reflect the theme color in mobile browser chrome so the status bar matches the app shell.
-  document
-    .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', resolveThemeColor(appearancePreset, isDark));
+  setThemeColorMeta(resolveThemeColor(appearancePreset, isDark));
   try {
     localStorage.setItem('worldscript-theme', isDark ? 'dark' : 'light');
   } catch {
@@ -103,10 +112,25 @@ function applyThemeCustomization(customization: ThemeCustomization, highContrast
   }
   document.body.toggleAttribute('data-custom-highlight', customization.accentColor !== '');
   customThemeColor = customization.backgroundColor || null;
-  if (customThemeColor) {
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', customThemeColor);
-  }
+  if (customThemeColor) setThemeColorMeta(customThemeColor);
   applyUserCss(customization.customCss);
+}
+
+const MORE_CONTRAST_QUERY = '(prefers-contrast: more)';
+
+// QNBS-v3 (#702): the OS-level contrast preference has its own border rules in index.css; customization must yield to it like to the in-app toggle.
+function usePrefersMoreContrast(): boolean {
+  const [prefersMore, setPrefersMore] = useState(
+    () => typeof window.matchMedia === 'function' && window.matchMedia(MORE_CONTRAST_QUERY).matches,
+  );
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const mq = window.matchMedia(MORE_CONTRAST_QUERY);
+    const handler = (e: MediaQueryListEvent) => setPrefersMore(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return prefersMore;
 }
 
 // QNBS-v3 (#702/#818): inline body tokens outrank the theme/preset classes and survive class switches; the browser-chrome color follows via customThemeColor.

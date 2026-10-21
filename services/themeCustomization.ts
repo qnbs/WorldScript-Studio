@@ -18,16 +18,10 @@ export const EMPTY_THEME_CUSTOMIZATION: ThemeCustomization = {
   customCss: '',
 };
 
-// QNBS-v3: the pre-#702 defaults were persisted for every user but never applied; treat them as unset so the fix does not repaint existing installs.
-const LEGACY_DEFAULTS: Readonly<Record<ThemeColorKey, string>> = {
-  primaryColor: '#3b82f6',
-  secondaryColor: '#64748b',
-  accentColor: '#f59e0b',
-  backgroundColor: '#0f172a',
-  textColor: '#f8fafc',
-};
-
-export type ThemeColorKey = Exclude<keyof ThemeCustomization, 'customCss'>;
+export type ThemeColorKey = Exclude<
+  keyof ThemeCustomization,
+  'customCss' | 'legacyDefaultsCleared'
+>;
 
 export const THEME_COLOR_KEYS: readonly ThemeColorKey[] = [
   'primaryColor',
@@ -43,10 +37,8 @@ export function isHexColor(value: unknown): value is string {
   return typeof value === 'string' && HEX_COLOR.test(value);
 }
 
-function normalizeColor(key: ThemeColorKey, value: unknown): string {
-  if (!isHexColor(value)) return '';
-  const lower = value.toLowerCase();
-  return lower === LEGACY_DEFAULTS[key] ? '' : lower;
+function normalizeColor(value: unknown): string {
+  return isHexColor(value) ? value.toLowerCase() : '';
 }
 
 /** Strips constructs that could load remote resources; CSP blocks them too, this is defense in depth. */
@@ -61,7 +53,7 @@ export function sanitizeCustomCss(css: unknown): string {
 export function normalizeThemeCustomization(raw: unknown): ThemeCustomization {
   const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const result: ThemeCustomization = { ...EMPTY_THEME_CUSTOMIZATION };
-  for (const key of THEME_COLOR_KEYS) result[key] = normalizeColor(key, source[key]);
+  for (const key of THEME_COLOR_KEYS) result[key] = normalizeColor(source[key]);
   result.customCss = sanitizeCustomCss(source['customCss']);
   return result;
 }
@@ -86,14 +78,14 @@ export function contrastRatio(a: string, b: string): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-const ON_ACCENT_LIGHT = '#ffffff';
-const ON_ACCENT_DARK = '#0f172a';
+// QNBS-v3: WCAG crossover where dark text starts to out-contrast white; both text colors are design tokens in index.css.
+const DARK_TEXT_LUMINANCE_THRESHOLD = 0.179;
 
-/** Picks the button text color that keeps the higher contrast on a custom primary color. */
+/** Picks the button text token that stays readable on a custom primary color. */
 export function pickOnAccentText(primary: string): string {
-  return contrastRatio(primary, ON_ACCENT_LIGHT) >= contrastRatio(primary, ON_ACCENT_DARK)
-    ? ON_ACCENT_LIGHT
-    : ON_ACCENT_DARK;
+  return relativeLuminance(primary) > DARK_TEXT_LUMINANCE_THRESHOLD
+    ? 'var(--sc-on-accent-dark)'
+    : 'var(--sc-on-accent-light)';
 }
 
 export interface ThemeOverrideOptions {
@@ -103,7 +95,7 @@ export interface ThemeOverrideOptions {
 
 function addPrimary(vars: Record<string, string>, primary: string, highContrast: boolean): void {
   vars['--sc-accent'] = primary;
-  vars['--sc-accent-hover'] = `color-mix(in srgb, ${primary} 85%, #000000)`;
+  vars['--sc-accent-hover'] = `color-mix(in srgb, ${primary} 85%, var(--sc-shade))`;
   vars['--sc-accent-subtle'] = `color-mix(in srgb, ${primary} 12%, transparent)`;
   vars['--sc-accent-glow'] = `0 0 40px -10px color-mix(in srgb, ${primary} 35%, transparent)`;
   vars['--sc-text-on-accent'] = pickOnAccentText(primary);
@@ -113,35 +105,31 @@ function addPrimary(vars: Record<string, string>, primary: string, highContrast:
   vars['--sc-ring-focus'] = `color-mix(in srgb, ${primary} 55%, transparent)`;
 }
 
-function addSurfaces(
+function addBackground(
   vars: Record<string, string>,
-  tc: ThemeCustomization,
+  background: string,
+  text: string,
   highContrast: boolean,
 ): void {
-  const text = tc.textColor || 'var(--sc-text-primary)';
-  if (tc.backgroundColor) {
-    const bg = tc.backgroundColor;
-    vars['--sc-surface-base'] = bg;
-    vars['--sc-surface-raised'] = `color-mix(in srgb, ${bg} 94%, ${text})`;
-    vars['--sc-surface-overlay'] = `color-mix(in srgb, ${bg} 88%, ${text})`;
-    vars['--sc-prose-bg'] = bg;
-    vars['--sc-bg'] = bg;
-    if (!highContrast) {
-      vars['--sc-border-subtle'] = `color-mix(in srgb, ${text} 10%, transparent)`;
-      vars['--sc-border-strong'] = `color-mix(in srgb, ${text} 18%, transparent)`;
-    }
-  }
-  if (tc.textColor) {
-    const bg = tc.backgroundColor || 'var(--sc-surface-base)';
-    vars['--sc-text-primary'] = tc.textColor;
-    vars['--sc-prose-fg'] = tc.textColor;
-    vars['--sc-fg'] = tc.textColor;
-    if (!tc.secondaryColor) {
-      vars['--sc-text-secondary'] = `color-mix(in srgb, ${tc.textColor} 80%, ${bg})`;
-      vars['--sc-text-muted'] = `color-mix(in srgb, ${tc.textColor} 62%, ${bg})`;
-      vars['--sc-muted'] = vars['--sc-text-muted'];
-    }
-  }
+  vars['--sc-surface-base'] = background;
+  vars['--sc-surface-raised'] = `color-mix(in srgb, ${background} 94%, ${text})`;
+  vars['--sc-surface-overlay'] = `color-mix(in srgb, ${background} 88%, ${text})`;
+  vars['--sc-prose-bg'] = background;
+  vars['--sc-bg'] = background;
+  if (highContrast) return;
+  vars['--sc-border-subtle'] = `color-mix(in srgb, ${text} 10%, transparent)`;
+  vars['--sc-border-strong'] = `color-mix(in srgb, ${text} 18%, transparent)`;
+}
+
+function addText(vars: Record<string, string>, tc: ThemeCustomization): void {
+  const background = tc.backgroundColor || 'var(--sc-surface-base)';
+  vars['--sc-text-primary'] = tc.textColor;
+  vars['--sc-prose-fg'] = tc.textColor;
+  vars['--sc-fg'] = tc.textColor;
+  if (tc.secondaryColor) return;
+  vars['--sc-text-secondary'] = `color-mix(in srgb, ${tc.textColor} 80%, ${background})`;
+  vars['--sc-text-muted'] = `color-mix(in srgb, ${tc.textColor} 62%, ${background})`;
+  vars['--sc-muted'] = vars['--sc-text-muted'];
 }
 
 /**
@@ -165,7 +153,10 @@ export function buildThemeOverrides(
     vars['--nav-border-active'] = tc.accentColor;
     vars['--sc-selection-bg'] = `color-mix(in srgb, ${tc.accentColor} 35%, transparent)`;
   }
-  addSurfaces(vars, tc, highContrast);
+  if (tc.backgroundColor) {
+    addBackground(vars, tc.backgroundColor, tc.textColor || 'var(--sc-text-primary)', highContrast);
+  }
+  if (tc.textColor) addText(vars, tc);
   return vars;
 }
 

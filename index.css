@@ -8,6 +8,10 @@
 
 /* ── Theme: semantic tokens (QNBS-v3: DS foundation, FOUC-safe defaults on :root) ── */
 :root {
+  /* QNBS-v3 (#702): theme-agnostic text colors for a user-chosen accent, and the shade used to darken it on hover. */
+  --sc-on-accent-light: #ffffff;
+  --sc-on-accent-dark: #0f172a;
+  --sc-shade: #000000;
   /* Motion & stacking — theme-agnostic */
   --sc-duration-fast: 150ms;
   --sc-duration-normal: 280ms;

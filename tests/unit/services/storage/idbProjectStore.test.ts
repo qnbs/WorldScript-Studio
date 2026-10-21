@@ -45,7 +45,15 @@ describe('idbProjectStore', () => {
         backgroundColor: '',
         textColor: '',
         customCss: ' .a { color: red; }',
+        legacyDefaultsCleared: true,
       });
+    });
+
+    it('keeps a former default color once the migration has run', () => {
+      const result = normalizePersistedSettings({
+        themeCustomization: { primaryColor: '#3b82f6', legacyDefaultsCleared: true },
+      });
+      expect(result.themeCustomization.primaryColor).toBe('#3b82f6');
     });
 
     it('migrates a legacy/invalid appearancePreset value to the current default', () => {
