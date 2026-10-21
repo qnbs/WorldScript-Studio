@@ -27,7 +27,7 @@ This project follows the [Contributor Covenant Code of Conduct](.github/CODE_OF_
 ### Prerequisites
 
 - **Node.js** ≥ 22.19 (see [`.nvmrc`](.nvmrc); matches `engines` in [`package.json`](package.json))
-- **pnpm** ≥ 11 (see `packageManager` in `package.json`; recommended via **Corepack**, ships with Node)
+- **pnpm** exactly the `packageManager` pin in `package.json` (currently 12.13.0; `engineStrict` rejects any other version; recommended via **Corepack**, ships with Node)
 - A **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/app/apikey) (optional if using **Ollama** in the desktop app only)
 
 ### Windows: Node, Corepack, and pnpm
