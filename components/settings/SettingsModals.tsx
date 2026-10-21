@@ -1,7 +1,5 @@
 import type { FC } from 'react';
-import { useCallback } from 'react';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
-import { useRestoreDefaultSettings } from '../../hooks/useRestoreDefaultSettings';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Modal } from '../ui/Modal';
@@ -12,6 +10,7 @@ export const SettingsModals: FC = () => {
     modal,
     setModal,
     handleResetProject,
+    handleRestoreDefaultSettings,
     handleFactoryReset,
     snapshotName,
     setSnapshotName,
@@ -20,8 +19,6 @@ export const SettingsModals: FC = () => {
     handleDeleteSnapshot,
     currentWordCount,
   } = useSettingsViewContext();
-  const closeModal = useCallback(() => setModal({ state: 'closed', payload: {} }), [setModal]);
-  const handleRestoreDefaultSettings = useRestoreDefaultSettings(closeModal);
 
   if (modal.state === 'closed') return null;
 

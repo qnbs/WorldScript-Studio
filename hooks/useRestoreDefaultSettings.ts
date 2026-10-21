@@ -1,20 +1,22 @@
 import { useCallback } from 'react';
-import { useAppDispatch } from '../app/hooks';
-import { useToast } from '../components/ui/Toast';
+import type { AppDispatch } from '../app/store';
+import type { useToast } from '../components/ui/Toast';
 import { settingsActions } from '../features/settings/settingsSlice';
-import { useTranslation } from './useTranslation';
 
 /**
  * Settings → Data → Restore default settings (#818): resets the settings slice (projects, API keys
- * and the privacy-relevant choices are kept, see settingsSlice.resetToDefaults), then confirms.
+ * and the privacy-relevant choices are kept, see settingsSlice.resetToDefaults), closes the dialog
+ * and confirms. Dependencies come from useSettingsView, which already owns them.
  */
-export function useRestoreDefaultSettings(onDone: () => void): () => void {
-  const dispatch = useAppDispatch();
-  const toast = useToast();
-  const { t } = useTranslation();
+export function useRestoreDefaultSettings(
+  dispatch: AppDispatch,
+  toast: ReturnType<typeof useToast>,
+  t: (key: string) => string,
+  setModal: (next: { state: 'closed'; payload: Record<string, never> }) => void,
+): () => void {
   return useCallback(() => {
     dispatch(settingsActions.resetToDefaults());
-    onDone();
+    setModal({ state: 'closed', payload: {} });
     toast.success(t('settings.data.dangerZone.settingsReset.done'));
-  }, [dispatch, onDone, toast, t]);
+  }, [dispatch, toast, t, setModal]);
 }

@@ -26,10 +26,6 @@ let mockModal: { state: string; payload: Record<string, unknown> } = {
 };
 let mockSnapshotName = '';
 
-vi.mock('../../../hooks/useRestoreDefaultSettings', () => ({
-  useRestoreDefaultSettings: () => mockHandleRestoreDefaultSettings,
-}));
-
 vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => ({
     t: (k: string, args?: Record<string, string>) => (args ? `${k}:${JSON.stringify(args)}` : k),
@@ -42,6 +38,7 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
     handleRestoreSnapshot: mockHandleRestoreSnapshot,
     handleDeleteSnapshot: mockHandleDeleteSnapshot,
     handleFactoryReset: mockHandleFactoryReset,
+    handleRestoreDefaultSettings: mockHandleRestoreDefaultSettings,
     currentWordCount: 1500,
   }),
 }));

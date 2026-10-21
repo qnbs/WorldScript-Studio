@@ -54,6 +54,7 @@ import type {
   WritingGoal,
   WritingSurfaceStyle,
 } from '../types';
+import { useRestoreDefaultSettings } from './useRestoreDefaultSettings';
 
 type ModalState =
   | 'closed'
@@ -365,6 +366,7 @@ export const useSettingsView = () => {
     setModal({ state: 'closed', payload: {} });
   }, [dispatch, t]);
 
+  const handleRestoreDefaultSettings = useRestoreDefaultSettings(dispatch, toast, t, setModal);
   const handleFactoryReset = useCallback(async () => {
     setModal({ state: 'closed', payload: {} });
     await performFactoryReset(t, toast);
@@ -469,6 +471,7 @@ export const useSettingsView = () => {
       handleExport,
       handleImport,
       handleResetProject,
+      handleRestoreDefaultSettings,
       handleFactoryReset,
       handleRepeatOnboarding,
       handleCreateSnapshot,
@@ -498,6 +501,7 @@ export const useSettingsView = () => {
       handleExport,
       handleImport,
       handleResetProject,
+      handleRestoreDefaultSettings,
       handleFactoryReset,
       handleRepeatOnboarding,
       handleCreateSnapshot,
