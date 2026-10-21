@@ -26,6 +26,9 @@ module.exports = {
         // QNBS-v3: same /dev/shm crash hardening as the mobile config (.lighthouserc.cjs) —
         // --disable-dev-shm-usage prevents the "Execution context was destroyed" CI flake.
         chromeFlags: '--no-sandbox --disable-dev-shm-usage --disable-gpu',
+        // QNBS-v3: one NO_FCP run aborts all of lhci autorun; a cold first run after VRT missed the default 30 s paint wait.
+        maxWaitForFcp: 90_000,
+        maxWaitForLoad: 120_000,
         preset: 'desktop',
         throttlingMethod: 'simulate',
       },

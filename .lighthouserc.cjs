@@ -26,6 +26,9 @@ module.exports = {
         // whole `lhci autorun` (numberOfRuns can't recover a crashed run). --no-sandbox/--disable-gpu
         // are standard headless-CI hygiene.
         chromeFlags: '--no-sandbox --disable-dev-shm-usage --disable-gpu',
+        // QNBS-v3: one NO_FCP run aborts all of lhci autorun; a cold first run after VRT missed the default 30 s paint wait.
+        maxWaitForFcp: 90_000,
+        maxWaitForLoad: 120_000,
         emulatedFormFactor: 'mobile',
         throttlingMethod: 'simulate',
         screenEmulation: {
