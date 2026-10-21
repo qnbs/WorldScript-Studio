@@ -212,13 +212,13 @@ describe('settingsSlice', () => {
       settingsActions.setAdvancedAi({
         provider: 'openai',
         model: 'gpt-4o-mini',
-        rateLimit: 30,
+        maxTokens: 2048,
       }),
     );
 
     expect(state.advancedAi.provider).toBe('openai');
     expect(state.advancedAi.model).toBe('gpt-4o-mini');
-    expect(state.advancedAi.rateLimit).toBe(30);
+    expect(state.advancedAi.maxTokens).toBe(2048);
     expect(state.advancedAi.temperature).toBe(0.7);
   });
 
