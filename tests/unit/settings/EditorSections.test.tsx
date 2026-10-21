@@ -159,6 +159,16 @@ describe('AdvancedEditorSection', () => {
     expect(screen.getByText('settings.advancedEditor.nativeSpellCheckHint')).toBeInTheDocument();
   });
 
+  it('shows browser spell check as off for settings saved before the field existed', () => {
+    settingsRef.current = {
+      advancedEditor: { ...makeSettings().advancedEditor, nativeSpellCheck: undefined },
+    };
+    render(<AdvancedEditorSection />);
+    expect(
+      screen.getByRole('switch', { name: 'settings.advancedEditor.nativeSpellCheck' }),
+    ).toHaveAttribute('aria-checked', 'false');
+  });
+
   it('no longer offers the auto-complete and grammar toggles that had no effect (#818)', () => {
     render(<AdvancedEditorSection />);
     expect(screen.queryByText('settings.advancedEditor.autoComplete')).not.toBeInTheDocument();
