@@ -139,11 +139,15 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * Default value for one settings group (#818). Fields this version does not know, e.g. from a
- * newer client, stay as stored (preserve-first); every known field takes its default.
+ * newer client, stay as stored (preserve-first); every known field takes its default. A stored
+ * value that should be a group but is not (malformed) is kept untouched: the runtime never applies
+ * it, and a reset must not silently replace data it cannot interpret.
  */
 function resetGroup(current: unknown, fallback: unknown): unknown {
   const fresh: unknown = structuredClone(fallback);
-  if (!isPlainRecord(current) || !isPlainRecord(fresh)) return fresh;
+  if (!isPlainRecord(fresh)) return fresh;
+  if (current !== undefined && !isPlainRecord(current)) return current;
+  if (!isPlainRecord(current)) return fresh;
   const unknownFields = Object.entries(current).filter(([key]) => !(key in fresh));
   return { ...Object.fromEntries(unknownFields), ...fresh };
 }

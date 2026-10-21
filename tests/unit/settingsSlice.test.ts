@@ -436,4 +436,13 @@ describe('settingsSlice', () => {
     );
     expect(settingsReducer(state, settingsActions.resetToDefaults()).customFont).toBeUndefined();
   });
+
+  it('resetToDefaults keeps a malformed stored group untouched (preserve-first)', () => {
+    const state = { ...initState(), themeCustomization: 'broken' } as unknown as ReturnType<
+      typeof initState
+    >;
+    const reset = settingsReducer(state, settingsActions.resetToDefaults());
+    expect(reset.themeCustomization as unknown).toBe('broken');
+    expect(reset.fontSize).toBe(initState().fontSize);
+  });
 });

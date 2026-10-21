@@ -50,6 +50,11 @@ const baseContextValue = {
   currentWordCount: 0,
 };
 
+// The restore-defaults hook needs the toast provider; the modal itself is covered in SettingsModals.test.tsx.
+vi.mock('../../hooks/useRestoreDefaultSettings', () => ({
+  useRestoreDefaultSettings: () => vi.fn(),
+}));
+
 vi.mock('../../hooks/useSettingsView', () => ({
   useSettingsView: vi.fn(() => baseContextValue),
 }));
