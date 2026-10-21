@@ -350,8 +350,35 @@ qualified by the required GitHub Actions checks: `CI Success`, which requires
 workflow policy, PR size, security, signatures, quality, build, E2E, browser
 quality and the path-scoped Rust gates, plus CodeQL. Storybook and the deep
 E2E matrix run as advisory jobs. No required check depends on a Vercel Preview.
-Production builds of `main` and Previews of every other branch are unchanged.
+Production builds of `main` are unchanged.
 A PR without a Preview simply has an empty protected set (`min(3, available)`).
+
+### Previews on demand (from 2026-10-21)
+
+On 2026-10-21 the project ran about 75 builds in one day. The causes were correction waves (one
+push per finding) and the strict merge cascade (each merge updates every open PR). The owner chose
+on-demand Previews. `vercel.json` `ignoreCommand` runs `scripts/vercel-ignore-build.mjs` (exit 1
+builds, exit 0 skips).
+
+- **Production** always builds.
+- **A Preview builds** in three cases:
+  - on the branch's first deployment (no `VERCEL_GIT_PREVIOUS_SHA`);
+  - when the commit message contains `[preview]`;
+  - when a deployment input changed since the branch's last successful deployment: `vercel.json`,
+    `vite.config.*`, `package.json`, `packages/*/package.json`, `patches/**`, `pnpm-lock.yaml`,
+    `pnpm-workspace.yaml`, `.npmrc`, `.nvmrc`, the edge
+    build scripts (`build-edge`, `runtime-asset-steps`, `sync-deploy-base`, `resolve-deploy-base`,
+    `dependency-state`, `copy-*`), `config/resolveViteBase.ts`, the ignore step `vercel-ignore-build.mjs` itself, or `api/**`. Renames count under
+    both paths (`git diff --no-renames`).
+- **Unknown state builds (fail-open):** a missing or non-SHA previous commit, or a previous commit
+  outside Vercel's shallow clone, builds the Preview.
+- **What it saves:** a skipped build still creates a canceled deployment, so this saves build
+  minutes, not the deployment count. Only `git.deploymentEnabled` above prevents deployments.
+- **Verifying a Preview** (e.g. a runtime-asset fix): push a commit whose message contains
+  `[preview]`.
+
+The nightly record pruner keeps the newest three Vercel records per environment (ten until
+2026-10-21), plus `main` and every open PR head; see `docs/PAGES-DEPLOYMENT-RECORD-PRUNING.md`.
 
 ## Protected state
 
