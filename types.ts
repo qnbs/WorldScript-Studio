@@ -508,11 +508,6 @@ export interface AdvancedAiSettings {
   provider: AIProvider;
   temperature: number;
   maxTokens: number;
-  topP: number;
-  frequencyPenalty: number;
-  presencePenalty: number;
-  customPrompts: Record<string, string>;
-  rateLimit: number; // requests per minute
   ollamaBaseUrl: string;
   /** Preset for local /v1 servers; switching sets the typical base URL (custom = manual URL). */
   localBackendPreset: LocalBackendPreset;
