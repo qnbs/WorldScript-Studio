@@ -48,12 +48,26 @@ const FIELDS: Record<ThemeColorKey, { id: string; label: string; hint: string; t
   },
 };
 
-/** Current theme value of a token as #rrggbb, so an unset color input starts at what the user sees. */
+function rgbToHex(rgb: string): string {
+  const channels = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgb)?.slice(1, 4) ?? [];
+  if (channels.length !== 3) return '';
+  return `#${channels.map((c) => Number(c).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * Current theme value of a token as #rrggbb, so an unset color input starts at what the user sees.
+ * The browser resolves var()/color-mix() through a probe element; an unresolvable value yields ''
+ * (the color input then shows its own default).
+ */
 function readTokenHex(token: string): string {
   const value = getComputedStyle(document.body).getPropertyValue(token).trim().toLowerCase();
   if (isHexColor(value)) return value;
-  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(value);
-  return short ? `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}` : '#000000';
+  const probe = document.createElement('span');
+  probe.style.color = `var(${token})`;
+  document.body.appendChild(probe);
+  const resolved = getComputedStyle(probe).color;
+  probe.remove();
+  return rgbToHex(resolved);
 }
 
 // QNBS-v3 (#702): a background without a text color gets contrast-safe text at runtime, so only an explicit text color can be too faint.
