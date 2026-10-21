@@ -1151,6 +1151,58 @@ describe('testAIConnection', () => {
     expect(result.params).toEqual({ provider: 'Gemini' });
   });
 
+  describe('gemini key transport (#1129)', () => {
+    const FAKE_KEY = 'fake-gemini-key-0000';
+    afterEach(() => vi.unstubAllGlobals());
+
+    function stubFetch(response: Response | Error) {
+      const fetchMock = vi.fn(async () => {
+        if (response instanceof Error) throw response;
+        return response;
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    }
+
+    it('sends the key in the x-goog-api-key header, never in the URL', async () => {
+      vi.mocked(storageService.getGeminiApiKey).mockResolvedValueOnce(FAKE_KEY);
+      const fetchMock = stubFetch(new Response('{"models":[]}', { status: 200 }));
+
+      expect(await testAIConnection('gemini', {})).toEqual({ ok: true });
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/models');
+      expect(url).not.toContain(FAKE_KEY);
+      expect(init.headers).toEqual({ 'x-goog-api-key': FAKE_KEY });
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it.each([401, 403, 429])('maps HTTP %i to httpError without the key', async (status) => {
+      vi.mocked(storageService.getGeminiApiKey).mockResolvedValueOnce(FAKE_KEY);
+      stubFetch(new Response('denied', { status }));
+
+      const result = await testAIConnection('gemini', {});
+      expect(result).toMatchObject({ ok: false, kind: 'httpError', params: { status } });
+      expect(JSON.stringify(result)).not.toContain(FAKE_KEY);
+    });
+
+    it('a timeout or network failure carries no key in the result', async () => {
+      vi.mocked(storageService.getGeminiApiKey).mockResolvedValueOnce(FAKE_KEY);
+      stubFetch(new DOMException('The operation timed out.', 'TimeoutError'));
+
+      const result = await testAIConnection('gemini', {});
+      expect(result.ok).toBe(false);
+      expect(JSON.stringify(result)).not.toContain(FAKE_KEY);
+    });
+
+    it('an empty key makes no request', async () => {
+      vi.mocked(storageService.getGeminiApiKey).mockResolvedValueOnce('');
+      const fetchMock = stubFetch(new Response('{}', { status: 200 }));
+
+      expect((await testAIConnection('gemini', {})).kind).toBe('noApiKey');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
   it('returns ok:false for unknown provider', async () => {
     const result = await testAIConnection('unknown' as never, {});
     expect(result.ok).toBe(false);

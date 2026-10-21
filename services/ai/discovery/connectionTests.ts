@@ -194,10 +194,11 @@ export async function testAIConnection(
             params: { provider: 'Gemini' },
           };
         }
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`,
-          { signal: AbortSignal.timeout(8000) },
-        );
+        // QNBS-v3 (#1129): the key travels in Google's `x-goog-api-key` header, never in the URL.
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+          headers: { 'x-goog-api-key': geminiKey },
+          signal: AbortSignal.timeout(8000),
+        });
         if (!res.ok) {
           return {
             ok: false,
