@@ -599,6 +599,8 @@ export interface ThemeCustomization {
   backgroundColor: string;
   textColor: string;
   customCss: string;
+  /** Set once the #702 migration cleared the never-applied legacy defaults. */
+  legacyDefaultsCleared?: boolean;
 }
 
 // ── Voice Full Support (opt-in) ──────────────────────────────────────────────

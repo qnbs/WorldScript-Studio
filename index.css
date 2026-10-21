@@ -8,6 +8,11 @@
 
 /* ── Theme: semantic tokens (QNBS-v3: DS foundation, FOUC-safe defaults on :root) ── */
 :root {
+  /* QNBS-v3 (#702): theme-agnostic text colors for a user-chosen accent or background (black only where the softer dark text misses 4.5:1), and the shade used to darken it on hover. */
+  --sc-on-accent-light: #ffffff;
+  --sc-on-accent-dark: #0f172a;
+  --sc-on-accent-black: #000000;
+  --sc-shade: #000000;
   /* Motion & stacking — theme-agnostic */
   --sc-duration-fast: 150ms;
   --sc-duration-normal: 280ms;
@@ -78,6 +83,8 @@
   /* QNBS-v3: #94a3b8 = 7.97:1 on #020617 (AAA) / 5.83:1 on #0f172a (AA) — upgraded from #64748b for WCAG 2.2 AAA goal */
   --sc-text-muted: #94a3b8;
   --sc-text-on-accent: #ffffff;
+  /* QNBS-v3 (#702): label color on fixed status fills (danger/success/warning); a custom primary changes --sc-text-on-accent only. Dark text here: the dark theme's status fills are bright. */
+  --sc-text-on-status: #0f172a;
   --sc-accent: #6366f1;
   --sc-accent-hover: #4f46e5;
   --sc-accent-subtle: rgba(99, 102, 241, 0.12);
@@ -157,6 +164,7 @@
   /* QNBS-v3: #4b5563 = 7.39:1 on #ffffff (AAA) / 6.77:1 on #f1f5f9 (AA+) — upgraded from #64748b for WCAG 2.2 AAA goal */
   --sc-text-muted: #4b5563;
   --sc-text-on-accent: #ffffff;
+  --sc-text-on-status: #ffffff;
   --sc-accent: #4f46e5;
   --sc-accent-hover: #4338ca;
   /* QNBS-v3: WCAG 2 AA fix — 0.12 opacity gives 4.5:1 contrast on #ffffff when used as bg with text-[var(--sc-accent)] */
@@ -312,6 +320,7 @@
   --sc-text-muted: #b38a64;
   /* QNBS-v3: amber accent is bright; dark text on #f59e0b = 9.1:1 AAA, on hover #d97706 = 6.1:1 AA */
   --sc-text-on-accent: #1c1308;
+  --sc-text-on-status: #1c1308;
 
   /* Accent — candlelight amber */
   --sc-accent: #f59e0b;
@@ -390,6 +399,11 @@
   --sc-heat-2: #fde047;
   --sc-heat-3: #facc15;
   --sc-heat-4: #d97706;
+}
+
+/* QNBS-v3 (#702): highlight color from Settings → Appearance → Theme customization; only active when the user sets one. */
+body[data-custom-highlight] ::selection {
+  background-color: var(--sc-selection-bg);
 }
 
 /* High contrast — user toggle + system preference */

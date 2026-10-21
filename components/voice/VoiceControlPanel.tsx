@@ -112,7 +112,7 @@ export const VoiceControlPanel = React.memo(function VoiceControlPanel() {
         onClick={handleToggleDictation}
         className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
           dictationActive
-            ? 'bg-[var(--sc-success-fg)] text-[var(--sc-text-on-accent)]'
+            ? 'bg-[var(--sc-success-fg)] text-[var(--sc-text-on-status)]'
             : 'bg-[var(--sc-surface-subtle)] text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-hover)]'
         }`}
         aria-pressed={dictationActive}
