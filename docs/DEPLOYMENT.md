@@ -43,6 +43,7 @@ gh run view <run-id> --log-failed
    - **Build:** `pnpm run build:edge`
    - **Output:** `dist`
 3. **Node.js** ≥ 22.19 (Project Settings → General; matches `engines` in `package.json`).
+   **pnpm:** set `ENABLE_EXPERIMENTAL_COREPACK=1` (Preview and Production) so Vercel runs exactly the `packageManager` pin. Vercel's bundled pnpm does not switch versions because `pnpm-workspace.yaml` sets `pmOnFail: ignore`, and the install step (`dependency-state.mjs reconcile`) refuses any other pnpm.
 4. **Environment variables (optional):** `DEPLOY_TARGET=edge` — redundant if using `build:edge`; do **not** add AI API keys for end users.
 5. SPA routing: `rewrites` in `vercel.json` → `index.html`.
 6. **Preview deployments:** enabled per branch/PR by default.

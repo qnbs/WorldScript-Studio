@@ -59,7 +59,9 @@ function normalizeLineEndings(content) {
 // QNBS-v3: shared by both the filesystem and git-ref fingerprint paths so they can never drift.
 function hashManifests(entries) {
   const hash = createHash('sha256');
-  for (const [relativePath, content] of [...entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+  for (const [relativePath, content] of [...entries].sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  )) {
     hash.update(`${relativePath}\0`);
     // QNBS-v3: normalizes a core.autocrlf checkout vs. the LF-stored git blob to the same bytes.
     hash.update(normalizeLineEndings(content));
@@ -114,10 +116,12 @@ function defaultReadFileAtRef(sha, relativePath, cwd) {
 
 // QNBS-v3: diagnostic-only; reads localSha's committed manifests via git objects, no worktree.
 export function calculateDependencyFingerprintFromRef(sha, root = projectRoot, dependencies = {}) {
-  const listFiles = dependencies.dependencyFilesFromRef ?? (() => dependencyFilesFromRef(sha, root, dependencies));
+  const listFiles =
+    dependencies.dependencyFilesFromRef ?? (() => dependencyFilesFromRef(sha, root, dependencies));
   const files = listFiles(sha);
   if (files === null) return null;
-  const readContent = dependencies.readFileAtRef ?? ((path) => defaultReadFileAtRef(sha, path, root));
+  const readContent =
+    dependencies.readFileAtRef ?? ((path) => defaultReadFileAtRef(sha, path, root));
   const entries = [];
   for (const relativePath of files) {
     const content = readContent(relativePath);
@@ -182,7 +186,28 @@ export function verifyDependencyState(root = projectRoot) {
   return current;
 }
 
+// QNBS-v3: any host pnpm (e.g. a build platform's bundled one) must match the exact packageManager pin before installing.
+export function pnpmPinMismatch(packageManager, runningVersion) {
+  const pinned = /^pnpm@(\d+\.\d+\.\d+)$/.exec(packageManager ?? '')?.[1];
+  if (!pinned) return 'package.json must pin packageManager to pnpm@<exact-version>.';
+  if (runningVersion === pinned) return null;
+  return `pnpm ${pinned} is required by packageManager; found ${runningVersion || 'no pnpm'}.`;
+}
+
+function assertPinnedPnpm(root) {
+  const { packageManager } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const result = spawnSync('pnpm', ['--version'], {
+    cwd: root,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
+  if (result.error) throw result.error;
+  const mismatch = pnpmPinMismatch(packageManager, result.stdout.trim());
+  if (mismatch) throw new Error(mismatch);
+}
+
 function reconcile(root = projectRoot) {
+  assertPinnedPnpm(root);
   const nodeModules = join(root, 'node_modules');
   mkdirSync(nodeModules, { recursive: true });
   const lockPath = join(nodeModules, '.worldscript-deps-reconcile.lock');
