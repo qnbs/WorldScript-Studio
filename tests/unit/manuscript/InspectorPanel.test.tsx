@@ -14,9 +14,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockDispatch = vi.fn();
 
+let mockWritingStats: boolean | undefined = true;
+
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => mockDispatch),
-  useAppSelector: vi.fn(() => []), // sectionSnapshots = []
+  // sectionSnapshots = [] (selectCurrentBranchSnapshots is mocked); settings drive the stats card.
+  useAppSelector: vi.fn((selector: (state: unknown) => unknown) =>
+    selector({ settings: { advancedEditor: { writingStats: mockWritingStats } } }),
+  ),
 }));
 
 vi.mock('../../../features/versionControl/versionControlSlice', () => ({
@@ -155,6 +160,13 @@ describe('InspectorPanel', () => {
   it('renders stats section', () => {
     render(<InspectorPanel />);
     expect(screen.getByText('manuscript.inspector.statsTitle')).toBeInTheDocument();
+  });
+
+  it('hides the stats section when Writing Statistics is off (#818)', () => {
+    mockWritingStats = false;
+    render(<InspectorPanel />);
+    expect(screen.queryByText('manuscript.inspector.statsTitle')).not.toBeInTheDocument();
+    mockWritingStats = true;
   });
 
   it('renders word count stat', () => {
