@@ -445,4 +445,15 @@ describe('settingsSlice', () => {
     expect(reset.themeCustomization as unknown).toBe('broken');
     expect(reset.fontSize).toBe(initState().fontSize);
   });
+
+  it('resetToDefaults keeps a choice value from a newer client, resets known ones', () => {
+    const state = {
+      ...initState(),
+      writingSurfaceStyle: 'future-surface',
+      appearancePreset: 'sepia',
+    } as unknown as ReturnType<typeof initState>;
+    const reset = settingsReducer(state, settingsActions.resetToDefaults());
+    expect(reset.writingSurfaceStyle as string).toBe('future-surface');
+    expect(reset.appearancePreset).toBe(initState().appearancePreset);
+  });
 });

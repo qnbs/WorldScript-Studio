@@ -131,6 +131,21 @@ export { defaultDesktopSettings, defaultVoiceSettings };
 // QNBS-v3: exported so components + IDB rehydration can backfill missing nested objects
 // (older persisted settings lacked advancedEditor/themeCustomization → page crash on read).
 export const defaultAdvancedEditorSettings = defaultSettings.advancedEditor;
+// Choice settings whose values this version knows; a stored value outside the list comes from a newer client.
+const KNOWN_CHOICES: Readonly<Record<string, readonly string[]>> = {
+  theme: ['dark', 'light', 'auto'],
+  appearancePreset: ['default', 'sepia'],
+  writingSurfaceStyle: ['textured', 'plain'],
+  editorFont: ['serif', 'sans-serif', 'monospace', 'custom'],
+  aiCreativity: ['Focused', 'Balanced', 'Imaginative'],
+};
+
+/** An unsupported stored choice (e.g. a newer client's writing surface) stays as stored on reset (preserve-first). */
+function isUnsupportedChoice(key: string, value: unknown): boolean {
+  const known = KNOWN_CHOICES[key];
+  return known !== undefined && typeof value === 'string' && !known.includes(value);
+}
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -172,6 +187,7 @@ const settingsSlice = createSlice({
       };
       const target = state as unknown as Record<string, unknown>;
       for (const [key, value] of Object.entries(defaultSettings)) {
+        if (isUnsupportedChoice(key, target[key])) continue;
         target[key] = resetGroup(target[key], value);
       }
       // A known setting without a default: the reset returns the editor to the built-in fonts.
