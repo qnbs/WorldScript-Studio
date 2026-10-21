@@ -327,7 +327,7 @@ describe('settingsSlice', () => {
 
     expect(state.advancedEditor.focusMode).toBe(true);
     expect(state.advancedEditor.customDictionary).toEqual(['worldscript', 'worldbuilding']);
-    expect(state.advancedEditor.autoComplete).toBe(true);
+    expect(state.advancedEditor.nativeSpellCheck).toBe(false);
   });
 
   it('setThemeCustomization merges theme customization settings', () => {
