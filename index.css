@@ -83,8 +83,8 @@
   /* QNBS-v3: #94a3b8 = 7.97:1 on #020617 (AAA) / 5.83:1 on #0f172a (AA) — upgraded from #64748b for WCAG 2.2 AAA goal */
   --sc-text-muted: #94a3b8;
   --sc-text-on-accent: #ffffff;
-  /* QNBS-v3 (#702): label color on fixed status fills (danger/success/warning); a custom primary changes --sc-text-on-accent only. */
-  --sc-text-on-status: #ffffff;
+  /* QNBS-v3 (#702): label color on fixed status fills (danger/success/warning); a custom primary changes --sc-text-on-accent only. Dark text here: the dark theme's status fills are bright. */
+  --sc-text-on-status: #0f172a;
   --sc-accent: #6366f1;
   --sc-accent-hover: #4f46e5;
   --sc-accent-subtle: rgba(99, 102, 241, 0.12);
