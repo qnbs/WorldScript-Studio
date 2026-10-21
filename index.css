@@ -392,6 +392,11 @@
   --sc-heat-4: #d97706;
 }
 
+/* QNBS-v3 (#702): highlight color from Settings → Appearance → Theme customization; only active when the user sets one. */
+body[data-custom-highlight] ::selection {
+  background-color: var(--sc-selection-bg);
+}
+
 /* High contrast — user toggle + system preference */
 .accessibility-high-contrast {
   /* QNBS-v3: DS-5 — use sc-* token directly; --foreground-primary bridge alias removed. */

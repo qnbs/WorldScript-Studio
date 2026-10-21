@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { RTL_LOCALES } from '../contexts/I18nContext';
 import type { Language } from '../i18n/locales';
-import type { Settings } from '../types';
+import { buildThemeOverrides, normalizeThemeCustomization } from '../services/themeCustomization';
+import type { Settings, ThemeCustomization } from '../types';
 
 export interface UseAppearanceBodyClassesParams {
   settings: Settings;
@@ -15,6 +16,7 @@ export interface UseAppearanceBodyClassesParams {
 export function useAppearanceBodyClasses(params: UseAppearanceBodyClassesParams): void {
   const { settings, isPortalActive, language, enableRtlLayout } = params;
   useThemeClass(settings.theme, settings.appearancePreset);
+  useThemeCustomization(settings.themeCustomization, settings.accessibility.highContrast);
   useSepiaClass(settings.appearancePreset);
   usePortalActiveClass(isPortalActive);
   useWritingSurfacePlainClass(settings.writingSurfaceStyle);
@@ -26,10 +28,14 @@ export function useAppearanceBodyClasses(params: UseAppearanceBodyClassesParams)
   useDocumentLocale(language, enableRtlLayout);
 }
 
+// QNBS-v3 (#702): set by the customization effect so the auto-theme listener keeps a custom background in the browser chrome.
+let customThemeColor: string | null = null;
+
 function resolveThemeColor(
   appearancePreset: Settings['appearancePreset'],
   isDark: boolean,
 ): string {
+  if (customThemeColor) return customThemeColor;
   if (appearancePreset === 'sepia') return isDark ? '#1c1308' : '#f4ecd8';
   return isDark ? '#020617' : '#ffffff';
 }
@@ -64,6 +70,53 @@ function useThemeClass(
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, [theme, appearancePreset]);
+}
+
+const USER_CSS_ELEMENT_ID = 'worldscript-user-css';
+const appliedThemeVars = new Set<string>();
+
+function applyUserCss(css: string): void {
+  let element = document.getElementById(USER_CSS_ELEMENT_ID) as HTMLStyleElement | null;
+  if (css.trim() === '') {
+    element?.remove();
+    return;
+  }
+  if (!element) {
+    element = document.createElement('style');
+    element.id = USER_CSS_ELEMENT_ID;
+    document.head.appendChild(element);
+  }
+  // QNBS-v3 (#702): textContent only — never parsed as HTML, and CSP (style-src/img-src/font-src) still blocks remote loads.
+  element.textContent = css;
+}
+
+function applyThemeCustomization(customization: ThemeCustomization, highContrast: boolean): void {
+  const vars = buildThemeOverrides(customization, { highContrast });
+  const style = document.body.style;
+  for (const name of appliedThemeVars) {
+    if (!(name in vars)) style.removeProperty(name);
+  }
+  appliedThemeVars.clear();
+  for (const [name, value] of Object.entries(vars)) {
+    style.setProperty(name, value);
+    appliedThemeVars.add(name);
+  }
+  document.body.toggleAttribute('data-custom-highlight', customization.accentColor !== '');
+  customThemeColor = customization.backgroundColor || null;
+  if (customThemeColor) {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', customThemeColor);
+  }
+  applyUserCss(customization.customCss);
+}
+
+// QNBS-v3 (#702/#818): inline body tokens outrank the theme/preset classes and survive class switches; the browser-chrome color follows via customThemeColor.
+function useThemeCustomization(
+  themeCustomization: Settings['themeCustomization'] | undefined,
+  highContrast: boolean,
+): void {
+  useEffect(() => {
+    applyThemeCustomization(normalizeThemeCustomization(themeCustomization), highContrast);
+  }, [themeCustomization, highContrast]);
 }
 
 // QNBS-v3: Appearance presets → body class (pairs with index.css tokens).

@@ -234,3 +234,79 @@ describe('useAppearanceBodyClasses — locale', () => {
     expect(document.documentElement.dir).toBe('rtl');
   });
 });
+
+describe('theme customization (#702)', () => {
+  const custom = (overrides: Partial<Settings['themeCustomization']>) =>
+    ({
+      ...buildSettings(),
+      themeCustomization: {
+        primaryColor: '',
+        secondaryColor: '',
+        accentColor: '',
+        backgroundColor: '',
+        textColor: '',
+        customCss: '',
+        ...overrides,
+      },
+    }) as unknown as TestSettings;
+
+  afterEach(() => {
+    document.body.removeAttribute('style');
+    document.body.removeAttribute('data-custom-highlight');
+    document.getElementById('worldscript-user-css')?.remove();
+  });
+
+  it('applies custom colors as body-level design tokens and removes them on reset', () => {
+    const { rerender } = renderWith(
+      custom({ primaryColor: '#1e3a8a', backgroundColor: '#fefae0' }),
+    );
+    expect(document.body.style.getPropertyValue('--sc-accent')).toBe('#1e3a8a');
+    expect(document.body.style.getPropertyValue('--sc-bg')).toBe('#fefae0');
+    rerender({ s: custom({}), portal: false, lang: 'en', rtl: false });
+    expect(document.body.style.getPropertyValue('--sc-accent')).toBe('');
+    expect(document.body.style.getPropertyValue('--sc-bg')).toBe('');
+  });
+
+  it('ignores the legacy defaults that were persisted before the fix', () => {
+    renderWith(custom({ primaryColor: '#3b82f6', backgroundColor: '#0f172a' }));
+    expect(document.body.style.getPropertyValue('--sc-accent')).toBe('');
+    expect(document.body.style.getPropertyValue('--sc-surface-base')).toBe('');
+  });
+
+  it('keeps borders and focus rings for high contrast', () => {
+    renderWith({
+      ...custom({ primaryColor: '#1e3a8a', backgroundColor: '#ffffff' }),
+      accessibility: { ...baseAccessibility, highContrast: true },
+    });
+    expect(document.body.style.getPropertyValue('--sc-accent')).toBe('#1e3a8a');
+    expect(document.body.style.getPropertyValue('--sc-border-focus')).toBe('');
+    expect(document.body.style.getPropertyValue('--sc-border-subtle')).toBe('');
+  });
+
+  it('marks the body for the custom highlight rule only when an accent color is set', () => {
+    const { rerender } = renderWith(custom({ accentColor: '#dda15e' }));
+    expect(document.body.hasAttribute('data-custom-highlight')).toBe(true);
+    rerender({ s: custom({}), portal: false, lang: 'en', rtl: false });
+    expect(document.body.hasAttribute('data-custom-highlight')).toBe(false);
+  });
+
+  it('manages one sanitized user stylesheet and removes it when the CSS is cleared', () => {
+    const { rerender } = renderWith(
+      custom({ customCss: '@import url(https://x.example/a.css); .p { color: red; }' }),
+    );
+    const style = document.getElementById('worldscript-user-css');
+    expect(style?.textContent).toContain('.p { color: red; }');
+    expect(style?.textContent).not.toContain('@import');
+    rerender({ s: custom({ customCss: '' }), portal: false, lang: 'en', rtl: false });
+    expect(document.getElementById('worldscript-user-css')).toBeNull();
+  });
+
+  it('reflects a custom background in the browser theme-color', () => {
+    const existing = document.querySelector('meta[name="theme-color"]');
+    const meta = existing ?? document.head.appendChild(document.createElement('meta'));
+    meta.setAttribute('name', 'theme-color');
+    renderWith(custom({ backgroundColor: '#fefae0' }));
+    expect(meta.getAttribute('content')).toBe('#fefae0');
+    if (!existing) meta.remove();
+  });
+});

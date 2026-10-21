@@ -13,9 +13,39 @@ describe('idbProjectStore', () => {
       expect(result.theme).toBe('dark');
       // QNBS-v3: must match settingsSlice.ts's initialState.appearancePreset — a mismatch here would make a genuinely first-ever launch disagree with every other launch about what "no persisted preference" means.
       expect(result.appearancePreset).toBe('default');
-      expect(result.writingSurfaceStyle).toBe('textured');
+      expect(result.writingSurfaceStyle).toBe('plain');
       expect(result.editorFont).toBe('serif');
       expect(result.fontSize).toBe(16);
+    });
+
+    it('keeps an explicit persisted writing surface while new installs default to plain (#701)', () => {
+      expect(
+        normalizePersistedSettings({ writingSurfaceStyle: 'textured' }).writingSurfaceStyle,
+      ).toBe('textured');
+      expect(normalizePersistedSettings({ writingSurfaceStyle: 'bogus' }).writingSurfaceStyle).toBe(
+        'plain',
+      );
+    });
+
+    it('normalizes theme customization and drops the never-applied legacy defaults (#702)', () => {
+      const result = normalizePersistedSettings({
+        themeCustomization: {
+          primaryColor: '#3b82f6',
+          secondaryColor: '#123456',
+          accentColor: 'not-a-color',
+          backgroundColor: '#0f172a',
+          textColor: '#f8fafc',
+          customCss: '@import url(https://x.example/a.css); .a { color: red; }',
+        },
+      });
+      expect(result.themeCustomization).toEqual({
+        primaryColor: '',
+        secondaryColor: '#123456',
+        accentColor: '',
+        backgroundColor: '',
+        textColor: '',
+        customCss: ' .a { color: red; }',
+      });
     });
 
     it('migrates a legacy/invalid appearancePreset value to the current default', () => {

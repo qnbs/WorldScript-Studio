@@ -4,6 +4,7 @@ import {
   DEFAULT_GEMINI_MODEL_ID,
   DEFAULT_OPENROUTER_MODEL_ID,
 } from '../../services/ai/cloudModelCatalog';
+import { EMPTY_THEME_CUSTOMIZATION } from '../../services/themeCustomization';
 import type {
   AccessibilitySettings,
   AdvancedAiSettings,
@@ -50,7 +51,7 @@ const defaultSettings: Settings = {
   theme: getSystemThemePreference(),
   // QNBS-v3: new sessions default to the standard palette, not Writer's Sepia — sepia is now an opt-in choice, matching idbProjectStore.ts's normalizePersistedSettings fallback.
   appearancePreset: 'default',
-  writingSurfaceStyle: 'textured',
+  writingSurfaceStyle: 'plain',
   aiMode: 'hybrid',
   openRouter: DEFAULT_OPENROUTER_SETTINGS,
   editorFont: 'serif',
@@ -124,14 +125,7 @@ const defaultSettings: Settings = {
     customDictionary: [],
     writingStats: true,
   },
-  themeCustomization: {
-    primaryColor: '#3b82f6',
-    secondaryColor: '#64748b',
-    accentColor: '#f59e0b',
-    backgroundColor: '#0f172a',
-    textColor: '#f8fafc',
-    customCss: '',
-  },
+  themeCustomization: { ...EMPTY_THEME_CUSTOMIZATION },
   voice: defaultVoiceSettings,
   // QNBS-v3 (T2): desktop-only behavior; default off so the web/PWA is unaffected.
   desktop: defaultDesktopSettings,

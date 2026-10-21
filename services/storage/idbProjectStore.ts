@@ -31,6 +31,7 @@ import { logger } from '../logger';
 import { admitCanonicalProjectDocument } from '../projectDocument';
 import { importedProjectJsonSchema } from '../projectImportSchema';
 import type { CanonicalProjectRawResult, SaveProjectInput } from '../storageBackend';
+import { normalizeThemeCustomization } from '../themeCustomization';
 import { IdbAssetStore } from './idbAssetStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import { idbProjectCanonicalAuthority } from './idbProjectCanonicalAuthority';
@@ -57,7 +58,7 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
     theme: 'dark',
     // QNBS-v3: must match settingsSlice.ts's initialState.appearancePreset — the two are the same product default and must never silently disagree about what "no persisted preference" means.
     appearancePreset: 'default',
-    writingSurfaceStyle: 'textured',
+    writingSurfaceStyle: 'plain',
     // QNBS-v3: aiMode added in v1.22 — backfill for older persisted settings that lack the field.
     aiMode: 'hybrid',
     editorFont: 'serif',
@@ -74,10 +75,11 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
     validSettings.appearancePreset = 'default';
   }
   if (!['textured', 'plain'].includes(validSettings.writingSurfaceStyle)) {
-    validSettings.writingSurfaceStyle = 'textured';
+    validSettings.writingSurfaceStyle = 'plain';
   }
 
   validSettings.accessibility = normalizeAccessibilitySettings(incoming['accessibility']);
+  validSettings.themeCustomization = normalizeThemeCustomization(incoming['themeCustomization']);
 
   const incomingPrivacy = incoming['privacy'] as Partial<Settings['privacy']> | undefined;
   // QNBS-v3: SEC — analytics default ON (local-only metadata, never leaves device), gated by
