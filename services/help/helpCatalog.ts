@@ -300,11 +300,6 @@ export const HELP_CATALOG: HelpCategoryDef[] = [
         tryActionId: 'nav-settings',
       },
       {
-        titleKey: 'help.advanced.cloudSync.title',
-        contentKey: 'help.advanced.cloudSync.content',
-        tryActionId: 'nav-settings',
-      },
-      {
         titleKey: 'help.advanced.plugins.title',
         contentKey: 'help.advanced.plugins.content',
         tryActionId: 'nav-settings',

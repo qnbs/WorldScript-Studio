@@ -1,4 +1,4 @@
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/qnbs/WorldScript-Studio)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-0F766E)](https://deepwiki.com/qnbs/WorldScript-Studio)
 
 <p align="center">
   <img src="public/icon-192.png" width="112" height="112" alt="WorldScript Studio logo">
@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite 8">
   <img src="https://img.shields.io/badge/TypeScript-tsgo_native_preview-3178C6?logo=typescript&logoColor=white" alt="TypeScript native preview (tsgo)">
   <img src="https://img.shields.io/badge/Desktop-Tauri_2-FFC131?logo=tauri&logoColor=black" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/i18n-19_locales-2947_keys-0EA5E9" alt="19 locales — 2947 keys">
+  <img src="https://img.shields.io/badge/i18n-19_locales_%2F_2945_keys-0EA5E9" alt="19 locales — 2945 keys">
   <img src="https://img.shields.io/badge/Tests-8552%2B_%2F_640_files-22C55E" alt="8552+ tests / 640 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github&label=CI" alt="CI status">
@@ -66,7 +66,7 @@ The web deployments share the same application codebase, but they are **not oper
    - use Ollama/local-server inference where supported;
    - or keep AI disabled.
 
-No WorldScript account is required.
+WorldScript has no user accounts, by design: there is nothing to sign up for and nothing to log in to.
 
 **Documentation:** the curated public documentation is available in **[English](https://qnbs.gitbook.io/worldscript-studio/)** and **[Deutsch](https://qnbs.gitbook.io/worldscript-studio/de/)**. **[DeepWiki](https://deepwiki.com/qnbs/WorldScript-Studio)** provides an additional code-derived repository view. Repository source, current ADRs, security documents, configuration, and CI remain the engineering/source-truth layer; GitBook is the polished reader-oriented documentation surface.
 
@@ -113,11 +113,11 @@ The application is intended to remain useful when:
 
 ### Privacy-oriented without pretending the network does not exist
 
-WorldScript does not require:
-- a WorldScript account;
-- server-side manuscript persistence;
-- a central project database;
-- mandatory cloud AI.
+By design, WorldScript has:
+- no user accounts;
+- no server-side manuscript storage;
+- no central project database;
+- no mandatory cloud AI.
 
 When you choose a networked feature, that boundary is made explicit:
 - cloud AI sends the prompt/context required for that request to the selected provider;
@@ -268,7 +268,7 @@ A force-directed graph visualizes relationships across the cast for complex stor
 
 The template library includes structural and genre-oriented starting points, including classic narrative structures. Templates can be adapted and, when AI is configured, personalized.
 
-Community template assets live with the application rather than requiring a WorldScript account marketplace.
+Community template assets ship with the application; there is no online marketplace and no account.
 
 ## Story Objects & Groups
 
@@ -365,7 +365,7 @@ The current `FeatureFlagsState` contains the following feature authorities:
 
 Two earlier flags were intentionally retired:
 - cross-project search is permanent core behavior;
-- the previous Cloud Sync toggle was removed because there is no finished central Cloud Sync product/UI.
+- the previous Cloud Sync toggle was removed because WorldScript has no central cloud sync service.
 
 ---
 
@@ -487,13 +487,13 @@ Treat these as separate security authorities:
 
 A guarantee in one row must never be generalized to another. For the detailed threat model and current security-truth reconciliation, see [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) and the repository security documentation.
 
-## No central WorldScript account or manuscript backend
+## No accounts and no manuscript backend
 
-Today, WorldScript Studio does **not** require:
-- account registration;
-- central manuscript hosting;
-- a WorldScript cloud project database;
-- mandatory sync.
+By design, WorldScript Studio has:
+- no user accounts and no account registration;
+- no central manuscript hosting;
+- no WorldScript cloud project database;
+- no mandatory sync.
 
 That is a product-architecture statement, not a claim that the application never connects to external services.
 
@@ -591,7 +591,7 @@ Deployment surfaces share a generated CSP origin policy, with host-specific deli
 "Local-first" in WorldScript currently means:
 
 - the active project is persisted locally;
-- the app has no mandatory central account/database;
+- the app has no user accounts and no central database;
 - exports/backups remain user-controlled;
 - most editor/planning/project operations are local;
 - the PWA app shell can continue offline after caching.
@@ -665,7 +665,7 @@ Signaling endpoints are configurable; self-hosting guidance is documented in the
 
 ## Internationalization
 
-Shipped UI locales with **2947 i18n keys** across **19 locales**:
+Shipped UI locales with **2945 i18n keys** across **19 locales**:
 
 - German (`de`)
 - English (`en`)
@@ -808,7 +808,7 @@ The normal web PR pipeline is not the complete native release qualification surf
 | PDF | jsPDF | PDF generation |
 | DOCX | `docx` + JSZip | Word-compatible export |
 | PWA | Service Worker + Web App Manifest | Offline shell/installability |
-| i18n | Custom React i18n context | 2947 keys × 19 locales |
+| i18n | Custom React i18n context | 2945 keys × 19 locales |
 | Testing | Vitest 5.x (8552+ tests / 640 files) + Playwright | Unit/integration/E2E |
 | Quality | Biome + tsgo + CodeQL/security tooling | Static and CI gates |
 | Desktop | Tauri 2 | Current native shell |
@@ -1032,7 +1032,7 @@ Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendo
 Current source-synchronized README metrics:
 
 - **8552+ unit tests** across **640 test files**
-- i18n: **2947 keys × 19 locales**
+- i18n: **2945 keys × 19 locales**
 
 CI remains authoritative for actual pass/fail and live coverage.
 
@@ -1118,9 +1118,9 @@ Browser-native models require a first download and sufficient browser storage/RA
 
 The web/PWA does not probe localhost by default. Direct browser→Ollama requires explicit opt-in and compatible server CORS/origin configuration.
 
-### No central Cloud Sync product
+### No cloud sync
 
-There is no WorldScript account-backed cloud manuscript synchronization product today. The experimental Yjs local-first shadow path is not a replacement for that and remains off by default.
+WorldScript has no accounts and therefore no account-backed cloud sync for manuscripts. The experimental Yjs local-first shadow path is not a cloud sync service and remains off by default.
 
 ### Translation quality is not uniform
 
