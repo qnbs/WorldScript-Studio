@@ -34,12 +34,13 @@ export function useAppearanceBodyClasses(params: UseAppearanceBodyClassesParams)
 
 // QNBS-v3 (#702): set by the customization effect so the auto-theme listener keeps a custom background in the browser chrome.
 let customThemeColor: string | null = null;
+// QNBS-v3 (#702): the theme's own chrome color, so clearing a custom background can restore it without waiting for a theme switch.
+let themeChromeColor: string | null = null;
 
 function resolveThemeColor(
   appearancePreset: Settings['appearancePreset'],
   isDark: boolean,
 ): string {
-  if (customThemeColor) return customThemeColor;
   if (appearancePreset === 'sepia') return isDark ? '#1c1308' : '#f4ecd8';
   return isDark ? '#020617' : '#ffffff';
 }
@@ -55,7 +56,8 @@ function applyThemeClass(appearancePreset: Settings['appearancePreset'], isDark:
   document.body.classList.remove('light-theme', 'dark-theme');
   document.body.classList.add(isDark ? 'dark-theme' : 'light-theme');
   // QNBS-v3: reflect the theme color in mobile browser chrome so the status bar matches the app shell.
-  setThemeColorMeta(resolveThemeColor(appearancePreset, isDark));
+  themeChromeColor = resolveThemeColor(appearancePreset, isDark);
+  setThemeColorMeta(customThemeColor ?? themeChromeColor);
   try {
     localStorage.setItem('worldscript-theme', isDark ? 'dark' : 'light');
   } catch {
@@ -111,8 +113,9 @@ function applyThemeCustomization(customization: ThemeCustomization, highContrast
     appliedThemeVars.add(name);
   }
   document.body.toggleAttribute('data-custom-highlight', customization.accentColor !== '');
-  customThemeColor = customization.backgroundColor || null;
-  if (customThemeColor) setThemeColorMeta(customThemeColor);
+  customThemeColor = highContrast ? null : customization.backgroundColor || null;
+  const chromeColor = customThemeColor ?? themeChromeColor;
+  if (chromeColor) setThemeColorMeta(chromeColor);
   applyUserCss(customization.customCss);
 }
 

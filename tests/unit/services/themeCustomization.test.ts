@@ -53,6 +53,22 @@ describe('sanitizeCustomCss', () => {
     expect(out).toContain('url("data:image/png;base64,AAAA")');
   });
 
+  it('drops the whole stylesheet when an escaped @import or url() would survive', () => {
+    expect(sanitizeCustomCss('.a { background: \\75 rl(https://x.example/p.png); }')).toBe('');
+    expect(sanitizeCustomCss('@\\69 mport "https://x.example/a.css";')).toBe('');
+    expect(sanitizeCustomCss('.a { content: "\\201C"; color: red; }')).toBe(
+      '.a { content: "\\201C"; color: red; }',
+    );
+  });
+
+  it('drops image-set() with remote strings but keeps data: sources', () => {
+    expect(sanitizeCustomCss('.a { background: image-set("https://x.example/a.png" 1x); }')).toBe(
+      '',
+    );
+    const local = '.a { background: image-set("data:image/png;base64,AAAA" 1x); }';
+    expect(sanitizeCustomCss(local)).toBe(local);
+  });
+
   it('caps the stylesheet length and ignores non-strings', () => {
     expect(sanitizeCustomCss('a'.repeat(MAX_CUSTOM_CSS_LENGTH + 50))).toHaveLength(
       MAX_CUSTOM_CSS_LENGTH,
@@ -89,15 +105,13 @@ describe('buildThemeOverrides', () => {
     expect(vars['--sc-ring-focus']).toContain('#1e3a8a');
   });
 
-  it('leaves borders and focus rings to high contrast', () => {
-    const vars = buildThemeOverrides(
-      { ...EMPTY_THEME_CUSTOMIZATION, primaryColor: '#1e3a8a', backgroundColor: '#ffffff' },
-      { highContrast: true },
-    );
-    expect(vars['--sc-accent']).toBe('#1e3a8a');
-    expect(vars['--sc-border-focus']).toBeUndefined();
-    expect(vars['--sc-ring-focus']).toBeUndefined();
-    expect(vars['--sc-border-subtle']).toBeUndefined();
+  it('pauses every color override while high contrast is active', () => {
+    expect(
+      buildThemeOverrides(
+        { ...EMPTY_THEME_CUSTOMIZATION, primaryColor: '#ffffff', backgroundColor: '#ffffff' },
+        { highContrast: true },
+      ),
+    ).toEqual({});
   });
 
   it('sets the body-level alias tokens together with a custom background and text', () => {

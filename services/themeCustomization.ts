@@ -41,13 +41,43 @@ function normalizeColor(value: unknown): string {
   return isHexColor(value) ? value.toLowerCase() : '';
 }
 
-/** Strips constructs that could load remote resources; CSP blocks them too, this is defense in depth. */
+/** Decodes CSS escapes (`\75 rl`, `\@`) the way the CSS tokenizer would, for detection only. */
+function decodeCssEscapes(css: string): string {
+  return css
+    .replace(/\\([0-9a-f]{1,6})\s?/gi, (_, hex: string) =>
+      String.fromCodePoint(Number.parseInt(hex, 16) || 0xfffd),
+    )
+    .replace(/\\(.)/g, '$1');
+}
+
+const REMOTE_IMPORT = /@import/i;
+const REMOTE_URL = /url\(\s*(?!['"]?\s*data:)/i;
+
+/** image-set() can fetch from plain strings without url(); every string in it must be a data: URL. */
+function hasRemoteImageSet(css: string): boolean {
+  for (const [, args = ''] of css.matchAll(/image-set\(([^)]*)\)/gi)) {
+    for (const [, , value = ''] of args.matchAll(/(['"])(.*?)\1/g)) {
+      if (!value.trim().toLowerCase().startsWith('data:')) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Strips constructs that could load remote resources; CSP blocks them too, this is defense in
+ * depth. Escaped spellings that survive the plain patterns fail closed: the whole stylesheet is dropped.
+ */
 export function sanitizeCustomCss(css: unknown): string {
   if (typeof css !== 'string') return '';
-  return css
+  const stripped = css
     .slice(0, MAX_CUSTOM_CSS_LENGTH)
     .replace(/@import[^;]*;?/gi, '')
     .replace(/url\(\s*(?!['"]?\s*data:)[^)]*\)/gi, 'none');
+  const decoded = decodeCssEscapes(stripped);
+  if (REMOTE_IMPORT.test(decoded) || REMOTE_URL.test(decoded) || hasRemoteImageSet(decoded)) {
+    return '';
+  }
+  return stripped;
 }
 
 export function normalizeThemeCustomization(raw: unknown): ThemeCustomization {
@@ -89,34 +119,27 @@ export function pickOnAccentText(primary: string): string {
 }
 
 export interface ThemeOverrideOptions {
-  /** High contrast owns borders and focus rings; customization must not weaken them. */
+  /** High contrast (in-app toggle or OS preference) pauses color customization; accessibility wins. */
   highContrast: boolean;
 }
 
-function addPrimary(vars: Record<string, string>, primary: string, highContrast: boolean): void {
+function addPrimary(vars: Record<string, string>, primary: string): void {
   vars['--sc-accent'] = primary;
   vars['--sc-accent-hover'] = `color-mix(in srgb, ${primary} 85%, var(--sc-shade))`;
   vars['--sc-accent-subtle'] = `color-mix(in srgb, ${primary} 12%, transparent)`;
   vars['--sc-accent-glow'] = `0 0 40px -10px color-mix(in srgb, ${primary} 35%, transparent)`;
   vars['--sc-text-on-accent'] = pickOnAccentText(primary);
   vars['--nav-border-active'] = primary;
-  if (highContrast) return;
   vars['--sc-border-focus'] = primary;
   vars['--sc-ring-focus'] = `color-mix(in srgb, ${primary} 55%, transparent)`;
 }
 
-function addBackground(
-  vars: Record<string, string>,
-  background: string,
-  text: string,
-  highContrast: boolean,
-): void {
+function addBackground(vars: Record<string, string>, background: string, text: string): void {
   vars['--sc-surface-base'] = background;
   vars['--sc-surface-raised'] = `color-mix(in srgb, ${background} 94%, ${text})`;
   vars['--sc-surface-overlay'] = `color-mix(in srgb, ${background} 88%, ${text})`;
   vars['--sc-prose-bg'] = background;
   vars['--sc-bg'] = background;
-  if (highContrast) return;
   vars['--sc-border-subtle'] = `color-mix(in srgb, ${text} 10%, transparent)`;
   vars['--sc-border-strong'] = `color-mix(in srgb, ${text} 18%, transparent)`;
 }
@@ -142,7 +165,9 @@ export function buildThemeOverrides(
   { highContrast }: ThemeOverrideOptions,
 ): Record<string, string> {
   const vars: Record<string, string> = {};
-  if (tc.primaryColor) addPrimary(vars, tc.primaryColor, highContrast);
+  // QNBS-v3 (#702/#818): high-contrast tokens derive from --sc-accent and the surfaces, so any user color could undo them; colors pause, custom CSS stays.
+  if (highContrast) return vars;
+  if (tc.primaryColor) addPrimary(vars, tc.primaryColor);
   if (tc.secondaryColor) {
     const bg = tc.backgroundColor || 'var(--sc-surface-base)';
     vars['--sc-text-secondary'] = tc.secondaryColor;
@@ -154,7 +179,7 @@ export function buildThemeOverrides(
     vars['--sc-selection-bg'] = `color-mix(in srgb, ${tc.accentColor} 35%, transparent)`;
   }
   if (tc.backgroundColor) {
-    addBackground(vars, tc.backgroundColor, tc.textColor || 'var(--sc-text-primary)', highContrast);
+    addBackground(vars, tc.backgroundColor, tc.textColor || 'var(--sc-text-primary)');
   }
   if (tc.textColor) addText(vars, tc);
   return vars;

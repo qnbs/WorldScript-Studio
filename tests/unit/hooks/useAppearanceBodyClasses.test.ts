@@ -277,7 +277,7 @@ describe('theme customization (#702)', () => {
     expect(document.body.style.getPropertyValue('--sc-accent')).toBe('#3b82f6');
   });
 
-  it('yields borders and focus rings to the OS-level prefers-contrast: more', () => {
+  it('pauses custom colors for the OS-level prefers-contrast: more', () => {
     const original = window.matchMedia;
     window.matchMedia = ((query: string) => ({
       matches: query === '(prefers-contrast: more)',
@@ -287,22 +287,25 @@ describe('theme customization (#702)', () => {
     })) as unknown as typeof window.matchMedia;
     try {
       renderWith(custom({ primaryColor: '#1e3a8a', backgroundColor: '#ffffff' }));
-      expect(document.body.style.getPropertyValue('--sc-accent')).toBe('#1e3a8a');
+      expect(document.body.style.getPropertyValue('--sc-accent')).toBe('');
       expect(document.body.style.getPropertyValue('--sc-border-focus')).toBe('');
-      expect(document.body.style.getPropertyValue('--sc-border-subtle')).toBe('');
     } finally {
       window.matchMedia = original;
     }
   });
 
-  it('keeps borders and focus rings for high contrast', () => {
+  it('pauses custom colors for high contrast but keeps the user stylesheet', () => {
     renderWith({
-      ...custom({ primaryColor: '#1e3a8a', backgroundColor: '#ffffff' }),
+      ...custom({
+        primaryColor: '#ffffff',
+        backgroundColor: '#ffffff',
+        customCss: '.p { color: red; }',
+      }),
       accessibility: { ...baseAccessibility, highContrast: true },
     });
-    expect(document.body.style.getPropertyValue('--sc-accent')).toBe('#1e3a8a');
-    expect(document.body.style.getPropertyValue('--sc-border-focus')).toBe('');
-    expect(document.body.style.getPropertyValue('--sc-border-subtle')).toBe('');
+    expect(document.body.style.getPropertyValue('--sc-accent')).toBe('');
+    expect(document.body.style.getPropertyValue('--sc-surface-base')).toBe('');
+    expect(document.getElementById('worldscript-user-css')?.textContent).toContain('.p');
   });
 
   it('marks the body for the custom highlight rule only when an accent color is set', () => {
@@ -336,5 +339,16 @@ describe('theme customization (#702)', () => {
     expect(light.getAttribute('content')).toBe('#fefae0');
     dark.remove();
     light.remove();
+  });
+
+  it('restores the theme chrome color when the custom background is cleared', () => {
+    for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.remove();
+    const meta = document.head.appendChild(document.createElement('meta'));
+    meta.setAttribute('name', 'theme-color');
+    const { rerender } = renderWith({ ...custom({ backgroundColor: '#fefae0' }), theme: 'light' });
+    expect(meta.getAttribute('content')).toBe('#fefae0');
+    rerender({ s: { ...custom({}), theme: 'light' }, portal: false, lang: 'en', rtl: false });
+    expect(meta.getAttribute('content')).toBe('#ffffff');
+    meta.remove();
   });
 });
