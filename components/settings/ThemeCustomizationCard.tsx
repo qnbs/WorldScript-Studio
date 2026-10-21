@@ -4,7 +4,6 @@ import {
   contrastRatio,
   EMPTY_THEME_CUSTOMIZATION,
   hasThemeCustomization,
-  isHexColor,
   MAX_CUSTOM_CSS_LENGTH,
   normalizeThemeCustomization,
   THEME_COLOR_KEYS,
@@ -14,6 +13,7 @@ import {
 import type { ThemeCustomization } from '../../types';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
+import { useResolvedThemeTokens } from './useResolvedThemeTokens';
 
 const FIELDS: Record<ThemeColorKey, { id: string; label: string; hint: string; token: string }> = {
   primaryColor: {
@@ -48,53 +48,51 @@ const FIELDS: Record<ThemeColorKey, { id: string; label: string; hint: string; t
   },
 };
 
-function rgbToHex(rgb: string): string {
-  const channels = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgb)?.slice(1, 4) ?? [];
-  if (channels.length !== 3) return '';
-  return `#${channels.map((c) => Number(c).toString(16).padStart(2, '0')).join('')}`;
-}
-
-/**
- * Current theme value of a token as #rrggbb, so an unset color input starts at what the user sees.
- * The browser resolves var()/color-mix() through a probe element; an unresolvable value yields ''
- * (the color input then shows its own default).
- */
-function readTokenHex(token: string): string {
-  const value = getComputedStyle(document.body).getPropertyValue(token).trim().toLowerCase();
-  if (isHexColor(value)) return value;
-  const probe = document.createElement('span');
-  probe.style.color = `var(${token})`;
-  document.body.appendChild(probe);
-  const resolved = getComputedStyle(probe).color;
-  probe.remove();
-  return rgbToHex(resolved);
-}
-
 // QNBS-v3 (#702): a background without a text color gets contrast-safe text at runtime, so only an explicit text color can be too faint.
-function lowTextContrast(tc: ThemeCustomization): number | null {
+function lowTextContrast(tc: ThemeCustomization, themeBackground: string): number | null {
   if (!tc.textColor) return null;
-  const background = tc.backgroundColor || readTokenHex('--sc-surface-base');
+  const background = tc.backgroundColor || themeBackground;
+  if (!background) return null;
   const ratio = contrastRatio({ foreground: tc.textColor, background });
   return ratio < WCAG_AA_TEXT_CONTRAST ? ratio : null;
 }
 
 /**
- * The stored record as edited: unknown fields and the raw CSS source survive every edit (#702,
- * preserve-first). A malformed stored value is never spread; edits then start from the defaults.
+ * The stored record as edited: unknown fields and the stored CSS payload survive every color edit
+ * (#702, preserve-first); only the CSS editor shows a string fallback for a non-string payload. A
+ * malformed stored value is never spread; edits then start from the defaults.
  */
-function editableThemeCustomization(stored: unknown): ThemeCustomization {
+function editableThemeCustomization(stored: unknown): {
+  record: ThemeCustomization;
+  cssText: string;
+} {
   const isRecord = typeof stored === 'object' && stored !== null && !Array.isArray(stored);
-  const raw = { ...EMPTY_THEME_CUSTOMIZATION, ...(isRecord ? stored : {}) };
-  return typeof raw.customCss === 'string' ? raw : { ...raw, customCss: '' };
+  const record = {
+    ...EMPTY_THEME_CUSTOMIZATION,
+    ...(isRecord ? stored : {}),
+  } as ThemeCustomization;
+  const css: unknown = record.customCss;
+  return { record, cssText: typeof css === 'string' ? css : '' };
 }
+
+const TOKENS = Object.values(FIELDS).map((field) => field.token);
 
 export const ThemeCustomizationCard: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
-  const raw = editableThemeCustomization(settings.themeCustomization);
-  const colors = normalizeThemeCustomization(raw);
+  const { record, cssText } = editableThemeCustomization(settings.themeCustomization);
+  const colors = normalizeThemeCustomization(record);
   const update = (patch: Partial<ThemeCustomization>) =>
-    handleSettingChange('themeCustomization', { ...raw, ...patch });
-  const lowContrast = lowTextContrast(colors);
+    handleSettingChange('themeCustomization', { ...record, ...patch });
+  const resolved = useResolvedThemeTokens(
+    TOKENS,
+    JSON.stringify([
+      settings.theme,
+      settings.appearancePreset,
+      settings.themeCustomization,
+      settings.accessibility?.highContrast,
+    ]),
+  );
+  const lowContrast = lowTextContrast(colors, resolved['--sc-surface-base'] ?? '');
 
   return (
     <Card>
@@ -127,7 +125,7 @@ export const ThemeCustomizationCard: FC = () => {
                     id={field.id}
                     type="color"
                     aria-describedby={`${field.id}-hint`}
-                    value={colors[key] || readTokenHex(field.token)}
+                    value={colors[key] || resolved[field.token] || ''}
                     onChange={(e) => update({ [key]: e.target.value })}
                     className="h-10 w-16 rounded border border-[var(--sc-border-subtle)]"
                   />
@@ -170,7 +168,7 @@ export const ThemeCustomizationCard: FC = () => {
           <textarea
             id="settings-custom-css"
             aria-describedby="settings-custom-css-hint"
-            value={raw.customCss}
+            value={cssText}
             maxLength={MAX_CUSTOM_CSS_LENGTH}
             onChange={(e) => update({ customCss: e.target.value })}
             placeholder="/* Custom CSS */"
@@ -178,10 +176,10 @@ export const ThemeCustomizationCard: FC = () => {
             className="w-full h-32 p-3 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] font-mono text-sm"
           />
           <p className="text-xs text-right text-[var(--sc-text-muted)]">
-            {raw.customCss.length} / {MAX_CUSTOM_CSS_LENGTH}
+            {cssText.length} / {MAX_CUSTOM_CSS_LENGTH}
           </p>
         </div>
-        {hasThemeCustomization({ ...colors, customCss: raw.customCss }) && (
+        {hasThemeCustomization({ ...colors, customCss: cssText }) && (
           <Button variant="secondary" onClick={() => update({ ...EMPTY_THEME_CUSTOMIZATION })}>
             {t('settings.appearance.resetAllCustomization')}
           </Button>

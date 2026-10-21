@@ -285,6 +285,20 @@ describe('ThemeCustomizationCard (#702)', () => {
     });
   });
 
+  it('keeps a non-string stored CSS payload when a color changes (preserve-first)', () => {
+    const payload = { legacy: true };
+    settingsRef.current = { themeCustomization: { ...emptyCustomization, customCss: payload } };
+    render(<AppearanceSection />);
+    expect(screen.getByLabelText('settings.appearance.customCss')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('settings.appearance.primaryColor'), {
+      target: { value: '#1e3a8a' },
+    });
+    expect(mockHandleSettingChange).toHaveBeenCalledWith(
+      'themeCustomization',
+      expect.objectContaining({ primaryColor: '#1e3a8a', customCss: payload }),
+    );
+  });
+
   it('resets a single color and everything back to the theme', async () => {
     const user = userEvent.setup();
     settingsRef.current = {
