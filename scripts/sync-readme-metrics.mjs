@@ -79,9 +79,10 @@ const localeCount = getLocaleCount();
 const testCount = getTestCaseCount(readme);
 
 // --- Badges (shields.io URL + alt text) -------------------------------------
+// QNBS-v3: shields.io splits on a bare dash, so the message uses the escaped "_%2F_" separator; the legacy dash form is still rewritten.
 readme = readme.replace(
-  /i18n-\d+_locales-\d+_keys/g,
-  `i18n-${localeCount}_locales-${keyCount}_keys`,
+  /i18n-\d+_locales(?:-|_%2F_)\d+_keys/g,
+  `i18n-${localeCount}_locales_%2F_${keyCount}_keys`,
 );
 readme = readme.replace(/\d+ locales — \d+ keys/g, `${localeCount} locales — ${keyCount} keys`);
 if (testCount != null) {
@@ -96,10 +97,12 @@ if (testCount != null) {
 }
 
 // --- Prose occurrences ------------------------------------------------------
-// Line ~352: "Shipped UI locales with **2 594 i18n keys**"
+// Line ~352: "Shipped UI locales with **2 594 i18n keys** across **19 locales**"
 readme = readme.replace(
-  new RegExp(`(Shipped UI locales with \\*\\*)${NUM}( i18n keys\\*\\*)`),
-  `$1${keyCount}$2`,
+  new RegExp(
+    `(Shipped UI locales with \\*\\*)${NUM}( i18n keys\\*\\* across \\*\\*)\\d+( locales\\*\\*)`,
+  ),
+  `$1${keyCount}$2${localeCount}$3`,
 );
 // Line ~453: "| 2716 keys × 17 locales" — keep the table-cell leading space; locale count dynamic.
 readme = readme.replace(
