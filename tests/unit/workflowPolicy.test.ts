@@ -342,8 +342,9 @@ describe('CI workflow policy', () => {
     expect(scheduledSecurityWorkflowSource).not.toMatch(/^\s*security-events:\s*write\s*$/m);
     expect(scanStep).toContain('id: osv');
     expect(scanStep).toContain('continue-on-error: true');
-    expect(scanStep).toContain(
-      'google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36',
+    // QNBS-v3: anchor the pin to the live `uses:` line; a raw-text match would also accept it inside a comment.
+    expect(scanStep).toMatch(
+      /^\s*(?:- )?uses: google\/osv-scanner-action\/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2\.7\.0$/m,
     );
     for (const lockfile of ['pnpm-lock.yaml', 'src-tauri/Cargo.lock', 'crates/Cargo.lock']) {
       expect(scanStep).toContain(`--lockfile=${lockfile}`);
