@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Settings:** Theme Customization under Settings → Appearance gets a card with a reset per color and a reset of all customization back to the selected theme (PR #1120, #818). Since custom colors became active there was no way to undo them. The card also warns about an explicit text color below WCAG 4.5:1, bounds the custom CSS editor, and its hints say that high contrast pauses custom colors (19 locales).
 
+- **Settings:** Spell Check under Settings → Advanced Editor was stored but never applied; it is replaced by an opt-in **Browser Spell Check** (off by default, with a note that some browsers' enhanced spell check sends text to their provider) (PR #1118, #818). Auto-Complete Suggestions and Grammar Check, which had no implementation, are removed; grammar checking remains available through LanguageTool under Integrations.
+
 - **Settings:** The Word Count Display, Reading Time Estimate and Writing Statistics toggles under Settings → Advanced Editor now work (PR #1117, #818). The editor badge shows the word count and a reading-time estimate according to their toggles, and the inspector's statistics card follows Writing Statistics.
 
 - **Settings:** The Top P and Rate Limit sliders under Settings → Advanced AI are removed; their values were stored but never sent to a provider or used by any limiter (PR #1119, #818). The unused `frequencyPenalty`, `presencePenalty` and `customPrompts` fields are gone too. Temperature and Max Tokens stay.

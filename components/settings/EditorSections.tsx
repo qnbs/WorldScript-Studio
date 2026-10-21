@@ -199,32 +199,13 @@ export const AdvancedEditorSection: FC = () => {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ToggleSwitch
-              label={t('settings.advancedEditor.autoComplete')}
-              checked={advancedEditor.autoComplete}
+              label={t('settings.advancedEditor.nativeSpellCheck')}
+              hint={t('settings.advancedEditor.nativeSpellCheckHint')}
+              checked={advancedEditor.nativeSpellCheck ?? false}
               onChange={(v) =>
                 handleSettingChange('advancedEditor', {
                   ...advancedEditor,
-                  autoComplete: v,
-                })
-              }
-            />
-            <ToggleSwitch
-              label={t('settings.advancedEditor.spellCheck')}
-              checked={advancedEditor.spellCheck}
-              onChange={(v) =>
-                handleSettingChange('advancedEditor', {
-                  ...advancedEditor,
-                  spellCheck: v,
-                })
-              }
-            />
-            <ToggleSwitch
-              label={t('settings.advancedEditor.grammarCheck')}
-              checked={advancedEditor.grammarCheck}
-              onChange={(v) =>
-                handleSettingChange('advancedEditor', {
-                  ...advancedEditor,
-                  grammarCheck: v,
+                  nativeSpellCheck: v,
                 })
               }
             />
