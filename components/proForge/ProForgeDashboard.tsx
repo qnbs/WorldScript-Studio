@@ -106,7 +106,7 @@ export const ProForgeDashboard: React.FC = () => {
             <button
               type="button"
               onClick={handleAbort}
-              className="px-3 py-1.5 text-sm rounded-sc-md bg-[var(--sc-error)] text-[var(--sc-text-on-accent)] hover:opacity-90 transition-opacity"
+              className="px-3 py-1.5 text-sm rounded-sc-md bg-[var(--sc-error)] text-[var(--sc-text-on-status)] hover:opacity-90 transition-opacity"
               aria-label={t('proforge.dashboard.abortAria')}
             >
               {t('common.abort')}

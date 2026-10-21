@@ -18,7 +18,8 @@ describe('settingsSlice', () => {
     expect(state.theme).toBeTypeOf('string');
     // QNBS-v3: locks in the product default of standard palette over Writer's Sepia for new sessions.
     expect(state.appearancePreset).toBe('default');
-    expect(state.writingSurfaceStyle).toBe('textured');
+    // QNBS-v3 (#701): fresh sessions default to the plain writing surface.
+    expect(state.writingSurfaceStyle).toBe('plain');
     expect(state.aiCreativity).toBe('Balanced');
     expect(state.keyboardShortcuts.length).toBeGreaterThan(0);
     expect(state.writingGoals.length).toBeGreaterThan(0);
@@ -339,7 +340,8 @@ describe('settingsSlice', () => {
 
     expect(state.themeCustomization.primaryColor).toBe('#ff0000');
     expect(state.themeCustomization.customCss).toBe('body { letter-spacing: 0.01em; }');
-    expect(state.themeCustomization.accentColor).toBe('#f59e0b');
+    // QNBS-v3 (#702): untouched colors stay unset ('' = theme default).
+    expect(state.themeCustomization.accentColor).toBe('');
   });
 
   it('applyInitialTheme applies persisted theme from localStorage roundtrip', () => {

@@ -422,7 +422,7 @@ export const LocalAiSection: FC = () => {
                 type="button"
                 onClick={() => void handleClear()}
                 disabled={clearing || downloadingId !== null || externalLoading}
-                className="rounded-lg bg-[var(--sc-danger-fg)] px-4 py-2 text-sm font-medium text-[var(--sc-text-on-accent)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
+                className="rounded-lg bg-[var(--sc-danger-fg)] px-4 py-2 text-sm font-medium text-[var(--sc-text-on-status)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
               >
                 {clearing
                   ? t('settings.ai.localAi.clearingButton')
