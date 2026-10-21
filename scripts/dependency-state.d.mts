@@ -8,6 +8,10 @@ export function readStoredFingerprint(root?: string): string | null;
 export function writeStoredFingerprint(root?: string, fingerprint?: string): void;
 export function verifyDependencyState(root?: string): string;
 export function main(command?: string): void;
+export function pnpmPinMismatch(
+  packageManager: string | undefined,
+  runningVersion: string,
+): string | null;
 
 export interface DependencyFilesFromRefDependencies {
   listTree?: (sha: string) => string[] | null;
