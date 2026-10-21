@@ -96,6 +96,8 @@ describe('CI workflow policy', () => {
     expect(pnpmStep).toContain('pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0');
     expect(pnpmStep).toContain('install: false');
     expect(pnpmStep).not.toContain('node-version-file:');
+    // QNBS-v3: a `version` input breaks this required check whenever the base packageManager pin moves.
+    expect(pnpmStep).not.toContain('version:');
   });
 
   it('keeps the reviewer trust guard base-owned and data-only', () => {
