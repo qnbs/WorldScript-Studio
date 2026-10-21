@@ -93,11 +93,14 @@ vi.mock('../../../hooks/useLanguageToolCheck', () => ({
   }),
 }));
 
+let mockNativeSpellCheck = false;
+
 vi.mock('../../../app/hooks', () => ({
   useAppSelector: vi.fn(() => ({
     editorFont: 'Georgia',
     fontSize: 16,
     lineSpacing: 1.6,
+    advancedEditor: { nativeSpellCheck: mockNativeSpellCheck },
   })),
   useAppDispatch: vi.fn(() => vi.fn()),
 }));
@@ -219,6 +222,16 @@ describe('ManuscriptEditor', () => {
     render(<ManuscriptEditor isFocusMode={false} />);
     const textarea = screen.getByTestId('editor-textarea');
     expect(textarea).toHaveValue('Hello world teh quick brown fox');
+  });
+
+  it('keeps native spell check off unless the setting is on (#818)', () => {
+    const { unmount } = render(<ManuscriptEditor isFocusMode={false} />);
+    expect(screen.getByTestId('editor-textarea')).toHaveAttribute('spellcheck', 'false');
+    unmount();
+    mockNativeSpellCheck = true;
+    render(<ManuscriptEditor isFocusMode={false} />);
+    expect(screen.getByTestId('editor-textarea')).toHaveAttribute('spellcheck', 'true');
+    mockNativeSpellCheck = false;
   });
 
   it('shows word count badge', () => {

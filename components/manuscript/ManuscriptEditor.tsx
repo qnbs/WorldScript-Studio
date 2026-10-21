@@ -393,7 +393,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
             fontSize: `${settings.fontSize}px`,
             lineHeight: settings.lineSpacing,
           }}
-          spellCheck={false}
+          spellCheck={settings.advancedEditor?.nativeSpellCheck ?? false}
         />
         <div
           ref={highlightRef}

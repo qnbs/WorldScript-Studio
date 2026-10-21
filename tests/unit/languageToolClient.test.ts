@@ -57,9 +57,7 @@ const baseSettings = (): Settings => ({
     languageToolBaseUrl: 'http://localhost:8010',
   },
   advancedEditor: {
-    autoComplete: true,
-    spellCheck: true,
-    grammarCheck: true,
+    nativeSpellCheck: false,
     wordCount: true,
     readingTime: true,
     distractionFree: false,

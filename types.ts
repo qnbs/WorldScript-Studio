@@ -579,16 +579,21 @@ export interface IntegrationSettings {
 }
 
 export interface AdvancedEditorSettings {
-  autoComplete: boolean;
-  spellCheck: boolean;
-  grammarCheck: boolean;
+  /**
+   * Native browser/OS spell check in the manuscript editor. Off by default: some browsers' enhanced
+   * spell check sends text to their provider. Replaces the never-applied `spellCheck` flag.
+   */
+  nativeSpellCheck: boolean;
+  /** Word count badge in the manuscript editor. */
   wordCount: boolean;
+  /** Reading-time estimate in the manuscript editor badge. */
   readingTime: boolean;
   distractionFree: boolean;
   typewriterMode: boolean;
   zenMode: boolean;
   focusMode: boolean;
   customDictionary: string[];
+  /** Section statistics card in the manuscript inspector. */
   writingStats: boolean;
 }
 
