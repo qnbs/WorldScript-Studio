@@ -26,7 +26,7 @@ export const BUILD_RELEVANT = [
   // Workspace package manifests and pnpm patches change what the install step resolves.
   /^packages\/[^/]+\/package\.json$/,
   /^patches\//,
-  /^scripts\/(build-edge|runtime-asset-steps|sync-deploy-base|dependency-state)\.mjs$/,
+  /^scripts\/(build-edge|runtime-asset-steps|sync-deploy-base|dependency-state|vercel-ignore-build)\.mjs$/,
   /^scripts\/copy-[\w-]+\.mjs$/,
   /^api\//,
 ];
@@ -48,11 +48,15 @@ export function decideBuild({ env, changedFiles }) {
   return { build: false, reason: 'no-build-file-changed' };
 }
 
-/** Files changed since `previous`; null when it is not a commit SHA or not in the (shallow) clone. */
+/**
+ * Files changed since `previous`; null when it is not a commit SHA or not in the (shallow) clone.
+ * `--no-renames` lists a renamed file under both its old and new path, so renaming a build input
+ * away from a matched name still builds.
+ */
 export function changedSince(previous) {
   if (!SHA.test(previous ?? '')) return null;
   try {
-    const out = execFileSync('git', ['diff', '--name-only', previous, 'HEAD'], {
+    const out = execFileSync('git', ['diff', '--name-only', '--no-renames', previous, 'HEAD'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });

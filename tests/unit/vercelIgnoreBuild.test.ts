@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { changedSince, decideBuild } from '../../scripts/vercel-ignore-build.mjs';
 
@@ -58,6 +59,7 @@ describe('Vercel ignored build step (previews on demand)', () => {
       '.nvmrc',
       'packages/ui/package.json',
       'patches/some-dep@1.0.0.patch',
+      'scripts/vercel-ignore-build.mjs',
     ]) {
       expect(decideBuild({ env: preview, changedFiles: ['README.md', file] })).toEqual({
         build: true,
@@ -100,5 +102,42 @@ describe('Vercel ignored build step (previews on demand)', () => {
         VERCEL_GIT_COMMIT_MESSAGE: 'docs: x [preview]',
       }),
     ).toBe(1);
+  });
+
+  it('renaming a build input away from its matched name still builds', () => {
+    const repo = mkdtempSync(join(tmpdir(), 'vercel-ignore-'));
+    const git = (...args: string[]) =>
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@example.invalid',
+          '-c',
+          'commit.gpgsign=false',
+          ...args,
+        ],
+        { cwd: repo, encoding: 'utf8' },
+      ).trim();
+    try {
+      git('init', '-q');
+      mkdirSync(join(repo, 'scripts'));
+      writeFileSync(join(repo, 'scripts/build-edge.mjs'), 'export {};\n');
+      git('add', '.');
+      git('commit', '-q', '-m', 'base');
+      const base = git('rev-parse', 'HEAD');
+      git('mv', 'scripts/build-edge.mjs', 'scripts/build-edge-old.mjs');
+      git('commit', '-q', '-m', 'rename');
+
+      const { VERCEL_GIT_COMMIT_MESSAGE: _m, ...rest } = process.env;
+      const status = spawnSync(process.execPath, [script], {
+        cwd: repo,
+        env: { ...rest, VERCEL_ENV: 'preview', VERCEL_GIT_PREVIOUS_SHA: base },
+      }).status;
+      expect(status).toBe(1);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 });

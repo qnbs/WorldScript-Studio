@@ -368,7 +368,8 @@ builds, exit 0 skips).
     `vite.config.*`, `package.json`, `packages/*/package.json`, `patches/**`, `pnpm-lock.yaml`,
     `pnpm-workspace.yaml`, `.npmrc`, `.nvmrc`, the edge
     build scripts (`build-edge`, `runtime-asset-steps`, `sync-deploy-base`, `dependency-state`,
-    `copy-*`) or `api/**`.
+    `copy-*`), the ignore step `vercel-ignore-build.mjs` itself, or `api/**`. Renames count under
+    both paths (`git diff --no-renames`).
 - **Unknown state builds (fail-open):** a missing or non-SHA previous commit, or a previous commit
   outside Vercel's shallow clone, builds the Preview.
 - **What it saves:** a skipped build still creates a canceled deployment, so this saves build
