@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Settings:** Theme Customization now works (PR #1116, #702, #818). Its colors and custom CSS were saved but never applied; they now map onto the design tokens (base theme → appearance preset → customization → accessibility; high contrast keeps its borders and focus rings). Custom CSS runs in one app-owned stylesheet with `@import` and remote `url()` stripped. The never-applied old defaults are treated as unset, so existing installs do not change. New installs use the plain writing surface (#701); an explicit textured choice is kept.
+
 - **Maintenance (Dependabot):** `vite-plugin-pwa` 1.3.0 → 2.0.0 (PR #1115, successor of #1109). The major version only raises the Node floor to 20.19 (the repo requires ≥ 22.19) and allows `@vite-pwa/assets-generator` ^2 as a peer; the plugin source is unchanged between the two releases and Workbox stays at 7.4.1.
 
 - **Maintenance (Dependabot):** `google/osv-scanner-action` 2.6.0 → 2.7.0 and `ossf/scorecard-action` 2.4.4 → 2.5.0 (`actions-minor-patch` group; PR #1113, successor of #1107), with the OSV pin in `workflowPolicy.test.ts` moved to match. OSV 2.7.0 scans the same 1673 npm, 583 `src-tauri` and 175 Core Cargo packages as 2.6.0.
