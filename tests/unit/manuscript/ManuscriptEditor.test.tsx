@@ -231,6 +231,8 @@ describe('ManuscriptEditor', () => {
     mockNativeSpellCheck = true;
     render(<ManuscriptEditor isFocusMode={false} />);
     expect(screen.getByTestId('editor-textarea')).toHaveAttribute('spellcheck', 'true');
+    // Above the highlight mirror so spell-check marks stay visible, below the z-10 Copilot insight badge.
+    expect(screen.getByTestId('editor-textarea').className).toContain('relative z-[5]');
     mockNativeSpellCheck = false;
   });
 
