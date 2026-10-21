@@ -146,6 +146,20 @@ const settingsSlice = createSlice({
   name: 'settings',
   initialState,
   reducers: {
+    /**
+     * Settings → Data → Restore default settings (#818). Every setting returns to its default except
+     * the choices that decide whether data leaves the device (AI execution mode, privacy,
+     * collaboration servers) and the UI language. Projects and API keys live elsewhere.
+     */
+    resetToDefaults(state) {
+      const kept = {
+        aiMode: state.aiMode,
+        privacy: state.privacy,
+        collaboration: state.collaboration,
+        language: state.language,
+      };
+      Object.assign(state, structuredClone(defaultSettings), kept);
+    },
     setSettings(state, action: PayloadAction<Settings>) {
       Object.assign(state, action.payload);
       state.accessibility = normalizeAccessibilitySettings(state.accessibility);

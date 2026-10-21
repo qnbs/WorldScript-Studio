@@ -377,4 +377,31 @@ describe('settingsSlice', () => {
     expect(document.body.classList.contains('dark-theme')).toBe(true);
     expect(document.body.classList.contains('auto-theme')).toBe(false);
   });
+
+  // QNBS-v3 (#818): restore defaults resets every setting except the ones that gate data leaving the device.
+  it('resetToDefaults restores defaults but keeps AI mode, privacy, collaboration and language', () => {
+    let state = initState();
+    state = settingsReducer(state, settingsActions.setTheme('light'));
+    state = settingsReducer(state, settingsActions.setAiMode('local'));
+    state = settingsReducer(state, settingsActions.setPrivacy({ analyticsEnabled: false }));
+    state = settingsReducer(
+      state,
+      settingsActions.setThemeCustomization({ primaryColor: '#ff0000', customCss: '.a{}' }),
+    );
+    state = settingsReducer(
+      state,
+      settingsActions.setCollaboration({ webrtcSignalingUrls: ['wss://own.example'] }),
+    );
+    state = { ...state, language: 'de', fontSize: 22 };
+
+    const reset = settingsReducer(state, settingsActions.resetToDefaults());
+    const defaults = initState();
+    expect(reset.theme).toBe(defaults.theme);
+    expect(reset.fontSize).toBe(defaults.fontSize);
+    expect(reset.themeCustomization).toEqual(defaults.themeCustomization);
+    expect(reset.aiMode).toBe('local');
+    expect(reset.privacy.analyticsEnabled).toBe(false);
+    expect(reset.collaboration.webrtcSignalingUrls).toEqual(['wss://own.example']);
+    expect(reset.language).toBe('de');
+  });
 });

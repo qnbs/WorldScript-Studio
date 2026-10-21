@@ -55,7 +55,14 @@ import type {
   WritingSurfaceStyle,
 } from '../types';
 
-type ModalState = 'closed' | 'reset' | 'restore' | 'delete' | 'create' | 'factoryReset';
+type ModalState =
+  | 'closed'
+  | 'reset'
+  | 'restore'
+  | 'delete'
+  | 'create'
+  | 'settingsReset'
+  | 'factoryReset';
 type ModalPayload = { id?: number; name?: string; date?: string; wordCount?: number };
 
 // QNBS-v3: the whole try/catch lives here, not in useSettingsView's own body, so this branch's complexity is never attributed to that already-flagged hotspot (CodeScene).
@@ -358,6 +365,12 @@ export const useSettingsView = () => {
     setModal({ state: 'closed', payload: {} });
   }, [dispatch, t]);
 
+  const handleRestoreDefaultSettings = useCallback(() => {
+    dispatch(settingsActions.resetToDefaults());
+    setModal({ state: 'closed', payload: {} });
+    toast.success(t('settings.data.dangerZone.settingsReset.done'));
+  }, [dispatch, t, toast]);
+
   const handleFactoryReset = useCallback(async () => {
     setModal({ state: 'closed', payload: {} });
     await performFactoryReset(t, toast);
@@ -462,6 +475,7 @@ export const useSettingsView = () => {
       handleExport,
       handleImport,
       handleResetProject,
+      handleRestoreDefaultSettings,
       handleFactoryReset,
       handleRepeatOnboarding,
       handleCreateSnapshot,
@@ -491,6 +505,7 @@ export const useSettingsView = () => {
       handleExport,
       handleImport,
       handleResetProject,
+      handleRestoreDefaultSettings,
       handleFactoryReset,
       handleRepeatOnboarding,
       handleCreateSnapshot,
