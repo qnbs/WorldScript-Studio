@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Maintenance (Vercel builds):** Vercel Previews now build on demand (PR #1130). `vercel.json` `ignoreCommand` runs `scripts/vercel-ignore-build.mjs`: Production always builds, and a Preview builds on a branch's first deployment, when the commit message contains `[preview]`, or when a deployment input changed (`vercel.json`, Vite config, `package.json`, lockfile, edge build scripts, `api/**`). Unknown state builds. This saves build minutes; correction waves and the strict merge cascade had driven about 75 builds in one day. A skipped build still counts as a canceled deployment. The nightly record pruner now keeps the newest three Vercel deployment records per environment instead of ten, plus `main` and every open PR head.
+
 - **Settings:** Spell Check under Settings → Advanced Editor was stored but never applied; it is replaced by an opt-in **Browser Spell Check** (off by default, with a note that some browsers' enhanced spell check sends text to their provider) (PR #1118, #818). Auto-Complete Suggestions and Grammar Check, which had no implementation, are removed; grammar checking remains available through LanguageTool under Integrations.
 
 - **Settings:** The Word Count Display, Reading Time Estimate and Writing Statistics toggles under Settings → Advanced Editor now work (PR #1117, #818). The editor badge shows the word count and a reading-time estimate according to their toggles, and the inspector's statistics card follows Writing Statistics.
