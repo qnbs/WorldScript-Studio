@@ -1,3 +1,5 @@
+import { EMPTY_THEME_CUSTOMIZATION } from './themeCustomization';
+
 /**
  * One-time migration for #702. Before Theme Customization was applied at runtime, these defaults
  * were persisted for every user without ever taking effect. Clearing them once keeps existing
@@ -20,4 +22,20 @@ export function migrateLegacyThemeCustomization(raw: unknown): Record<string, un
   }
   source['legacyDefaultsCleared'] = true;
   return source;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Hydration is preserve-first: unknown fields, invalid colors and the full custom CSS source stay as
+ * stored, so the next settings save writes them back unchanged. Only the runtime applies the
+ * normalized, sanitized view (`normalizeThemeCustomization`). An absent record gets the defaults; a
+ * malformed non-object value is kept untouched and never applied or migrated.
+ */
+export function hydrateThemeCustomization(raw: unknown): unknown {
+  if (raw === undefined) return { ...EMPTY_THEME_CUSTOMIZATION, legacyDefaultsCleared: true };
+  if (!isPlainObject(raw)) return raw;
+  return { ...EMPTY_THEME_CUSTOMIZATION, ...migrateLegacyThemeCustomization(raw) };
 }

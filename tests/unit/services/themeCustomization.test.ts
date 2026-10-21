@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   buildThemeOverrides,
@@ -6,7 +8,10 @@ import {
   hasThemeCustomization,
   MAX_CUSTOM_CSS_LENGTH,
   normalizeThemeCustomization,
+  ON_ACCENT_DARK_LUMINANCE,
+  ON_ACCENT_LIGHT_LUMINANCE,
   pickOnAccentText,
+  relativeLuminance,
   sanitizeCustomCss,
 } from '../../../services/themeCustomization';
 
@@ -86,6 +91,25 @@ describe('contrast helpers', () => {
   it('picks the more readable text color for a custom primary', () => {
     expect(pickOnAccentText('#fde047')).toBe('var(--sc-on-accent-dark)');
     expect(pickOnAccentText('#1e3a8a')).toBe('var(--sc-on-accent-light)');
+  });
+
+  it('compares against the real token colors, not black and white', () => {
+    // #767676: white reaches 4.54:1, the dark token #0f172a only 3.93:1.
+    expect(pickOnAccentText('#767676')).toBe('var(--sc-on-accent-light)');
+    expect(pickOnAccentText('#888888')).toBe('var(--sc-on-accent-dark)');
+  });
+
+  it('keeps the on-accent luminances in sync with the index.css tokens', () => {
+    const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
+    const expected = [
+      ['light', ON_ACCENT_LIGHT_LUMINANCE],
+      ['dark', ON_ACCENT_DARK_LUMINANCE],
+    ] as const;
+    for (const [variant, luminance] of expected) {
+      const hex = new RegExp(`--sc-on-accent-${variant}:\\s*(#[0-9a-f]{6})`, 'i').exec(css)?.[1];
+      expect(hex).toBeDefined();
+      expect(relativeLuminance(hex ?? '')).toBeCloseTo(luminance, 12);
+    }
   });
 });
 

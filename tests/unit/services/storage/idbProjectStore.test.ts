@@ -27,7 +27,8 @@ describe('idbProjectStore', () => {
       );
     });
 
-    it('normalizes theme customization and drops the never-applied legacy defaults (#702)', () => {
+    it('preserves the stored theme customization and only drops the never-applied legacy defaults (#702)', () => {
+      const customCss = `@import url(https://x.example/a.css); .a { color: red; }${' '.repeat(25_000)}`;
       const result = normalizePersistedSettings({
         themeCustomization: {
           primaryColor: '#3b82f6',
@@ -35,18 +36,25 @@ describe('idbProjectStore', () => {
           accentColor: 'not-a-color',
           backgroundColor: '#0f172a',
           textColor: '#f8fafc',
-          customCss: '@import url(https://x.example/a.css); .a { color: red; }',
+          customCss,
+          futureField: 'kept',
         },
       });
       expect(result.themeCustomization).toEqual({
         primaryColor: '',
         secondaryColor: '#123456',
-        accentColor: '',
+        accentColor: 'not-a-color',
         backgroundColor: '',
         textColor: '',
-        customCss: ' .a { color: red; }',
+        customCss,
+        futureField: 'kept',
         legacyDefaultsCleared: true,
       });
+    });
+
+    it('keeps a malformed theme customization untouched instead of replacing it', () => {
+      const result = normalizePersistedSettings({ themeCustomization: 'broken' });
+      expect(result.themeCustomization as unknown).toBe('broken');
     });
 
     it('keeps a former default color once the migration has run', () => {

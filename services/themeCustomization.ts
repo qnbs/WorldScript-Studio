@@ -53,6 +53,10 @@ function decodeCssEscapes(css: string): string {
 const REMOTE_IMPORT = /@import/i;
 const REMOTE_URL = /url\(\s*(?!['"]?\s*data:)/i;
 
+function hasRemoteReference(css: string): boolean {
+  return REMOTE_IMPORT.test(css) || REMOTE_URL.test(css) || hasRemoteImageSet(css);
+}
+
 /** image-set() can fetch from plain strings without url(); every string in it must be a data: URL. */
 function hasRemoteImageSet(css: string): boolean {
   for (const [, args = ''] of css.matchAll(/image-set\(([^)]*)\)/gi)) {
@@ -73,11 +77,7 @@ export function sanitizeCustomCss(css: unknown): string {
     .slice(0, MAX_CUSTOM_CSS_LENGTH)
     .replace(/@import[^;]*;?/gi, '')
     .replace(/url\(\s*(?!['"]?\s*data:)[^)]*\)/gi, 'none');
-  const decoded = decodeCssEscapes(stripped);
-  if (REMOTE_IMPORT.test(decoded) || REMOTE_URL.test(decoded) || hasRemoteImageSet(decoded)) {
-    return '';
-  }
-  return stripped;
+  return hasRemoteReference(decodeCssEscapes(stripped)) ? '' : stripped;
 }
 
 export function normalizeThemeCustomization(raw: unknown): ThemeCustomization {
@@ -93,7 +93,7 @@ function channelToLinear(channel: number): number {
   return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
-function relativeLuminance(hex: string): number {
+export function relativeLuminance(hex: string): number {
   const n = Number.parseInt(hex.slice(1), 16);
   const r = channelToLinear((n >> 16) & 0xff);
   const g = channelToLinear((n >> 8) & 0xff);
@@ -101,21 +101,28 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** WCAG 2.x contrast ratio between two #rrggbb colors (1–21). */
-export function contrastRatio(a: string, b: string): number {
-  const la = relativeLuminance(a);
-  const lb = relativeLuminance(b);
+function luminanceContrast(la: number, lb: number): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-// QNBS-v3: WCAG crossover where dark text starts to out-contrast white; both text colors are design tokens in index.css.
-const DARK_TEXT_LUMINANCE_THRESHOLD = 0.179;
+/** WCAG 2.x contrast ratio between two #rrggbb colors (1–21). */
+export function contrastRatio(a: string, b: string): number {
+  return luminanceContrast(relativeLuminance(a), relativeLuminance(b));
+}
 
-/** Picks the button text token that stays readable on a custom primary color. */
+/**
+ * Relative luminance of the --sc-on-accent-light/-dark tokens in index.css (#ffffff, #0f172a).
+ * QNBS-v3 (#702): kept as luminances so the token values stay in index.css; a unit test fails if they drift.
+ */
+export const ON_ACCENT_LIGHT_LUMINANCE = 1;
+export const ON_ACCENT_DARK_LUMINANCE = 0.008815176790098227;
+
+/** Picks the button text token with the higher contrast against the actual token colors. */
 export function pickOnAccentText(primary: string): string {
-  return relativeLuminance(primary) > DARK_TEXT_LUMINANCE_THRESHOLD
-    ? 'var(--sc-on-accent-dark)'
-    : 'var(--sc-on-accent-light)';
+  const background = relativeLuminance(primary);
+  const light = luminanceContrast(background, ON_ACCENT_LIGHT_LUMINANCE);
+  const dark = luminanceContrast(background, ON_ACCENT_DARK_LUMINANCE);
+  return dark > light ? 'var(--sc-on-accent-dark)' : 'var(--sc-on-accent-light)';
 }
 
 export interface ThemeOverrideOptions {
@@ -123,7 +130,10 @@ export interface ThemeOverrideOptions {
   highContrast: boolean;
 }
 
-function addPrimary(vars: Record<string, string>, primary: string): void {
+function addPrimary(
+  vars: Record<string, string>,
+  { primaryColor: primary }: ThemeCustomization,
+): void {
   vars['--sc-accent'] = primary;
   vars['--sc-accent-hover'] = `color-mix(in srgb, ${primary} 85%, var(--sc-shade))`;
   vars['--sc-accent-subtle'] = `color-mix(in srgb, ${primary} 12%, transparent)`;
@@ -134,7 +144,21 @@ function addPrimary(vars: Record<string, string>, primary: string): void {
   vars['--sc-ring-focus'] = `color-mix(in srgb, ${primary} 55%, transparent)`;
 }
 
-function addBackground(vars: Record<string, string>, background: string, text: string): void {
+function addSecondary(vars: Record<string, string>, tc: ThemeCustomization): void {
+  const background = tc.backgroundColor || 'var(--sc-surface-base)';
+  vars['--sc-text-secondary'] = tc.secondaryColor;
+  vars['--sc-text-muted'] = `color-mix(in srgb, ${tc.secondaryColor} 78%, ${background})`;
+  vars['--sc-muted'] = vars['--sc-text-muted'];
+}
+
+function addAccent(vars: Record<string, string>, { accentColor }: ThemeCustomization): void {
+  vars['--nav-border-active'] = accentColor;
+  vars['--sc-selection-bg'] = `color-mix(in srgb, ${accentColor} 35%, transparent)`;
+}
+
+function addBackground(vars: Record<string, string>, tc: ThemeCustomization): void {
+  const background = tc.backgroundColor;
+  const text = tc.textColor || 'var(--sc-text-primary)';
   vars['--sc-surface-base'] = background;
   vars['--sc-surface-raised'] = `color-mix(in srgb, ${background} 94%, ${text})`;
   vars['--sc-surface-overlay'] = `color-mix(in srgb, ${background} 88%, ${text})`;
@@ -167,20 +191,10 @@ export function buildThemeOverrides(
   const vars: Record<string, string> = {};
   // QNBS-v3 (#702/#818): high-contrast tokens derive from --sc-accent and the surfaces, so any user color could undo them; colors pause, custom CSS stays.
   if (highContrast) return vars;
-  if (tc.primaryColor) addPrimary(vars, tc.primaryColor);
-  if (tc.secondaryColor) {
-    const bg = tc.backgroundColor || 'var(--sc-surface-base)';
-    vars['--sc-text-secondary'] = tc.secondaryColor;
-    vars['--sc-text-muted'] = `color-mix(in srgb, ${tc.secondaryColor} 78%, ${bg})`;
-    vars['--sc-muted'] = vars['--sc-text-muted'];
-  }
-  if (tc.accentColor) {
-    vars['--nav-border-active'] = tc.accentColor;
-    vars['--sc-selection-bg'] = `color-mix(in srgb, ${tc.accentColor} 35%, transparent)`;
-  }
-  if (tc.backgroundColor) {
-    addBackground(vars, tc.backgroundColor, tc.textColor || 'var(--sc-text-primary)');
-  }
+  if (tc.primaryColor) addPrimary(vars, tc);
+  if (tc.secondaryColor) addSecondary(vars, tc);
+  if (tc.accentColor) addAccent(vars, tc);
+  if (tc.backgroundColor) addBackground(vars, tc);
   if (tc.textColor) addText(vars, tc);
   return vars;
 }

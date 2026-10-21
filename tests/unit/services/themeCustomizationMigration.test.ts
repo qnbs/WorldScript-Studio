@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { migrateLegacyThemeCustomization } from '../../../services/themeCustomizationMigration';
+import { EMPTY_THEME_CUSTOMIZATION } from '../../../services/themeCustomization';
+import {
+  hydrateThemeCustomization,
+  migrateLegacyThemeCustomization,
+} from '../../../services/themeCustomizationMigration';
 
 describe('migrateLegacyThemeCustomization (#702)', () => {
   it('clears the never-applied legacy defaults once and marks the record', () => {
@@ -25,5 +29,29 @@ describe('migrateLegacyThemeCustomization (#702)', () => {
 
   it('handles missing input', () => {
     expect(migrateLegacyThemeCustomization(undefined)).toEqual({ legacyDefaultsCleared: true });
+  });
+});
+
+describe('hydrateThemeCustomization (#702)', () => {
+  it('gives an absent record the migrated defaults', () => {
+    expect(hydrateThemeCustomization(undefined)).toEqual({
+      ...EMPTY_THEME_CUSTOMIZATION,
+      legacyDefaultsCleared: true,
+    });
+  });
+
+  it('keeps unknown fields, invalid colors and the raw CSS source', () => {
+    const raw = { accentColor: 'red', customCss: '@import "a.css";', extra: 1 };
+    expect(hydrateThemeCustomization(raw)).toEqual({
+      ...EMPTY_THEME_CUSTOMIZATION,
+      ...raw,
+      legacyDefaultsCleared: true,
+    });
+  });
+
+  it('returns a malformed non-object value unchanged and unmarked', () => {
+    const malformed = ['#ffffff'];
+    expect(hydrateThemeCustomization(malformed)).toBe(malformed);
+    expect(hydrateThemeCustomization(null)).toBeNull();
   });
 });

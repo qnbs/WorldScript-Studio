@@ -31,8 +31,7 @@ import { logger } from '../logger';
 import { admitCanonicalProjectDocument } from '../projectDocument';
 import { importedProjectJsonSchema } from '../projectImportSchema';
 import type { CanonicalProjectRawResult, SaveProjectInput } from '../storageBackend';
-import { normalizeThemeCustomization } from '../themeCustomization';
-import { migrateLegacyThemeCustomization } from '../themeCustomizationMigration';
+import { hydrateThemeCustomization } from '../themeCustomizationMigration';
 import { IdbAssetStore } from './idbAssetStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import { idbProjectCanonicalAuthority } from './idbProjectCanonicalAuthority';
@@ -80,10 +79,10 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   }
 
   validSettings.accessibility = normalizeAccessibilitySettings(incoming['accessibility']);
-  validSettings.themeCustomization = {
-    ...normalizeThemeCustomization(migrateLegacyThemeCustomization(incoming['themeCustomization'])),
-    legacyDefaultsCleared: true,
-  };
+  // QNBS-v3 (#702): preserve-first — the stored record (even a malformed one) round-trips; the runtime only applies its normalized view.
+  validSettings.themeCustomization = hydrateThemeCustomization(
+    incoming['themeCustomization'],
+  ) as Settings['themeCustomization'];
 
   const incomingPrivacy = incoming['privacy'] as Partial<Settings['privacy']> | undefined;
   // QNBS-v3: SEC — analytics default ON (local-only metadata, never leaves device), gated by
