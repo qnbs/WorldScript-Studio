@@ -3,6 +3,7 @@ import settingsReducer, {
   applyInitialTheme,
   settingsActions,
 } from '../../features/settings/settingsSlice';
+import { normalizePersistedSettings } from '../../services/storage/idbProjectStore';
 
 const initState = () => settingsReducer(undefined, { type: '@@INIT' });
 
@@ -455,5 +456,59 @@ describe('settingsSlice', () => {
     const reset = settingsReducer(state, settingsActions.resetToDefaults());
     expect(reset.writingSurfaceStyle as string).toBe('future-surface');
     expect(reset.appearancePreset).toBe(initState().appearancePreset);
+  });
+
+  /** Known fields holding data of the wrong shape, plus valid edits beside them. */
+  const withIncompatibleFields = () =>
+    ({
+      ...initState(),
+      fontSize: { px: 22 },
+      themeCustomization: {
+        ...initState().themeCustomization,
+        primaryColor: { r: 1, g: 2, b: 3 },
+        customCss: 42,
+        accentColor: '#00ff00',
+      },
+      advancedEditor: { ...initState().advancedEditor, customDictionary: null, wordCount: false },
+      voice: 'broken-voice',
+    }) as unknown as ReturnType<typeof initState>;
+
+  it('resetToDefaults keeps incompatible values inside known fields and resets the valid ones', () => {
+    const reset = settingsReducer(
+      withIncompatibleFields(),
+      settingsActions.resetToDefaults(),
+    ) as unknown as Record<string, Record<string, unknown>>;
+    const defaults = initState();
+
+    expect(reset['fontSize']).toEqual({ px: 22 });
+    expect(reset['themeCustomization']?.['primaryColor']).toEqual({ r: 1, g: 2, b: 3 });
+    expect(reset['themeCustomization']?.['customCss']).toBe(42);
+    expect(reset['themeCustomization']?.['accentColor']).toBe(
+      defaults.themeCustomization.accentColor,
+    );
+    expect(reset['advancedEditor']?.['customDictionary']).toBeNull();
+    expect(reset['advancedEditor']?.['wordCount']).toBe(defaults.advancedEditor.wordCount);
+    expect(reset['voice']).toBe('broken-voice');
+  });
+
+  it('a second resetToDefaults changes nothing (idempotent)', () => {
+    const once = settingsReducer(withIncompatibleFields(), settingsActions.resetToDefaults());
+    expect(settingsReducer(once, settingsActions.resetToDefaults())).toEqual(once);
+  });
+
+  it('the reset state survives persistence hydration with the kept values intact', () => {
+    const reset = settingsReducer(withIncompatibleFields(), settingsActions.resetToDefaults());
+    const hydrated = normalizePersistedSettings(
+      structuredClone(reset) as unknown as Record<string, unknown>,
+    ) as unknown as Record<string, Record<string, unknown>>;
+
+    expect(hydrated['themeCustomization']?.['primaryColor']).toEqual({ r: 1, g: 2, b: 3 });
+    expect(hydrated['themeCustomization']?.['customCss']).toBe(42);
+    expect(hydrated['fontSize']).toEqual({ px: 22 });
+    const again = settingsReducer(
+      hydrated as unknown as ReturnType<typeof initState>,
+      settingsActions.resetToDefaults(),
+    );
+    expect(again.themeCustomization).toEqual(reset.themeCustomization);
   });
 });

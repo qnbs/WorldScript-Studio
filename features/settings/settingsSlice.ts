@@ -150,19 +150,29 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** JSON shape of a stored value: 'record', 'array', 'null' or its typeof. */
+function shapeOf(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value === 'object' ? 'record' : typeof value;
+}
+
 /**
- * Default value for one settings group (#818). Fields this version does not know, e.g. from a
- * newer client, stay as stored (preserve-first); every known field takes its default. A stored
- * value that should be a group but is not (malformed) is kept untouched: the runtime never applies
- * it, and a reset must not silently replace data it cannot interpret.
+ * Default value for one setting (#818), applied field by field inside settings groups
+ * (preserve-first). A field this version does not know, e.g. from a newer client, stays as stored.
+ * A stored value whose shape differs from its default (a group stored as a string, a colour stored
+ * as an object, a list stored as null) is kept untouched: the runtime never applies it, and a reset
+ * must not silently replace data it cannot interpret. Every other known field takes its default; a
+ * default of null or undefined has no shape to compare, so its field is reset.
  */
-function resetGroup(current: unknown, fallback: unknown): unknown {
+function resetValue(current: unknown, fallback: unknown): unknown {
   const fresh: unknown = structuredClone(fallback);
-  if (!isPlainRecord(fresh)) return fresh;
-  if (current !== undefined && !isPlainRecord(current)) return current;
-  if (!isPlainRecord(current)) return fresh;
-  const unknownFields = Object.entries(current).filter(([key]) => !(key in fresh));
-  return { ...Object.fromEntries(unknownFields), ...fresh };
+  if (current === undefined || fresh === null || fresh === undefined) return fresh;
+  if (shapeOf(current) !== shapeOf(fresh)) return current;
+  if (!isPlainRecord(fresh) || !isPlainRecord(current)) return fresh;
+  const merged: Record<string, unknown> = { ...current };
+  for (const [key, value] of Object.entries(fresh)) merged[key] = resetValue(current[key], value);
+  return merged;
 }
 
 export const defaultThemeCustomization = defaultSettings.themeCustomization;
@@ -188,7 +198,7 @@ const settingsSlice = createSlice({
       const target = state as unknown as Record<string, unknown>;
       for (const [key, value] of Object.entries(defaultSettings)) {
         if (isUnsupportedChoice(key, target[key])) continue;
-        target[key] = resetGroup(target[key], value);
+        target[key] = resetValue(target[key], value);
       }
       // A known setting without a default: the reset returns the editor to the built-in fonts.
       delete state.customFont;
