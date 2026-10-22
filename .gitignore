@@ -87,6 +87,10 @@ public/locales/*/*.json
 # Never commit: these are build artifacts of an existing dependency, not source.
 public/duckdb/
 
+# License texts of bundled fonts and the app license, copied from the pinned dependencies by
+# scripts/copy-third-party-licenses.mjs (predev/prebuild). Build artifacts, not source.
+public/licenses/
+
 # Claude Code local config and Lighthouse CI results
 .claude/
 .lighthouseci/
