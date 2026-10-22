@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -337,6 +337,18 @@ describe('runCheck (real git fixture, staged mode)', () => {
       if (original.LC_ALL === undefined) delete process.env['LC_ALL'];
       else process.env['LC_ALL'] = original.LC_ALL;
     }
+  });
+
+  // QNBS-v3: for a dot-leading path, `git show :.github/…` reports an "ambiguous argument" instead of "does not exist".
+  it('treats a deleted dot-leading workflow file as a skip, not a failure', () => {
+    mkdirSync(join(fixtureDir, '.github', 'workflows'), { recursive: true });
+    writeFileSync(join(fixtureDir, '.github', 'workflows', 'gone.yml'), 'name: gone\n');
+    git(['add', '-A']);
+    git(['commit', '-q', '-m', 'add workflow']);
+    git(['rm', '-q', '.github/workflows/gone.yml']);
+    const result = runCheck({ mode: 'staged', cwd: fixtureDir });
+    expect(result.failedClosed).toBe(false);
+    expect(result.ok).toBe(true);
   });
 
   it('passes a clean single-line addition', () => {
