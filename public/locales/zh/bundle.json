@@ -1924,6 +1924,7 @@
   "settings.ai.temperature.creative": "2 – 创意",
   "settings.ai.temperature.precise": "0 – 精确",
   "settings.ai.testConnection": "测试连接",
+  "settings.ai.testError.aiModeBlocked": "当前 AI 模式仅允许本地模型。要测试此云端连接，请更改 AI 模式。",
   "settings.ai.testError.corsSuspected": "Likely CORS ({{url}}) — verify OLLAMA_ORIGINS includes this page's origin, or check the server is actually running. Browsers give an identical error for both cases.",
   "settings.ai.testError.desktopRequired": "Ollama 和本地 OpenAI 兼容服务器仅在桌面应用中可用。浏览器会阻止网页直接连接到 localhost（CORS 和 Private Network Access）。",
   "settings.ai.testError.httpError": "HTTP {{status}}",

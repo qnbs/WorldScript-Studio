@@ -7,6 +7,7 @@ import { assertCspConnectEndpointAllowed } from '../../network/cspOriginPolicy';
 import { testOllamaConnection } from '../../ollamaService';
 import { storageService } from '../../storageService';
 import { isTauriRuntime } from '../../tauriRuntime';
+import { assertCloudAiAllowedSync } from '../aiPolicy';
 // QNBS-v3: connection tests use the same current Anthropic default as the catalog and proxy.
 import { DEFAULT_ANTHROPIC_MODEL_ID } from '../cloudModelCatalog';
 import type { AIRequestOptions } from '../contracts/providerRequest';
@@ -29,6 +30,7 @@ export type TestConnectionErrorKind =
   | 'timeout'
   | 'unreachable'
   | 'policyBlocked'
+  | 'aiModeBlocked'
   | 'pluginUnavailable'
   | 'desktopRequired'
   | 'proxyUnavailableStaticHost'
@@ -47,10 +49,24 @@ export interface TestConnectionResult {
   localServer?: LocalServerDiagnostic;
 }
 
+/** A cloud provider under a local-only AI mode is refused before any key is read or request made. */
+function aiModeRefusal(provider: AIProvider): TestConnectionResult | null {
+  try {
+    assertCloudAiAllowedSync(provider);
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: message, kind: 'aiModeBlocked' };
+  }
+}
+
 export async function testAIConnection(
   provider: AIProvider,
   opts: Partial<AIRequestOptions>,
 ): Promise<TestConnectionResult> {
+  // QNBS-v3 (#1129, #1122): the AI mode is the single cloud authority; a connection test is a cloud request too.
+  const refusal = aiModeRefusal(provider);
+  if (refusal) return refusal;
   try {
     switch (provider) {
       case 'openai': {
@@ -66,6 +82,9 @@ export async function testAIConnection(
         const root = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
         // QNBS-v3: connection tests reuse the same endpoint policy as production requests.
         assertCspConnectEndpointAllowed(root, 'OpenAI-compatible endpoint');
+        // QNBS-v3 (#1129): the mode may have changed while the key read was pending; re-check right before the request.
+        const lateRefusal = aiModeRefusal(provider);
+        if (lateRefusal) return lateRefusal;
         const res = await fetch(`${root}/models`, {
           headers: { Authorization: `Bearer ${apiKey}` },
           signal: AbortSignal.timeout(8000),
@@ -122,6 +141,8 @@ export async function testAIConnection(
             params: { provider: 'Claude' },
           };
         }
+        const lateRefusal = aiModeRefusal(provider);
+        if (lateRefusal) return lateRefusal;
         // QNBS-v3: Anthropic has no public /v1/models endpoint — a minimal (max_tokens: 1) real request is the practical connectivity check, mirroring the pattern used for Grok.
         // QNBS-v3 (CodeRabbit): bounded like every sibling connectivity check (testOllamaConnection uses timeoutMs: 5000; openai/grok/gemini use AbortSignal.timeout(8000)) — a stalled native/proxy HTTP call must not hang the Settings test spinner indefinitely.
         const res = isDesktop
@@ -170,6 +191,8 @@ export async function testAIConnection(
             params: { provider: 'Grok' },
           };
         }
+        const lateRefusal = aiModeRefusal(provider);
+        if (lateRefusal) return lateRefusal;
         const res = await fetch('https://api.x.ai/v1/models', {
           headers: { Authorization: `Bearer ${apiKey}` },
           signal: AbortSignal.timeout(8000),
@@ -194,10 +217,13 @@ export async function testAIConnection(
             params: { provider: 'Gemini' },
           };
         }
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`,
-          { signal: AbortSignal.timeout(8000) },
-        );
+        const lateRefusal = aiModeRefusal(provider);
+        if (lateRefusal) return lateRefusal;
+        // QNBS-v3 (#1129): the key travels in Google's `x-goog-api-key` header, never in the URL.
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+          headers: { 'x-goog-api-key': geminiKey },
+          signal: AbortSignal.timeout(8000),
+        });
         if (!res.ok) {
           return {
             ok: false,

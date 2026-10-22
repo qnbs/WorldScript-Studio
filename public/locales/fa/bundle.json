@@ -1924,6 +1924,7 @@
   "settings.ai.temperature.creative": "2- خلاق",
   "settings.ai.temperature.precise": "0 - دقیق",
   "settings.ai.testConnection": "تست اتصال",
+  "settings.ai.testError.aiModeBlocked": "حالت فعلی هوش مصنوعی فقط مدل‌های محلی را مجاز می‌داند. برای آزمایش این اتصال ابری، حالت هوش مصنوعی را تغییر دهید.",
   "settings.ai.testError.corsSuspected": "Likely CORS ({{url}}) — verify OLLAMA_ORIGINS includes this page's origin, or check the server is actually running. Browsers give an identical error for both cases.",
   "settings.ai.testError.desktopRequired": "Ollama و سرورهای محلی سازگار با OpenAI فقط در برنامه دسکتاپ در دسترس هستند. مرورگرها اتصالات مستقیم از صفحات وب به localhost را مسدود می‌کنند (CORS و Private Network Access).",
   "settings.ai.testError.httpError": "HTTP {{status}}",

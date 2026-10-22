@@ -1924,6 +1924,7 @@
   "settings.ai.temperature.creative": "2 - Skapandi",
   "settings.ai.temperature.precise": "0 - Nákvæmt",
   "settings.ai.testConnection": "Prófaðu tengingu",
+  "settings.ai.testError.aiModeBlocked": "Núverandi gervigreindarhamur leyfir aðeins staðbundin líkön. Skiptu um gervigreindarham til að prófa þessa skýjatengingu.",
   "settings.ai.testError.corsSuspected": "Likely CORS ({{url}}) — verify OLLAMA_ORIGINS includes this page's origin, or check the server is actually running. Browsers give an identical error for both cases.",
   "settings.ai.testError.desktopRequired": "Ollama og staðbundnir OpenAI-samhæfir netþjónar eru aðeins tiltækir í skjáborðsforritinu. Vafrar loka fyrir bein tengsl frá vefsíðum við localhost (CORS og Private Network Access).",
   "settings.ai.testError.httpError": "HTTP {{status}}",

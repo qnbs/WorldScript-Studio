@@ -255,6 +255,7 @@
   "settings.ai.temperature.creative": "2 – Δημιουργικό",
   "settings.ai.temperature.precise": "0 – Ακριβές",
   "settings.ai.testConnection": "Δοκιμαστική σύνδεση",
+  "settings.ai.testError.aiModeBlocked": "Η τρέχουσα λειτουργία ΤΝ επιτρέπει μόνο τοπικά μοντέλα. Αλλάξτε τη λειτουργία ΤΝ για να ελέγξετε αυτή τη σύνδεση cloud.",
   "settings.ai.testError.corsSuspected": "Likely CORS ({{url}}) — verify OLLAMA_ORIGINS includes this page's origin, or check the server is actually running. Browsers give an identical error for both cases.",
   "settings.ai.testError.desktopRequired": "Το Ollama και οι τοπικοί διακομιστές συμβατοί με OpenAI είναι διαθέσιμοι μόνο στην εφαρμογή επιφάνειας εργασίας. Οι φυλλομετρητές αποκλείουν άμεσες συνδέσεις από ιστοσελίδες προς το localhost (CORS και Private Network Access).",
   "settings.ai.testError.httpError": "HTTP {{status}}",

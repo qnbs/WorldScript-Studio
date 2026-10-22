@@ -1924,6 +1924,7 @@
   "settings.ai.temperature.creative": "2 – Kreatív",
   "settings.ai.temperature.precise": "0 – Pontos",
   "settings.ai.testConnection": "Kapcsolat tesztelése",
+  "settings.ai.testError.aiModeBlocked": "A jelenlegi MI-mód csak helyi modelleket enged. A felhőkapcsolat teszteléséhez válts MI-módot.",
   "settings.ai.testError.corsSuspected": "Likely CORS ({{url}}) — verify OLLAMA_ORIGINS includes this page's origin, or check the server is actually running. Browsers give an identical error for both cases.",
   "settings.ai.testError.desktopRequired": "Az Ollama és a helyi OpenAI-kompatibilis kiszolgálók csak az asztali alkalmazásban érhetők el. A böngészők blokkolják a weboldalak közvetlen kapcsolatait a localhosttal (CORS és Private Network Access).",
   "settings.ai.testError.httpError": "HTTP {{status}}",

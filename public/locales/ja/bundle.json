@@ -1924,6 +1924,7 @@
   "settings.ai.temperature.creative": "2 – クリエイティブ",
   "settings.ai.temperature.precise": "0 – 正確",
   "settings.ai.testConnection": "テスト接続",
+  "settings.ai.testError.aiModeBlocked": "現在の AI モードではローカル モデルのみ使用できます。このクラウド接続をテストするには AI モードを変更してください。",
   "settings.ai.testError.corsSuspected": "Likely CORS ({{url}}) — verify OLLAMA_ORIGINS includes this page's origin, or check the server is actually running. Browsers give an identical error for both cases.",
   "settings.ai.testError.desktopRequired": "Ollama およびローカルの OpenAI 互換サーバーはデスクトップアプリでのみ利用できます。ブラウザは Web ページから localhost への直接接続をブロックします（CORS および Private Network Access）。",
   "settings.ai.testError.httpError": "HTTP {{status}}",
