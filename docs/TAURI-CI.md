@@ -137,7 +137,9 @@ Complete these steps once before pushing the first signed release tag:
 
 3. Push a v*.* tag  (e.g. git tag v1.6.0 && git push --tags)
    → All 3 matrix jobs build and sign bundles
-   → release job uploads installers + latest.json to GitHub Release
+   → security-audit runs the exact-ref OSV audit of the tagged commit (#911)
+   → release job uploads installers + latest.json to GitHub Release, only if
+     security-audit succeeded for that same SHA (otherwise it never runs)
 
 4. Verify release-assets in the GitHub Release:
    - tauri-bundle-ubuntu-22.04  → .deb, .AppImage + .sig files

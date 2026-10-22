@@ -846,7 +846,18 @@ function collectActionSteps(doc) {
 const DOCKER_DIGEST_PATTERN = /@sha256:[0-9a-f]{64}$/;
 
 // QNBS-v3: checks one uses: value, resolving aliases first so *ref hides no bypass step 6/2 found.
-function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, failures }) {
+// QNBS-v3 (#911): a job-level call to a reusable workflow in .github/workflows is itself a governed workflow file (listWorkflowFiles checks its pins and permissions).
+const LOCAL_REUSABLE_WORKFLOW_PATTERN = /^\.\/\.github\/workflows\/[A-Za-z0-9_-]+\.ya?ml$/;
+
+function checkUsesRef({
+  usesNode,
+  containerNode,
+  doc,
+  fileName,
+  lineCounter,
+  failures,
+  allowLocalWorkflow = false,
+}) {
   const resolvedNode = resolveNode(usesNode, doc);
   if (!resolvedNode || typeof resolvedNode.value !== 'string') return;
   const ref = resolvedNode.value;
@@ -860,6 +871,7 @@ function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, fai
   if (ref.startsWith('./')) {
     // QNBS-v3: only .github/actions/** is scanned by listActionFiles — any other local ref is unchecked.
     if (ref.startsWith('./.github/actions/')) return;
+    if (allowLocalWorkflow && LOCAL_REUSABLE_WORKFLOW_PATTERN.test(ref)) return;
     failures.push({
       file: fileName,
       message: `${loc}local action reference "${ref}" is outside the governed .github/actions/ directory and is never pin-checked`,
@@ -919,7 +931,15 @@ export function checkActionPins(fileName, doc, failures, options = {}) {
     for (const [, jobNode] of jobMap(doc)) {
       const usesNode = jobNode?.get?.('uses', true);
       if (!usesNode) continue;
-      checkUsesRef({ usesNode, containerNode: jobNode, doc, fileName, lineCounter, failures });
+      checkUsesRef({
+        usesNode,
+        containerNode: jobNode,
+        doc,
+        fileName,
+        lineCounter,
+        failures,
+        allowLocalWorkflow: true,
+      });
     }
   }
   // QNBS-v3: a Docker action (runs.using: docker) has no steps — its own image: needs the same pin.
@@ -1066,6 +1086,161 @@ export function checkPublishingBoundary(fileName, doc, failures) {
   }
 }
 
+// QNBS-v3 (#911): every publishing job runs only after an exact-ref OSV audit of the commit it publishes.
+const RELEASE_SECURITY_GATED_JOBS = {
+  'tauri-build.yml': new Set(['release']),
+  'docker.yml': new Set(['build-push']),
+};
+const RELEASE_SECURITY_WORKFLOW = 'release-security-audit.yml';
+const RELEASE_SECURITY_CALL = `./.github/workflows/${RELEASE_SECURITY_WORKFLOW}`;
+const GITHUB_SHA_EXPRESSION = `\${{ github.sha }}`;
+const EXPECTED_SHA_INPUT_EXPRESSION = `\${{ inputs.expected-sha }}`;
+const RELEASE_SECURITY_REQUIRED_CONDITIONS = [
+  "needs.security-audit.result == 'success'",
+  'needs.security-audit.outputs.audited-sha == github.sha',
+];
+const RELEASE_SECURITY_SCAN_ARGS = [
+  '--config=src-tauri/osv-scanner.toml',
+  '--lockfile=pnpm-lock.yaml',
+  '--lockfile=src-tauri/Cargo.lock',
+  '--lockfile=crates/Cargo.lock',
+];
+// A status function in a job `if` replaces the implicit success() requirement on its needs.
+const STATUS_FUNCTION_PATTERN = /\b(?:always|failure|cancelled|success)\s*\(/;
+
+function jobHasWritePermission(jobNode, doc) {
+  const permissions = permissionEntries(jobNode?.get?.('permissions', true), doc);
+  if (!permissions) return false;
+  if (permissions.scalar !== undefined) return permissions.scalar !== 'read-all';
+  return Object.values(permissions.map).includes('write');
+}
+
+function checkReleaseSecurityCaller(fileName, jobs, doc, failures) {
+  const auditJob = jobs.get('security-audit');
+  if (!auditJob) {
+    failures.push({ file: fileName, message: 'missing job "security-audit" (#911 release gate)' });
+    return;
+  }
+  if (nodeValue(auditJob.get?.('uses', true), doc) !== RELEASE_SECURITY_CALL) {
+    failures.push({
+      file: fileName,
+      message: `job "security-audit" must call ${RELEASE_SECURITY_CALL}`,
+    });
+  }
+  const expectedSha = nodeValue(auditJob.get?.('with', true), doc)?.['expected-sha'];
+  if (expectedSha !== GITHUB_SHA_EXPRESSION) {
+    failures.push({
+      file: fileName,
+      message: `job "security-audit" must audit expected-sha: ${GITHUB_SHA_EXPRESSION}`,
+    });
+  }
+}
+
+function checkReleaseSecurityGatedJob(fileName, jobName, jobNode, doc, failures) {
+  if (!resolveNeedsList(jobNode?.get?.('needs', true), doc).includes('security-audit')) {
+    failures.push({
+      file: fileName,
+      message: `publishing job "${jobName}" must need "security-audit"`,
+    });
+  }
+  const condition = String(nodeValue(jobNode?.get?.('if', true), doc) ?? '');
+  for (const required of RELEASE_SECURITY_REQUIRED_CONDITIONS) {
+    if (!condition.includes(required)) {
+      failures.push({
+        file: fileName,
+        message: `publishing job "${jobName}" if: must require ${required}`,
+      });
+    }
+  }
+  if (STATUS_FUNCTION_PATTERN.test(condition)) {
+    failures.push({
+      file: fileName,
+      message: `publishing job "${jobName}" if: must not use a status function; it would let the job run after a failed, skipped or cancelled audit`,
+    });
+  }
+}
+
+export function checkReleaseSecurityGate(fileName, doc, failures) {
+  const gated = RELEASE_SECURITY_GATED_JOBS[fileName];
+  if (!gated) return;
+  const jobs = jobMap(doc);
+  checkReleaseSecurityCaller(fileName, jobs, doc, failures);
+  for (const [jobName, jobNode] of jobs) {
+    if (gated.has(jobName)) {
+      checkReleaseSecurityGatedJob(fileName, jobName, jobNode, doc, failures);
+    } else if (jobHasWritePermission(jobNode, doc)) {
+      failures.push({
+        file: fileName,
+        message: `job "${jobName}" holds a write permission but is not behind the #911 release security gate`,
+      });
+    }
+  }
+  for (const jobName of gated) {
+    if (!jobs.has(jobName)) {
+      failures.push({ file: fileName, message: `gated publishing job "${jobName}" is missing` });
+    }
+  }
+}
+
+function findAuditSteps(doc) {
+  const job = jobMap(doc).get('osv-audit');
+  const steps = resolveSteps(job?.get?.('steps', true), doc).map((step) => step?.toJSON?.() ?? {});
+  return { job, steps };
+}
+
+// QNBS-v3 (#911): the reusable audit must stay callable-only, check out the requested SHA, prove it, and scan all three lockfiles.
+export function checkReleaseSecurityWorkflow(fileName, doc, failures) {
+  if (fileName !== RELEASE_SECURITY_WORKFLOW) return;
+  const on = nodeValue(doc.get('on', true), doc);
+  const triggers = on && typeof on === 'object' ? Object.keys(on) : [];
+  if (triggers.length !== 1 || triggers[0] !== 'workflow_call') {
+    failures.push({ file: fileName, message: 'must be triggered by workflow_call only' });
+  }
+  const { job, steps } = findAuditSteps(doc);
+  if (!job) {
+    failures.push({ file: fileName, message: 'missing job "osv-audit"' });
+    return;
+  }
+  const checkout = steps.find((step) => String(step.uses ?? '').startsWith('actions/checkout@'));
+  if (checkout?.with?.ref !== EXPECTED_SHA_INPUT_EXPRESSION) {
+    failures.push({
+      file: fileName,
+      message: `checkout must use ref: ${EXPECTED_SHA_INPUT_EXPRESSION}`,
+    });
+  }
+  const provenance = steps.some((step) =>
+    /git rev-parse HEAD[\s\S]*EXPECTED_SHA/.test(String(step.run ?? '')),
+  );
+  if (!provenance) {
+    failures.push({
+      file: fileName,
+      message: 'must verify the checked-out HEAD equals expected-sha',
+    });
+  }
+  const scan = steps.find((step) =>
+    String(step.uses ?? '').startsWith('google/osv-scanner-action/osv-scanner-action@'),
+  );
+  const scanArgs = String(scan?.with?.['scan-args'] ?? '');
+  for (const arg of RELEASE_SECURITY_SCAN_ARGS) {
+    if (
+      !scanArgs
+        .split('\n')
+        .map((line) => line.trim())
+        .includes(arg)
+    ) {
+      failures.push({ file: fileName, message: `OSV scan must include ${arg}` });
+    }
+  }
+  const scanIndex = steps.indexOf(scan);
+  const resultIndex = steps.findIndex((step) => step.id === 'result');
+  if (scanIndex < 0 || resultIndex < scanIndex) {
+    failures.push({
+      file: fileName,
+      message: 'the audited-sha output step must come after the OSV scan',
+    });
+  }
+}
+
 export function getTriggers(doc) {
   const on = doc.get('on', true) ?? doc.get(true, true);
   const triggers = { workflowDispatch: false, tagPush: false };
@@ -1101,6 +1276,8 @@ export function checkWorkflowFile(filePath, dependencies = {}) {
   checkActionPins(fileName, doc, failures, { fileKind: 'workflow', lineCounter });
   checkAggregatorNeeds(fileName, doc, failures);
   checkPublishingBoundary(fileName, doc, failures);
+  checkReleaseSecurityGate(fileName, doc, failures);
+  checkReleaseSecurityWorkflow(fileName, doc, failures);
   checkReviewerGovernanceGate(fileName, doc, failures);
   checkMergeAdmissionGate(fileName, doc, failures);
   checkReviewerGovernanceTrustWorkflow(fileName, doc, failures);
@@ -1135,6 +1312,7 @@ export function checkAllWorkflows(root = projectRoot, dependencies = {}) {
       'pr-changelog-reference.yml',
       'required PR CHANGELOG guard must remain present for main-context merge admission',
     ],
+    [RELEASE_SECURITY_WORKFLOW, 'required #911 release security audit must remain present'],
   ];
   const requiredWorkflowFailures = requiredWorkflows
     .filter(([fileName]) => {

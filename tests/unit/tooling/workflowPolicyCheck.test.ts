@@ -1226,6 +1226,10 @@ describe('checkAllWorkflows', () => {
         file: 'pr-changelog-reference.yml',
         message: 'required PR CHANGELOG guard must remain present for main-context merge admission',
       },
+      {
+        file: 'release-security-audit.yml',
+        message: 'required #911 release security audit must remain present',
+      },
     ]);
   });
 
@@ -1279,7 +1283,7 @@ describe('checkAllWorkflows', () => {
         throw new Error('symlink not allowed under .github/actions: /repo/.github/actions/setup');
       },
     });
-    expect(failures).toHaveLength(4);
+    expect(failures).toHaveLength(5);
     expect(failures.some((failure) => failure.file === 'reviewer-governance-trust.yml')).toBe(true);
     expect(failures.some((failure) => /symlink/i.test(failure.message))).toBe(true);
   });

@@ -155,6 +155,13 @@ registry gzip-decoding failure mode, while OSV failures remain blocking.
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
 >
+> **Release publication security gate (#911):** Tauri `release` (GitHub Release assets and the updater `latest.json`) and GHCR `build-push` (version, `major.minor` and `latest`, including metadata-action's `latest=auto`) each need a `security-audit` job. That job calls [`release-security-audit.yml`](../.github/workflows/release-security-audit.yml) with `expected-sha: ${{ github.sha }}`.
+>
+> - **What the audit does:** checks out that exact commit, proves `HEAD` equals it, and runs the same pinned OSV scanner and `src-tauri/osv-scanner.toml` over `pnpm-lock.yaml`, `src-tauri/Cargo.lock` and `crates/Cargo.lock`. Only then does it emit `audited-sha`.
+> - **The publish condition:** each publish job's `if` requires `needs.security-audit.result == 'success'` and `needs.security-audit.outputs.audited-sha == github.sha`, with no status function. A finding, scanner or database error, skip, cancellation, timeout or SHA mismatch therefore leaves it unrun. This applies to tag pushes and to `workflow_dispatch` alike.
+> - **Policy enforcement:** `scripts/workflow-policy-check.mjs` (`checkReleaseSecurityGate`, `checkReleaseSecurityWorkflow`) fails CI if any of this is weakened, or if a new write-privileged job appears in those workflows outside the gate.
+> - **Live proof without publishing:** [`release-gate-proof.yml`](../.github/workflows/release-gate-proof.yml) is dispatch-only. Its publish stand-in uses the identical condition.
+>
 > **Maintainer follow-up (not done here):** switching branch protection's required-checks list from the
 > 4 individual contexts to just `ci-success` is a branch-protection settings change — out of scope for
 > an automated PR. Do it manually once `ci-success` has run green on `main` at least once: repo

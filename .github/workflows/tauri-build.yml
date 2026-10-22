@@ -40,6 +40,18 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/signing/verify-github-signatures.mjs
 
+  # QNBS-v3 (#911): exact-ref OSV audit of the tagged commit; `release` runs only on its success for the identical SHA.
+  security-audit:
+    name: 🔒 Release security audit
+    needs: [verify-release-tag]
+    if: >-
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-security-audit.yml
+    with:
+      expected-sha: ${{ github.sha }}
+
   # QNBS-v3: cheap defense-in-depth gate (no pnpm install needed) so a Rust/npm plugin mismatch fails in seconds, not after the ~45min matrix — the v1.28.5 failure class.
   # QNBS-v3: needs verify-release-tag so a tag that fails signature verification never gets this job's checkout+script execution either, not just the bundle matrix.
   parity-preflight:
@@ -190,9 +202,10 @@ jobs:
   # -----------------------------------------------------------------
   release:
     name: GitHub Release
-    needs: [bundle]
+    # QNBS-v3 (#911): no status function in `if`, so any failed, skipped or cancelled need (bundle or security-audit) leaves this job unrun.
+    needs: [bundle, security-audit]
     if: >-
-      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
