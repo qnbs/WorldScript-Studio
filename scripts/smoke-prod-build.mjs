@@ -95,16 +95,17 @@ try {
     });
   });
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
-  // QNBS-v3: index.html ships a static boot shell and services/bootStatus.ts can show a startup notice; neither is the mounted app, so both are rejected explicitly.
+  // QNBS-v3: index.html ships a static boot shell, services/bootStatus.ts can show a startup notice and StorageErrorScreen a recovery screen; none is the mounted app, so all are rejected explicitly.
   const appMounted = () => {
     const root = document.getElementById('root');
     const first = root?.firstElementChild;
     if (!root || !first) return false;
-    if (first.hasAttribute('data-boot-shell') || first.hasAttribute('data-startup-notice'))
-      return false;
+    const markers = ['data-boot-shell', 'data-startup-notice', 'data-startup-recovery'];
+    if (markers.some((marker) => first.hasAttribute(marker))) return false;
     return root.innerHTML.length > 100;
   };
-  await page.waitForFunction(appMounted, { timeout: 15000 }).catch(() => {});
+  // Predicate first, its argument second, options third (Playwright signature).
+  await page.waitForFunction(appMounted, undefined, { timeout: 15000 }).catch(() => {});
   const mounted = await page.evaluate(appMounted);
   const rootLen = await page.evaluate(
     () => document.getElementById('root')?.innerHTML.length ?? -1,
