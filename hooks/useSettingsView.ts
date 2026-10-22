@@ -54,8 +54,16 @@ import type {
   WritingGoal,
   WritingSurfaceStyle,
 } from '../types';
+import { useRestoreDefaultSettings } from './useRestoreDefaultSettings';
 
-type ModalState = 'closed' | 'reset' | 'restore' | 'delete' | 'create' | 'factoryReset';
+type ModalState =
+  | 'closed'
+  | 'reset'
+  | 'restore'
+  | 'delete'
+  | 'create'
+  | 'settingsReset'
+  | 'factoryReset';
 type ModalPayload = { id?: number; name?: string; date?: string; wordCount?: number };
 
 // QNBS-v3: the whole try/catch lives here, not in useSettingsView's own body, so this branch's complexity is never attributed to that already-flagged hotspot (CodeScene).
@@ -71,6 +79,11 @@ async function performFactoryReset(
     });
     toast.error(t('settings.data.dangerZone.factoryReset.failed'));
   }
+}
+
+// QNBS-v3: useApp.ts listens for this event and re-opens the WelcomePortal; module-level, so it needs no memoization inside the hook.
+function repeatOnboarding(): void {
+  window.dispatchEvent(new CustomEvent('worldscript:openPortal'));
 }
 
 export const useSettingsView = () => {
@@ -358,15 +371,11 @@ export const useSettingsView = () => {
     setModal({ state: 'closed', payload: {} });
   }, [dispatch, t]);
 
+  const handleRestoreDefaultSettings = useRestoreDefaultSettings(dispatch, toast, t, setModal);
   const handleFactoryReset = useCallback(async () => {
     setModal({ state: 'closed', payload: {} });
     await performFactoryReset(t, toast);
   }, [t, toast]);
-
-  const handleRepeatOnboarding = useCallback(() => {
-    // QNBS-v3: useApp.ts listens for this event and re-opens the WelcomePortal.
-    window.dispatchEvent(new CustomEvent('worldscript:openPortal'));
-  }, []);
 
   const handleCreateSnapshot = useCallback(async () => {
     await createCanonicalProjectSnapshot(snapshotName, project.id, project);
@@ -462,8 +471,9 @@ export const useSettingsView = () => {
       handleExport,
       handleImport,
       handleResetProject,
+      handleRestoreDefaultSettings,
       handleFactoryReset,
-      handleRepeatOnboarding,
+      handleRepeatOnboarding: repeatOnboarding,
       handleCreateSnapshot,
       handleRestoreSnapshot,
       handleDeleteSnapshot,
@@ -491,8 +501,8 @@ export const useSettingsView = () => {
       handleExport,
       handleImport,
       handleResetProject,
+      handleRestoreDefaultSettings,
       handleFactoryReset,
-      handleRepeatOnboarding,
       handleCreateSnapshot,
       handleRestoreSnapshot,
       handleDeleteSnapshot,

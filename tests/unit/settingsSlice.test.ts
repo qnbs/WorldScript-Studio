@@ -3,6 +3,7 @@ import settingsReducer, {
   applyInitialTheme,
   settingsActions,
 } from '../../features/settings/settingsSlice';
+import { normalizePersistedSettings } from '../../services/storage/idbProjectStore';
 
 const initState = () => settingsReducer(undefined, { type: '@@INIT' });
 
@@ -377,5 +378,138 @@ describe('settingsSlice', () => {
 
     expect(document.body.classList.contains('dark-theme')).toBe(true);
     expect(document.body.classList.contains('auto-theme')).toBe(false);
+  });
+
+  // QNBS-v3 (#818): restore defaults resets every setting except the ones that gate data leaving the device.
+  it('resetToDefaults restores defaults but keeps AI mode, privacy, collaboration and language', () => {
+    let state = initState();
+    state = settingsReducer(state, settingsActions.setTheme('light'));
+    state = settingsReducer(state, settingsActions.setAiMode('local'));
+    state = settingsReducer(state, settingsActions.setPrivacy({ analyticsEnabled: false }));
+    state = settingsReducer(
+      state,
+      settingsActions.setThemeCustomization({ primaryColor: '#ff0000', customCss: '.a{}' }),
+    );
+    state = settingsReducer(
+      state,
+      settingsActions.setCollaboration({ webrtcSignalingUrls: ['wss://own.example'] }),
+    );
+    state = { ...state, language: 'de', fontSize: 22 };
+
+    const reset = settingsReducer(state, settingsActions.resetToDefaults());
+    const defaults = initState();
+    expect(reset.theme).toBe(defaults.theme);
+    expect(reset.fontSize).toBe(defaults.fontSize);
+    expect(reset.themeCustomization).toEqual(defaults.themeCustomization);
+    expect(reset.aiMode).toBe('local');
+    expect(reset.privacy.analyticsEnabled).toBe(false);
+    expect(reset.collaboration.webrtcSignalingUrls).toEqual(['wss://own.example']);
+    expect(reset.language).toBe('de');
+  });
+
+  it('resetToDefaults keeps fields a newer client stored inside a settings group (preserve-first)', () => {
+    const state = {
+      ...initState(),
+      advancedAi: { ...initState().advancedAi, temperature: 1.2, futureKnob: 3 },
+      themeCustomization: {
+        ...initState().themeCustomization,
+        primaryColor: '#123456',
+        futureField: 'x',
+      },
+    } as ReturnType<typeof initState>;
+    const reset = settingsReducer(state, settingsActions.resetToDefaults()) as unknown as {
+      advancedAi: Record<string, unknown>;
+      themeCustomization: Record<string, unknown>;
+    };
+    expect(reset.advancedAi['temperature']).toBe(initState().advancedAi.temperature);
+    expect(reset.advancedAi['futureKnob']).toBe(3);
+    expect(reset.themeCustomization['primaryColor']).toBe('');
+    expect(reset.themeCustomization['futureField']).toBe('x');
+  });
+
+  it('resetToDefaults removes a custom font', () => {
+    const state = settingsReducer(
+      initState(),
+      settingsActions.setCustomFont({
+        name: 'Mine',
+        url: 'https://x.example/f.woff2',
+        format: 'woff2',
+      }),
+    );
+    expect(settingsReducer(state, settingsActions.resetToDefaults()).customFont).toBeUndefined();
+  });
+
+  it('resetToDefaults keeps a malformed stored group untouched (preserve-first)', () => {
+    const state = { ...initState(), themeCustomization: 'broken' } as unknown as ReturnType<
+      typeof initState
+    >;
+    const reset = settingsReducer(state, settingsActions.resetToDefaults());
+    expect(reset.themeCustomization as unknown).toBe('broken');
+    expect(reset.fontSize).toBe(initState().fontSize);
+  });
+
+  it('resetToDefaults keeps a choice value from a newer client, resets known ones', () => {
+    const state = {
+      ...initState(),
+      writingSurfaceStyle: 'future-surface',
+      appearancePreset: 'sepia',
+    } as unknown as ReturnType<typeof initState>;
+    const reset = settingsReducer(state, settingsActions.resetToDefaults());
+    expect(reset.writingSurfaceStyle as string).toBe('future-surface');
+    expect(reset.appearancePreset).toBe(initState().appearancePreset);
+  });
+
+  /** Known fields holding data of the wrong shape, plus valid edits beside them. */
+  const withIncompatibleFields = () =>
+    ({
+      ...initState(),
+      fontSize: { px: 22 },
+      themeCustomization: {
+        ...initState().themeCustomization,
+        primaryColor: { r: 1, g: 2, b: 3 },
+        customCss: 42,
+        accentColor: '#00ff00',
+      },
+      advancedEditor: { ...initState().advancedEditor, customDictionary: null, wordCount: false },
+      voice: 'broken-voice',
+    }) as unknown as ReturnType<typeof initState>;
+
+  it('resetToDefaults keeps incompatible values inside known fields and resets the valid ones', () => {
+    const reset = settingsReducer(
+      withIncompatibleFields(),
+      settingsActions.resetToDefaults(),
+    ) as unknown as Record<string, Record<string, unknown>>;
+    const defaults = initState();
+
+    expect(reset['fontSize']).toEqual({ px: 22 });
+    expect(reset['themeCustomization']?.['primaryColor']).toEqual({ r: 1, g: 2, b: 3 });
+    expect(reset['themeCustomization']?.['customCss']).toBe(42);
+    expect(reset['themeCustomization']?.['accentColor']).toBe(
+      defaults.themeCustomization.accentColor,
+    );
+    expect(reset['advancedEditor']?.['customDictionary']).toBeNull();
+    expect(reset['advancedEditor']?.['wordCount']).toBe(defaults.advancedEditor.wordCount);
+    expect(reset['voice']).toBe('broken-voice');
+  });
+
+  it('a second resetToDefaults changes nothing (idempotent)', () => {
+    const once = settingsReducer(withIncompatibleFields(), settingsActions.resetToDefaults());
+    expect(settingsReducer(once, settingsActions.resetToDefaults())).toEqual(once);
+  });
+
+  it('the reset state survives persistence hydration with the kept values intact', () => {
+    const reset = settingsReducer(withIncompatibleFields(), settingsActions.resetToDefaults());
+    const hydrated = normalizePersistedSettings(
+      structuredClone(reset) as unknown as Record<string, unknown>,
+    ) as unknown as Record<string, Record<string, unknown>>;
+
+    expect(hydrated['themeCustomization']?.['primaryColor']).toEqual({ r: 1, g: 2, b: 3 });
+    expect(hydrated['themeCustomization']?.['customCss']).toBe(42);
+    expect(hydrated['fontSize']).toEqual({ px: 22 });
+    const again = settingsReducer(
+      hydrated as unknown as ReturnType<typeof initState>,
+      settingsActions.resetToDefaults(),
+    );
+    expect(again.themeCustomization).toEqual(reset.themeCustomization);
   });
 });

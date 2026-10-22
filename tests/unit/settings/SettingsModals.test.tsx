@@ -17,6 +17,7 @@ const mockHandleCreateSnapshot = vi.fn();
 const mockHandleRestoreSnapshot = vi.fn();
 const mockHandleDeleteSnapshot = vi.fn();
 const mockHandleFactoryReset = vi.fn();
+const mockHandleRestoreDefaultSettings = vi.fn();
 const mockSetSnapshotName = vi.fn();
 
 let mockModal: { state: string; payload: Record<string, unknown> } = {
@@ -37,6 +38,7 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
     handleRestoreSnapshot: mockHandleRestoreSnapshot,
     handleDeleteSnapshot: mockHandleDeleteSnapshot,
     handleFactoryReset: mockHandleFactoryReset,
+    handleRestoreDefaultSettings: mockHandleRestoreDefaultSettings,
     currentWordCount: 1500,
   }),
 }));
@@ -159,6 +161,27 @@ describe('SettingsModals', () => {
       render(<SettingsModals />);
       await user.click(screen.getByText('settings.deleteModal.confirm'));
       expect(mockHandleDeleteSnapshot).toHaveBeenCalled();
+    });
+  });
+
+  describe('settingsReset modal (#818)', () => {
+    beforeEach(() => {
+      mockModal = { state: 'settingsReset', payload: {} };
+    });
+
+    it('explains what is reset and what is kept', () => {
+      render(<SettingsModals />);
+      expect(
+        screen.getByText('settings.data.dangerZone.settingsReset.modalDescription'),
+      ).toBeInTheDocument();
+    });
+
+    it('calls handleRestoreDefaultSettings on confirm', async () => {
+      const user = userEvent.setup();
+      render(<SettingsModals />);
+      await user.click(screen.getByTestId('settings-reset-confirm-button'));
+      expect(mockHandleRestoreDefaultSettings).toHaveBeenCalled();
+      expect(mockHandleFactoryReset).not.toHaveBeenCalled();
     });
   });
 

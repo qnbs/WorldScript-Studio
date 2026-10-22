@@ -10,6 +10,7 @@ export const SettingsModals: FC = () => {
     modal,
     setModal,
     handleResetProject,
+    handleRestoreDefaultSettings,
     handleFactoryReset,
     snapshotName,
     setSnapshotName,
@@ -114,6 +115,33 @@ export const SettingsModals: FC = () => {
             </Button>
             <Button variant="danger" onClick={handleDeleteSnapshot}>
               {t('settings.deleteModal.confirm')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
+
+  if (modal.state === 'settingsReset')
+    return (
+      <Modal
+        isOpen={true}
+        onClose={() => setModal({ state: 'closed', payload: {} })}
+        title={t('settings.data.dangerZone.settingsReset.modalTitle')}
+      >
+        <div className="space-y-4">
+          <p className="text-[var(--sc-text-secondary)]">
+            {t('settings.data.dangerZone.settingsReset.modalDescription')}
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setModal({ state: 'closed', payload: {} })}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleRestoreDefaultSettings}
+              data-testid="settings-reset-confirm-button"
+            >
+              {t('settings.data.dangerZone.settingsReset.modalConfirm')}
             </Button>
           </div>
         </div>
