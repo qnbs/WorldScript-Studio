@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Included in the 1.29.2 section below:** the curated WebLLM model list (#743), merged after
+  the release-prep cut and before the release tag. PR #1142.
+
 ## [1.29.2] — 2026-10-22
 <!-- release-candidate: v1.29.2 -->
 

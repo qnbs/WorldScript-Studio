@@ -71,7 +71,7 @@ describe('getModelRecommendationForTask', () => {
   it('low VRAM tier returns small models', () => {
     const report: DeviceHealthReport = { ...baseReport, gpuVramTier: 'low' };
     const result = getModelRecommendationForTask('text-gen', report);
-    expect(result.webllm).toContain('gemma-3-1b');
+    expect(result.webllm).toContain('Llama-3.2-1B');
     expect(result.onnx).toBe(ECO_TEXT_GEN_MODEL);
   });
 });
