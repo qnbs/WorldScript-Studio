@@ -7,13 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Included in the 1.29.2 section below:** the curated WebLLM model list (#743), merged after
-  the release-prep cut and before the release tag. PR #1142.
-- **Included in the 1.29.2 section below:** the complete JavaScript third-party inventory under
-  pnpm 12 (#871), merged after the release-prep cut and before the release tag. PR #1143.
+- **Post-release v1.29.2 truth sync:** removed the release-candidate markers from README.md and
+  CHANGELOG.md now that the `v1.29.2` tag and GitHub Release are published, and recorded the real
+  release evidence in AUDIT.md, TODO.md and `docs/RELEASE-V1.29.2-EVIDENCE.md` (see `## [1.29.2]`
+  below and #1139).
 
 ## [1.29.2] — 2026-10-22
-<!-- release-candidate: v1.29.2 -->
 
 - **Interim maintenance release** between v1.29.1 and v1.30. Highlights, each detailed below:
   - Settings that were stored but never applied now work, and dead controls are gone (#818).
