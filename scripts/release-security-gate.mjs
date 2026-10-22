@@ -59,38 +59,65 @@ function hasWritePermission(job) {
   return Object.values(permissions ?? {}).includes('write');
 }
 
-function checkAuditSteps(steps, expectedSha, fail) {
-  const validate = steps.findIndex((step) => /\^\[0-9a-f\]\{40\}\$/.test(String(step.run ?? '')));
-  const checkout = steps.findIndex((step) => String(step.uses ?? '').startsWith(CHECKOUT));
-  const provenance = steps.findIndex((step) =>
-    /git rev-parse HEAD[\s\S]*"\$EXPECTED_SHA"/.test(String(step.run ?? '')),
-  );
-  const scan = steps.findIndex((step) => String(step.uses ?? '').startsWith(OSV_SCANNER));
-  const result = steps.findIndex((step) => step.id === 'result');
+const runOf = (step) => String(step?.run ?? '');
+const usesOf = (step) => String(step?.uses ?? '');
 
-  if (validate < 0) fail('the audit must reject an expected SHA that is not 40 hex characters');
-  if (checkout < 0 || steps[checkout]?.with?.ref !== expectedSha) {
-    fail(`the audit checkout must use ref: ${expectedSha}`);
-  }
-  if (provenance < 0) fail('the audit must verify the checked-out HEAD equals EXPECTED_SHA');
-  const args = String(steps[scan]?.with?.['scan-args'] ?? '')
+/** Locates each required audit step; -1 when missing. */
+function locateAuditSteps(steps) {
+  return {
+    validate: steps.findIndex((step) => /\^\[0-9a-f\]\{40\}\$/.test(runOf(step))),
+    checkout: steps.findIndex((step) => usesOf(step).startsWith(CHECKOUT)),
+    provenance: steps.findIndex((step) =>
+      /git rev-parse HEAD[\s\S]*"\$EXPECTED_SHA"/.test(runOf(step)),
+    ),
+    scan: steps.findIndex((step) => usesOf(step).startsWith(OSV_SCANNER)),
+    result: steps.findIndex((step) => step.id === 'result'),
+  };
+}
+
+function isStrictlyIncreasing(indexes) {
+  return indexes.every((index, i) => index >= 0 && (i === 0 || index > indexes[i - 1]));
+}
+
+function checkScanArgs(scanStep, fail) {
+  const args = String(scanStep?.with?.['scan-args'] ?? '')
     .split('\n')
     .map((line) => line.trim());
   for (const arg of REQUIRED_SCAN_ARGS) {
     if (!args.includes(arg)) fail(`the OSV scan must include ${arg}`);
   }
-  const ordered = [validate, checkout, provenance, scan, result];
-  if (
-    ordered.some((index) => index < 0) ||
-    ordered.some((index, i) => i > 0 && index <= ordered[i - 1])
-  ) {
+}
+
+// A step-level `if` can skip a check and `continue-on-error` turns a failed check into success; either would let the audit pass without auditing.
+function checkStepsAlwaysEnforced(steps, fail) {
+  for (const step of steps) {
+    if (step?.if !== undefined)
+      fail(`audit step "${step.name ?? step.uses ?? step.id}" must not have an if:`);
+    if (step?.['continue-on-error'] !== undefined) {
+      fail(`audit step "${step.name ?? step.uses ?? step.id}" must not set continue-on-error`);
+    }
+  }
+}
+
+function checkAuditSteps(steps, expectedSha, fail) {
+  const found = locateAuditSteps(steps);
+  if (found.validate < 0)
+    fail('the audit must reject an expected SHA that is not 40 hex characters');
+  if (steps[found.checkout]?.with?.ref !== expectedSha) {
+    fail(`the audit checkout must use ref: ${expectedSha}`);
+  }
+  if (found.provenance < 0) fail('the audit must verify the checked-out HEAD equals EXPECTED_SHA');
+  checkScanArgs(steps[found.scan], fail);
+  const order = [found.validate, found.checkout, found.provenance, found.scan, found.result];
+  if (!isStrictlyIncreasing(order)) {
     fail(
       'the audit steps must run validate → checkout → provenance → scan → record, in that order',
     );
   }
-  if (!/git rev-parse HEAD/.test(String(steps[result]?.run ?? ''))) {
+  if (!/git rev-parse HEAD/.test(runOf(steps[found.result]))) {
     fail('the audited-sha output must be recorded from git rev-parse HEAD');
   }
+  checkStepsAlwaysEnforced(steps, fail);
 }
 
 function checkAuditJob(audit, expectedSha, fail) {
@@ -106,6 +133,9 @@ function checkAuditJob(audit, expectedSha, fail) {
   }
   if (audit.outputs?.['audited-sha'] !== AUDITED_SHA_OUTPUT) {
     fail(`job "security-audit" must output audited-sha: ${AUDITED_SHA_OUTPUT}`);
+  }
+  if (audit['continue-on-error'] !== undefined) {
+    fail('job "security-audit" must not set continue-on-error');
   }
   checkAuditSteps(asList(audit.steps), expectedSha, fail);
 }
