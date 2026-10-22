@@ -255,6 +255,7 @@
   "settings.ai.temperature.creative": "2 – Sormena",
   "settings.ai.temperature.precise": "0 – Zehatza",
   "settings.ai.testConnection": "Probatu konexioa",
+  "settings.ai.testError.aiModeBlocked": "Uneko AA moduak tokiko ereduak soilik onartzen ditu. Aldatu AA modua hodeiko konexio hau probatzeko.",
   "settings.ai.testError.corsSuspected": "Likely CORS ({{url}}) — verify OLLAMA_ORIGINS includes this page's origin, or check the server is actually running. Browsers give an identical error for both cases.",
   "settings.ai.testError.desktopRequired": "Ollama eta OpenAI-rekin bateragarriak diren zerbitzari lokalak mahaigaineko aplikazioan bakarrik daude erabilgarri. Nabigatzaileek web orrialdeetatik localhost-era zuzeneko konexioak blokeatzen dituzte (CORS eta Private Network Access).",
   "settings.ai.testError.httpError": "HTTP {{status}}",
