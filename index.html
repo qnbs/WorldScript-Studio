@@ -94,7 +94,8 @@
       <div class="aurora-blob blob-2"></div>
       <div class="aurora-blob blob-3"></div>
     </div>
-    <div id="root"></div>
+    <!-- QNBS-v3: static boot shell paints before any script runs; React's first render replaces it, and services/bootStatus.ts treats it as "not mounted yet". -->
+    <div id="root"><div data-boot-shell role="status" aria-busy="true" style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Inter,system-ui,sans-serif;font-size:1.25rem;font-weight:600;opacity:.8">WorldScript Studio</div></div>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

@@ -39,6 +39,14 @@ describe('StorageErrorScreen', () => {
     await expect(loadStorageErrorCopy()).resolves.toEqual(STARTUP_COPY_FALLBACKS);
   });
 
+  // QNBS-v3: the production smoke test (scripts/smoke-prod-build.mjs) must not count a recovery screen as a mounted app.
+  it('marks its outermost element as a startup recovery screen', () => {
+    const { container } = render(
+      <StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} failureKind="storage" onReset={vi.fn()} />,
+    );
+    expect(container.firstElementChild?.hasAttribute('data-startup-recovery')).toBe(true);
+  });
+
   it('renders localized actions and never renders a raw recovery exception', async () => {
     const user = userEvent.setup();
     const onRecover = vi.fn().mockRejectedValue(new Error('EACCES /private/project.json'));

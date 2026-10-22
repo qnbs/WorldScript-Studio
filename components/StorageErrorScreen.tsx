@@ -432,6 +432,8 @@ export function StorageErrorScreen({
 
   return (
     <div
+      // QNBS-v3: marks a recovery screen, which is not a mounted app (scripts/smoke-prod-build.mjs rejects it).
+      data-startup-recovery=""
       style={{
         display: 'flex',
         flexDirection: 'column',

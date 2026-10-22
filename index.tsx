@@ -14,6 +14,15 @@ import {
   loadSafeOpenRootState,
   shouldAllowInitialMetadataSeed,
 } from './services/appBootstrap';
+import {
+  CRITICAL_STARTUP_KEY,
+  CRITICAL_STARTUP_MESSAGE,
+  canShowStartupError,
+  renderStartupNotice,
+  SLOW_START_KEY,
+  SLOW_START_MESSAGE,
+  startBootWatchdog,
+} from './services/bootStatus';
 import { initializeStorage } from './services/dbInitialization';
 import { logger } from './services/logger';
 import {
@@ -96,10 +105,22 @@ const root = ReactDOM.createRoot(rootElement);
 // or a prod-only bundle ReferenceError (e.g. zod DCE) produced a *silent* blank screen.
 function renderStartupError(message: string) {
   const rootEl = document.getElementById('root');
-  if (!rootEl || rootEl.childElementCount > 0) return;
-  const safe = String(message).replace(/[<>&]/g, (c) => `&#${c.charCodeAt(0)};`);
-  rootEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#f1f5f9;text-align:center;padding:2rem;flex-direction:column;gap:1rem"><h1 style="font-size:1.5rem;font-weight:700">WorldScript Studio</h1><p style="color:#94a3b8">A critical startup error occurred. Please reload the page.</p><pre style="background:#1e293b;border-radius:.5rem;padding:.75rem 1rem;font-size:.8rem;color:#fca5a5;max-width:36rem;overflow:auto;text-align:left">${safe}</pre><button onclick="location.reload()" style="padding:.5rem 1.25rem;border-radius:.5rem;border:1px solid #334155;background:#1e293b;color:#f1f5f9;cursor:pointer;font-family:inherit">Reload</button></div>`;
+  if (!rootEl || !canShowStartupError(rootEl)) return;
+  void renderStartupNotice(rootEl, {
+    message: CRITICAL_STARTUP_MESSAGE,
+    messageKey: CRITICAL_STARTUP_KEY,
+    detail: String(message),
+  });
 }
+
+// QNBS-v3: a boot that hangs (e.g. an IndexedDB open that never settles) would otherwise leave only the static boot shell; surface it visibly and in the console.
+startBootWatchdog(rootElement, () => {
+  logger.error('Startup has not completed after the slow-start limit; the app never mounted.');
+  void renderStartupNotice(rootElement, {
+    message: SLOW_START_MESSAGE,
+    messageKey: SLOW_START_KEY,
+  });
+});
 
 window.addEventListener('error', (event) => {
   renderStartupError(event.message);

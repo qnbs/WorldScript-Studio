@@ -95,11 +95,18 @@ try {
     });
   });
   await page.goto(url, { waitUntil: 'load', timeout: 30000 });
-  await page
-    .waitForFunction(() => (document.getElementById('root')?.innerHTML.length ?? 0) > 100, {
-      timeout: 15000,
-    })
-    .catch(() => {});
+  // QNBS-v3: index.html ships a static boot shell, services/bootStatus.ts can show a startup notice and StorageErrorScreen a recovery screen; none is the mounted app, so all are rejected explicitly.
+  const appMounted = () => {
+    const root = document.getElementById('root');
+    const first = root?.firstElementChild;
+    if (!root || !first) return false;
+    const markers = ['data-boot-shell', 'data-startup-notice', 'data-startup-recovery'];
+    if (markers.some((marker) => first.hasAttribute(marker))) return false;
+    return root.innerHTML.length > 100;
+  };
+  // Predicate first, its argument second, options third (Playwright signature).
+  await page.waitForFunction(appMounted, undefined, { timeout: 15000 }).catch(() => {});
+  const mounted = await page.evaluate(appMounted);
   const rootLen = await page.evaluate(
     () => document.getElementById('root')?.innerHTML.length ?? -1,
   );
@@ -130,7 +137,7 @@ try {
   const totalCspViolations = cspConsoleViolations.length + inPageCspViolations.length;
   // eslint-disable-next-line no-console
   console.log(
-    `[smoke] #root innerHTML length=${rootLen} pageerror=${pageError ?? 'none'} cspViolations=${totalCspViolations} (${knownBenignViolations.length} known-benign excluded) wasm=${wasmResult === true ? 'ok' : wasmResult}`,
+    `[smoke] mounted=${mounted} #root innerHTML length=${rootLen} pageerror=${pageError ?? 'none'} cspViolations=${totalCspViolations} (${knownBenignViolations.length} known-benign excluded) wasm=${wasmResult === true ? 'ok' : wasmResult}`,
   );
   if (knownBenignViolations.length > 0) {
     // eslint-disable-next-line no-console
@@ -160,7 +167,7 @@ try {
     // eslint-disable-next-line no-console
     console.error(`[smoke] WebAssembly.instantiate blocked: ${wasmResult}`);
   }
-  if (rootLen > 100 && !pageError && totalCspViolations === 0 && wasmResult === true) {
+  if (mounted && !pageError && totalCspViolations === 0 && wasmResult === true) {
     // eslint-disable-next-line no-console
     console.log('[smoke] PASS — production build mounts, 0 CSP violations, wasm: ok ✅');
     exitCode = 0;

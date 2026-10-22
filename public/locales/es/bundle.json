@@ -819,6 +819,8 @@
   "error.startup.projectUnsupported": "Este proyecto utiliza una versión de esquema que esta compilación no puede editar. El archivo original no se ha modificado. Actualiza WorldScript Studio o abre el proyecto con una compilación compatible.",
   "error.startup.projectMigrationGap": "Este proyecto utiliza una versión de esquema anterior que esta compilación no puede migrar. El archivo original no se ha modificado. Ábrelo con una compilación compatible que admita su ruta de migración.",
   "error.startup.reload": "Recargar",
+  "error.startup.slowStart": "El inicio está tardando más de lo esperado. Puede que otra pestaña de WorldScript Studio siga usando la base de datos local: cierra las demás pestañas y vuelve a cargar.",
+  "error.startup.critical": "Se produjo un error crítico al iniciar. Vuelve a cargar la página.",
   "error.startup.retry": "Reintentar",
   "error.startup.recover": "Poner el proyecto en cuarentena y recargar",
   "error.startup.recovering": "Preservando el proyecto…",
