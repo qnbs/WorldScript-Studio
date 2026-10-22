@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseAllDocuments } from 'yaml';
@@ -245,15 +245,40 @@ describe('production package set from the lockfile', () => {
     const shippedNames = new Set(
       [...productionPackageKeys(real)].map((key) => key.slice(0, key.lastIndexOf('@'))),
     );
-    const declared = (path: string) => {
-      const manifest = JSON.parse(readFileSync(join(root, path), 'utf8'));
-      return Object.keys({ ...manifest.dependencies, ...manifest.optionalDependencies }).filter(
-        (name) => !String(manifest.dependencies?.[name] ?? '').startsWith('workspace:'),
-      );
+    type Manifest = {
+      name: string;
+      dependencies?: Record<string, string>;
+      optionalDependencies?: Record<string, string>;
     };
-    const expected = [...declared('package.json'), ...declared('packages/ai-core/package.json')];
+    const readManifest = (path: string): Manifest =>
+      JSON.parse(readFileSync(join(root, path, 'package.json'), 'utf8'));
+    const workspace = new Map(
+      readdirSync(join(root, 'packages')).map((dir) => {
+        const manifest = readManifest(join('packages', dir));
+        return [manifest.name, manifest] as const;
+      }),
+    );
+    // Every workspace package the app links, transitively, and the external packages they declare.
+    const linked = new Set<string>();
+    const expected = new Set<string>();
+    const visit = (manifest: Manifest) => {
+      const runtime = { ...manifest.dependencies, ...manifest.optionalDependencies };
+      for (const [name, spec] of Object.entries(runtime)) {
+        const member = spec.startsWith('workspace:') ? workspace.get(name) : undefined;
+        if (!member) expected.add(name);
+        else if (!linked.has(name)) {
+          linked.add(name);
+          visit(member);
+        }
+      }
+    };
+    visit(readManifest('.'));
+    expect([...linked]).toEqual(
+      expect.arrayContaining(['@domain/ai-core', '@domain/collab-transport']),
+    );
     expect(expected).toContain('@mlc-ai/web-llm');
-    expect(expected.filter((name) => !shippedNames.has(name))).toEqual([]);
+    expect(expected).toContain('simple-peer');
+    expect([...expected].filter((name) => !shippedNames.has(name))).toEqual([]);
   });
 });
 
