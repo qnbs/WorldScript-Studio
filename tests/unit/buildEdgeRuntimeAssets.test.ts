@@ -37,11 +37,13 @@ describe('runtime asset steps', () => {
     expect(RUNTIME_ASSET_SCRIPTS).toContain('copy-duckdb-assets.mjs');
   });
 
-  it('runs every step in prebuild and predev', () => {
+  it('runs every step in prebuild, predev and prebuild:pages', () => {
     const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> };
     for (const script of RUNTIME_ASSET_SCRIPTS) {
       expect(pkg.scripts['prebuild']).toContain(`node scripts/${script}`);
       expect(pkg.scripts['predev']).toContain(`node scripts/${script}`);
+      // QNBS-v3: build:pages calls vite directly, so its own pre-hook must produce the same assets.
+      expect(pkg.scripts['prebuild:pages']).toContain(`node scripts/${script}`);
     }
   });
 
