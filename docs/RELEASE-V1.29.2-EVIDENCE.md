@@ -33,7 +33,22 @@ Live proof on `main` `d614f098`:
 - run 39738231759 had an invalid SHA, the audit failed and publishing was skipped.
 
 The owner read back the gate independently and gave a terminal verdict: PASS, #911 comment
-6341204152, on main `1b053070`. The gate files were unchanged at the tag.
+6341204152. The read-back ran on main `1b053070`, which was later invalidated as a candidate for
+a different reason (the inventory, #1143). Its verdict is scoped to "the candidate SHA recorded in
+#1139" and still holds for the final candidate `54835103`. The read-back covers only the gate
+itself, and every file of that gate is byte-identical across `d614f098`, `1b053070` and
+`54835103`. #1142 and #1143 touched none of these files, which was checked before the tag.
+
+| Gate file | Blob in `d614f098` = `1b053070` = `54835103` |
+|---|---|
+| `.github/workflows/tauri-build.yml` | `c0092173a9cc` |
+| `.github/workflows/docker.yml` | `7b1b3b3fa5d3` |
+| `scripts/release-security-gate.mjs` | `3d8604aff9ee` |
+| `tests/unit/tooling/releaseSecurityGate.test.ts` | `959b132a35fb` |
+
+The tag-triggered runs also exercised the gate on `54835103` itself. Tauri 39797957025 published
+only after its exact-ref audit succeeded for that SHA. Docker 39797957134 started `build-push`
+only after its audit's last step.
 
 At the tag, the Docker audit's job record stayed `in_progress` in the GitHub API, although every
 step, including "Complete job", had finished `success` at 14:42:24Z. `build-push` started only
@@ -48,7 +63,7 @@ candidate.
 |---|---|---|---|
 | Resulting-main CI/CD + CodeQL | push-triggered runs on the candidate SHA, including the Security Audit | CI/CD 39786476747, CodeQL 39786476870 | PASS |
 | Security Audit freshness | newly execute the OSV scan on the frozen candidate right before the tag; an earlier run is not freshness evidence | `security-scheduled.yml` dispatch 39796232431, job 119884027879, 2026-10-22T14:30:30Z–14:30:49Z, headSha = candidate | PASS |
-| #911 owner read-back | independent owner verdict on the mechanical publish gate | #911 comment 6341204152 | PASS |
+| #911 owner read-back | independent owner verdict on the mechanical publish gate | #911 comment 6341204152 (run on `1b053070`; gate files byte-identical on `54835103`, see above) | PASS |
 | Production truth | Vercel Production READY on the candidate SHA; canonical aliases; `/duckdb/duckdb-eh.wasm` is `application/wasm` with magic `00 61 73 6d`; `/licenses/*.txt` served as text | Production `dpl_BXUNNrNrSXy3K5jpU6SDgki788fA` (retention anchor `54835103`); `sw.js` 1.29.2; bundle carries the curated WebLLM catalogue | PASS |
 | Tauri plugin parity | `pnpm run tauri-plugins:check` on the candidate | 6 importers aligned | PASS |
 | 3-OS native build | `tauri-build.yml` `workflow_dispatch` on the candidate: Linux, Windows, macOS ARM | dispatch 39786513756 | PASS |
