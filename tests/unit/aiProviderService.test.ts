@@ -1208,6 +1208,26 @@ describe('testAIConnection', () => {
       },
     );
 
+    it.each([
+      ['gemini', 'getGeminiApiKey'],
+      ['openai', 'getApiKey'],
+      ['grok', 'getApiKey'],
+      ['anthropic', 'getApiKey'],
+    ] as const)(
+      '%s: a switch to local mode while the key read is pending still blocks the request',
+      async (provider, reader) => {
+        const fetchMock = stubFetch(new Response('{}', { status: 200 }));
+        vi.mocked(storageService[reader]).mockImplementationOnce(async () => {
+          setActiveAiMode('local');
+          return FAKE_KEY;
+        });
+
+        const result = await testAIConnection(provider, {});
+        expect(result).toMatchObject({ ok: false, kind: 'aiModeBlocked' });
+        expect(fetchMock).not.toHaveBeenCalled();
+      },
+    );
+
     it('local providers stay testable in local mode', async () => {
       setActiveAiMode('local');
       expect(await testAIConnection('onnx', {})).toEqual({ ok: true });

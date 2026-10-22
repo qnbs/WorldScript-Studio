@@ -82,6 +82,9 @@ export async function testAIConnection(
         const root = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
         // QNBS-v3: connection tests reuse the same endpoint policy as production requests.
         assertCspConnectEndpointAllowed(root, 'OpenAI-compatible endpoint');
+        // QNBS-v3 (#1129): the mode may have changed while the key read was pending; re-check right before the request.
+        const lateRefusal = aiModeRefusal(provider);
+        if (lateRefusal) return lateRefusal;
         const res = await fetch(`${root}/models`, {
           headers: { Authorization: `Bearer ${apiKey}` },
           signal: AbortSignal.timeout(8000),
@@ -138,6 +141,8 @@ export async function testAIConnection(
             params: { provider: 'Claude' },
           };
         }
+        const lateRefusal = aiModeRefusal(provider);
+        if (lateRefusal) return lateRefusal;
         // QNBS-v3: Anthropic has no public /v1/models endpoint — a minimal (max_tokens: 1) real request is the practical connectivity check, mirroring the pattern used for Grok.
         // QNBS-v3 (CodeRabbit): bounded like every sibling connectivity check (testOllamaConnection uses timeoutMs: 5000; openai/grok/gemini use AbortSignal.timeout(8000)) — a stalled native/proxy HTTP call must not hang the Settings test spinner indefinitely.
         const res = isDesktop
@@ -186,6 +191,8 @@ export async function testAIConnection(
             params: { provider: 'Grok' },
           };
         }
+        const lateRefusal = aiModeRefusal(provider);
+        if (lateRefusal) return lateRefusal;
         const res = await fetch('https://api.x.ai/v1/models', {
           headers: { Authorization: `Bearer ${apiKey}` },
           signal: AbortSignal.timeout(8000),
@@ -210,6 +217,8 @@ export async function testAIConnection(
             params: { provider: 'Gemini' },
           };
         }
+        const lateRefusal = aiModeRefusal(provider);
+        if (lateRefusal) return lateRefusal;
         // QNBS-v3 (#1129): the key travels in Google's `x-goog-api-key` header, never in the URL.
         const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
           headers: { 'x-goog-api-key': geminiKey },
