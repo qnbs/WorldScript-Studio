@@ -1,69 +1,70 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseDocument } from 'yaml';
-import type { WorkflowPolicyFailure } from '../../../scripts/workflow-policy-check.d.mts';
 import {
-  checkReleaseSecurityGate,
+  checkReleaseSecurityGates,
   checkReleaseSecurityWorkflow,
-  checkWorkflowFile,
-} from '../../../scripts/workflow-policy-check.mjs';
+} from '../../../scripts/release-security-gate.mjs';
+import { checkWorkflowFile } from '../../../scripts/workflow-policy-check.mjs';
 
 const workflows = join(__dirname, '../../../.github/workflows');
 const source = (name: string) => readFileSync(join(workflows, name), 'utf8');
 const TAURI = 'tauri-build.yml';
 const DOCKER = 'docker.yml';
-const AUDIT = 'release-security-audit.yml';
+const PROOF = 'release-gate-proof.yml';
 // QNBS-v3: `\$` keeps the literal GitHub expression syntax out of JS interpolation (Biome noTemplateCurlyInString).
 const expr = (expression: string) => `\${{ ${expression} }}`;
 
-/** Runs the full per-file policy on a (possibly mutated) workflow source under its real name. */
-function check(name: string, content: string): WorkflowPolicyFailure[] {
-  return checkWorkflowFile(join(workflows, name), { readFileSync: () => content });
-}
-
-function gateFailures(name: string, content: string): WorkflowPolicyFailure[] {
-  const failures: WorkflowPolicyFailure[] = [];
-  const doc = parseDocument(content, { uniqueKeys: true });
-  checkReleaseSecurityGate(name, doc, failures);
-  checkReleaseSecurityWorkflow(name, doc, failures);
-  return failures;
-}
+const gateCondition =
+  "needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha";
+const tauriReleaseCondition = `github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && ${gateCondition}`;
 
 function mutate(text: string, from: string, to: string): string {
   expect(text, `fixture anchor not found: ${from}`).toContain(from);
   return text.replace(from, to);
 }
 
-const tauriReleaseCondition =
-  "github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha";
-const tauriReleaseIf = expr(tauriReleaseCondition);
-const dockerCondition =
-  "needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha";
-const dockerIf = expr(dockerCondition);
+const messages = (name: string, text: string) =>
+  checkReleaseSecurityWorkflow(name, text)
+    .map((failure) => failure.message)
+    .join('\n');
 
 describe('#911 release security gate: shipped workflows', () => {
-  it.each([TAURI, DOCKER, AUDIT])('%s passes the full workflow policy', (name) => {
-    expect(check(name, source(name))).toEqual([]);
+  it('every publishing job waits on an exact-ref audit', () => {
+    expect(checkReleaseSecurityGates()).toEqual([]);
   });
 
-  it('Tauri release and GHCR build-push both wait on an exact-SHA audit of github.sha', () => {
-    expect(source(TAURI)).toContain(tauriReleaseIf);
+  it.each([TAURI, DOCKER, PROOF])('%s also passes the trusted workflow policy on main', (name) => {
+    expect(checkWorkflowFile(join(workflows, name))).toEqual([]);
+  });
+
+  it('Tauri release and GHCR build-push use the exact gate conditions', () => {
+    expect(source(TAURI)).toContain(expr(tauriReleaseCondition));
     expect(source(TAURI)).toContain('needs: [bundle, security-audit]');
-    expect(source(DOCKER)).toContain(dockerIf);
+    expect(source(DOCKER)).toContain(expr(gateCondition));
     expect(source(DOCKER)).toContain('needs: [security-audit]');
-    for (const name of [TAURI, DOCKER]) {
-      expect(source(name)).toContain('uses: ./.github/workflows/release-security-audit.yml');
-      expect(source(name)).toContain(`expected-sha: ${expr('github.sha')}`);
-    }
   });
 
   it('GHCR builds exactly the audited commit', () => {
     expect(source(DOCKER)).toMatch(/ref: \$\{\{ github\.sha \}\}\n\s+persist-credentials: false/);
   });
+
+  it('the three inlined audit jobs are identical apart from the SHA they audit', () => {
+    const auditJob = (name: string) => {
+      const text = source(name);
+      const start = text.indexOf('\n  security-audit:\n');
+      const end = text.indexOf('\n\n  ', text.indexOf('id: result', start));
+      return text
+        .slice(start, end)
+        .replace(/\n {4}needs: \[verify-release-tag\]\n {4}if: >-\n.*\n/, '\n')
+        .replaceAll(expr('inputs.expected-sha'), expr('github.sha'));
+    };
+    expect(auditJob(DOCKER)).toBe(auditJob(TAURI));
+    expect(auditJob(PROOF)).toBe(auditJob(TAURI));
+  });
 });
 
-describe('#911 release security gate: publish jobs stay blocked when the gate is weakened', () => {
+describe('#911 release security gate: weakening it fails', () => {
   it.each([
     [
       'Tauri release without the audit need',
@@ -75,22 +76,22 @@ describe('#911 release security gate: publish jobs stay blocked when the gate is
     [
       'GHCR build-push without the audit need',
       DOCKER,
-      'needs: [security-audit]\n',
+      '    needs: [security-audit]\n',
       '',
       /must need "security-audit"/,
     ],
     [
-      'Tauri release that runs after any audit outcome (always())',
+      'Tauri release after any audit outcome',
       TAURI,
-      tauriReleaseIf,
+      expr(tauriReleaseCondition),
       expr(`always() && ${tauriReleaseCondition}`),
       /must not use a status function/,
     ],
     [
-      'GHCR build-push that runs when the audit is not cancelled',
+      'GHCR build-push when the audit is not cancelled',
       DOCKER,
-      dockerIf,
-      expr(`!cancelled() && ${dockerCondition}`),
+      expr(gateCondition),
+      expr(`!cancelled() && ${gateCondition}`),
       /must not use a status function/,
     ],
     [
@@ -101,32 +102,84 @@ describe('#911 release security gate: publish jobs stay blocked when the gate is
       /audited-sha == github\.sha/,
     ],
     [
-      'GHCR build-push that only checks the audited SHA, not the result',
+      'GHCR build-push that skips the result check',
       DOCKER,
       "needs.security-audit.result == 'success' && ",
       '',
       /needs\.security-audit\.result == 'success'/,
     ],
     [
-      'an audit of a caller-chosen ref instead of github.sha',
+      'an audit of a caller-chosen SHA',
       DOCKER,
-      `expected-sha: ${expr('github.sha')}`,
-      `expected-sha: ${expr('github.event.inputs.sha')}`,
-      /expected-sha: \$\{\{ github\.sha \}\}/,
+      `EXPECTED_SHA: ${expr('github.sha')}`,
+      `EXPECTED_SHA: ${expr('github.event.inputs.sha')}`,
+      /must audit EXPECTED_SHA/,
     ],
     [
-      'an audit job that calls a different workflow',
+      'a checkout of the default ref',
       TAURI,
-      'uses: ./.github/workflows/release-security-audit.yml',
-      'uses: ./.github/workflows/ci.yml',
-      /must call \.\/\.github\/workflows\/release-security-audit\.yml/,
+      `ref: ${expr('github.sha')}\n          fetch-depth: 1`,
+      'ref: main\n          fetch-depth: 1',
+      /checkout must use ref/,
     ],
-  ])('%s fails', (_label, name, from, to, message) => {
-    const failures = gateFailures(name, mutate(source(name), from, to));
-    expect(failures.map((failure) => failure.message).join('\n')).toMatch(message);
+    [
+      'one lockfile dropped',
+      DOCKER,
+      '            --lockfile=crates/Cargo.lock\n',
+      '',
+      /--lockfile=crates\/Cargo\.lock/,
+    ],
+    [
+      'the scanner config dropped',
+      TAURI,
+      '            --config=src-tauri/osv-scanner.toml\n',
+      '',
+      /--config=src-tauri\/osv-scanner\.toml/,
+    ],
+    [
+      'the provenance check removed',
+      DOCKER,
+      'HEAD_SHA="$(git rev-parse HEAD)"',
+      'HEAD_SHA="$EXPECTED_SHA"',
+      /verify the checked-out HEAD/,
+    ],
+    [
+      'the SHA format check removed',
+      TAURI,
+      "grep -Eq '^[0-9a-f]{40}$'",
+      'true',
+      /not 40 hex characters/,
+    ],
+    [
+      'a write permission on the audit job',
+      DOCKER,
+      '    permissions:\n      contents: read\n    outputs:',
+      '    permissions:\n      contents: read\n      packages: write\n    outputs:',
+      /exactly permissions/,
+    ],
+    [
+      'an audit output not taken from the scan result',
+      TAURI,
+      `audited-sha: ${expr('steps.result.outputs.audited-sha')}`,
+      `audited-sha: ${expr('github.sha')}`,
+      /must output audited-sha/,
+    ],
+  ])('%s', (_label, name, from, to, message) => {
+    expect(messages(name, mutate(source(name), from, to))).toMatch(message);
   });
 
-  it('a new write-privileged job in a gated workflow must sit behind the gate', () => {
+  it('recording the audited SHA before the scan fails', () => {
+    const text = source(DOCKER);
+    const record =
+      '      - name: Record the audited SHA\n        id: result\n        run: echo "audited-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"\n';
+    const moved = mutate(text, record, '').replace(
+      '      - name: Validate the requested commit SHA\n',
+      `${record}\n      - name: Validate the requested commit SHA\n`,
+    );
+    expect(messages(DOCKER, moved)).toMatch(/in that order/);
+  });
+
+  it('a new write-privileged job beside the gate fails', () => {
     const extra = `${source(DOCKER)}
   sidecar-push:
     runs-on: ubuntu-latest
@@ -136,79 +189,27 @@ describe('#911 release security gate: publish jobs stay blocked when the gate is
     steps:
       - run: echo push
 `;
-    expect(gateFailures(DOCKER, extra).map((failure) => failure.message)).toContain(
-      'job "sidecar-push" holds a write permission but is not behind the #911 release security gate',
+    expect(messages(DOCKER, extra)).toMatch(/"sidecar-push" holds a write permission/);
+  });
+
+  it('a workflow without its audit job fails', () => {
+    const text = source(PROOF);
+    const start = text.indexOf('  security-audit:\n');
+    const end = text.indexOf('  publish-stand-in:\n');
+    expect(messages(PROOF, text.slice(0, start) + text.slice(end))).toMatch(
+      /missing job "security-audit"/,
     );
-  });
-
-  it('a gated workflow that drops its audit job fails', () => {
-    const withoutAudit = source(TAURI).replace(/\n {2}security-audit:\n[\s\S]*?\n\n/, '\n');
-    expect(withoutAudit).not.toContain('\n  security-audit:');
-    expect(gateFailures(TAURI, withoutAudit).map((failure) => failure.message)).toContain(
-      'missing job "security-audit" (#911 release gate)',
-    );
-  });
-});
-
-describe('#911 reusable audit workflow: weakening it fails the policy', () => {
-  it.each([
-    [
-      'one lockfile dropped',
-      '            --lockfile=crates/Cargo.lock\n',
-      '',
-      /--lockfile=crates\/Cargo\.lock/,
-    ],
-    [
-      'the scanner config dropped',
-      '            --config=src-tauri/osv-scanner.toml\n',
-      '',
-      /--config=src-tauri\/osv-scanner\.toml/,
-    ],
-    [
-      'a checkout of the default ref',
-      `ref: ${expr('inputs.expected-sha')}`,
-      'ref: main',
-      /checkout must use ref/,
-    ],
-    [
-      'a push trigger added',
-      'on:\n  workflow_call:',
-      'on:\n  push:\n  workflow_call:',
-      /workflow_call only/,
-    ],
-    [
-      'the provenance check removed',
-      'HEAD_SHA="$(git rev-parse HEAD)"',
-      'HEAD_SHA="$EXPECTED_SHA"',
-      /must verify the checked-out HEAD/,
-    ],
-  ])('%s fails', (_label, from, to, message) => {
-    const failures = gateFailures(AUDIT, mutate(source(AUDIT), from, to));
-    expect(failures.map((failure) => failure.message).join('\n')).toMatch(message);
-  });
-
-  it('the audited-sha output is recorded only after the scan', () => {
-    const text = source(AUDIT);
-    const scan = text.indexOf('osv-scanner-action/osv-scanner-action@');
-    const result = text.indexOf('id: result');
-    expect(scan).toBeGreaterThan(-1);
-    expect(result).toBeGreaterThan(scan);
-    expect(text).toContain(`value: ${expr('jobs.osv-audit.outputs.audited-sha')}`);
   });
 });
 
 describe('#911 non-publishing gate proof workflow', () => {
-  const PROOF = 'release-gate-proof.yml';
-
-  it('passes the workflow policy and holds no write permission', () => {
-    expect(check(PROOF, source(PROOF))).toEqual([]);
+  it('holds no write permission and no publishing action', () => {
     expect(source(PROOF)).not.toMatch(/:\s*write\b/);
     expect(source(PROOF)).not.toMatch(/docker\/login-action|action-gh-release|gh release/);
   });
 
-  it('its publish stand-in uses the exact GHCR build-push condition', () => {
-    expect(source(PROOF)).toContain(dockerIf);
-    expect(source(PROOF)).toContain('needs: [security-audit]');
-    expect(source(PROOF)).toContain('uses: ./.github/workflows/release-security-audit.yml');
+  it('its stand-in uses the exact GHCR build-push condition and audits the dispatch input', () => {
+    expect(source(PROOF)).toContain(expr(gateCondition));
+    expect(source(PROOF)).toContain(`EXPECTED_SHA: ${expr('inputs.expected-sha')}`);
   });
 });

@@ -87,18 +87,6 @@ export function checkPublishingBoundary(
   failures: WorkflowPolicyFailure[],
 ): void;
 
-export function checkReleaseSecurityGate(
-  fileName: string,
-  doc: Document,
-  failures: WorkflowPolicyFailure[],
-): void;
-
-export function checkReleaseSecurityWorkflow(
-  fileName: string,
-  doc: Document,
-  failures: WorkflowPolicyFailure[],
-): void;
-
 export function checkReviewerGovernanceGate(
   fileName: string,
   doc: Document,

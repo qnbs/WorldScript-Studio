@@ -15,12 +15,59 @@ permissions:
 jobs:
   # QNBS-v3 (#911): exact-ref OSV audit of the commit this run would publish, on tag pushes and manual dispatches alike.
   security-audit:
-    name: 🔒 Release security audit
+    name: 🔒 Release security audit (exact ref)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
-    uses: ./.github/workflows/release-security-audit.yml
-    with:
-      expected-sha: ${{ github.sha }}
+    outputs:
+      audited-sha: ${{ steps.result.outputs.audited-sha }}
+    env:
+      EXPECTED_SHA: ${{ github.sha }}
+    steps:
+      - name: Validate the requested commit SHA
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$EXPECTED_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::expected SHA must be a full 40-character commit SHA, got '${EXPECTED_SHA}'"
+            exit 1
+          fi
+
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify checkout provenance and audit inputs
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if [ "$HEAD_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::checked out ${HEAD_SHA}, expected ${EXPECTED_SHA}"
+            exit 1
+          fi
+          for input in src-tauri/osv-scanner.toml pnpm-lock.yaml src-tauri/Cargo.lock crates/Cargo.lock; do
+            if [ ! -s "$input" ]; then
+              echo "::error::missing or empty audit input ${input}"
+              exit 1
+            fi
+          done
+
+      # Same pinned scanner, config and lockfiles as the CI Security Audit; any finding or scanner error fails this step.
+      - name: OSV vulnerability scan (all three lockfiles)
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: |-
+            --config=src-tauri/osv-scanner.toml
+            --lockfile=pnpm-lock.yaml
+            --lockfile=src-tauri/Cargo.lock
+            --lockfile=crates/Cargo.lock
+
+      - name: Record the audited SHA
+        id: result
+        run: echo "audited-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build-push:
     name: Build & push image
