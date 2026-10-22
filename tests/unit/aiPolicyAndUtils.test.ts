@@ -1,25 +1,10 @@
 /**
- * Tests for services/ai/aiPolicy.ts, creativityTemperature.ts, modelNormalization.ts.
- * QNBS-v3: Pure logic — no network, mocks storageService for async path.
+ * Tests for services/ai/creativityTemperature.ts and modelNormalization.ts (aiPolicy: tests/unit/ai/aiPolicy.test.ts).
+ * QNBS-v3: Pure logic — no network.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
-const mockLoadSettings = vi.fn();
-
-vi.mock('../../services/storageService', () => ({
-  storageService: { loadSettings: (...args: unknown[]) => mockLoadSettings(...args) },
-}));
-
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
-import { assertCloudAiAllowed, assertCloudAiAllowedSync } from '../../services/ai/aiPolicy';
 import { CREATIVITY_TO_TEMPERATURE } from '../../services/ai/creativityTemperature';
 import {
   buildOpenRouterStyleHeaders,
@@ -27,107 +12,6 @@ import {
   normalizeOpenAiCompatibleBaseUrl,
   resolveOpenAiCompatibleRoot,
 } from '../../services/ai/modelNormalization';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const basePrivacy = (overrides: { localStorageOnly: boolean; euDataResidency: boolean }) => ({
-  analyticsEnabled: false,
-  dataEncryption: false,
-  ...overrides,
-});
-
-// ---------------------------------------------------------------------------
-// aiPolicy — assertCloudAiAllowedSync
-// ---------------------------------------------------------------------------
-
-describe('assertCloudAiAllowedSync', () => {
-  it('allows ollama regardless of privacy settings', () => {
-    expect(() =>
-      assertCloudAiAllowedSync(
-        'ollama',
-        basePrivacy({ localStorageOnly: true, euDataResidency: false }),
-      ),
-    ).not.toThrow();
-  });
-
-  it('allows webllm regardless of privacy settings', () => {
-    expect(() =>
-      assertCloudAiAllowedSync(
-        'webllm',
-        basePrivacy({ localStorageOnly: true, euDataResidency: false }),
-      ),
-    ).not.toThrow();
-  });
-
-  it('throws when localStorageOnly=true and provider is gemini', () => {
-    expect(() =>
-      assertCloudAiAllowedSync(
-        'gemini',
-        basePrivacy({ localStorageOnly: true, euDataResidency: false }),
-      ),
-    ).toThrow('Cloud provider blocked: local-only mode is active.');
-  });
-
-  it('throws when euDataResidency=true and provider is openai', () => {
-    expect(() =>
-      assertCloudAiAllowedSync(
-        'openai',
-        basePrivacy({ localStorageOnly: false, euDataResidency: true }),
-      ),
-    ).toThrow('EU residency policy');
-  });
-
-  it('throws when euDataResidency=true and provider is grok', () => {
-    expect(() =>
-      assertCloudAiAllowedSync(
-        'grok',
-        basePrivacy({ localStorageOnly: false, euDataResidency: true }),
-      ),
-    ).toThrow('EU residency policy');
-  });
-
-  it('allows gemini when euDataResidency=true (only openai/grok are blocked)', () => {
-    expect(() =>
-      assertCloudAiAllowedSync(
-        'gemini',
-        basePrivacy({ localStorageOnly: false, euDataResidency: true }),
-      ),
-    ).not.toThrow();
-  });
-
-  it('does not throw when privacy is undefined', () => {
-    expect(() => assertCloudAiAllowedSync('gemini', undefined)).not.toThrow();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// aiPolicy — assertCloudAiAllowed (async)
-// ---------------------------------------------------------------------------
-
-describe('assertCloudAiAllowed (async)', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('skips storage for ollama', async () => {
-    await expect(assertCloudAiAllowed('ollama')).resolves.not.toThrow();
-    expect(mockLoadSettings).not.toHaveBeenCalled();
-  });
-
-  it('throws when settings have localStorageOnly=true', async () => {
-    mockLoadSettings.mockResolvedValueOnce({
-      privacy: basePrivacy({ localStorageOnly: true, euDataResidency: false }),
-    });
-    await expect(assertCloudAiAllowed('gemini')).rejects.toThrow('local-only mode');
-  });
-
-  it('resolves without error when settings allow cloud', async () => {
-    mockLoadSettings.mockResolvedValueOnce({
-      privacy: basePrivacy({ localStorageOnly: false, euDataResidency: false }),
-    });
-    await expect(assertCloudAiAllowed('gemini')).resolves.toBeUndefined();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // creativityTemperature

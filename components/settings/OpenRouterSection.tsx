@@ -100,17 +100,8 @@ export const OpenRouterSection: FC = () => {
   const dispatch = useAppDispatch();
   const openRouterSettings = useAppSelector((s) => s.settings.openRouter);
   const aiMode = useAppSelector((s) => s.settings.aiMode);
-  const privacy = useAppSelector((s) => s.settings.privacy);
-  // QNBS-v3: Derive the cloud-policy block from LIVE Redux state so it reacts INSTANTLY to AI-mode /
-  // privacy changes. The previous approach used an async storageService.loadSettings() check that
-  // only re-ran on mount / API-key change, so toggling "Local storage only" (which defaults to ON) or
-  // switching the AI mode never updated the banner — OpenRouter looked permanently blocked.
-  const policyBlock = useMemo<'mode' | 'localOnly' | null>(() => {
-    if (aiMode === 'local' || aiMode === 'eco') return 'mode';
-    if (privacy?.localStorageOnly) return 'localOnly';
-    return null;
-  }, [aiMode, privacy?.localStorageOnly]);
-  const policyBlocked = policyBlock !== null;
+  // QNBS-v3 (#818): derived from live Redux state so it reacts instantly; the AI execution mode is the single cloud authority.
+  const policyBlocked = aiMode === 'local' || aiMode === 'eco';
   // QNBS-v3: Subscribe to online/offline events instead of reading navigator.onLine once at render —
   // otherwise the offline warning goes stale until an unrelated re-render happens to recompute it.
   const [isOffline, setIsOffline] = useState(
@@ -407,10 +398,7 @@ export const OpenRouterSection: FC = () => {
     if (policyBlocked) {
       setTestResult({
         ok: false,
-        text:
-          policyBlock === 'mode'
-            ? t('settings.openRouter.policyBlocked.mode')
-            : t('settings.openRouter.policyBlocked.localOnly'),
+        text: t('settings.openRouter.policyBlocked.mode'),
       });
       setIsTesting(false);
       return;
@@ -439,7 +427,7 @@ export const OpenRouterSection: FC = () => {
     } finally {
       if (isLatest()) setIsTesting(false);
     }
-  }, [policyBlocked, policyBlock, storedKey, t]);
+  }, [policyBlocked, storedKey, t]);
 
   const handleModelChange = useCallback(
     (value: string) => {
@@ -578,11 +566,9 @@ export const OpenRouterSection: FC = () => {
                 {modeWarning}
               </p>
             )}
-            {policyBlock && (
+            {policyBlocked && (
               <p className="text-xs text-[var(--sc-danger-fg)]" role="alert" aria-live="polite">
-                {policyBlock === 'mode'
-                  ? t('settings.openRouter.policyBlocked.mode')
-                  : t('settings.openRouter.policyBlocked.localOnly')}
+                {t('settings.openRouter.policyBlocked.mode')}
               </p>
             )}
           </div>

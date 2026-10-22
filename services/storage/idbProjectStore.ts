@@ -48,6 +48,24 @@ import {
 // ─── Exported for unit testing ────────────────────────────────────────────────
 
 /**
+ * QNBS-v3 (#818) one-time migration: "Local storage only" (stored default true) blocked cloud AI
+ * next to the AI execution mode. The mode is now the single cloud authority, so a legacy local-only
+ * choice becomes `aiMode: 'local'` (eco already blocks cloud). The legacy field stays stored
+ * (preserve-first); the marker makes the user's later mode choice stick.
+ */
+function migrateLegacyLocalOnly(
+  settings: Settings,
+  incomingPrivacy: Partial<Settings['privacy']> | undefined,
+): void {
+  if (incomingPrivacy?.cloudAuthorityMigrated === true) return;
+  const legacyLocalOnly = incomingPrivacy?.localStorageOnly !== false;
+  if (legacyLocalOnly && (settings.aiMode === 'hybrid' || settings.aiMode === 'cloud')) {
+    settings.aiMode = 'local';
+  }
+  settings.privacy.cloudAuthorityMigrated = true;
+}
+
+/**
  * Merges a raw (potentially incomplete) persisted settings object with safe defaults.
  * Exported so tests can verify migration behavior without opening IndexedDB.
  * QNBS-v3: Each sub-object is normalized separately to guard against absent fields
@@ -87,9 +105,6 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   // isAnalyticsPersistenceAllowed; persisted user choice overrides the default via the spread.
   validSettings.privacy = {
     analyticsEnabled: true,
-    dataEncryption: true,
-    localStorageOnly: true,
-    euDataResidency: true,
     ...incomingPrivacy,
   };
   // QNBS-v3: SEC one-time migration — before the gate shipped, analyticsEnabled was cosmetic and
@@ -101,6 +116,7 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
     validSettings.privacy.analyticsEnabled = true;
   }
   validSettings.privacy.analyticsGateMigrated = true;
+  migrateLegacyLocalOnly(validSettings, incomingPrivacy);
 
   const incomingCollab = incoming['collaboration'] as
     | Partial<Settings['collaboration']>

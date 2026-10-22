@@ -1,7 +1,12 @@
 /**
  * LanguageTool nur gegen konfigurierte Basis-URL (lokal empfohlen).
- * QNBS-v3: Privacy-Gating — remote Server bei local-only blockieren.
+ * QNBS-v3 (#818): LanguageTool is off by default and points at localhost. A remote server is used
+ * only when the user enables it and enters that URL, the CSP connect-src allowlist admits it, and
+ * the AI execution mode is not local-only (local/eco) — the mode that also carries a migrated
+ * "Local storage only" choice, so previously blocked remote checks stay blocked.
  */
+
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 import type { Settings } from '../types';
 import { assertCspConnectEndpointAllowed } from './network/cspOriginPolicy';
@@ -17,9 +22,9 @@ export function assertLanguageToolAllowed(settings: Settings, baseUrl: string): 
   } catch {
     throw new Error('Invalid LanguageTool base URL.');
   }
-  const isLocal = host === 'localhost' || host === '127.0.0.1';
-  if (settings.privacy.localStorageOnly && !isLocal) {
-    throw new Error('Remote LanguageTool is blocked while local-only privacy mode is on.');
+  const localOnlyMode = settings.aiMode === 'local' || settings.aiMode === 'eco';
+  if (localOnlyMode && !LOCAL_HOSTS.has(host)) {
+    throw new Error('Remote LanguageTool is blocked while the AI execution mode is local-only.');
   }
 }
 

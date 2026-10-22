@@ -38,7 +38,9 @@ describe('settingsSlice', () => {
     // device); the privacy toggle now gates DuckDB writes via isAnalyticsPersistenceAllowed.
     const privacy = initState().privacy;
     expect(privacy.analyticsEnabled).toBe(true);
-    expect(privacy.localStorageOnly).toBe(true);
+    // QNBS-v3 (#818): fresh installs start in hybrid; the AI mode is the only cloud authority.
+    expect(privacy.cloudAuthorityMigrated).toBe(true);
+    expect(initState().aiMode).toBe('hybrid');
   });
 
   it('setDesktopSettings merges the desktop group', () => {
@@ -286,12 +288,11 @@ describe('settingsSlice', () => {
   it('setPrivacy merges privacy settings', () => {
     const state = settingsReducer(
       initState(),
-      settingsActions.setPrivacy({ analyticsEnabled: false, localStorageOnly: false }),
+      settingsActions.setPrivacy({ analyticsEnabled: false }),
     );
 
     expect(state.privacy.analyticsEnabled).toBe(false);
-    expect(state.privacy.localStorageOnly).toBe(false);
-    expect(state.privacy.dataEncryption).toBe(true);
+    expect(state.privacy.analyticsGateMigrated).toBe(true);
   });
 
   it('setCollaboration merges collaboration settings', () => {

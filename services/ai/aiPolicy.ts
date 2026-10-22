@@ -1,5 +1,4 @@
-import type { AIProvider, PrivacySettings } from '../../types';
-import { storageService } from '../storageService';
+import type { AIProvider } from '../../types';
 import { getActiveAiMode } from './aiModeService';
 
 const LORA_LOCAL_PROVIDERS = new Set(['webllm', 'onnx', 'transformers', 'ollama']);
@@ -23,29 +22,19 @@ export function assertLoraLocalOnly(modelIdOrProvider: string): void {
   );
 }
 
-/** Sync-Check wenn Settings bereits geladen sind (z. B. aus Redux). */
-export function assertCloudAiAllowedSync(
-  provider: AIProvider,
-  privacy: PrivacySettings | undefined,
-): void {
+/**
+ * Sync-Check: the AI execution mode is the single cloud authority (#818). Local and eco modes block
+ * every cloud provider; hybrid and cloud allow the providers the user has configured.
+ */
+export function assertCloudAiAllowedSync(provider: AIProvider): void {
   if (LOCAL_INFERENCE_PROVIDERS.has(provider)) return;
-  // QNBS-v3: AI execution mode gates cloud access independently of privacy.localStorageOnly.
   const mode = getActiveAiMode();
   if (mode === 'local' || mode === 'eco') {
     throw new Error(`Cloud provider blocked: AI mode is "${mode}" (local-only).`);
   }
-  if (!privacy) return;
-  if (privacy.localStorageOnly) {
-    throw new Error('Cloud provider blocked: local-only mode is active.');
-  }
-  if (privacy.euDataResidency && (provider === 'grok' || provider === 'openai')) {
-    throw new Error(`Cloud provider blocked by EU residency policy: ${provider}`);
-  }
 }
 
-/** Async-Pfad wie früher `enforceCloudPolicy` — lädt aktuelle Privacy-Einstellungen aus dem Speicher. */
+/** Async path kept for existing call sites; the mode is held in memory, so no settings load is needed. */
 export async function assertCloudAiAllowed(provider: AIProvider): Promise<void> {
-  if (LOCAL_INFERENCE_PROVIDERS.has(provider)) return;
-  const settings = await storageService.loadSettings();
-  assertCloudAiAllowedSync(provider, settings?.privacy);
+  assertCloudAiAllowedSync(provider);
 }

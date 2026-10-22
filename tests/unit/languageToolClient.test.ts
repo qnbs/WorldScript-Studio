@@ -109,10 +109,24 @@ describe('languageToolClient', () => {
     ).not.toThrow();
   });
 
-  it('blocks remote URLs when local-only privacy is on', () => {
+  it('allows a remote server the user enabled and entered when the CSP admits it (#818)', () => {
     expect(() =>
       assertLanguageToolAllowed(baseSettings(), 'https://api.languagetool.org/'),
-    ).toThrow(/blocked/i);
+    ).not.toThrow();
+  });
+
+  it('blocks remote servers while the AI execution mode is local-only, but not localhost', () => {
+    for (const aiMode of ['local', 'eco'] as const) {
+      const s = { ...baseSettings(), aiMode };
+      expect(() => assertLanguageToolAllowed(s, 'https://api.languagetool.org/')).toThrow(
+        /local-only/,
+      );
+      expect(() => assertLanguageToolAllowed(s, 'http://localhost:8010')).not.toThrow();
+    }
+  });
+
+  it('still refuses endpoints outside the CSP connect-src allowlist', () => {
+    expect(() => assertLanguageToolAllowed(baseSettings(), 'https://untrusted.example/')).toThrow();
   });
 
   it('throws when disabled', () => {

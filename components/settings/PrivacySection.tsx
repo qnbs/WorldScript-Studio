@@ -62,21 +62,6 @@ export const PrivacySection: FC = () => {
                 if (v) setPassphraseModal('set');
               }}
             />
-            <ToggleSwitch
-              label={t('settings.privacy.localStorageOnly')}
-              checked={settings.privacy.localStorageOnly}
-              onChange={(v) =>
-                handleSettingChange('privacy', { ...settings.privacy, localStorageOnly: v })
-              }
-            />
-            <ToggleSwitch
-              label={t('settings.privacy.euDataResidency')}
-              hint={t('settings.privacy.euDataResidencyHint')}
-              checked={settings.privacy.euDataResidency}
-              onChange={(v) =>
-                handleSettingChange('privacy', { ...settings.privacy, euDataResidency: v })
-              }
-            />
           </div>
         </CardContent>
       </Card>

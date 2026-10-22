@@ -262,10 +262,7 @@ describe('generateWorldImageThunk', () => {
     );
 
     expect(action.type).toBe('project/generateWorldImage/fulfilled');
-    expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
-      'gemini',
-      expect.objectContaining({ localStorageOnly: true }),
-    );
+    expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith('gemini');
     expect(mockGenerateImage).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ provider: 'gemini' }),
