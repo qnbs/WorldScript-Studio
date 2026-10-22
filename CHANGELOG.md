@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Security (AI connection test):** The Gemini connection test under Settings → AI sends the API key in Google's `x-goog-api-key` header instead of the `?key=` query string, so the key no longer appears in the request URL (PR #1135, #1129). In the Local and Eco AI modes, the test for any cloud provider is now refused before a key is read or a request is made ("The current AI mode allows only local models", new key `settings.ai.testError.aiModeBlocked` in all 19 locales), matching the AI mode as the single cloud authority (#1122). Local providers stay testable.
+
 - **Docs:** The in-app help (19 locales) now names the real Early Access Features section instead of "Experimental flags", says which features are on by default, drops switches that no longer exist (cross-project search, Plot Board), describes the flag reset correctly, and lists the actual appearance options instead of non-existent specialty themes (PR #1123).
 
 - **Privacy:** The AI execution mode is now the single switch for cloud AI (PR #1122, #818). "Local storage only" (on by default) blocked cloud AI on top of the mode, and "EU data residency" only blocked OpenAI and Grok without controlling where data is processed; both toggles are removed. A one-time migration keeps existing installs as they were (a local-only choice becomes local mode); fresh installs start in hybrid. A remote LanguageTool server is used only when you enable it and enter that server.
