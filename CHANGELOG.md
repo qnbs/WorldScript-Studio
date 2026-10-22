@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Docs:** The in-app help (19 locales) now names the real Early Access Features section instead of "Experimental flags", says which features are on by default, drops switches that no longer exist (cross-project search, Plot Board), describes the flag reset correctly, and lists the actual appearance options instead of non-existent specialty themes (PR #1123).
+
 - **Privacy:** The AI execution mode is now the single switch for cloud AI (PR #1122, #818). "Local storage only" (on by default) blocked cloud AI on top of the mode, and "EU data residency" only blocked OpenAI and Grok without controlling where data is processed; both toggles are removed. A one-time migration keeps existing installs as they were (a local-only choice becomes local mode); fresh installs start in hybrid. A remote LanguageTool server is used only when you enable it and enter that server.
 
 - **Maintenance (CI):** Lighthouse CI waits up to 90 s for first paint and 120 s for load, instead of the defaults (30 s and 45 s), in both the mobile and desktop configs (PR #1133). One run that errors aborts the whole `lhci autorun`. On 2026-10-21 a cold first run after the visual-regression phase failed the required Browser Quality job three times with `NO_FCP`, although the app paints.
