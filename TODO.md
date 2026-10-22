@@ -8,7 +8,21 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Current Sprint — v1.29.1 release (successor of the unpublished v1.29.0 tag, 2026-09-30)
+## Current Sprint — v1.29.2 interim release (release-first, 2026-10-22)
+
+> **Status: 🔄 in progress — release candidate, not published.** Owner decision on #1139: ship
+> v1.29.2 before the deferred Dependabot groups #1106/#1108/#1104 (HOLD until v1.29.2 is
+> verified). Record: #1139, `docs/RELEASE-V1.29.2-EVIDENCE.md`.
+
+- ✅ Settings correctness tranche merged: #1116–#1123 (#818).
+- ✅ Pre-tag corrections merged: #1124 (production DuckDB-WASM), #1134 (boot shell, stalled-start
+  notice), #1135 (Gemini key header, AI-mode refusal), #1136 (license texts at build time).
+- ✅ #911 publish gate merged (#1137) and live-proven; ⬜ independent owner read-back.
+- ⬜ Release-prep PR (this version bump, CHANGELOG, README/AUDIT/TODO truth, evidence record).
+- ⬜ Pre-tag qualification on the exact candidate SHA (state ladder in the evidence record).
+- ⬜ Signed tag, publication, public read-back, retention.
+
+## Previous Sprint — v1.29.1 release (successor of the unpublished v1.29.0 tag, 2026-09-30)
 
 > **Status: ✅ released.** `v1.29.1` is published (signed tag on `f255d767`, GitHub Release
 > 2026-09-30, Latest). The signed `v1.29.0` tag (`cf72dc6d`) passed full pre-tag qualification,
