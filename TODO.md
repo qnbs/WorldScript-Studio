@@ -10,17 +10,25 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ## Current Sprint — v1.29.2 interim release (release-first, 2026-10-22)
 
-> **Status: 🔄 in progress — release candidate, not published.** Owner decision on #1139: ship
-> v1.29.2 before the deferred Dependabot groups #1106/#1108/#1104 (HOLD until v1.29.2 is
-> verified). Record: #1139, `docs/RELEASE-V1.29.2-EVIDENCE.md`.
+> **Status: ✅ released.** `v1.29.2` is published (signed tag on `54835103`, GitHub Release
+> 2026-10-22, Latest). The deferred Dependabot groups #1106/#1108/#1104/#1140 resume now.
+> Record: #1139, `docs/RELEASE-V1.29.2-EVIDENCE.md`.
 
 - ✅ Settings correctness tranche merged: #1116–#1123 (#818).
 - ✅ Pre-tag corrections merged: #1124 (production DuckDB-WASM), #1134 (boot shell, stalled-start
   notice), #1135 (Gemini key header, AI-mode refusal), #1136 (license texts at build time).
-- ✅ #911 publish gate merged (#1137) and live-proven; ⬜ independent owner read-back.
-- ⬜ Release-prep PR (this version bump, CHANGELOG, README/AUDIT/TODO truth, evidence record).
-- ⬜ Pre-tag qualification on the exact candidate SHA (state ladder in the evidence record).
-- ⬜ Signed tag, publication, public read-back, retention.
+- ✅ #911 publish gate merged (#1137), live-proven, and owner read-back PASS (#911 comment
+  6341204152).
+- ✅ Release-prep PR #1141 (version 1.29.2, CHANGELOG, README/AUDIT/TODO truth, evidence record).
+- ✅ Pre-tag qualification stopped two candidates: `1839cd1e` (#743 instance: three offered
+  WebLLM models the runtime cannot load, fixed by #1142) and `1b053070` (notices/SBOM missing
+  ~60 shipped npm packages under pnpm 12, fixed by #1143). `54835103` was fully qualified.
+- ✅ `v1.29.2` released (2026-10-22): installers, updater `.sig` files and `latest.json`
+  (signatures verified), SBOMs/notices identical to the qualified dispatch, GHCR
+  `1.29.2`/`1.29`/`latest` from `54835103`, retention SAFE 0 / UNKNOWN 0.
+- ⬜ Follow-ups found during qualification: the word-count badge says "1 words" (#1117), and the
+  portal's "API keys are encrypted at rest" claim still needs checking for the desktop path
+  (compliance audit).
 
 ## Previous Sprint — v1.29.1 release (successor of the unpublished v1.29.0 tag, 2026-09-30)
 
