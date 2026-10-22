@@ -819,6 +819,8 @@
   "error.startup.projectUnsupported": "This project uses a schema version this build cannot edit. The original file has not been changed. Upgrade WorldScript Studio or open it with a compatible build.",
   "error.startup.projectMigrationGap": "This project uses an older schema version that this build cannot migrate. The original file has not been changed. Open it with a compatible build that supports its migration path.",
   "error.startup.reload": "Reload",
+  "error.startup.slowStart": "Käynnistys kestää odotettua kauemmin. Toinen WorldScript Studio -välilehti saattaa yhä varata paikallisen tietokannan: sulje muut välilehdet ja lataa sivu uudelleen.",
+  "error.startup.critical": "Käynnistyksessä tapahtui vakava virhe. Lataa sivu uudelleen.",
   "error.startup.retry": "Retry",
   "error.startup.recover": "Quarantine project and reload",
   "error.startup.recovering": "Preserving project…",

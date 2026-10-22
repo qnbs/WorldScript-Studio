@@ -819,6 +819,8 @@
   "error.startup.projectUnsupported": "Dieses Projekt verwendet eine Schema-Version, die dieser Build nicht bearbeiten kann. Die Originaldatei wurde nicht verändert. Aktualisieren Sie WorldScript Studio oder öffnen Sie das Projekt mit einem kompatiblen Build.",
   "error.startup.projectMigrationGap": "Dieses Projekt verwendet eine ältere Schema-Version, die dieser Build nicht migrieren kann. Die Originaldatei wurde nicht verändert. Öffnen Sie das Projekt mit einem kompatiblen Build, der diesen Migrationspfad unterstützt.",
   "error.startup.reload": "Neu laden",
+  "error.startup.slowStart": "Der Start dauert länger als erwartet. Möglicherweise hält ein anderer WorldScript-Studio-Tab noch die lokale Datenbank: Schließen Sie andere Tabs und laden Sie die Anwendung dann neu.",
+  "error.startup.critical": "Beim Start ist ein kritischer Fehler aufgetreten. Bitte laden Sie die Seite neu.",
   "error.startup.retry": "Erneut versuchen",
   "error.startup.recover": "Projekt unter Quarantäne stellen und neu laden",
   "error.startup.recovering": "Projekt wird gesichert …",

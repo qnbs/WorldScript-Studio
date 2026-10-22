@@ -19,8 +19,8 @@
   <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite 8">
   <img src="https://img.shields.io/badge/TypeScript-tsgo_native_preview-3178C6?logo=typescript&logoColor=white" alt="TypeScript native preview (tsgo)">
   <img src="https://img.shields.io/badge/Desktop-Tauri_2-FFC131?logo=tauri&logoColor=black" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/i18n-19_locales_%2F_2960_keys-0EA5E9" alt="19 locales — 2960 keys">
-  <img src="https://img.shields.io/badge/Tests-8622%2B_%2F_648_files-22C55E" alt="8622+ tests / 648 files">
+  <img src="https://img.shields.io/badge/i18n-19_locales_%2F_2962_keys-0EA5E9" alt="19 locales — 2962 keys">
+  <img src="https://img.shields.io/badge/Tests-8626%2B_%2F_648_files-22C55E" alt="8626+ tests / 648 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github&label=CI" alt="CI status">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="MIT License">
@@ -665,7 +665,7 @@ Signaling endpoints are configurable; self-hosting guidance is documented in the
 
 ## Internationalization
 
-Shipped UI locales with **2960 i18n keys** across **19 locales**:
+Shipped UI locales with **2962 i18n keys** across **19 locales**:
 
 - German (`de`)
 - English (`en`)
@@ -808,8 +808,8 @@ The normal web PR pipeline is not the complete native release qualification surf
 | PDF | jsPDF | PDF generation |
 | DOCX | `docx` + JSZip | Word-compatible export |
 | PWA | Service Worker + Web App Manifest | Offline shell/installability |
-| i18n | Custom React i18n context | 2960 keys × 19 locales |
-| Testing | Vitest 5.x (8622+ tests / 648 files) + Playwright | Unit/integration/E2E |
+| i18n | Custom React i18n context | 2962 keys × 19 locales |
+| Testing | Vitest 5.x (8626+ tests / 648 files) + Playwright | Unit/integration/E2E |
 | Quality | Biome + tsgo + CodeQL/security tooling | Static and CI gates |
 | Desktop | Tauri 2 | Current native shell |
 
@@ -886,7 +886,7 @@ WorldScript-Studio/
 ├── locales/                 # Source locale trees
 ├── public/                  # PWA assets, manifest, SW, runtime locale bundles
 ├── tests/
-│   ├── unit/                # Vitest unit tests (the 8622+ total also includes components/ and packages/*/tests; tests/e2e is excluded)
+│   ├── unit/                # Vitest unit tests (the 8626+ total also includes components/ and packages/*/tests; tests/e2e is excluded)
 │   └── e2e/                 # Playwright
 ├── docs/                    # Canonical product/engineering documentation + ADRs
 ├── src-tauri/               # Tauri v2 desktop shell / Rust
@@ -1031,8 +1031,8 @@ Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendo
 
 Current source-synchronized README metrics:
 
-- **8622+ unit tests** across **648 test files**
-- i18n: **2960 keys × 19 locales**
+- **8626+ unit tests** across **648 test files**
+- i18n: **2962 keys × 19 locales**
 
 CI remains authoritative for actual pass/fail and live coverage.
 

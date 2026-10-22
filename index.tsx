@@ -15,8 +15,11 @@ import {
   shouldAllowInitialMetadataSeed,
 } from './services/appBootstrap';
 import {
+  CRITICAL_STARTUP_KEY,
+  CRITICAL_STARTUP_MESSAGE,
   isAppMounted,
   renderStartupNotice,
+  SLOW_START_KEY,
   SLOW_START_MESSAGE,
   startBootWatchdog,
 } from './services/bootStatus';
@@ -103,8 +106,9 @@ const root = ReactDOM.createRoot(rootElement);
 function renderStartupError(message: string) {
   const rootEl = document.getElementById('root');
   if (!rootEl || isAppMounted(rootEl)) return;
-  renderStartupNotice(rootEl, {
-    message: 'A critical startup error occurred. Please reload the page.',
+  void renderStartupNotice(rootEl, {
+    message: CRITICAL_STARTUP_MESSAGE,
+    messageKey: CRITICAL_STARTUP_KEY,
     detail: String(message),
   });
 }
@@ -112,7 +116,10 @@ function renderStartupError(message: string) {
 // QNBS-v3: a boot that hangs (e.g. an IndexedDB open that never settles) would otherwise leave only the static boot shell; surface it visibly and in the console.
 startBootWatchdog(rootElement, () => {
   logger.error('Startup has not completed after the slow-start limit; the app never mounted.');
-  renderStartupNotice(rootElement, { message: SLOW_START_MESSAGE });
+  void renderStartupNotice(rootElement, {
+    message: SLOW_START_MESSAGE,
+    messageKey: SLOW_START_KEY,
+  });
 });
 
 window.addEventListener('error', (event) => {

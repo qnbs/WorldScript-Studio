@@ -703,6 +703,8 @@
   "error.startup.projectUnsupported": "This project uses a schema version this build cannot edit. The original file has not been changed. Upgrade WorldScript Studio or open it with a compatible build.",
   "error.startup.projectMigrationGap": "This project uses an older schema version that this build cannot migrate. The original file has not been changed. Open it with a compatible build that supports its migration path.",
   "error.startup.reload": "Reload",
+  "error.startup.slowStart": "راه‌اندازی بیش از حد انتظار طول می‌کشد. ممکن است زبانهٔ دیگری از WorldScript Studio هنوز پایگاه دادهٔ محلی را در اختیار داشته باشد: زبانه‌های دیگر را ببندید و سپس صفحه را دوباره بارگذاری کنید.",
+  "error.startup.critical": "هنگام راه‌اندازی خطای بحرانی رخ داد. لطفاً صفحه را دوباره بارگذاری کنید.",
   "error.startup.retry": "Retry",
   "error.startup.recover": "Quarantine project and reload",
   "error.startup.recovering": "Preserving project…",

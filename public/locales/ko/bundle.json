@@ -819,6 +819,8 @@
   "error.startup.projectUnsupported": "This project uses a schema version this build cannot edit. The original file has not been changed. Upgrade WorldScript Studio or open it with a compatible build.",
   "error.startup.projectMigrationGap": "This project uses an older schema version that this build cannot migrate. The original file has not been changed. Open it with a compatible build that supports its migration path.",
   "error.startup.reload": "Reload",
+  "error.startup.slowStart": "시작이 예상보다 오래 걸리고 있습니다. 다른 WorldScript Studio 탭이 아직 로컬 데이터베이스를 사용 중일 수 있습니다. 다른 탭을 닫은 후 다시 불러오세요.",
+  "error.startup.critical": "시작 중 심각한 오류가 발생했습니다. 페이지를 다시 불러오세요.",
   "error.startup.retry": "Retry",
   "error.startup.recover": "Quarantine project and reload",
   "error.startup.recovering": "Preserving project…",
