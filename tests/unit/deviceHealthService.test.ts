@@ -118,9 +118,9 @@ describe('deviceHealthService', () => {
       );
     });
 
-    it('returns Gemma-3-1B for text-gen on low-VRAM GPU (2025 update)', () => {
+    it('returns Llama-3.2-1B for text-gen on low-VRAM GPU', () => {
       const report: DeviceHealthReport = { ...baseReport, gpuVramTier: 'low' };
-      expect(getModelRecommendation('text-gen', report)).toBe('gemma-3-1b-it-q4f16_1-MLC');
+      expect(getModelRecommendation('text-gen', report)).toBe('Llama-3.2-1B-Instruct-q4f16_1-MLC');
     });
 
     it('returns SmolLM2-135M ONNX for text-gen when no GPU (2025 update)', () => {

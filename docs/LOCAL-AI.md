@@ -44,11 +44,8 @@ The settings live in **Settings → AI Models → Local AI**.
 |---|---|---|
 | Qwen 2.5 0.5B | ~0.4 GB | Eco / very low-end |
 | Llama 3.2 1B | ~0.7 GB | Fast, low-end |
-| Gemma 3 1B | ~0.8 GB | Low-end |
 | Llama 3.2 3B | ~1.8 GB | Mid-range |
 | Phi-4 Mini 3.8B | ~2.3 GB | Mid/high-end |
-| Gemma 3 4B | ~4.9 GB | High-end |
-| Llama 3.3 70B | ~35 GB | Workstation GPUs only |
 
 If a model needs more space than you have free, the Models list shows a **size warning** and
 you should clear space or pick a smaller model first.

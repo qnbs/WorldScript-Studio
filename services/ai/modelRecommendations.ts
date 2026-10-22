@@ -114,13 +114,13 @@ export function getModelRecommendationForTask(
     };
   }
 
-  // QNBS-v3: Updated to 2025 model releases: Phi-4 Mini, Gemma 3, Llama 3.3.
+  // QNBS-v3: only ids from WEBLLM_SUPPORTED_MODELS (loadable in the installed web-llm runtime).
   const webllmModel =
     vramTier === 'high'
       ? 'Phi-4-mini-instruct-q4f16_1-MLC'
       : vramTier === 'medium'
         ? 'Llama-3.2-3B-Instruct-q4f16_1-MLC'
-        : 'gemma-3-1b-it-q4f16_1-MLC'; // 'low'
+        : 'Llama-3.2-1B-Instruct-q4f16_1-MLC'; // 'low'
 
   const onnxModel =
     vramTier === 'high'

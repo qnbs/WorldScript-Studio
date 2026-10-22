@@ -114,14 +114,14 @@ export function getModelRecommendation(task: AiTaskType, report: DeviceHealthRep
     // QNBS-v3: SmolLM2-135M replaces DistilGPT-2 — same size, better instruction following (2025).
     return 'HuggingFaceTB/SmolLM2-135M-Instruct';
   }
-  // text-gen: pick by VRAM tier — updated to 2025 releases (Phi-4, Gemma 3).
+  // text-gen: pick by VRAM tier — only ids from WEBLLM_SUPPORTED_MODELS.
   switch (report.gpuVramTier) {
     case 'high':
       return 'Phi-4-mini-instruct-q4f16_1-MLC';
     case 'medium':
       return 'Llama-3.2-3B-Instruct-q4f16_1-MLC';
     case 'low':
-      return 'gemma-3-1b-it-q4f16_1-MLC';
+      return 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
     default:
       // No GPU: use ONNX WASM
       return 'HuggingFaceTB/SmolLM2-135M-Instruct';

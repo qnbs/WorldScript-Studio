@@ -8,9 +8,6 @@ const WEBLLM_USE_CASES: Record<string, string> = {
   'Llama-3.2-1B-Instruct-q4f16_1-MLC': 'settings.community.useCase.fast',
   'Llama-3.2-3B-Instruct-q4f16_1-MLC': 'settings.community.useCase.balanced',
   'Phi-4-mini-instruct-q4f16_1-MLC': 'settings.community.useCase.reasoning',
-  'gemma-3-1b-it-q4f16_1-MLC': 'settings.community.useCase.fast',
-  'gemma-3-4b-it-q4f32_1-MLC': 'settings.community.useCase.balanced',
-  'Llama-3.3-70B-Instruct-q3f16_1-MLC': 'settings.community.useCase.highEnd',
 };
 
 export const CommunitySection: React.FC = () => {

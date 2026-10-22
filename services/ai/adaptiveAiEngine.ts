@@ -100,7 +100,7 @@ function selectModelForBackend(backend: ComputeBackend, profile: DeviceCapabilit
     const vram = profile.webgpu.vramTier ?? 'low';
     if (vram === 'high') return 'Phi-4-mini-instruct-q4f16_1-MLC';
     if (vram === 'medium') return 'Llama-3.2-3B-Instruct-q4f16_1-MLC';
-    return 'gemma-3-1b-it-q4f16_1-MLC';
+    return 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
   }
 
   if (isOnnx || isTransformers) {
