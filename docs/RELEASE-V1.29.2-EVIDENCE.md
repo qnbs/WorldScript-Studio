@@ -46,6 +46,7 @@ candidate.
 | Notices + SBOM | notices inside each installer, one `*.cdx.json` per target bound to the candidate SHA; font and app license texts present in the packaged web assets | per-target hashes | PENDING |
 | Release-job dry run | `release` collect logic against the dispatch artifacts; release-notes `awk` extraction for `1.29.2` with the guard phrases | command output | PENDING |
 | Packaged state protocols A–E | `docs/RELEASE-V1.29.0-PACKAGED-QUALIFICATION.md` | hashes, markers, screenshots | PENDING |
+| #743 release invariant | the per-release invariant list re-verified on the candidate | checklist | PENDING |
 | Settings behavior | defaults, Restore Defaults preserve-first, AI-mode cloud authority (no cloud request in Local/Eco, including connection tests) | test output, manual check | PENDING |
 
 ## `TAG_ONLY_PENDING`

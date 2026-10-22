@@ -19,7 +19,7 @@ function localeHandlerBlock(src: string): string {
   const start = src.indexOf("url.pathname.includes('/locales/')");
   expect(start).toBeGreaterThan(-1);
   // Grab a generous window covering the branch body.
-  return src.slice(start, start + 600);
+  return src.slice(start, start + 900);
 }
 
 describe('service worker — locale bundle caching strategy', () => {
@@ -30,7 +30,7 @@ describe('service worker — locale bundle caching strategy', () => {
   it('is network-first: fetches the network before any cache fallback', () => {
     const block = localeHandlerBlock(swSource);
     const fetchIdx = block.indexOf('await fetch(request)');
-    const cacheMatchIdx = block.indexOf('cache.match(request)');
+    const cacheMatchIdx = block.indexOf('cachedLocaleBundle(cache, request)');
     expect(fetchIdx).toBeGreaterThan(-1);
     // Cache is only consulted as a fallback → it must appear AFTER the network fetch.
     expect(cacheMatchIdx).toBeGreaterThan(fetchIdx);
@@ -44,13 +44,26 @@ describe('service worker — locale bundle caching strategy', () => {
 
   it('still falls back to cache when the network is unavailable (offline support)', () => {
     const block = localeHandlerBlock(swSource);
-    expect(block).toMatch(/catch[\s\S]*cache\.match\(request\)/);
+    expect(block).toMatch(/catch[\s\S]*cachedLocaleBundle\(cache, request\)/);
   });
 
   it('falls back to cache on a non-OK response (transient 5xx/404 must not break translations)', () => {
     // QNBS-v3: 5xx/404 do not throw — after the `response.ok` check the handler must prefer the
     // cached bundle, otherwise a transient backend/CDN error returns a broken bundle.
     const block = localeHandlerBlock(swSource);
-    expect(block).toMatch(/response\.ok[\s\S]*cache\.match\(request\)\s*\)\s*\|\|\s*response/);
+    expect(block).toMatch(
+      /response\.ok[\s\S]*cachedLocaleBundle\(cache, request\)\s*\)\s*\|\|\s*response/,
+    );
+  });
+
+  // QNBS-v3: after an update the new CACHE_DYNAMIC is empty while the bundles are precached in CACHE_STATIC; offline must still find them there.
+  it('the cache fallback checks CACHE_DYNAMIC first, then the precached CACHE_STATIC copy', () => {
+    const start = swSource.indexOf('async function cachedLocaleBundle');
+    expect(start).toBeGreaterThan(-1);
+    const helper = swSource.slice(start, swSource.indexOf('\n}', start));
+    const dynamicIdx = helper.indexOf('dynamicCache.match(request)');
+    const staticIdx = helper.indexOf('caches.match(request, { cacheName: CACHE_STATIC })');
+    expect(dynamicIdx).toBeGreaterThan(-1);
+    expect(staticIdx).toBeGreaterThan(dynamicIdx);
   });
 });
