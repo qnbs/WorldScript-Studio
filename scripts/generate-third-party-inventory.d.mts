@@ -34,6 +34,23 @@ export interface PnpmLicenseEntry {
   homepage?: string;
 }
 
+export interface PnpmLockfileNode {
+  dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+}
+
+export interface PnpmLockfile {
+  importers?: Record<
+    string,
+    {
+      dependencies?: Record<string, { version: string }>;
+      optionalDependencies?: Record<string, { version: string }>;
+      devDependencies?: Record<string, { version: string }>;
+    }
+  >;
+  snapshots?: Record<string, PnpmLockfileNode | null>;
+}
+
 export interface CargoMetadata {
   packages: Array<{
     id: string;
@@ -63,9 +80,11 @@ export function readLicenseTexts(
   directory: string | undefined,
   extraFiles?: string[],
 ): LicenseText[];
+export function productionPackageKeys(lockfile: PnpmLockfile): Set<string>;
 export function collectJsComponents(
   pnpmLicenses: Record<string, PnpmLicenseEntry[]>,
   readTexts?: ReadLicenseTexts,
+  isShipped?: (name: string, version: string) => boolean,
 ): InventoryComponent[];
 export function collectRustComponents(
   metadata: CargoMetadata,

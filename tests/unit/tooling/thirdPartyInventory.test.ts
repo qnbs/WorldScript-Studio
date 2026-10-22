@@ -1,9 +1,13 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { parseAllDocuments } from 'yaml';
 import type {
   CargoMetadata,
   InventoryComponent,
   InventoryContext,
+  PnpmLockfile,
 } from '../../../scripts/generate-third-party-inventory.d.mts';
 import {
   classifyComponents,
@@ -13,6 +17,7 @@ import {
   licenseEntry,
   normalizeLicenseExpression,
   packageUrl,
+  productionPackageKeys,
   renderNotices,
   renderSbom,
 } from '../../../scripts/generate-third-party-inventory.mjs';
@@ -174,6 +179,81 @@ describe('component collection', () => {
       '/nm/.pnpm/@scope+pkg@1.0.0/node_modules/@scope/pkg',
       '/nm/.pnpm/@scope+pkg@2.0.0_peer/node_modules/@scope/pkg',
     ]);
+  });
+
+  it('keeps only the npm versions the shipped set accepts', () => {
+    const result = collectJsComponents(
+      {
+        MIT: [
+          { name: 'kept', versions: ['1.0.0', '2.0.0'], paths: [], license: 'MIT' },
+          { name: 'dev-only', versions: ['1.0.0'], paths: [], license: 'MIT' },
+        ],
+      },
+      () => [],
+      (name, version) => `${name}@${version}` === 'kept@2.0.0',
+    );
+    expect(result.map((entry) => `${entry.name}@${entry.version}`)).toEqual(['kept@2.0.0']);
+  });
+});
+
+describe('production package set from the lockfile', () => {
+  const lockfile: PnpmLockfile = {
+    importers: {
+      '.': {
+        dependencies: {
+          app: { version: '1.0.0(peer@2.0.0)' },
+          core: { version: 'link:packages/core' },
+          aliased: { version: 'target@3.0.0' },
+        },
+        devDependencies: { tool: { version: '1.0.0' } },
+      },
+      'packages/core': { optionalDependencies: { runtime: { version: '4.0.0' } } },
+      'packages/unlinked': { dependencies: { stray: { version: '1.0.0' } } },
+    },
+    snapshots: {
+      'app@1.0.0(peer@2.0.0)': {
+        dependencies: { peer: '2.0.0' },
+        optionalDependencies: { canvas: '5.0.0' },
+      },
+      'peer@2.0.0': {},
+      'canvas@5.0.0': { dependencies: { deep: '6.0.0' } },
+      'deep@6.0.0': {},
+      'target@3.0.0': null,
+      'runtime@4.0.0': {},
+      'tool@1.0.0': { dependencies: { 'tool-dep': '1.0.0' } },
+      'tool-dep@1.0.0': {},
+      'stray@1.0.0': {},
+    },
+  };
+
+  it('follows dependencies, optional dependencies and linked workspace packages only', () => {
+    expect([...productionPackageKeys(lockfile)].sort()).toEqual([
+      'app@1.0.0',
+      'canvas@5.0.0',
+      'deep@6.0.0',
+      'peer@2.0.0',
+      'runtime@4.0.0',
+      'target@3.0.0',
+    ]);
+  });
+
+  it('covers every runtime dependency the app and its linked workspace packages declare', () => {
+    const root = join(__dirname, '..', '..', '..');
+    const real = parseAllDocuments(readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8'))
+      .map((document) => document.toJS())
+      .find((document) => document?.importers) as PnpmLockfile;
+    const shippedNames = new Set(
+      [...productionPackageKeys(real)].map((key) => key.slice(0, key.lastIndexOf('@'))),
+    );
+    const declared = (path: string) => {
+      const manifest = JSON.parse(readFileSync(join(root, path), 'utf8'));
+      return Object.keys({ ...manifest.dependencies, ...manifest.optionalDependencies }).filter(
+        (name) => !String(manifest.dependencies?.[name] ?? '').startsWith('workspace:'),
+      );
+    };
+    const expected = [...declared('package.json'), ...declared('packages/ai-core/package.json')];
+    expect(expected).toContain('@mlc-ai/web-llm');
+    expect(expected.filter((name) => !shippedNames.has(name))).toEqual([]);
   });
 });
 
