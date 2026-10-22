@@ -311,6 +311,12 @@ function diffFor(mode, ref, file, cwd) {
 
 // QNBS-v3: content comes from the diff's own revision (index or HEAD), never the working tree.
 function readVersioned(mode, file, cwd) {
+  // QNBS-v3: a path staged for deletion has no index entry; `git show :path` then reports an "ambiguous argument", not "does not exist", so ask the index directly.
+  if (mode === 'staged') {
+    const staged = git(['ls-files', '--stage', '--', file], cwd);
+    if (staged.status !== 0) return { content: null, missing: false, error: true };
+    if (!(staged.stdout ?? '').trim()) return { content: null, missing: true, error: false };
+  }
   const spec = mode === 'staged' ? `:${file}` : `HEAD:${file}`;
   const result = git(['show', spec], cwd);
   if (result.status === 0) return { content: result.stdout ?? '', missing: false, error: false };

@@ -415,9 +415,10 @@ describe('Tauri release workflow policy', () => {
 
   it('keeps release publication tag-only and downstream of bundle output', () => {
     const release = extractJobBlock(tauriWorkflowSource, 'release');
-    expect(extractNeeds(tauriWorkflowSource, 'release')).toEqual(['bundle']);
+    expect(extractNeeds(tauriWorkflowSource, 'release')).toEqual(['bundle', 'security-audit']);
+    // QNBS-v3 (#911): tag-only AND an exact-SHA security audit success; tests/unit/tooling/releaseSecurityGate.test.ts covers the weakened variants.
     expect(release).toMatch(
-      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) \}\}$/m,
+      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) && needs\.security-audit\.result == 'success' && needs\.security-audit\.outputs\.audited-sha == github\.sha \}\}$/m,
     );
     expect(release).not.toContain('workflow_dispatch');
     expect(release).toContain('body_path: release-notes.md');
