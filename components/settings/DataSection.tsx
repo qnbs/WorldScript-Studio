@@ -408,6 +408,27 @@ export const DataSection: FC = () => {
               </Button>
             </div>
 
+            {/* Restore default settings — keeps projects, API keys and privacy-relevant choices (#818) */}
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg border border-[var(--sc-danger-border)]">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[var(--sc-text-primary)]">
+                  {t('settings.data.dangerZone.settingsReset.label')}
+                </p>
+                <p className="text-xs text-[var(--sc-text-muted)] mt-0.5">
+                  {t('settings.data.dangerZone.settingsReset.hint')}
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                data-testid="settings-reset-button"
+                onClick={() => setModal({ state: 'settingsReset', payload: {} })}
+                className="shrink-0"
+              >
+                {t('settings.data.dangerZone.settingsReset.button')}
+              </Button>
+            </div>
+
             {/* Factory Reset */}
             <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-[var(--sc-danger-bg)]/50 border border-[var(--sc-danger-border)]">
               <div className="flex-1 min-w-0">

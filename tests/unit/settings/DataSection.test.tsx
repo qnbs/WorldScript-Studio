@@ -177,6 +177,12 @@ describe('DataSection', () => {
     expect(mockSetModal).toHaveBeenCalledWith({ state: 'reset', payload: {} });
   });
 
+  it('opens the restore-default-settings confirmation (#818)', () => {
+    render(<DataSection />);
+    fireEvent.click(screen.getByTestId('settings-reset-button'));
+    expect(mockSetModal).toHaveBeenCalledWith({ state: 'settingsReset', payload: {} });
+  });
+
   it('shows project size', () => {
     render(<DataSection />);
     // t('settings.data.projectSize', ...) returns the key with interpolation
