@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   admission,
+  KEEP_PER_ENVIRONMENT,
   planRecords,
   reconcileVercelRecords,
   WORKFLOW,
@@ -58,7 +59,7 @@ const schedule = {
   workflowRef: WORKFLOW,
 };
 
-test('keeps the newest ten per environment and leaves other environments and creators alone', () => {
+test('keeps the newest three per environment and leaves other environments and creators alone', () => {
   const production = days('Production', 14);
   const preview = days('Preview', 12);
   const outOfScope = [
@@ -70,8 +71,8 @@ test('keeps the newest ten per environment and leaves other environments and cre
     mainSha: MAIN,
     openHeads: new Set(),
   });
-  assert.equal(kept.length, 20);
-  const expected = [...production.slice(0, 4), ...preview.slice(0, 2)].map((r) => r.id);
+  assert.equal(kept.length, 6);
+  const expected = [...production.slice(0, 11), ...preview.slice(0, 9)].map((r) => r.id);
   assert.deepEqual(new Set(candidates.map((r) => r.id)), new Set(expected));
   assert.ok(candidates.every((r, i) => i === 0 || r.created_at >= candidates[i - 1].created_at));
   for (const r of outOfScope) assert.ok(!candidates.includes(r) && !kept.includes(r));
@@ -84,7 +85,11 @@ test('protects the current main commit and the Preview records of open PR heads'
     record('Preview', 1, { commit: openHead }),
   ];
   const { candidates } = planRecords({
-    records: [...old, ...days('Production', 10, 5), ...days('Preview', 10, 5)],
+    records: [
+      ...old,
+      ...days('Production', KEEP_PER_ENVIRONMENT, 5),
+      ...days('Preview', KEEP_PER_ENVIRONMENT, 5),
+    ],
     mainSha: MAIN,
     openHeads: new Set([openHead]),
   });
@@ -112,7 +117,7 @@ test('binds writes to the scheduled trusted workflow on a full commit of this re
 });
 
 test('a dispatched run plans without any write', async () => {
-  const github = fakeGithub({ records: days('Production', 13) });
+  const github = fakeGithub({ records: days('Production', KEEP_PER_ENVIRONMENT + 3) });
   const summary = await reconcileVercelRecords({
     github,
     authority: { ...schedule, eventName: 'workflow_dispatch' },

@@ -253,8 +253,9 @@ The same workflow bounds the rest with a second step in each job
 
 - **Scope:** environments `Production` and `Preview` whose creator is `vercel[bot]`. `github-pages`
   records, other environments and other creators are never candidates.
-- **Kept:** the newest ten records per environment (by `created_at`, then ID), the record of the
-  current `main` commit, and every Preview record whose commit is the head of an open PR.
+- **Kept:** the newest three records per environment (by `created_at`, then ID; ten until
+  2026-10-21), the record of the current `main` commit, and every Preview record whose commit is
+  the head of an open PR.
 - **Authority:** writes only in the scheduled `prune` job, which already holds
   `deployments: write`, of the trusted workflow (`workflowRef`) on the commit that is still `main`
   (`main-moved` otherwise, at the start and before every candidate). The dispatched `plan` job reads
