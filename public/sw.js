@@ -6,7 +6,7 @@
 // ============================================================
 
 // QNBS-v3: version bump auto-synced from package.json by scripts/sync-sw-version.mjs — every CACHE_STATIC/CACHE_DYNAMIC name changes too, so this alone invalidates all prior caches on next activate.
-const APP_VERSION   = '1.29.1';
+const APP_VERSION   = '1.29.2';
 const CACHE_STATIC  = `worldscript-static-v${APP_VERSION}`;
 const CACHE_DYNAMIC = `worldscript-dynamic-v${APP_VERSION}`;
 const CACHE_IMAGES  = `worldscript-images-v${APP_VERSION}`;
@@ -95,6 +95,14 @@ async function trimCache(cacheName, maxEntries) {
 }
 
 // ── Offline fallback per resource type ───────────────────────
+// QNBS-v3: right after an update the new CACHE_DYNAMIC is empty, but every locale bundle is precached in CACHE_STATIC — fall back to it so going offline after an update never loses translations.
+async function cachedLocaleBundle(dynamicCache, request) {
+  return (
+    (await dynamicCache.match(request)) ||
+    (await caches.match(request, { cacheName: CACHE_STATIC }))
+  );
+}
+
 async function offlineFallback(request) {
   if (request.destination === 'document') {
     // QNBS-v3: scoped to CACHE_STATIC (where offline.html is precached) — an unscoped caches.match() searches every cache on the shared qnbs.github.io origin, not just this app's own.
@@ -294,9 +302,9 @@ self.addEventListener('fetch', (event) => {
           }
           // QNBS-v3: HTTP 5xx/404 don't throw — prefer a valid cached bundle over a broken
           // response so transient backend/CDN errors never wipe out translations.
-          return (await cache.match(request)) || response;
+          return (await cachedLocaleBundle(cache, request)) || response;
         } catch {
-          return (await cache.match(request)) || offlineFallback(request);
+          return (await cachedLocaleBundle(cache, request)) || offlineFallback(request);
         }
       })
     );
