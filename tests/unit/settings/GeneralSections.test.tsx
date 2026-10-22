@@ -3,7 +3,7 @@
  * QNBS-v3: Mocks SettingsViewContext + FeatureFlagsContext; tests language, theme, About.
  */
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import packageJson from '../../../package.json';
@@ -222,6 +222,130 @@ describe('AppearanceSection', () => {
     expect(
       screen.getByRole('button', { name: 'settings.appearance.writingSurfacePlain' }),
     ).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('exposes the selected theme and palette via aria-pressed', () => {
+    settingsRef.current = { theme: 'light', appearancePreset: 'sepia' };
+    render(<AppearanceSection />);
+    expect(screen.getByRole('button', { name: 'settings.theme.light' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'settings.theme.dark' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'settings.appearance.presetSepia' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+});
+
+describe('ThemeCustomizationCard (#702)', () => {
+  const emptyCustomization = {
+    primaryColor: '',
+    secondaryColor: '',
+    accentColor: '',
+    backgroundColor: '',
+    textColor: '',
+    customCss: '',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    settingsRef.current = { themeCustomization: { ...emptyCustomization } };
+  });
+
+  it('offers all five colors, each labelled and described, defaulting to the theme', () => {
+    render(<AppearanceSection />);
+    for (const key of [
+      'primaryColor',
+      'secondaryColor',
+      'accentColor',
+      'backgroundColor',
+      'textColor',
+    ]) {
+      const input = screen.getByLabelText(`settings.appearance.${key}`);
+      expect(input).toHaveAttribute('type', 'color');
+      expect(input).toHaveAccessibleDescription(`settings.appearance.${key}Hint`);
+    }
+    expect(screen.getAllByText('settings.appearance.themeDefault')).toHaveLength(5);
+    expect(screen.queryByText('settings.appearance.resetAllCustomization')).toBeNull();
+  });
+
+  it('stores a picked color without dropping the other fields', () => {
+    render(<AppearanceSection />);
+    fireEvent.change(screen.getByLabelText('settings.appearance.primaryColor'), {
+      target: { value: '#1e3a8a' },
+    });
+    expect(mockHandleSettingChange).toHaveBeenCalledWith('themeCustomization', {
+      ...emptyCustomization,
+      primaryColor: '#1e3a8a',
+    });
+  });
+
+  it('keeps a non-string stored CSS payload when a color changes (preserve-first)', () => {
+    const payload = { legacy: true };
+    settingsRef.current = { themeCustomization: { ...emptyCustomization, customCss: payload } };
+    render(<AppearanceSection />);
+    expect(screen.getByLabelText('settings.appearance.customCss')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('settings.appearance.primaryColor'), {
+      target: { value: '#1e3a8a' },
+    });
+    expect(mockHandleSettingChange).toHaveBeenCalledWith(
+      'themeCustomization',
+      expect.objectContaining({ primaryColor: '#1e3a8a', customCss: payload }),
+    );
+  });
+
+  it('resets a single color and everything back to the theme', async () => {
+    const user = userEvent.setup();
+    settingsRef.current = {
+      themeCustomization: { ...emptyCustomization, accentColor: '#dda15e', customCss: '.a{}' },
+    };
+    render(<AppearanceSection />);
+    await user.click(screen.getByRole('button', { name: 'settings.appearance.resetColorAria' }));
+    expect(mockHandleSettingChange).toHaveBeenLastCalledWith('themeCustomization', {
+      ...emptyCustomization,
+      customCss: '.a{}',
+    });
+    await user.click(screen.getByText('settings.appearance.resetAllCustomization'));
+    expect(mockHandleSettingChange).toHaveBeenLastCalledWith(
+      'themeCustomization',
+      emptyCustomization,
+    );
+  });
+
+  it('warns when custom text and background fall below WCAG AA contrast', () => {
+    settingsRef.current = {
+      themeCustomization: {
+        ...emptyCustomization,
+        backgroundColor: '#777777',
+        textColor: '#888888',
+      },
+    };
+    render(<AppearanceSection />);
+    expect(screen.getByRole('status')).toHaveTextContent('settings.appearance.contrastWarning');
+  });
+
+  it('does not warn for a readable custom pair', () => {
+    settingsRef.current = {
+      themeCustomization: {
+        ...emptyCustomization,
+        backgroundColor: '#ffffff',
+        textColor: '#111111',
+      },
+    };
+    render(<AppearanceSection />);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('bounds the custom CSS editor and explains what is stripped', () => {
+    render(<AppearanceSection />);
+    const editor = screen.getByLabelText('settings.appearance.customCss');
+    expect(editor).toHaveAttribute('maxLength', '20000');
+    expect(editor).toHaveAccessibleDescription('settings.appearance.customCssHint');
   });
 });
 

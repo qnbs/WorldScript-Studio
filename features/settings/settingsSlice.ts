@@ -157,6 +157,11 @@ function shapeOf(value: unknown): string {
   return typeof value === 'object' ? 'record' : typeof value;
 }
 
+/** Nothing stored, or a default without a shape to compare (null/undefined): the default applies. */
+function takesDefaultOutright(current: unknown, fresh: unknown): boolean {
+  return current === undefined || fresh === null || fresh === undefined;
+}
+
 /**
  * Default value for one setting (#818), applied field by field inside settings groups
  * (preserve-first). A field this version does not know, e.g. from a newer client, stays as stored.
@@ -167,11 +172,13 @@ function shapeOf(value: unknown): string {
  */
 function resetValue(current: unknown, fallback: unknown): unknown {
   const fresh: unknown = structuredClone(fallback);
-  if (current === undefined || fresh === null || fresh === undefined) return fresh;
+  if (takesDefaultOutright(current, fresh)) return fresh;
   if (shapeOf(current) !== shapeOf(fresh)) return current;
-  if (!isPlainRecord(fresh) || !isPlainRecord(current)) return fresh;
-  const merged: Record<string, unknown> = { ...current };
-  for (const [key, value] of Object.entries(fresh)) merged[key] = resetValue(current[key], value);
+  if (!isPlainRecord(fresh)) return fresh;
+  // Same shape as a plain-record default, so the stored value is a plain record too.
+  const stored = current as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...stored };
+  for (const [key, value] of Object.entries(fresh)) merged[key] = resetValue(stored[key], value);
   return merged;
 }
 
