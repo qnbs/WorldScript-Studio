@@ -18,6 +18,16 @@ export function isAppMounted(rootEl: Element): boolean {
 
 export const STARTUP_NOTICE_ATTRIBUTE = 'data-startup-notice';
 
+/** True while #root shows one of the startup notices (slow start or critical error). */
+export function isShowingStartupNotice(rootEl: Element): boolean {
+  return rootEl.firstElementChild?.hasAttribute(STARTUP_NOTICE_ATTRIBUTE) ?? false;
+}
+
+/** A critical startup error may replace the boot shell or an earlier notice, never the mounted app. */
+export function canShowStartupError(rootEl: Element): boolean {
+  return !isAppMounted(rootEl) || isShowingStartupNotice(rootEl);
+}
+
 export interface StartupNotice {
   /** English text shown immediately, and kept if the translation cannot load. */
   message: string;

@@ -17,7 +17,7 @@ import {
 import {
   CRITICAL_STARTUP_KEY,
   CRITICAL_STARTUP_MESSAGE,
-  isAppMounted,
+  canShowStartupError,
   renderStartupNotice,
   SLOW_START_KEY,
   SLOW_START_MESSAGE,
@@ -105,7 +105,7 @@ const root = ReactDOM.createRoot(rootElement);
 // or a prod-only bundle ReferenceError (e.g. zod DCE) produced a *silent* blank screen.
 function renderStartupError(message: string) {
   const rootEl = document.getElementById('root');
-  if (!rootEl || isAppMounted(rootEl)) return;
+  if (!rootEl || !canShowStartupError(rootEl)) return;
   void renderStartupNotice(rootEl, {
     message: CRITICAL_STARTUP_MESSAGE,
     messageKey: CRITICAL_STARTUP_KEY,

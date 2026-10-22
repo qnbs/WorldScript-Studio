@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BOOT_SHELL_ATTRIBUTE,
+  canShowStartupError,
   isAppMounted,
   renderStartupNotice,
   SLOW_START_KEY,
@@ -160,5 +161,18 @@ describe('startup notice localization', () => {
         expect(common[key], `${lang} ${key}`).toBeTruthy();
       }
     }
+  });
+});
+
+describe('critical startup error after the slow-start notice', () => {
+  it('may replace the boot shell or an earlier notice, never the mounted app', async () => {
+    const root = shippedRoot();
+    expect(canShowStartupError(root)).toBe(true);
+
+    await renderStartupNotice(root, { message: SLOW_START_MESSAGE }, english);
+    expect(canShowStartupError(root)).toBe(true);
+
+    root.replaceChildren(document.createElement('main'));
+    expect(canShowStartupError(root)).toBe(false);
   });
 });
