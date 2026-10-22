@@ -182,10 +182,10 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@biomejs/biome": "^2.5.8",
+    "@biomejs/biome": "^2.5.15",
     "@codecov/vite-plugin": "2.0.1",
     "@lhci/cli": "^0.15.1",
-    "@playwright/test": "^1.64.0",
+    "@playwright/test": "^1.64.1",
     "@storybook/addon-a11y": "^10.6.2",
     "@storybook/builder-vite": "^10.6.2",
     "@storybook/react": "^10.6.2",
