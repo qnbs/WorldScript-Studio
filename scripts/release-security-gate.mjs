@@ -42,7 +42,10 @@ const STATUS_FUNCTION = /\b(?:always|failure|cancelled|success)\s*\(/;
 const CHECKOUT = 'actions/checkout@';
 const OSV_SCANNER = 'google/osv-scanner-action/osv-scanner-action@';
 
-const asList = (value) => (Array.isArray(value) ? value : value ? [value] : []);
+function asList(value) {
+  if (Array.isArray(value)) return value;
+  return value ? [value] : [];
+}
 
 function permissionsAreReadOnlyContents(permissions) {
   return (
@@ -120,24 +123,45 @@ function checkAuditSteps(steps, expectedSha, fail) {
   checkStepsAlwaysEnforced(steps, fail);
 }
 
+/** [passes(audit, expectedSha), message(expectedSha)] for the audit job's own settings. */
+const AUDIT_JOB_RULES = [
+  [
+    (audit) => permissionsAreReadOnlyContents(audit.permissions),
+    () => 'job "security-audit" must hold exactly permissions: { contents: read }',
+  ],
+  [
+    (audit, sha) => audit.env?.EXPECTED_SHA === sha,
+    (sha) => `job "security-audit" must audit EXPECTED_SHA: ${sha}`,
+  ],
+  [
+    (audit) => audit.outputs?.['audited-sha'] === AUDITED_SHA_OUTPUT,
+    () => `job "security-audit" must output audited-sha: ${AUDITED_SHA_OUTPUT}`,
+  ],
+  [
+    (audit) => audit['continue-on-error'] === undefined,
+    () => 'job "security-audit" must not set continue-on-error',
+  ],
+];
+
 function checkAuditJob(audit, expectedSha, fail) {
   if (!audit) {
     fail('missing job "security-audit" (#911 release gate)');
     return;
   }
-  if (!permissionsAreReadOnlyContents(audit.permissions)) {
-    fail('job "security-audit" must hold exactly permissions: { contents: read }');
-  }
-  if (audit.env?.EXPECTED_SHA !== expectedSha) {
-    fail(`job "security-audit" must audit EXPECTED_SHA: ${expectedSha}`);
-  }
-  if (audit.outputs?.['audited-sha'] !== AUDITED_SHA_OUTPUT) {
-    fail(`job "security-audit" must output audited-sha: ${AUDITED_SHA_OUTPUT}`);
-  }
-  if (audit['continue-on-error'] !== undefined) {
-    fail('job "security-audit" must not set continue-on-error');
+  for (const [passes, message] of AUDIT_JOB_RULES) {
+    if (!passes(audit, expectedSha)) fail(message(expectedSha));
   }
   checkAuditSteps(asList(audit.steps), expectedSha, fail);
+}
+
+function checkGateCondition(jobName, condition, fail) {
+  const missing = REQUIRED_GATE_CONDITIONS.filter((required) => !condition.includes(required));
+  for (const required of missing) fail(`job "${jobName}" if: must require ${required}`);
+  if (STATUS_FUNCTION.test(condition)) {
+    fail(
+      `job "${jobName}" if: must not use a status function; it would let the job run after a failed, skipped or cancelled audit`,
+    );
+  }
 }
 
 function checkGatedJob(jobName, job, fail) {
@@ -145,16 +169,28 @@ function checkGatedJob(jobName, job, fail) {
     fail(`gated job "${jobName}" is missing`);
     return;
   }
-  if (!asList(job.needs).includes('security-audit'))
+  if (!asList(job.needs).includes('security-audit')) {
     fail(`job "${jobName}" must need "security-audit"`);
-  const condition = String(job.if ?? '');
-  for (const required of REQUIRED_GATE_CONDITIONS) {
-    if (!condition.includes(required)) fail(`job "${jobName}" if: must require ${required}`);
   }
-  if (STATUS_FUNCTION.test(condition)) {
+  checkGateCondition(jobName, String(job.if ?? ''), fail);
+}
+
+function checkNoUngatedWriters(jobs, gatedJobs, fail) {
+  const ungated = Object.entries(jobs).filter(
+    ([jobName, job]) => !gatedJobs.includes(jobName) && hasWritePermission(job),
+  );
+  for (const [jobName] of ungated) {
     fail(
-      `job "${jobName}" if: must not use a status function; it would let the job run after a failed, skipped or cancelled audit`,
+      `job "${jobName}" holds a write permission but is not behind the #911 release security gate`,
     );
+  }
+}
+
+function parseWorkflow(source) {
+  try {
+    return { workflow: parse(source), error: null };
+  } catch (error) {
+    return { workflow: null, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -164,37 +200,32 @@ export function checkReleaseSecurityWorkflow(fileName, source) {
   if (!spec) return [];
   const failures = [];
   const fail = (message) => failures.push({ file: fileName, message });
-  let workflow;
-  try {
-    workflow = parse(source);
-  } catch (error) {
-    fail(`YAML parse error: ${error instanceof Error ? error.message : String(error)}`);
+  const { workflow, error } = parseWorkflow(source);
+  if (error !== null) {
+    fail(`YAML parse error: ${error}`);
     return failures;
   }
   const jobs = workflow?.jobs ?? {};
   checkAuditJob(jobs['security-audit'], spec.expectedSha, fail);
   for (const jobName of spec.gatedJobs) checkGatedJob(jobName, jobs[jobName], fail);
-  for (const [jobName, job] of Object.entries(jobs)) {
-    if (!spec.gatedJobs.includes(jobName) && hasWritePermission(job)) {
-      fail(
-        `job "${jobName}" holds a write permission but is not behind the #911 release security gate`,
-      );
-    }
-  }
+  checkNoUngatedWriters(jobs, spec.gatedJobs, fail);
   return failures;
+}
+
+function readWorkflow(root, fileName) {
+  try {
+    return readFileSync(join(root, '.github', 'workflows', fileName), 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 export function checkReleaseSecurityGates(
   root = resolve(dirname(fileURLToPath(import.meta.url)), '..'),
 ) {
   return Object.keys(RELEASE_GATED_WORKFLOWS).flatMap((fileName) => {
-    const path = join(root, '.github', 'workflows', fileName);
-    let source;
-    try {
-      source = readFileSync(path, 'utf8');
-    } catch {
-      return [{ file: fileName, message: 'gated workflow is missing' }];
-    }
+    const source = readWorkflow(root, fileName);
+    if (source === null) return [{ file: fileName, message: 'gated workflow is missing' }];
     return checkReleaseSecurityWorkflow(fileName, source);
   });
 }
