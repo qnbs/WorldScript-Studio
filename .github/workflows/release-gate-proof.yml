@@ -1,0 +1,89 @@
+# Non-publishing proof of the #911 release security gate (same inlined audit job as tauri-build.yml / docker.yml). Dispatch it on main with:
+#   expected-sha = the dispatched commit  -> audit succeeds, the publish stand-in runs (echo only)
+#   expected-sha = another full SHA       -> audit may succeed, the stand-in is skipped (SHA mismatch)
+#   expected-sha = not-a-sha              -> audit fails, the stand-in is skipped
+# The stand-in's `if` is identical to docker.yml build-push (tests/unit/tooling/releaseSecurityGate.test.ts).
+# Nothing here holds a write permission, logs in to a registry or creates a release.
+name: Release gate proof
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected-sha:
+        description: SHA to hand to the release security audit (use a wrong or invalid value for the negative proofs).
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  security-audit:
+    name: 🔒 Release security audit (exact ref)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      audited-sha: ${{ steps.result.outputs.audited-sha }}
+    env:
+      EXPECTED_SHA: ${{ inputs.expected-sha }}
+    steps:
+      - name: Validate the requested commit SHA
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$EXPECTED_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::expected SHA must be a full 40-character commit SHA, got '${EXPECTED_SHA}'"
+            exit 1
+          fi
+
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.expected-sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify checkout provenance and audit inputs
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if [ "$HEAD_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::checked out ${HEAD_SHA}, expected ${EXPECTED_SHA}"
+            exit 1
+          fi
+          for input in src-tauri/osv-scanner.toml pnpm-lock.yaml src-tauri/Cargo.lock crates/Cargo.lock; do
+            if [ ! -s "$input" ]; then
+              echo "::error::missing or empty audit input ${input}"
+              exit 1
+            fi
+          done
+
+      # Same pinned scanner, config and lockfiles as the CI Security Audit; any finding or scanner error fails this step.
+      - name: OSV vulnerability scan (all three lockfiles)
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: |-
+            --config=src-tauri/osv-scanner.toml
+            --lockfile=pnpm-lock.yaml
+            --lockfile=src-tauri/Cargo.lock
+            --lockfile=crates/Cargo.lock
+
+      - name: Record the audited SHA
+        id: result
+        run: echo "audited-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  publish-stand-in:
+    name: Publish stand-in (no side effects)
+    needs: [security-audit]
+    if: >-
+      ${{ needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Report the admitted publish
+        env:
+          AUDITED_SHA: ${{ needs.security-audit.outputs.audited-sha }}
+        run: echo "The gate admitted a publish of ${AUDITED_SHA}."
