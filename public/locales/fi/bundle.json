@@ -1922,6 +1922,7 @@
   "settings.ai.temperature.creative": "2 – Luova",
   "settings.ai.temperature.precise": "0 – Tarkka",
   "settings.ai.testConnection": "Testaa yhteys",
+  "settings.ai.testError.aiModeBlocked": "Nykyinen tekoälytila sallii vain paikalliset mallit. Vaihda tekoälytilaa testataksesi tämän pilviyhteyden.",
   "settings.ai.testError.corsSuspected": "Likely CORS ({{url}}) — verify OLLAMA_ORIGINS includes this page's origin, or check the server is actually running. Browsers give an identical error for both cases.",
   "settings.ai.testError.desktopRequired": "Ollama ja paikalliset OpenAI-yhteensopivat palvelimet ovat käytettävissä vain työpöytäsovelluksessa. Selaimet estävät suorat yhteydet verkkosivuilta osoitteeseen localhost (CORS ja Private Network Access).",
   "settings.ai.testError.httpError": "HTTP {{status}}",

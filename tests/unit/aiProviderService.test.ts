@@ -1194,6 +1194,25 @@ describe('testAIConnection', () => {
       expect(JSON.stringify(result)).not.toContain(FAKE_KEY);
     });
 
+    it.each(['local', 'eco'] as const)(
+      'in %s mode refuses before reading the key or making any request',
+      async (mode) => {
+        setActiveAiMode(mode);
+        const fetchMock = stubFetch(new Response('{}', { status: 200 }));
+        vi.mocked(storageService.getGeminiApiKey).mockClear();
+
+        const result = await testAIConnection('gemini', {});
+        expect(result).toMatchObject({ ok: false, kind: 'aiModeBlocked' });
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(storageService.getGeminiApiKey).not.toHaveBeenCalled();
+      },
+    );
+
+    it('local providers stay testable in local mode', async () => {
+      setActiveAiMode('local');
+      expect(await testAIConnection('onnx', {})).toEqual({ ok: true });
+    });
+
     it('an empty key makes no request', async () => {
       vi.mocked(storageService.getGeminiApiKey).mockResolvedValueOnce('');
       const fetchMock = stubFetch(new Response('{}', { status: 200 }));

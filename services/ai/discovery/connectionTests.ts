@@ -7,6 +7,7 @@ import { assertCspConnectEndpointAllowed } from '../../network/cspOriginPolicy';
 import { testOllamaConnection } from '../../ollamaService';
 import { storageService } from '../../storageService';
 import { isTauriRuntime } from '../../tauriRuntime';
+import { assertCloudAiAllowedSync } from '../aiPolicy';
 // QNBS-v3: connection tests use the same current Anthropic default as the catalog and proxy.
 import { DEFAULT_ANTHROPIC_MODEL_ID } from '../cloudModelCatalog';
 import type { AIRequestOptions } from '../contracts/providerRequest';
@@ -29,6 +30,7 @@ export type TestConnectionErrorKind =
   | 'timeout'
   | 'unreachable'
   | 'policyBlocked'
+  | 'aiModeBlocked'
   | 'pluginUnavailable'
   | 'desktopRequired'
   | 'proxyUnavailableStaticHost'
@@ -47,10 +49,24 @@ export interface TestConnectionResult {
   localServer?: LocalServerDiagnostic;
 }
 
+/** A cloud provider under a local-only AI mode is refused before any key is read or request made. */
+function aiModeRefusal(provider: AIProvider): TestConnectionResult | null {
+  try {
+    assertCloudAiAllowedSync(provider);
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: message, kind: 'aiModeBlocked' };
+  }
+}
+
 export async function testAIConnection(
   provider: AIProvider,
   opts: Partial<AIRequestOptions>,
 ): Promise<TestConnectionResult> {
+  // QNBS-v3 (#1129, #1122): the AI mode is the single cloud authority; a connection test is a cloud request too.
+  const refusal = aiModeRefusal(provider);
+  if (refusal) return refusal;
   try {
     switch (provider) {
       case 'openai': {

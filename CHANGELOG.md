@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Security (AI connection test):** The Gemini connection test under Settings → AI sends the API key in Google's `x-goog-api-key` header instead of the `?key=` query string, so the key no longer appears in the request URL (PR #1135, #1129). In the Local and Eco AI modes, the test for any cloud provider is now refused before a key is read or a request is made ("The current AI mode allows only local models", new key `settings.ai.testError.aiModeBlocked` in all 19 locales), matching the AI mode as the single cloud authority (#1122). Local providers stay testable.
+
 - **Privacy:** The AI execution mode is now the single switch for cloud AI (PR #1122, #818). "Local storage only" (on by default) blocked cloud AI on top of the mode, and "EU data residency" only blocked OpenAI and Grok without controlling where data is processed; both toggles are removed. A one-time migration keeps existing installs as they were (a local-only choice becomes local mode); fresh installs start in hybrid. A remote LanguageTool server is used only when you enable it and enter that server.
 
 - **Maintenance (CI):** Lighthouse CI waits up to 90 s for first paint and 120 s for load, instead of the defaults (30 s and 45 s), in both the mobile and desktop configs (PR #1133). One run that errors aborts the whole `lhci autorun`. On 2026-10-21 a cold first run after the visual-regression phase failed the required Browser Quality job three times with `NO_FCP`, although the app paints.
