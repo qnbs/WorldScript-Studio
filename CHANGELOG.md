@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Compliance (font licenses):** The SIL Open Font License texts of the ten bundled `@fontsource` fonts and the app's MIT license are now produced at build time by `scripts/copy-third-party-licenses.mjs` into `public/licenses/` (PR #1136, #818). This runs in `predev`, `prebuild` and the Vercel edge build (`RUNTIME_ASSET_SCRIPTS`), so the texts ship with every build from the pinned packages. The font list lives in `services/thirdPartyNotices.ts`, and a test keeps it equal to the fonts `index.tsx` imports. Eleven copies of these files had been committed by accident with #1124; they are removed from version control, and `public/licenses/` is ignored like `public/duckdb/`.
+
 - **Privacy:** The AI execution mode is now the single switch for cloud AI (PR #1122, #818). "Local storage only" (on by default) blocked cloud AI on top of the mode, and "EU data residency" only blocked OpenAI and Grok without controlling where data is processed; both toggles are removed. A one-time migration keeps existing installs as they were (a local-only choice becomes local mode); fresh installs start in hybrid. A remote LanguageTool server is used only when you enable it and enter that server.
 
 - **Maintenance (CI):** Lighthouse CI waits up to 90 s for first paint and 120 s for load, instead of the defaults (30 s and 45 s), in both the mobile and desktop configs (PR #1133). One run that errors aborts the whole `lhci autorun`. On 2026-10-21 a cold first run after the visual-regression phase failed the required Browser Quality job three times with `NO_FCP`, although the app paints.
