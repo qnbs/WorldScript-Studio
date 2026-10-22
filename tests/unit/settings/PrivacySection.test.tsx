@@ -90,15 +90,12 @@ describe('PrivacySection', () => {
     expect(screen.getByText('settings.privacy.dataEncryption')).toBeInTheDocument();
   });
 
-  it('renders local storage only toggle', () => {
+  // QNBS-v3 (#818): "Local storage only" duplicated the AI mode and "EU data residency" never controlled data location; both were removed.
+  it('renders only the analytics and encryption toggles', () => {
     render(<PrivacySection />);
-    expect(screen.getByText('settings.privacy.localStorageOnly')).toBeInTheDocument();
-  });
-
-  // QNBS-v3: dead crashReporting + shareUsageData toggles removed (no functional reads); 4 remain.
-  it('renders four toggles total (analytics, encryption, localStorageOnly, euDataResidency)', () => {
-    render(<PrivacySection />);
-    expect(screen.getAllByRole('switch').length).toBe(4);
+    expect(screen.getAllByRole('switch').length).toBe(2);
+    expect(screen.queryByText('settings.privacy.localStorageOnly')).not.toBeInTheDocument();
+    expect(screen.queryByText('settings.privacy.euDataResidency')).not.toBeInTheDocument();
   });
 
   it('analytics toggle calls handleSettingChange when clicked', async () => {

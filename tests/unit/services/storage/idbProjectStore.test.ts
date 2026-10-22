@@ -107,8 +107,7 @@ describe('idbProjectStore', () => {
         },
       });
       expect(result.privacy.analyticsEnabled).toBe(true);
-      expect(result.privacy.dataEncryption).toBe(true);
-      expect(result.privacy.localStorageOnly).toBe(true);
+      expect(result.privacy.cloudAuthorityMigrated).toBe(true);
     });
 
     it('sets default webrtcSignalingUrls when empty', () => {

@@ -3,7 +3,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { APP_NAME, ICONS, PRODUCTION_URL } from '../../constants';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
-import { defaultThemeCustomization } from '../../features/settings/settingsSlice';
 import { usePWA } from '../../hooks/usePWA';
 import packageJson from '../../package.json';
 import { desktopPlatform } from '../../services/desktopPlatform';
@@ -13,6 +12,7 @@ import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { CustomIcon } from '../ui/Icon';
 import { LanguageSelector } from '../ui/LanguageSelector';
+import { ThemeCustomizationCard } from './ThemeCustomizationCard';
 
 // QNBS-v3: PWA install card — always accessible from Settings even after banner dismissed.
 const PWAInstallCard: FC = () => {
@@ -138,12 +138,6 @@ export const GeneralSection: FC = () => {
 
 export const AppearanceSection: FC = () => {
   const { t, settings, handleSettingChange } = useSettingsViewContext();
-  // QNBS-v3: Defensive merge — old persisted states may lack themeCustomization, and a malformed stored value is preserved as-is (#702); edits then start from the defaults.
-  const stored: unknown = settings.themeCustomization;
-  const themeCustomization =
-    stored && typeof stored === 'object' && !Array.isArray(stored)
-      ? settings.themeCustomization
-      : defaultThemeCustomization;
   return (
     <div className="space-y-6">
       <Card>
@@ -159,6 +153,7 @@ export const AppearanceSection: FC = () => {
           <div className="grid grid-cols-3 gap-4">
             <Button
               variant={settings.theme === 'dark' ? 'primary' : 'secondary'}
+              aria-pressed={settings.theme === 'dark'}
               onClick={() => handleSettingChange('theme', 'dark')}
               className="text-center justify-center py-4"
             >
@@ -166,6 +161,7 @@ export const AppearanceSection: FC = () => {
             </Button>
             <Button
               variant={settings.theme === 'light' ? 'primary' : 'secondary'}
+              aria-pressed={settings.theme === 'light'}
               onClick={() => handleSettingChange('theme', 'light')}
               className="text-center justify-center py-4"
             >
@@ -173,6 +169,7 @@ export const AppearanceSection: FC = () => {
             </Button>
             <Button
               variant={settings.theme === 'auto' ? 'primary' : 'secondary'}
+              aria-pressed={settings.theme === 'auto'}
               onClick={() => handleSettingChange('theme', 'auto')}
               className="text-center justify-center py-4"
             >
@@ -190,6 +187,7 @@ export const AppearanceSection: FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Button
                 variant={settings.appearancePreset === 'default' ? 'primary' : 'secondary'}
+                aria-pressed={settings.appearancePreset === 'default'}
                 size="sm"
                 onClick={() => handleSettingChange('appearancePreset', 'default')}
                 className="justify-center"
@@ -198,6 +196,7 @@ export const AppearanceSection: FC = () => {
               </Button>
               <Button
                 variant={settings.appearancePreset === 'sepia' ? 'primary' : 'secondary'}
+                aria-pressed={settings.appearancePreset === 'sepia'}
                 size="sm"
                 onClick={() => handleSettingChange('appearancePreset', 'sepia')}
                 className="justify-center"
@@ -237,117 +236,7 @@ export const AppearanceSection: FC = () => {
           </div>
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader>
-          <h2 className="text-xl font-semibold text-[var(--sc-text-primary)]">
-            {t('settings.appearance.customization')}
-          </h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label
-                htmlFor="settings-primary-color"
-                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
-              >
-                {t('settings.appearance.primaryColor')}
-              </label>
-              <input
-                id="settings-primary-color"
-                type="color"
-                value={themeCustomization.primaryColor}
-                onChange={(e) =>
-                  handleSettingChange('themeCustomization', {
-                    ...themeCustomization,
-                    primaryColor: e.target.value,
-                  })
-                }
-                className="w-full h-10 rounded border border-[var(--sc-border-subtle)]"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="settings-secondary-color"
-                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
-              >
-                {t('settings.appearance.secondaryColor')}
-              </label>
-              <input
-                id="settings-secondary-color"
-                type="color"
-                value={themeCustomization.secondaryColor}
-                onChange={(e) =>
-                  handleSettingChange('themeCustomization', {
-                    ...themeCustomization,
-                    secondaryColor: e.target.value,
-                  })
-                }
-                className="w-full h-10 rounded border border-[var(--sc-border-subtle)]"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="settings-accent-color"
-                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
-              >
-                {t('settings.appearance.accentColor')}
-              </label>
-              <input
-                id="settings-accent-color"
-                type="color"
-                value={themeCustomization.accentColor}
-                onChange={(e) =>
-                  handleSettingChange('themeCustomization', {
-                    ...themeCustomization,
-                    accentColor: e.target.value,
-                  })
-                }
-                className="w-full h-10 rounded border border-[var(--sc-border-subtle)]"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="settings-bg-color"
-                className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
-              >
-                {t('settings.appearance.backgroundColor')}
-              </label>
-              <input
-                id="settings-bg-color"
-                type="color"
-                value={themeCustomization.backgroundColor}
-                onChange={(e) =>
-                  handleSettingChange('themeCustomization', {
-                    ...themeCustomization,
-                    backgroundColor: e.target.value,
-                  })
-                }
-                className="w-full h-10 rounded border border-[var(--sc-border-subtle)]"
-              />
-            </div>
-          </div>
-          <div>
-            <label
-              htmlFor="settings-custom-css"
-              className="text-sm font-medium text-[var(--sc-text-secondary)] mb-2 block"
-            >
-              {t('settings.appearance.customCss')}
-            </label>
-            <textarea
-              id="settings-custom-css"
-              value={themeCustomization.customCss}
-              onChange={(e) =>
-                handleSettingChange('themeCustomization', {
-                  ...themeCustomization,
-                  customCss: e.target.value,
-                })
-              }
-              placeholder="/* Custom CSS */"
-              className="w-full h-32 p-3 rounded border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] font-mono text-sm"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <ThemeCustomizationCard />
     </div>
   );
 };

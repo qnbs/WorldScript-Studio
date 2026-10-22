@@ -6,7 +6,6 @@ import {
   type AIRoutingOperation,
   peekPositiveRoutingProvider,
 } from '../../services/ai/positiveRouting';
-import type { PrivacySettings } from '../../types';
 import { getProjectTargetIdentity } from './projectIdentity';
 import { buildAiOptions } from './thunks/thunkUtils';
 
@@ -100,10 +99,7 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
         // generic text-routing prediction applied to every AI capability.
         const state = thunkAPI.getState() as RootState;
         const provider = peekPositiveRoutingProvider(buildAiOptions(state), operation);
-        if (provider) {
-          const privacy = (state.settings as unknown as { privacy?: PrivacySettings }).privacy;
-          assertCloudAiAllowedSync(provider, privacy);
-        }
+        if (provider) assertCloudAiAllowedSync(provider);
         return await payloadCreator(arg, wrappedThunkAPI);
       } finally {
         activeRequestCleanup();

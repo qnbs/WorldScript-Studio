@@ -94,11 +94,10 @@ const defaultSettings: Settings = {
     // prose, never leaves the device) and the analytics dashboard relies on it. The toggle is now a
     // functional opt-out (gates DuckDB writes + inference telemetry via isAnalyticsPersistenceAllowed).
     analyticsEnabled: true,
-    dataEncryption: true,
-    localStorageOnly: true,
-    euDataResidency: true,
     // QNBS-v3: SEC — fresh installs are born post-migration so the normalizer respects this default.
     analyticsGateMigrated: true,
+    // QNBS-v3 (#818): AI execution mode is the only cloud authority; fresh installs start in hybrid.
+    cloudAuthorityMigrated: true,
   },
   collaboration: {
     webrtcSignalingUrls: ['wss://y-webrtc-signaling.fly.dev', 'wss://signaling.yjs.dev'],
@@ -131,6 +130,57 @@ export { defaultDesktopSettings, defaultVoiceSettings };
 // QNBS-v3: exported so components + IDB rehydration can backfill missing nested objects
 // (older persisted settings lacked advancedEditor/themeCustomization → page crash on read).
 export const defaultAdvancedEditorSettings = defaultSettings.advancedEditor;
+// Choice settings whose values this version knows; a stored value outside the list comes from a newer client.
+const KNOWN_CHOICES: Readonly<Record<string, readonly string[]>> = {
+  theme: ['dark', 'light', 'auto'],
+  appearancePreset: ['default', 'sepia'],
+  writingSurfaceStyle: ['textured', 'plain'],
+  editorFont: ['serif', 'sans-serif', 'monospace', 'custom'],
+  aiCreativity: ['Focused', 'Balanced', 'Imaginative'],
+};
+
+/** An unsupported stored choice (e.g. a newer client's writing surface) stays as stored on reset (preserve-first). */
+function isUnsupportedChoice(key: string, value: unknown): boolean {
+  const known = KNOWN_CHOICES[key];
+  return known !== undefined && typeof value === 'string' && !known.includes(value);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** JSON shape of a stored value: 'record', 'array', 'null' or its typeof. */
+function shapeOf(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value === 'object' ? 'record' : typeof value;
+}
+
+/** Nothing stored, or a default without a shape to compare (null/undefined): the default applies. */
+function takesDefaultOutright(current: unknown, fresh: unknown): boolean {
+  return current === undefined || fresh === null || fresh === undefined;
+}
+
+/**
+ * Default value for one setting (#818), applied field by field inside settings groups
+ * (preserve-first). A field this version does not know, e.g. from a newer client, stays as stored.
+ * A stored value whose shape differs from its default (a group stored as a string, a colour stored
+ * as an object, a list stored as null) is kept untouched: the runtime never applies it, and a reset
+ * must not silently replace data it cannot interpret. Every other known field takes its default; a
+ * default of null or undefined has no shape to compare, so its field is reset.
+ */
+function resetValue(current: unknown, fallback: unknown): unknown {
+  const fresh: unknown = structuredClone(fallback);
+  if (takesDefaultOutright(current, fresh)) return fresh;
+  if (shapeOf(current) !== shapeOf(fresh)) return current;
+  if (!isPlainRecord(fresh)) return fresh;
+  // Same shape as a plain-record default, so the stored value is a plain record too.
+  const stored = current as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...stored };
+  for (const [key, value] of Object.entries(fresh)) merged[key] = resetValue(stored[key], value);
+  return merged;
+}
+
 export const defaultThemeCustomization = defaultSettings.themeCustomization;
 
 const initialState: Settings = { ...defaultSettings };
@@ -139,6 +189,27 @@ const settingsSlice = createSlice({
   name: 'settings',
   initialState,
   reducers: {
+    /**
+     * Settings → Data → Restore default settings (#818). Every setting returns to its default except
+     * the choices that decide whether data leaves the device (AI execution mode, privacy,
+     * collaboration servers) and the UI language. Projects and API keys live elsewhere.
+     */
+    resetToDefaults(state) {
+      const kept = {
+        aiMode: state.aiMode,
+        privacy: state.privacy,
+        collaboration: state.collaboration,
+        language: state.language,
+      };
+      const target = state as unknown as Record<string, unknown>;
+      for (const [key, value] of Object.entries(defaultSettings)) {
+        if (isUnsupportedChoice(key, target[key])) continue;
+        target[key] = resetValue(target[key], value);
+      }
+      // A known setting without a default: the reset returns the editor to the built-in fonts.
+      delete state.customFont;
+      Object.assign(state, kept);
+    },
     setSettings(state, action: PayloadAction<Settings>) {
       Object.assign(state, action.payload);
       state.accessibility = normalizeAccessibilitySettings(state.accessibility);

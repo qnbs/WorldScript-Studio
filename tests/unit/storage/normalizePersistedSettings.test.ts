@@ -94,7 +94,7 @@ describe('normalizePersistedSettings', () => {
   it('provides default privacy settings when field is absent (analytics ON, migrated)', () => {
     const result = normalizePersistedSettings({});
     expect(result.privacy).toBeDefined();
-    expect(result.privacy.localStorageOnly).toBe(true);
+    expect(result.privacy.cloudAuthorityMigrated).toBe(true);
     // QNBS-v3: SEC — default analytics ON (local-only metadata); fresh data is treated as migrated.
     expect(result.privacy.analyticsEnabled).toBe(true);
     expect(result.privacy.analyticsGateMigrated).toBe(true);
@@ -105,7 +105,47 @@ describe('normalizePersistedSettings', () => {
       privacy: { analyticsEnabled: true, analyticsGateMigrated: true },
     });
     expect(result.privacy.analyticsEnabled).toBe(true);
-    expect(result.privacy.localStorageOnly).toBe(true); // default preserved
+    // QNBS-v3 (#818): the removed legacy flags get no defaults injected.
+    expect(result.privacy.localStorageOnly).toBeUndefined();
+  });
+
+  // QNBS-v3 (#818): the AI mode is now the single cloud authority; a legacy local-only choice (stored default true) carries over once.
+  describe('legacy local-only → AI mode migration', () => {
+    it.each(['hybrid', 'cloud'] as const)(
+      'turns stored local-only + %s into local mode',
+      (aiMode) => {
+        const result = normalizePersistedSettings({ aiMode, privacy: { localStorageOnly: true } });
+        expect(result.aiMode).toBe('local');
+        expect(result.privacy.cloudAuthorityMigrated).toBe(true);
+        expect(result.privacy.localStorageOnly).toBe(true); // stored field preserved
+      },
+    );
+
+    it('treats settings saved before the privacy record existed as local-only (the old default)', () => {
+      expect(normalizePersistedSettings({ aiMode: 'hybrid' }).aiMode).toBe('local');
+    });
+
+    it('keeps hybrid when local-only was turned off', () => {
+      const result = normalizePersistedSettings({
+        aiMode: 'hybrid',
+        privacy: { localStorageOnly: false },
+      });
+      expect(result.aiMode).toBe('hybrid');
+    });
+
+    it('keeps an already local-only mode such as eco', () => {
+      expect(
+        normalizePersistedSettings({ aiMode: 'eco', privacy: { localStorageOnly: true } }).aiMode,
+      ).toBe('eco');
+    });
+
+    it('runs once: a later hybrid choice sticks', () => {
+      const result = normalizePersistedSettings({
+        aiMode: 'hybrid',
+        privacy: { localStorageOnly: true, cloudAuthorityMigrated: true },
+      });
+      expect(result.aiMode).toBe('hybrid');
+    });
   });
 
   // QNBS-v3: SEC one-time migration — legacy persisted analyticsEnabled was cosmetic (the gate didn't
