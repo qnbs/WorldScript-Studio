@@ -1,7 +1,8 @@
 # WorldScript Studio — Codebase Audit Report
 
 **2026-10-22 DOMPurify follow-up (#1132):** raised the direct dependency and workspace override
-floor to 3.4.17, with the lockfile updating only DOMPurify and jsPDF's optional DOMPurify reference.
+floor to 3.4.17 with a `<4` override cap preserving the app/jsPDF compatibility range. The lockfile
+updates only DOMPurify and jsPDF's optional DOMPurify reference.
 This addresses `GHSA-c6gr-qvv4-5v3f`, `GHSA-cg2g-xh64-v4q7` and `GHSA-mrv2-3pqr-j5jr`.
 The four dependency regression cases fail on 3.4.16 and pass on 3.4.17: XHTML SVG `attributeName`,
 split template expressions in attached shadow roots, and parent/sibling detachment by hooks.

@@ -26,7 +26,7 @@ overrides:
   uuid: '>=11.1.1 <12.0.0 || >=12.0.1 <13.0.0 || >=13.0.1'
   qs: '>=6.16.0'
   fflate: '>=0.8.3'
-  dompurify: '>=3.4.17'
+  dompurify: '>=3.4.17 <4'
   '@babel/core': '>=7.29.6 <8'
   undici: '>=7.29.1 <8'
   js-yaml: '>=4.3.2 <5'
@@ -157,7 +157,7 @@ importers:
         specifier: ^9.8.1
         version: 9.8.1
       dompurify:
-        specifier: '>=3.4.17'
+        specifier: '>=3.4.17 <4'
         version: 3.4.17
       driver.js:
         specifier: ^1.8.0

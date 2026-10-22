@@ -39,25 +39,32 @@ describe('DOMPurify security regressions', () => {
     expect(shadow.querySelector('span')?.textContent).toBe('kept');
   });
 
-  it.each(['parent', 'nextSibling'] as const)(
-    'neutralizes handlers in a %s detached by a hook (GHSA-mrv2-3pqr-j5jr)',
-    (detachedNode) => {
-      const purifier = createDOMPurify(window);
-      const root = document.createElement('div');
-      root.innerHTML =
-        '<figure><img class="remove"><img id="unsafe" onerror="alert(1)"></figure><p>kept</p>';
-      const unsafeImage = root.querySelector('#unsafe');
-      expect(unsafeImage?.hasAttribute('onerror')).toBe(true);
-      purifier.addHook('afterSanitizeAttributes', (node) => {
-        if (node.getAttribute('class') !== 'remove') return;
-        if (detachedNode === 'parent') node.parentElement?.remove();
-        else node.nextElementSibling?.remove();
-      });
+  function expectDetachedSubtreeSanitized(detachedNode: 'parent' | 'nextSibling') {
+    const purifier = createDOMPurify(window);
+    const root = document.createElement('div');
+    root.innerHTML =
+      '<figure><img class="remove"><img id="unsafe" onerror="alert(1)"></figure><p>kept</p>';
+    const unsafeImage = root.querySelector('#unsafe');
+    expect(unsafeImage?.hasAttribute('onerror')).toBe(true);
+    purifier.addHook('afterSanitizeAttributes', (node) => {
+      if (node.getAttribute('class') !== 'remove') return;
+      if (detachedNode === 'parent') node.parentElement?.remove();
+      else node.nextElementSibling?.remove();
+    });
 
-      purifier.sanitize(root, { IN_PLACE: true });
+    purifier.sanitize(root, { IN_PLACE: true });
 
-      expect(unsafeImage?.hasAttribute('onerror')).toBe(false);
-      expect(root.querySelector('p')?.textContent).toBe('kept');
-    },
-  );
+    expect(root.contains(unsafeImage)).toBe(false);
+    expect(unsafeImage?.hasAttribute('onerror')).toBe(false);
+    expect(root.querySelector('p')?.textContent).toBe('kept');
+  }
+
+  // QNBS-v3: Explicit cases keep both detachment paths visible to the source-based test counter.
+  it('neutralizes handlers when a hook detaches their parent (GHSA-mrv2-3pqr-j5jr)', () => {
+    expectDetachedSubtreeSanitized('parent');
+  });
+
+  it('neutralizes handlers when a hook detaches a later sibling (GHSA-mrv2-3pqr-j5jr)', () => {
+    expectDetachedSubtreeSanitized('nextSibling');
+  });
 });

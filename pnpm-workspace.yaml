@@ -89,7 +89,7 @@ overrides:
   uuid: ">=11.1.1 <12.0.0 || >=12.0.1 <13.0.0 || >=13.0.1"
   qs: ">=6.16.0"
   fflate: ">=0.8.3"
-  dompurify: ">=3.4.17" # GHSA-c6gr-qvv4-5v3f / GHSA-cg2g-xh64-v4q7 / GHSA-mrv2-3pqr-j5jr; shipped runtime dependency
+  dompurify: ">=3.4.17 <4" # GHSA-c6gr-qvv4-5v3f / GHSA-cg2g-xh64-v4q7 / GHSA-mrv2-3pqr-j5jr; retain the app/jsPDF 3.x contract
   "@babel/core": ">=7.29.6 <8"
   undici: ">=7.29.1 <8" # floor raised for GHSA-3wwx-pv8p-q78v (fixed 7.29.1); stays within 7.x (see header)
   js-yaml: ">=4.3.2 <5" # GHSA-2883-xcg3-v3hh (jest/babel-istanbul transitive, dev-only)
