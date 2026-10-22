@@ -657,6 +657,37 @@ describe('checkActionPins', () => {
     expect(failures).toEqual([]);
   });
 
+  // QNBS-v3 (#911): a job may call a reusable workflow in .github/workflows, which is itself a governed workflow file.
+  it('passes a job-level call to a local reusable workflow in .github/workflows/', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins(
+      'x.yml',
+      doc('jobs:\n  call:\n    uses: ./.github/workflows/release-security-audit.yml\n'),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it.each([
+    [
+      'a step-level local workflow reference',
+      wrap('uses: ./.github/workflows/release-security-audit.yml'),
+    ],
+    [
+      'a nested local workflow path',
+      'jobs:\n  call:\n    uses: ./.github/workflows/nested/x.yml\n',
+    ],
+    [
+      'a parent-directory escape',
+      'jobs:\n  call:\n    uses: ./.github/workflows/../actions/x.yml\n',
+    ],
+  ])('still fails %s', (_label, yaml) => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins('x.yml', doc(yaml), failures);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/outside the governed \.github\/actions\//);
+  });
+
   // QNBS-v3: only .github/actions/** is scanned by listActionFiles — anywhere else is unchecked.
   it('fails for a local action reference outside .github/actions/', () => {
     const failures: WorkflowPolicyFailure[] = [];

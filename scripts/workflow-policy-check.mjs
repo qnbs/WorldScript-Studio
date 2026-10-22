@@ -846,7 +846,18 @@ function collectActionSteps(doc) {
 const DOCKER_DIGEST_PATTERN = /@sha256:[0-9a-f]{64}$/;
 
 // QNBS-v3: checks one uses: value, resolving aliases first so *ref hides no bypass step 6/2 found.
-function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, failures }) {
+// QNBS-v3 (#911): a job-level call to a reusable workflow in .github/workflows is itself a governed workflow file (listWorkflowFiles checks its pins and permissions).
+const LOCAL_REUSABLE_WORKFLOW_PATTERN = /^\.\/\.github\/workflows\/[A-Za-z0-9_-]+\.ya?ml$/;
+
+function checkUsesRef({
+  usesNode,
+  containerNode,
+  doc,
+  fileName,
+  lineCounter,
+  failures,
+  allowLocalWorkflow = false,
+}) {
   const resolvedNode = resolveNode(usesNode, doc);
   if (!resolvedNode || typeof resolvedNode.value !== 'string') return;
   const ref = resolvedNode.value;
@@ -860,6 +871,7 @@ function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, fai
   if (ref.startsWith('./')) {
     // QNBS-v3: only .github/actions/** is scanned by listActionFiles — any other local ref is unchecked.
     if (ref.startsWith('./.github/actions/')) return;
+    if (allowLocalWorkflow && LOCAL_REUSABLE_WORKFLOW_PATTERN.test(ref)) return;
     failures.push({
       file: fileName,
       message: `${loc}local action reference "${ref}" is outside the governed .github/actions/ directory and is never pin-checked`,
@@ -919,7 +931,15 @@ export function checkActionPins(fileName, doc, failures, options = {}) {
     for (const [, jobNode] of jobMap(doc)) {
       const usesNode = jobNode?.get?.('uses', true);
       if (!usesNode) continue;
-      checkUsesRef({ usesNode, containerNode: jobNode, doc, fileName, lineCounter, failures });
+      checkUsesRef({
+        usesNode,
+        containerNode: jobNode,
+        doc,
+        fileName,
+        lineCounter,
+        failures,
+        allowLocalWorkflow: true,
+      });
     }
   }
   // QNBS-v3: a Docker action (runs.using: docker) has no steps — its own image: needs the same pin.
