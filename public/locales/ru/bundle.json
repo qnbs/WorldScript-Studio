@@ -1922,6 +1922,7 @@
   "settings.ai.temperature.creative": "2 – Креатив",
   "settings.ai.temperature.precise": "0 – Точный",
   "settings.ai.testConnection": "Тестовое соединение",
+  "settings.ai.testError.aiModeBlocked": "Текущий режим ИИ разрешает только локальные модели. Чтобы проверить это облачное подключение, смените режим ИИ.",
   "settings.ai.testError.corsSuspected": "Likely CORS ({{url}}) — verify OLLAMA_ORIGINS includes this page's origin, or check the server is actually running. Browsers give an identical error for both cases.",
   "settings.ai.testError.desktopRequired": "Ollama и локальные серверы, совместимые с OpenAI, доступны только в настольном приложении. Браузеры блокируют прямые подключения с веб-страниц к localhost (CORS и Private Network Access).",
   "settings.ai.testError.httpError": "HTTP {{status}}",
