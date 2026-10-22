@@ -241,7 +241,7 @@ describe('createDeduplicatedThunk', () => {
   });
 
   describe('cloud AI policy enforcement', () => {
-    it('calls assertCloudAiAllowedSync with the current provider and privacy settings', async () => {
+    it('calls assertCloudAiAllowedSync with the current provider', async () => {
       const thunk = createDeduplicatedThunk<string>('test/policy-call', async (_arg, api) => {
         api.registerDuplicateRequest('prompt', 'view');
         return 'result';
@@ -251,10 +251,7 @@ describe('createDeduplicatedThunk', () => {
       await store.dispatch(thunk());
 
       // Default settings: advancedAi.provider='gemini', privacy.localStorageOnly=true
-      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
-        'gemini',
-        expect.objectContaining({ localStorageOnly: true }),
-      );
+      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith('gemini');
     });
 
     it('rejects when cloud AI policy blocks the provider', async () => {
@@ -291,10 +288,7 @@ describe('createDeduplicatedThunk', () => {
 
       await store.dispatch(thunk());
 
-      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
-        'gemini',
-        expect.objectContaining({ localStorageOnly: true }),
-      );
+      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith('gemini');
     });
 
     it('checks the routing-resolved local provider, not the nominal cloud one, when shouldRouteLocally() is true — so the safe local-reroute path is not blocked before it runs', async () => {
@@ -314,14 +308,11 @@ describe('createDeduplicatedThunk', () => {
       const result = await store.dispatch(thunk());
 
       expect(result.type).toBe('test/policy-local-routing-resolve/fulfilled');
-      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
-        'webllm',
-        expect.objectContaining({ localStorageOnly: true }),
-      );
+      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith('webllm');
       expect(payloadCreator).toHaveBeenCalled();
     });
 
-    it('checks the OpenRouter-promoted provider, not the EU-residency-restricted preset provider, when OpenRouter is enabled', async () => {
+    it('checks the OpenRouter-promoted provider, not the preset provider, when OpenRouter is enabled', async () => {
       const payloadCreator = vi.fn().mockResolvedValue('result');
       const thunk = createDeduplicatedThunk<string>(
         'test/policy-openrouter-promotion',
@@ -342,10 +333,7 @@ describe('createDeduplicatedThunk', () => {
       const result = await store.dispatch(thunk());
 
       expect(result.type).toBe('test/policy-openrouter-promotion/fulfilled');
-      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
-        'openrouter',
-        expect.objectContaining({ euDataResidency: true }),
-      );
+      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith('openrouter');
       expect(payloadCreator).toHaveBeenCalled();
     });
 
@@ -368,10 +356,7 @@ describe('createDeduplicatedThunk', () => {
       const result = await store.dispatch(thunk());
 
       expect(result.type).toBe('test/policy-image-operation/fulfilled');
-      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
-        'gemini',
-        expect.objectContaining({ localStorageOnly: true }),
-      );
+      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith('gemini');
       expect(payloadCreator).toHaveBeenCalled();
     });
 

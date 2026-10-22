@@ -331,12 +331,13 @@ describe('OpenRouterSection', () => {
     });
   });
 
-  it('shows the local-only policy-blocked message when localStorageOnly is on', async () => {
+  it('ignores the legacy local-only flag; only the AI mode blocks OpenRouter (#818)', () => {
     mocks.settingsState.privacy = { localStorageOnly: true };
     render(<OpenRouterSection />);
-    await waitFor(() =>
-      expect(screen.getByText('settings.openRouter.policyBlocked.localOnly')).toBeInTheDocument(),
-    );
+    expect(screen.queryByText('settings.openRouter.policyBlocked.mode')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('settings.openRouter.policyBlocked.localOnly'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows the mode policy-blocked message when AI mode is local/eco', async () => {
