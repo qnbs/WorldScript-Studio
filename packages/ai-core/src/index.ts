@@ -169,15 +169,12 @@ export const ONNX_SUPPORTED_MODELS = [
 
 export type OnnxModelId = (typeof ONNX_SUPPORTED_MODELS)[number]['id'];
 
-// QNBS-v3: curated MLC checkpoints; updated 2025 to include Llama 3.3, Phi-4, Gemma 3 releases.
+// QNBS-v3: curated MLC checkpoints; each id must be in web-llm's prebuiltAppConfig (webllmModelCatalog.test.ts).
 export const WEBLLM_SUPPORTED_MODELS = [
   { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', label: 'Qwen 2.5 0.5B (eco, ~0.4 GB)' },
   { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', label: 'Llama 3.2 1B (fast, ~0.7 GB)' },
   { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', label: 'Llama 3.2 3B (~1.8 GB)' },
   { id: 'Phi-4-mini-instruct-q4f16_1-MLC', label: 'Phi-4 Mini 3.8B (~2.3 GB)' },
-  { id: 'gemma-3-1b-it-q4f16_1-MLC', label: 'Gemma 3 1B (~0.8 GB)' },
-  { id: 'gemma-3-4b-it-q4f32_1-MLC', label: 'Gemma 3 4B (~4.9 GB)' },
-  { id: 'Llama-3.3-70B-Instruct-q3f16_1-MLC', label: 'Llama 3.3 70B (high-end, ~35 GB)' },
 ] as const;
 
 export type WebLlmModelId = (typeof WEBLLM_SUPPORTED_MODELS)[number]['id'];
@@ -192,9 +189,6 @@ export const WEBLLM_MODEL_APPROX_MB: Record<WebLlmModelId, number> = {
   'Llama-3.2-1B-Instruct-q4f16_1-MLC': 700,
   'Llama-3.2-3B-Instruct-q4f16_1-MLC': 1800,
   'Phi-4-mini-instruct-q4f16_1-MLC': 2300,
-  'gemma-3-1b-it-q4f16_1-MLC': 800,
-  'gemma-3-4b-it-q4f32_1-MLC': 4900,
-  'Llama-3.3-70B-Instruct-q3f16_1-MLC': 35000,
 };
 
 export interface WebLlmProgressReport {
@@ -369,10 +363,10 @@ export async function runLocalTextGeneration(
   const MLC_TO_ONNX_MAP: Readonly<Record<string, string>> = {
     'Qwen2.5-0.5B': ONNX_SUPPORTED_MODELS[0]!.id,
     'Llama-3.2-1B': ONNX_SUPPORTED_MODELS[0]!.id,
-    'gemma-3-1b': ONNX_SUPPORTED_MODELS[0]!.id,
+    'gemma-3-1b': ONNX_SUPPORTED_MODELS[0]!.id, // kept for selections stored before curation
     'Llama-3.2-3B': ONNX_SUPPORTED_MODELS[1]!.id,
     'Phi-4-mini': ONNX_SUPPORTED_MODELS[1]!.id,
-    'gemma-3-4b': ONNX_SUPPORTED_MODELS[1]!.id,
+    'gemma-3-4b': ONNX_SUPPORTED_MODELS[1]!.id, // kept for selections stored before curation
   };
   const resolvedOnnxModelId: string = (() => {
     if (!resolvedModelId.includes('MLC')) return resolvedModelId;

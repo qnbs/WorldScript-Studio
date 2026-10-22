@@ -69,9 +69,9 @@ describe('getModelRecommendationForTask', () => {
   });
 
   describe('text-gen task — low VRAM', () => {
-    it('returns gemma-3-1b webllm and SmolLM2 ONNX', () => {
+    it('returns Llama-3.2-1B webllm and SmolLM2 ONNX', () => {
       const result = getModelRecommendationForTask('text-gen', baseReport('low'));
-      expect(result.webllm).toBe('gemma-3-1b-it-q4f16_1-MLC');
+      expect(result.webllm).toBe('Llama-3.2-1B-Instruct-q4f16_1-MLC');
       expect(result.onnx).toBe('HuggingFaceTB/SmolLM2-135M-Instruct');
     });
   });

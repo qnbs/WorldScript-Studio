@@ -99,7 +99,7 @@ describe('adaptiveAiEngine', () => {
       const { getTaskConfig } = await import('../../../../services/ai/adaptiveAiEngine');
       const config = await getTaskConfig('text-gen-short');
 
-      expect(config.modelId).toBe('gemma-3-1b-it-q4f16_1-MLC');
+      expect(config.modelId).toBe('Llama-3.2-1B-Instruct-q4f16_1-MLC');
     });
 
     it('selects ONNX model for high memory tier', async () => {

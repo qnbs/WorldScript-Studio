@@ -50,9 +50,6 @@ const MODEL_LABEL_KEY: Record<string, string> = {
   'Llama-3.2-1B-Instruct-q4f16_1-MLC': 'settings.ai.localAi.modelLabel.llama32_1b',
   'Llama-3.2-3B-Instruct-q4f16_1-MLC': 'settings.ai.localAi.modelLabel.llama32_3b',
   'Phi-4-mini-instruct-q4f16_1-MLC': 'settings.ai.localAi.modelLabel.phi4mini',
-  'gemma-3-1b-it-q4f16_1-MLC': 'settings.ai.localAi.modelLabel.gemma3_1b',
-  'gemma-3-4b-it-q4f32_1-MLC': 'settings.ai.localAi.modelLabel.gemma3_4b',
-  'Llama-3.3-70B-Instruct-q3f16_1-MLC': 'settings.ai.localAi.modelLabel.llama33_70b',
 };
 
 // QNBS-v3: The four local-inference layers, in the exact order runLocalTextGeneration tries them.

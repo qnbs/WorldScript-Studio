@@ -56,9 +56,9 @@ describe('getModelRecommendation', () => {
     expect(getModelRecommendation('text-gen', report)).toBe('Llama-3.2-3B-Instruct-q4f16_1-MLC');
   });
 
-  it('returns Gemma-3 for text-gen with low VRAM', () => {
+  it('returns Llama-3.2-1B for text-gen with low VRAM', () => {
     const report = makeReport({ gpuVramTier: 'low' });
-    expect(getModelRecommendation('text-gen', report)).toBe('gemma-3-1b-it-q4f16_1-MLC');
+    expect(getModelRecommendation('text-gen', report)).toBe('Llama-3.2-1B-Instruct-q4f16_1-MLC');
   });
 
   it('returns SmolLM2 for text-gen with no GPU', () => {
