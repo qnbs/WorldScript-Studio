@@ -45,6 +45,8 @@ export const CRITICAL_STARTUP_MESSAGE =
 /**
  * Replaces `#root` with a self-contained notice and a Reload button. Built with DOM APIs: no
  * innerHTML (detail text is untrusted) and no inline handler (CSP `script-src 'self'` blocks them).
+ * Colors come from the theme tokens (index.css loads with the entry module); without them the
+ * browser defaults stay readable.
  */
 export function renderStartupNotice(
   rootEl: Element,
@@ -57,20 +59,20 @@ export function renderStartupNotice(
   container.setAttribute('role', 'alert');
   container.setAttribute(
     'style',
-    'display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#f1f5f9;text-align:center;padding:2rem;flex-direction:column;gap:1rem',
+    'display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Inter,system-ui,sans-serif;background:var(--sc-bg);color:var(--sc-text-primary);text-align:center;padding:2rem;flex-direction:column;gap:1rem',
   );
   const title = doc.createElement('h1');
   title.setAttribute('style', 'font-size:1.5rem;font-weight:700');
   title.textContent = 'WorldScript Studio';
   const message = doc.createElement('p');
-  message.setAttribute('style', 'color:#94a3b8;max-width:36rem');
+  message.setAttribute('style', 'color:var(--sc-text-muted);max-width:36rem');
   message.textContent = notice.message;
   container.append(title, message);
   if (notice.detail) {
     const detail = doc.createElement('pre');
     detail.setAttribute(
       'style',
-      'background:#1e293b;border-radius:.5rem;padding:.75rem 1rem;font-size:.8rem;color:#fca5a5;max-width:36rem;overflow:auto;text-align:left',
+      'background:var(--sc-surface-raised);border-radius:.5rem;padding:.75rem 1rem;font-size:.8rem;color:var(--sc-danger-fg);max-width:36rem;overflow:auto;text-align:left',
     );
     detail.textContent = notice.detail;
     container.append(detail);
@@ -80,7 +82,7 @@ export function renderStartupNotice(
   reload.textContent = 'Reload';
   reload.setAttribute(
     'style',
-    'padding:.5rem 1.25rem;border-radius:.5rem;border:1px solid #334155;background:#1e293b;color:#f1f5f9;cursor:pointer;font-family:inherit',
+    'padding:.5rem 1.25rem;border-radius:.5rem;border:1px solid var(--sc-border-strong);background:var(--sc-surface-raised);color:var(--sc-text-primary);cursor:pointer;font-family:inherit',
   );
   reload.addEventListener('click', () => doc.defaultView?.location.reload());
   container.append(reload);
