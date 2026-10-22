@@ -11,8 +11,9 @@
  *   - Rust: crates reachable from the desktop crate through normal (non-dev, non-build)
  *     dependency edges for the target, excluding first-party path crates and proc-macro crates
  *     (compile-time only, not linked into the binary);
- *   - JavaScript: the pnpm production dependency graph, a documented superset of the modules
- *     Vite actually bundles.
+ *   - JavaScript: the production dependency graph in pnpm-lock.yaml (`dependencies` and
+ *     `optionalDependencies` of the app and of the workspace packages it links, transitively) as
+ *     installed on the build host, a documented superset of the modules Vite actually bundles.
  *
  * A component without any license metadata fails the run. Licenses outside the permissive
  * auto-accepted set, non-SPDX identifiers, and packages without a license text are listed for
@@ -21,9 +22,10 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, posix, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { parseAllDocuments } from 'yaml';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -65,7 +67,7 @@ const LICENSE_FILE_PATTERN = /^(?:licen[cs]e|copying|notice|unlicense)(?:[-._].*
 const SCOPE_STATEMENT = [
   'Rust scope: crates linked into the desktop binary for this target (normal dependencies;',
   '  first-party path crates and compile-time-only proc-macro crates excluded).',
-  'JavaScript scope: the pnpm production dependency graph, a superset of the bundled modules.',
+  'JavaScript scope: the pnpm production dependency graph (including optional and workspace-package dependencies), a superset of the bundled modules.',
   'This inventory is generated from package metadata and is not a legal opinion.',
 ];
 
@@ -171,19 +173,77 @@ function storeDirectory(entry, version) {
   return entry.versions.length === 1 ? entry.paths[0] : undefined;
 }
 
-/** Parses `pnpm licenses list --prod --json` output into components (one per name@version). */
-export function collectJsComponents(pnpmLicenses, readTexts = readLicenseTexts) {
+/** `name@version` of a lockfile reference; an alias reference already names its target package. */
+function packageKey(name, reference) {
+  const version = String(reference).split('(')[0];
+  return version.lastIndexOf('@') > 0 ? version : `${name}@${version}`;
+}
+
+function runtimeDependencies(node) {
+  return [
+    ...Object.entries(node?.dependencies ?? {}),
+    ...Object.entries(node?.optionalDependencies ?? {}),
+  ];
+}
+
+/**
+ * `name@version` of every package the app ships: reachable from the root importer through
+ * `dependencies` and `optionalDependencies`, following `link:` references into the linked workspace
+ * package's own importer. devDependencies are never entered.
+ */
+export function productionPackageKeys(lockfile) {
+  const snapshots = new Map(
+    Object.entries(lockfile.snapshots ?? {}).map(([key, node]) => [key.split('(')[0], node]),
+  );
+  const keys = new Set();
+  const importers = new Set();
+  const stack = [{ importer: '.' }];
+  while (stack.length > 0) {
+    const item = stack.pop();
+    if (item.key !== undefined) {
+      if (keys.has(item.key)) continue;
+      keys.add(item.key);
+      for (const [name, reference] of runtimeDependencies(snapshots.get(item.key))) {
+        stack.push({ key: packageKey(name, reference) });
+      }
+      continue;
+    }
+    if (importers.has(item.importer)) continue;
+    importers.add(item.importer);
+    for (const [name, dependency] of runtimeDependencies(lockfile.importers?.[item.importer])) {
+      const version = String(dependency.version);
+      stack.push(
+        version.startsWith('link:')
+          ? { importer: posix.join(item.importer, version.slice('link:'.length)) }
+          : { key: packageKey(name, version) },
+      );
+    }
+  }
+  return keys;
+}
+
+/**
+ * Parses `pnpm -r licenses list --json` output into components (one per name@version), keeping
+ * only the versions `isShipped` accepts.
+ */
+export function collectJsComponents(
+  pnpmLicenses,
+  readTexts = readLicenseTexts,
+  isShipped = () => true,
+) {
   return Object.values(pnpmLicenses)
     .flat()
     .flatMap((entry) =>
-      entry.versions.map((version) => ({
-        ecosystem: 'npm',
-        name: entry.name,
-        version,
-        license: normalizeLicenseExpression(entry.license),
-        homepage: entry.homepage ?? null,
-        texts: readTexts(storeDirectory(entry, version)),
-      })),
+      entry.versions
+        .filter((version) => isShipped(entry.name, version))
+        .map((version) => ({
+          ecosystem: 'npm',
+          name: entry.name,
+          version,
+          license: normalizeLicenseExpression(entry.license),
+          homepage: entry.homepage ?? null,
+          texts: readTexts(storeDirectory(entry, version)),
+        })),
     );
 }
 
@@ -419,10 +479,17 @@ function resolveContext(requestedTarget) {
 function collectAllComponents(target) {
   const cargoArgs = ['metadata', '--locked', '--format-version', '1'];
   cargoArgs.push('--manifest-path', 'src-tauri/Cargo.toml', '--filter-platform', target);
-  const pnpmLicenses = JSON.parse(run('pnpm', ['licenses', 'list', '--prod', '--json']));
+  // QNBS-v3: pnpm 12's `licenses list --prod` omits optional and workspace-package dependencies (since #1110), so the shipped set comes from the lockfile and pnpm only supplies the metadata.
+  const lockfile = parseAllDocuments(readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8'))
+    .map((document) => document.toJS())
+    .find((document) => document?.importers);
+  const shipped = productionPackageKeys(lockfile);
+  const pnpmLicenses = JSON.parse(run('pnpm', ['-r', 'licenses', 'list', '--json']));
   return [
     ...collectRustComponents(JSON.parse(run('cargo', cargoArgs))),
-    ...collectJsComponents(pnpmLicenses),
+    ...collectJsComponents(pnpmLicenses, readLicenseTexts, (name, version) =>
+      shipped.has(`${name}@${version}`),
+    ),
   ];
 }
 
