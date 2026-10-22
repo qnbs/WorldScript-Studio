@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Fix (startup):** The page no longer stays blank while startup waits (PR #1134). `index.html` now paints a static boot shell inside `#root` before any script runs, and React replaces it on mount. If the app has not mounted after 15 seconds (for example because another tab still holds an older IndexedDB connection, now logged through `onblocked`), a notice explains the likely cause and offers Reload, and the stall is logged as an error. The startup error and the slow-start notice are built with DOM APIs; the old Reload button used an inline `onclick` that the `script-src 'self'` CSP blocked, so it never worked. This also removes the cause behind the recurring Lighthouse `NO_FCP` failures: a run whose boot never rendered had nothing to paint.
+
 - **Privacy:** The AI execution mode is now the single switch for cloud AI (PR #1122, #818). "Local storage only" (on by default) blocked cloud AI on top of the mode, and "EU data residency" only blocked OpenAI and Grok without controlling where data is processed; both toggles are removed. A one-time migration keeps existing installs as they were (a local-only choice becomes local mode); fresh installs start in hybrid. A remote LanguageTool server is used only when you enable it and enter that server.
 
 - **Maintenance (CI):** Lighthouse CI waits up to 90 s for first paint and 120 s for load, instead of the defaults (30 s and 45 s), in both the mobile and desktop configs (PR #1133). One run that errors aborts the whole `lhci autorun`. On 2026-10-21 a cold first run after the visual-regression phase failed the required Browser Quality job three times with `NO_FCP`, although the app paints.

@@ -167,6 +167,9 @@ export class IdbConnectionManager {
         this.stateDb = db;
         resolve();
       };
+      // QNBS-v3: another tab holding an older version blocks this open until it closes; the boot watchdog (services/bootStatus.ts) shows the user why startup waits.
+      request.onblocked = () =>
+        logger.warn('IndexedDB open blocked by another connection', { db: STATE_DB_NAME });
       request.onerror = () => reject(request.error);
     });
     this.stateDbPromise = thisOpen;
@@ -226,6 +229,8 @@ export class IdbConnectionManager {
         this.dataDb = db;
         resolve();
       };
+      request.onblocked = () =>
+        logger.warn('IndexedDB open blocked by another connection', { db: DATA_DB_NAME });
       request.onerror = () => reject(request.error);
     });
     this.dataDbPromise = thisOpen;
