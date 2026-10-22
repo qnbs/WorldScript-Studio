@@ -1,5 +1,21 @@
 # WorldScript Studio — Codebase Audit Report
 
+**2026-10-22 DOMPurify follow-up (#1132):** raised the direct dependency and workspace override
+floor to 3.4.17 with a `<4` override cap preserving the app/jsPDF compatibility range. The lockfile
+updates only DOMPurify and jsPDF's optional DOMPurify reference.
+This addresses `GHSA-c6gr-qvv4-5v3f`, `GHSA-cg2g-xh64-v4q7` and `GHSA-mrv2-3pqr-j5jr`.
+The four dependency regression cases fail on 3.4.16 and pass on 3.4.17: XHTML SVG `attributeName`,
+split template expressions in attached shadow roots, and parent/sibling detachment by hooks.
+The app's examined sanitizer calls use string output without these special modes; these tests
+qualify the dependency boundary and do not establish a production exploit.
+
+The registry dates 3.4.17 to 2026-10-12, satisfying the seven-day gate. The downloaded tarball's
+SHA-512 integrity and package identity were checked before installation. Frozen reconciliation
+passed with the existing supply-chain policy; 31 focused tests passed under Node 22.23.4 and
+pnpm 12.13.0. A fresh scan of all three lockfiles reports no DOMPurify advisory, but still exits
+1 for the separate `ip-address@10.7.2` / `GHSA-rxp7-6hxx-x8q5` finding. That package and all OSV
+exceptions remain unchanged; this slice is not a claim that the complete security gate is green.
+
 **2026-09-19 security follow-up (PR #778):** `adm-zip@0.6.1` became available after the dated
 `GHSA-vwc7-r8mq-g2x9` investigation below. The transitive override now uses `>=0.6.1`, removing
 vulnerable `0.6.0` and covering the three relevant advisories: `GHSA-xcpc-8h2w-3j85` (high,
