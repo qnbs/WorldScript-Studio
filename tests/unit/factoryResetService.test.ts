@@ -120,6 +120,20 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
+  it.each(['localStorage', 'sessionStorage'] as const)(
+    'fails closed without reloading when %s is unavailable',
+    async (storageName) => {
+      vi.stubGlobal(storageName, undefined);
+
+      await expect(runWipe()).rejects.toThrow(
+        'Factory reset could not clear all app-owned browser storage',
+      );
+
+      expect(reloadMock).not.toHaveBeenCalled();
+      expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+    },
+  );
+
   // QNBS-v3: guards flushPersistedState's visibilitychange/quit-flush call sites against racing this same reload and recreating a just-deleted database with stale state.
   it('marks a reset in progress for the duration of a successful wipe', async () => {
     await runWipe();
@@ -448,6 +462,36 @@ describe('wipeAllAppData', () => {
 
     expect(keys).toHaveBeenCalledTimes(2);
     expect(reloadMock).not.toHaveBeenCalled();
+    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows a safe retry after an owned cache deletion initially fails', async () => {
+    const remainingCaches = ['worldscript-static-v1.28.2'];
+    let failFirstDelete = true;
+    const del = vi.fn(async (name: string) => {
+      if (failFirstDelete) {
+        failFirstDelete = false;
+        return false;
+      }
+      const index = remainingCaches.indexOf(name);
+      if (index < 0) return false;
+      remainingCaches.splice(index, 1);
+      return true;
+    });
+    const keys = vi.fn(async () => [...remainingCaches]);
+    vi.stubGlobal('caches', { keys, delete: del });
+
+    await expect(runWipe()).rejects.toThrow(
+      'Factory reset could not clear all app-owned browser caches',
+    );
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+
+    await runWipe();
+
+    expect(remainingCaches).toEqual([]);
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(mockBeginIdbReset).toHaveBeenCalledTimes(2);
     expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
   });
 

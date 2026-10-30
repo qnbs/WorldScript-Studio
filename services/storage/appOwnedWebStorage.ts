@@ -69,13 +69,14 @@ function clearOwnedStorage(storage: Storage, isOwned: (key: string) => boolean):
 /** Remove only keys written by WorldScript and verify the owned namespace is empty. */
 export function clearAppOwnedWebStorage(): void {
   try {
-    if (typeof globalThis.localStorage !== 'undefined') {
-      clearOwnedStorage(globalThis.localStorage, isAppOwnedLocalStorageKey);
+    const local = Reflect.get(globalThis, 'localStorage') as Storage | undefined;
+    const session = Reflect.get(globalThis, 'sessionStorage') as Storage | undefined;
+    if (!local || !session) {
+      throw new Error('Browser storage is unavailable');
     }
-    if (typeof globalThis.sessionStorage !== 'undefined') {
-      const ownedSessionKeys = new Set<string>(APP_OWNED_SESSION_STORAGE_KEYS);
-      clearOwnedStorage(globalThis.sessionStorage, (key) => ownedSessionKeys.has(key));
-    }
+    clearOwnedStorage(local, isAppOwnedLocalStorageKey);
+    const ownedSessionKeys = new Set<string>(APP_OWNED_SESSION_STORAGE_KEYS);
+    clearOwnedStorage(session, (key) => ownedSessionKeys.has(key));
   } catch {
     throw new Error('Factory reset could not clear all app-owned browser storage');
   }
