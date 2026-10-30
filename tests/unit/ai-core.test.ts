@@ -33,7 +33,7 @@ vi.mock(
     get pipeline() {
       return xenovaState.pipelineImpl;
     },
-    env: { backends: { onnx: { wasm: { proxy: true } } } },
+    env: { cacheKey: 'transformers-cache', backends: { onnx: { wasm: { proxy: true } } } },
   }),
 );
 
@@ -125,6 +125,8 @@ describe('runLocalTextGeneration', () => {
     const result = await runLocalTextGeneration('test prompt');
     expect(result.layer).toBe('onnx');
     expect(result.text).toBe('ONNX generated');
+    const { env } = await import('../../packages/ai-core/src/vendor-transformers');
+    expect(env.cacheKey).toBe('worldscript-transformers-cache');
   });
 
   it('calls onProgress during WebLLM init', async () => {

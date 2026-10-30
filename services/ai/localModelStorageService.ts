@@ -7,14 +7,8 @@ import {
 } from '@domain/ai-core';
 import { logger } from '../logger';
 
-// QNBS-v3: exact vendor CacheStorage bucket names, not a substring match — narrows the false-positive foreign-cache matches a loose regex had, but these names are still vendor-fixed, not app-scoped, so this is not a full positive-ownership proof (tracked separately).
-export const LOCAL_MODEL_CACHE_PATTERNS: readonly RegExp[] = [
-  /^webllm\/model$/,
-  /^webllm\/config$/,
-  /^webllm\/wasm$/,
-  /^transformers-cache$/,
-  /^experimental_transformers-hash-cache$/,
-];
+// QNBS-v3: only the cache key set by our Transformers.js proxy proves WorldScript ownership; vendor-default and WebLLM buckets may be shared by same-origin apps.
+export const LOCAL_MODEL_CACHE_PATTERNS: readonly RegExp[] = [/^worldscript-transformers-cache$/];
 
 // QNBS-v3: re-export the canonical @domain/ai-core table instead of maintaining a second, driftable literal.
 export { WEBLLM_MODEL_APPROX_MB };
@@ -59,7 +53,7 @@ async function listModelCacheNames(): Promise<string[]> {
 }
 
 /**
- * QNBS-v3: Estimate total persistent storage usage + how many local-model cache buckets exist.
+ * QNBS-v3: Estimate total persistent storage usage + how many WorldScript-owned model cache buckets exist.
  * Exact per-cache byte sizes are not exposed by the platform, so `usageMb` is the whole-origin
  * estimate (the dominant contributor is the model weights) and `modelCacheCount` proves models exist.
  */
@@ -98,8 +92,8 @@ export async function estimateLocalModelStorage(): Promise<LocalModelStorageEsti
 }
 
 /**
- * QNBS-v3: Free downloaded local-model weights. Releases in-memory engine/session handles FIRST so
- * no live reference pins the buffers, then deletes every matching Cache API bucket. Never throws —
+ * QNBS-v3: Free only WorldScript-owned Transformers weights. Releases in-memory engine/session handles FIRST so
+ * no live reference pins the buffers, then deletes the positively namespaced Cache API bucket. Never throws —
  * partial failures are logged and the deleted count is returned so the UI can report honestly.
  */
 export async function clearLocalModels(): Promise<ClearLocalModelsResult> {

@@ -8,6 +8,7 @@ const { mockPipelineFactory } = vi.hoisted(() => ({ mockPipelineFactory: vi.fn()
 
 vi.mock('@huggingface/transformers', () => ({
   pipeline: mockPipelineFactory,
+  env: { cacheKey: 'transformers-cache' },
 }));
 
 // QNBS-v3: [Imported after the mock is declared so the worker picks up the mocked factory.]
