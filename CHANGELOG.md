@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Fix (local AI model storage):** Transformers.js now uses a WorldScript-owned cache bucket, so Factory Reset can remove that cache without deleting vendor or legacy model caches that may belong to other data. The Local AI screen reports the remaining cache limits (#1148).
+- **Fix (local AI model storage):** Transformers.js now uses a WorldScript-owned cache bucket, so Factory Reset can remove that cache without deleting vendor or legacy model caches that may belong to other data. The Local AI screen reports the remaining cache limits (PR #1148).
 
 - **Post-release v1.29.2 truth sync:** removed the release-candidate markers from README.md and
   CHANGELOG.md now that the `v1.29.2` tag and GitHub Release are published, and recorded the real
