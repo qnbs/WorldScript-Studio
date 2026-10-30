@@ -1,3 +1,5 @@
+const IDB_ENCRYPTION_SALT_KEY = 'worldscript-idb-kdf-salt-v1';
+
 // QNBS-v3: this exact catalogue mirrors WorldScript web-storage writers and approved legacy keys; shared origins make broad prefix deletion unsafe.
 const APP_OWNED_LOCAL_STORAGE_KEYS = new Set([
   'worldscript-state',
@@ -14,7 +16,7 @@ const APP_OWNED_LOCAL_STORAGE_KEYS = new Set([
   'worldscript-scene-comments',
   'worldscript-progress-tracker',
   'worldscript-palette-prefs-v1',
-  'worldscript-idb-kdf-salt-v1',
+  IDB_ENCRYPTION_SALT_KEY,
   'worldscript-spotlight-tour-done',
   'worldscript-ai-telemetry',
   'worldscript-benchmarks',
@@ -66,7 +68,7 @@ function clearOwnedStorage(storage: Storage, isOwned: (key: string) => boolean):
   }
 }
 
-/** Remove only keys written by WorldScript and verify the owned namespace is empty. */
+/** Remove owned non-salt keys first; encrypted IndexedDB records may still need the persisted KDF salt if later reset work fails. */
 export function clearAppOwnedWebStorage(): void {
   try {
     const local = Reflect.get(globalThis, 'localStorage') as Storage | undefined;
@@ -74,9 +76,23 @@ export function clearAppOwnedWebStorage(): void {
     if (!local || !session) {
       throw new Error('Browser storage is unavailable');
     }
-    clearOwnedStorage(local, isAppOwnedLocalStorageKey);
+    clearOwnedStorage(
+      local,
+      (key) => isAppOwnedLocalStorageKey(key) && key !== IDB_ENCRYPTION_SALT_KEY,
+    );
     clearOwnedStorage(session, (key) => APP_OWNED_SESSION_STORAGE_KEYS.has(key));
   } catch {
     throw new Error('Factory reset could not clear all app-owned browser storage');
+  }
+}
+
+// QNBS-v3: remove the non-secret salt only after every dependent encrypted IndexedDB database has been confirmed deleted, so a later native/IDB failure never strands surviving ciphertext without its key-derivation input.
+export function clearIdbEncryptionSaltAfterPrimaryDataDeletion(): void {
+  try {
+    const local = Reflect.get(globalThis, 'localStorage') as Storage | undefined;
+    if (!local) throw new Error('Browser storage is unavailable');
+    clearOwnedStorage(local, (key) => key === IDB_ENCRYPTION_SALT_KEY);
+  } catch {
+    throw new Error('Factory reset could not clear the app-owned encryption salt');
   }
 }

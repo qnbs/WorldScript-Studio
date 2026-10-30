@@ -140,6 +140,7 @@ describe('wipeAllAppData', () => {
     const appSwHistoryKey = `worldscript-sw-installed:${appSwUrl}`;
     const appLocalKeys = [...EXPECTED_APP_LOCAL_STORAGE_KEYS, appSwHistoryKey];
     const appSessionKeys = EXPECTED_APP_SESSION_STORAGE_KEYS;
+    const saltRemove = vi.spyOn(localStorage, 'removeItem');
     for (const key of appLocalKeys) localStorage.setItem(key, 'app-value');
     for (const key of appSessionKeys) sessionStorage.setItem(key, 'app-value');
     const foreignLocalKeys = [
@@ -171,9 +172,17 @@ describe('wipeAllAppData', () => {
     for (const key of foreignSessionKeys)
       expect(sessionStorage.getItem(key)).toBe(`preserve:${key}`);
     expect(delSpy).toHaveBeenCalledWith('worldscript-data-db');
+    expect(saltRemove).toHaveBeenCalledWith('worldscript-idb-kdf-salt-v1');
+    const saltRemovalIndex = saltRemove.mock.calls.findIndex(
+      ([key]) => key === 'worldscript-idb-kdf-salt-v1',
+    );
+    expect(saltRemove.mock.invocationCallOrder[saltRemovalIndex]).toBeGreaterThan(
+      Math.max(...delSpy.mock.invocationCallOrder),
+    );
     expect(reloadMock).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     delSpy.mockRestore();
+    saltRemove.mockRestore();
   });
 
   it.each(['localStorage', 'sessionStorage'] as const)(
@@ -711,6 +720,10 @@ describe('wipeAllAppData', () => {
     });
 
     it('rejects and never reloads when every AppData entry fails to remove', async () => {
+      const encryptionSalt = 'test-salt-kept-until-encrypted-databases-are-gone';
+      localStorage.setItem('worldscript-idb-kdf-salt-v1', encryptionSalt);
+      await createDb('worldscript-data-db');
+      const databaseDelete = vi.spyOn(indexedDB, 'deleteDatabase');
       mockLoadTauriApis.mockResolvedValue({
         appDataDir: vi.fn().mockResolvedValue('/app/data'),
         exists: vi.fn((path: string) => Promise.resolve(path === '/app/data')),
@@ -734,9 +747,14 @@ describe('wipeAllAppData', () => {
         'Failed to clear Tauri app data during factory reset:',
         expect.any(Error),
       );
+      // QNBS-v3: the salt is required to derive the key for any encrypted IndexedDB records that survive this failed desktop cleanup.
+      expect(localStorage.getItem('worldscript-idb-kdf-salt-v1')).toBe(encryptionSalt);
+      expect(await hasDb('worldscript-data-db')).toBe(true);
+      expect(databaseDelete).not.toHaveBeenCalled();
       // QNBS-v3: native removal began before failing, so writes stay fenced and the UI reports that data may already have been removed.
       expect(isFactoryResetInProgress()).toBe(true);
       expect(mockEndIdbReset).not.toHaveBeenCalled();
+      databaseDelete.mockRestore();
     });
 
     it('rejects and never reloads when readDir itself throws', async () => {

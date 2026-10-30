@@ -17,7 +17,10 @@ import {
 import { invalidatePersistedEditorEpoch } from './editorProjectGeneration';
 import type { TauriApis } from './fs/fsCore';
 import { logger } from './logger';
-import { clearAppOwnedWebStorage } from './storage/appOwnedWebStorage';
+import {
+  clearAppOwnedWebStorage,
+  clearIdbEncryptionSaltAfterPrimaryDataDeletion,
+} from './storage/appOwnedWebStorage';
 import { beginIdbReset, endIdbReset } from './storage/idbResetGate';
 import { isTauriRuntime } from './tauriRuntime';
 
@@ -275,6 +278,7 @@ async function performFactoryReset(): Promise<void> {
     });
     primaryDeletionStarted = true;
     await deleteAllIndexedDBDatabases();
+    clearIdbEncryptionSaltAfterPrimaryDataDeletion();
     // Small delay so async IDB deletions can settle before unload.
     await new Promise((r) => setTimeout(r, 300));
     sanitizeViewCarryingUrlState();
