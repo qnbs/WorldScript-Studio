@@ -25,18 +25,27 @@ import {
 } from '../../../services/ai/localModelStorageService';
 
 const MB = 1_048_576;
+const WORLD_SCRIPT_TRANSFORMERS_CACHE = 'worldscript-transformers-cache';
 const ALL_CACHE_NAMES = [
   'webllm/model',
+  'webllm/config',
   'webllm/wasm',
   'transformers-cache',
+  'experimental_transformers-hash-cache',
+  WORLD_SCRIPT_TRANSFORMERS_CACHE,
   'worldscript-logs-db', // not a model cache
   'workbox-precache', // not a model cache
 ];
 
 function installCaches(names: string[], deleteImpl?: (name: string) => Promise<boolean>) {
-  const del = vi.fn(deleteImpl ?? (async () => true));
+  const state = new Set(names);
+  const del = vi.fn(async (name: string) => {
+    const deleted = await (deleteImpl?.(name) ?? Promise.resolve(true));
+    if (deleted) state.delete(name);
+    return deleted;
+  });
   vi.stubGlobal('caches', {
-    keys: vi.fn(async () => names),
+    keys: vi.fn(async () => [...state]),
     delete: del,
   });
   return del;
@@ -57,13 +66,14 @@ afterEach(() => {
 });
 
 describe('LOCAL_MODEL_CACHE_PATTERNS', () => {
-  it('matches only the exact vendor-literal WebLLM/transformers.js bucket names', () => {
+  it('matches only the positively namespaced WorldScript Transformers bucket', () => {
     const matches = (n: string) => LOCAL_MODEL_CACHE_PATTERNS.some((re) => re.test(n));
-    expect(matches('webllm/model')).toBe(true);
-    expect(matches('webllm/config')).toBe(true);
-    expect(matches('webllm/wasm')).toBe(true);
-    expect(matches('transformers-cache')).toBe(true);
-    expect(matches('experimental_transformers-hash-cache')).toBe(true);
+    expect(matches(WORLD_SCRIPT_TRANSFORMERS_CACHE)).toBe(true);
+    expect(matches('webllm/model')).toBe(false);
+    expect(matches('webllm/config')).toBe(false);
+    expect(matches('webllm/wasm')).toBe(false);
+    expect(matches('transformers-cache')).toBe(false);
+    expect(matches('experimental_transformers-hash-cache')).toBe(false);
     expect(matches('worldscript-logs-db')).toBe(false);
     expect(matches('workbox-precache')).toBe(false);
   });
@@ -101,13 +111,13 @@ describe('estimateLocalModelStorage', () => {
     expect(est.quotaMb).toBe(1000);
     expect(est.freeMb).toBe(900);
     expect(est.usagePercent).toBe(10);
-    // webllm/model, webllm/wasm, transformers-cache → 3 (the two non-model buckets excluded)
-    expect(est.modelCacheCount).toBe(3);
+    // QNBS-v3: vendor names are not proof of app ownership; count only the dedicated namespace.
+    expect(est.modelCacheCount).toBe(1);
   });
 
   it('reports estimate-unavailable (null sizes) when only the Cache API is present', async () => {
     vi.stubGlobal('navigator', {}); // no StorageManager → quota unknown
-    installCaches(['webllm/model']);
+    installCaches([WORLD_SCRIPT_TRANSFORMERS_CACHE, 'transformers-cache']);
     const est = await estimateLocalModelStorage();
     expect(est.estimateAvailable).toBe(false);
     expect(est.quotaMb).toBeNull();
@@ -119,29 +129,36 @@ describe('estimateLocalModelStorage', () => {
 });
 
 describe('clearLocalModels', () => {
-  it('releases engines + sessions and deletes every matching bucket', async () => {
+  it('releases engines + sessions and deletes only the positively owned bucket', async () => {
     const del = installCaches(ALL_CACHE_NAMES);
 
     const result = await clearLocalModels();
 
     expect(releaseAllWebLlmEngines).toHaveBeenCalledTimes(1);
     expect(releaseAllOnnxSessions).toHaveBeenCalledTimes(1);
-    expect(result.clearedCaches).toBe(3);
-    expect(del).toHaveBeenCalledWith('webllm/model');
-    expect(del).toHaveBeenCalledWith('transformers-cache');
-    // Non-model buckets are never deleted.
+    expect(result.clearedCaches).toBe(1);
+    expect(del).toHaveBeenCalledTimes(1);
+    expect(del).toHaveBeenCalledWith(WORLD_SCRIPT_TRANSFORMERS_CACHE);
+    // Vendor-global and unrelated buckets remain outside this app-owned deletion path.
+    expect(del).not.toHaveBeenCalledWith('webllm/model');
+    expect(del).not.toHaveBeenCalledWith('transformers-cache');
+    expect(del).not.toHaveBeenCalledWith('experimental_transformers-hash-cache');
     expect(del).not.toHaveBeenCalledWith('worldscript-logs-db');
+    const remaining = await caches.keys();
+    expect(remaining).toContain('webllm/model');
+    expect(remaining).toContain('transformers-cache');
+    expect(remaining).toContain('experimental_transformers-hash-cache');
+    expect(remaining).not.toContain(WORLD_SCRIPT_TRANSFORMERS_CACHE);
   });
 
   it('does not throw and counts only successful deletes when one bucket fails', async () => {
     installCaches(ALL_CACHE_NAMES, async (name) => {
-      if (name === 'webllm/wasm') throw new Error('boom');
+      if (name === WORLD_SCRIPT_TRANSFORMERS_CACHE) throw new Error('boom');
       return true;
     });
 
     const result = await clearLocalModels();
-    // webllm/model + transformers-cache succeeded; webllm/wasm threw.
-    expect(result.clearedCaches).toBe(2);
+    expect(result.clearedCaches).toBe(0);
   });
 
   it('is a no-op delete count when the Cache API is absent', async () => {

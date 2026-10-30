@@ -572,7 +572,7 @@ export class VoiceCommandService {
     // QNBS-v3: Trigger model download via transformers pipeline warm-up.
     // This forces the model to be fetched and cached in browser storage.
     try {
-      const { pipeline, env } = await import('@huggingface/transformers');
+      const { pipeline, env } = await import('../../packages/ai-core/src/vendor-transformers');
       // Disable WASM proxy for direct inline execution
       interface XenovaEnv {
         backends?: { onnx?: { wasm?: { proxy?: boolean } } };
