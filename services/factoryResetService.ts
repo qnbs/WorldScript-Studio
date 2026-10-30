@@ -19,7 +19,7 @@ import type { TauriApis } from './fs/fsCore';
 import { logger } from './logger';
 import {
   clearAppOwnedWebStorage,
-  clearIdbEncryptionSaltAfterPrimaryDataDeletion,
+  clearDeferredAppOwnedWebStorageAfterPrimaryDataDeletion,
 } from './storage/appOwnedWebStorage';
 import { beginIdbReset, endIdbReset } from './storage/idbResetGate';
 import { isTauriRuntime } from './tauriRuntime';
@@ -237,9 +237,8 @@ async function clearTauriAppData(onDeletionStarted: () => void): Promise<void> {
 }
 
 /**
- * Wipe all app data and reload.
- * Clears: IDB, localStorage, sessionStorage, SW caches.
- * After the reload the app starts as a fresh install.
+ * Wipe positively-owned app data and reload, preserving foreign and ambiguous shared-origin storage.
+ * User-authored content/settings and the IDB encryption salt are cleared only after primary deletion succeeds.
  */
 export function wipeAllAppData(): Promise<void> {
   if (activeFactoryReset) return activeFactoryReset;
@@ -278,7 +277,7 @@ async function performFactoryReset(): Promise<void> {
     });
     primaryDeletionStarted = true;
     await deleteAllIndexedDBDatabases();
-    clearIdbEncryptionSaltAfterPrimaryDataDeletion();
+    clearDeferredAppOwnedWebStorageAfterPrimaryDataDeletion();
     // Small delay so async IDB deletions can settle before unload.
     await new Promise((r) => setTimeout(r, 300));
     sanitizeViewCarryingUrlState();

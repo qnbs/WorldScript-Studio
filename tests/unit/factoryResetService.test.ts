@@ -140,7 +140,8 @@ describe('wipeAllAppData', () => {
     const appSwHistoryKey = `worldscript-sw-installed:${appSwUrl}`;
     const appLocalKeys = [...EXPECTED_APP_LOCAL_STORAGE_KEYS, appSwHistoryKey];
     const appSessionKeys = EXPECTED_APP_SESSION_STORAGE_KEYS;
-    const saltRemove = vi.spyOn(localStorage, 'removeItem');
+    const deferredStorageRemove = vi.spyOn(localStorage, 'removeItem');
+    const deferredSessionRemove = vi.spyOn(sessionStorage, 'removeItem');
     for (const key of appLocalKeys) localStorage.setItem(key, 'app-value');
     for (const key of appSessionKeys) sessionStorage.setItem(key, 'app-value');
     const foreignLocalKeys = [
@@ -172,17 +173,31 @@ describe('wipeAllAppData', () => {
     for (const key of foreignSessionKeys)
       expect(sessionStorage.getItem(key)).toBe(`preserve:${key}`);
     expect(delSpy).toHaveBeenCalledWith('worldscript-data-db');
-    expect(saltRemove).toHaveBeenCalledWith('worldscript-idb-kdf-salt-v1');
-    const saltRemovalIndex = saltRemove.mock.calls.findIndex(
-      ([key]) => key === 'worldscript-idb-kdf-salt-v1',
+    for (const deferredKey of [
+      'worldscript-state',
+      'worldscript-lora',
+      'worldscript-progress-tracker',
+      'worldscript-scene-comments',
+      'worldscript-idb-kdf-salt-v1',
+    ]) {
+      expect(deferredStorageRemove).toHaveBeenCalledWith(deferredKey);
+      const callIndex = deferredStorageRemove.mock.calls.findIndex(([key]) => key === deferredKey);
+      expect(deferredStorageRemove.mock.invocationCallOrder[callIndex]).toBeGreaterThan(
+        Math.max(...delSpy.mock.invocationCallOrder),
+      );
+    }
+    expect(deferredSessionRemove).toHaveBeenCalledWith('worldscript-share-target-payload');
+    const sharePayloadRemovalIndex = deferredSessionRemove.mock.calls.findIndex(
+      ([key]) => key === 'worldscript-share-target-payload',
     );
-    expect(saltRemove.mock.invocationCallOrder[saltRemovalIndex]).toBeGreaterThan(
-      Math.max(...delSpy.mock.invocationCallOrder),
-    );
+    expect(
+      deferredSessionRemove.mock.invocationCallOrder[sharePayloadRemovalIndex],
+    ).toBeGreaterThan(Math.max(...delSpy.mock.invocationCallOrder));
     expect(reloadMock).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     delSpy.mockRestore();
-    saltRemove.mockRestore();
+    deferredStorageRemove.mockRestore();
+    deferredSessionRemove.mockRestore();
   });
 
   it.each(['localStorage', 'sessionStorage'] as const)(
@@ -758,6 +773,15 @@ describe('wipeAllAppData', () => {
     });
 
     it('rejects and never reloads when readDir itself throws', async () => {
+      const savedComments = JSON.stringify({ comments: [{ id: 'fixture-comment' }] });
+      const savedSharePayload = 'synthetic share import payload';
+      localStorage.setItem('worldscript-scene-comments', savedComments);
+      localStorage.setItem('worldscript-state', '{"settings":{"fixture":true}}');
+      localStorage.setItem('worldscript-lora', '{"adapters":["fixture-adapter"]}');
+      localStorage.setItem('worldscript-progress-tracker', '{"totalWordsAllTime":42}');
+      sessionStorage.setItem('worldscript-share-target-payload', savedSharePayload);
+      await createDb('worldscript-data-db');
+      const databaseDelete = vi.spyOn(indexedDB, 'deleteDatabase');
       mockLoadTauriApis.mockResolvedValue({
         appDataDir: vi.fn().mockResolvedValue('/app/data'),
         exists: vi.fn().mockResolvedValue(true),
@@ -777,6 +801,15 @@ describe('wipeAllAppData', () => {
       }
 
       expect(reloadMock).not.toHaveBeenCalled();
+      // QNBS-v3: user-authored persisted state and import payloads survive a desktop preflight refusal before primary deletion.
+      expect(localStorage.getItem('worldscript-scene-comments')).toBe(savedComments);
+      expect(localStorage.getItem('worldscript-state')).toBe('{"settings":{"fixture":true}}');
+      expect(localStorage.getItem('worldscript-lora')).toBe('{"adapters":["fixture-adapter"]}');
+      expect(localStorage.getItem('worldscript-progress-tracker')).toBe('{"totalWordsAllTime":42}');
+      expect(sessionStorage.getItem('worldscript-share-target-payload')).toBe(savedSharePayload);
+      expect(await hasDb('worldscript-data-db')).toBe(true);
+      expect(databaseDelete).not.toHaveBeenCalled();
+      databaseDelete.mockRestore();
     });
 
     // QNBS-v3 (#553): a fresh review's finding — this function used to recursively delete every child of appDataPath, including project-locks/, while a save in another process could still be inside withProjectFileLock's fn(). Proves the guard refuses before touching anything, so a detected conflict never leaves partial cleanup, and that a merely-empty project-locks/ (no active lock, just the directory itself) does not block a normal reset.

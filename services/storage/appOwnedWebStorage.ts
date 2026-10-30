@@ -1,6 +1,6 @@
 const IDB_ENCRYPTION_SALT_KEY = 'worldscript-idb-kdf-salt-v1';
 
-// QNBS-v3: this exact catalogue mirrors WorldScript web-storage writers and approved legacy keys; shared origins make broad prefix deletion unsafe.
+// QNBS-v3: exact names with positive ownership; generic unnamespaced keys remain outside this reset inventory on shared origins.
 const APP_OWNED_LOCAL_STORAGE_KEYS = new Set([
   'worldscript-state',
   'worldscript-theme',
@@ -40,6 +40,16 @@ const APP_OWNED_SESSION_STORAGE_KEYS = new Set([
   'worldscript-share-target-payload',
 ]);
 
+// QNBS-v3: user-authored content/settings and the KDF salt must survive a preflight or primary-delete failure.
+const DEFERRED_APP_OWNED_LOCAL_STORAGE_KEYS = new Set([
+  'worldscript-state',
+  'worldscript-lora',
+  'worldscript-progress-tracker',
+  'worldscript-scene-comments',
+  IDB_ENCRYPTION_SALT_KEY,
+]);
+const DEFERRED_APP_OWNED_SESSION_STORAGE_KEYS = new Set(['worldscript-share-target-payload']);
+
 // QNBS-v3: register-sw.ts records only the current build's exact absolute script URL, not every deployment under a WorldScript-looking prefix.
 function currentAppServiceWorkerHistoryKey(): string | null {
   if (typeof window === 'undefined') return null;
@@ -68,7 +78,7 @@ function clearOwnedStorage(storage: Storage, isOwned: (key: string) => boolean):
   }
 }
 
-/** Remove owned non-salt keys first; encrypted IndexedDB records may still need the persisted KDF salt if later reset work fails. */
+/** Remove disposable owned keys first; retain user content/preferences and the KDF salt until primary deletion succeeds. */
 export function clearAppOwnedWebStorage(): void {
   try {
     const local = Reflect.get(globalThis, 'localStorage') as Storage | undefined;
@@ -78,21 +88,28 @@ export function clearAppOwnedWebStorage(): void {
     }
     clearOwnedStorage(
       local,
-      (key) => isAppOwnedLocalStorageKey(key) && key !== IDB_ENCRYPTION_SALT_KEY,
+      (key) => isAppOwnedLocalStorageKey(key) && !DEFERRED_APP_OWNED_LOCAL_STORAGE_KEYS.has(key),
     );
-    clearOwnedStorage(session, (key) => APP_OWNED_SESSION_STORAGE_KEYS.has(key));
+    clearOwnedStorage(
+      session,
+      (key) =>
+        APP_OWNED_SESSION_STORAGE_KEYS.has(key) &&
+        !DEFERRED_APP_OWNED_SESSION_STORAGE_KEYS.has(key),
+    );
   } catch {
     throw new Error('Factory reset could not clear all app-owned browser storage');
   }
 }
 
-// QNBS-v3: remove the non-secret salt only after every dependent encrypted IndexedDB database has been confirmed deleted, so a later native/IDB failure never strands surviving ciphertext without its key-derivation input.
-export function clearIdbEncryptionSaltAfterPrimaryDataDeletion(): void {
+// QNBS-v3: deferred app-owned values are removed only after native and primary IndexedDB deletion succeeds; a failed earlier step must not discard user-authored data or the KDF input for surviving ciphertext.
+export function clearDeferredAppOwnedWebStorageAfterPrimaryDataDeletion(): void {
   try {
     const local = Reflect.get(globalThis, 'localStorage') as Storage | undefined;
-    if (!local) throw new Error('Browser storage is unavailable');
-    clearOwnedStorage(local, (key) => key === IDB_ENCRYPTION_SALT_KEY);
+    const session = Reflect.get(globalThis, 'sessionStorage') as Storage | undefined;
+    if (!local || !session) throw new Error('Browser storage is unavailable');
+    clearOwnedStorage(local, (key) => DEFERRED_APP_OWNED_LOCAL_STORAGE_KEYS.has(key));
+    clearOwnedStorage(session, (key) => DEFERRED_APP_OWNED_SESSION_STORAGE_KEYS.has(key));
   } catch {
-    throw new Error('Factory reset could not clear the app-owned encryption salt');
+    throw new Error('Factory reset could not clear deferred app-owned browser data');
   }
 }
