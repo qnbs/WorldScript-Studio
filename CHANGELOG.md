@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Fix (factory reset):** preserve foreign same-origin Web Storage, remove only catalogued WorldScript and approved legacy keys, and stop before reload when an owned service-worker cache remains or browser storage is unavailable (PR #1147, #1125).
+- **Fix (factory reset/recovery):** preserve foreign same-origin Web Storage, remove only verified app and legacy keys, and finish fallible browser cleanup before primary project deletion. Concurrent factory resets now share one operation; a failure after native or IndexedDB deletion begins is reported as potentially partial and keeps writes fenced until restart. Startup recovery also rejects IndexedDB errors or unresolved blocks instead of reloading as if deletion succeeded (PR #1147, #1125).
 
 - **Post-release v1.29.2 truth sync:** removed the release-candidate markers from README.md and
   CHANGELOG.md now that the `v1.29.2` tag and GitHub Release are published, and recorded the real

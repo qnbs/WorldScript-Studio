@@ -1,5 +1,5 @@
-// QNBS-v3: this exact catalogue mirrors web-storage writers; shared origins make broad prefix deletion unsafe.
-export const APP_OWNED_LOCAL_STORAGE_KEYS = [
+// QNBS-v3: this exact catalogue mirrors WorldScript web-storage writers and approved legacy keys; shared origins make broad prefix deletion unsafe.
+const APP_OWNED_LOCAL_STORAGE_KEYS = new Set([
   'worldscript-state',
   'worldscript-theme',
   'worldscript-language',
@@ -21,9 +21,6 @@ export const APP_OWNED_LOCAL_STORAGE_KEYS = [
   'worldscript-or-cb-state',
   'worldscript-openrouter-models',
   'worldscript-ai-leader-heartbeat',
-  'copilot.mode',
-  'debugRedux',
-  'debug',
   'worldscript-idb-unlock-attempts',
   'worldscript-idb-unlock-lockout',
   'storycraft-idb-unlock-attempts',
@@ -31,23 +28,26 @@ export const APP_OWNED_LOCAL_STORAGE_KEYS = [
   'worldscript-hint-flow',
   'worldscript-hint-focus',
   'worldscript-hint-proforge',
-] as const;
+  // QNBS-v3: these two literal historical keys are covered by dbInitialization's legacy-reset fixtures; no prefix is accepted.
+  'worldscript_version',
+  'plotBoard_zoom',
+]);
 
-export const APP_OWNED_SESSION_STORAGE_KEYS = [
-  'pwa-install-dismissed',
-  'collab_user',
+const APP_OWNED_SESSION_STORAGE_KEYS = new Set([
   'worldscript-settings-category',
   'worldscript-share-target-payload',
-] as const;
+]);
 
-// QNBS-v3: register-sw.ts stores history under this URL-keyed family, not a generic worldscript-* prefix.
-const SERVICE_WORKER_HISTORY_PREFIX = 'worldscript-sw-installed:';
+// QNBS-v3: register-sw.ts records only the current build's exact absolute script URL, not every deployment under a WorldScript-looking prefix.
+function currentAppServiceWorkerHistoryKey(): string | null {
+  if (typeof window === 'undefined') return null;
+  const basePath = import.meta.env.BASE_URL || '/';
+  const swUrl = new URL(`${basePath}sw.js`, window.location.href).href;
+  return `worldscript-sw-installed:${swUrl}`;
+}
 
-export function isAppOwnedLocalStorageKey(key: string): boolean {
-  return (
-    (APP_OWNED_LOCAL_STORAGE_KEYS as readonly string[]).includes(key) ||
-    key.startsWith(SERVICE_WORKER_HISTORY_PREFIX)
-  );
+function isAppOwnedLocalStorageKey(key: string): boolean {
+  return APP_OWNED_LOCAL_STORAGE_KEYS.has(key) || key === currentAppServiceWorkerHistoryKey();
 }
 
 function findOwnedKeys(storage: Storage, isOwned: (key: string) => boolean): string[] {
@@ -75,8 +75,7 @@ export function clearAppOwnedWebStorage(): void {
       throw new Error('Browser storage is unavailable');
     }
     clearOwnedStorage(local, isAppOwnedLocalStorageKey);
-    const ownedSessionKeys = new Set<string>(APP_OWNED_SESSION_STORAGE_KEYS);
-    clearOwnedStorage(session, (key) => ownedSessionKeys.has(key));
+    clearOwnedStorage(session, (key) => APP_OWNED_SESSION_STORAGE_KEYS.has(key));
   } catch {
     throw new Error('Factory reset could not clear all app-owned browser storage');
   }

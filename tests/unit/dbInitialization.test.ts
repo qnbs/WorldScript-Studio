@@ -111,10 +111,15 @@ describe('dbInitialization', () => {
       expect(deletedNames).toContain('worldscript-data-db');
     });
 
-    it('removes worldscript-prefixed localStorage keys', async () => {
+    it('removes exact owned legacy markers while preserving unknown same-origin keys', async () => {
       localStorage.setItem('worldscript_version', '1');
       localStorage.setItem('plotBoard_zoom', '1.5');
       localStorage.setItem('unrelated_key', 'keep');
+      localStorage.setItem('worldscript-foreign-tool:key', 'keep-worldscript');
+      localStorage.setItem('plotBoard_foreign:key', 'keep-plotboard');
+      localStorage.setItem('schemaVersion_foreign:key', 'keep-schema');
+      // QNBS-v3: dbConstants defines this as an IndexedDB record key; its spelling alone is not localStorage ownership proof.
+      localStorage.setItem('__legacy_worldscript_db_migrated__', 'keep-unproven');
       const { resetAllDatabases } = await import('../../services/dbInitialization');
 
       await resetAllDatabases();
@@ -122,9 +127,13 @@ describe('dbInitialization', () => {
       expect(localStorage.getItem('worldscript_version')).toBeNull();
       expect(localStorage.getItem('plotBoard_zoom')).toBeNull();
       expect(localStorage.getItem('unrelated_key')).toBe('keep');
+      expect(localStorage.getItem('worldscript-foreign-tool:key')).toBe('keep-worldscript');
+      expect(localStorage.getItem('plotBoard_foreign:key')).toBe('keep-plotboard');
+      expect(localStorage.getItem('schemaVersion_foreign:key')).toBe('keep-schema');
+      expect(localStorage.getItem('__legacy_worldscript_db_migrated__')).toBe('keep-unproven');
     });
 
-    it('resolves even when deleteDatabase fires onerror instead of onsuccess', async () => {
+    it('fails closed when deleteDatabase fires onerror instead of onsuccess', async () => {
       mockDeleteDatabase.mockImplementation(() => {
         const req: Record<string, unknown> = { onsuccess: null, onerror: null, onblocked: null };
         Promise.resolve().then(() => {
@@ -134,7 +143,93 @@ describe('dbInitialization', () => {
       });
 
       const { resetAllDatabases } = await import('../../services/dbInitialization');
+      await expect(resetAllDatabases()).rejects.toMatchObject({
+        name: 'StartupDatabaseResetError',
+        dataMayHaveBeenRemoved: false,
+      });
+    });
+
+    it('waits for a blocked request to reach onsuccess before reporting a completed reset', async () => {
+      mockDeleteDatabase.mockImplementation(() => {
+        const req: Record<string, unknown> = { onsuccess: null, onerror: null, onblocked: null };
+        // QNBS-v3: two microtask turns model onblocked as a nonterminal notification followed by the request's real success event.
+        Promise.resolve().then(() => {
+          if (typeof req['onblocked'] === 'function') (req['onblocked'] as () => void)();
+          Promise.resolve().then(() => {
+            if (typeof req['onsuccess'] === 'function') (req['onsuccess'] as () => void)();
+          });
+        });
+        return req;
+      });
+
+      const { resetAllDatabases } = await import('../../services/dbInitialization');
+
       await expect(resetAllDatabases()).resolves.toBeUndefined();
+      expect(mockDeleteDatabase).toHaveBeenCalledTimes(2);
+    });
+
+    it('marks a reset partial when blocked delete requests time out but could still complete', async () => {
+      vi.useFakeTimers();
+      mockDeleteDatabase.mockImplementation(() => {
+        const req: Record<string, unknown> = { onsuccess: null, onerror: null, onblocked: null };
+        Promise.resolve().then(() => {
+          if (typeof req['onblocked'] === 'function') (req['onblocked'] as () => void)();
+        });
+        return req;
+      });
+
+      try {
+        const { resetAllDatabases } = await import('../../services/dbInitialization');
+        const reset = resetAllDatabases();
+        void reset.catch(() => undefined);
+        await vi.runAllTimersAsync();
+
+        await expect(reset).rejects.toMatchObject({
+          name: 'StartupDatabaseResetError',
+          outcome: 'partial-reset',
+          dataMayHaveBeenRemoved: true,
+        });
+        await expect(resetAllDatabases()).rejects.toMatchObject({ outcome: 'partial-reset' });
+        expect(mockDeleteDatabase).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('marks partial reset when one database is deleted and the other fails', async () => {
+      mockDeleteDatabase.mockImplementation((name: string) => {
+        const req: Record<string, unknown> = { onsuccess: null, onerror: null, onblocked: null };
+        Promise.resolve().then(() => {
+          const handler = name === 'worldscript-state-db' ? req['onsuccess'] : req['onerror'];
+          if (typeof handler === 'function') (handler as () => void)();
+        });
+        return req;
+      });
+
+      const { resetAllDatabases, StartupDatabaseResetError } = await import(
+        '../../services/dbInitialization'
+      );
+
+      await expect(resetAllDatabases()).rejects.toMatchObject({
+        name: StartupDatabaseResetError.name,
+        outcome: 'partial-reset',
+        dataMayHaveBeenRemoved: true,
+      });
+      await expect(resetAllDatabases()).rejects.toMatchObject({ outcome: 'partial-reset' });
+      expect(mockDeleteDatabase).toHaveBeenCalledTimes(2);
+    });
+
+    it('fails before database deletion when localStorage is unavailable', async () => {
+      vi.stubGlobal('localStorage', undefined);
+      const { resetAllDatabases } = await import('../../services/dbInitialization');
+
+      await expect(resetAllDatabases()).rejects.toMatchObject({
+        name: 'StartupDatabaseResetError',
+        outcome: 'failed-before-primary-delete',
+        dataMayHaveBeenRemoved: false,
+      });
+      expect(mockDeleteDatabase).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
     });
   });
 });

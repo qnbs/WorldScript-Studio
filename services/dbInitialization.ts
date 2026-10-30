@@ -28,18 +28,73 @@ function formatStorageError(err: unknown): string {
   return 'Unknown storage error.';
 }
 
+const RESET_DELETE_BLOCKED_TIMEOUT_MS = 3000;
+const APP_OWNED_RESET_MARKERS = ['worldscript_version', 'plotBoard_zoom'] as const;
+// QNBS-v3: recovery reset is also a single destructive writer; concurrent callers must share its terminal result.
+let activeDatabaseReset: Promise<void> | null = null;
+// QNBS-v3: timed-out blocked IDB requests may still complete later, so do not retry in this page after an uncertain deletion.
+let partialDatabaseResetDetected = false;
+
+type DatabaseResetOutcome = 'failed-before-primary-delete' | 'partial-reset';
+
+class DatabaseDeleteFailure extends Error {
+  constructor(
+    message: string,
+    readonly mayCompleteAfterTimeout: boolean,
+  ) {
+    super(message);
+  }
+}
+
+export class StartupDatabaseResetError extends Error {
+  readonly dataMayHaveBeenRemoved: boolean;
+
+  constructor(readonly outcome: DatabaseResetOutcome) {
+    super(
+      outcome === 'partial-reset'
+        ? 'Database reset stopped after deletion began; local project data may have been removed. Restart the app before retrying.'
+        : 'Database reset stopped before local project data deletion began.',
+    );
+    this.name = 'StartupDatabaseResetError';
+    this.dataMayHaveBeenRemoved = outcome === 'partial-reset';
+  }
+}
+
+function clearOwnedResetMarkers(): void {
+  const local = Reflect.get(globalThis, 'localStorage') as Storage | undefined;
+  if (!local) throw new Error('Browser storage is unavailable');
+  for (const key of APP_OWNED_RESET_MARKERS) {
+    local.removeItem(key);
+    if (local.getItem(key) !== null) throw new Error('A reset marker remains in browser storage');
+  }
+}
+
 function deleteIdb(name: string): Promise<void> {
-  return new Promise((resolve) => {
-    // QNBS-v3: resolve on both success and error so one DB failure doesn't block the other.
+  return new Promise((resolve, reject) => {
     const req = indexedDB.deleteDatabase(name);
-    req.onsuccess = () => resolve();
+    let blockedTimeout: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+    const settle = (finish: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (blockedTimeout) clearTimeout(blockedTimeout);
+      finish();
+    };
+    req.onsuccess = () => settle(resolve);
     req.onerror = () => {
       logger.warn(`dbInitialization: could not delete "${name}":`, req.error);
-      resolve();
+      settle(() =>
+        reject(new DatabaseDeleteFailure(`Database reset could not delete ${name}`, false)),
+      );
     };
     req.onblocked = () => {
       logger.warn(`dbInitialization: deleteDatabase "${name}" blocked (other tab open?)`);
-      resolve();
+      if (blockedTimeout) return;
+      blockedTimeout = setTimeout(() => {
+        settle(() =>
+          reject(new DatabaseDeleteFailure(`Database reset remained blocked for ${name}`, true)),
+        );
+      }, RESET_DELETE_BLOCKED_TIMEOUT_MS);
     };
   });
 }
@@ -101,18 +156,41 @@ export async function checkStorageHealth(): Promise<StorageHealth> {
  * Deletes both IndexedDB databases and relevant localStorage markers.
  * Use as a last-resort recovery option (user-confirmed).
  */
-export async function resetAllDatabases(): Promise<void> {
-  logger.warn('dbInitialization: resetAllDatabases — deleting both IDB databases');
-  await Promise.all([deleteIdb(STATE_DB_NAME), deleteIdb(DATA_DB_NAME)]);
+export function resetAllDatabases(): Promise<void> {
+  if (activeDatabaseReset) return activeDatabaseReset;
+  if (partialDatabaseResetDetected) {
+    return Promise.reject(new StartupDatabaseResetError('partial-reset'));
+  }
 
-  // Remove localStorage markers that guard migration idempotency + any plotBoard viewport state.
-  // QNBS-v3: Only worldscript-specific keys; avoids wiping unrelated site storage.
-  const prefix = ['worldscript', 'plotBoard', 'schemaVersion', '__legacy_worldscript'];
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const key = localStorage.key(i);
-    if (key && prefix.some((p) => key.startsWith(p))) {
-      localStorage.removeItem(key);
-    }
+  const operation = performDatabaseReset();
+  let trackedOperation: Promise<void>;
+  trackedOperation = operation.finally(() => {
+    if (activeDatabaseReset === trackedOperation) activeDatabaseReset = null;
+  });
+  activeDatabaseReset = trackedOperation;
+  return trackedOperation;
+}
+
+async function performDatabaseReset(): Promise<void> {
+  logger.warn('dbInitialization: resetAllDatabases — deleting both IDB databases');
+  try {
+    // QNBS-v3: clear only the two verified localStorage markers before primary deletion; prefix-shaped foreign data and the similarly named IDB record stay untouched.
+    clearOwnedResetMarkers();
+  } catch {
+    throw new StartupDatabaseResetError('failed-before-primary-delete');
+  }
+
+  const results = await Promise.allSettled([deleteIdb(STATE_DB_NAME), deleteIdb(DATA_DB_NAME)]);
+  const failures = results.filter((result) => result.status === 'rejected');
+  if (failures.length > 0) {
+    const partial =
+      results.some((result) => result.status === 'fulfilled') ||
+      failures.some(
+        (result) =>
+          result.reason instanceof DatabaseDeleteFailure && result.reason.mayCompleteAfterTimeout,
+      );
+    if (partial) partialDatabaseResetDetected = true;
+    throw new StartupDatabaseResetError(partial ? 'partial-reset' : 'failed-before-primary-delete');
   }
 
   logger.info('dbInitialization: resetAllDatabases — complete');

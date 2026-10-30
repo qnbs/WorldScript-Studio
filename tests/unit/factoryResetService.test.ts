@@ -8,12 +8,51 @@ import {
   duckDbWriteCoordinator,
   projectPersistenceCoordinator,
 } from '../../app/persistenceCoordinator';
-import { isFactoryResetInProgress, wipeAllAppData } from '../../services/factoryResetService';
-import { logger } from '../../services/logger';
 import {
-  APP_OWNED_LOCAL_STORAGE_KEYS,
-  APP_OWNED_SESSION_STORAGE_KEYS,
-} from '../../services/storage/appOwnedWebStorage';
+  _resetFactoryResetStateForTest,
+  FactoryResetError,
+  isFactoryResetInProgress,
+  wipeAllAppData,
+} from '../../services/factoryResetService';
+import { logger } from '../../services/logger';
+
+// QNBS-v3: literal expectations are intentionally independent of the production ownership catalogue so an omitted owned key cannot make this regression test pass by construction.
+const EXPECTED_APP_LOCAL_STORAGE_KEYS = [
+  'worldscript-state',
+  'worldscript-theme',
+  'worldscript-language',
+  'worldscript-last-view',
+  'worldscript-dashboard-onboarding-dismissed',
+  'worldscript-book-preview-prefs',
+  'worldscript-lora',
+  'worldscript-plot-board',
+  'worldscript-feature-flags',
+  'storycraft-feature-flags',
+  'worldscript-mind-map-ui',
+  'worldscript-scene-comments',
+  'worldscript-progress-tracker',
+  'worldscript-palette-prefs-v1',
+  'worldscript-idb-kdf-salt-v1',
+  'worldscript-spotlight-tour-done',
+  'worldscript-ai-telemetry',
+  'worldscript-benchmarks',
+  'worldscript-or-cb-state',
+  'worldscript-openrouter-models',
+  'worldscript-ai-leader-heartbeat',
+  'worldscript-idb-unlock-attempts',
+  'worldscript-idb-unlock-lockout',
+  'storycraft-idb-unlock-attempts',
+  'storycraft-idb-unlock-lockout',
+  'worldscript-hint-flow',
+  'worldscript-hint-focus',
+  'worldscript-hint-proforge',
+  'worldscript_version',
+  'plotBoard_zoom',
+];
+const EXPECTED_APP_SESSION_STORAGE_KEYS = [
+  'worldscript-settings-category',
+  'worldscript-share-target-payload',
+];
 
 const mockIsTauriRuntime = vi.fn(() => false);
 const mockLoadTauriApis = vi.fn();
@@ -51,6 +90,11 @@ function createDb(name: string): Promise<void> {
   });
 }
 
+async function hasDb(name: string): Promise<boolean> {
+  const databases = await indexedDB.databases();
+  return databases.some((database) => database.name === name);
+}
+
 // QNBS-v3: production has a real 300ms settle delay before reload — drive it with fake timers so
 // the suite stays deterministic and fast (CodeAnt #132). runAllTimersAsync loops until every
 // pending timer is drained, which also flushes the fake-indexeddb deletion scheduling.
@@ -71,6 +115,7 @@ let reloadMock: ReturnType<typeof vi.fn>;
 let originalLocation: Location;
 
 beforeEach(() => {
+  _resetFactoryResetStateForTest();
   vi.clearAllMocks();
   mockIsTauriRuntime.mockReturnValue(false);
   reloadMock = vi.fn();
@@ -91,29 +136,40 @@ afterEach(() => {
 describe('wipeAllAppData', () => {
   it('removes known app storage but preserves foreign keys on the shared origin', async () => {
     await createDb('worldscript-data-db');
-    const appLocalKeys = [
-      ...APP_OWNED_LOCAL_STORAGE_KEYS,
-      'worldscript-sw-installed:http://localhost:3000/WorldScript-Studio/sw.js',
-    ];
-    const appSessionKeys = APP_OWNED_SESSION_STORAGE_KEYS;
+    const appSwUrl = new URL(`${import.meta.env.BASE_URL || '/'}sw.js`, window.location.href).href;
+    const appSwHistoryKey = `worldscript-sw-installed:${appSwUrl}`;
+    const appLocalKeys = [...EXPECTED_APP_LOCAL_STORAGE_KEYS, appSwHistoryKey];
+    const appSessionKeys = EXPECTED_APP_SESSION_STORAGE_KEYS;
     for (const key of appLocalKeys) localStorage.setItem(key, 'app-value');
     for (const key of appSessionKeys) sessionStorage.setItem(key, 'app-value');
-    localStorage.setItem('foreign-tool:key', 'preserve-local');
-    localStorage.setItem('worldscript-foreign-tool:key', 'preserve-prefixed-local');
-    sessionStorage.setItem('foreign-tool:key', 'preserve-session');
-    sessionStorage.setItem('worldscript-foreign-tool:key', 'preserve-prefixed-session');
+    const foreignLocalKeys = [
+      'foreign-tool:key',
+      'worldscript-foreign-tool:key',
+      'worldscript-sw-installed:https://other.example/sw.js',
+      `worldscript-sw-installed:${appSwUrl}/other-scope`,
+      `worldscript-sw-installed:${appSwUrl}?foreign=1`,
+      `worldscript-sw-installed:${appSwUrl.replace('http://', 'https://')}`,
+      'copilot.mode',
+      'debugRedux',
+      'debug',
+    ];
+    const foreignSessionKeys = [
+      'foreign-tool:key',
+      'worldscript-foreign-tool:key',
+      'pwa-install-dismissed',
+      'collab_user',
+    ];
+    for (const key of foreignLocalKeys) localStorage.setItem(key, `preserve:${key}`);
+    for (const key of foreignSessionKeys) sessionStorage.setItem(key, `preserve:${key}`);
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
 
     await runWipe();
 
     for (const key of appLocalKeys) expect(localStorage.getItem(key)).toBeNull();
     for (const key of appSessionKeys) expect(sessionStorage.getItem(key)).toBeNull();
-    expect(localStorage.getItem('foreign-tool:key')).toBe('preserve-local');
-    expect(localStorage.getItem('worldscript-foreign-tool:key')).toBe('preserve-prefixed-local');
-    expect(sessionStorage.getItem('foreign-tool:key')).toBe('preserve-session');
-    expect(sessionStorage.getItem('worldscript-foreign-tool:key')).toBe(
-      'preserve-prefixed-session',
-    );
+    for (const key of foreignLocalKeys) expect(localStorage.getItem(key)).toBe(`preserve:${key}`);
+    for (const key of foreignSessionKeys)
+      expect(sessionStorage.getItem(key)).toBe(`preserve:${key}`);
     expect(delSpy).toHaveBeenCalledWith('worldscript-data-db');
     expect(reloadMock).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledTimes(1);
@@ -123,14 +179,20 @@ describe('wipeAllAppData', () => {
   it.each(['localStorage', 'sessionStorage'] as const)(
     'fails closed without reloading when %s is unavailable',
     async (storageName) => {
+      await createDb('worldscript-data-db');
+      const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
       vi.stubGlobal(storageName, undefined);
 
-      await expect(runWipe()).rejects.toThrow(
-        'Factory reset could not clear all app-owned browser storage',
-      );
+      await expect(runWipe()).rejects.toMatchObject({
+        name: 'FactoryResetError',
+        outcome: 'failed-before-primary-delete',
+        dataMayHaveBeenRemoved: false,
+      });
 
       expect(reloadMock).not.toHaveBeenCalled();
       expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+      expect(delSpy).not.toHaveBeenCalled();
+      delSpy.mockRestore();
     },
   );
 
@@ -292,8 +354,8 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
-  // QNBS-v3 (cubic/coderabbit): onblocked alone must not settle the promise -- only a block that genuinely outlasts the timeout is treated as a failure.
-  it('rejects, never reloads, and releases the reset gate when a database deletion stays blocked past the timeout', async () => {
+  // QNBS-v3 (cubic/coderabbit): onblocked alone is nonterminal; once primary deletion began, timeout failure is reported as potentially partial and keeps writes fenced for reload.
+  it('reports a partial reset when a primary database stays blocked past the timeout', async () => {
     await createDb('worldscript-data-db');
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation((_name: string) => {
       const req = {} as IDBOpenDBRequest;
@@ -307,14 +369,19 @@ describe('wipeAllAppData', () => {
       // QNBS-v3: attached synchronously, in the same tick the promise is created — a handler attached only after runAllTimersAsync() lets the timeout-driven rejection fire unhandled for a full turn first, which Node flags even once it's later caught.
       void wiped.catch(() => undefined);
       await vi.runAllTimersAsync();
-      await expect(wiped).rejects.toThrow(/still blocked after/);
+      await expect(wiped).rejects.toMatchObject({
+        name: 'FactoryResetError',
+        outcome: 'partial-reset',
+        dataMayHaveBeenRemoved: true,
+      });
     } finally {
       vi.useRealTimers();
     }
 
     expect(reloadMock).not.toHaveBeenCalled();
     expect(mockBeginIdbReset).toHaveBeenCalledTimes(1);
-    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+    expect(mockEndIdbReset).not.toHaveBeenCalled();
+    expect(isFactoryResetInProgress()).toBe(true);
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining(`deleteDatabase(worldscript-data-db) blocked`),
     );
@@ -355,7 +422,7 @@ describe('wipeAllAppData', () => {
   });
 
   // QNBS-v3: proves allSettled semantics — a fast rejection must not release the gate while another deletion is still outstanding; the gate only releases once every deletion has settled.
-  it('waits for every database deletion to settle before releasing the gate, even when one rejects quickly and another is deliberately delayed', async () => {
+  it('waits for every database deletion to settle and reports partial state when one succeeds and another rejects', async () => {
     const dbSpy = vi.spyOn(indexedDB, 'databases').mockResolvedValue([
       { name: 'worldscript-data-db', version: 1 },
       { name: 'worldscript-logs-db', version: 1 },
@@ -392,10 +459,18 @@ describe('wipeAllAppData', () => {
     expect(mockEndIdbReset).not.toHaveBeenCalled();
 
     slow.resolve?.();
-    await expect(wipePromise).rejects.toThrow(/database deletion\(s\) failed/);
+    await expect(wipePromise).rejects.toMatchObject({
+      name: 'FactoryResetError',
+      outcome: 'partial-reset',
+      dataMayHaveBeenRemoved: true,
+    });
 
-    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+    expect(mockEndIdbReset).not.toHaveBeenCalled();
     expect(reloadMock).not.toHaveBeenCalled();
+    expect(isFactoryResetInProgress()).toBe(true);
+    const beginCount = mockBeginIdbReset.mock.calls.length;
+    await expect(wipeAllAppData()).rejects.toMatchObject({ outcome: 'partial-reset' });
+    expect(mockBeginIdbReset).toHaveBeenCalledTimes(beginCount);
     dbSpy.mockRestore();
     delSpy.mockRestore();
   });
@@ -408,7 +483,10 @@ describe('wipeAllAppData', () => {
       new Error('[idbResetGate] reset teardown incomplete — 1 closer(s) failed: close failed'),
     );
 
-    await expect(wipeAllAppData()).rejects.toThrow(/closer\(s\) failed/);
+    await expect(wipeAllAppData()).rejects.toMatchObject({
+      outcome: 'failed-before-primary-delete',
+      dataMayHaveBeenRemoved: false,
+    });
 
     expect(delSpy).not.toHaveBeenCalled();
     expect(reloadMock).not.toHaveBeenCalled();
@@ -453,16 +531,69 @@ describe('wipeAllAppData', () => {
     ['false result', vi.fn().mockResolvedValue(false)],
     ['rejection', vi.fn().mockRejectedValue(new Error('cache deletion failed'))],
   ])('does not reload after an owned cache deletion %s', async (_outcome, del) => {
+    await createDb('worldscript-data-db');
+    const databaseDelete = vi.spyOn(indexedDB, 'deleteDatabase');
     const keys = vi.fn().mockResolvedValue(['worldscript-static-v1.28.2']);
     vi.stubGlobal('caches', { keys, delete: del });
 
-    await expect(runWipe()).rejects.toThrow(
-      'Factory reset could not clear all app-owned browser caches',
-    );
+    await expect(runWipe()).rejects.toBeInstanceOf(FactoryResetError);
 
     expect(keys).toHaveBeenCalledTimes(2);
+    expect(del).toHaveBeenCalledWith('worldscript-static-v1.28.2');
+    expect(await hasDb('worldscript-data-db')).toBe(true);
+    expect(databaseDelete).not.toHaveBeenCalled();
     expect(reloadMock).not.toHaveBeenCalled();
     expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+    databaseDelete.mockRestore();
+  });
+
+  it('coalesces concurrent resets and keeps the reset gate closed until browser cleanup settles', async () => {
+    await createDb('worldscript-data-db');
+    let signalDeleteStarted: () => void = () => {};
+    let resolveCacheDelete: (deleted: boolean) => void = () => {};
+    const deleteStarted = new Promise<void>((resolve) => {
+      signalDeleteStarted = resolve;
+    });
+    const pendingDelete = new Promise<boolean>((resolve) => {
+      resolveCacheDelete = resolve;
+    });
+    // QNBS-v3: a deferred Cache.delete lets the second reset arrive before cleanup settles, exposing any duplicate operation or early gate release.
+    const cacheDelete = vi.fn(() => {
+      signalDeleteStarted();
+      return pendingDelete;
+    });
+    vi.stubGlobal('caches', {
+      keys: vi.fn(async () => ['worldscript-static-v1.28.2']),
+      delete: cacheDelete,
+    });
+    const databaseDelete = vi.spyOn(indexedDB, 'deleteDatabase');
+
+    const firstReset = wipeAllAppData();
+    void firstReset.catch(() => undefined);
+    const secondReset = wipeAllAppData();
+    void secondReset.catch(() => undefined);
+    try {
+      expect(secondReset).toBe(firstReset);
+      await deleteStarted;
+      await Promise.resolve();
+
+      expect(mockBeginIdbReset).toHaveBeenCalledTimes(1);
+      expect(mockEndIdbReset).not.toHaveBeenCalled();
+      expect(databaseDelete).not.toHaveBeenCalled();
+
+      resolveCacheDelete(false);
+      const outcomes = await Promise.allSettled([firstReset, secondReset]);
+
+      expect(outcomes.every((outcome) => outcome.status === 'rejected')).toBe(true);
+      expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+      expect(databaseDelete).not.toHaveBeenCalled();
+      expect(reloadMock).not.toHaveBeenCalled();
+      expect(isFactoryResetInProgress()).toBe(false);
+    } finally {
+      resolveCacheDelete(false);
+      await Promise.allSettled([firstReset, secondReset]);
+      databaseDelete.mockRestore();
+    }
   });
 
   it('allows a safe retry after an owned cache deletion initially fails', async () => {
@@ -481,9 +612,7 @@ describe('wipeAllAppData', () => {
     const keys = vi.fn(async () => [...remainingCaches]);
     vi.stubGlobal('caches', { keys, delete: del });
 
-    await expect(runWipe()).rejects.toThrow(
-      'Factory reset could not clear all app-owned browser caches',
-    );
+    await expect(runWipe()).rejects.toMatchObject({ outcome: 'failed-before-primary-delete' });
     expect(reloadMock).not.toHaveBeenCalled();
     expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
 
@@ -592,9 +721,10 @@ describe('wipeAllAppData', () => {
 
       vi.useFakeTimers();
       try {
-        await expect(wipeAllAppData()).rejects.toThrow(
-          'Factory reset could not clear desktop data',
-        );
+        await expect(wipeAllAppData()).rejects.toMatchObject({
+          outcome: 'partial-reset',
+          dataMayHaveBeenRemoved: true,
+        });
       } finally {
         vi.useRealTimers();
       }
@@ -604,8 +734,9 @@ describe('wipeAllAppData', () => {
         'Failed to clear Tauri app data during factory reset:',
         expect.any(Error),
       );
-      // QNBS-v3: a failed reset never reloads, so the app keeps running -- the flag must not stay stuck on and silently block every future save.
-      expect(isFactoryResetInProgress()).toBe(false);
+      // QNBS-v3: native removal began before failing, so writes stay fenced and the UI reports that data may already have been removed.
+      expect(isFactoryResetInProgress()).toBe(true);
+      expect(mockEndIdbReset).not.toHaveBeenCalled();
     });
 
     it('rejects and never reloads when readDir itself throws', async () => {
@@ -619,9 +750,10 @@ describe('wipeAllAppData', () => {
 
       vi.useFakeTimers();
       try {
-        await expect(wipeAllAppData()).rejects.toThrow(
-          'Factory reset could not clear desktop data',
-        );
+        await expect(wipeAllAppData()).rejects.toMatchObject({
+          outcome: 'failed-before-primary-delete',
+          dataMayHaveBeenRemoved: false,
+        });
       } finally {
         vi.useRealTimers();
       }
@@ -648,9 +780,10 @@ describe('wipeAllAppData', () => {
 
       vi.useFakeTimers();
       try {
-        await expect(wipeAllAppData()).rejects.toThrow(
-          'Factory reset could not clear desktop data',
-        );
+        await expect(wipeAllAppData()).rejects.toMatchObject({
+          outcome: 'failed-before-primary-delete',
+          dataMayHaveBeenRemoved: false,
+        });
       } finally {
         vi.useRealTimers();
       }
