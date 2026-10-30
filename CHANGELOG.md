@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Fix (factory reset):** preserve foreign same-origin Web Storage, remove only catalogued WorldScript and approved legacy keys, and stop before reload when an owned service-worker cache remains (PR #1147, #1125).
+
 - **Post-release v1.29.2 truth sync:** removed the release-candidate markers from README.md and
   CHANGELOG.md now that the `v1.29.2` tag and GitHub Release are published, and recorded the real
   release evidence in AUDIT.md, TODO.md and `docs/RELEASE-V1.29.2-EVIDENCE.md` (see `## [1.29.2]`
