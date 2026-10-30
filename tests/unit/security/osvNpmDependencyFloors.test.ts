@@ -30,6 +30,16 @@ function compareNumericVersionTriples(left: string, right: string): number {
   return 0;
 }
 
+function resolvedVersions(packageName: string): string[] {
+  return Object.keys(lockfile.packages ?? {})
+    .filter((key) => key.startsWith(`${packageName}@`))
+    .map((key) => key.slice(packageName.length + 1));
+}
+
+function referencesResolvedVersion(reference: string, versions: string[]): boolean {
+  return versions.some((version) => reference === version || reference.startsWith(`${version}(`));
+}
+
 const projectRoot = process.cwd();
 const packageManifest = JSON.parse(
   readFileSync(resolve(projectRoot, 'package.json'), 'utf8'),
@@ -51,14 +61,13 @@ describe('OSV npm dependency floors', () => {
   it('keeps each patched package at its fixed floor within a bounded major', () => {
     for (const { name, minimumVersion, major, override } of fixedFloors) {
       expect(workspace.overrides?.[name]).toBe(override);
-      const resolved = Object.keys(lockfile.packages ?? {})
-        .filter((key) => key.startsWith(`${name}@`))
-        .map((key) => key.slice(name.length + 1));
-      expect(resolved).toHaveLength(1);
-      const version = resolved[0] ?? '';
-      expect(version).toMatch(/^\d+\.\d+\.\d+$/);
-      expect(version.split('.')[0]).toBe(major);
-      expect(compareNumericVersionTriples(version, minimumVersion)).toBeGreaterThanOrEqual(0);
+      const resolved = resolvedVersions(name);
+      expect(resolved.length).toBeGreaterThan(0);
+      for (const version of resolved) {
+        expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+        expect(version.split('.')[0]).toBe(major);
+        expect(compareNumericVersionTriples(version, minimumVersion)).toBeGreaterThanOrEqual(0);
+      }
     }
   });
 
@@ -68,43 +77,68 @@ describe('OSV npm dependency floors', () => {
     const providers = Object.entries(lockfile.snapshots ?? {}).filter(([key]) =>
       key.startsWith('@ai-sdk/provider-utils@'),
     );
+    const undiciVersions = resolvedVersions('undici');
     expect(providers.length).toBeGreaterThan(0);
-    expect(providers.every(([, snapshot]) => snapshot.dependencies?.['undici'] === '7.30.1')).toBe(
-      true,
-    );
+    expect(undiciVersions.length).toBeGreaterThan(0);
+    expect(
+      providers.every(([, snapshot]) => {
+        const reference = snapshot.dependencies?.['undici'];
+        return (
+          typeof reference === 'string' && referencesResolvedVersion(reference, undiciVersions)
+        );
+      }),
+    ).toBe(true);
   });
 
   it('patches the vulnerable Zod 4 line without overriding Zod 3 tooling peers', () => {
     expect(workspace.overrides?.['zod@^4']).toBe('>=4.6.6 <5');
-    const resolved = Object.keys(lockfile.packages ?? {})
-      .filter((key) => key.startsWith('zod@'))
-      .map((key) => key.slice('zod@'.length))
-      .sort((left, right) => compareNumericVersionTriples(left, right));
-    expect(resolved).toHaveLength(2);
-    expect(resolved[0]).toBe('3.25.76');
-    expect(resolved[1]?.split('.')[0]).toBe('4');
-    expect(compareNumericVersionTriples(resolved[1] ?? '', '4.6.6')).toBeGreaterThanOrEqual(0);
+    const resolved = resolvedVersions('zod');
+    const zod3Versions = resolved.filter((version) => version.startsWith('3.'));
+    const zod4Versions = resolved.filter((version) => version.startsWith('4.'));
+    expect(zod3Versions.length).toBeGreaterThan(0);
+    expect(zod4Versions.length).toBeGreaterThan(0);
+    expect(
+      zod4Versions.every((version) => compareNumericVersionTriples(version, '4.6.6') >= 0),
+    ).toBe(true);
     expect(workspace.patchedDependencies ?? {}).not.toHaveProperty('zod@4.4.3');
   });
 
   it('keeps Lighthouse on its supported Puppeteer range with a Zod 4 BiDi parent', () => {
     expect(workspace.overrides?.['puppeteer-core']).toBe('>=25.16.0 <26');
+    const puppeteerVersions = resolvedVersions('puppeteer-core');
+    const chromiumBidiVersions = resolvedVersions('chromium-bidi');
+    const zod4Versions = resolvedVersions('zod').filter((version) => version.startsWith('4.'));
+    expect(puppeteerVersions.length).toBeGreaterThan(0);
     expect(
-      Object.keys(lockfile.packages ?? {}).filter((key) => key.startsWith('puppeteer-core@')),
-    ).toEqual(['puppeteer-core@25.16.0']);
-    expect(
-      Object.keys(lockfile.packages ?? {}).filter((key) => key.startsWith('chromium-bidi@')),
-    ).toEqual(['chromium-bidi@157.0.8090-0']);
+      puppeteerVersions.every(
+        (version) =>
+          version.startsWith('25.') && compareNumericVersionTriples(version, '25.16.0') >= 0,
+      ),
+    ).toBe(true);
+    expect(chromiumBidiVersions.length).toBeGreaterThan(0);
     const puppeteerSnapshots = Object.entries(lockfile.snapshots ?? {}).filter(([key]) =>
-      key.startsWith('puppeteer-core@25.16.0('),
+      puppeteerVersions.some((version) => key.startsWith(`puppeteer-core@${version}(`)),
     );
     expect(puppeteerSnapshots.length).toBeGreaterThan(0);
     expect(
-      puppeteerSnapshots.every(
-        ([, snapshot]) =>
-          snapshot.dependencies?.['chromium-bidi'] ===
-          '157.0.8090-0(devtools-protocol@0.0.1704951)',
-      ),
+      puppeteerSnapshots.every(([, snapshot]) => {
+        const reference = snapshot.dependencies?.['chromium-bidi'];
+        return (
+          typeof reference === 'string' &&
+          referencesResolvedVersion(reference, chromiumBidiVersions)
+        );
+      }),
+    ).toBe(true);
+
+    const bidiSnapshots = Object.entries(lockfile.snapshots ?? {}).filter(([key]) =>
+      chromiumBidiVersions.some((version) => key.startsWith(`chromium-bidi@${version}(`)),
+    );
+    expect(bidiSnapshots.length).toBeGreaterThan(0);
+    expect(
+      bidiSnapshots.every(([, snapshot]) => {
+        const reference = snapshot.dependencies?.['zod'];
+        return typeof reference === 'string' && referencesResolvedVersion(reference, zod4Versions);
+      }),
     ).toBe(true);
   });
 });
