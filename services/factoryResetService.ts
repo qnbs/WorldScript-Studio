@@ -17,6 +17,7 @@ import {
 import { invalidatePersistedEditorEpoch } from './editorProjectGeneration';
 import type { TauriApis } from './fs/fsCore';
 import { logger } from './logger';
+import { clearAppOwnedWebStorage } from './storage/appOwnedWebStorage';
 import { beginIdbReset, endIdbReset } from './storage/idbResetGate';
 import { isTauriRuntime } from './tauriRuntime';
 
@@ -119,12 +120,16 @@ function deleteDatabase(name: string): Promise<void> {
 
 async function clearServiceWorkerCaches(): Promise<void> {
   if (!('caches' in globalThis)) return;
-  try {
-    const keys = await caches.keys();
-    // QNBS-v3: only delete this app's own caches — a shared origin can host unrelated caches this user-triggered reset must never touch.
-    await Promise.all(keys.filter(isWorldScriptOwnedCacheName).map((k) => caches.delete(k)));
-  } catch {
-    // Non-fatal — caches cleared on next SW registration
+  const cacheStorage = globalThis.caches;
+  const keys = await cacheStorage.keys();
+  // QNBS-v3: only delete this app's own caches — a shared origin can host unrelated caches this user-triggered reset must never touch.
+  await Promise.allSettled(
+    keys.filter(isWorldScriptOwnedCacheName).map((name) => cacheStorage.delete(name)),
+  );
+  // QNBS-v3: delete(false) and rejected requests are inconclusive until a fresh enumeration proves no owned cache remains; failure keeps the app open so reset can be retried.
+  const remaining = (await cacheStorage.keys()).filter(isWorldScriptOwnedCacheName);
+  if (remaining.length > 0) {
+    throw new Error('Factory reset could not clear all app-owned browser caches');
   }
 }
 
@@ -231,12 +236,7 @@ export async function wipeAllAppData(): Promise<void> {
     await clearTauriAppData();
     await deleteAllIndexedDBDatabases();
     await clearServiceWorkerCaches();
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch {
-      // Private browsing may throw
-    }
+    clearAppOwnedWebStorage();
     // Small delay so async IDB deletions can settle before unload.
     await new Promise((r) => setTimeout(r, 300));
     sanitizeViewCarryingUrlState();

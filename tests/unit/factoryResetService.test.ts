@@ -10,6 +10,10 @@ import {
 } from '../../app/persistenceCoordinator';
 import { isFactoryResetInProgress, wipeAllAppData } from '../../services/factoryResetService';
 import { logger } from '../../services/logger';
+import {
+  APP_OWNED_LOCAL_STORAGE_KEYS,
+  APP_OWNED_SESSION_STORAGE_KEYS,
+} from '../../services/storage/appOwnedWebStorage';
 
 const mockIsTauriRuntime = vi.fn(() => false);
 const mockLoadTauriApis = vi.fn();
@@ -54,6 +58,8 @@ async function runWipe(): Promise<void> {
   vi.useFakeTimers();
   try {
     const done = wipeAllAppData();
+    // Attach before advancing timers so an expected reset failure is never reported as an unhandled rejection.
+    void done.catch(() => undefined);
     await vi.runAllTimersAsync();
     await done;
   } finally {
@@ -83,16 +89,31 @@ afterEach(() => {
 });
 
 describe('wipeAllAppData', () => {
-  it('clears web storage, deletes IDB databases, and reloads', async () => {
+  it('removes known app storage but preserves foreign keys on the shared origin', async () => {
     await createDb('worldscript-data-db');
-    localStorage.setItem('foo', 'bar');
-    sessionStorage.setItem('baz', 'qux');
+    const appLocalKeys = [
+      ...APP_OWNED_LOCAL_STORAGE_KEYS,
+      'worldscript-sw-installed:http://localhost:3000/WorldScript-Studio/sw.js',
+    ];
+    const appSessionKeys = APP_OWNED_SESSION_STORAGE_KEYS;
+    for (const key of appLocalKeys) localStorage.setItem(key, 'app-value');
+    for (const key of appSessionKeys) sessionStorage.setItem(key, 'app-value');
+    localStorage.setItem('foreign-tool:key', 'preserve-local');
+    localStorage.setItem('worldscript-foreign-tool:key', 'preserve-prefixed-local');
+    sessionStorage.setItem('foreign-tool:key', 'preserve-session');
+    sessionStorage.setItem('worldscript-foreign-tool:key', 'preserve-prefixed-session');
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
 
     await runWipe();
 
-    expect(localStorage.getItem('foo')).toBeNull();
-    expect(sessionStorage.getItem('baz')).toBeNull();
+    for (const key of appLocalKeys) expect(localStorage.getItem(key)).toBeNull();
+    for (const key of appSessionKeys) expect(sessionStorage.getItem(key)).toBeNull();
+    expect(localStorage.getItem('foreign-tool:key')).toBe('preserve-local');
+    expect(localStorage.getItem('worldscript-foreign-tool:key')).toBe('preserve-prefixed-local');
+    expect(sessionStorage.getItem('foreign-tool:key')).toBe('preserve-session');
+    expect(sessionStorage.getItem('worldscript-foreign-tool:key')).toBe(
+      'preserve-prefixed-session',
+    );
     expect(delSpy).toHaveBeenCalledWith('worldscript-data-db');
     expect(reloadMock).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledTimes(1);
@@ -414,12 +435,32 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
+  it.each([
+    ['false result', vi.fn().mockResolvedValue(false)],
+    ['rejection', vi.fn().mockRejectedValue(new Error('cache deletion failed'))],
+  ])('does not reload after an owned cache deletion %s', async (_outcome, del) => {
+    const keys = vi.fn().mockResolvedValue(['worldscript-static-v1.28.2']);
+    vi.stubGlobal('caches', { keys, delete: del });
+
+    await expect(runWipe()).rejects.toThrow(
+      'Factory reset could not clear all app-owned browser caches',
+    );
+
+    expect(keys).toHaveBeenCalledTimes(2);
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+  });
+
   it("clears this app's own service-worker caches when the Cache API is available", async () => {
-    const del = vi.fn().mockResolvedValue(true);
+    const remainingCaches = ['worldscript-static-v1.28.2', 'worldscript-dynamic-v1.28.2'];
+    const del = vi.fn(async (name: string) => {
+      const index = remainingCaches.indexOf(name);
+      if (index < 0) return false;
+      remainingCaches.splice(index, 1);
+      return true;
+    });
     vi.stubGlobal('caches', {
-      keys: vi
-        .fn()
-        .mockResolvedValue(['worldscript-static-v1.28.2', 'worldscript-dynamic-v1.28.2']),
+      keys: vi.fn(async () => [...remainingCaches]),
       delete: del,
     });
 
@@ -432,11 +473,15 @@ describe('wipeAllAppData', () => {
 
   // QNBS-v3: a shared origin can host caches from an unrelated app/tool — factory reset must never delete them.
   it('never deletes a foreign, non-owned cache on the shared origin', async () => {
-    const del = vi.fn().mockResolvedValue(true);
+    const remainingCaches = ['worldscript-static-v1.28.2', 'some-other-tools-analytics-cache'];
+    const del = vi.fn(async (name: string) => {
+      const index = remainingCaches.indexOf(name);
+      if (index < 0) return false;
+      remainingCaches.splice(index, 1);
+      return true;
+    });
     vi.stubGlobal('caches', {
-      keys: vi
-        .fn()
-        .mockResolvedValue(['worldscript-static-v1.28.2', 'some-other-tools-analytics-cache']),
+      keys: vi.fn(async () => [...remainingCaches]),
       delete: del,
     });
 
@@ -446,6 +491,7 @@ describe('wipeAllAppData', () => {
     expect(del).not.toHaveBeenCalledWith('some-other-tools-analytics-cache');
     expect(del).toHaveBeenCalledTimes(1);
     expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(remainingCaches).toEqual(['some-other-tools-analytics-cache']);
   });
 
   describe('desktop (Tauri) AppData clearing', () => {
