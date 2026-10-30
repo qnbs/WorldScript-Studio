@@ -18,6 +18,18 @@ type Lockfile = {
   };
 };
 
+function compareNumericVersionTriples(left: string, right: string): number {
+  const leftParts = left.split('.').map(Number);
+  const rightParts = right.split('.').map(Number);
+
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+
+  return 0;
+}
+
 // QNBS-v3: Vitest transforms import.meta.url to a non-file scheme, so fixtures resolve from its project cwd.
 const projectRoot = process.cwd();
 const packageManifest = JSON.parse(
@@ -32,19 +44,14 @@ describe('ip-address security dependency floor', () => {
   it('keeps socks on a patched, bounded 10.x lockfile release', () => {
     expect(workspace.overrides?.['ip-address']).toBe('>=10.7.4 <11');
 
-    const resolvedVersions = Object.keys(lockfile.packages ?? {}).flatMap((key) => {
-      const match = /^ip-address@(\d+\.\d+\.\d+)$/.exec(key);
-      return match?.[1] ? [match[1]] : [];
-    });
+    const resolvedVersions = Object.keys(lockfile.packages ?? {})
+      .filter((key) => key.startsWith('ip-address@'))
+      .map((key) => key.slice('ip-address@'.length));
     expect(resolvedVersions).toHaveLength(1);
 
     const version = resolvedVersions[0] ?? '';
-    const numericParts = version.split('.').map(Number);
-    const major = numericParts[0] ?? 0;
-    const minor = numericParts[1] ?? 0;
-    const patch = numericParts[2] ?? 0;
-    expect(major).toBe(10);
-    expect(minor > 7 || (minor === 7 && patch >= 4)).toBe(true);
+    expect(version).toMatch(/^10\.\d+\.\d+$/);
+    expect(compareNumericVersionTriples(version, '10.7.4')).toBeGreaterThanOrEqual(0);
     expect(lockfile.snapshots?.['socks@2.8.7']?.dependencies?.['ip-address']).toBe(version);
   });
 
