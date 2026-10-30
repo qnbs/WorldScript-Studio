@@ -1832,7 +1832,7 @@
   "settings.ai.localAi.fallbackIntro": "레이어를 사용할 수 없는 경우 Co-Pilot은 자동으로 다음 레이어를 시도합니다.",
   "settings.ai.localAi.fallbackLayer1": "WebGPU(WebLLM) — 가장 빠르고 최고의 품질; 유능한 GPU가 필요합니다.",
   "settings.ai.localAi.fallbackLayer2": "WASM(ONNX) — GPU를 사용할 수 없을 때 CPU에서 실행됩니다.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js — 경량 최후의 수단 생성기.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — 최후의 수단으로 사용하는 경량 생성기입니다. 이전 공유 캐시의 모델은 보존되지만 이 버전에서 재사용되지는 않습니다. 인터넷에 연결된 상태에서 Transformers.js를 한 번 사용해 모델을 WorldScript 캐시에 다운로드하세요. 그전까지 오프라인 AI는 휴리스틱 대체 기능을 사용할 수 있습니다.",
   "settings.ai.localAi.fallbackLayer4": "휴리스틱 — 모델을 실행할 수 없는 경우 항상 사용 가능한 오프라인 스텁입니다.",
   "settings.ai.localAi.fallbackTitle": "폴백 체인",
   "settings.ai.localAi.modelLabel.gemma3_1b": "젬마 3 1B(~0.8GB)",

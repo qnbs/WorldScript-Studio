@@ -1832,7 +1832,7 @@
   "settings.ai.localAi.fallbackIntro": "Quando un livello non è disponibile, il Co-Pilot prova automaticamente il successivo:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM): il più veloce e di qualità più alta; richiede una GPU capace.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX): viene eseguito sulla CPU quando non è disponibile una GPU.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js: generatore leggero come ultima risorsa.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — generatore leggero come ultima risorsa. I modelli nella vecchia cache condivisa vengono conservati, ma questa versione non li riutilizza. Usa Transformers.js una volta connesso a Internet per scaricare il modello nella cache di WorldScript; fino ad allora, l’IA offline potrebbe usare il fallback euristico.",
   "settings.ai.localAi.fallbackLayer4": "Euristica: ripiego offline sempre disponibile quando nessun modello può essere eseguito.",
   "settings.ai.localAi.fallbackTitle": "Catena di fallback",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0.8 GB)",

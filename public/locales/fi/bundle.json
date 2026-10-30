@@ -1832,7 +1832,7 @@
   "settings.ai.localAi.fallbackIntro": "Kun kerros ei ole käytettävissä, perämies yrittää automaattisesti seuraavaa:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) — nopein ja laadukkain; tarvitsee toimivan GPU:n.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) — toimii prosessorilla, kun grafiikkasuoritin ei ole käytettävissä.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js — kevyt viimeinen keino generaattori.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — kevyt generaattori viimeisenä vaihtoehtona. Vanhan jaetun välimuistin mallit säilyvät, mutta tämä versio ei käytä niitä uudelleen. Käytä Transformers.js:ää kerran verkkoyhteydessä, jotta malli latautuu WorldScriptin välimuistiin; siihen asti offline-tekoäly voi käyttää heuristista vararatkaisua.",
   "settings.ai.localAi.fallbackLayer4": "Heuristinen – aina saatavilla offline-tilassa, kun mikään malli ei voi toimia.",
   "settings.ai.localAi.fallbackTitle": "Varaketju",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0,8 Gt)",

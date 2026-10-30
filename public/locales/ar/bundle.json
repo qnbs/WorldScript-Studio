@@ -1832,7 +1832,7 @@
   "settings.ai.localAi.fallbackIntro": "When a layer is unavailable, the Co-Pilot automatically tries the next one:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) — fastest and highest quality; needs a capable GPU.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) — runs on the CPU when no GPU is available.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js — lightweight last-resort generator.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — مولّد خفيف كخيار أخير. تُحفظ النماذج الموجودة في الذاكرة المشتركة القديمة، لكن هذه النسخة لا تعيد استخدامها. استخدم Transformers.js مرة مع اتصال بالإنترنت لتنزيل النموذج إلى ذاكرة WorldScript؛ وإلى أن يحدث ذلك قد يلجأ الذكاء الاصطناعي دون اتصال إلى الاستدلال الإرشادي.",
   "settings.ai.localAi.fallbackLayer4": "Heuristic — always-available offline stub when no model can run.",
   "settings.ai.localAi.fallbackTitle": "Fallback chain",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0.8 GB)",

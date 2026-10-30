@@ -163,7 +163,7 @@
   "settings.ai.localAi.fallbackIntro": "Όταν ένα επίπεδο δεν είναι διαθέσιμο, ο Co-Pilot δοκιμάζει αυτόματα το επόμενο:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) — το ταχύτερο και υψηλότερης ποιότητας· χρειάζεται ικανή GPU.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) — εκτελείται στη CPU όταν δεν υπάρχει διαθέσιμη GPU.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js — ελαφρύς γεννήτορας ως τελευταία λύση.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — ελαφρύ μοντέλο ως έσχατη λύση. Τα παλαιότερα μοντέλα στην κοινόχρηστη μνήμη cache διατηρούνται, αλλά αυτή η έκδοση δεν τα χρησιμοποιεί ξανά. Χρησιμοποιήστε το Transformers.js μία φορά με σύνδεση στο διαδίκτυο για να ληφθεί το μοντέλο στην cache του WorldScript· μέχρι τότε, η λειτουργία AI χωρίς σύνδεση μπορεί να καταφύγει στις ευρετικές μεθόδους.",
   "settings.ai.localAi.fallbackLayer4": "Ευρετική — πάντα διαθέσιμο εφεδρικό εκτός σύνδεσης όταν κανένα μοντέλο δεν μπορεί να εκτελεστεί.",
   "settings.ai.localAi.fallbackTitle": "Αλυσίδα εφεδρείας",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0,8 GB)",

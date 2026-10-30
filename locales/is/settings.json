@@ -163,7 +163,7 @@
   "settings.ai.localAi.fallbackIntro": "Þegar lag er ekki tiltækt reynir aðstoðarflugmaðurinn sjálfkrafa næsta:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) — hraðasta og hæsta gæðaflokki; þarf hæfan GPU.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) — keyrir á örgjörvanum þegar enginn GPU er tiltækur.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js — léttur síðasta úrræði rafall.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — léttur textagjafi sem síðasta úrræði. Eldri líkön í sameiginlegu skyndiminni eru varðveitt en þessi útgáfa notar þau ekki aftur. Notaðu Transformers.js einu sinni með nettengingu svo líkanið hlaðist niður í skyndiminni WorldScript; þangað til gæti gervigreind án nettengingar notað heuríska varaúrræðið.",
   "settings.ai.localAi.fallbackLayer4": "Heuristic — alltaf tiltækur ótengdur stubbur þegar engin líkan getur keyrt.",
   "settings.ai.localAi.fallbackTitle": "Fallback keðja",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0,8 GB)",

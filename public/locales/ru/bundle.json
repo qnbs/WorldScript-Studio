@@ -1832,7 +1832,7 @@
   "settings.ai.localAi.fallbackIntro": "Если слой недоступен, второй пилот автоматически пробует следующий:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) — самый быстрый и качественный; нужен мощный графический процессор.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) — работает на ЦП, когда графический процессор недоступен.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js — легкий генератор последней инстанции.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — лёгкий генератор на крайний случай. Модели из старого общего кэша сохраняются, но эта версия их повторно не использует. Один раз запустите Transformers.js при подключении к интернету, чтобы загрузить модель в кэш WorldScript; до этого офлайн-ИИ может использовать эвристический резервный вариант.",
   "settings.ai.localAi.fallbackLayer4": "Эвристика — всегда доступная автономная заглушка, когда ни одна модель не может работать.",
   "settings.ai.localAi.fallbackTitle": "Резервная цепочка",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Джемма 3 1Б (~0,8 ГБ)",

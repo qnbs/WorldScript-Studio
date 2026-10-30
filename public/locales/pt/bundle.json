@@ -1832,7 +1832,7 @@
   "settings.ai.localAi.fallbackIntro": "Quando uma camada não está disponível, o Co-Pilot tenta automaticamente a seguinte:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) — o mais rápido e de maior qualidade; precisa de uma GPU capaz.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) — é executado na CPU quando não há GPU disponível.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js — gerador leve como último recurso.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — gerador leve como último recurso. Os modelos da cache partilhada antiga são mantidos, mas esta versão não os reutiliza. Use o Transformers.js uma vez com ligação à Internet para transferir o modelo para a cache do WorldScript; até lá, a IA offline pode recorrer à alternativa heurística.",
   "settings.ai.localAi.fallbackLayer4": "Heurística — recurso alternativo offline sempre disponível quando nenhum modelo pode ser executado.",
   "settings.ai.localAi.fallbackTitle": "Cadeia de recurso alternativo",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gema 3 1B (~0,8 GB)",

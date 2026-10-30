@@ -163,7 +163,7 @@
   "settings.ai.localAi.fallbackIntro": "ある層が利用できない場合、Co-Pilot は自動的に次の層を試します:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) — 最速かつ最高品質。高性能な GPU が必要です。",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) — GPU がない場合に CPU で実行されます。",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js — 軽量な最終手段のジェネレーター。",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — 最後の手段となる軽量ジェネレーターです。以前の共有キャッシュのモデルは保持されますが、このバージョンでは再利用されません。インターネット接続中に Transformers.js を一度使い、モデルを WorldScript のキャッシュにダウンロードしてください。それまでは、オフライン AI がヒューリスティックな代替処理を使う場合があります。",
   "settings.ai.localAi.fallbackLayer4": "ヒューリスティック — モデルを実行できない場合に常に利用できるオフラインのスタブ。",
   "settings.ai.localAi.fallbackTitle": "フォールバックチェーン",
   "settings.ai.localAi.modelLabel.gemma3_1b": "ジェマ 3 1B (~0.8 GB)",

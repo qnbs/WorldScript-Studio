@@ -163,7 +163,7 @@
   "settings.ai.localAi.fallbackIntro": "Ha egy réteg nem elérhető, a Co-Pilot automatikusan megpróbálja a következőt:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) – a leggyorsabb és legjobb minőség; képes GPU kell hozzá.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) – akkor fut a CPU-n, ha nem áll rendelkezésre GPU.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js – könnyű, utolsó lehetőség generátor.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — könnyű generátor végső lehetőségként. A régi megosztott gyorsítótár modelljei megmaradnak, de ez a verzió nem használja őket újra. Használd egyszer internetkapcsolattal a Transformers.js-t, hogy a modell letöltődjön a WorldScript gyorsítótárába; addig az offline AI a heurisztikus tartalékot használhatja.",
   "settings.ai.localAi.fallbackLayer4": "Heurisztikus – mindig elérhető offline csonk, amikor egyetlen modell sem fut.",
   "settings.ai.localAi.fallbackTitle": "Tartaléklánc",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0,8 GB)",

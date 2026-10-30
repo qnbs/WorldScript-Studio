@@ -163,7 +163,7 @@
   "settings.ai.localAi.fallbackIntro": "När ett lager inte är tillgängligt, försöker Co-Pilot automatiskt nästa:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) — snabbaste och högsta kvalitet; behöver en kapabel GPU.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) — körs på processorn när ingen GPU är tillgänglig.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js — lätt sista utvägsgenerator.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — lätt generator som sista utväg. Modeller från den äldre delade cachen sparas, men den här versionen återanvänder dem inte. Använd Transformers.js en gång med internetanslutning så att modellen hämtas till WorldScripts cache; tills dess kan offline-AI använda den heuristiska reservlösningen.",
   "settings.ai.localAi.fallbackLayer4": "Heuristisk — alltid tillgänglig offline-stub när ingen modell kan köras.",
   "settings.ai.localAi.fallbackTitle": "Reservkedja",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0,8 GB)",

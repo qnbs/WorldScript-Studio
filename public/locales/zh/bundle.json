@@ -1832,7 +1832,7 @@
   "settings.ai.localAi.fallbackIntro": "当某一层不可用时，Co-Pilot 会自动尝试下一层：",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM)——最快且质量最高；需要强劲的 GPU。",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX)——在没有 GPU 时于 CPU 上运行。",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js——轻量级的最后备用生成器。",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — 作为最后手段的轻量生成器。旧共享缓存中的模型会保留，但此版本不会重新使用它们。请在联网时使用一次 Transformers.js，将模型下载到 WorldScript 缓存；在此之前，离线 AI 可能会使用启发式备用方案。",
   "settings.ai.localAi.fallbackLayer4": "启发式——当没有模型可运行时始终可用的离线兜底。",
   "settings.ai.localAi.fallbackTitle": "回退链",
   "settings.ai.localAi.modelLabel.gemma3_1b": "杰玛 3 1B (~0.8 GB)",

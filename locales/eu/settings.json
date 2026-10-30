@@ -163,7 +163,7 @@
   "settings.ai.localAi.fallbackIntro": "Geruza bat erabilgarri ez dagoenean, kopilotuak automatikoki hurrengoa probatzen du:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) - azkarrena eta kalitate gorenekoa; GPU gai bat behar du.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) - CPUan exekutatzen da GPUrik ez dagoenean.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js - azken baliabideko sorgailu arina.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — azken aukera gisa erabiltzen den sorgailu arina. Partekatutako cache zaharreko ereduak gordetzen dira, baina bertsio honek ez ditu berrerabiltzen. Erabili Transformers.js behin Internetera konektatuta, eredua WorldScripten cachean deskargatzeko; ordura arte, lineaz kanpoko IAk heuristikara jo dezake.",
   "settings.ai.localAi.fallbackLayer4": "Heuristikoa: beti eskuragarri dago lineaz kanpoko zirriborroa, modelorik ezin denean exekutatu.",
   "settings.ai.localAi.fallbackTitle": "Fallback katea",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0,8 GB)",

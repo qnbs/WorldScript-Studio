@@ -1832,7 +1832,7 @@
   "settings.ai.localAi.fallbackIntro": "هنگامی که یک لایه در دسترس نباشد، Co-Pilot به طور خودکار لایه بعدی را امتحان می کند:",
   "settings.ai.localAi.fallbackLayer1": "WebGPU (WebLLM) - سریعترین و با کیفیت ترین. به یک GPU توانمند نیاز دارد.",
   "settings.ai.localAi.fallbackLayer2": "WASM (ONNX) - زمانی که هیچ GPU در دسترس نباشد روی CPU اجرا می شود.",
-  "settings.ai.localAi.fallbackLayer3": "Transformers.js - مولد آخرین گزینه سبک وزن.",
+  "settings.ai.localAi.fallbackLayer3": "Transformers.js — مولد سبک به‌عنوان آخرین گزینه. مدل‌های موجود در حافظهٔ نهان مشترک قدیمی حفظ می‌شوند، اما این نسخه دوباره از آن‌ها استفاده نمی‌کند. یک‌بار در حالت آنلاین از Transformers.js استفاده کنید تا مدل در حافظهٔ نهان WorldScript بارگیری شود؛ تا آن زمان ممکن است هوش مصنوعی آفلاین از جایگزین اکتشافی استفاده کند.",
   "settings.ai.localAi.fallbackLayer4": "اکتشافی - خرد آفلاین همیشه در دسترس زمانی که هیچ مدلی نمی تواند اجرا شود.",
   "settings.ai.localAi.fallbackTitle": "زنجیره بازگشتی",
   "settings.ai.localAi.modelLabel.gemma3_1b": "Gemma 3 1B (~0.8 گیگابایت)",
