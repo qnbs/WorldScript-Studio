@@ -12,6 +12,7 @@ const xenovaState = vi.hoisted(() => ({
   pipelineImpl: undefined as
     | ((task: string, model: string, opts?: unknown) => Promise<unknown>)
     | undefined,
+  env: { cacheKey: 'transformers-cache', backends: { onnx: { wasm: { proxy: true } } } },
 }));
 
 // QNBS-v3: plain async fn over hoisted state — survives the global afterEach vi.restoreAllMocks()
@@ -33,7 +34,7 @@ vi.mock(
     get pipeline() {
       return xenovaState.pipelineImpl;
     },
-    env: { cacheKey: 'transformers-cache', backends: { onnx: { wasm: { proxy: true } } } },
+    env: xenovaState.env,
   }),
 );
 
@@ -64,6 +65,7 @@ describe('runLocalTextGeneration', () => {
   beforeEach(() => {
     mlcState.engineFn = undefined;
     xenovaState.pipelineImpl = undefined;
+    xenovaState.env.cacheKey = 'transformers-cache';
     tabLeaderState.result = true;
     removeNavigatorGpu();
   });
@@ -121,12 +123,13 @@ describe('runLocalTextGeneration', () => {
     xenovaState.pipelineImpl = async () => async () => [
       { generated_text: 'test promptONNX generated' },
     ];
+    // QNBS-v3: Re-import the lazy proxy here so this oracle observes its initialization, not a prior test's cached module.
+    vi.resetModules();
     const { runLocalTextGeneration } = await import('../../packages/ai-core/src/index');
     const result = await runLocalTextGeneration('test prompt');
     expect(result.layer).toBe('onnx');
     expect(result.text).toBe('ONNX generated');
-    const { env } = await import('../../packages/ai-core/src/vendor-transformers');
-    expect(env.cacheKey).toBe('worldscript-transformers-cache');
+    expect(xenovaState.env.cacheKey).toBe('worldscript-transformers-cache');
   });
 
   it('calls onProgress during WebLLM init', async () => {
