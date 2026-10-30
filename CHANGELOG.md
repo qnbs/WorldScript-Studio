@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Security (DOMPurify):** Updated the shipped HTML sanitizer from 3.4.16 to 3.4.17, including
-  jsPDF's optional copy, for XHTML/SVG, shadow-root template and detached-hook fixes (PR #1145, #1132).
-  Four dependency regression cases now cover these upstream security boundaries.
+- **Security (dependencies):** Updated the shipped HTML sanitizer to DOMPurify 3.4.17, including
+  jsPDF's optional copy, for XHTML/SVG, shadow-root template and detached-hook fixes. Raised the
+  LHCI-only `ip-address` dependency floor to 10.7.4 for GHSA-rxp7-6hxx-x8q5 (PR #1145, #1132).
+  Focused sanitizer regressions and a transitive lockfile floor assertion cover both fixes.
 
 - **Post-release v1.29.2 truth sync:** removed the release-candidate markers from README.md and
   CHANGELOG.md now that the `v1.29.2` tag and GitHub Release are published, and recorded the real

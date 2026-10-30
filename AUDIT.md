@@ -1,20 +1,23 @@
 # WorldScript Studio — Codebase Audit Report
 
-**2026-10-22 DOMPurify follow-up (#1132):** raised the direct dependency and workspace override
-floor to 3.4.17 with a `<4` override cap preserving the app/jsPDF compatibility range. The lockfile
-updates only DOMPurify and jsPDF's optional DOMPurify reference.
+**2026-10-30 DOMPurify + ip-address follow-up (#1132):** raised the direct DOMPurify dependency
+and workspace floor to 3.4.17 with a `<4` override cap preserving the app/jsPDF compatibility
+range. The lockfile also updates the `ip-address` version used only by the Lighthouse CI dev-tooling
+chain (`@lhci/cli` → proxy agents → `socks`), bounded to the supported 10.x line.
 This addresses `GHSA-c6gr-qvv4-5v3f`, `GHSA-cg2g-xh64-v4q7` and `GHSA-mrv2-3pqr-j5jr`.
-The four dependency regression cases fail on 3.4.16 and pass on 3.4.17: XHTML SVG `attributeName`,
-split template expressions in attached shadow roots, and parent/sibling detachment by hooks.
-The app's examined sanitizer calls use string output without these special modes; these tests
-qualify the dependency boundary and do not establish a production exploit.
-
-The registry dates 3.4.17 to 2026-10-12, satisfying the seven-day gate. The downloaded tarball's
-SHA-512 integrity and package identity were checked before installation. Frozen reconciliation
-passed with the existing supply-chain policy; 31 focused tests passed under Node 22.23.4 and
-pnpm 12.13.0. A fresh scan of all three lockfiles reports no DOMPurify advisory, but still exits
-1 for the separate `ip-address@10.7.2` / `GHSA-rxp7-6hxx-x8q5` finding. That package and all OSV
-exceptions remain unchanged; this slice is not a claim that the complete security gate is green.
+The four DOMPurify dependency regressions fail on 3.4.16 and pass on 3.4.17: XHTML SVG
+`attributeName`, split template expressions in attached shadow roots, and parent/sibling detachment
+by hooks. The app's examined sanitizer calls use string output without these special modes; these
+tests qualify the dependency boundary and do not establish a production exploit. The separate OSV
+finding for `ip-address@10.7.2` was traced with `pnpm why` to LHCI dev tooling; no first-party source
+reference was found. npm registry metadata marks 10.7.4 fixed and dates it 2026-10-11, more than a
+week before this update. Its lockfile resolution carries the registry SHA-512
+`DWBMKyeM25D70nrIiTkgQth59/G+naKOTep6huF9j+GmeK3DMD60Zvxg5d5qQnz+38AHgou6ean2LECX+lrKDg==`.
+The pinned pnpm 12.13.0 frozen reconciliation passed the 1,672-entry supply-chain policy and
+dependency-state verification. The focused lockfile-floor/dev-only-path test and the four existing
+DOMPurify regression cases passed (6 tests total); the lockfile-floor assertion failed against the
+previous 10.7.2 lock entry before the update. The prior exact-head PR OSV check failed on 10.7.2;
+the updated exact-head OSV and full CI checks have not run yet.
 
 **2026-09-19 security follow-up (PR #778):** `adm-zip@0.6.1` became available after the dated
 `GHSA-vwc7-r8mq-g2x9` investigation below. The transitive override now uses `>=0.6.1`, removing
