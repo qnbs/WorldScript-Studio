@@ -34,7 +34,7 @@ minimumReleaseAgeExclude:
 # - axios: CVE-2024-XXXX - SSRF fix
 # - basic-ftp: CVE-2024-XXXX - path traversal fix
 # - fast-uri: GHSA-7p8r-x3mc-p8w7 - host confusion via backslash authority parsing (fixed 3.1.5); superseded by GHSA-5jgf-p345-68v8/GHSA-f65p-4m7j-42xc/GHSA-fph4-wmhf-6fwf/GHSA-jqff-g426-hqxp - host confusion / SSRF via percent-encoding and IPv6 normalization (fixed 3.1.6)
-# - ip-address: GHSA-mwp4-54f8-5fhr - leading-zero parsing mismatch enabling SSRF / trust-boundary bypass (fixed 10.3.1)
+# - ip-address: GHSA-mwp4-54f8-5fhr - leading-zero parsing mismatch enabling SSRF / trust-boundary bypass (fixed 10.3.1); GHSA-rxp7-6hxx-x8q5 (fixed 10.7.4)
 # - ws: GHSA-96hv-2xvq-fx4p - memory-exhaustion DoS from tiny fragments (fixed 8.21.0)
 # - form-data: CRLF injection via unescaped boundary (fixed 4.0.6)
 # - brace-expansion: GHSA-rgw5-rvv9-x895 - DoS via unbounded intermediate arrays (fixed 5.0.9)
@@ -47,8 +47,8 @@ minimumReleaseAgeExclude:
 #     GHSA-gv7w-rqvm-qjhr - missing binary integrity verification (Deno module);
 #     GHSA-g7r4-m6w7-qqqr - Windows path traversal in the dev-server file handler (all fixed 0.28.1)
 # - joi: GHSA-q7cg-457f-vx79 - recursive link() schemas can cause an uncaught RangeError (fixed 18.2.1)
-# - dompurify: GHSA-55q2-fjhq-7xh7 + prior XSS/nesting fixes (fixed 3.4.13; the no-fix
-#     GHSA-x4vx-rjvf-j5p4 is accepted in src-tauri/osv-scanner.toml)
+# - dompurify: GHSA-c6gr-qvv4-5v3f / GHSA-cg2g-xh64-v4q7 / GHSA-mrv2-3pqr-j5jr -
+#     XHTML SVG href guards, shadow-root template scrubbing and detached-hook subtrees (fixed 3.4.17)
 # - @babel/core: GHSA-4x5r-pxfx-6jf8 - build-time transpiler advisory (fixed 7.29.6). Bounded to the
 #     7.x line (<8): react-docgen@8.0.3 (via storybook/@storybook/react-vite) declares "@babel/core":
 #     "^7.28.0" and calls the synchronous loadPartialConfig(), removed in Babel 8 in favor of
@@ -72,7 +72,7 @@ overrides:
   esbuild: ">=0.28.1"
   joi: ">=18.2.6 <19" # GHSA-6w3j-5fw6-r9vr + GHSA-gg4h-3hg2-grpc + GHSA-6h2x-m376-mqjq; capped at major 18 (wait-on's own declared range) so a future major can't force-install
   typescript: "6.0.3"
-  serialize-javascript: ">=7.0.3"
+  serialize-javascript: ">=7.1.3 <8" # GHSA-m5mm-p8h7-m29v (fixed in 7.1.3); keep the consumer major boundary
   chrome-launcher: "^1.2.1"
   tmp: ">=0.2.7"
   "@xmldom/xmldom": ">=0.9.12"
@@ -80,18 +80,20 @@ overrides:
   axios: ">=1.20.0" # 12 advisories on 1.19.0 incl. GHSA-542g-h47m-68v8 (fixed 1.20.0); dev-only via wait-on
   follow-redirects: "1.16.1" # GHSA-8r9p-f939-6h3c + GHSA-q3jh-wrc6-jgq8, credential headers kept across cross-origin redirects (fixed 1.16.1); transitive via axios and http-proxy
   basic-ftp: ">=6.2.1" # GHSA-c475-qrg2-pj4r (fixed 6.2.1); dev-only via @lhci/cli / lighthouse -> proxy-agent -> get-uri
-  fast-uri: ">=3.1.8 <4" # GHSA-hrr3-gc8f-f4qj (fixed 3.1.8); dev-only
-  ip-address: "10.7.2" # GHSA-2vr4-cq9g-pvrc + GHSA-rpw4-54j3-4h4q (fixed 10.5.1) + GHSA-h3mg-xc3c-68pw + GHSA-j6r3-76f7-8jcv (fixed 10.7.1); dev-only via @lhci/cli -> socks
+  fast-uri: ">=3.1.9 <4" # GHSA-333x-w4r6-6crp and three related advisories; dev-only
+  ip-address: ">=10.7.4 <11" # GHSA-rxp7-6hxx-x8q5 (fixed 10.7.4); bounded to 10.x; dev-only via @lhci/cli -> socks
   ws: ">=8.21.0"
   form-data: ">=4.0.6"
   brace-expansion: ">=5.0.12" # GHSA-6j4f-fj2g-mc7p + GHSA-qhr7-859c-m2p7 + GHSA-q2hr-2g5m-vwhr (fixed 5.0.10-5.0.12); dev-only
   # QNBS-v3: excludes the two exact unpatched releases (12.0.0, 13.0.0) a bare ">=11.1.1" floor would still permit; the resolved 14.0.1 already satisfies this.
   uuid: ">=11.1.1 <12.0.0 || >=12.0.1 <13.0.0 || >=13.0.1"
-  qs: ">=6.16.0"
+  qs: ">=6.16.1 <7" # GHSA-6pq8-jhm2-2vcw; keep the supported 6.x line
   fflate: ">=0.8.3"
-  dompurify: ">=3.4.16" # GHSA-p98j-92pf-mc4p (fixed 3.4.16); shipped runtime dependency
+  dompurify: ">=3.4.17 <4" # GHSA-c6gr-qvv4-5v3f / GHSA-cg2g-xh64-v4q7 / GHSA-mrv2-3pqr-j5jr; retain the app/jsPDF 3.x contract
   "@babel/core": ">=7.29.6 <8"
-  undici: ">=7.29.1 <8" # floor raised for GHSA-3wwx-pv8p-q78v (fixed 7.29.1); stays within 7.x (see header)
+  undici: ">=7.30.1 <8" # 8 current advisories fixed in 7.30.1; preserve the existing 7.x boundary
+  puppeteer-core: ">=25.16.0 <26" # Lighthouse accepts ^25.3.0; this patched parent moves chromium-bidi to Zod 4
+  zod@^4: ">=4.6.6 <5" # GHSA-mrhx-c7xc-m3w5; keep zod 3.x tooling peers on their compatible major
   js-yaml: ">=4.3.2 <5" # GHSA-2883-xcg3-v3hh (jest/babel-istanbul transitive, dev-only)
   nanoid@^3: "3.3.18"
   nanoid@^5: "5.1.16"
@@ -103,7 +105,7 @@ overrides:
   adm-zip: ">=0.6.1" # GHSA-xcpc-8h2w-3j85 + GHSA-7q85-xj36-vmfc + GHSA-vwc7-r8mq-g2x9 (onnxruntime-node)
   postcss: ">=8.5.18" # GHSA — path traversal in previous source map (vite/storybook chain)
   sharp: ">=0.35.5 <1" # GHSA-rgj7-g3m4-5g8c + GHSA-wq5f-xc86-pv6w (librsvg, fixed 0.35.5) + inherited libvips vulnerabilities (@huggingface/transformers, miniflare); capped below 1.x so a refresh cannot override consumers' 0.x constraints with a major
-  body-parser: ">=1.20.6 <2" # GHSA-v422-hmwv-36x6 — DoS via empty urlencoded body (express via @lhci/cli, dev-only)
+  body-parser: ">=1.20.9 <2" # GHSA-27r3-jxmh-p828 plus the prior 1.20.6 floor; @lhci/cli dev tooling
   compression: ">=1.8.2 <2" # GHSA-vc2v-76pw-4v95; @lhci/cli, dev-only
   proxy-addr: ">=2.0.8 <3" # GHSA-jqcg-44mw-7w3h; express via @lhci/cli, dev-only
   source-map-js: ">=1.2.2 <2" # GHSA-68fv-2mgg-jv7q; postcss/tailwind/css-tree/magicast
@@ -118,9 +120,6 @@ overrides:
 peerDependencyRules:
   allowedVersions:
     vite-plugin-pwa>vite: "8"
-
-patchedDependencies:
-  zod@4.4.3: patches/zod@4.4.3.patch
 
 packages:
   - "packages/*"
