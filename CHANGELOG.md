@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Fix (factory reset/recovery):** preserve foreign same-origin Web Storage, remove only verified app and legacy keys, and finish cache plus disposable-key cleanup before primary project deletion. Keep user-authored scene comments, legacy settings, LoRA metadata, writing progress, share-import payloads, and the IndexedDB encryption salt until dependent databases are confirmed deleted, so an earlier desktop failure does not discard those values or strand surviving ciphertext. Concurrent resets share one operation; failures after native or IndexedDB deletion begins are reported as potentially partial and keep writes fenced until restart. Startup recovery rejects IndexedDB errors or unresolved blocks instead of reloading as if deletion succeeded (PR #1147, #1125).
+
 - **Post-release v1.29.2 truth sync:** removed the release-candidate markers from README.md and
   CHANGELOG.md now that the `v1.29.2` tag and GitHub Release are published, and recorded the real
   release evidence in AUDIT.md, TODO.md and `docs/RELEASE-V1.29.2-EVIDENCE.md` (see `## [1.29.2]`

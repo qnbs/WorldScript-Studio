@@ -21,6 +21,7 @@ export interface StorageErrorCopy {
   recoveryUnknown: string;
   recoveryAlreadyPreserved: string;
   resetWarning: string;
+  resetFailed: string;
   safeOpen: string;
   safeOpenNotice: string;
 }
@@ -48,6 +49,8 @@ export const STARTUP_COPY_FALLBACKS: StorageErrorCopy = {
   recoveryAlreadyPreserved:
     'The project appears to have been preserved by another recovery attempt. Reload to continue.',
   resetWarning: 'Resetting the database will delete all local projects and settings.',
+  resetFailed:
+    'The reset did not complete and local data may have been removed. Restart the app before trying again.',
   safeOpen: 'Open WorldScript Studio without this project',
   safeOpenNotice:
     'This project stays on disk exactly as it is. It will not be opened or changed in this session, so a compatible build can still open it later.',
@@ -77,6 +80,7 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     recoveryUnknown,
     recoveryAlreadyPreserved,
     resetWarning,
+    resetFailed,
     safeOpen,
     safeOpenNotice,
   ] = await Promise.all([
@@ -114,6 +118,10 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
       STARTUP_COPY_FALLBACKS.recoveryAlreadyPreserved,
     ),
     startupTranslation('error.startup.resetWarning', STARTUP_COPY_FALLBACKS.resetWarning),
+    startupTranslation(
+      'settings.data.dangerZone.factoryReset.failed',
+      STARTUP_COPY_FALLBACKS.resetFailed,
+    ),
     startupTranslation('error.startup.safeOpen', STARTUP_COPY_FALLBACKS.safeOpen),
     startupTranslation('error.startup.safeOpenNotice', STARTUP_COPY_FALLBACKS.safeOpenNotice),
   ]);
@@ -134,6 +142,7 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     recoveryUnknown,
     recoveryAlreadyPreserved,
     resetWarning,
+    resetFailed,
     safeOpen,
     safeOpenNotice,
   };
@@ -360,14 +369,25 @@ function ResetButton({
 function ResetWarning({
   failureKind,
   onReset,
+  resetFailed,
   copy,
 }: {
   failureKind: StartupRecoveryFailureKind;
   onReset: (() => void) | undefined;
+  resetFailed: boolean;
   copy: StorageErrorCopy;
 }) {
   if (failureKind !== 'storage' || !onReset) return null;
-  return <p style={{ fontSize: '0.75rem', color: '#475569' }}>{copy.resetWarning}</p>;
+  return (
+    <>
+      {resetFailed && (
+        <p role="status" aria-live="polite" aria-atomic="true">
+          {copy.resetFailed}
+        </p>
+      )}
+      <p style={{ fontSize: '0.75rem', color: '#475569' }}>{copy.resetWarning}</p>
+    </>
+  );
 }
 
 // QNBS-v3: use explicit failure kinds so I/O retry, quarantine, and database reset cannot be inferred from callbacks.
@@ -381,7 +401,7 @@ export function StorageErrorScreen({
 }: {
   copy: StorageErrorCopy;
   failureKind: StartupRecoveryFailureKind;
-  onReset?: () => void;
+  onReset?: () => Promise<void> | void;
   onRecover?: () => Promise<void>;
   onRetry?: () => void;
   onSafeOpen?: () => Promise<void> | void;
@@ -389,6 +409,7 @@ export function StorageErrorScreen({
   const [recoveryStatus, setRecoveryStatus] = React.useState<RecoveryStatus>(null);
   const [isRecovering, setIsRecovering] = React.useState(false);
   const [isOpening, setIsOpening] = React.useState(false);
+  const [resetFailed, setResetFailed] = React.useState(false);
   const canSafeOpen = onSafeOpen !== undefined && isRefusedProjectFailure(failureKind);
 
   const handleSafeOpen = async () => {
@@ -428,6 +449,22 @@ export function StorageErrorScreen({
       return;
     }
     window.location.reload();
+  };
+
+  const handleReset = async () => {
+    if (!onReset || isRecovering) return;
+    setResetFailed(false);
+    setIsRecovering(true);
+    try {
+      await onReset();
+    } catch (error) {
+      logger.error('Startup database reset failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      setResetFailed(true);
+    } finally {
+      setIsRecovering(false);
+    }
   };
 
   return (
@@ -485,7 +522,7 @@ export function StorageErrorScreen({
         />
         <ResetButton
           failureKind={failureKind}
-          onReset={onReset}
+          onReset={onReset ? () => void handleReset() : undefined}
           isRecovering={isRecovering}
           copy={copy}
         />
@@ -498,7 +535,12 @@ export function StorageErrorScreen({
         recoveryStatus={recoveryStatus}
         copy={copy}
       />
-      <ResetWarning failureKind={failureKind} onReset={onReset} copy={copy} />
+      <ResetWarning
+        failureKind={failureKind}
+        onReset={onReset}
+        resetFailed={resetFailed}
+        copy={copy}
+      />
     </div>
   );
 }

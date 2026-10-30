@@ -17,6 +17,10 @@ import {
 import { invalidatePersistedEditorEpoch } from './editorProjectGeneration';
 import type { TauriApis } from './fs/fsCore';
 import { logger } from './logger';
+import {
+  clearAppOwnedWebStorage,
+  clearDeferredAppOwnedWebStorageAfterPrimaryDataDeletion,
+} from './storage/appOwnedWebStorage';
 import { beginIdbReset, endIdbReset } from './storage/idbResetGate';
 import { isTauriRuntime } from './tauriRuntime';
 
@@ -30,6 +34,26 @@ const DELETE_BLOCKED_TIMEOUT_MS = 3000;
 
 // QNBS-v3: set before any wipe work starts and never cleared -- the page is reloading regardless, and a false-negative window here is exactly the race (visibilitychange-triggered flush recreating a just-deleted database) this exists to close.
 let resetInProgress = false;
+// QNBS-v3: callers share one promise so a failing duplicate cannot release the shared reset gate while another wipe still runs.
+let activeFactoryReset: Promise<void> | null = null;
+// QNBS-v3: after a partial primary deletion, only a page reload can re-establish a trustworthy in-memory view of persisted state.
+let partialResetDetected = false;
+
+type FactoryResetOutcome = 'failed-before-primary-delete' | 'partial-reset';
+
+export class FactoryResetError extends Error {
+  readonly dataMayHaveBeenRemoved: boolean;
+
+  constructor(readonly outcome: FactoryResetOutcome) {
+    super(
+      outcome === 'partial-reset'
+        ? 'Factory reset stopped after primary data deletion began; data may have been removed. Restart the app before retrying.'
+        : 'Factory reset stopped before primary project data deletion began.',
+    );
+    this.name = 'FactoryResetError';
+    this.dataMayHaveBeenRemoved = outcome === 'partial-reset';
+  }
+}
 
 /** True once a factory reset has started; stays true until the reload actually happens. */
 export function isFactoryResetInProgress(): boolean {
@@ -119,12 +143,16 @@ function deleteDatabase(name: string): Promise<void> {
 
 async function clearServiceWorkerCaches(): Promise<void> {
   if (!('caches' in globalThis)) return;
-  try {
-    const keys = await caches.keys();
-    // QNBS-v3: only delete this app's own caches — a shared origin can host unrelated caches this user-triggered reset must never touch.
-    await Promise.all(keys.filter(isWorldScriptOwnedCacheName).map((k) => caches.delete(k)));
-  } catch {
-    // Non-fatal — caches cleared on next SW registration
+  const cacheStorage = globalThis.caches;
+  const keys = await cacheStorage.keys();
+  // QNBS-v3: only delete this app's own caches — a shared origin can host unrelated caches this user-triggered reset must never touch.
+  await Promise.allSettled(
+    keys.filter(isWorldScriptOwnedCacheName).map((name) => cacheStorage.delete(name)),
+  );
+  // QNBS-v3: delete(false) and rejected requests are inconclusive until a fresh enumeration proves no owned cache remains; failure keeps the app open so reset can be retried.
+  const remaining = (await cacheStorage.keys()).filter(isWorldScriptOwnedCacheName);
+  if (remaining.length > 0) {
+    throw new Error('Factory reset could not clear all app-owned browser caches');
   }
 }
 
@@ -178,7 +206,7 @@ async function assertNoActiveProjectLock(
   );
 }
 
-async function clearTauriAppData(): Promise<void> {
+async function clearTauriAppData(onDeletionStarted: () => void): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
     const { loadTauriApis, retryFs, PROJECT_LOCKS_DIR_NAME } = await import('./fs/fsCore');
@@ -194,6 +222,7 @@ async function clearTauriAppData(): Promise<void> {
         .filter((entryName): entryName is string => Boolean(entryName))) {
         try {
           const childPath = await apis.join(appDataPath, name);
+          onDeletionStarted();
           await retryFs(() => apis.remove(childPath, { recursive: true }));
         } catch (error) {
           firstError ??= error;
@@ -208,13 +237,26 @@ async function clearTauriAppData(): Promise<void> {
 }
 
 /**
- * Wipe all app data and reload.
- * Clears: IDB, localStorage, sessionStorage, SW caches.
- * After the reload the app starts as a fresh install.
+ * Wipe positively-owned app data and reload, preserving foreign and ambiguous shared-origin storage.
+ * User-authored content/settings and the IDB encryption salt are cleared only after primary deletion succeeds.
  */
-export async function wipeAllAppData(): Promise<void> {
+export function wipeAllAppData(): Promise<void> {
+  if (activeFactoryReset) return activeFactoryReset;
+  if (partialResetDetected) return Promise.reject(new FactoryResetError('partial-reset'));
+
+  const operation = performFactoryReset();
+  let trackedOperation: Promise<void>;
+  trackedOperation = operation.finally(() => {
+    if (activeFactoryReset === trackedOperation) activeFactoryReset = null;
+  });
+  activeFactoryReset = trackedOperation;
+  return trackedOperation;
+}
+
+async function performFactoryReset(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
   resetInProgress = true;
+  let primaryDeletionStarted = false;
   try {
     // QNBS-v3: a save enqueued (project or settings autosave, or a visibility/quit flush) before this flag flipped already passed its own guard check and will run regardless -- draining all four coordinators here lets it finish before deletion starts, instead of racing it. The last two cover the non-critical cross-project-index/DuckDB writes a project save fires off after its own enqueue() already resolved.
     await Promise.all([
@@ -227,24 +269,35 @@ export async function wipeAllAppData(): Promise<void> {
     invalidatePersistedEditorEpoch();
     // QNBS-v3: only after those four have genuinely drained -- beginIdbReset() force-closes every other long-lived IDB connection (9 modules), which must not happen while one of the four above is still mid-write. Awaited and can throw: it fails closed on any closer failure, so a rejection here skips straight to the catch below and deletion never starts on an unproven teardown.
     await beginIdbReset();
-    // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
-    await clearTauriAppData();
-    await deleteAllIndexedDBDatabases();
+    // QNBS-v3: finish fallible browser cleanup before deleting primary project stores, so a cache/storage failure never discards saved project data.
     await clearServiceWorkerCaches();
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch {
-      // Private browsing may throw
-    }
+    clearAppOwnedWebStorage();
+    await clearTauriAppData(() => {
+      primaryDeletionStarted = true;
+    });
+    primaryDeletionStarted = true;
+    await deleteAllIndexedDBDatabases();
+    clearDeferredAppOwnedWebStorageAfterPrimaryDataDeletion();
     // Small delay so async IDB deletions can settle before unload.
     await new Promise((r) => setTimeout(r, 300));
     sanitizeViewCarryingUrlState();
     window.location.reload();
-  } catch (error) {
-    // QNBS-v3: a failed reset never reloads, so the app keeps running -- both gates must release (endIdbReset() unconditionally, since beginIdbReset() can leave its own internal state marked in-progress even when it itself is what rejected), or every future save/open would stay silently blocked.
+  } catch {
+    // QNBS-v3: once native/IDB primary deletion starts, a later error cannot promise rollback; keep writes fenced until reload and report that data may already be gone. Before that boundary it is safe to release the gate for retry.
+    if (primaryDeletionStarted) partialResetDetected = true;
+    if (partialResetDetected) {
+      resetInProgress = true;
+      throw new FactoryResetError('partial-reset');
+    }
     resetInProgress = false;
     endIdbReset();
-    throw error;
+    throw new FactoryResetError('failed-before-primary-delete');
   }
+}
+
+// QNBS-v3: resets the module-scoped operation state between isolated unit cases; production callers must never invoke this.
+export function _resetFactoryResetStateForTest(): void {
+  resetInProgress = false;
+  activeFactoryReset = null;
+  partialResetDetected = false;
 }
