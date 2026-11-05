@@ -53,6 +53,8 @@ const fixedFloors = [
   { name: 'undici', minimumVersion: '7.30.1', major: '7', override: '>=7.30.1 <8' },
   { name: 'body-parser', minimumVersion: '1.20.9', major: '1', override: '>=1.20.9 <2' },
   { name: 'fast-uri', minimumVersion: '3.1.9', major: '3', override: '>=3.1.9 <4' },
+  { name: 'follow-redirects', minimumVersion: '1.16.2', major: '1', override: '>=1.16.2 <2' },
+  { name: 'joi', minimumVersion: '18.3.1', major: '18', override: '>=18.3.1 <19' },
   { name: 'qs', minimumVersion: '6.16.1', major: '6', override: '>=6.16.1 <7' },
   { name: 'serialize-javascript', minimumVersion: '7.1.3', major: '7', override: '>=7.1.3 <8' },
 ];
@@ -140,5 +142,41 @@ describe('OSV npm dependency floors', () => {
         return typeof reference === 'string' && referencesResolvedVersion(reference, zod4Versions);
       }),
     ).toBe(true);
+  });
+
+  it('binds each no-fix OSV ignore to the exact dev-only version it was reviewed for', () => {
+    const toml = readFileSync(resolve(projectRoot, 'src-tauri/osv-scanner.toml'), 'utf8');
+    const ignoreFor = (id: string): string | undefined =>
+      toml.split('[[IgnoredVulns]]').find((block) => block.includes(`id = "${id}"`));
+
+    const deepmerge = ignoreFor('GHSA-gcqx-w48m-w2h4');
+    const zod3 = ignoreFor('GHSA-mrhx-c7xc-m3w5');
+    expect(deepmerge).toMatch(/ignoreUntil = "2026-11-30T00:00:00Z"/);
+    expect(zod3).toMatch(/ignoreUntil = "2026-11-30T00:00:00Z"/);
+
+    // The ignores are only justified for exactly these resolved versions. A different resolution
+    // must re-open the review instead of silently inheriting the waiver.
+    expect(resolvedVersions('deepmerge')).toEqual(['4.3.1']);
+    expect(resolvedVersions('zod').filter((version) => version.startsWith('3.'))).toEqual([
+      '3.25.76',
+    ]);
+
+    // They stay dev-only: neither package may become a runtime dependency of the app.
+    expect(packageManifest.dependencies?.['deepmerge']).toBeUndefined();
+    expect(packageManifest.dependencies?.['@codecov/vite-plugin']).toBeUndefined();
+
+    // glob and minimatch are fixed only in new majors, so the waiver lasts while a vulnerable
+    // copy is resolved. Once every copy is patched, the ignore has to be removed.
+    for (const { id, name, fixed } of [
+      { id: 'GHSA-3g3m-2fjr-6pw4', name: 'glob', fixed: '14.0.2' },
+      { id: 'GHSA-g3hv-75wg-m249', name: 'minimatch', fixed: '11.0.1' },
+    ]) {
+      const block = ignoreFor(id);
+      expect(block).toMatch(/ignoreUntil = "2026-11-30T00:00:00Z"/);
+      expect(
+        resolvedVersions(name).some((version) => compareNumericVersionTriples(version, fixed) < 0),
+      ).toBe(true);
+      expect(packageManifest.dependencies?.[name]).toBeUndefined();
+    }
   });
 });

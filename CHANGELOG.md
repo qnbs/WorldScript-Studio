@@ -16,8 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fast-uri`, `qs` and `serialize-javascript`; upgraded only Zod 4 and moved Lighthouse's
   supported Puppeteer 25.x line to a release using Zod 4. Removed the OSV ignore for the
   withdrawn `sprintf-js` advisory while retaining the package. OSV Scanner 2.7.0 now reports
-  only unresolved `deepmerge@4.3.1` and Zod 3 findings; the global gate remains blocked and is
-  tracked in [#1146](https://github.com/qnbs/WorldScript-Studio/issues/1146) (PR #1149).
+  `deepmerge@4.3.1` and `zod@3.25.76`, plus `glob` and `minimatch` advisories published on
+  2026-10-30 that are fixed only in new majors. Also raised `follow-redirects` (>=1.16.2) and `joi`
+  (>=18.3.1). None of the four remaining packages has a compatible fix and all are reachable only
+  through devDependencies, so they carry time-bounded OSV ignores (until 2026-11-30) that a
+  test ties to the resolved lockfile; the incident stays tracked in
+  [#1146](https://github.com/qnbs/WorldScript-Studio/issues/1146) (PR #1149).
 
 - **Post-release v1.29.2 truth sync:** removed the release-candidate markers from README.md and
   CHANGELOG.md now that the `v1.29.2` tag and GitHub Release are published, and recorded the real

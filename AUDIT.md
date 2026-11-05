@@ -1,5 +1,29 @@
 # WorldScript Studio — Codebase Audit Report
 
+**2026-11-05 OSV residue: `deepmerge@4.3.1` and `zod@3.25.76` (#1146, PR #1149):** after the
+bounded floors in this PR, OSV Scanner reports exactly two pnpm findings, both without a compatible
+fix. `GHSA-gcqx-w48m-w2h4` (low, `deepmerge` `mergeObject` prototype poisoning) has
+`first_patched_version: null`; the package is reached only through `@rollup/plugin-node-resolve`
+(`workbox-build` <- `vite-plugin-pwa`, build time) and `jest-config` (`@storybook/test-runner`,
+test time). `GHSA-mrhx-c7xc-m3w5` (high, memory exhaustion on oversized constrained collections) is
+fixed only in `zod@4.6.6`; the 3.25.76 copy is required by `@codecov/bundler-plugin-core@2.0.1`
+(`^3.22.4`) through `@codecov/vite-plugin`, which validates its own build-time options. `pnpm why`
+shows only devDependency paths for both. Maintainer approval (2026-11-05) for time-bounded ignores
+in `src-tauri/osv-scanner.toml` until 2026-11-30, aligned with the existing review date. No global
+Zod-major override and no tool removal: a Zod 3 -> 4 override on a package that declares `^3` is
+unproven, and dropping the Codecov bundle analysis was not needed. `osvNpmDependencyFloors.test.ts`
+pins each waiver to the exact resolved version and to devDependency status, so a different
+resolution re-opens the review. Retire each ignore as soon as its parent ships a fix.
+
+**Addendum 2026-11-05 (advisories published 2026-10-30):** `follow-redirects` (GHSA-mrwp-f3q8-3g9p,
+fixed 1.16.2) and `joi` (GHSA-4528-x5fx-h6hg, fixed 18.3.1) were raised in place within their major.
+`glob` (GHSA-3g3m-2fjr-6pw4, medium, fixed only in 14.0.2) and `minimatch` (GHSA-g3hv-75wg-m249,
+medium, fixed only in 11.0.1) have no fix inside the resolved majors (glob 10/11/13, minimatch
+3/5/9/10); every copy is a devDependency. A blanket override to the new majors cannot be verified
+locally against jest, `@storybook/test-runner`, workbox-build, `@lhci/cli` and the coverage chain,
+so both carry the same maintainer-approved ignore until 2026-11-30. The test fails once no
+vulnerable copy is resolved, which forces the ignore out.
+
 **2026-10-30 DOMPurify + ip-address follow-up (#1132):** raised the direct DOMPurify dependency
 and workspace floor to 3.4.17 with a `<4` override cap preserving the app/jsPDF compatibility
 range. The lockfile also updates the `ip-address` version used only by the Lighthouse CI dev-tooling

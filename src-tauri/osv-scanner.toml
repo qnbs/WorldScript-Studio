@@ -1,6 +1,6 @@
 # osv-scanner ignore list for src-tauri/Cargo.lock + crates/Cargo.lock + pnpm-lock.yaml
 # All entries have been evaluated and accepted by the maintainer.
-# Reviewed: 2026-09-20 (Rust) / 2026-09-19 (npm) / 2026-10-20 (zbus family, #911)
+# Reviewed: 2026-09-20 (Rust) / 2026-09-19 (npm) / 2026-10-20 (zbus family, #911) / 2026-11-05 (npm deepmerge + zod 3, #1146)
 
 # ─── GTK3 Rust bindings (Linux WebKit stack) ────────────────────────────────
 # webkit2gtk 2.0.2 (required by wry 0.55.x / Tauri 2.x for Linux) depends on
@@ -118,6 +118,34 @@ reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; 
 # defense-in-depth for the transitive package's install-time lifecycle script. npm registry
 # metadata dates 0.6.1 to 2026-09-11; a direct 0.6.0/0.6.1 tarball comparison confirmed the
 # extraction fix's `assertPathSafe`/`lstat` rejection of pre-existing symlink components.
+
+# ─── npm build/test tooling without a compatible fix (2026-11-05, #1146 / #1149) ───
+# These packages are reachable only through devDependencies (verified with
+# `pnpm why`); neither is bundled into the shipped PWA or the Tauri frontend.
+# deepmerge and zod 3 are bound to the exact resolved version by
+# tests/unit/security/osvNpmDependencyFloors.test.ts; glob and minimatch fail the
+# test once no vulnerable copy remains. Either way the entry has to be re-evaluated
+# or removed instead of silently outliving its reason.
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "deepmerge 4.3.1 (low, mergeObject prototype poisoning): no patched release exists (first_patched_version null). Dev-only: @rollup/plugin-node-resolve 16.0.3 <- workbox-build <- vite-plugin-pwa (build time) and jest-config 30.5.1 <- @storybook/test-runner (test time). Both merge trusted, repository-owned configuration objects; no user, manuscript or network data reaches mergeObject. Re-evaluate when deepmerge or either parent ships a fix."
+
+[[IgnoredVulns]]
+id = "GHSA-mrhx-c7xc-m3w5"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "zod 3.25.76 (high, memory exhaustion validating oversized constrained collections): fixed only in 4.6.6, no 3.x release. Dev-only: @codecov/bundler-plugin-core 2.0.1 <- @codecov/vite-plugin 2.0.1 requires zod ^3.22.4 and validates its own build-time plugin options, which this repository controls. All Zod 4 consumers (the shipped app, chromium-bidi via Lighthouse) are overridden to >=4.6.6 <5. Re-evaluate when @codecov/bundler-plugin-core moves to Zod 4."
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "glob (medium, AbortSignal cancellation bypass allows filesystem traversal after a timeout) in the 10.5.0, 11.1.0 and 13.0.6 lines: fixed only in glob 14.0.2, a new major whose API the dev tooling parents (jest/@storybook/test-runner, workbox-build, @lhci/cli, rimraf/test-exclude chains) do not declare. Dev-only: every resolved copy is reached through devDependencies and only walks repository-owned paths at build/test time with no caller-supplied AbortSignal. Re-evaluate when the parents accept glob >=14.0.2; a blanket major override was rejected as unverifiable."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "minimatch (medium, DoS via globparts amplification) in the 3.1.5, 5.1.9, 9.0.9 and 10.2.6 lines: fixed only in minimatch 11.0.1, a new major that dev-tooling parents do not declare. Dev-only: every resolved copy is reached through devDependencies and matches repository-owned patterns at build/test time; no attacker-controlled glob pattern reaches it. Re-evaluate when the parents accept minimatch >=11.0.1; a blanket major override was rejected as unverifiable."
 
 # Historical note: the 2026-09-10 investigation found no patched release for
 # GHSA-vwc7-r8mq-g2x9 at that time. The 2026-09-19 `pnpm audit --json` output
