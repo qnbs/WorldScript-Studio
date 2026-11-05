@@ -9,8 +9,8 @@ import {
   isAffected,
   type Lockfile,
   parentPackages,
+  parseKey,
   productionReachable,
-  splitKey,
 } from './lockfileGraph';
 
 type PackageManifest = {
@@ -229,7 +229,7 @@ describe('OSV npm dependency floors', () => {
       );
       for (const version of affected) {
         expect(
-          parentPackages(lockfile, rule.name, version),
+          parentPackages(lockfile, { name: rule.name, version }),
           `${rule.name}@${version} parents`,
         ).toEqual(rule.reviewedParents[version]);
       }
@@ -244,7 +244,7 @@ describe('OSV npm dependency floors', () => {
     const reachable = productionReachable(lockfile);
     for (const rule of waivedAdvisories) {
       const hits = [...reachable].filter((key) => {
-        const [name, version] = splitKey(key);
+        const { name, version } = parseKey(key);
         return name === rule.name && isAffected(version, rule);
       });
       expect(hits, `${rule.name} reachable from production roots`).toEqual([]);

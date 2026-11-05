@@ -40,17 +40,16 @@ export function isAffected(version: string, rule: AffectedRule): boolean {
   return compareNumericVersionTriples(version, rule.lastAffected) <= 0;
 }
 
-export function bareKey(key: string): string {
-  return key.split('(')[0] ?? key;
-}
+export type PackageRef = { name: string; version: string };
 
-export function splitKey(key: string): [string, string] {
-  const bare = bareKey(key);
+/** Parses a lockfile key such as `name@1.2.3(peer@4.5.6)` into its package reference. */
+export function parseKey(key: string): PackageRef {
+  const bare = key.split('(')[0] ?? key;
   const at = bare.lastIndexOf('@');
-  return [bare.slice(0, at), bare.slice(at + 1)];
+  return { name: bare.slice(0, at), version: bare.slice(at + 1) };
 }
 
-const isRegistryKey = (key: string): boolean => !key.includes('@link:');
+const registryOnly = (key: string): boolean => !key.includes('@link:');
 
 function importerRoots(importer: Importer): string[] {
   return SECTIONS.flatMap((section) =>
@@ -61,7 +60,7 @@ function importerRoots(importer: Importer): string[] {
 function childKeys(snapshot: Snapshot | undefined): string[] {
   return SECTIONS.flatMap((section) =>
     Object.entries(snapshot?.[section] ?? {}).map(([name, reference]) => `${name}@${reference}`),
-  ).filter(isRegistryKey);
+  ).filter(registryOnly);
 }
 
 /**
@@ -73,24 +72,28 @@ export function productionReachable(lockfile: Lockfile): Set<string> {
   const seen = new Set<string>();
   const stack = Object.values(lockfile.importers ?? {})
     .flatMap(importerRoots)
-    .filter(isRegistryKey);
+    .filter(registryOnly);
   for (let key = stack.pop(); key !== undefined; key = stack.pop()) {
     if (seen.has(key)) continue;
     seen.add(key);
     stack.push(...childKeys(lockfile.snapshots?.[key]));
   }
-  return new Set([...seen].map(bareKey));
+  return new Set(
+    [...seen].map((key) => {
+      const ref = parseKey(key);
+      return `${ref.name}@${ref.version}`;
+    }),
+  );
 }
 
-function referencesVersion(reference: string | undefined, version: string): boolean {
-  return reference === version || (reference?.startsWith(`${version}(`) ?? false);
+function referencesVersion(dependencies: Record<string, string> | undefined, ref: PackageRef) {
+  const reference = dependencies?.[ref.name];
+  return reference === ref.version || (reference?.startsWith(`${ref.version}(`) ?? false);
 }
 
-export function parentPackages(lockfile: Lockfile, name: string, version: string): string[] {
+export function parentPackages(lockfile: Lockfile, ref: PackageRef): string[] {
   const parents = Object.entries(lockfile.snapshots ?? {})
-    .filter(([, snapshot]) =>
-      SECTIONS.some((section) => referencesVersion(snapshot[section]?.[name], version)),
-    )
-    .map(([key]) => splitKey(key)[0]);
+    .filter(([, snapshot]) => SECTIONS.some((section) => referencesVersion(snapshot[section], ref)))
+    .map(([key]) => parseKey(key).name);
   return [...new Set(parents)].sort();
 }
