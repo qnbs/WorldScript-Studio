@@ -3,6 +3,15 @@ import { resolve } from 'node:path';
 import process from 'node:process';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import {
+  type AffectedRule,
+  compareNumericVersionTriples,
+  isAffected,
+  type Lockfile,
+  parentPackages,
+  productionReachable,
+  splitKey,
+} from './lockfileGraph';
 
 type PackageManifest = {
   dependencies?: Record<string, string>;
@@ -12,33 +21,6 @@ type WorkspaceConfig = {
   overrides?: Record<string, string>;
   patchedDependencies?: Record<string, string>;
 };
-
-type Lockfile = {
-  importers?: Record<
-    string,
-    {
-      dependencies?: Record<string, { version: string }>;
-      optionalDependencies?: Record<string, { version: string }>;
-    }
-  >;
-  packages?: Record<string, unknown>;
-  snapshots?: Record<
-    string,
-    { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string> }
-  >;
-};
-
-function compareNumericVersionTriples(left: string, right: string): number {
-  const leftParts = left.split('.').map(Number);
-  const rightParts = right.split('.').map(Number);
-
-  for (let index = 0; index < 3; index += 1) {
-    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-    if (difference !== 0) return difference;
-  }
-
-  return 0;
-}
 
 function resolvedVersions(packageName: string): string[] {
   return Object.keys(lockfile.packages ?? {})
@@ -68,63 +50,6 @@ const fixedFloors = [
   { name: 'qs', minimumVersion: '6.16.1', major: '6', override: '>=6.16.1 <7' },
   { name: 'serialize-javascript', minimumVersion: '7.1.3', major: '7', override: '>=7.1.3 <8' },
 ];
-
-type AffectedRule = { name: string; introduced: string; fixed?: string; lastAffected?: string };
-
-function isAffected(version: string, rule: AffectedRule): boolean {
-  if (compareNumericVersionTriples(version, rule.introduced) < 0) return false;
-  if (rule.fixed !== undefined) return compareNumericVersionTriples(version, rule.fixed) < 0;
-  if (rule.lastAffected !== undefined) {
-    return compareNumericVersionTriples(version, rule.lastAffected) <= 0;
-  }
-  return true;
-}
-
-function splitKey(key: string): [string, string] {
-  const bare = key.split('(')[0] ?? key;
-  const at = bare.lastIndexOf('@');
-  return [bare.slice(0, at), bare.slice(at + 1)];
-}
-
-function parentPackages(name: string, version: string): string[] {
-  const parents = new Set<string>();
-  for (const [key, snapshot] of Object.entries(lockfile.snapshots ?? {})) {
-    for (const section of [snapshot.dependencies, snapshot.optionalDependencies]) {
-      const reference = section?.[name];
-      if (
-        typeof reference === 'string' &&
-        (reference === version || reference.startsWith(`${version}(`))
-      ) {
-        parents.add(splitKey(key)[0]);
-      }
-    }
-  }
-  return [...parents].sort();
-}
-
-function productionReachable(): Set<string> {
-  const seen = new Set<string>();
-  const stack: string[] = [];
-  for (const importer of Object.values(lockfile.importers ?? {})) {
-    for (const section of [importer.dependencies, importer.optionalDependencies]) {
-      for (const [name, entry] of Object.entries(section ?? {})) {
-        if (!entry.version.startsWith('link:')) stack.push(`${name}@${entry.version}`);
-      }
-    }
-  }
-  while (stack.length > 0) {
-    const key = stack.pop() as string;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const snapshot = lockfile.snapshots?.[key];
-    for (const section of [snapshot?.dependencies, snapshot?.optionalDependencies]) {
-      for (const [name, reference] of Object.entries(section ?? {})) {
-        if (!reference.startsWith('link:')) stack.push(`${name}@${reference}`);
-      }
-    }
-  }
-  return new Set([...seen].map((key) => key.split('(')[0] as string));
-}
 
 // Reviewed 2026-11-05 (#1146). OSV filters an IgnoredVulns entry for the whole advisory, not per
 // version or lockfile; these records are the fail-closed guard around that wider waiver.
@@ -303,9 +228,10 @@ describe('OSV npm dependency floors', () => {
         [...rule.reviewedCopies].sort(),
       );
       for (const version of affected) {
-        expect(parentPackages(rule.name, version), `${rule.name}@${version} parents`).toEqual(
-          rule.reviewedParents[version],
-        );
+        expect(
+          parentPackages(lockfile, rule.name, version),
+          `${rule.name}@${version} parents`,
+        ).toEqual(rule.reviewedParents[version]);
       }
     }
   });
@@ -315,7 +241,7 @@ describe('OSV npm dependency floors', () => {
     // workspace importer. It does not inspect the built bundle and does not prove that no
     // attacker-controlled pattern or file tree reaches a development-time caller; that boundary is
     // argued in AUDIT.md.
-    const reachable = productionReachable();
+    const reachable = productionReachable(lockfile);
     for (const rule of waivedAdvisories) {
       const hits = [...reachable].filter((key) => {
         const [name, version] = splitKey(key);
@@ -324,5 +250,12 @@ describe('OSV npm dependency floors', () => {
       expect(hits, `${rule.name} reachable from production roots`).toEqual([]);
     }
     expect([...reachable].some((key) => key.startsWith('zod@4.'))).toBe(true);
+
+    // pnpm records resolved peer dependencies inside the snapshot's own dependencies, which the
+    // walk follows. Pin that assumption on a known peer relationship (react-dom -> react).
+    const reactDom = Object.entries(lockfile.snapshots ?? {}).find(([key]) =>
+      key.startsWith('react-dom@'),
+    );
+    expect(reactDom?.[1].dependencies?.['react']).toBeDefined();
   });
 });
