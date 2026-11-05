@@ -14,8 +14,18 @@ type WorkspaceConfig = {
 };
 
 type Lockfile = {
+  importers?: Record<
+    string,
+    {
+      dependencies?: Record<string, { version: string }>;
+      optionalDependencies?: Record<string, { version: string }>;
+    }
+  >;
   packages?: Record<string, unknown>;
-  snapshots?: Record<string, { dependencies?: Record<string, string> }>;
+  snapshots?: Record<
+    string,
+    { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string> }
+  >;
 };
 
 function compareNumericVersionTriples(left: string, right: string): number {
@@ -57,6 +67,128 @@ const fixedFloors = [
   { name: 'joi', minimumVersion: '18.3.1', major: '18', override: '>=18.3.1 <19' },
   { name: 'qs', minimumVersion: '6.16.1', major: '6', override: '>=6.16.1 <7' },
   { name: 'serialize-javascript', minimumVersion: '7.1.3', major: '7', override: '>=7.1.3 <8' },
+];
+
+type AffectedRule = { name: string; introduced: string; fixed?: string; lastAffected?: string };
+
+function isAffected(version: string, rule: AffectedRule): boolean {
+  if (compareNumericVersionTriples(version, rule.introduced) < 0) return false;
+  if (rule.fixed !== undefined) return compareNumericVersionTriples(version, rule.fixed) < 0;
+  if (rule.lastAffected !== undefined) {
+    return compareNumericVersionTriples(version, rule.lastAffected) <= 0;
+  }
+  return true;
+}
+
+function splitKey(key: string): [string, string] {
+  const bare = key.split('(')[0] ?? key;
+  const at = bare.lastIndexOf('@');
+  return [bare.slice(0, at), bare.slice(at + 1)];
+}
+
+function parentPackages(name: string, version: string): string[] {
+  const parents = new Set<string>();
+  for (const [key, snapshot] of Object.entries(lockfile.snapshots ?? {})) {
+    for (const section of [snapshot.dependencies, snapshot.optionalDependencies]) {
+      const reference = section?.[name];
+      if (
+        typeof reference === 'string' &&
+        (reference === version || reference.startsWith(`${version}(`))
+      ) {
+        parents.add(splitKey(key)[0]);
+      }
+    }
+  }
+  return [...parents].sort();
+}
+
+function productionReachable(): Set<string> {
+  const seen = new Set<string>();
+  const stack: string[] = [];
+  for (const importer of Object.values(lockfile.importers ?? {})) {
+    for (const section of [importer.dependencies, importer.optionalDependencies]) {
+      for (const [name, entry] of Object.entries(section ?? {})) {
+        if (!entry.version.startsWith('link:')) stack.push(`${name}@${entry.version}`);
+      }
+    }
+  }
+  while (stack.length > 0) {
+    const key = stack.pop() as string;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const snapshot = lockfile.snapshots?.[key];
+    for (const section of [snapshot?.dependencies, snapshot?.optionalDependencies]) {
+      for (const [name, reference] of Object.entries(section ?? {})) {
+        if (!reference.startsWith('link:')) stack.push(`${name}@${reference}`);
+      }
+    }
+  }
+  return new Set([...seen].map((key) => key.split('(')[0] as string));
+}
+
+// Reviewed 2026-11-05 (#1146). OSV filters an IgnoredVulns entry for the whole advisory, not per
+// version or lockfile; these records are the fail-closed guard around that wider waiver.
+const waivedAdvisories: Array<
+  AffectedRule & {
+    id: string;
+    reviewedCopies: string[];
+    reviewedParents: Record<string, string[]>;
+    affectedSamples: string[];
+    unaffectedSamples: string[];
+  }
+> = [
+  {
+    id: 'GHSA-gcqx-w48m-w2h4',
+    name: 'deepmerge',
+    introduced: '4.2.0',
+    lastAffected: '4.3.1',
+    reviewedCopies: ['4.3.1'],
+    reviewedParents: { '4.3.1': ['@rollup/plugin-node-resolve', 'jest-config'] },
+    affectedSamples: ['4.2.0', '4.3.1'],
+    unaffectedSamples: ['4.1.2', '4.3.2'],
+  },
+  {
+    id: 'GHSA-mrhx-c7xc-m3w5',
+    name: 'zod',
+    introduced: '0.0.0',
+    fixed: '4.6.6',
+    reviewedCopies: ['3.25.76'],
+    reviewedParents: { '3.25.76': ['@codecov/bundler-plugin-core'] },
+    affectedSamples: ['3.25.76', '4.6.5'],
+    unaffectedSamples: ['4.6.6', '4.6.7'],
+  },
+  {
+    id: 'GHSA-3g3m-2fjr-6pw4',
+    name: 'glob',
+    introduced: '9.0.0',
+    fixed: '14.0.2',
+    reviewedCopies: ['10.5.0', '11.1.0', '13.0.6'],
+    reviewedParents: {
+      '10.5.0': ['test-exclude'],
+      '11.1.0': ['workbox-build'],
+      '13.0.6': [
+        '@jest/reporters',
+        '@joshwooding/vite-plugin-react-docgen-typescript',
+        'jest-config',
+        'jest-runtime',
+      ],
+    },
+    affectedSamples: ['9.0.0', '10.5.0', '13.0.6', '14.0.1'],
+    unaffectedSamples: ['7.2.3', '8.1.0', '14.0.2', '14.0.3'],
+  },
+  {
+    id: 'GHSA-g3hv-75wg-m249',
+    name: 'minimatch',
+    introduced: '7.0.0',
+    fixed: '11.0.1',
+    reviewedCopies: ['10.2.6', '9.0.9'],
+    reviewedParents: {
+      '10.2.6': ['@stryker-mutator/core', 'glob', 'test-exclude'],
+      '9.0.9': ['glob'],
+    },
+    affectedSamples: ['7.0.0', '9.0.9', '10.2.6', '11.0.0'],
+    unaffectedSamples: ['3.1.5', '5.1.9', '6.2.0', '11.0.1', '11.0.4'],
+  },
 ];
 
 describe('OSV npm dependency floors', () => {
@@ -144,39 +276,53 @@ describe('OSV npm dependency floors', () => {
     ).toBe(true);
   });
 
-  it('binds each no-fix OSV ignore to the exact dev-only version it was reviewed for', () => {
-    const toml = readFileSync(resolve(projectRoot, 'src-tauri/osv-scanner.toml'), 'utf8');
-    const ignoreFor = (id: string): string | undefined =>
-      toml.split('[[IgnoredVulns]]').find((block) => block.includes(`id = "${id}"`));
-
-    const deepmerge = ignoreFor('GHSA-gcqx-w48m-w2h4');
-    const zod3 = ignoreFor('GHSA-mrhx-c7xc-m3w5');
-    expect(deepmerge).toMatch(/ignoreUntil = "2026-11-30T00:00:00Z"/);
-    expect(zod3).toMatch(/ignoreUntil = "2026-11-30T00:00:00Z"/);
-
-    // The ignores are only justified for exactly these resolved versions. A different resolution
-    // must re-open the review instead of silently inheriting the waiver.
-    expect(resolvedVersions('deepmerge')).toEqual(['4.3.1']);
-    expect(resolvedVersions('zod').filter((version) => version.startsWith('3.'))).toEqual([
-      '3.25.76',
-    ]);
-
-    // They stay dev-only: neither package may become a runtime dependency of the app.
-    expect(packageManifest.dependencies?.['deepmerge']).toBeUndefined();
-    expect(packageManifest.dependencies?.['@codecov/vite-plugin']).toBeUndefined();
-
-    // glob and minimatch are fixed only in new majors, so the waiver lasts while a vulnerable
-    // copy is resolved. Once every copy is patched, the ignore has to be removed.
-    for (const { id, name, fixed } of [
-      { id: 'GHSA-3g3m-2fjr-6pw4', name: 'glob', fixed: '14.0.2' },
-      { id: 'GHSA-g3hv-75wg-m249', name: 'minimatch', fixed: '11.0.1' },
-    ]) {
-      const block = ignoreFor(id);
-      expect(block).toMatch(/ignoreUntil = "2026-11-30T00:00:00Z"/);
-      expect(
-        resolvedVersions(name).some((version) => compareNumericVersionTriples(version, fixed) < 0),
-      ).toBe(true);
-      expect(packageManifest.dependencies?.[name]).toBeUndefined();
+  it('classifies versions against the exact affected range of each waived advisory', () => {
+    for (const rule of waivedAdvisories) {
+      for (const version of rule.affectedSamples) {
+        expect(isAffected(version, rule), `${rule.name}@${version} must be affected`).toBe(true);
+      }
+      for (const version of rule.unaffectedSamples) {
+        expect(isAffected(version, rule), `${rule.name}@${version} must be unaffected`).toBe(false);
+      }
     }
+  });
+
+  it('keeps every waived advisory tied to its affected copies and parent packages', () => {
+    const toml = readFileSync(resolve(projectRoot, 'src-tauri/osv-scanner.toml'), 'utf8');
+    for (const rule of waivedAdvisories) {
+      const block = toml
+        .split('[[IgnoredVulns]]')
+        .find((part) => part.includes(`id = "${rule.id}"`));
+      expect(block, `${rule.id} needs its ignore entry`).toBeDefined();
+      expect(block).toMatch(/ignoreUntil = "2026-11-30T00:00:00Z"/);
+
+      // Fail-closed: the waiver is advisory-wide for OSV, so the test pins what it was reviewed for.
+      // A stale waiver (no affected copy left) or a new affected copy / parent must re-open it.
+      const affected = resolvedVersions(rule.name).filter((version) => isAffected(version, rule));
+      expect(affected.sort(), `${rule.id} affected copies`).toEqual(
+        [...rule.reviewedCopies].sort(),
+      );
+      for (const version of affected) {
+        expect(parentPackages(rule.name, version), `${rule.name}@${version} parents`).toEqual(
+          rule.reviewedParents[version],
+        );
+      }
+    }
+  });
+
+  it('keeps every waived package out of the production dependency graph', () => {
+    // Lockfile-graph evidence only. It follows dependencies and optionalDependencies from every
+    // workspace importer. It does not inspect the built bundle and does not prove that no
+    // attacker-controlled pattern or file tree reaches a development-time caller; that boundary is
+    // argued in AUDIT.md.
+    const reachable = productionReachable();
+    for (const rule of waivedAdvisories) {
+      const hits = [...reachable].filter((key) => {
+        const [name, version] = splitKey(key);
+        return name === rule.name && isAffected(version, rule);
+      });
+      expect(hits, `${rule.name} reachable from production roots`).toEqual([]);
+    }
+    expect([...reachable].some((key) => key.startsWith('zod@4.'))).toBe(true);
   });
 });

@@ -15,13 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Security (dependencies):** Raised bounded floors for patched `undici`, `body-parser`,
   `fast-uri`, `qs` and `serialize-javascript`; upgraded only Zod 4 and moved Lighthouse's
   supported Puppeteer 25.x line to a release using Zod 4. Removed the OSV ignore for the
-  withdrawn `sprintf-js` advisory while retaining the package. OSV Scanner 2.7.0 now reports
-  `deepmerge@4.3.1` and `zod@3.25.76`, plus `glob` and `minimatch` advisories published on
-  2026-10-30 that are fixed only in new majors. Also raised `follow-redirects` (>=1.16.2) and `joi`
-  (>=18.3.1). None of the four remaining packages has a compatible fix and all are reachable only
-  through devDependencies, so they carry time-bounded OSV ignores (until 2026-11-30) that a
-  test ties to the resolved lockfile; the incident stays tracked in
-  [#1146](https://github.com/qnbs/WorldScript-Studio/issues/1146) (PR #1149).
+  withdrawn `sprintf-js` advisory while retaining the package. Also raised `follow-redirects`
+  (>=1.16.2) and `joi` (>=18.3.1). Four advisories have no compatible fix and are accepted as
+  time-bounded vulnerabilities, not fixes: `deepmerge` (`GHSA-gcqx-w48m-w2h4`), Zod 3 via the
+  Codecov plugin (`GHSA-mrhx-c7xc-m3w5`), `glob` (`GHSA-3g3m-2fjr-6pw4`) and `minimatch`
+  (`GHSA-g3hv-75wg-m249`). Each ignore expires on 2026-11-30 at the latest; every affected copy is
+  development tooling and none is reachable from the production dependency graph in the lockfile.
+  A test pins the affected copies, their parent packages and that absence, and fails when they
+  change. Tracked in [#1146](https://github.com/qnbs/WorldScript-Studio/issues/1146) and
+  [#1163](https://github.com/qnbs/WorldScript-Studio/issues/1163) (PR #1149).
 
 - **Post-release v1.29.2 truth sync:** removed the release-candidate markers from README.md and
   CHANGELOG.md now that the `v1.29.2` tag and GitHub Release are published, and recorded the real

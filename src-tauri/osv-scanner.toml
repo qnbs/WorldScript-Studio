@@ -119,33 +119,33 @@ reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; 
 # metadata dates 0.6.1 to 2026-09-11; a direct 0.6.0/0.6.1 tarball comparison confirmed the
 # extraction fix's `assertPathSafe`/`lstat` rejection of pre-existing symlink components.
 
-# ─── npm build/test tooling without a compatible fix (2026-11-05, #1146 / #1149) ───
-# These packages are reachable only through devDependencies (verified with
-# `pnpm why`); neither is bundled into the shipped PWA or the Tauri frontend.
-# deepmerge and zod 3 are bound to the exact resolved version by
-# tests/unit/security/osvNpmDependencyFloors.test.ts; glob and minimatch fail the
-# test once no vulnerable copy remains. Either way the entry has to be re-evaluated
-# or removed instead of silently outliving its reason.
+# ─── npm development tooling without a compatible fix (2026-11-05, #1146 / #1163) ───
+# ACCEPTED TIME-BOUNDED VULNERABILITIES, NOT FIXES. OSV filters an IgnoredVulns entry for the
+# whole advisory, not for one version, lockfile or call site. The guard around the wider waiver is
+# tests/unit/security/osvNpmDependencyFloors.test.ts: it fails when an affected copy, an affected
+# copy's parent package, or a production path appears, or when no affected copy is left (stale
+# waiver). Full per-advisory record, alternatives and re-check trigger: AUDIT.md (2026-11-05).
+# Every entry expires on 2026-11-30 at the latest; remove it as soon as a parent ships a fix.
 
 [[IgnoredVulns]]
 id = "GHSA-gcqx-w48m-w2h4"
 ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "deepmerge 4.3.1 (low, mergeObject prototype poisoning): no patched release exists (first_patched_version null). Dev-only: @rollup/plugin-node-resolve 16.0.3 <- workbox-build <- vite-plugin-pwa (build time) and jest-config 30.5.1 <- @storybook/test-runner (test time). Both merge trusted, repository-owned configuration objects; no user, manuscript or network data reaches mergeObject. Re-evaluate when deepmerge or either parent ships a fix."
+reason = "deepmerge >=4.2.0 <=4.3.1 (low, mergeObject prototype poisoning), no patched release. Resolved copy: 4.3.1 via @rollup/plugin-node-resolve (workbox-build <- vite-plugin-pwa, build time) and jest-config (@storybook/test-runner, test time). Both merge repository-owned configuration; not reachable from production roots in any lockfile importer."
 
 [[IgnoredVulns]]
 id = "GHSA-mrhx-c7xc-m3w5"
 ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "zod 3.25.76 (high, memory exhaustion validating oversized constrained collections): fixed only in 4.6.6, no 3.x release. Dev-only: @codecov/bundler-plugin-core 2.0.1 <- @codecov/vite-plugin 2.0.1 requires zod ^3.22.4 and validates its own build-time plugin options, which this repository controls. All Zod 4 consumers (the shipped app, chromium-bidi via Lighthouse) are overridden to >=4.6.6 <5. Re-evaluate when @codecov/bundler-plugin-core moves to Zod 4."
+reason = "zod <4.6.6 (high, memory exhaustion validating oversized constrained collections), fixed only in 4.6.6. Resolved affected copy: 3.25.76 via @codecov/bundler-plugin-core 2.0.1 (^3.22.4) <- @codecov/vite-plugin, which validates its own build-time options. All Zod 4 consumers are overridden to >=4.6.6 <5 and are the only Zod reachable from production roots."
 
 [[IgnoredVulns]]
 id = "GHSA-3g3m-2fjr-6pw4"
 ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "glob (medium, AbortSignal cancellation bypass allows filesystem traversal after a timeout) in the 10.5.0, 11.1.0 and 13.0.6 lines: fixed only in glob 14.0.2, a new major whose API the dev tooling parents (jest/@storybook/test-runner, workbox-build, @lhci/cli, rimraf/test-exclude chains) do not declare. Dev-only: every resolved copy is reached through devDependencies and only walks repository-owned paths at build/test time with no caller-supplied AbortSignal. Re-evaluate when the parents accept glob >=14.0.2; a blanket major override was rejected as unverifiable."
+reason = "glob >=9.0.0 <14.0.2 (medium, AbortSignal cancellation bypass lets traversal continue after a timeout), fixed only in 14.0.2. Resolved affected copies: 10.5.0 (test-exclude 7.0.2), 11.1.0 (workbox-build 7.4.1), 13.0.6 (@jest/reporters, jest-config, jest-runtime, @joshwooding/vite-plugin-react-docgen-typescript). glob 7.2.3 is outside the range. Needs a caller that passes an AbortSignal; none of these parents does (source search), and none is reachable from production roots."
 
 [[IgnoredVulns]]
 id = "GHSA-g3hv-75wg-m249"
 ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "minimatch (medium, DoS via globparts amplification) in the 3.1.5, 5.1.9, 9.0.9 and 10.2.6 lines: fixed only in minimatch 11.0.1, a new major that dev-tooling parents do not declare. Dev-only: every resolved copy is reached through devDependencies and matches repository-owned patterns at build/test time; no attacker-controlled glob pattern reaches it. Re-evaluate when the parents accept minimatch >=11.0.1; a blanket major override was rejected as unverifiable."
+reason = "minimatch >=7.0.0 <11.0.1 (medium, DoS via globparts amplification from an attacker-chosen pattern), fixed only in 11.0.1. Resolved affected copies: 9.0.9 (glob 10.5.0) and 10.2.6 (@stryker-mutator/core, glob 11.1.0/13.0.6, test-exclude 7.0.2). minimatch 3.1.5 and 5.1.9 are outside the range and are not covered by this entry. Patterns come from repository-owned tool configuration; none of these parents is reachable from production roots."
 
 # Historical note: the 2026-09-10 investigation found no patched release for
 # GHSA-vwc7-r8mq-g2x9 at that time. The 2026-09-19 `pnpm audit --json` output
