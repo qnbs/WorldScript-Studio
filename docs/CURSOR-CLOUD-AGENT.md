@@ -72,9 +72,10 @@ After merging to `main`:
    reconciliation is required before non-train mutation resumes. A separately
    declared release-batched Preview retention mode in that policy may defer
    the same Preview housekeeping until the next sanctioned `v*` release
-   reconciliation. Under the historical release-batched mode, the writer was
-   Codex CLI in local VS Code/Ubuntu and Cursor Cloud had no deployment-delete
-   or release authority. Per-merge CI/CD, CodeQL,
+   reconciliation. As of 2026-10-13 that release-batched mode is superseded.
+   Under that historical mode, the writer was Codex CLI in local VS Code/Ubuntu;
+   Cursor Cloud does not delete Vercel deployments or receive release authority.
+   Per-merge CI/CD, CodeQL,
    Production READY, canonical HTTP, and alias/promotion/rollback checks stay
    mandatory. Gate 7 and the production storage-authority switch stay
    maintainer-gated. The introducing transition is one-time; a later pull

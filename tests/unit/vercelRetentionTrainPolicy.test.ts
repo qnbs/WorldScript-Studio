@@ -148,15 +148,24 @@ describe('release-batched Preview retention', () => {
 });
 
 describe('active ordinary per-merge Preview retention', () => {
-  it('supersedes the release-batched record with a named local Claude Code CLI writer', () => {
+  it('preserves the historical writer and defines the current exclusive operator lease', () => {
     expect(policy).toContain('## Active mode from 2026-10-13: ordinary per-merge retention');
     expect(policy).toContain('ACTIVE_MODE = ordinary per-merge preview retention');
-    expect(policy).toContain('ACTIVE_DESTRUCTIVE_WRITER = Claude Code CLI, local VS Code / Ubuntu');
+    expect(policy).toContain(
+      'HISTORICAL_DESTRUCTIVE_WRITER_AT_2026-10-13 = Claude Code CLI, local VS Code / Ubuntu',
+    );
     expect(policy).toContain(
       'SUPERSEDES = release-batched preview retention record, FIRST_BATCH_PR #1020',
     );
     expect(policy).toContain(
       'SUPERSESSION_AUTHORITY = maintainer decision, GH #627 comment 6134785538',
+    );
+    expect(policy).toContain('CURRENT_OPERATOR_POLICY = dated operator-eligibility section below');
+    expect(policy).toContain('OPERATOR_ELIGIBILITY = Claude Code CLI | Codex CLI | Cursor agent');
+    expect(policy).toContain('OPERATOR_LEASE = exactly one active operator/session at a time');
+    expect(policy).toContain('RETENTION_RUNTIME = Node 22.19+ with major 22');
+    expect(policy).toContain(
+      'CURSOR_CLOUD_DESTRUCTIVE_ACCESS = conditional on its own scoped Vercel authorization and runner qualification',
     );
     expect(policy).toContain('TAG_AND_PUBLISH = not granted by this record');
     expect(policy).toContain('a project name is never passed to `vercel remove`');
@@ -175,15 +184,18 @@ describe('active ordinary per-merge Preview retention', () => {
     expect(policy).not.toContain('a branch that is gone or a PR that is closed');
   });
 
-  it('keeps the historical batch record and marks it superseded in every companion', () => {
+  it('keeps the historical batch record and current operator eligibility synchronized in every companion', () => {
     expect(policy).toContain('DESTRUCTIVE_WRITER = Codex CLI, local VS Code / Ubuntu');
     for (const relativePath of companionPaths) {
       const source = prose(
         readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8'),
       );
       expect(source, relativePath).toContain('As of 2026-10-13 that release-batched mode is');
-      expect(source, relativePath).toContain('executed by the local Claude Code CLI');
-      expect(source, relativePath).toContain('GH #627');
+      expect(source, relativePath).toContain('As of 2026-11-06');
+      expect(source, relativePath).toContain('Claude Code CLI, Codex CLI');
+      expect(source, relativePath).toContain('Cursor agent at a time');
+      expect(source, relativePath).toContain('Cursor Cloud');
+      expect(source, relativePath).toContain('Node 22');
     }
   });
 });
