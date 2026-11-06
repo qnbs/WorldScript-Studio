@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Rust dependencies:** Updated the resolved `rustix` lock entry from 1.1.5 to 1.1.6, including the upstream fix for truncated macOS `SCM_RIGHTS` messages (PR #1181; Dependabot source PR #1169).
 
+- **Dependencies:** Updated the test dependency `fake-indexeddb` to 6.2.7 and resolved `uuid` to 14.0.3 without narrowing its existing manifest range. Redux Toolkit remains at 2.12.0 while 2.13.0 is held for the prototype-named entity ID regressions (Dependabot source PR #1172).
+
 - **CI operations:** Defined a five-merge/24-hour, Pages-degraded recovery contract for #1176. Exact-main quality, security, CodeQL, Production, and review gates remain required; Vercel retention and deletions stay on hold until the full push workflow succeeds (PR #1177).
 
 - **Operations:** Made ordinary Vercel preview retention operator-agnostic across qualified local Claude Code CLI, Codex CLI, and future Cursor Cloud leases, with one maintainer-designated operator at a time. Cursor Cloud remains `NOT_ADMITTED` for deletions until the separate maintainer-approved capability gate in #1174; local credentials are never copied to Cloud. PRs open ready for review; SAFE-only and protection gates are unchanged (PR #1175).
