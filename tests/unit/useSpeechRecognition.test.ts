@@ -57,7 +57,7 @@ describe('useSpeechRecognition (no browser API available)', () => {
 describe('useSpeechRecognition (with mocked SpeechRecognition)', () => {
   it('startListening sets isListening to true', () => {
     const started = { called: false };
-    function MockSpeechRecognition(this: Record<string, unknown>) {
+    function speechRecognitionConstructor(this: Record<string, unknown>) {
       this['continuous'] = false;
       this['interimResults'] = false;
       this['lang'] = '';
@@ -69,7 +69,7 @@ describe('useSpeechRecognition (with mocked SpeechRecognition)', () => {
       };
       this['stop'] = vi.fn();
     }
-    (window as { SpeechRecognition?: unknown }).SpeechRecognition = MockSpeechRecognition;
+    (window as { SpeechRecognition?: unknown }).SpeechRecognition = speechRecognitionConstructor;
 
     const { result } = renderHook(() => useSpeechRecognition());
 

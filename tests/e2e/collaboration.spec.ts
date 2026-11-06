@@ -40,7 +40,7 @@ test.describe('Collaboration Panel (CI-only)', () => {
     await expect(securityAlert).toBeVisible({ timeout: 5000 });
 
     // The warning text should mention signaling or security
-    const text = await securityAlert.innerText();
+    const text = (await securityAlert.textContent()) ?? '';
     expect(text.length).toBeGreaterThan(10);
   });
 });

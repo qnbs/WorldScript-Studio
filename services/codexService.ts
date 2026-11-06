@@ -95,8 +95,8 @@ function buildRelationshipEdges(entities: StoryCodexEntity[]): StoryCodexRelatio
       for (let j = i + 1; j < ids.length; j++) {
         const a = ids[i]!;
         const b = ids[j]!;
-        const source = a < b ? a : b;
-        const target = a < b ? b : a;
+        const source = a;
+        const target = b;
         const key = `${source}::${target}`;
         const edge = pairMap.get(key) ?? {
           source,

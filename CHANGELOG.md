@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Developer tooling:** Updated Biome from 2.5.8 to 2.6.4 and aligned its configuration schema. Resolved the new component-factory findings and repo-wide lint diagnostics across test harnesses, retry timing, sorted entity pairs, Aurora cascade ordering, and DOM text reads; lowered the suppression ratchet by two removed directives (PR #1185; Dependabot source PR #1171).
+
 - **Tauri dependencies:** Updated the locked Rust plugins `tauri-plugin-dialog` to 2.8.4, `tauri-plugin-updater` to 2.14.1, and `tauri-plugin-single-instance` to 2.5.5, with their resolved `rfd`, `base64`, and Windows target dependency changes (PR #1179; Dependabot source PR #1170).
 
 - **Rust dependencies:** Updated the resolved `rustix` lock entry from 1.1.5 to 1.1.6, including the upstream fix for truncated macOS `SCM_RIGHTS` messages (PR #1181; Dependabot source PR #1169).
@@ -506,7 +508,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dependencies:** align `@ai-sdk/google` 4.0.76→4.0.85 and `@ai-sdk/openai` 4.0.53→4.0.80
   on one shared floor, `@ai-sdk/provider` 4.0.19 and `@ai-sdk/provider-utils` 5.0.51.
   `undici` stays 7.29.1, which already satisfies `^7.29.0` and the workspace override
-  `>=7.29.1 <8`.   `@ai-sdk/react`, `ai`, and `@ai-sdk/gateway` keep their existing pins.
+  `>=7.29.1 <8`. `@ai-sdk/react`, `ai`, and `@ai-sdk/gateway` keep their existing pins.
   Supersedes Dependabot #979 and #981. PR #987.
 - **R-15 Gate 4D:** resume from the journal manifest generation named by the committed
   root `LiveMigration`. A newer durable generation is retained and not adopted.
@@ -1025,7 +1027,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   queue, and failing closed if that cannot be proven — for both the project and the settings queue. The older captured snapshot is never re-saved, since a newer successful
   save may already have replaced it. PR #832.
 - **Data integrity (#553):** a second desktop WorldScript window can no longer silently revert
-  changes another window saved. #826's lock only serialized write *order*: two windows that both
+  changes another window saved. #826's lock only serialized write _order_: two windows that both
   opened a project at the same version, then edited independently, would each save in turn — and
   the second overlaid its whole older in-memory snapshot onto the first's newer file, reverting
   every field only the first had changed, while its read-then-write fence still passed. The desktop
@@ -1066,7 +1068,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matching the error message text — the real Tauri error always embeds the full lock path, so a
   substring match is spoofable by an ordinary project name containing "exist"; both `retryFs` and
   this classification now normalize the real Tauri invoke shape (a plain string, not a JS Error).
-  A failed create whose path then checks as *not* occupied gets one bounded inline retry before its
+  A failed create whose path then checks as _not_ occupied gets one bounded inline retry before its
   error is treated as genuine and unrelated to contention — the lock we collided with may simply
   have been released between our failed create and that check, a real interleaving under ordinary
   two-window editing, not a contrived edge case; without the retry that resolved race surfaced as a
@@ -1767,7 +1769,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   AI model caches (Settings → AI → Clear Local Models) are a separate deletion authority and are
   addressed by the next entry; Factory Reset does not yet clear them — tracked in #526.
 - **Local AI model cache clearing now matches exact vendor bucket names, not a loose substring:**
-  "Clear Local Models" previously matched any cache whose name merely *contained* `webllm`, `mlc`,
+  "Clear Local Models" previously matched any cache whose name merely _contained_ `webllm`, `mlc`,
   `tvmjs`, or `transformers` — broad enough to catch an unrelated cache like
   `other-transformers-assets` on the shared origin. It now matches only the exact CacheStorage bucket
   names these two vendor libraries actually create.
@@ -2228,7 +2230,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other DuckDB metadata columns (`title`/`logline`/`name`/`character_names`/`label`) stay
   intentionally plaintext by design, not manuscript prose.
 - **SEC-6 backfill migration marker was a single global key, not scoped per project** —
-  once *any* project completed the excerpt-encryption backfill, every other project's
+  once _any_ project completed the excerpt-encryption backfill, every other project's
   plaintext `codex_mentions.excerpt` rows were silently never migrated.
   `isCodexExcerptEncryptionMigrationDone()` now takes a `projectId` and scopes the `_meta`
   done-marker key per project. Also fixed `duckdbCodexWrite()`'s `ON CONFLICT` clause for
@@ -2343,7 +2345,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secondary failure there can no longer block the fallback path itself.
 - **A missing `ensureInferencePool` export broke production builds** on Vercel (rolldown's
   `[MISSING_EXPORT]`) — not caught by Vitest (the consumer test mocks the whole module) or by local
-  `tsgo` typecheck. Root-caused by reproducing Vercel's *exact* build command
+  `tsgo` typecheck. Root-caused by reproducing Vercel's _exact_ build command
   (`pnpm run build:edge`, which differs from the plain `pnpm run build` used for an earlier,
   misleading local repro attempt) and fixed by adding the missing function.
 - **A reused `AbortSignal` leaked one `'abort'` listener per call** in `duckdbClient.ts`'s `send()`
@@ -2386,7 +2388,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   iterations) + a random 32-byte salt, matching the existing `storageEncryptionService.ts`
   pattern. Pre-existing key files are discarded (not migrated) with a one-time notification
   prompting re-entry. **Correction (2026-08-13):** this hardened the KDF against rainbow-table
-  and multi-target reuse, but the derivation *input* itself — `${appDataPath}|${provider}|WorldScriptStudio|v1`
+  and multi-target reuse, but the derivation _input_ itself — `${appDataPath}|${provider}|WorldScriptStudio|v1`
   — remained fully public/reconstructible, so the root "obfuscation, not encryption" finding was
   never actually closed. Tracked as an open gap — see `docs/IDB-ENCRYPTION.md` § Tauri Desktop Layer
   and `AUDIT.md`'s F-05/F-06 row for current status. **Review-loop follow-up (2026-08-13):**
@@ -2401,7 +2403,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   invisible to the code that actually uses it. Tracked in
   [#358](https://github.com/qnbs/WorldScript-Studio/issues/358); not fixed by this entry.
   **Second review-loop follow-up (2026-08-13):** tightened the attacker-capability wording (needs
-  both the ciphertext *and* the public derivation inputs, not the ciphertext alone) in both the
+  both the ciphertext _and_ the public derivation inputs, not the ciphertext alone) in both the
   Mitigation Mapping row and the attack tree; added the same Gemini-exception note to the attack
   tree (previously only in the table row); and added a new Mitigation Mapping row for desktop
   project/settings/snapshot/Codex/RAG/image/binder-asset data, which this threat model previously didn't
@@ -2758,7 +2760,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **v1.23 P0 tracker reconciliation (docs):** `ROADMAP.md`, `TODO.md`, and `AUDIT.md` brought into agreement after a drift where ROADMAP marked all v1.23 P0 items done while TODO still listed three as open. Each item is now evidence-backed (audit output, CI run, file existence). The manual smoke-test *run* is split out as a tracked human-only step (the protocol document itself is complete).
+- **v1.23 P0 tracker reconciliation (docs):** `ROADMAP.md`, `TODO.md`, and `AUDIT.md` brought into agreement after a drift where ROADMAP marked all v1.23 P0 items done while TODO still listed three as open. Each item is now evidence-backed (audit output, CI run, file existence). The manual smoke-test _run_ is split out as a tracked human-only step (the protocol document itself is complete).
 - **AUDIT.md Known Overrides table refreshed:** added the just-merged `esbuild >=0.28.1` override (GHSA-67mh-4wv8-2f99, dev-server CORS), replaced placeholder advisory strings with verified GitHub Advisory IDs (re-checked 2026-06-13), and labelled preventive-only pins honestly. Dependency hygiene re-verified: `pnpm audit` high **and** moderate → 0 vulnerabilities.
 - **Dependency maintenance (Dependabot):** bumped `@ai-sdk/openai`, `@ai-sdk/google`, `yjs`, `tailwindcss`, `turbo`, `lint-staged`, and the `log` crate to current patch/minor releases (web CI green on each).
 
@@ -2779,7 +2781,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Plugin worker no longer leaks a sandbox guard across runs (FU-1):** `workers/plugin.worker.ts` restored `Function.prototype.constructor` through the bare `Function` identifier, which install had reassigned to the denied stub — so the real constructor stayed neutered after a plugin run. Restoration now routes through the module-captured native `Function`, keeping the dedicated worker's global scope clean between tasks. Restoration is also hardened: the `self.*` bindings are restored first and unconditionally, and each constructor is force-redefined via `Object.defineProperty` (best-effort), so a plugin that locks a property descriptor cannot abort the restore and poison subsequent runs. Isolation during execution is unchanged.
 - **Command Palette fully localized:** ~20 command labels and category headers (AI Execution Modes, editor modes, appearance presets, accessibility toggles, Navigation/Editor/Global/etc.) were showing English in de/es/fr/it because the keys existed but the values were never translated. All are now translated for the core locales (de/en/es/fr/it). A new guard test (`tests/unit/i18n/paletteLocalization.test.ts`) fails if any `palette.*` key reverts to English fallback in a core locale (with a small allowlist for loanwords). Beta/RTL locales remain English-fallback by policy.
 - **Writer shows localized, classified AI errors:** the Writer's generation-failure handler dispatched a hardcoded English string ("Error generating content…") and a hardcoded `[Cancelled]` tag. It now uses `getAiErrorMessage(err, t)` (same actionable, localized messages as the Copilot) and a localized `writer.cancelledTag`.
-- **OpenRouter cloud-policy block is now reactive:** the OpenRouter settings panel derives its blocked state from live Redux (`aiMode` + `privacy.localStorageOnly`) instead of a one-shot async check, so toggling *Local storage only* or switching the AI mode updates the banner and the test-connection / catalog-fetch guards instantly. Split into distinct `policyBlocked.mode` / `policyBlocked.localOnly` messages (translated across the 8 non-stub locales) and fixed an infinite render-loop in the policy-blocked catalog path. (#163)
+- **OpenRouter cloud-policy block is now reactive:** the OpenRouter settings panel derives its blocked state from live Redux (`aiMode` + `privacy.localStorageOnly`) instead of a one-shot async check, so toggling _Local storage only_ or switching the AI mode updates the banner and the test-connection / catalog-fetch guards instantly. Split into distinct `policyBlocked.mode` / `policyBlocked.localOnly` messages (translated across the 8 non-stub locales) and fixed an infinite render-loop in the policy-blocked catalog path. (#163)
 - **Local AI settings localized:** the 40 English-only `settings.ai.localAi.*` keys (WebGPU capability, model downloads, storage usage, fallback chain, throughput) translated for de/es/fr/it/el/ja/pt/zh (ar/he stay English stubs; model names unchanged). (#164)
 - **Real WorldScript app icons:** replaced the placeholder icons — generic 16-bit RGBA PNGs that broke the macOS/Windows Tauri bundler (`unsupported ColorType: Rgba16`) and blocked the desktop release — with a new "W" quill-nib monogram, regenerated as 8-bit across `favicon.svg`, the PWA icons, and the full Tauri icon set (incl. a newly generated `icon.icns`). Also fixed remaining StoryCraft URLs in `robots.txt` / `sitemap.xml` / `_redirects` / `CNAME.example` and renamed the Cloudflare Pages project in `wrangler.toml`. (#165)
 
@@ -2794,7 +2796,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Cloud**: all requests to configured cloud provider
   - **Local**: on-device only via Ollama / WebLLM / ONNX — nothing leaves the device
   - **Eco**: battery-saving tiny 0.5B model + heuristics only; no cloud, no GPU
-  `aiModeService.ts` persists the active mode to `settings.aiMode`; `listenerMiddleware` syncs without page reload. `AiModeIndicator` chip in the Copilot header shows the active mode and turns amber when the OpenRouter circuit breaker is open.
+    `aiModeService.ts` persists the active mode to `settings.aiMode`; `listenerMiddleware` syncs without page reload. `AiModeIndicator` chip in the Copilot header shows the active mode and turns amber when the OpenRouter circuit breaker is open.
 
 - **Ultimate Copilot AI v2 — Phase 2+3 (PR #110, #111):**
   - **Markdown rendering** in `CopilotMessageList` — assistant messages rendered as sanitised HTML (DOMPurify + inline micro-markdown renderer; headings, bold, italic, code blocks, lists). No new runtime dependency.
@@ -2893,8 +2895,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **World Building "Add Manually" now opens the atlas editor** (2026-06-03): `useWorldView.handleAddNewManually` only dispatched `addWorld` and left the user on the grid with a silent "New World" card and no editor — inconsistent with Characters, whose manual-add was deliberately fixed to open the dossier. Now mirrors that flow (create → select → open atlas) with fully-formed defaults (`timeline`/`locations` as `[]`). Adds real-browser `tests/e2e/world.spec.ts` (was none) + a hook-level regression assertion.
 - **CI unblock — OSV `paste` advisory + Vercel rate-limit noise** (2026-06-03):
-  - `src-tauri/osv-scanner.toml` — ignore `RUSTSEC-2024-0436` (`paste` 1.0.15 *unmaintained*; build-time proc-macro helper, no runtime exposure, no fix release). The advisory was newly published and was failing the required **Security Audit** check on every branch (e.g. Dependabot PR #78).
-  - `vercel.json` — `"github": { "silent": true }` so Vercel still deploys but no longer posts commit statuses; the free-tier **"Deployment rate limited — retry in 24 hours"** preview failure can no longer show as a hard fail on PRs. (Vercel was never a *required* status check, so this is purely cosmetic-noise removal.)
+  - `src-tauri/osv-scanner.toml` — ignore `RUSTSEC-2024-0436` (`paste` 1.0.15 _unmaintained_; build-time proc-macro helper, no runtime exposure, no fix release). The advisory was newly published and was failing the required **Security Audit** check on every branch (e.g. Dependabot PR #78).
+  - `vercel.json` — `"github": { "silent": true }` so Vercel still deploys but no longer posts commit statuses; the free-tier **"Deployment rate limited — retry in 24 hours"** preview failure can no longer show as a hard fail on PRs. (Vercel was never a _required_ status check, so this is purely cosmetic-noise removal.)
 
 ### Added
 

@@ -110,7 +110,7 @@ function retryAfterStringToMs(value: string): number | null {
   const ts = Date.parse(trimmed);
   if (!Number.isNaN(ts)) {
     const diff = ts - Date.now();
-    return diff > 0 ? diff : 0;
+    return Math.max(diff, 0);
   }
   return null;
 }

@@ -432,16 +432,6 @@ body[data-custom-highlight] ::selection {
   }
 }
 
-/* QNBS-v3: .aurora-disabled is toggled by inline JS in index.html when hardwareConcurrency ≤ 4 — prevents GPU drain on low-end devices. */
-.aurora-disabled .aurora-blob {
-  display: none;
-}
-
-.worldscript-reduced-motion .aurora-blob {
-  animation: none;
-  opacity: 0.1;
-}
-
 /* Large UI text — paired with Settings › Accessibility */
 html.worldscript-large-text {
   font-size: 112.5%;
@@ -572,10 +562,6 @@ body {
   opacity: 0.035;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
-.light-theme .noise-overlay {
-  opacity: 0.025;
-}
-
 /* ── Ambient Lighting - Aurora ─────────────────────────── */
 .aurora-container {
   position: fixed;
@@ -591,9 +577,6 @@ body {
   border-radius: 50%;
   will-change: transform;
   animation: float 25s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
-}
-.light-theme .aurora-blob {
-  opacity: 0.08;
 }
 .blob-1 {
   top: -10%;
@@ -619,21 +602,32 @@ body {
   animation-delay: -15s;
 }
 
+/* QNBS-v3: .aurora-disabled is toggled by inline JS in index.html when hardwareConcurrency ≤ 4 — prevents GPU drain on low-end devices. */
+.aurora-disabled .aurora-blob {
+  display: none;
+}
+
+.worldscript-reduced-motion .aurora-blob {
+  animation: none;
+  opacity: 0.1;
+}
+
 /* QNBS-v3 (Visual Maturity #A): Aurora/noise are a Welcome Portal brand moment, not a default whole-app ambience — hidden unless body carries .portal-active (toggled by App.tsx from isPortalActive). */
 .aurora-container,
 .noise-overlay {
   display: none;
 }
-/* QNBS-v3: :not(.writing-surface-plain) makes the plain-surface opt-out win by specificity, not by being declared later — two equal-specificity descendant selectors would otherwise depend on source order if this rule ever moved. */
+/* Theme refinements follow base selectors; portal activation follows both, preserving specificity order. */
+.light-theme .noise-overlay {
+  opacity: 0.025;
+}
+.light-theme .aurora-blob {
+  opacity: 0.08;
+}
+/* QNBS-v3: the body-level plain-surface preference is excluded here, so portal decoration cannot override the user's neutral-canvas choice. */
 body.portal-active:not(.writing-surface-plain) .aurora-container,
 body.portal-active:not(.writing-surface-plain) .noise-overlay {
   display: block;
-}
-
-/* QNBS-v3: a plain writing surface keeps the neutral canvas even during the portal — explicit user opt-out always wins over the default portal-active decoration. */
-.writing-surface-plain .noise-overlay,
-.writing-surface-plain .aurora-container {
-  display: none;
 }
 
 @keyframes float {
@@ -1046,7 +1040,13 @@ body.is-desktop ::-webkit-scrollbar {
    descendants, not body — otherwise classic (non-overlay) scrollbars appearing/disappearing shift
    content horizontally. `:where()` keeps specificity at 0 so view styles still win. */
 body.is-desktop
-:where(.overflow-y-auto, .overflow-auto, .overflow-y-scroll, .overflow-x-auto, .overflow-x-scroll) {
+  :where(
+    .overflow-y-auto,
+    .overflow-auto,
+    .overflow-y-scroll,
+    .overflow-x-auto,
+    .overflow-x-scroll
+  ) {
   scrollbar-gutter: stable;
 }
 

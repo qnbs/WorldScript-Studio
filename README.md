@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/TypeScript-tsgo_native_preview-3178C6?logo=typescript&logoColor=white" alt="TypeScript native preview (tsgo)">
   <img src="https://img.shields.io/badge/Desktop-Tauri_2-FFC131?logo=tauri&logoColor=black" alt="Tauri 2">
   <img src="https://img.shields.io/badge/i18n-19_locales_%2F_2963_keys-0EA5E9" alt="19 locales — 2963 keys">
-  <img src="https://img.shields.io/badge/Tests-8672%2B_%2F_654_files-22C55E" alt="8672+ tests / 654 files">
+  <img src="https://img.shields.io/badge/Tests-8673%2B_%2F_654_files-22C55E" alt="8673+ tests / 654 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github&label=CI" alt="CI status">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="MIT License">
@@ -45,12 +45,12 @@ WorldScript Studio combines a manuscript editor, visual plot planning, character
 
 ## Try it
 
-| Surface | URL / entry point | Important differences |
-| --- | --- | --- |
-| **GitHub Pages** | **https://qnbs.github.io/WorldScript-Studio/** | Canonical static upstream deployment. No serverless API functions; **Claude is unavailable on this host**. GitHub Pages also cannot inject HTTP security headers, so the app relies on its meta CSP there. |
-| **Vercel** | **https://worldscript-studio.vercel.app/** | Edge-hosted deployment with root-path build, response security headers, and the same-origin Claude serverless relay. |
-| **PWA** | Install from a supported browser | Offline-capable app shell after caching; local browser storage remains origin-specific. |
-| **Tauri desktop** | Tagged GitHub Releases / local `pnpm run tauri:dev` | Local filesystem project persistence, native HTTP for admitted local/cloud endpoints, native menu/window integration, updater plumbing. See the desktop security caveat below. |
+| Surface           | URL / entry point                                   | Important differences                                                                                                                                                                                      |
+| ----------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GitHub Pages**  | **https://qnbs.github.io/WorldScript-Studio/**      | Canonical static upstream deployment. No serverless API functions; **Claude is unavailable on this host**. GitHub Pages also cannot inject HTTP security headers, so the app relies on its meta CSP there. |
+| **Vercel**        | **https://worldscript-studio.vercel.app/**          | Edge-hosted deployment with root-path build, response security headers, and the same-origin Claude serverless relay.                                                                                       |
+| **PWA**           | Install from a supported browser                    | Offline-capable app shell after caching; local browser storage remains origin-specific.                                                                                                                    |
+| **Tauri desktop** | Tagged GitHub Releases / local `pnpm run tauri:dev` | Local filesystem project persistence, native HTTP for admitted local/cloud endpoints, native menu/window integration, updater plumbing. See the desktop security caveat below.                             |
 
 The web deployments share the same application codebase, but they are **not operationally identical** because their hosting capabilities differ.
 
@@ -209,11 +209,11 @@ AI-generated outline previews are treated as project-owned results; project iden
 
 Three visual planning modes coexist:
 
-| Mode | Purpose |
-| --- | --- |
+| Mode         | Purpose                                                 |
+| ------------ | ------------------------------------------------------- |
 | **Swimlane** | Kanban-style scene organization across structural lanes |
-| **Canvas** | Free-form pan/zoom spatial planning |
-| **Timeline** | Timeline/Gantt-style story sequencing |
+| **Canvas**   | Free-form pan/zoom spatial planning                     |
+| **Timeline** | Timeline/Gantt-style story sequencing                   |
 
 Additional planning layers include:
 - scene connections;
@@ -337,31 +337,31 @@ WorldScript deliberately distinguishes **available**, **default-on**, and **matu
 
 The current `FeatureFlagsState` contains the following feature authorities:
 
-| Flag | Default | Role / maturity note |
-| --- | :---: | --- |
-| `enableStoryBibleAdvanced` | ✅ | Story-bible graph/consistency features |
-| `enableBinderResearch` | ✅ | Research Binder |
-| `enableCompileWizard` | ✅ | Guided export/compile flow |
-| `enableProjectHealthScore` | ✅ | Dashboard health insights |
-| `enableAppHealthPanel` | ✅ | Runtime diagnostics in About |
-| `enableDuckDbAnalytics` | ✅ | Local DuckDB-WASM analytics sidecar; see privacy caveats |
-| `enableObjectsGroups` | ✅ | Story Objects & Groups |
-| `enableMindMaps` | ✅ | Enhanced Mind Maps |
-| `enableCharacterInterviews` | ✅ | Character Interviews v2 |
-| `enableLoraAdapters` | ✅ | LoRA adapter tooling; advanced/experimental |
-| `enablePluginSystem` | ✅ | Worker-isolated permission-gated plugin system; still an advanced extension surface |
-| `enableIdbAtRestEncryption` | ✅ | Browser/PWA IDB encryption capability; passphrase setup controls actual encryption state |
-| `enableAdaptiveAiEngine` | ✅ | Device-aware AI backend/model selection |
-| `enableComputeShaders` | ✅ | Experimental WebGPU compute path; do not assume every advertised acceleration path is active on every device |
-| `enableWorkerBusV2` | ✅ | Shared background task orchestration |
-| `enableRtlLayout` | ❌ | Manual RTL-layout test override |
-| `enableVoiceSupport` | ❌ | Voice commands/dictation; explicit permission boundary |
-| `enableProForge` | ❌ | Token-heavy experimental agentic editorial pipeline |
-| `enableVoiceWasm` | ❌ | Local voice WASM models; explicit download/opt-in |
-| `enableRustCompute` | ❌ | Desktop qualification wrappers; no general production caller |
-| `enableGlobalCopilot` | ❌ | Ambient Global AI Copilot |
-| `enableLocalFirstSync` | ❌ | Experimental Yjs shadow projection; Redux remains source of truth |
-| `enableBrowserOllama` | ❌ | Advanced browser→Ollama opt-in; requires user-managed CORS/origin configuration |
+| Flag                        | Default | Role / maturity note                                                                                         |
+| --------------------------- | :-----: | ------------------------------------------------------------------------------------------------------------ |
+| `enableStoryBibleAdvanced`  |   ✅    | Story-bible graph/consistency features                                                                       |
+| `enableBinderResearch`      |   ✅    | Research Binder                                                                                              |
+| `enableCompileWizard`       |   ✅    | Guided export/compile flow                                                                                   |
+| `enableProjectHealthScore`  |   ✅    | Dashboard health insights                                                                                    |
+| `enableAppHealthPanel`      |   ✅    | Runtime diagnostics in About                                                                                 |
+| `enableDuckDbAnalytics`     |   ✅    | Local DuckDB-WASM analytics sidecar; see privacy caveats                                                     |
+| `enableObjectsGroups`       |   ✅    | Story Objects & Groups                                                                                       |
+| `enableMindMaps`            |   ✅    | Enhanced Mind Maps                                                                                           |
+| `enableCharacterInterviews` |   ✅    | Character Interviews v2                                                                                      |
+| `enableLoraAdapters`        |   ✅    | LoRA adapter tooling; advanced/experimental                                                                  |
+| `enablePluginSystem`        |   ✅    | Worker-isolated permission-gated plugin system; still an advanced extension surface                          |
+| `enableIdbAtRestEncryption` |   ✅    | Browser/PWA IDB encryption capability; passphrase setup controls actual encryption state                     |
+| `enableAdaptiveAiEngine`    |   ✅    | Device-aware AI backend/model selection                                                                      |
+| `enableComputeShaders`      |   ✅    | Experimental WebGPU compute path; do not assume every advertised acceleration path is active on every device |
+| `enableWorkerBusV2`         |   ✅    | Shared background task orchestration                                                                         |
+| `enableRtlLayout`           |   ❌    | Manual RTL-layout test override                                                                              |
+| `enableVoiceSupport`        |   ❌    | Voice commands/dictation; explicit permission boundary                                                       |
+| `enableProForge`            |   ❌    | Token-heavy experimental agentic editorial pipeline                                                          |
+| `enableVoiceWasm`           |   ❌    | Local voice WASM models; explicit download/opt-in                                                            |
+| `enableRustCompute`         |   ❌    | Desktop qualification wrappers; no general production caller                                                 |
+| `enableGlobalCopilot`       |   ❌    | Ambient Global AI Copilot                                                                                    |
+| `enableLocalFirstSync`      |   ❌    | Experimental Yjs shadow projection; Redux remains source of truth                                            |
+| `enableBrowserOllama`       |   ❌    | Advanced browser→Ollama opt-in; requires user-managed CORS/origin configuration                              |
 
 Two earlier flags were intentionally retired:
 - cross-project search is permanent core behavior;
@@ -418,12 +418,12 @@ Initial model acquisition requires network access and can involve hundreds of me
 
 The routing service currently implements these semantics:
 
-| Mode | Current routing intent |
-| --- | --- |
-| **Hybrid** | Cloud-first while online; local fallback when the browser reports offline |
-| **Cloud** | Cloud path while online; local fallback when offline |
-| **Local** | Local/on-device path only; every cloud provider call is blocked outright (`assertCloudAiAllowed` rejects with `AI mode is "local" (local-only)`) |
-| **Eco** | Small local model / heuristic-oriented path for constrained devices; cloud provider calls are blocked identically to Local (`assertCloudAiAllowed` rejects Eco the same way) — Eco is a strict no-cloud mode, not merely a battery/cost optimization |
+| Mode       | Current routing intent                                                                                                                                                                                                                               |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hybrid** | Cloud-first while online; local fallback when the browser reports offline                                                                                                                                                                            |
+| **Cloud**  | Cloud path while online; local fallback when offline                                                                                                                                                                                                 |
+| **Local**  | Local/on-device path only; every cloud provider call is blocked outright (`assertCloudAiAllowed` rejects with `AI mode is "local" (local-only)`)                                                                                                     |
+| **Eco**    | Small local model / heuristic-oriented path for constrained devices; cloud provider calls are blocked identically to Local (`assertCloudAiAllowed` rejects Eco the same way) — Eco is a strict no-cloud mode, not merely a battery/cost optimization |
 
 If you require AI execution that never intentionally calls a cloud provider, use **Local or Eco** — both are enforced as strict no-cloud modes at the same policy gate.
 
@@ -431,11 +431,11 @@ If you require AI execution that never intentionally calls a cloud provider, use
 
 Claude has a different browser trust boundary from other providers:
 
-| Surface | Claude path |
-| --- | --- |
-| **Tauri desktop** | Direct native HTTP request to Anthropic |
+| Surface                       | Claude path                                          |
+| ----------------------------- | ---------------------------------------------------- |
+| **Tauri desktop**             | Direct native HTTP request to Anthropic              |
 | **Vercel / Cloudflare Pages** | Same-origin WorldScript serverless relay → Anthropic |
-| **GitHub Pages** | Unavailable; static hosting cannot run the relay |
+| **GitHub Pages**              | Unavailable; static hosting cannot run the relay     |
 
 On edge hosts, the BYOK key, prompt, and response transit the WorldScript relay process. The **application relay code is designed not to persist or intentionally log those payloads**, but hosting/network infrastructure can still process connection metadata according to the host's own policies.
 
@@ -467,23 +467,22 @@ A heuristics-only mode exists for local non-model assistance.
 
 # Privacy, storage, and security
 
-
 ## Security model: separate trust boundaries
 
 WorldScript security is layered rather than represented by one blanket **"private"**, **"local"**, or **"encrypted"** guarantee.
 
 Treat these as separate security authorities:
 
-| Boundary | What it governs |
-| --- | --- |
-| **Project persistence** | Where manuscript/project data is stored and whether that surface is protected at rest |
-| **Secret storage** | API credentials and other dedicated secrets |
-| **AI execution** | Browser-local, local-network, direct cloud-provider, and WorldScript-relay request paths |
-| **Collaboration** | Room-key/content encryption versus signaling/connection metadata |
-| **Analytics** | DuckDB/OPFS persistence and the distinction between local metadata and encrypted cells |
-| **Exports/backups** | User-controlled artifacts and passphrase-protected library backup |
-| **Desktop filesystem** | Native local files and the current absence of WorldScript application-level at-rest encryption there |
-| **Deployment infrastructure** | Host-specific CSP, headers, serverless relay capability, updates, and release provenance |
+| Boundary                      | What it governs                                                                                      |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Project persistence**       | Where manuscript/project data is stored and whether that surface is protected at rest                |
+| **Secret storage**            | API credentials and other dedicated secrets                                                          |
+| **AI execution**              | Browser-local, local-network, direct cloud-provider, and WorldScript-relay request paths             |
+| **Collaboration**             | Room-key/content encryption versus signaling/connection metadata                                     |
+| **Analytics**                 | DuckDB/OPFS persistence and the distinction between local metadata and encrypted cells               |
+| **Exports/backups**           | User-controlled artifacts and passphrase-protected library backup                                    |
+| **Desktop filesystem**        | Native local files and the current absence of WorldScript application-level at-rest encryption there |
+| **Deployment infrastructure** | Host-specific CSP, headers, serverless relay capability, updates, and release provenance             |
 
 A guarantee in one row must never be generalized to another. For the detailed threat model and current security-truth reconciliation, see [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) and the repository security documentation.
 
@@ -499,14 +498,14 @@ That is a product-architecture statement, not a claim that the application never
 
 ## Storage by platform
 
-| Data class | Browser / PWA | Tauri desktop |
-| --- | --- | --- |
-| Project/state persistence | IndexedDB | Local filesystem under app data |
-| Snapshots/assets | IndexedDB stores | Local filesystem stores |
-| API keys | Separate IndexedDB encrypted-secret store | Same WebView IndexedDB encrypted-secret store |
-| Optional project-data at-rest encryption | Implemented for the protected IDB path | **Does not currently encrypt the filesystem-backed project store** |
-| DuckDB analytics | OPFS / DuckDB-WASM when enabled | OPFS/WebView-side DuckDB path when enabled |
-| Model cache | Browser origin cache/storage | WebView storage / local runtime cache |
+| Data class                               | Browser / PWA                             | Tauri desktop                                                      |
+| ---------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------ |
+| Project/state persistence                | IndexedDB                                 | Local filesystem under app data                                    |
+| Snapshots/assets                         | IndexedDB stores                          | Local filesystem stores                                            |
+| API keys                                 | Separate IndexedDB encrypted-secret store | Same WebView IndexedDB encrypted-secret store                      |
+| Optional project-data at-rest encryption | Implemented for the protected IDB path    | **Does not currently encrypt the filesystem-backed project store** |
+| DuckDB analytics                         | OPFS / DuckDB-WASM when enabled           | OPFS/WebView-side DuckDB path when enabled                         |
+| Model cache                              | Browser origin cache/storage              | WebView storage / local runtime cache                              |
 
 ### Critical desktop caveat
 
@@ -720,25 +719,24 @@ See [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
 
 # Web, PWA, and desktop
 
-
 ## Platform capability matrix
 
 The same product codebase runs across different hosts, but **host capabilities are not identical**.
 
-| Capability | GitHub Pages | Vercel / compatible edge host | Tauri desktop |
-| --- | :---: | :---: | :---: |
-| Core writing/planning | ✅ | ✅ | ✅ |
-| Browser-origin IndexedDB | ✅ | ✅ | ✅ via WebView where used |
-| Installable PWA | ✅ | ✅ | — |
-| Offline-capable cached web shell | ✅ | ✅ | Native app |
-| WorldScript filesystem-backed project store | ❌ | ❌ | ✅ |
-| Native HTTP transport | ❌ | ❌ | ✅ |
-| Claude | ❌ | ✅ via same-origin relay | ✅ direct native HTTP |
-| Browser-native WebLLM/ONNX/Transformers | ✅ when runtime supports it | ✅ when runtime supports it | ✅ through WebView/runtime support |
-| Direct browser→Ollama | Experimental opt-in; CORS/origin dependent | Experimental opt-in; CORS/origin dependent | Not needed for the normal desktop local-server path |
-| Ollama / LM Studio / vLLM local-server path | Browser constraints apply | Browser constraints apply | ✅ native HTTP path |
-| Response security headers controlled by WorldScript deployment | Limited by static host; meta CSP used | ✅ | Tauri CSP/configuration |
-| Application-level at-rest encryption for filesystem project files | n/a | n/a | ❌ currently |
+| Capability                                                        |                GitHub Pages                |       Vercel / compatible edge host        |                    Tauri desktop                    |
+| ----------------------------------------------------------------- | :----------------------------------------: | :----------------------------------------: | :-------------------------------------------------: |
+| Core writing/planning                                             |                     ✅                     |                     ✅                     |                         ✅                          |
+| Browser-origin IndexedDB                                          |                     ✅                     |                     ✅                     |              ✅ via WebView where used              |
+| Installable PWA                                                   |                     ✅                     |                     ✅                     |                          —                          |
+| Offline-capable cached web shell                                  |                     ✅                     |                     ✅                     |                     Native app                      |
+| WorldScript filesystem-backed project store                       |                     ❌                     |                     ❌                     |                         ✅                          |
+| Native HTTP transport                                             |                     ❌                     |                     ❌                     |                         ✅                          |
+| Claude                                                            |                     ❌                     |          ✅ via same-origin relay          |                ✅ direct native HTTP                |
+| Browser-native WebLLM/ONNX/Transformers                           |        ✅ when runtime supports it         |        ✅ when runtime supports it         |         ✅ through WebView/runtime support          |
+| Direct browser→Ollama                                             | Experimental opt-in; CORS/origin dependent | Experimental opt-in; CORS/origin dependent | Not needed for the normal desktop local-server path |
+| Ollama / LM Studio / vLLM local-server path                       |         Browser constraints apply          |         Browser constraints apply          |                 ✅ native HTTP path                 |
+| Response security headers controlled by WorldScript deployment    |   Limited by static host; meta CSP used    |                     ✅                     |               Tauri CSP/configuration               |
+| Application-level at-rest encryption for filesystem project files |                    n/a                     |                    n/a                     |                    ❌ currently                     |
 
 This table is intentionally capability-oriented. It does not imply that every optional/experimental feature is equally qualified on every supported device.
 
@@ -787,31 +785,31 @@ The normal web PR pipeline is not the complete native release qualification surf
 
 # Technology stack
 
-| Layer | Technology | Purpose |
-| --- | --- | --- |
-| UI | React 19 | Main application UI |
-| Type system | TypeScript native preview (`tsgo`), strict configuration | Static correctness |
-| Build | Vite 8 | Web/PWA application build |
-| Workspace | pnpm 12.13.0 + Turborepo | Dependency/workspace orchestration |
-| Persistent app state | Redux Toolkit + redux-undo | Project/settings/undoable domain state |
-| Transient UI state | Zustand | Ephemeral UI-only state |
-| Styling | Tailwind CSS 4 + CSS custom properties/design tokens | Theming and design system |
-| Cloud AI | Gemini, OpenAI, Claude, Grok, OpenRouter | BYOK cloud model execution |
-| Browser local AI | WebLLM, ONNX Runtime Web, Transformers.js | On-device inference |
-| Local server AI | Ollama / compatible local endpoints | Desktop-native local inference path |
-| Background work | WorkerBus v2 | Worker pools, scheduling, cancellation/health primitives |
-| Analytics | DuckDB-WASM + OPFS | Local analytics/query sidecar |
-| Browser storage | IndexedDB | State/assets/secure local persistence |
-| Desktop storage | Tauri filesystem stores | Local project persistence |
-| Collaboration | Yjs + `packages/collab-transport` | P2P CRDT collaboration |
-| Crypto | Web Crypto API | API-key storage, IDB encryption, backups, collaboration crypto |
-| PDF | jsPDF | PDF generation |
-| DOCX | `docx` + JSZip | Word-compatible export |
-| PWA | Service Worker + Web App Manifest | Offline shell/installability |
-| i18n | Custom React i18n context | 2963 keys × 19 locales |
-| Testing | Vitest 5.x (8672+ tests / 654 files) + Playwright | Unit/integration/E2E |
-| Quality | Biome + tsgo + CodeQL/security tooling | Static and CI gates |
-| Desktop | Tauri 2 | Current native shell |
+| Layer                | Technology                                               | Purpose                                                        |
+| -------------------- | -------------------------------------------------------- | -------------------------------------------------------------- |
+| UI                   | React 19                                                 | Main application UI                                            |
+| Type system          | TypeScript native preview (`tsgo`), strict configuration | Static correctness                                             |
+| Build                | Vite 8                                                   | Web/PWA application build                                      |
+| Workspace            | pnpm 12.13.0 + Turborepo                                 | Dependency/workspace orchestration                             |
+| Persistent app state | Redux Toolkit + redux-undo                               | Project/settings/undoable domain state                         |
+| Transient UI state   | Zustand                                                  | Ephemeral UI-only state                                        |
+| Styling              | Tailwind CSS 4 + CSS custom properties/design tokens     | Theming and design system                                      |
+| Cloud AI             | Gemini, OpenAI, Claude, Grok, OpenRouter                 | BYOK cloud model execution                                     |
+| Browser local AI     | WebLLM, ONNX Runtime Web, Transformers.js                | On-device inference                                            |
+| Local server AI      | Ollama / compatible local endpoints                      | Desktop-native local inference path                            |
+| Background work      | WorkerBus v2                                             | Worker pools, scheduling, cancellation/health primitives       |
+| Analytics            | DuckDB-WASM + OPFS                                       | Local analytics/query sidecar                                  |
+| Browser storage      | IndexedDB                                                | State/assets/secure local persistence                          |
+| Desktop storage      | Tauri filesystem stores                                  | Local project persistence                                      |
+| Collaboration        | Yjs + `packages/collab-transport`                        | P2P CRDT collaboration                                         |
+| Crypto               | Web Crypto API                                           | API-key storage, IDB encryption, backups, collaboration crypto |
+| PDF                  | jsPDF                                                    | PDF generation                                                 |
+| DOCX                 | `docx` + JSZip                                           | Word-compatible export                                         |
+| PWA                  | Service Worker + Web App Manifest                        | Offline shell/installability                                   |
+| i18n                 | Custom React i18n context                                | 2963 keys × 19 locales                                         |
+| Testing              | Vitest 5.x (8673+ tests / 654 files) + Playwright        | Unit/integration/E2E                                           |
+| Quality              | Biome + tsgo + CodeQL/security tooling                   | Static and CI gates                                            |
+| Desktop              | Tauri 2                                                  | Current native shell                                           |
 
 ---
 
@@ -886,7 +884,7 @@ WorldScript-Studio/
 ├── locales/                 # Source locale trees
 ├── public/                  # PWA assets, manifest, SW, runtime locale bundles
 ├── tests/
-│   ├── unit/                # Vitest unit tests (the 8672+ total also includes components/ and packages/*/tests; tests/e2e is excluded)
+│   ├── unit/                # Vitest unit tests (the 8673+ total also includes components/ and packages/*/tests; tests/e2e is excluded)
 │   └── e2e/                 # Playwright
 ├── docs/                    # Canonical product/engineering documentation + ADRs
 ├── src-tauri/               # Tauri v2 desktop shell / Rust
@@ -1031,7 +1029,7 @@ Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendo
 
 Current source-synchronized README metrics:
 
-- **8672+ unit tests** across **654 test files**
+- **8673+ unit tests** across **654 test files**
 - i18n: **2963 keys × 19 locales**
 
 CI remains authoritative for actual pass/fail and live coverage.
@@ -1237,47 +1235,47 @@ The README is the product/entry-point overview. Detailed operational truth shoul
 
 ## User/product/runtime
 
-| Document | Purpose |
-| --- | --- |
-| [`docs/LOCAL-AI.md`](docs/LOCAL-AI.md) | Browser-native AI, model downloads, Ollama/local servers |
-| [`docs/COPILOT.md`](docs/COPILOT.md) | Global Copilot |
-| [`docs/LANGUAGETOOL.md`](docs/LANGUAGETOOL.md) | Grammar/spell integration and privacy boundary |
-| [`docs/PLOT-BOARD.md`](docs/PLOT-BOARD.md) | Plot Board v2 |
-| [`docs/PROGRESS-TRACKER.md`](docs/PROGRESS-TRACKER.md) | Goals, sessions, streaks, charts |
-| [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge pipeline |
-| [`docs/HEURISTIC-RULES.md`](docs/HEURISTIC-RULES.md) | Offline heuristic analysis rules |
-| [`docs/IDB-ENCRYPTION.md`](docs/IDB-ENCRYPTION.md) | Browser IDB at-rest encryption lifecycle |
+| Document                                                 | Purpose                                                  |
+| -------------------------------------------------------- | -------------------------------------------------------- |
+| [`docs/LOCAL-AI.md`](docs/LOCAL-AI.md)                   | Browser-native AI, model downloads, Ollama/local servers |
+| [`docs/COPILOT.md`](docs/COPILOT.md)                     | Global Copilot                                           |
+| [`docs/LANGUAGETOOL.md`](docs/LANGUAGETOOL.md)           | Grammar/spell integration and privacy boundary           |
+| [`docs/PLOT-BOARD.md`](docs/PLOT-BOARD.md)               | Plot Board v2                                            |
+| [`docs/PROGRESS-TRACKER.md`](docs/PROGRESS-TRACKER.md)   | Goals, sessions, streaks, charts                         |
+| [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge pipeline                                        |
+| [`docs/HEURISTIC-RULES.md`](docs/HEURISTIC-RULES.md)     | Offline heuristic analysis rules                         |
+| [`docs/IDB-ENCRYPTION.md`](docs/IDB-ENCRYPTION.md)       | Browser IDB at-rest encryption lifecycle                 |
 
 ## Security / deployment / desktop
 
-| Document | Purpose |
-| --- | --- |
-| [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) | STRIDE model and mitigation map |
-| [`.github/SECURITY.md`](.github/SECURITY.md) | Vulnerability reporting |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Pages / Vercel / Cloudflare deployment |
-| [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Desktop build workflow |
-| [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) | Updater/signing configuration |
-| [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) | PWA behavior/audit |
+| Document                                                         | Purpose                                       |
+| ---------------------------------------------------------------- | --------------------------------------------- |
+| [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) | STRIDE model and mitigation map               |
+| [`.github/SECURITY.md`](.github/SECURITY.md)                     | Vulnerability reporting                       |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)                       | GitHub Pages / Vercel / Cloudflare deployment |
+| [`docs/TAURI-CI.md`](docs/TAURI-CI.md)                           | Desktop build workflow                        |
+| [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md)                 | Updater/signing configuration                 |
+| [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md)                         | PWA behavior/audit                            |
 
 ## Engineering
 
-| Document | Purpose |
-| --- | --- |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Development workflow |
-| [DeepWiki](https://deepwiki.com/qnbs/WorldScript-Studio) | Code-derived repository documentation / exploration view; keep the top README badge intact |
-| [`docs/CI.md`](docs/CI.md) | CI architecture and local parity |
-| [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering/content conventions |
-| [`docs/Design-System.md`](docs/Design-System.md) | Design tokens and UI primitives |
-| [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | Accessibility architecture |
-| [`docs/adr/README.md`](docs/adr/README.md) | Architecture Decision Records |
-| [`AUDIT.md`](AUDIT.md) | Security/quality audit trail |
-| [`CHANGELOG.md`](CHANGELOG.md) | Release/change history |
-| [`ROADMAP.md`](ROADMAP.md) | Forward-looking strategy |
-| [`TODO.md`](TODO.md) | Current execution backlog |
-| [`docs/DEPENDABOT-TRIAGE.md`](docs/DEPENDABOT-TRIAGE.md) | Dependency update discipline |
+| Document                                                                 | Purpose                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md)                                     | Development workflow                                                                                                                                                                                           |
+| [DeepWiki](https://deepwiki.com/qnbs/WorldScript-Studio)                 | Code-derived repository documentation / exploration view; keep the top README badge intact                                                                                                                     |
+| [`docs/CI.md`](docs/CI.md)                                               | CI architecture and local parity                                                                                                                                                                               |
+| [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md)                       | Engineering/content conventions                                                                                                                                                                                |
+| [`docs/Design-System.md`](docs/Design-System.md)                         | Design tokens and UI primitives                                                                                                                                                                                |
+| [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md)                         | Accessibility architecture                                                                                                                                                                                     |
+| [`docs/adr/README.md`](docs/adr/README.md)                               | Architecture Decision Records                                                                                                                                                                                  |
+| [`AUDIT.md`](AUDIT.md)                                                   | Security/quality audit trail                                                                                                                                                                                   |
+| [`CHANGELOG.md`](CHANGELOG.md)                                           | Release/change history                                                                                                                                                                                         |
+| [`ROADMAP.md`](ROADMAP.md)                                               | Forward-looking strategy                                                                                                                                                                                       |
+| [`TODO.md`](TODO.md)                                                     | Current execution backlog                                                                                                                                                                                      |
+| [`docs/DEPENDABOT-TRIAGE.md`](docs/DEPENDABOT-TRIAGE.md)                 | Dependency update discipline                                                                                                                                                                                   |
 | [`docs/GIT-WORKTREE-HOUSEKEEPING.md`](docs/GIT-WORKTREE-HOUSEKEEPING.md) | Git worktree/branch cleanup discipline — the `'main' is already used by worktree` local `gh pr merge` error and its fix, safe-deletion diagnostics, the Claude Code permission gate, `git gc` hardware caveats |
-| [`docs/CODEANT-REVIEW-LOOP.md`](docs/CODEANT-REVIEW-LOOP.md) | Review/convergence runbook |
-| [`docs/DEEPSOURCE-REVIEW-LOOP.md`](docs/DEEPSOURCE-REVIEW-LOOP.md) | Static-analysis convergence |
+| [`docs/CODEANT-REVIEW-LOOP.md`](docs/CODEANT-REVIEW-LOOP.md)             | Review/convergence runbook                                                                                                                                                                                     |
+| [`docs/DEEPSOURCE-REVIEW-LOOP.md`](docs/DEEPSOURCE-REVIEW-LOOP.md)       | Static-analysis convergence                                                                                                                                                                                    |
 
 ## Code-intelligence tooling
 

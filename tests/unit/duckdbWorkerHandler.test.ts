@@ -25,7 +25,7 @@ const {
   const mockConnect = vi.fn();
   const mockDbTerminate = vi.fn();
   // QNBS-v3: [Must be a `function`, not an arrow — arrow functions aren't constructable, and initDuckDb() calls `new AsyncDuckDB(...)`.]
-  const MockAsyncDuckDB = vi.fn().mockImplementation(function MockAsyncDuckDBCtor() {
+  const MockAsyncDuckDB = vi.fn().mockImplementation(function mockAsyncDuckDBConstructor() {
     return {
       instantiate: mockInstantiate,
       registerFileHandle: mockRegisterFileHandle,
