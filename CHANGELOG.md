@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Rust dependencies:** Bumped `tokio` to 1.54.1 in the Tauri backend and `unicode-normalization` to
+  0.1.26 in the Rust Core workspace; lockfile-only, MSRV pins unchanged (PR #1167; Dependabot source PRs
+  #1153, #1156).
+
 - **CI dependencies:** Moved all four `github/codeql-action` references (`init`, `autobuild`, `analyze`,
   `upload-sarif`) to v4.39.1 together, and bumped `Swatinem/rust-cache` and `docker/login-action`
   (v4.7.0) in the workflows (PR #1166; Dependabot source PRs #1158, #1159).
