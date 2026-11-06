@@ -25,12 +25,14 @@ review, signing, and security policy remain in `AGENTS.md`, `docs/CI.md`, and
 
 ## PR lifecycle (Cloud)
 
-Matches repository policy; do not wait for CI while the PR stays in **Draft**.
+Open every PR as **Ready for Review**; do not use Draft PRs. When the PR number is
+needed for the changelog or governance, open the ready PR after the implementation
+is prepared and add its reference promptly so CI and review run immediately.
 
 ```text
 coherent local implementation
-→ Draft only if a PR number is required for CHANGELOG/governance
-→ Ready for Review immediately
+→ PR opened as Ready for Review
+→ add the PR number to CHANGELOG/governance if required
 → CI + semantic review in parallel
 → classify entire review wave (three channels)
 → one correction wave
@@ -39,7 +41,7 @@ coherent local implementation
 → resulting-main CI + CodeQL + Vercel Production exact SHA
 ```
 
-CodeRabbit is configured with `drafts: false` — staying in Draft suppresses automatic review.
+CodeRabbit is configured with `drafts: false`; Draft status suppresses automatic review.
 
 ## Review semantics
 
@@ -70,9 +72,10 @@ After merging to `main`:
    reconciliation is required before non-train mutation resumes. A separately
    declared release-batched Preview retention mode in that policy may defer
    the same Preview housekeeping until the next sanctioned `v*` release
-   reconciliation. Its destructive writer is Codex CLI in the local VS
-   Code/Ubuntu environment. Cursor Cloud does not delete Vercel deployments,
-   publish a release, or receive release secrets. Per-merge CI/CD, CodeQL,
+   reconciliation. As of 2026-10-13 that release-batched mode is superseded.
+   Under that historical mode, the writer was Codex CLI in local VS Code/Ubuntu;
+   Cursor Cloud does not delete Vercel deployments or receive release authority.
+   Per-merge CI/CD, CodeQL,
    Production READY, canonical HTTP, and alias/promotion/rollback checks stay
    mandatory. Gate 7 and the production storage-authority switch stay
    maintainer-gated. The introducing transition is one-time; a later pull
@@ -80,13 +83,14 @@ After merging to `main`:
    Preview deployments, or provider resource pressure, requires one exceptional
    Codex CLI pass and stops dependent repository mutation until that pass is
    recorded. That pass does not restore per-merge destructive cleanup. Until
-   that mode is on `main`,
-   ordinary mode still requires the full reconciliation. As of 2026-10-13 that
-   release-batched mode is superseded: the maintainer decision recorded in GH
-   #627 makes ordinary per-merge reconciliation the active mode, executed by the
-   local Claude Code CLI session. The Codex CLI writer, handoff and release-pass
-   clauses above no longer apply, and Cursor Cloud still does not delete
-   deployments; see the policy's Active mode section.
+   that mode is on `main`, ordinary mode still requires the full reconciliation.
+   As of 2026-11-06, ordinary-mode operator eligibility is defined by the dated
+   section in `docs/VERCEL-PREVIEW-RETENTION-POLICY.md`: one maintainer-designated
+   local Claude Code CLI or Codex CLI at a time. Cursor Cloud may write source and
+   PRs, but destructive retention remains **NOT_ADMITTED** pending the separate
+   maintainer-approved capability gate in [#1174](https://github.com/qnbs/WorldScript-Studio/issues/1174).
+   Until then, hand off per-merge retention to a qualified local operator. Do not
+   copy local Vercel tokens or `.vercel` state into Cursor Cloud.
 
 ## Environment configuration (D1)
 

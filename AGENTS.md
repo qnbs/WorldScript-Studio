@@ -94,6 +94,9 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
 `docs/PR-CI-MERGE-WORKFLOW.md`; do not load that procedure for an unrelated tiny edit.
 
 - Use a feature branch and conventional commits. Never commit directly to `main`.
+- Open every pull request as ready for review; do not use draft PRs. If a PR number is
+  needed for its changelog entry, open it once implementation is ready and add the
+  reference promptly so review and CI start immediately.
 - PR budget is cumulative base→prospective head/index: absolute normal ceiling is ≤30 changed files / ≤3000 meaningful lines / ≤15 commits; at 30 files do not add a file, at 15 commits do not create another commit, and never push merely to discover the budget.
 - Resolve the real PR base and run `pnpm run pr:budget -- --base <ref>` before the first commit and before every corrective commit/push; use `--prospective` for staged changes. If no live PR base exists yet, provide the reviewed base as `PR_BUDGET_BASE=<ref>` for both admission and push. Treat remaining headroom as a design constraint, never delete meaningful safety proof to reclaim a slot, and use a bounded split/successor when a valid fix cannot fit.
 - Do not add Claude/Anthropic attribution, generated-by footers, or session URLs to commit
@@ -147,17 +150,26 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   does not restore per-merge destructive cleanup. Until that mode is on `main`,
   ordinary mode still requires
   the full reconciliation. As of 2026-10-13 that release-batched mode is
-  superseded: the maintainer decision recorded in GH #627 makes ordinary
-  per-merge reconciliation the active mode, executed by the local Claude Code CLI
-  session. The Codex CLI writer, handoff and release-pass clauses above no longer
-  apply; see the policy's Active mode section.
+  superseded and ordinary per-merge reconciliation is active. As of 2026-11-06,
+  its operator eligibility, recorded in GH #627, permits one maintainer-designated
+  local Claude Code CLI or Codex CLI at a time. Cursor Cloud may write source and
+  PRs under ordinary repository rules, but destructive retention remains
+  `NOT_ADMITTED` until the separate maintainer-approved capability gate in GH
+  #1174 is complete. That gate requires Cursor-managed least-privilege Vercel
+  access and a clean, source-equal Node 22 runner; local Vercel tokens or state
+  must never be copied into Cursor. Until admission, hand off per-merge retention
+  to a qualified local operator and record the exclusive lease transfer. This
+  updates operator eligibility only: full reconciliation, SAFE-only deletion,
+  Production/rollback protection, all gates, and release restrictions remain in
+  force. See the policy's dated operator-eligibility section.
 
 ## Cursor Cloud Agent
 
 Cloud Agents run on Linux VMs with Cursor-managed signing and GitHub integration. `gh` API auth
-may fail while Git push/PR operations still work — diagnose both separately. Use Draft PRs only
-for short bootstrap; mark **Ready for Review** early so CodeRabbit and CI run in parallel (see
-`config/reviewer-registry.json`). After merge, prove **resulting-main** CI/CodeQL/Vercel Production
+may fail while Git push/PR operations still work — diagnose both separately. Open every PR as
+**Ready for Review**; do not use Draft PRs, including when the PR number is needed for the
+changelog or governance. Complete that reference in the ready PR so CodeRabbit and CI can run
+immediately (see `config/reviewer-registry.json`). After merge, prove **resulting-main** CI/CodeQL/Vercel Production
 on the squash commit SHA, not the PR head. Operational detail: `docs/CURSOR-CLOUD-AGENT.md`;
 session snapshot: `pnpm run cursor:cloud-doctor`.
 

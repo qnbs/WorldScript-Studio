@@ -273,14 +273,20 @@ exception, and does not waive any post-merge safety requirement.
 
 ```text
 ACTIVE_MODE = ordinary per-merge preview retention
-ACTIVE_DESTRUCTIVE_WRITER = Claude Code CLI, local VS Code / Ubuntu
+HISTORICAL_DESTRUCTIVE_WRITER_AT_2026-10-13 = Claude Code CLI, local VS Code / Ubuntu
 SUPERSEDES = release-batched preview retention record, FIRST_BATCH_PR #1020
 SUPERSESSION_AUTHORITY = maintainer decision, GH #627 comment 6134785538
-CURSOR_CLOUD_DESTRUCTIVE_ACCESS = NO
+HISTORICAL_CURSOR_CLOUD_DESTRUCTIVE_ACCESS_AT_2026-10-13 = NO
+CURRENT_OPERATOR_POLICY = dated operator-eligibility section below
 TAG_AND_PUBLISH = not granted by this record
 GATE_7 = maintainer only
 PRODUCTION_AUTHORITY_SWITCH = forbidden
 ```
+
+This section preserves the operator assignment as it stood on 2026-10-13. Its
+operator-only fields are superseded by the dated 2026-11-06 eligibility section
+below; the ordinary-mode lifecycle, safety predicates, and release restrictions
+remain in force.
 
 After every merge to `main`, the mandatory lifecycle at the top of this policy
 runs in full before dependent repository mutation. The writer must also hold
@@ -317,6 +323,52 @@ The run ends with the post-cleanup proof below, and records the exact `main`
 SHA, run IDs, Production and alias state, the SAFE/PROTECTED/UNKNOWN counts, the
 deleted IDs and the verification in GH #627 and QNB-67. A later batched or
 train exception needs its own newly declared record in a later pull request.
+
+## Operator eligibility from 2026-11-06: one exclusive operator lease
+
+This dated successor changes only who may hold the ordinary-mode destructive
+writer role. The 2026-10-13 assignment remains as historical evidence. One
+maintainer-designated local Claude Code CLI or Codex CLI session may hold the
+current destructive lease. Cursor Cloud may write source and PRs under normal
+repository rules, but its destructive retention access is **not admitted** by
+this policy. It may become eligible only after the separate, explicit
+maintainer-approved capability admission tracked in
+[#1174](https://github.com/qnbs/WorldScript-Studio/issues/1174). A Vercel token
+or a source-writer lease alone never grants deletion authority. After #1174 is
+accepted, this policy supports an ordinary handoff to Cursor Cloud without
+binding eligibility to one model or provider. Until then, per-merge retention
+must be handed to a qualified local operator.
+
+```text
+ACTIVE_MODE = ordinary per-merge Preview retention
+OPERATOR_ELIGIBILITY = local Claude Code CLI | local Codex CLI | Cursor Cloud after GH #1174 capability admission
+OPERATOR_LEASE = exactly one active operator/session at a time
+OPERATOR_SELECTION = current maintainer-directed session
+EXECUTION_ENVIRONMENT = operator environment with verified repository access
+RETENTION_RUNTIME = Node 22.19+ with major 22, enforced by the unchanged runner
+CURSOR_CLOUD_DESTRUCTIVE_ACCESS = NOT_ADMITTED until explicit maintainer approval in GH #1174
+CURSOR_CLOUD_SOURCE_WRITES = allowed under ordinary signed-PR governance
+CURSOR_CLOUD_RETENTION_HANDOFF = qualified local operator until capability admission
+SAFE_ONLY = YES
+PER_MERGE_FULL_RECONCILIATION = REQUIRED
+TAG_AND_PUBLISH = not granted
+GATE_7 = maintainer only
+PRODUCTION_AUTHORITY_SWITCH = forbidden
+```
+
+The active operator must first confirm that no other agent or process is writing
+the same branch, worktree, lockfile, or retention pass. Cursor Cloud remains
+source-writer-only for retention until #1174 is explicitly accepted by the
+maintainer. That separate admission requires its own least-privilege
+team/project-scoped Vercel credential, a clean source-equal current-main
+worktree, Node 22.19+ on the canonical unchanged runner, read-only qualification,
+and explicit first-deletion approval; local tokens or `.vercel` state must never
+be copied. Until then, the selected local operator completes each required
+retention pass with an explicit handoff and no overlapping writes. After a
+future admission, an exclusive lease may pass to Cursor Cloud without another
+operator-name policy change. No handoff waives any state, CI, security, HTTP,
+alias, rollback, or post-proof predicate above. This record becomes active only
+after this policy change merges and its resulting-main gates pass.
 
 ## Expected provider scope and identity
 

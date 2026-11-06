@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Operations:** Made ordinary Vercel preview retention operator-agnostic across qualified local Claude Code CLI, Codex CLI, and future Cursor Cloud leases, with one maintainer-designated operator at a time. Cursor Cloud remains `NOT_ADMITTED` for deletions until the separate maintainer-approved capability gate in #1174; local credentials are never copied to Cloud. PRs open ready for review; SAFE-only and protection gates are unchanged (PR #1175).
+
 - **Dependencies:** Bumped React 19.3.1, Vite 8.3.5, the dev-tooling group (Playwright, Storybook, Vitest
   and others), 42 minor/patch packages including the AI SDK and the `@tauri-apps/*` plugins, and the
   matching Rust `tauri-plugin-*` crates (`notification` 2.8.0, `shell` 2.6.0, `updater` ~2.14). Biome is

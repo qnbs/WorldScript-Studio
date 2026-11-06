@@ -75,9 +75,14 @@ stops dependent repository mutation until that pass is recorded. That pass
 does not restore per-merge destructive cleanup. Until that mode is on `main`,
 ordinary mode still requires the full reconciliation. As of 2026-10-13 that
 release-batched mode is superseded: the maintainer decision recorded in GH #627
-makes ordinary per-merge reconciliation the active mode, executed by the local
-Claude Code CLI session. The Codex CLI writer, handoff and release-pass clauses
-above no longer apply; see the policy's Active mode section.
+makes ordinary per-merge reconciliation the active mode. As of 2026-11-06, its
+operator eligibility is defined in the dated section of
+`VERCEL-PREVIEW-RETENTION-POLICY.md`: one maintainer-designated local Claude
+Code CLI or Codex CLI at a time. Cursor Cloud may write source and PRs but is
+`NOT_ADMITTED` for destructive retention until the separate maintainer-approved
+capability gate in [#1174](https://github.com/qnbs/WorldScript-Studio/issues/1174)
+is complete. Until then, per-merge retention hands off to a qualified local
+operator; local Vercel tokens or `.vercel` state are never copied to Cursor.
 The GitHub workflow [`prune-deployments.yml`](../.github/workflows/prune-deployments.yml)
 prunes GitHub Deployment records only; it does not delete Vercel deployment
 artifacts.
