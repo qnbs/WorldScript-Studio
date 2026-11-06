@@ -233,13 +233,18 @@ describe('bounded GitHub Pages incident mode', () => {
     expect(policy).toContain(
       'the incident record, activation time, or sole writer lease is missing',
     );
-    expect(policy).toContain('the merge count or 24-hour clock has expired');
-    expect(policy).toContain('another writer is active');
+    expect(policy).toContain('the merge count or 24-hour clock expiring');
+    expect(policy).toContain('Another writer being active');
   });
 
-  it('requires the Pages deploy to be the only incomplete job and preserves all independent gates', () => {
-    expect(policy).toContain('its **only** non-success job');
+  it('allows only the Pages cancellation and workflow-defined skips while preserving all independent gates', () => {
+    expect(policy).toContain('Pages must be the only failed or cancelled job');
     expect(policy).toContain('`🚀 Deploy to GitHub Pages`');
+    expect(policy).toContain(
+      "workflow's `build` job (`🏗️ Build`) `Upload Pages artifact` step succeeded",
+    );
+    expect(policy).toContain('push-only skip of `📏 PR Size Governance` is admissible');
+    expect(policy).toContain('workflow explicitly defines for that event and changed paths');
     expect(policy).toContain('The overall `CI / CD` result remains truthfully `cancelled`');
     expect(policy).toContain(
       '`✅ CI Success`, Workflow Policy, Security Audit/OSV, Verified Signatures',
@@ -250,7 +255,13 @@ describe('bounded GitHub Pages incident mode', () => {
     expect(policy).toContain('the current main SHA does not match the push and CodeQL evidence');
     expect(policy).toContain('the event is not a protected-main push');
     expect(policy).toContain('any required job is absent, pending, skipped');
+    expect(policy).toContain('workflow-defined event- or path-based skip reason');
+    expect(policy).toContain('after the successful build-job artifact');
     expect(policy).toContain('did not unambiguously reach `syncing_files`');
+    expect(policy).toContain(
+      'These current-main admission predicates do not require the successor PR to exist.',
+    );
+    expect(policy).toContain('CI and independent review are merge-boundary evidence');
     expect(policy).toContain('A `workflow_dispatch` run');
     expect(policy).toContain('or a green PR-head check cannot substitute');
   });
@@ -270,9 +281,9 @@ describe('bounded GitHub Pages incident mode', () => {
       'first verify full push `CI / CD` and CodeQL on the current main, then complete',
     );
     expect(policy).toContain('the public HTTP check, or rollback protection does not match');
-    expect(policy).toContain('any provider/check result is unknown or contradictory');
+    expect(policy).toContain('any provider/check result being unknown or contradictory');
     expect(policy).toContain('the source is outside the five listed PRs');
-    expect(policy).toContain('is not a signed successor');
+    expect(policy).toContain('the successor is unsigned');
     expect(policy).toContain('lacks its independent reviews');
   });
 

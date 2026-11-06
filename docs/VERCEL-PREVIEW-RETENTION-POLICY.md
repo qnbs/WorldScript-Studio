@@ -412,16 +412,27 @@ TAG_AND_RELEASE = forbidden
 GATE_7 = maintainer only
 ```
 
-Before each successor branch, push, PR merge, or other dependent source mutation,
-the sole writer verifies the following against the current exact protected-main
-SHA using GitHub's live run and job records, not PR-provided evidence:
+Before creating a successor branch, pushing a branch, or performing another
+dependent source mutation, the sole writer verifies predicates 1–3 against the
+current exact protected-main SHA using GitHub's live run and job records, not
+PR-provided evidence. These current-main admission predicates do not require the
+successor PR to exist. Recheck them before each branch mutation or push. Before
+merging, also require predicate 4 on the exact successor PR head; CI and
+independent review are merge-boundary evidence, not prerequisites for creating
+or correcting that PR.
 
-1. The push-triggered `CI / CD` run is terminal and its **only** non-success job
-   is `🚀 Deploy to GitHub Pages`, which uploaded the artifact, created the
-   deployment, reached `syncing_files`, and was cancelled by its bounded job
-   timeout. The overall `CI / CD` result remains truthfully `cancelled`; no
-   other failure, cancellation, pending job, missing run, or workflow-dispatch
-   result is admissible.
+1. The push-triggered `CI / CD` run is terminal. The workflow's `build` job
+   (`🏗️ Build`) `Upload Pages artifact` step succeeded; the separate
+   `🚀 Deploy to GitHub Pages` job created the deployment, reached
+   `syncing_files`, and was cancelled by its bounded job timeout. Pages must be
+   the only failed or cancelled job.
+   Every other job must succeed or be skipped only as the protected workflow
+   explicitly defines for that event and changed paths. In particular, the
+   push-only skip of `📏 PR Size Governance` is admissible because that job runs
+   only for `pull_request` events and the trusted `✅ CI Success` aggregator
+   accepts that defined skip. The overall `CI / CD` result remains truthfully
+   `cancelled`; no other failure, cancellation, pending job, missing run, or
+   workflow-dispatch result is admissible.
 2. `✅ CI Success`, Workflow Policy, Security Audit/OSV, Verified Signatures,
    both Node 22 and Node 24 Quality Gates, Build, E2E, Browser Quality (VRT and
    Lighthouse), CodeQL, and every applicable path-scoped Rust/security gate
@@ -441,16 +452,18 @@ SHA using GitHub's live run and job records, not PR-provided evidence:
 Fail closed before mutation or merge if any of these is true: the incident
 record, activation time, or sole writer lease is missing; the current main SHA
 does not match the push and CodeQL evidence; the event is not a protected-main
-push; the `CI Success` identity or any required job is absent, pending, skipped
-without a path-based reason, failed, or cancelled; the Pages job did not
-unambiguously reach `syncing_files` after artifact upload and deployment
-creation; Production, a canonical alias, the public HTTP check, or rollback
-protection does not match; the source is outside the five listed PRs, is not a
-signed successor, or lacks its independent reviews; another writer is active;
-the merge count or 24-hour clock has expired; or any provider/check result is
-unknown or contradictory. A `workflow_dispatch` run, a similarly named status
-from an untrusted workflow, or a green PR-head check cannot substitute for
-trusted exact-main push and CodeQL evidence.
+push; the `CI Success` identity or any required job is absent, pending, skipped,
+failed, or cancelled; any other job has a non-success result without an exact
+workflow-defined event- or path-based skip reason; the Pages job did not
+unambiguously reach `syncing_files` after the successful build-job artifact
+upload and deployment creation; Production, a canonical alias, the public HTTP
+check, or rollback protection does not match; the source is outside the five
+listed PRs; or, at the merge boundary, the successor is unsigned, lacks its
+independent reviews, or has incomplete exact-head checks. Another writer being
+active, the merge count or 24-hour clock expiring, or any provider/check result
+being unknown or contradictory also stops the lane. A `workflow_dispatch` run,
+a similarly named status from an untrusted workflow, or a green PR-head check
+cannot substitute for trusted exact-main push and CodeQL evidence.
 
 During this mode, Pages remains **DEGRADED** until a real successful Pages
 deployment and public-site verification exist. Never call the whole `CI / CD`
