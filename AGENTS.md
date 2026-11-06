@@ -147,10 +147,15 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   does not restore per-merge destructive cleanup. Until that mode is on `main`,
   ordinary mode still requires
   the full reconciliation. As of 2026-10-13 that release-batched mode is
-  superseded: the maintainer decision recorded in GH #627 makes ordinary
-  per-merge reconciliation the active mode, executed by the local Claude Code CLI
-  session. The Codex CLI writer, handoff and release-pass clauses above no longer
-  apply; see the policy's Active mode section.
+  superseded and ordinary per-merge reconciliation is active. Its destructive
+  operator may be one maintainer-designated Claude Code CLI, Codex CLI, or Cursor
+  agent at a time. Local agents run in the user's VS Code/Ubuntu environment;
+  Cursor Cloud may hold the lease only after its own scoped Vercel access and
+  clean-main Node 22 runner are verified. One active session holds the exclusive
+  writer lease; simultaneous agent writes are forbidden. This updates operator
+  eligibility only: full reconciliation, SAFE-only deletion, Production/rollback
+  protection, all gates, and release restrictions remain in force. See the
+  policy's dated operator-eligibility section.
 
 ## Cursor Cloud Agent
 

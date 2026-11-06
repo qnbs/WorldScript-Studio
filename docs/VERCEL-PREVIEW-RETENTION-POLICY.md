@@ -318,6 +318,45 @@ SHA, run IDs, Production and alias state, the SAFE/PROTECTED/UNKNOWN counts, the
 deleted IDs and the verification in GH #627 and QNB-67. A later batched or
 train exception needs its own newly declared record in a later pull request.
 
+## Operator eligibility from 2026-11-06: one local operator lease
+
+This dated successor changes only who may hold the ordinary-mode destructive
+writer role. The 2026-10-13 assignment remains as historical evidence. The
+maintainer's current session direction allows one of these operators to hold the
+lease: Claude Code CLI, Codex CLI, or the Cursor agent. Claude and Codex run in
+the user's local VS Code/Ubuntu environment. Cursor Cloud may hold the lease only
+after its own team/project-scoped Vercel authorization and its clean-main Node 22
+runner have been verified. The operator is selected by the current
+maintainer-directed session; this policy does not bind the role to one product,
+model, or provider and does not require another policy change for an ordinary
+operator handoff.
+
+```text
+ACTIVE_MODE = ordinary per-merge Preview retention
+OPERATOR_ELIGIBILITY = Claude Code CLI | Codex CLI | Cursor agent
+OPERATOR_LEASE = exactly one active operator/session at a time
+OPERATOR_SELECTION = current maintainer-directed session
+EXECUTION_ENVIRONMENT = operator environment with verified repository access
+RETENTION_RUNTIME = Node 22.19+ with major 22, enforced by the unchanged runner
+CURSOR_CLOUD_DESTRUCTIVE_ACCESS = conditional on its own scoped Vercel authorization and runner qualification
+SAFE_ONLY = YES
+PER_MERGE_FULL_RECONCILIATION = REQUIRED
+TAG_AND_PUBLISH = not granted
+GATE_7 = maintainer only
+PRODUCTION_AUTHORITY_SWITCH = forbidden
+```
+
+The active operator must first confirm that no other agent or process is writing
+the same branch, worktree, lockfile, or retention pass. Cursor Cloud additionally
+must use its own team/project-scoped Vercel authorization and prove the unchanged
+Node 22 runner against a clean worktree equal to current `origin/main`; this
+policy does not grant or modify Cursor credentials. The exclusive lease ends
+with the pass or explicit maintainer handoff; another listed operator may take
+the next lease without changing this policy. A handoff does not waive any state,
+CI, security, HTTP, alias, rollback, or post-proof predicate above. This record
+becomes active only after this policy change merges and its resulting-main gates
+pass.
+
 ## Expected provider scope and identity
 
 Enumeration and deletion are scoped to this exact non-secret identity:
