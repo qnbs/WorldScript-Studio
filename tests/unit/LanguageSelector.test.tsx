@@ -26,12 +26,18 @@ describe('LanguageSelector', () => {
   describe('compact variant', () => {
     it('renders with current language flag and name', () => {
       render(<LanguageSelector value="en" onChange={vi.fn()} variant="compact" />);
-      expect(screen.getByRole('button', { name: 'portal.language.groupLabel' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /portal\.language\.groupLabel/ })).toBeTruthy();
+    });
+
+    it('keeps the visible language name inside the accessible name (WCAG 2.5.3)', () => {
+      render(<LanguageSelector value="en" onChange={vi.fn()} variant="compact" />);
+      const button = screen.getByRole('button', { name: /portal\.language\.groupLabel/ });
+      expect(button.getAttribute('aria-label')).toContain('English');
     });
 
     it('shows beta indicator for beta languages', () => {
       render(<LanguageSelector value="ar" onChange={vi.fn()} variant="compact" />);
-      const button = screen.getByRole('button', { name: 'portal.language.groupLabel' });
+      const button = screen.getByRole('button', { name: /portal\.language\.groupLabel/ });
       expect(button).toBeTruthy();
       // Beta indicator should be present
       expect(button.querySelector('sup')).toBeTruthy();
@@ -41,13 +47,13 @@ describe('LanguageSelector', () => {
   describe('full variant', () => {
     it('renders with current language selected', () => {
       render(<LanguageSelector value="de" onChange={vi.fn()} variant="full" />);
-      expect(screen.getByRole('button', { name: 'portal.language.groupLabel' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /portal\.language\.groupLabel/ })).toBeTruthy();
     });
 
     it('opens dropdown on click', async () => {
       const user = userEvent.setup();
       render(<LanguageSelector value="en" onChange={vi.fn()} variant="full" />);
-      const button = screen.getByRole('button', { name: 'portal.language.groupLabel' });
+      const button = screen.getByRole('button', { name: /portal\.language\.groupLabel/ });
       await user.click(button);
       // Dropdown should open with listbox role
       expect(screen.getByRole('listbox')).toBeTruthy();
@@ -56,7 +62,7 @@ describe('LanguageSelector', () => {
     it('filters languages by search query', async () => {
       const user = userEvent.setup();
       render(<LanguageSelector value="en" onChange={vi.fn()} variant="full" />);
-      const button = screen.getByRole('button', { name: 'portal.language.groupLabel' });
+      const button = screen.getByRole('button', { name: /portal\.language\.groupLabel/ });
       await user.click(button);
 
       const searchInput = screen.getByPlaceholderText('portal.language.searchPlaceholder');
@@ -73,7 +79,7 @@ describe('LanguageSelector', () => {
       const onChange = vi.fn();
       render(<LanguageSelector value="en" onChange={onChange} variant="full" />);
 
-      const button = screen.getByRole('button', { name: 'portal.language.groupLabel' });
+      const button = screen.getByRole('button', { name: /portal\.language\.groupLabel/ });
       await user.click(button);
 
       // Click on German option
@@ -87,7 +93,7 @@ describe('LanguageSelector', () => {
       const user = userEvent.setup();
       render(<LanguageSelector value="en" onChange={vi.fn()} variant="full" />);
 
-      const button = screen.getByRole('button', { name: 'portal.language.groupLabel' });
+      const button = screen.getByRole('button', { name: /portal\.language\.groupLabel/ });
       await user.click(button);
       expect(screen.getByRole('listbox')).toBeTruthy();
 
@@ -101,7 +107,7 @@ describe('LanguageSelector', () => {
   describe('accessibility', () => {
     it('has proper aria attributes on trigger button', () => {
       render(<LanguageSelector value="en" onChange={vi.fn()} variant="full" />);
-      const button = screen.getByRole('button', { name: 'portal.language.groupLabel' });
+      const button = screen.getByRole('button', { name: /portal\.language\.groupLabel/ });
       expect(button.getAttribute('aria-haspopup')).toBe('listbox');
       expect(button.getAttribute('aria-expanded')).toBe('false');
     });
@@ -109,7 +115,7 @@ describe('LanguageSelector', () => {
     it('updates aria-expanded when opened', async () => {
       const user = userEvent.setup();
       render(<LanguageSelector value="en" onChange={vi.fn()} variant="full" />);
-      const button = screen.getByRole('button', { name: 'portal.language.groupLabel' });
+      const button = screen.getByRole('button', { name: /portal\.language\.groupLabel/ });
 
       await user.click(button);
       expect(button.getAttribute('aria-expanded')).toBe('true');

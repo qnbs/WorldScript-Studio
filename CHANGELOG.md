@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dependencies:** Bumped React 19.3.1, Vite 8.3.5, the dev-tooling group (Playwright, Storybook, Vitest
   and others), 42 minor/patch packages including the AI SDK and the `@tauri-apps/*` plugins, and the
   matching Rust `tauri-plugin-*` crates (`notification` 2.8.0, `shell` 2.6.0, `updater` ~2.14). Biome is
-  held at 2.5.8 until its 2.6 rule changes are fixed in a separate change, and `@reduxjs/toolkit` is held at 2.12.0 because 2.13.0 changes how entity adapters treat prototype-named IDs (two existing tests fail); `tauri-plugin-deep-link` moves to 2.6.3, which builds against `rust-ini` 0.21.3 (PR #1168; Dependabot source PRs
+  held at 2.5.8 until its 2.6 rule changes are fixed in a separate change, and `@reduxjs/toolkit` is held at 2.12.0 because 2.13.0 changes how entity adapters treat prototype-named IDs (two existing tests fail); the language selector trigger now includes the visible language name in its accessible name (WCAG 2.5.3, newly reported by axe-core 4.14); `tauri-plugin-deep-link` moves to 2.6.3, which builds against `rust-ini` 0.21.3 (PR #1168; Dependabot source PRs
   #1104, #1154, #1155, #1157, #1165).
 
 - **Rust dependencies:** Bumped `tokio` to 1.54.1 in the Tauri backend and `unicode-normalization` to
