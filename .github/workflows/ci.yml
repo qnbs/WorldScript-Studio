@@ -481,7 +481,7 @@ jobs:
       # QNBS-v3: no cargo caching existed before — fmt/check/clippy/test each rebuilt the full
       # dependency tree from scratch every run. Keyed on Cargo.lock + rustc version, so a toolchain
       # bump or lockfile change invalidates cleanly rather than reusing stale artifacts.
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri -> target
       # QNBS-v3: /var/cache/apt/archives is root-owned by default — actions/cache's restore
@@ -538,7 +538,7 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: crates -> target
       - name: Rust format check
