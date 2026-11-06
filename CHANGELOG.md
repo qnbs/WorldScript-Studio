@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **CI dependencies:** Moved all four `github/codeql-action` references (`init`, `autobuild`, `analyze`,
+  `upload-sarif`) to v4.39.1 together, and bumped `Swatinem/rust-cache` and `docker/login-action`
+  (v4.7.0) in the workflows (PR #1166; Dependabot source PRs #1158, #1159).
+
 - **Security (dependencies):** Updated the shipped HTML sanitizer to DOMPurify 3.4.17, including
   jsPDF's optional copy, for XHTML/SVG, shadow-root template and detached-hook fixes. Raised the
   LHCI-only `ip-address` dependency floor to 10.7.4 for GHSA-rxp7-6hxx-x8q5 (PR #1145, #1132).
