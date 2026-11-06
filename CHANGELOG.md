@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   held at 2.5.8 until its 2.6 rule changes are fixed in a separate change (PR #1168; Dependabot source PRs
   #1104, #1154, #1155, #1157, #1165).
 
+- **Rust dependencies:** Bumped `tokio` to 1.54.1 in the Tauri backend and `unicode-normalization` to
+  0.1.26 in the Rust Core workspace; lockfile-only, MSRV pins unchanged (PR #1167; Dependabot source PRs
+  #1153, #1156).
+
+- **CI dependencies:** Moved all four `github/codeql-action` references (`init`, `autobuild`, `analyze`,
+  `upload-sarif`) to v4.39.1 together, and bumped `Swatinem/rust-cache` and `docker/login-action`
+  (v4.7.0) in the workflows (PR #1166; Dependabot source PRs #1158, #1159).
+
 - **Security (dependencies):** Updated the shipped HTML sanitizer to DOMPurify 3.4.17, including
   jsPDF's optional copy, for XHTML/SVG, shadow-root template and detached-hook fixes. Raised the
   LHCI-only `ip-address` dependency floor to 10.7.4 for GHSA-rxp7-6hxx-x8q5 (PR #1145, #1132).
