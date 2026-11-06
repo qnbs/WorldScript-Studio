@@ -35,7 +35,7 @@ tauri-plugin-shell = "2"
 # No `zip` feature (#911): it only unpacks the v1 `.zip` / `.tar.gz` updater bundles, and
 # `createUpdaterArtifacts: true` ships the raw `-setup.exe` / `.msi` / `.AppImage` instead. macOS
 # keeps its `.app.tar.gz` path, whose `tar` and `flate2` are not behind this feature.
-tauri-plugin-updater = { version = "~2.12.0", default-features = false, features = ["rustls-tls", "system-proxy"] }
+tauri-plugin-updater = { version = "~2.14.0", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-window-state = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }

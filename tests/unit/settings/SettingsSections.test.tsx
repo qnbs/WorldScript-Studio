@@ -230,7 +230,7 @@ describe('GeneralSection', () => {
   it('shows language selector', () => {
     render(<GeneralSection />);
     // QNBS-v3: LanguageSelector is a custom dropdown with aria-label
-    expect(screen.getByLabelText('portal.language.groupLabel')).toBeTruthy();
+    expect(screen.getByLabelText(/portal\.language\.groupLabel/)).toBeTruthy();
   });
 });
 

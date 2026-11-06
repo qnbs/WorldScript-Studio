@@ -218,6 +218,9 @@ export const LanguageSelector = React.memo(
       </div>
     );
 
+    // WCAG 2.5.3 (label in name): the accessible name must contain the visible language name.
+    const triggerLabel = `${t('portal.language.groupLabel')}: ${currentMeta.nativeName}`;
+
     // QNBS-v3: Compact variant for header (button with current language indicator)
     if (isCompact) {
       return (
@@ -227,7 +230,7 @@ export const LanguageSelector = React.memo(
             onClick={() => setIsOpen(!isOpen)}
             aria-haspopup="listbox"
             aria-expanded={isOpen}
-            aria-label={t('portal.language.groupLabel')}
+            aria-label={triggerLabel}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-sc-md bg-[var(--glass-bg)] hover:bg-[var(--glass-bg-hover)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] cursor-pointer"
           >
             <span className="text-base" aria-hidden="true">
@@ -260,7 +263,7 @@ export const LanguageSelector = React.memo(
           onClick={() => setIsOpen(!isOpen)}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
-          aria-label={t('portal.language.groupLabel')}
+          aria-label={triggerLabel}
           className="flex items-center justify-between w-full px-4 py-2.5 text-sm rounded-sc-lg bg-[var(--glass-bg)] hover:bg-[var(--glass-bg-hover)] border border-[var(--sc-border-subtle)] text-[var(--sc-text-primary)] transition-all duration-sc-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] cursor-pointer"
         >
           <div className="flex items-center gap-3">

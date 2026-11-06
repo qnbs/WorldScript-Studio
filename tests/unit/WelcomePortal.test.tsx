@@ -92,14 +92,14 @@ describe('WelcomePortal', () => {
   it('shows language selector dropdown', () => {
     render(<WelcomePortal onExit={vi.fn()} />);
     // LanguageSelector is now a dropdown with aria-haspopup="listbox"
-    expect(screen.getByRole('button', { name: 'portal.language.groupLabel' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /portal\.language\.groupLabel/ })).toBeTruthy();
   });
 
   it('calls setLanguage when language is changed', () => {
     render(<WelcomePortal onExit={vi.fn()} />);
     // The LanguageSelector component receives setLanguage via props
     // We verify the component is rendered and functional
-    const langButton = screen.getByRole('button', { name: 'portal.language.groupLabel' });
+    const langButton = screen.getByRole('button', { name: /portal\.language\.groupLabel/ });
     expect(langButton).toBeTruthy();
     // Note: Full interaction testing would require mocking the dropdown state
   });
