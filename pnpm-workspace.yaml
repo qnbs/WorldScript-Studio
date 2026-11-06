@@ -22,7 +22,7 @@ minimumReleaseAgeExclude:
 
 # QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
 
-# Overrides with security justifications:
+# Overrides with security or compatibility justifications:
 # - typescript: pin ecosystem TypeScript dependencies/peers to the existing TypeScript 6.0.3
 #     compatibility compiler while tsgo/native-preview remains the primary repository typechecker
 # - serialize-javascript: CVE-2024-XXXX - prototype pollution fix
@@ -66,7 +66,9 @@ minimumReleaseAgeExclude:
 #     playwright-core@1.60.0, producing two copies whose nominally-distinct Page/ElementHandle
 #     types break the typecheck in tests/e2e/a11y.spec.ts (TS2322). Pin both to the exact
 #     @playwright/test version and move all three together (1.64.1 since PR #1168).
+# - @reduxjs/toolkit: hold the known-safe 2.12.0 behavior until the 2.13.0 prototype-named ID regressions are resolved; recharts@3.10.1 accepts the 2.x line.
 overrides:
+  "@reduxjs/toolkit": "2.12.0"
   playwright: "1.64.1"
   playwright-core: "1.64.1"
   esbuild: ">=0.28.1"
