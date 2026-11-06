@@ -10,7 +10,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "lib0": "^0.2.42",
+    "lib0": "^0.2.119",
     "simple-peer": "^9.11.0",
     "y-protocols": "^1.0.6"
   },
