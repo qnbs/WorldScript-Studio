@@ -97,9 +97,12 @@ mutation until that pass is recorded. That pass does not restore per-merge
 destructive cleanup. Until that mode is on `main`, ordinary mode still
 requires the full reconciliation. As of 2026-10-13 that release-batched mode is
 superseded: the maintainer decision recorded in GH #627 makes ordinary
-per-merge reconciliation the active mode, executed by the local Claude Code CLI
-session. The Codex CLI writer, handoff and release-pass clauses above no longer
-apply; see the policy's Active mode section. This is a Vercel artifact procedure; the
+per-merge reconciliation the active mode. As of 2026-11-06, its operator
+eligibility is defined in the dated section of
+`docs/VERCEL-PREVIEW-RETENTION-POLICY.md`: one maintainer-designated Claude Code
+CLI, Codex CLI, or qualified Cursor agent at a time. Cursor Cloud may run
+retention only with its own scoped Vercel access and a verified clean-main Node
+22 runner. This does not grant release credentials or release authority. This is a Vercel artifact procedure; the
 existing GitHub deployment-record workflow does not satisfy it. Never print
 tokens, environment values, or creator emails.
 

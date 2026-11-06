@@ -273,14 +273,20 @@ exception, and does not waive any post-merge safety requirement.
 
 ```text
 ACTIVE_MODE = ordinary per-merge preview retention
-ACTIVE_DESTRUCTIVE_WRITER = Claude Code CLI, local VS Code / Ubuntu
+HISTORICAL_DESTRUCTIVE_WRITER_AT_2026-10-13 = Claude Code CLI, local VS Code / Ubuntu
 SUPERSEDES = release-batched preview retention record, FIRST_BATCH_PR #1020
 SUPERSESSION_AUTHORITY = maintainer decision, GH #627 comment 6134785538
-CURSOR_CLOUD_DESTRUCTIVE_ACCESS = NO
+HISTORICAL_CURSOR_CLOUD_DESTRUCTIVE_ACCESS_AT_2026-10-13 = NO
+CURRENT_OPERATOR_POLICY = dated operator-eligibility section below
 TAG_AND_PUBLISH = not granted by this record
 GATE_7 = maintainer only
 PRODUCTION_AUTHORITY_SWITCH = forbidden
 ```
+
+This section preserves the operator assignment as it stood on 2026-10-13. Its
+operator-only fields are superseded by the dated 2026-11-06 eligibility section
+below; the ordinary-mode lifecycle, safety predicates, and release restrictions
+remain in force.
 
 After every merge to `main`, the mandatory lifecycle at the top of this policy
 runs in full before dependent repository mutation. The writer must also hold
@@ -318,7 +324,7 @@ SHA, run IDs, Production and alias state, the SAFE/PROTECTED/UNKNOWN counts, the
 deleted IDs and the verification in GH #627 and QNB-67. A later batched or
 train exception needs its own newly declared record in a later pull request.
 
-## Operator eligibility from 2026-11-06: one local operator lease
+## Operator eligibility from 2026-11-06: one exclusive operator lease
 
 This dated successor changes only who may hold the ordinary-mode destructive
 writer role. The 2026-10-13 assignment remains as historical evidence. The

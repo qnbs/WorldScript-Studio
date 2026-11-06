@@ -94,6 +94,9 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
 `docs/PR-CI-MERGE-WORKFLOW.md`; do not load that procedure for an unrelated tiny edit.
 
 - Use a feature branch and conventional commits. Never commit directly to `main`.
+- Open every pull request as ready for review; do not use draft PRs. If a PR number is
+  needed for its changelog entry, open it once implementation is ready and add the
+  reference promptly so review and CI start immediately.
 - PR budget is cumulative base→prospective head/index: absolute normal ceiling is ≤30 changed files / ≤3000 meaningful lines / ≤15 commits; at 30 files do not add a file, at 15 commits do not create another commit, and never push merely to discover the budget.
 - Resolve the real PR base and run `pnpm run pr:budget -- --base <ref>` before the first commit and before every corrective commit/push; use `--prospective` for staged changes. If no live PR base exists yet, provide the reviewed base as `PR_BUDGET_BASE=<ref>` for both admission and push. Treat remaining headroom as a design constraint, never delete meaningful safety proof to reclaim a slot, and use a bounded split/successor when a valid fix cannot fit.
 - Do not add Claude/Anthropic attribution, generated-by footers, or session URLs to commit
@@ -160,9 +163,10 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
 ## Cursor Cloud Agent
 
 Cloud Agents run on Linux VMs with Cursor-managed signing and GitHub integration. `gh` API auth
-may fail while Git push/PR operations still work — diagnose both separately. Use Draft PRs only
-for short bootstrap; mark **Ready for Review** early so CodeRabbit and CI run in parallel (see
-`config/reviewer-registry.json`). After merge, prove **resulting-main** CI/CodeQL/Vercel Production
+may fail while Git push/PR operations still work — diagnose both separately. Open every PR as
+**Ready for Review**; do not use Draft PRs, including when the PR number is needed for the
+changelog or governance. Complete that reference in the ready PR so CodeRabbit and CI can run
+immediately (see `config/reviewer-registry.json`). After merge, prove **resulting-main** CI/CodeQL/Vercel Production
 on the squash commit SHA, not the PR head. Operational detail: `docs/CURSOR-CLOUD-AGENT.md`;
 session snapshot: `pnpm run cursor:cloud-doctor`.
 
