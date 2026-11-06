@@ -29,12 +29,12 @@ has advanced, stop the retention wave and establish the new exact-main gate
 before continuing.
 
 This lifecycle is **NORMAL MODE**. Dependent repository mutation waits for the
-full reconciliation above. Opt-in exceptions are only the bounded
-dependency/toolchain maintenance train in the next section and the
-release-batched Preview retention after it. Silence, a green head, or a READY
+full reconciliation above. Opt-in exceptions are limited to the bounded
+dependency/toolchain maintenance train in the next section and the separately
+reviewed Pages incident mode below. The historical release-batched Preview
+mode remains superseded from 2026-10-13. Silence, a green head, or a READY
 Production deployment is neither exception. Until a named exception is on
-`main`, this normal lifecycle still applies. The release-batched exception is
-superseded from 2026-10-13; see the Active mode section after it.
+`main`, this normal lifecycle still applies.
 
 ## Bounded dependency/toolchain maintenance train
 
@@ -369,6 +369,109 @@ future admission, an exclusive lease may pass to Cursor Cloud without another
 operator-name policy change. No handoff waives any state, CI, security, HTTP,
 alias, rollback, or post-proof predicate above. This record becomes active only
 after this policy change merges and its resulting-main gates pass.
+
+## Bounded GitHub Pages delivery incident mode — GH #1176 (2026-11-06)
+
+This dated exception addresses only the repeated GitHub Pages `syncing_files`
+stall recorded in [GH #1176](https://github.com/qnbs/WorldScript-Studio/issues/1176).
+It is separate from the bounded maintenance train and the superseded
+release-batched mode; it cannot reuse or extend either record.
+On `db85ce826623165eb5f63ed86abae436917e956c`, push run `42198434875` created
+Pages deployments in jobs `127838137432` and `127843540538`; both remained in
+`syncing_files` and were cancelled at the job timeout. The uploaded artifact
+`13493474778` was present. Byte-level comparison to the earlier successful
+Pages artifact found identical paths and file hashes. This evidence is the
+incident's starting record, not proof that Pages is currently healthy.
+
+This exception can become active only after this policy change has passed the
+trusted-base workflow-policy admission, independent maintainer review, all
+existing protected PR checks, and the normal signed protected merge. The
+introducing PR does not certify its own exception: after merge, evaluate its
+resulting protected-main push and CodeQL on their exact SHA. No dependency
+successor may be mutated or merged until that resulting-main admission is
+verified and recorded in GH #1176. If the base has advanced from the recorded
+incident SHA before this policy merges, requalify the incident on the current
+main; do not carry stale evidence forward.
+
+```text
+INCIDENT = GitHub Pages server-side syncing_files stall, GH #1176
+INCIDENT_STARTING_MAIN = db85ce826623165eb5f63ed86abae436917e956c
+INCIDENT_PUSH_RUN = 42198434875
+INCIDENT_PAGES_JOBS = 127838137432, 127843540538
+INCIDENT_ARTIFACT = 13493474778
+INCIDENT_MODE = dependency-successor-only; Pages publication DEGRADED
+INCIDENT_CLOCK_ORIGIN = UTC merge time of this approved policy PR, recorded in GH #1176
+MAX_SUCCESSOR_MERGES = 5
+MAX_DURATION = 24h from INCIDENT_CLOCK_ORIGIN
+ALLOWED_SOURCE_SET = #1160, #1169, #1170, #1171, #1172, only bounded safe slices
+ACTIVE_WRITER = one maintainer-designated operator lease, recorded in GH #1162
+OVERALL_CI_CD = report the actual run conclusion; never label a cancelled run successful
+VERCEL_RETENTION = HOLD until normal full CI / CD and CodeQL succeed on current main
+PRODUCTION_MUTATION = forbidden
+TAG_AND_RELEASE = forbidden
+GATE_7 = maintainer only
+```
+
+Before each successor branch, push, PR merge, or other dependent source mutation,
+the sole writer verifies the following against the current exact protected-main
+SHA using GitHub's live run and job records, not PR-provided evidence:
+
+1. The push-triggered `CI / CD` run is terminal and its **only** non-success job
+   is `🚀 Deploy to GitHub Pages`, which uploaded the artifact, created the
+   deployment, reached `syncing_files`, and was cancelled by its bounded job
+   timeout. The overall `CI / CD` result remains truthfully `cancelled`; no
+   other failure, cancellation, pending job, missing run, or workflow-dispatch
+   result is admissible.
+2. `✅ CI Success`, Workflow Policy, Security Audit/OSV, Verified Signatures,
+   both Node 22 and Node 24 Quality Gates, Build, E2E, Browser Quality (VRT and
+   Lighthouse), CodeQL, and every applicable path-scoped Rust/security gate
+   are terminal `success`. Any skipped path-scoped gate must be the workflow's
+   legitimate skip for untouched paths. Advisory Storybook and Deep E2E jobs
+   must also finish successfully. Check identities and workflow definitions
+   must match the protected base; the exception never changes branch-protection
+   settings, required check names, or CI aggregation.
+3. Vercel Production is independently `READY` on that same SHA; the canonical
+   Production/Main aliases remain bound, the canonical public HTTP check passes,
+   and the prior rollback-capable Production remains present and unchanged.
+4. The exact source PR is one signed successor for an admitted safe subset of
+   the five listed Dependabot sources, based on current main. Its entire normal
+   required and advisory CI, CodeQL, security, review, signature, budget, and
+   changelog evidence passes. The source bot PR itself is never merged.
+
+Fail closed before mutation or merge if any of these is true: the incident
+record, activation time, or sole writer lease is missing; the current main SHA
+does not match the push and CodeQL evidence; the event is not a protected-main
+push; the `CI Success` identity or any required job is absent, pending, skipped
+without a path-based reason, failed, or cancelled; the Pages job did not
+unambiguously reach `syncing_files` after artifact upload and deployment
+creation; Production, a canonical alias, the public HTTP check, or rollback
+protection does not match; the source is outside the five listed PRs, is not a
+signed successor, or lacks its independent reviews; another writer is active;
+the merge count or 24-hour clock has expired; or any provider/check result is
+unknown or contradictory. A `workflow_dispatch` run, a similarly named status
+from an untrusted workflow, or a green PR-head check cannot substitute for
+trusted exact-main push and CodeQL evidence.
+
+During this mode, Pages remains **DEGRADED** until a real successful Pages
+deployment and public-site verification exist. Never call the whole `CI / CD`
+workflow green because `✅ CI Success` passed. The canonical retention runner
+and its `CI / CD` success requirement are unchanged. Do not run retention
+`dry-run` or `reconcile`, delete any deployment or alias, or claim a retention
+receipt while the whole push workflow is not successful. Preview cleanup is
+deferred; Production, rollback, active PR previews, aliases, and unknown
+resources remain untouched. The seven SAFE deletions on `b501fa59` are not
+reusable evidence for this incident.
+
+The exception ends at the first of: a Pages delivery recovery, five successor
+merges, 24 hours from the recorded clock origin, any unrelated failed or
+incomplete gate, any change in the Pages failure signature, loss of the sole
+writer lease, or any doubt about Production/alias/rollback state. A genuine
+successful Pages deployment does not by itself permit another source mutation:
+first verify full push `CI / CD` and CodeQL on the current main, then complete
+the unchanged canonical Node 22 retention lifecycle and its post-proof. A limit
+breach or missing evidence sets `INCIDENT_MODE = INACTIVE` and returns the lane
+to the normal full-reconciliation requirement. No automatic extension or
+historical train/release exception may be used to continue.
 
 ## Expected provider scope and identity
 

@@ -205,3 +205,84 @@ describe('active ordinary per-merge Preview retention', () => {
     }
   });
 });
+
+describe('bounded GitHub Pages incident mode', () => {
+  it('binds the exception to the reproduced exact-main incident and the five current bot sources', () => {
+    expect(policy).toContain(
+      '## Bounded GitHub Pages delivery incident mode — GH #1176 (2026-11-06)',
+    );
+    expect(policy).toContain('INCIDENT_STARTING_MAIN = db85ce826623165eb5f63ed86abae436917e956c');
+    expect(policy).toContain('INCIDENT_PUSH_RUN = 42198434875');
+    expect(policy).toContain('INCIDENT_PAGES_JOBS = 127838137432, 127843540538');
+    expect(policy).toContain('INCIDENT_ARTIFACT = 13493474778');
+    expect(policy).toContain(
+      'ALLOWED_SOURCE_SET = #1160, #1169, #1170, #1171, #1172, only bounded safe slices',
+    );
+    expect(policy).toContain('It is separate from the bounded maintenance train');
+    expect(policy).toContain('it cannot reuse or extend either record');
+  });
+
+  it('caps the exception by both successor merges and elapsed time', () => {
+    expect(policy).toContain(
+      'INCIDENT_CLOCK_ORIGIN = UTC merge time of this approved policy PR, recorded in GH #1176',
+    );
+    expect(policy).toContain('MAX_SUCCESSOR_MERGES = 5');
+    expect(policy).toContain('MAX_DURATION = 24h from INCIDENT_CLOCK_ORIGIN');
+    expect(policy).toContain('five successor merges, 24 hours from the recorded clock origin');
+    expect(policy).toContain('No automatic extension');
+    expect(policy).toContain(
+      'the incident record, activation time, or sole writer lease is missing',
+    );
+    expect(policy).toContain('the merge count or 24-hour clock has expired');
+    expect(policy).toContain('another writer is active');
+  });
+
+  it('requires the Pages deploy to be the only incomplete job and preserves all independent gates', () => {
+    expect(policy).toContain('its **only** non-success job');
+    expect(policy).toContain('`🚀 Deploy to GitHub Pages`');
+    expect(policy).toContain('The overall `CI / CD` result remains truthfully `cancelled`');
+    expect(policy).toContain(
+      '`✅ CI Success`, Workflow Policy, Security Audit/OSV, Verified Signatures',
+    );
+    expect(policy).toContain('both Node 22 and Node 24 Quality Gates');
+    expect(policy).toContain('Advisory Storybook and Deep E2E jobs must also finish successfully');
+    expect(policy).toContain('the exception never changes branch-protection settings');
+    expect(policy).toContain('the current main SHA does not match the push and CodeQL evidence');
+    expect(policy).toContain('the event is not a protected-main push');
+    expect(policy).toContain('any required job is absent, pending, skipped');
+    expect(policy).toContain('did not unambiguously reach `syncing_files`');
+    expect(policy).toContain('A `workflow_dispatch` run');
+    expect(policy).toContain('or a green PR-head check cannot substitute');
+  });
+
+  it('keeps destructive Vercel retention and releases held while Pages is degraded', () => {
+    expect(policy).toContain(
+      'VERCEL_RETENTION = HOLD until normal full CI / CD and CodeQL succeed on current main',
+    );
+    expect(policy).toContain(
+      'The canonical retention runner and its `CI / CD` success requirement are unchanged',
+    );
+    expect(policy).toContain('Do not run retention `dry-run` or `reconcile`');
+    expect(policy).toContain('delete any deployment or alias');
+    expect(policy).toContain('The seven SAFE deletions on `b501fa59` are not reusable evidence');
+    expect(policy).toContain('TAG_AND_RELEASE = forbidden');
+    expect(policy).toContain(
+      'first verify full push `CI / CD` and CodeQL on the current main, then complete',
+    );
+    expect(policy).toContain('the public HTTP check, or rollback protection does not match');
+    expect(policy).toContain('any provider/check result is unknown or contradictory');
+    expect(policy).toContain('the source is outside the five listed PRs');
+    expect(policy).toContain('is not a signed successor');
+    expect(policy).toContain('lacks its independent reviews');
+  });
+
+  it('keeps the repository-wide operator instructions aligned with the incident contract', () => {
+    const agents = prose(
+      readFileSync(fileURLToPath(new URL('../../AGENTS.md', import.meta.url)), 'utf8'),
+    );
+    expect(agents).toContain('signed, reviewed GH #1176 incident mode');
+    expect(agents).toContain('truthful overall workflow result');
+    expect(agents).toContain('it defers all Vercel retention');
+    expect(agents).toContain('no Vercel deployment or alias deletion is permitted');
+  });
+});

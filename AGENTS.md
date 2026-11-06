@@ -140,8 +140,12 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   same Preview housekeeping until the next sanctioned `v*` release
   reconciliation. Its destructive writer is Codex CLI in the local VS Code/Ubuntu
   environment. Cursor Cloud does not delete Vercel deployments, publish a
-  release, or receive release secrets. Per-merge CI/CD, CodeQL, Production
-  READY, canonical HTTP, and alias/promotion/rollback checks stay mandatory.
+  release, or receive release secrets. Per-merge exact-main `CI Success`, CodeQL,
+  Production READY, canonical HTTP, and alias/promotion/rollback checks stay
+  mandatory. Whole push-triggered `CI / CD` success remains required in normal
+  mode. The signed, reviewed GH #1176 incident mode is the sole bounded exception
+  for its listed dependency successors; it must report a cancelled Pages job and
+  the truthful overall workflow result, and it defers all Vercel retention.
   Gate 7 and the production storage-authority switch stay maintainer-gated.
   The introducing transition is one-time; a later pull request cannot reuse
   that transition. Reaching 14 days or 24 non-protected Preview deployments,
@@ -161,7 +165,10 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   to a qualified local operator and record the exclusive lease transfer. This
   updates operator eligibility only: full reconciliation, SAFE-only deletion,
   Production/rollback protection, all gates, and release restrictions remain in
-  force. See the policy's dated operator-eligibility section.
+  force. See the policy's dated operator-eligibility section. During GH #1176
+  incident mode, no Vercel deployment or alias deletion is permitted; expiry,
+  any additional failed job, or a changed Pages failure signature stops the
+  dependency lane until normal full reconciliation is available.
 
 ## Cursor Cloud Agent
 
