@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **CI dependencies:** Bumped `pnpm/setup` from v3.0.0 to v3.1.2 in `ci.yml` and the shared setup action.
+  The protected `reviewer-governance-trust.yml` stays on v2.1.0 until a base-owned transition allows
+  changing it (PR #; Dependabot source PR #1160).
+
 - **Dependencies:** Bumped React 19.3.1, Vite 8.3.5, the dev-tooling group (Playwright, Storybook, Vitest
   and others), 42 minor/patch packages including the AI SDK and the `@tauri-apps/*` plugins, and the
   matching Rust `tauri-plugin-*` crates (`notification` 2.8.0, `shell` 2.6.0, `updater` ~2.14). Biome is
