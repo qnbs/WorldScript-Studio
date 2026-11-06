@@ -174,4 +174,23 @@ describe('extractStoryCodex', () => {
     expect(codex.summary).toContain('Alexander');
     expect(codex.summary).toContain('Isabella');
   });
+
+  it('builds a canonical relationship edge for entities mentioned in one section', () => {
+    const codex = extractStoryCodex(
+      'test-project',
+      [makeSection('Isabella met Alexander.', 'chapter 1')],
+      [],
+      [],
+      { advanced: true },
+    );
+
+    expect(codex.relationshipEdges).toEqual([
+      {
+        sourceEntityId: 'unknown-alexander',
+        targetEntityId: 'unknown-isabella',
+        weight: 1,
+        sectionIds: ['section-1'],
+      },
+    ]);
+  });
 });
