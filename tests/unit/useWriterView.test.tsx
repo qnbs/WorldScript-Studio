@@ -1,5 +1,4 @@
-import { act, render, waitFor } from '@testing-library/react';
-import { useEffect } from 'react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type DispatcherAction = { type: string; payload?: unknown };
@@ -218,19 +217,8 @@ vi.mock('../../services/ragPromptAssembly', () => ({
 
 const createHookWrapper = async () => {
   const { useWriterView } = await import('../../hooks/useWriterView');
-  const current: { current: ReturnType<typeof useWriterView> | null } = { current: null };
-
-  function Test() {
-    const value = useWriterView();
-    useEffect(() => {
-      current.current = value;
-    }, [value]);
-    return null;
-  }
-
-  render(<Test />);
-  await waitFor(() => expect(current.current).not.toBeNull());
-  return current.current!;
+  const { result } = renderHook(() => useWriterView());
+  return result.current;
 };
 
 describe('useWriterView', () => {

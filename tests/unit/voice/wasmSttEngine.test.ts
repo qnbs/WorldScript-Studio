@@ -112,19 +112,17 @@ beforeEach(() => {
   vi.stubGlobal('WebAssembly', {});
   // Regular functions required — arrow functions cannot be used as constructors.
   // biome-ignore lint/suspicious/noExplicitAny: constructor mock
-  // biome-ignore lint/complexity/useArrowFunction: arrow functions are not constructors
-  const AudioContextCtor: any = function () {
+  const audioContextConstructor: any = function audioContextConstructor() {
     return audioCtxMock;
   };
-  vi.stubGlobal('AudioContext', AudioContextCtor);
+  vi.stubGlobal('AudioContext', audioContextConstructor);
 
   // biome-ignore lint/suspicious/noExplicitAny: constructor mock with static method
-  // biome-ignore lint/complexity/useArrowFunction: arrow functions are not constructors
-  const MediaRecorderCtor: any = function () {
+  const mediaRecorderConstructor: any = function mediaRecorderConstructor() {
     return mediaRecorderMock;
   };
-  MediaRecorderCtor.isTypeSupported = vi.fn().mockReturnValue(true);
-  vi.stubGlobal('MediaRecorder', MediaRecorderCtor);
+  mediaRecorderConstructor.isTypeSupported = vi.fn().mockReturnValue(true);
+  vi.stubGlobal('MediaRecorder', mediaRecorderConstructor);
 
   vi.stubGlobal('navigator', {
     mediaDevices: {
