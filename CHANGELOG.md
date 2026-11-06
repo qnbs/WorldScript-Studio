@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **CI operations:** Defined a five-merge/24-hour, Pages-degraded recovery contract for #1176. Exact-main quality, security, CodeQL, Production, and review gates remain required; Vercel retention and deletions stay on hold until the full push workflow succeeds (PR #1177).
+
 - **Operations:** Made ordinary Vercel preview retention operator-agnostic across qualified local Claude Code CLI, Codex CLI, and future Cursor Cloud leases, with one maintainer-designated operator at a time. Cursor Cloud remains `NOT_ADMITTED` for deletions until the separate maintainer-approved capability gate in #1174; local credentials are never copied to Cloud. PRs open ready for review; SAFE-only and protection gates are unchanged (PR #1175).
 
 - **Dependencies:** Bumped React 19.3.1, Vite 8.3.5, the dev-tooling group (Playwright, Storybook, Vitest
