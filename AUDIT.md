@@ -1,5 +1,56 @@
 # WorldScript Studio — Codebase Audit Report
 
+**2026-11-05 OSV residue (#1146, #1163, PR #1149) — ACCEPTED TIME-BOUNDED VULNERABILITIES, NOT FIXES.**
+After the bounded floors in this PR (`follow-redirects` >=1.16.2, `joi` >=18.3.1, Zod 4 >=4.6.6,
+`undici`, `fast-uri`, `qs`, `body-parser`, `serialize-javascript`, DOMPurify, `ip-address`), four
+advisories remain. Each has a time-limited `src-tauri/osv-scanner.toml` ignore that expires on
+2026-11-30 at the latest. A green OSV scan with these ignores does not mean the packages are fixed.
+OSV filters an ignore for the whole advisory, not for one version, lockfile or call site; the
+guard is `tests/unit/security/osvNpmDependencyFloors.test.ts`, which fails when an affected copy, a
+parent package of an affected copy or a production path appears, or when no affected copy is left.
+Common evidence: the `pnpm-lock.yaml` graph followed from every importer's `dependencies` and
+`optionalDependencies` reaches none of the four packages except the patched Zod 4 line. That is
+lockfile evidence only. The shipped bundle was not inspected, and the boundary that no
+attacker-chosen pattern or file tree reaches a development caller is an argument, not a test.
+All parents are development tooling that can only be changed by someone who can already change the
+repository's tool configuration and so already runs code in the same job. The one workflow that uses
+`pull_request_target` (`reviewer-governance-trust.yml`) is the base-ref governance check and does not
+run these tools over pull-request content.
+
+| Advisory | Package, affected range, fix | Resolved affected copies and parents (`pnpm why`) | Attack condition | Risk assessment | Alternatives checked |
+|---|---|---|---|---|---|
+| `GHSA-gcqx-w48m-w2h4` | `deepmerge` >=4.2.0 <=4.3.1, low; no fix | 4.3.1 via `@rollup/plugin-node-resolve` 16.0.3 <- `workbox-build` <- `vite-plugin-pwa` (build); `jest-config` 30.5.1 <- `@storybook/test-runner` (test) | `mergeObject` merging an object with attacker-chosen `__proto__` keys | Low. Inputs are tool configuration | No patched release exists; parents' latest releases still use 4.3.1; no backport evaluated |
+| `GHSA-mrhx-c7xc-m3w5` | `zod` <4.6.6, high; fixed 4.6.6 | 3.25.76 via `@codecov/bundler-plugin-core` 2.0.1 (`^3.22.4`) <- `@codecov/vite-plugin` | Validating an oversized constrained collection with Zod 3 | Low in practice. It validates its own build options. High score kept in view | Global Zod 3 -> 4 override rejected (parent declares `^3`, unproven); removing the Codecov plugin rejected by the owner's choice; Codecov has no Zod 4 release |
+| `GHSA-3g3m-2fjr-6pw4` | `glob` >=9.0.0 <14.0.2, medium; fixed 14.0.2 | 10.5.0 via `test-exclude` 7.0.2; 11.1.0 via `workbox-build` 7.4.1; 13.0.6 via `@jest/reporters`, `jest-config`, `jest-runtime`, `@joshwooding/vite-plugin-react-docgen-typescript`. `glob` 7.2.3 is outside the range | A caller passes an `AbortSignal` and relies on it to stop a traversal over an attacker-influenced tree | Low. A text search of these parents finds no `AbortSignal` use next to a glob call (heuristic, not a proof) | No patch on the 9-13 lines. Latest parents still depend on `glob` ^11 (`workbox-build` 7.4.1), ^13 (`test-exclude` 8.0.0, `@jest/reporters` 30.5.2). A blanket override to 14 is outside every declared parent range and unverifiable locally |
+| `GHSA-g3hv-75wg-m249` | `minimatch` >=7.0.0 <11.0.1, medium; fixed 11.0.1 | 9.0.9 via `glob` 10.5.0; 10.2.6 via `@stryker-mutator/core` 9.6.1, `glob` 11.1.0 and 13.0.6, `test-exclude` 7.0.2. 3.1.5 and 5.1.9 are not affected by this advisory and are not covered | An attacker-chosen glob pattern amplifies CPU and memory | Low. Patterns come from Vitest, Jest, Stryker and Workbox configuration in the repository | No patch on the 7-10 lines. `@stryker-mutator/core` 10.1.1 still uses `~10.2.4`; `test-exclude` 8.0.0 uses `^10.2.2`. Same override objection as glob |
+
+Protections that stay in force: all hosted security, CI, CodeQL and review gates; the three-lockfile
+OSV scan; `minimumReleaseAge`; frozen-lockfile installs. Re-check trigger: any new release of a
+listed parent, any new affected copy or parent (the test fails), and at the latest 2026-11-30. The
+2026-10-30 `glob`/`minimatch` advisories were published after the first #1149 head; the remediation
+follow-up is tracked in #1163. `follow-redirects` and `joi` were raised in place within their major.
+An earlier draft of this entry listed `minimatch` 3.x and 5.x as affected by `GHSA-g3hv-75wg-m249`;
+that was wrong (the range starts at 7.0.0) and is corrected here and in the test.
+
+**2026-10-30 DOMPurify + ip-address follow-up (#1132):** raised the direct DOMPurify dependency
+and workspace floor to 3.4.17 with a `<4` override cap preserving the app/jsPDF compatibility
+range. The lockfile also updates the `ip-address` version used only by the Lighthouse CI dev-tooling
+chain (`@lhci/cli` → proxy agents → `socks`), bounded to the supported 10.x line.
+This addresses `GHSA-c6gr-qvv4-5v3f`, `GHSA-cg2g-xh64-v4q7` and `GHSA-mrv2-3pqr-j5jr`.
+The four DOMPurify dependency regressions fail on 3.4.16 and pass on 3.4.17: XHTML SVG
+`attributeName`, split template expressions in attached shadow roots, and parent/sibling detachment
+by hooks. The app's examined sanitizer calls use string output without these special modes; these
+tests qualify the dependency boundary and do not establish a production exploit. The separate OSV
+finding for `ip-address@10.7.2` was traced with `pnpm why` to LHCI dev tooling; no first-party source
+reference was found. npm registry metadata marks 10.7.4 fixed and dates it 2026-10-11, more than a
+week before this update. Its lockfile resolution carries the registry SHA-512
+`DWBMKyeM25D70nrIiTkgQth59/G+naKOTep6huF9j+GmeK3DMD60Zvxg5d5qQnz+38AHgou6ean2LECX+lrKDg==`.
+The pinned pnpm 12.13.0 frozen reconciliation passed the 1,672-entry supply-chain policy and
+dependency-state verification. The focused lockfile-floor/dev-only-path test and the four existing
+DOMPurify regression cases passed (6 tests total); the lockfile-floor assertion failed against the
+previous 10.7.2 lock entry before the update. The prior exact-head PR OSV check failed on 10.7.2;
+the updated exact-head OSV and full CI checks have not run yet.
+
 **2026-09-19 security follow-up (PR #778):** `adm-zip@0.6.1` became available after the dated
 `GHSA-vwc7-r8mq-g2x9` investigation below. The transitive override now uses `>=0.6.1`, removing
 vulnerable `0.6.0` and covering the three relevant advisories: `GHSA-xcpc-8h2w-3j85` (high,

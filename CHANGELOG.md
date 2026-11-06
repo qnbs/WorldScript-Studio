@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Security (dependencies):** Updated the shipped HTML sanitizer to DOMPurify 3.4.17, including
+  jsPDF's optional copy, for XHTML/SVG, shadow-root template and detached-hook fixes. Raised the
+  LHCI-only `ip-address` dependency floor to 10.7.4 for GHSA-rxp7-6hxx-x8q5 (PR #1145, #1132).
+  Focused sanitizer regressions and a transitive lockfile floor assertion cover both fixes.
+
+- **Security (dependencies):** Raised bounded floors for patched `undici`, `body-parser`,
+  `fast-uri`, `qs` and `serialize-javascript`; upgraded only Zod 4 and moved Lighthouse's
+  supported Puppeteer 25.x line to a release using Zod 4. Removed the OSV ignore for the
+  withdrawn `sprintf-js` advisory while retaining the package. Also raised `follow-redirects`
+  (>=1.16.2) and `joi` (>=18.3.1). Four advisories have no compatible fix and are accepted as
+  time-bounded vulnerabilities, not fixes: `deepmerge` (`GHSA-gcqx-w48m-w2h4`), Zod 3 via the
+  Codecov plugin (`GHSA-mrhx-c7xc-m3w5`), `glob` (`GHSA-3g3m-2fjr-6pw4`) and `minimatch`
+  (`GHSA-g3hv-75wg-m249`). Each ignore expires on 2026-11-30 at the latest; every affected copy is
+  development tooling and none is reachable from the production dependency graph in the lockfile.
+  A test pins the affected copies, their parent packages and that absence, and fails when they
+  change. Tracked in [#1146](https://github.com/qnbs/WorldScript-Studio/issues/1146) and
+  [#1163](https://github.com/qnbs/WorldScript-Studio/issues/1163) (PR #1149).
+
 - **Post-release v1.29.2 truth sync:** removed the release-candidate markers from README.md and
   CHANGELOG.md now that the `v1.29.2` tag and GitHub Release are published, and recorded the real
   release evidence in AUDIT.md, TODO.md and `docs/RELEASE-V1.29.2-EVIDENCE.md` (see `## [1.29.2]`
