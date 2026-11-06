@@ -151,14 +151,17 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
   ordinary mode still requires
   the full reconciliation. As of 2026-10-13 that release-batched mode is
   superseded and ordinary per-merge reconciliation is active. As of 2026-11-06,
-  its operator eligibility, recorded in GH #627, is one maintainer-designated
-  Claude Code CLI, Codex CLI, or qualified Cursor agent at a time. Local agents run in the user's VS Code/Ubuntu environment;
-  Cursor Cloud may hold the lease only after its own scoped Vercel access and
-  clean-main Node 22 runner are verified. One active session holds the exclusive
-  writer lease; simultaneous agent writes are forbidden. This updates operator
-  eligibility only: full reconciliation, SAFE-only deletion, Production/rollback
-  protection, all gates, and release restrictions remain in force. See the
-  policy's dated operator-eligibility section.
+  its operator eligibility, recorded in GH #627, permits one maintainer-designated
+  local Claude Code CLI or Codex CLI at a time. Cursor Cloud may write source and
+  PRs under ordinary repository rules, but destructive retention remains
+  `NOT_ADMITTED` until the separate maintainer-approved capability gate in GH
+  #1174 is complete. That gate requires Cursor-managed least-privilege Vercel
+  access and a clean, source-equal Node 22 runner; local Vercel tokens or state
+  must never be copied into Cursor. Until admission, hand off per-merge retention
+  to a qualified local operator and record the exclusive lease transfer. This
+  updates operator eligibility only: full reconciliation, SAFE-only deletion,
+  Production/rollback protection, all gates, and release restrictions remain in
+  force. See the policy's dated operator-eligibility section.
 
 ## Cursor Cloud Agent
 

@@ -86,9 +86,11 @@ After merging to `main`:
    that mode is on `main`, ordinary mode still requires the full reconciliation.
    As of 2026-11-06, ordinary-mode operator eligibility is defined by the dated
    section in `docs/VERCEL-PREVIEW-RETENTION-POLICY.md`: one maintainer-designated
-   Claude Code CLI, Codex CLI, or qualified Cursor agent at a time. Cursor Cloud
-   may run retention only with its own scoped Vercel access and a verified clean-main
-   Node 22 runner. It receives no release credentials or release authority.
+   local Claude Code CLI or Codex CLI at a time. Cursor Cloud may write source and
+   PRs, but destructive retention remains **NOT_ADMITTED** pending the separate
+   maintainer-approved capability gate in [#1174](https://github.com/qnbs/WorldScript-Studio/issues/1174).
+   Until then, hand off per-merge retention to a qualified local operator. Do not
+   copy local Vercel tokens or `.vercel` state into Cursor Cloud.
 
 ## Environment configuration (D1)
 

@@ -161,11 +161,16 @@ describe('active ordinary per-merge Preview retention', () => {
       'SUPERSESSION_AUTHORITY = maintainer decision, GH #627 comment 6134785538',
     );
     expect(policy).toContain('CURRENT_OPERATOR_POLICY = dated operator-eligibility section below');
-    expect(policy).toContain('OPERATOR_ELIGIBILITY = Claude Code CLI | Codex CLI | Cursor agent');
+    expect(policy).toContain(
+      'OPERATOR_ELIGIBILITY = local Claude Code CLI | local Codex CLI | Cursor Cloud after GH #1174 capability admission',
+    );
     expect(policy).toContain('OPERATOR_LEASE = exactly one active operator/session at a time');
     expect(policy).toContain('RETENTION_RUNTIME = Node 22.19+ with major 22');
     expect(policy).toContain(
-      'CURSOR_CLOUD_DESTRUCTIVE_ACCESS = conditional on its own scoped Vercel authorization and runner qualification',
+      'CURSOR_CLOUD_DESTRUCTIVE_ACCESS = NOT_ADMITTED until explicit maintainer approval in GH #1174',
+    );
+    expect(policy).toContain(
+      'A Vercel token or a source-writer lease alone never grants deletion authority',
     );
     expect(policy).toContain('TAG_AND_PUBLISH = not granted by this record');
     expect(policy).toContain('a project name is never passed to `vercel remove`');
@@ -192,10 +197,11 @@ describe('active ordinary per-merge Preview retention', () => {
       );
       expect(source, relativePath).toContain('As of 2026-10-13 that release-batched mode is');
       expect(source, relativePath).toContain('As of 2026-11-06');
-      expect(source, relativePath).toContain('Claude Code CLI, Codex CLI');
-      expect(source, relativePath).toContain('Cursor agent at a time');
+      expect(source, relativePath).toContain('Claude Code CLI or Codex CLI');
+      expect(source, relativePath).toContain('NOT_ADMITTED');
+      expect(source, relativePath).toContain('#1174');
       expect(source, relativePath).toContain('Cursor Cloud');
-      expect(source, relativePath).toContain('Node 22');
+      expect(source, relativePath).toContain('qualified local operator');
     }
   });
 });

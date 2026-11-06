@@ -99,10 +99,12 @@ requires the full reconciliation. As of 2026-10-13 that release-batched mode is
 superseded: the maintainer decision recorded in GH #627 makes ordinary
 per-merge reconciliation the active mode. As of 2026-11-06, its operator
 eligibility is defined in the dated section of
-`docs/VERCEL-PREVIEW-RETENTION-POLICY.md`: one maintainer-designated Claude Code
-CLI, Codex CLI, or qualified Cursor agent at a time. Cursor Cloud may run
-retention only with its own scoped Vercel access and a verified clean-main Node
-22 runner. This does not grant release credentials or release authority. This is a Vercel artifact procedure; the
+`docs/VERCEL-PREVIEW-RETENTION-POLICY.md`: one maintainer-designated local Claude
+Code CLI or Codex CLI at a time. Cursor Cloud may write source and PRs, but
+destructive retention remains **NOT_ADMITTED** until the separate
+maintainer-approved capability gate in GH #1174 is complete. Until then,
+per-merge retention hands off to a qualified local operator; local Vercel
+tokens or `.vercel` state are never copied to Cursor Cloud. This is a Vercel artifact procedure; the
 existing GitHub deployment-record workflow does not satisfy it. Never print
 tokens, environment values, or creator emails.
 
