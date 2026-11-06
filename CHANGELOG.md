@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Dependencies:** Bumped React 19.3.1, Vite 8.3.5, the dev-tooling group (Playwright, Storybook, Vitest
+  and others), 42 minor/patch packages including the AI SDK and the `@tauri-apps/*` plugins, and the
+  matching Rust `tauri-plugin-*` crates (`notification` 2.8.0, `shell` 2.6.0, `updater` ~2.14). Biome is
+  held at 2.5.8 until its 2.6 rule changes are fixed in a separate change (PR #1168; Dependabot source PRs
+  #1104, #1154, #1155, #1157, #1165).
+
 - **Security (dependencies):** Updated the shipped HTML sanitizer to DOMPurify 3.4.17, including
   jsPDF's optional copy, for XHTML/SVG, shadow-root template and detached-hook fixes. Raised the
   LHCI-only `ip-address` dependency floor to 10.7.4 for GHSA-rxp7-6hxx-x8q5 (PR #1145, #1132).
