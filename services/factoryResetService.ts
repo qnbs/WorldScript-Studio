@@ -202,6 +202,33 @@ async function assertNoActiveProjectLock(
   );
 }
 
+async function deleteDesktopAppDataEntries(
+  apis: TauriApis,
+  retryFs: <T>(fn: () => Promise<T>) => Promise<T>,
+  appDataPath: string,
+  onDeletionStarted: () => void,
+): Promise<void> {
+  if (!(await apis.exists(appDataPath))) return;
+  // QNBS-v3: validate the full capability-scoped child list before removing any app-data entry.
+  const entries = await retryFs(() => apis.readDir(appDataPath));
+  const childNames = entries.map((entry) => entry.name);
+  if (
+    childNames.some(
+      (name) => !name || name === '.' || name === '..' || name.includes('/') || name.includes('\\'),
+    )
+  ) {
+    throw new Error('Desktop app data enumeration returned an unsafe child name');
+  }
+  for (const name of childNames) {
+    if (typeof name !== 'string') {
+      throw new Error('Desktop app data enumeration returned an unsafe child name');
+    }
+    const childPath = await apis.join(appDataPath, name);
+    onDeletionStarted();
+    await retryFs(() => apis.remove(childPath, { recursive: true }));
+  }
+}
+
 async function clearTauriAppData(onDeletionStarted: () => void): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
@@ -209,27 +236,7 @@ async function clearTauriAppData(onDeletionStarted: () => void): Promise<void> {
     const apis = await loadTauriApis();
     const appDataPath = await apis.appDataDir();
     await assertNoActiveProjectLock(apis, retryFs, PROJECT_LOCKS_DIR_NAME, appDataPath);
-    if (await apis.exists(appDataPath)) {
-      // QNBS-v3: keep the capability-scoped AppData root and remove only its contents.
-      const entries = await retryFs(() => apis.readDir(appDataPath));
-      const childNames = entries.map((entry) => entry.name);
-      if (
-        childNames.some(
-          (name) =>
-            !name || name === '.' || name === '..' || name.includes('/') || name.includes('\\'),
-        )
-      ) {
-        throw new Error('Desktop app data enumeration returned an unsafe child name');
-      }
-      for (const name of childNames) {
-        if (typeof name !== 'string') {
-          throw new Error('Desktop app data enumeration returned an unsafe child name');
-        }
-        const childPath = await apis.join(appDataPath, name);
-        onDeletionStarted();
-        await retryFs(() => apis.remove(childPath, { recursive: true }));
-      }
-    }
+    await deleteDesktopAppDataEntries(apis, retryFs, appDataPath, onDeletionStarted);
   } catch (error) {
     logger.error('Failed to clear Tauri app data during factory reset', {
       errorName: error instanceof Error ? error.name : 'unknown',
