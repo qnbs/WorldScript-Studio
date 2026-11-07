@@ -180,6 +180,27 @@ describe('StorageErrorScreen', () => {
     expect(onReset).toHaveBeenCalledOnce();
   });
 
+  it('updates a pre-mounted status region after reset fails without exposing the raw error', async () => {
+    const user = userEvent.setup();
+    const onReset = vi.fn().mockRejectedValue(new Error('EACCES /private/project.sqlite'));
+
+    render(
+      <StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} failureKind="storage" onReset={onReset} />,
+    );
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('');
+
+    await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }));
+
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent(STARTUP_COPY_FALLBACKS.description);
+    expect(screen.queryByText('EACCES /private/project.sqlite')).not.toBeInTheDocument();
+    expect(loggerError).toHaveBeenCalledWith('Startup database reset failed', {
+      errorName: 'Error',
+    });
+  });
+
   it('shows a non-destructive retry for project I/O failures without corruption or reset actions', async () => {
     const user = userEvent.setup();
     const onRetry = vi.fn();

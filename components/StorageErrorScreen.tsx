@@ -332,7 +332,7 @@ function ResetButton({
   copy,
 }: {
   failureKind: StartupRecoveryFailureKind;
-  onReset: (() => void) | undefined;
+  onReset: (() => Promise<void> | void) | undefined;
   isRecovering: boolean;
   copy: StorageErrorCopy;
 }) {
@@ -360,14 +360,23 @@ function ResetButton({
 function ResetWarning({
   failureKind,
   onReset,
+  resetFailed,
   copy,
 }: {
   failureKind: StartupRecoveryFailureKind;
-  onReset: (() => void) | undefined;
+  onReset: (() => Promise<void> | void) | undefined;
+  resetFailed: boolean;
   copy: StorageErrorCopy;
 }) {
   if (failureKind !== 'storage' || !onReset) return null;
-  return <p style={{ fontSize: '0.75rem', color: '#475569' }}>{copy.resetWarning}</p>;
+  return (
+    <>
+      <p role="status" aria-live="polite" aria-atomic="true">
+        {resetFailed ? copy.description : ''}
+      </p>
+      <p style={{ fontSize: '0.75rem', color: '#475569' }}>{copy.resetWarning}</p>
+    </>
+  );
 }
 
 // QNBS-v3: use explicit failure kinds so I/O retry, quarantine, and database reset cannot be inferred from callbacks.
@@ -381,13 +390,14 @@ export function StorageErrorScreen({
 }: {
   copy: StorageErrorCopy;
   failureKind: StartupRecoveryFailureKind;
-  onReset?: () => void;
+  onReset?: () => Promise<void> | void;
   onRecover?: () => Promise<void>;
   onRetry?: () => void;
   onSafeOpen?: () => Promise<void> | void;
 }) {
   const [recoveryStatus, setRecoveryStatus] = React.useState<RecoveryStatus>(null);
   const [isRecovering, setIsRecovering] = React.useState(false);
+  const [resetFailed, setResetFailed] = React.useState(false);
   const [isOpening, setIsOpening] = React.useState(false);
   const canSafeOpen = onSafeOpen !== undefined && isRefusedProjectFailure(failureKind);
 
@@ -428,6 +438,22 @@ export function StorageErrorScreen({
       return;
     }
     window.location.reload();
+  };
+
+  const handleReset = async () => {
+    if (!onReset || isRecovering) return;
+    setResetFailed(false);
+    setIsRecovering(true);
+    try {
+      await onReset();
+    } catch (error) {
+      logger.error('Startup database reset failed', {
+        errorName: error instanceof Error ? error.name : 'unknown',
+      });
+      setResetFailed(true);
+    } finally {
+      setIsRecovering(false);
+    }
   };
 
   return (
@@ -485,7 +511,7 @@ export function StorageErrorScreen({
         />
         <ResetButton
           failureKind={failureKind}
-          onReset={onReset}
+          onReset={onReset ? () => void handleReset() : undefined}
           isRecovering={isRecovering}
           copy={copy}
         />
@@ -498,7 +524,12 @@ export function StorageErrorScreen({
         recoveryStatus={recoveryStatus}
         copy={copy}
       />
-      <ResetWarning failureKind={failureKind} onReset={onReset} copy={copy} />
+      <ResetWarning
+        failureKind={failureKind}
+        onReset={onReset}
+        resetFailed={resetFailed}
+        copy={copy}
+      />
     </div>
   );
 }
