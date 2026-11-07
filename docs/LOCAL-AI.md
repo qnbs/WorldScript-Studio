@@ -22,30 +22,40 @@ The settings live in **Settings → AI Models → Local AI**.
 > The download runs in a background worker. You can keep writing while it streams; the
 > progress modal can be cancelled at any time.
 
+### Keep WebLLM ready for offline use after an app update
+
+WebLLM runtime updates can change the versioned URL of a model's small WebAssembly library,
+while the much larger model weights keep their existing cache URLs. After an app update, reconnect
+before relying on offline inference, open **Settings → AI Models → Local AI**, and press **Download**
+for each WebLLM model you need offline. Wait for the model preparation to finish while online; this
+refreshes any changed runtime library and reuses cached weights when they are still valid. If the
+runtime library has not been cached for the updated version, WebLLM may fall back to the other local
+AI layers until it can be refreshed online.
+
 ---
 
 ## Hardware & browser requirements
 
-| Capability | Needed for | How to check |
-|---|---|---|
-| **WebGPU** | Fast WebLLM models (Llama, Phi, Gemma) | Capability card, or `chrome://gpu` |
-| **~1–5 GB free storage** | Storing model weights | Storage card |
-| **4+ GB RAM** | Mid-size models without thrashing | Device-class badge |
+| Capability               | Needed for                             | How to check                       |
+| ------------------------ | -------------------------------------- | ---------------------------------- |
+| **WebGPU**               | Fast WebLLM models (Llama, Phi, Gemma) | Capability card, or `chrome://gpu` |
+| **~1–5 GB free storage** | Storing model weights                  | Storage card                       |
+| **4+ GB RAM**            | Mid-size models without thrashing      | Device-class badge                 |
 
 - **WebGPU** is available in recent Chrome/Edge (and Chromium-based browsers) and increasingly
-  in Safari/Firefox. If the Capability card says *Not available*, update your browser or enable
+  in Safari/Firefox. If the Capability card says _Not available_, update your browser or enable
   the WebGPU flag.
 - The **Device class** badge (High-end / Mid-range / Low-end) is derived from your GPU VRAM tier
   and CPU cores, and drives the **Recommended for your device** suggestion.
 
 ### Model sizes (approximate on-disk)
 
-| Model | Size | Best for |
-|---|---|---|
-| Qwen 2.5 0.5B | ~0.4 GB | Eco / very low-end |
-| Llama 3.2 1B | ~0.7 GB | Fast, low-end |
-| Llama 3.2 3B | ~1.8 GB | Mid-range |
-| Phi-4 Mini 3.8B | ~2.3 GB | Mid/high-end |
+| Model           | Size    | Best for           |
+| --------------- | ------- | ------------------ |
+| Qwen 2.5 0.5B   | ~0.4 GB | Eco / very low-end |
+| Llama 3.2 1B    | ~0.7 GB | Fast, low-end      |
+| Llama 3.2 3B    | ~1.8 GB | Mid-range          |
+| Phi-4 Mini 3.8B | ~2.3 GB | Mid/high-end       |
 
 If a model needs more space than you have free, the Models list shows a **size warning** and
 you should clear space or pick a smaller model first.
@@ -99,11 +109,11 @@ fallback. In **Local** and **Eco** modes, only the on-device chain is used.
 For server-grade local models, WorldScript Studio talks to a **local inference server** over
 HTTP instead of running the model in the WebView:
 
-| Server | Default URL | Notes |
-|---|---|---|
-| **Ollama** | `http://localhost:11434` | `ollama serve`; models via the Models list or `ollama pull` |
-| **LM Studio** | `http://localhost:1234` | Enable the local server in LM Studio (Developer tab) |
-| **vLLM** | `http://localhost:8000` | Any OpenAI-compatible `/v1` server works |
+| Server        | Default URL              | Notes                                                       |
+| ------------- | ------------------------ | ----------------------------------------------------------- |
+| **Ollama**    | `http://localhost:11434` | `ollama serve`; models via the Models list or `ollama pull` |
+| **LM Studio** | `http://localhost:1234`  | Enable the local server in LM Studio (Developer tab)        |
+| **vLLM**      | `http://localhost:8000`  | Any OpenAI-compatible `/v1` server works                    |
 
 Setup: **Settings → AI Models → AI → Advanced**, pick the **Ollama** provider, choose a preset
 (or enter a custom base URL), then press **Scan common local ports**. Every endpoint gets a
@@ -130,16 +140,16 @@ See [ADR 0012](adr/0012-local-server-connectivity-tauri-http.md) for the full ro
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| Download never starts / "Not available" | No WebGPU **and** no WASM fallback | Update browser; try a smaller ONNX model; or use Ollama. |
-| Download stalls or fails midway | Network drop or storage eviction | Cancel and retry; free space via **Clear Local Models**. |
-| "Another WorldScript tab holds the local inference lock" | Multi-tab GPU contention | Close other WorldScript tabs (only one tab loads the GPU model). |
-| Very slow generation | Low-end device / CPU fallback | Pick a smaller model or use **Eco** mode. |
-| Storage estimate unavailable | Browser without StorageManager | Informational only; downloads still work. |
-| Ollama/LM Studio not detected (desktop) | Server not running, or custom port | Run `ollama serve` / start the LM Studio server; press **Scan common local ports**; check the base URL. |
-| CORS errors mention `localhost:11434` (browser) | Ollama selected inside the PWA | Expected browser boundary — use the desktop app for local servers (see banner in Settings → AI). |
-| Scan shows **timeout** | Server busy loading a model or firewall interference | Retry after the model finishes loading; check OS firewall for localhost. |
+| Symptom                                                  | Cause                                                | Fix                                                                                                     |
+| -------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Download never starts / "Not available"                  | No WebGPU **and** no WASM fallback                   | Update browser; try a smaller ONNX model; or use Ollama.                                                |
+| Download stalls or fails midway                          | Network drop or storage eviction                     | Cancel and retry; free space via **Clear Local Models**.                                                |
+| "Another WorldScript tab holds the local inference lock" | Multi-tab GPU contention                             | Close other WorldScript tabs (only one tab loads the GPU model).                                        |
+| Very slow generation                                     | Low-end device / CPU fallback                        | Pick a smaller model or use **Eco** mode.                                                               |
+| Storage estimate unavailable                             | Browser without StorageManager                       | Informational only; downloads still work.                                                               |
+| Ollama/LM Studio not detected (desktop)                  | Server not running, or custom port                   | Run `ollama serve` / start the LM Studio server; press **Scan common local ports**; check the base URL. |
+| CORS errors mention `localhost:11434` (browser)          | Ollama selected inside the PWA                       | Expected browser boundary — use the desktop app for local servers (see banner in Settings → AI).        |
+| Scan shows **timeout**                                   | Server busy loading a model or firewall interference | Retry after the model finishes loading; check OS firewall for localhost.                                |
 
 The **Last local run: N tokens/sec** line under the fallback chain reflects the throughput
 of your most recent on-device generation — a quick way to compare models on your hardware.
