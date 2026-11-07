@@ -21,7 +21,6 @@ const APP_OWNED_LOCAL_STORAGE_KEYS = new Set([
   'worldscript-or-cb-state',
   'worldscript-openrouter-models',
   'worldscript-ai-leader-heartbeat',
-  'copilot.mode',
   'worldscript-idb-unlock-attempts',
   'worldscript-idb-unlock-lockout',
   'storycraft-idb-unlock-attempts',
@@ -37,8 +36,6 @@ const APP_OWNED_LOCAL_STORAGE_KEYS = new Set([
 const APP_OWNED_SESSION_STORAGE_KEYS = new Set([
   'worldscript-settings-category',
   'worldscript-share-target-payload',
-  'collab_user',
-  'pwa-install-dismissed',
 ]);
 
 const APP_OWNED_LEGACY_RESET_KEYS = ['worldscript_version', 'plotBoard_zoom'] as const;

@@ -99,9 +99,12 @@ describe('wipeAllAppData', () => {
     localStorage.setItem(appSwHistoryKey, 'registered');
     localStorage.setItem(foreignSwHistoryKey, 'keep-sw-history');
     sessionStorage.setItem('worldscript-settings-category', 'backup');
+    // QNBS-v3: these unnamespaced legacy keys have first-party writers but no exclusive same-origin ownership proof.
     sessionStorage.setItem('collab_user', JSON.stringify({ id: 'synthetic-user', name: 'Test' }));
     sessionStorage.setItem('pwa-install-dismissed', '1');
     localStorage.setItem('copilot.mode', 'sidebar');
+    localStorage.setItem('debug', 'true');
+    localStorage.setItem('debugRedux', 'true');
     localStorage.setItem('foreign-tool:key', 'keep-local');
     localStorage.setItem('worldscript-foreign-tool:key', 'keep-prefixed-foreign');
     sessionStorage.setItem('foreign-tool:key', 'keep-session');
@@ -115,9 +118,13 @@ describe('wipeAllAppData', () => {
     expect(localStorage.getItem(appSwHistoryKey)).toBeNull();
     expect(localStorage.getItem(foreignSwHistoryKey)).toBe('keep-sw-history');
     expect(sessionStorage.getItem('worldscript-settings-category')).toBeNull();
-    expect(sessionStorage.getItem('collab_user')).toBeNull();
-    expect(sessionStorage.getItem('pwa-install-dismissed')).toBeNull();
-    expect(localStorage.getItem('copilot.mode')).toBeNull();
+    expect(sessionStorage.getItem('collab_user')).toBe(
+      JSON.stringify({ id: 'synthetic-user', name: 'Test' }),
+    );
+    expect(sessionStorage.getItem('pwa-install-dismissed')).toBe('1');
+    expect(localStorage.getItem('copilot.mode')).toBe('sidebar');
+    expect(localStorage.getItem('debug')).toBe('true');
+    expect(localStorage.getItem('debugRedux')).toBe('true');
     expect(localStorage.getItem('foreign-tool:key')).toBe('keep-local');
     expect(localStorage.getItem('worldscript-foreign-tool:key')).toBe('keep-prefixed-foreign');
     expect(sessionStorage.getItem('foreign-tool:key')).toBe('keep-session');
