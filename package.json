@@ -160,7 +160,7 @@
     "@xstate/react": "^6.1.0",
     "ai": "^7.0.159",
     "diff-match-patch": "^1.0.5",
-    "docx": "^9.15.0",
+    "docx": "^9.15.1",
     "dompurify": "^3.4.17",
     "driver.js": "^1.10.2",
     "jspdf": "^4.2.1",
