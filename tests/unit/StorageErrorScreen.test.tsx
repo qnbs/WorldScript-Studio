@@ -32,6 +32,7 @@ describe('StorageErrorScreen', () => {
   it('loads translated recovery copy and falls back safely when a key is unavailable', async () => {
     await expect(loadStorageErrorCopy()).resolves.toMatchObject({
       description: 'translated:error.startup.description',
+      resetFailure: 'translated:settings.data.dangerZone.factoryReset.failed',
       recoveryAlreadyPreserved: 'translated:error.startup.recoveryAlreadyPreserved',
     });
 
@@ -178,6 +179,28 @@ describe('StorageErrorScreen', () => {
     await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }));
 
     expect(onReset).toHaveBeenCalledOnce();
+  });
+
+  it('updates a pre-mounted status region after reset fails without exposing the raw error', async () => {
+    const user = userEvent.setup();
+    const onReset = vi.fn().mockRejectedValue(new Error('EACCES /private/project.sqlite'));
+
+    render(
+      <StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} failureKind="storage" onReset={onReset} />,
+    );
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('');
+
+    await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }));
+
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent(STARTUP_COPY_FALLBACKS.resetFailure);
+    expect(status).not.toHaveTextContent(STARTUP_COPY_FALLBACKS.description);
+    expect(screen.queryByText('EACCES /private/project.sqlite')).not.toBeInTheDocument();
+    expect(loggerError).toHaveBeenCalledWith('Startup database reset failed', {
+      errorName: 'Error',
+    });
   });
 
   it('shows a non-destructive retry for project I/O failures without corruption or reset actions', async () => {

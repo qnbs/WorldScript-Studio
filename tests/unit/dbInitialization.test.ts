@@ -111,9 +111,10 @@ describe('dbInitialization', () => {
       expect(deletedNames).toContain('worldscript-data-db');
     });
 
-    it('removes worldscript-prefixed localStorage keys', async () => {
+    it('removes only the two exact legacy reset markers and preserves foreign prefix-like keys', async () => {
       localStorage.setItem('worldscript_version', '1');
       localStorage.setItem('plotBoard_zoom', '1.5');
+      localStorage.setItem('worldscript-foreign-marker', 'preserve');
       localStorage.setItem('unrelated_key', 'keep');
       const { resetAllDatabases } = await import('../../services/dbInitialization');
 
@@ -121,10 +122,11 @@ describe('dbInitialization', () => {
 
       expect(localStorage.getItem('worldscript_version')).toBeNull();
       expect(localStorage.getItem('plotBoard_zoom')).toBeNull();
+      expect(localStorage.getItem('worldscript-foreign-marker')).toBe('preserve');
       expect(localStorage.getItem('unrelated_key')).toBe('keep');
     });
 
-    it('resolves even when deleteDatabase fires onerror instead of onsuccess', async () => {
+    it('fails closed when deleteDatabase fires onerror instead of onsuccess', async () => {
       mockDeleteDatabase.mockImplementation(() => {
         const req: Record<string, unknown> = { onsuccess: null, onerror: null, onblocked: null };
         Promise.resolve().then(() => {
@@ -134,7 +136,99 @@ describe('dbInitialization', () => {
       });
 
       const { resetAllDatabases } = await import('../../services/dbInitialization');
+      await expect(resetAllDatabases()).rejects.toMatchObject({
+        name: 'StartupDatabaseResetError',
+        outcome: 'partial-reset',
+        dataMayHaveBeenRemoved: true,
+      });
+      expect(mockDeleteDatabase).toHaveBeenCalledWith('worldscript-state-db');
+      expect(mockDeleteDatabase).toHaveBeenCalledWith('worldscript-data-db');
+    });
+
+    it('keeps reset markers when a primary database deletion fails', async () => {
+      localStorage.setItem('worldscript_version', '1');
+      localStorage.setItem('plotBoard_zoom', '1.5');
+      mockDeleteDatabase.mockImplementation((name: string) => {
+        const req: Record<string, unknown> = { onsuccess: null, onerror: null, onblocked: null };
+        Promise.resolve().then(() => {
+          const callback = name === 'worldscript-state-db' ? req['onsuccess'] : req['onerror'];
+          if (typeof callback === 'function') (callback as () => void)();
+        });
+        return req;
+      });
+
+      const { resetAllDatabases } = await import('../../services/dbInitialization');
+      await expect(resetAllDatabases()).rejects.toMatchObject({ outcome: 'partial-reset' });
+      expect(localStorage.getItem('worldscript_version')).toBe('1');
+      expect(localStorage.getItem('plotBoard_zoom')).toBe('1.5');
+    });
+
+    it('shares one in-flight startup reset across concurrent callers', async () => {
+      const requests: Record<string, unknown>[] = [];
+      mockDeleteDatabase.mockImplementation(() => {
+        const request: Record<string, unknown> = {
+          onsuccess: null,
+          onerror: null,
+          onblocked: null,
+        };
+        requests.push(request);
+        return request;
+      });
+
+      const { resetAllDatabases } = await import('../../services/dbInitialization');
+      const first = resetAllDatabases();
+      expect(resetAllDatabases()).toBe(first);
+      await vi.waitFor(() => expect(requests).toHaveLength(2));
+      for (const request of requests) {
+        (request['onsuccess'] as () => void)();
+      }
+      await expect(first).resolves.toBeUndefined();
+    });
+
+    it('waits for a blocked request terminal event before reporting success', async () => {
+      mockDeleteDatabase.mockImplementation(() => {
+        const req: Record<string, unknown> = { onsuccess: null, onerror: null, onblocked: null };
+        Promise.resolve().then(() => {
+          if (typeof req['onblocked'] === 'function') (req['onblocked'] as () => void)();
+          Promise.resolve().then(() => {
+            if (typeof req['onsuccess'] === 'function') (req['onsuccess'] as () => void)();
+          });
+        });
+        return req;
+      });
+
+      const { resetAllDatabases } = await import('../../services/dbInitialization');
       await expect(resetAllDatabases()).resolves.toBeUndefined();
+      expect(mockDeleteDatabase).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps startup reset fenced after blocked deletion times out', async () => {
+      vi.useFakeTimers();
+      mockDeleteDatabase.mockImplementation(() => {
+        const req: Record<string, unknown> = { onsuccess: null, onerror: null, onblocked: null };
+        Promise.resolve().then(() => {
+          if (typeof req['onblocked'] === 'function') (req['onblocked'] as () => void)();
+        });
+        return req;
+      });
+
+      try {
+        const { resetAllDatabases } = await import('../../services/dbInitialization');
+        const reset = resetAllDatabases();
+        void reset.catch(() => undefined);
+        await vi.runAllTimersAsync();
+        await expect(reset).rejects.toMatchObject({
+          name: 'StartupDatabaseResetError',
+          outcome: 'partial-reset',
+          dataMayHaveBeenRemoved: true,
+        });
+        const { isIdbResetInProgress } = await import('../../services/storage/idbResetGate');
+        expect(isIdbResetInProgress()).toBe(true);
+        await expect(resetAllDatabases()).rejects.toMatchObject({ outcome: 'partial-reset' });
+        expect(mockDeleteDatabase).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

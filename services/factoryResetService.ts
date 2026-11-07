@@ -17,6 +17,10 @@ import {
 import { invalidatePersistedEditorEpoch } from './editorProjectGeneration';
 import type { TauriApis } from './fs/fsCore';
 import { logger } from './logger';
+import {
+  assertAppOwnedWebStorageAvailable,
+  clearAppOwnedWebStorageAfterPrimaryDataDeletion,
+} from './storage/appOwnedWebStorage';
 import { beginIdbReset, endIdbReset } from './storage/idbResetGate';
 import { isTauriRuntime } from './tauriRuntime';
 
@@ -28,15 +32,33 @@ const isWorldScriptOwnedCacheName = (name: string): boolean => OWNED_CACHE_NAME_
 // QNBS-v3 (cubic/coderabbit): onblocked only means deletion is waiting on another open connection -- the same request can still reach a real onsuccess/onerror once that connection closes. This bounds how long deleteDatabase() waits before giving up and reporting the block as a genuine failure.
 const DELETE_BLOCKED_TIMEOUT_MS = 3000;
 
-// QNBS-v3: set before any wipe work starts and never cleared -- the page is reloading regardless, and a false-negative window here is exactly the race (visibilitychange-triggered flush recreating a just-deleted database) this exists to close.
+// QNBS-v3: a partial destructive reset keeps this page fenced until reload rebuilds trusted storage state.
 let resetInProgress = false;
+let activeFactoryReset: Promise<void> | null = null;
+let partialResetDetected = false;
+
+type FactoryResetOutcome = 'failed-before-primary-delete' | 'partial-reset';
+
+export class FactoryResetError extends Error {
+  readonly dataMayHaveBeenRemoved: boolean;
+
+  constructor(readonly outcome: FactoryResetOutcome) {
+    super(
+      outcome === 'partial-reset'
+        ? 'Factory reset stopped after primary data deletion began. Restart the app before retrying.'
+        : 'Factory reset stopped before primary project data deletion began.',
+    );
+    this.name = 'FactoryResetError';
+    this.dataMayHaveBeenRemoved = outcome === 'partial-reset';
+  }
+}
 
 /** True once a factory reset has started; stays true until the reload actually happens. */
 export function isFactoryResetInProgress(): boolean {
   return resetInProgress;
 }
 
-// QNBS-v3: worldscript-localfirst-<projectId> (services/localFirst/docPersistence.ts) is per-project and dynamically named — it cannot be enumerated here; only indexedDB.databases() (the primary path above) ever sees it. This static list is a Safari/old-browser fallback only.
+// QNBS-v3: worldscript-localfirst-<projectId> (services/localFirst/docPersistence.ts) is per-project and dynamically named, so a complete database inventory is required before any reset deletion can begin.
 /** All IDB databases the app may have created under a fixed, exact name. */
 const KNOWN_DB_NAMES = [
   'worldscript-db', // legacy — migrated to worldscript-data-db
@@ -59,32 +81,34 @@ function isWorldScriptOwnedDatabaseName(name: string): boolean {
   return KNOWN_DB_NAMES.includes(name) || name.startsWith(LOCAL_FIRST_DB_PREFIX);
 }
 
-async function deleteAllIndexedDBDatabases(): Promise<void> {
-  // QNBS-v3: enumeration failure falls back to the known list, but a real deletion failure must propagate, not be silently retried through a different path that could mask it.
-  let names: string[] | null = null;
-  // Prefer the native API if available (Chrome 73+, Firefox 126+).
-  if (indexedDB.databases) {
-    try {
-      const all = await indexedDB.databases();
-      names = all.map((db) => db.name).filter((name): name is string => Boolean(name));
-    } catch {
-      // Fall through to known-list approach
-    }
+async function listAppOwnedIndexedDBDatabases(): Promise<string[]> {
+  // QNBS-v3: dynamic Local-First stores make the static list incomplete; if this origin cannot be fully enumerated, refuse before caches, desktop files, or primary data are changed.
+  if (typeof indexedDB.databases !== 'function') {
+    throw new Error('Factory reset cannot verify the complete IndexedDB inventory');
   }
-  // Safari / older browsers, or a failed enumeration: delete by known name list (already exact-owned, no filter needed). A successful native enumeration must still be filtered — it can see a foreign database on this origin.
-  const targets = names ? names.filter(isWorldScriptOwnedDatabaseName) : KNOWN_DB_NAMES;
+  let databases: IDBDatabaseInfo[];
+  try {
+    databases = await indexedDB.databases();
+  } catch {
+    throw new Error('Factory reset cannot verify the complete IndexedDB inventory');
+  }
+  if (databases.some(({ name }) => typeof name !== 'string' || name.length === 0)) {
+    throw new Error('Factory reset cannot classify every IndexedDB database');
+  }
+  const names = databases.map(({ name }) => name);
+  return [...new Set(names.filter((name): name is string => typeof name === 'string'))].filter(
+    isWorldScriptOwnedDatabaseName,
+  );
+}
+
+async function deleteAllIndexedDBDatabases(targets: readonly string[]): Promise<void> {
   // QNBS-v3: allSettled, not all — every deletion request must be given the chance to fully settle before this resolves/rejects, so wipeAllAppData()'s catch never releases the reset gate while another deletion is still outstanding in the background.
   const results = await Promise.allSettled(targets.map(deleteDatabase));
   const failures = results.filter(
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
   if (failures.length > 0) {
-    const messages = failures.map((failure) =>
-      failure.reason instanceof Error ? failure.reason.message : String(failure.reason),
-    );
-    throw new Error(
-      `[factoryReset] ${failures.length} of ${targets.length} database deletion(s) failed: ${messages.join('; ')}`,
-    );
+    throw new Error(`Factory reset could not delete ${failures.length} of its app-owned databases`);
   }
 }
 
@@ -92,26 +116,30 @@ function deleteDatabase(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.deleteDatabase(name);
     let blockedTimeout: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
     const settle = (run: () => void) => {
+      if (settled) return;
+      settled = true;
       if (blockedTimeout) clearTimeout(blockedTimeout);
       run();
     };
     req.onsuccess = () => settle(resolve);
     // QNBS-v3: deleting a non-existent database succeeds per spec — a real onerror means deletion is genuinely unproven, so reject rather than assume "DB may not exist" and report a fresh install that isn't.
     req.onerror = () => {
-      const message = `[factoryReset] deleteDatabase(${name}) failed`;
-      logger.warn(message, { error: req.error?.message });
+      const message = '[factoryReset] app-owned IndexedDB deletion failed';
+      logger.warn(message, { errorName: req.error?.name ?? 'unknown' });
       settle(() => reject(req.error ?? new Error(message)));
     };
     // QNBS-v3 (cubic/coderabbit): onblocked alone doesn't mean the request failed -- the SAME request can still reach onsuccess once the other connection closes. Rejecting here immediately previously settled the promise before the actual deletion outcome was known, letting wipeAllAppData() release the reset gate while the deletion was still asynchronously pending. Log and wait for the real terminal event; only give up once the block has genuinely outlasted a reasonable window.
     req.onblocked = () => {
       logger.warn(
-        `[factoryReset] deleteDatabase(${name}) blocked by another open connection — waiting for it to close`,
+        '[factoryReset] app-owned IndexedDB deletion is blocked by another open connection',
       );
+      if (blockedTimeout) return;
       blockedTimeout = setTimeout(() => {
-        const message = `[factoryReset] deleteDatabase(${name}) still blocked after ${DELETE_BLOCKED_TIMEOUT_MS}ms`;
+        const message = `[factoryReset] app-owned IndexedDB deletion remained blocked after ${DELETE_BLOCKED_TIMEOUT_MS}ms`;
         logger.warn(message);
-        reject(new Error(message));
+        settle(() => reject(new Error(message)));
       }, DELETE_BLOCKED_TIMEOUT_MS);
     };
   });
@@ -119,12 +147,15 @@ function deleteDatabase(name: string): Promise<void> {
 
 async function clearServiceWorkerCaches(): Promise<void> {
   if (!('caches' in globalThis)) return;
-  try {
-    const keys = await caches.keys();
-    // QNBS-v3: only delete this app's own caches — a shared origin can host unrelated caches this user-triggered reset must never touch.
-    await Promise.all(keys.filter(isWorldScriptOwnedCacheName).map((k) => caches.delete(k)));
-  } catch {
-    // Non-fatal — caches cleared on next SW registration
+  const cacheStorage = globalThis.caches;
+  const keys = await cacheStorage.keys();
+  // QNBS-v3: only delete exact app-owned versioned caches; reconcile false/rejected deletes against a fresh inventory.
+  await Promise.allSettled(
+    keys.filter(isWorldScriptOwnedCacheName).map((name) => cacheStorage.delete(name)),
+  );
+  const remaining = (await cacheStorage.keys()).filter(isWorldScriptOwnedCacheName);
+  if (remaining.length > 0) {
+    throw new Error('Factory reset could not clear all app-owned browser caches');
   }
 }
 
@@ -178,31 +209,45 @@ async function assertNoActiveProjectLock(
   );
 }
 
-async function clearTauriAppData(): Promise<void> {
+async function deleteDesktopAppDataEntries(
+  apis: TauriApis,
+  retryFs: <T>(fn: () => Promise<T>) => Promise<T>,
+  appDataPath: string,
+  onDeletionStarted: () => void,
+): Promise<void> {
+  if (!(await apis.exists(appDataPath))) return;
+  // QNBS-v3: validate the full capability-scoped child list before removing any app-data entry.
+  const entries = await retryFs(() => apis.readDir(appDataPath));
+  const childNames = entries.map((entry) => entry.name);
+  if (
+    childNames.some(
+      (name) => !name || name === '.' || name === '..' || name.includes('/') || name.includes('\\'),
+    )
+  ) {
+    throw new Error('Desktop app data enumeration returned an unsafe child name');
+  }
+  for (const name of childNames) {
+    if (typeof name !== 'string') {
+      throw new Error('Desktop app data enumeration returned an unsafe child name');
+    }
+    const childPath = await apis.join(appDataPath, name);
+    onDeletionStarted();
+    await retryFs(() => apis.remove(childPath, { recursive: true }));
+  }
+}
+
+async function clearTauriAppData(onDeletionStarted: () => void): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
     const { loadTauriApis, retryFs, PROJECT_LOCKS_DIR_NAME } = await import('./fs/fsCore');
     const apis = await loadTauriApis();
     const appDataPath = await apis.appDataDir();
     await assertNoActiveProjectLock(apis, retryFs, PROJECT_LOCKS_DIR_NAME, appDataPath);
-    if (await apis.exists(appDataPath)) {
-      // QNBS-v3: keep the capability-scoped AppData root and remove only its contents.
-      const entries = await retryFs(() => apis.readDir(appDataPath));
-      let firstError: unknown;
-      for (const name of entries
-        .map((entry) => entry.name)
-        .filter((entryName): entryName is string => Boolean(entryName))) {
-        try {
-          const childPath = await apis.join(appDataPath, name);
-          await retryFs(() => apis.remove(childPath, { recursive: true }));
-        } catch (error) {
-          firstError ??= error;
-        }
-      }
-      if (firstError) throw firstError;
-    }
+    await deleteDesktopAppDataEntries(apis, retryFs, appDataPath, onDeletionStarted);
   } catch (error) {
-    logger.error('Failed to clear Tauri app data during factory reset:', error);
+    logger.error('Failed to clear Tauri app data during factory reset', {
+      errorName: error instanceof Error ? error.name : 'unknown',
+    });
     throw new Error('Factory reset could not clear desktop data');
   }
 }
@@ -212,9 +257,23 @@ async function clearTauriAppData(): Promise<void> {
  * Clears: IDB, localStorage, sessionStorage, SW caches.
  * After the reload the app starts as a fresh install.
  */
-export async function wipeAllAppData(): Promise<void> {
+export function wipeAllAppData(): Promise<void> {
+  if (activeFactoryReset) return activeFactoryReset;
+  if (partialResetDetected) return Promise.reject(new FactoryResetError('partial-reset'));
+
+  const operation = performFactoryReset();
+  let trackedOperation: Promise<void>;
+  trackedOperation = operation.finally(() => {
+    if (activeFactoryReset === trackedOperation) activeFactoryReset = null;
+  });
+  activeFactoryReset = trackedOperation;
+  return trackedOperation;
+}
+
+async function performFactoryReset(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
   resetInProgress = true;
+  let primaryDeletionStarted = false;
   try {
     // QNBS-v3: a save enqueued (project or settings autosave, or a visibility/quit flush) before this flag flipped already passed its own guard check and will run regardless -- draining all four coordinators here lets it finish before deletion starts, instead of racing it. The last two cover the non-critical cross-project-index/DuckDB writes a project save fires off after its own enqueue() already resolved.
     await Promise.all([
@@ -227,24 +286,38 @@ export async function wipeAllAppData(): Promise<void> {
     invalidatePersistedEditorEpoch();
     // QNBS-v3: only after those four have genuinely drained -- beginIdbReset() force-closes every other long-lived IDB connection (9 modules), which must not happen while one of the four above is still mid-write. Awaited and can throw: it fails closed on any closer failure, so a rejection here skips straight to the catch below and deletion never starts on an unproven teardown.
     await beginIdbReset();
-    // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
-    await clearTauriAppData();
-    await deleteAllIndexedDBDatabases();
+    // QNBS-v3: detect restricted browser storage before deleting caches, desktop data or primary IndexedDB.
+    assertAppOwnedWebStorageAvailable();
+    const databaseTargets = await listAppOwnedIndexedDBDatabases();
     await clearServiceWorkerCaches();
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch {
-      // Private browsing may throw
-    }
+    // QNBS-v3: user-authored browser values and the encryption salt remain until every primary deletion has succeeded.
+    await clearTauriAppData(() => {
+      primaryDeletionStarted = true;
+    });
+    // QNBS-v3: set the irreversible boundary before issuing the first database deletion request; timeout/error can leave the provider outcome uncertain.
+    primaryDeletionStarted = true;
+    await deleteAllIndexedDBDatabases(databaseTargets);
+    clearAppOwnedWebStorageAfterPrimaryDataDeletion();
     // Small delay so async IDB deletions can settle before unload.
     await new Promise((r) => setTimeout(r, 300));
     sanitizeViewCarryingUrlState();
     window.location.reload();
-  } catch (error) {
-    // QNBS-v3: a failed reset never reloads, so the app keeps running -- both gates must release (endIdbReset() unconditionally, since beginIdbReset() can leave its own internal state marked in-progress even when it itself is what rejected), or every future save/open would stay silently blocked.
+  } catch {
+    // QNBS-v3: after primary deletion starts, failure is potentially partial; keep both write gates latched until a reload rebuilds trusted state.
+    if (primaryDeletionStarted) partialResetDetected = true;
+    if (partialResetDetected) {
+      resetInProgress = true;
+      throw new FactoryResetError('partial-reset');
+    }
     resetInProgress = false;
     endIdbReset();
-    throw error;
+    throw new FactoryResetError('failed-before-primary-delete');
   }
+}
+
+/** Reset only for isolated unit cases; production callers must never invoke this. */
+export function _resetFactoryResetStateForTest(): void {
+  resetInProgress = false;
+  activeFactoryReset = null;
+  partialResetDetected = false;
 }
