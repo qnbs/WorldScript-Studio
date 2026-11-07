@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **DOCX export:** Updated `docx` to 9.15.1 and its resolved `@types/node` dependency to 26.6.6; the existing export contract remains covered by focused tests (PR #1194; Dependabot source PR #1193).
+
 - **AI dependencies:** Updated the coordinated Vercel AI SDK family: `@ai-sdk/google` 4.0.109, `@ai-sdk/openai` 4.0.106, `@ai-sdk/react` 4.0.163, and `ai` 7.0.159. The lockfile keeps their provider, provider-utils, gateway, and MCP dependencies aligned; Redux Toolkit remains at 2.12.0 and WebLLM stays on its separate qualification path (PR #1189; Dependabot source PR #1184).
 
 - **Local AI runtime:** Updated the curated WebLLM runtime to 0.2.87, including its upstream model-configuration refresh. The supported model catalog and inference contract are unchanged. After an update that changes a versioned model-library URL, prepare each WebLLM model online before relying on it offline; unchanged model weights remain cached (PR #1191; Dependabot source PR #1190).
