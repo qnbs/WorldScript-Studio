@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **CI governance:** Bound the exact reviewer-trust workflow target hash for the separate `pnpm/setup` v3.1.2 migration; this manifest-only authorization changes no workflow behavior and keeps implementation review independent (PR #1187; source PR #1160).
-
 - **Developer tooling:** Updated Biome from 2.5.8 to 2.6.4 and aligned its configuration schema. Resolved the new component-factory findings and repo-wide lint diagnostics across test harnesses, retry timing, sorted entity pairs, Aurora cascade ordering, and DOM text reads; lowered the suppression ratchet by two removed directives (PR #1185; Dependabot source PR #1171).
 
 - **Tauri dependencies:** Updated the locked Rust plugins `tauri-plugin-dialog` to 2.8.4, `tauri-plugin-updater` to 2.14.1, and `tauri-plugin-single-instance` to 2.5.5, with their resolved `rfd`, `base64`, and Windows target dependency changes (PR #1179; Dependabot source PR #1170).
