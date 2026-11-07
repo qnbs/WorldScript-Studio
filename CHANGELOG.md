@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **AI dependencies:** Updated the coordinated Vercel AI SDK family: `@ai-sdk/google` 4.0.109, `@ai-sdk/openai` 4.0.106, `@ai-sdk/react` 4.0.163, and `ai` 7.0.159. The lockfile keeps their provider, provider-utils, gateway, and MCP dependencies aligned; Redux Toolkit remains at 2.12.0 and WebLLM stays on its separate qualification path (PR #1189; Dependabot source PR #1184).
 
+- **Local AI runtime:** Updated the curated WebLLM runtime to 0.2.87, including its upstream model-configuration refresh. The supported model catalog and inference contract are unchanged (PR #1191; Dependabot source PR #1190).
+
 - **CI dependencies:** Upgrade the SHA-pinned `pnpm/setup` GitHub Action to v3.1.2 in the shared setup action and both policy workflows. Keep project Node selection with `actions/setup-node`, and preserve the trusted workflow's frozen, script-disabled install (PR #1188; Dependabot source PR #1160).
 
 - **Developer tooling:** Updated Biome from 2.5.8 to 2.6.4 and aligned its configuration schema. Resolved the new component-factory findings and repo-wide lint diagnostics across test harnesses, retry timing, sorted entity pairs, Aurora cascade ordering, and DOM text reads; lowered the suppression ratchet by two removed directives (PR #1185; Dependabot source PR #1171).
