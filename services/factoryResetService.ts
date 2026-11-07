@@ -58,7 +58,7 @@ export function isFactoryResetInProgress(): boolean {
   return resetInProgress;
 }
 
-// QNBS-v3: worldscript-localfirst-<projectId> (services/localFirst/docPersistence.ts) is per-project and dynamically named — it cannot be enumerated here; only indexedDB.databases() (the primary path above) ever sees it. This static list is a Safari/old-browser fallback only.
+// QNBS-v3: worldscript-localfirst-<projectId> (services/localFirst/docPersistence.ts) is per-project and dynamically named, so a complete database inventory is required before any reset deletion can begin.
 /** All IDB databases the app may have created under a fixed, exact name. */
 const KNOWN_DB_NAMES = [
   'worldscript-db', // legacy — migrated to worldscript-data-db
@@ -81,20 +81,27 @@ function isWorldScriptOwnedDatabaseName(name: string): boolean {
   return KNOWN_DB_NAMES.includes(name) || name.startsWith(LOCAL_FIRST_DB_PREFIX);
 }
 
-async function deleteAllIndexedDBDatabases(): Promise<void> {
-  // QNBS-v3: enumeration failure falls back to the known list, but a real deletion failure must propagate, not be silently retried through a different path that could mask it.
-  let names: string[] | null = null;
-  // Prefer the native API if available (Chrome 73+, Firefox 126+).
-  if (indexedDB.databases) {
-    try {
-      const all = await indexedDB.databases();
-      names = all.map((db) => db.name).filter((name): name is string => Boolean(name));
-    } catch {
-      // Fall through to known-list approach
-    }
+async function listAppOwnedIndexedDBDatabases(): Promise<string[]> {
+  // QNBS-v3: dynamic Local-First stores make the static list incomplete; if this origin cannot be fully enumerated, refuse before caches, desktop files, or primary data are changed.
+  if (typeof indexedDB.databases !== 'function') {
+    throw new Error('Factory reset cannot verify the complete IndexedDB inventory');
   }
-  // Safari / older browsers, or a failed enumeration: delete by known name list (already exact-owned, no filter needed). A successful native enumeration must still be filtered — it can see a foreign database on this origin.
-  const targets = names ? names.filter(isWorldScriptOwnedDatabaseName) : KNOWN_DB_NAMES;
+  let databases: IDBDatabaseInfo[];
+  try {
+    databases = await indexedDB.databases();
+  } catch {
+    throw new Error('Factory reset cannot verify the complete IndexedDB inventory');
+  }
+  if (databases.some(({ name }) => typeof name !== 'string' || name.length === 0)) {
+    throw new Error('Factory reset cannot classify every IndexedDB database');
+  }
+  const names = databases.map(({ name }) => name);
+  return [...new Set(names.filter((name): name is string => typeof name === 'string'))].filter(
+    isWorldScriptOwnedDatabaseName,
+  );
+}
+
+async function deleteAllIndexedDBDatabases(targets: readonly string[]): Promise<void> {
   // QNBS-v3: allSettled, not all — every deletion request must be given the chance to fully settle before this resolves/rejects, so wipeAllAppData()'s catch never releases the reset gate while another deletion is still outstanding in the background.
   const results = await Promise.allSettled(targets.map(deleteDatabase));
   const failures = results.filter(
@@ -281,6 +288,7 @@ async function performFactoryReset(): Promise<void> {
     await beginIdbReset();
     // QNBS-v3: detect restricted browser storage before deleting caches, desktop data or primary IndexedDB.
     assertAppOwnedWebStorageAvailable();
+    const databaseTargets = await listAppOwnedIndexedDBDatabases();
     await clearServiceWorkerCaches();
     // QNBS-v3: user-authored browser values and the encryption salt remain until every primary deletion has succeeded.
     await clearTauriAppData(() => {
@@ -288,7 +296,7 @@ async function performFactoryReset(): Promise<void> {
     });
     // QNBS-v3: set the irreversible boundary before issuing the first database deletion request; timeout/error can leave the provider outcome uncertain.
     primaryDeletionStarted = true;
-    await deleteAllIndexedDBDatabases();
+    await deleteAllIndexedDBDatabases(databaseTargets);
     clearAppOwnedWebStorageAfterPrimaryDataDeletion();
     // Small delay so async IDB deletions can settle before unload.
     await new Promise((r) => setTimeout(r, 300));

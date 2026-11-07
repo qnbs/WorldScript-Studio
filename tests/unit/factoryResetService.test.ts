@@ -1,6 +1,6 @@
 /**
  * Tests for services/factoryResetService.ts
- * QNBS-v3: covers the native indexedDB.databases() path, the known-list fallback, the Cache API branch, and the Tauri AppData clear branch (exists/missing/partial-failure).
+ * QNBS-v3: covers complete IndexedDB enumeration, fail-closed inventory errors, Cache API cleanup, and the Tauri AppData clear branch (exists/missing/partial-failure).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -493,17 +493,39 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
-  it('falls back to the known database list when indexedDB.databases() fails', async () => {
+  it('fails closed before any deletion when database enumeration is unavailable', async () => {
+    const dynamicDbName = 'worldscript-localfirst-proj-123';
+    await createDb(dynamicDbName);
     const dbSpy = vi.spyOn(indexedDB, 'databases').mockRejectedValueOnce(new Error('not allowed'));
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+    let cacheNames = ['worldscript-static-v1.29.2'];
+    const cacheKeys = vi.fn().mockImplementation(async () => cacheNames);
+    vi.stubGlobal('caches', {
+      keys: cacheKeys,
+      delete: vi.fn().mockImplementation(async (name: string) => {
+        cacheNames = cacheNames.filter((cacheName) => cacheName !== name);
+        return true;
+      }),
+    });
 
-    await runWipe();
+    await expect(wipeAllAppData()).rejects.toMatchObject({
+      name: 'FactoryResetError',
+      outcome: 'failed-before-primary-delete',
+      dataMayHaveBeenRemoved: false,
+    });
 
-    // Fallback deletes every name in the known list (e.g. the logs DB).
-    expect(delSpy).toHaveBeenCalledWith('worldscript-logs-db');
-    expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(delSpy).not.toHaveBeenCalled();
+    expect(cacheKeys).not.toHaveBeenCalled();
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(mockEndIdbReset).toHaveBeenCalledOnce();
+
     dbSpy.mockRestore();
     delSpy.mockRestore();
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.deleteDatabase(dynamicDbName);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
   });
 
   // QNBS-v3: hard preserve-first gate — a shared origin can host a database from an unrelated app/tool; indexedDB.databases() enumerates the whole origin, so factory reset must never construct a deletion target from anything it doesn't own.

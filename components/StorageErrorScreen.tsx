@@ -16,6 +16,7 @@ export interface StorageErrorCopy {
   recover: string;
   recovering: string;
   reset: string;
+  resetFailure: string;
   quarantineNotice: string;
   recoveryFailed: string;
   recoveryUnknown: string;
@@ -40,6 +41,8 @@ export const STARTUP_COPY_FALLBACKS: StorageErrorCopy = {
   recover: 'Quarantine project and reload',
   recovering: 'Preserving project…',
   reset: 'Reset database and reload',
+  resetFailure:
+    'The database reset did not complete. Restart the app to check its state before trying again.',
   quarantineNotice:
     'The complete project folder will be moved to quarantine. No project data will be deleted.',
   recoveryFailed:
@@ -72,6 +75,7 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     recover,
     recovering,
     reset,
+    resetFailure,
     quarantineNotice,
     recoveryFailed,
     recoveryUnknown,
@@ -106,6 +110,10 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     startupTranslation('error.startup.recover', STARTUP_COPY_FALLBACKS.recover),
     startupTranslation('error.startup.recovering', STARTUP_COPY_FALLBACKS.recovering),
     startupTranslation('error.startup.reset', STARTUP_COPY_FALLBACKS.reset),
+    startupTranslation(
+      'settings.data.dangerZone.factoryReset.failed',
+      STARTUP_COPY_FALLBACKS.resetFailure,
+    ),
     startupTranslation('error.startup.quarantineNotice', STARTUP_COPY_FALLBACKS.quarantineNotice),
     startupTranslation('error.startup.recoveryFailed', STARTUP_COPY_FALLBACKS.recoveryFailed),
     startupTranslation('error.startup.recoveryUnknown', STARTUP_COPY_FALLBACKS.recoveryUnknown),
@@ -129,6 +137,7 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     recover,
     recovering,
     reset,
+    resetFailure,
     quarantineNotice,
     recoveryFailed,
     recoveryUnknown,
@@ -372,7 +381,7 @@ function ResetWarning({
   return (
     <>
       <p role="status" aria-live="polite" aria-atomic="true">
-        {resetFailed ? copy.description : ''}
+        {resetFailed ? copy.resetFailure : ''}
       </p>
       <p style={{ fontSize: '0.75rem', color: '#475569' }}>{copy.resetWarning}</p>
     </>

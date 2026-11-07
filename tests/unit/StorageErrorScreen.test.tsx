@@ -32,6 +32,7 @@ describe('StorageErrorScreen', () => {
   it('loads translated recovery copy and falls back safely when a key is unavailable', async () => {
     await expect(loadStorageErrorCopy()).resolves.toMatchObject({
       description: 'translated:error.startup.description',
+      resetFailure: 'translated:settings.data.dangerZone.factoryReset.failed',
       recoveryAlreadyPreserved: 'translated:error.startup.recoveryAlreadyPreserved',
     });
 
@@ -194,7 +195,8 @@ describe('StorageErrorScreen', () => {
     await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }));
 
     expect(screen.getByRole('status')).toBe(status);
-    expect(status).toHaveTextContent(STARTUP_COPY_FALLBACKS.description);
+    expect(status).toHaveTextContent(STARTUP_COPY_FALLBACKS.resetFailure);
+    expect(status).not.toHaveTextContent(STARTUP_COPY_FALLBACKS.description);
     expect(screen.queryByText('EACCES /private/project.sqlite')).not.toBeInTheDocument();
     expect(loggerError).toHaveBeenCalledWith('Startup database reset failed', {
       errorName: 'Error',

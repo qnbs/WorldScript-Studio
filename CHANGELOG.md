@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Storage reset:** Limit factory and startup cleanup to exact app-owned storage keys, preserve unrelated same-origin data, and retain the IndexedDB encryption salt until primary data deletion succeeds. Fail closed on uncertain deletion outcomes and announce reset failures through a pre-mounted status region (PR #1196; successor to #1147; issue #1125).
+- **Storage reset:** Limit factory and startup cleanup to exact app-owned storage keys, disclose intentionally retained ambiguous same-origin browser values, and retain the IndexedDB encryption salt until primary deletion succeeds. Require a complete IndexedDB inventory before any destructive reset step so dynamic Local-First stores cannot be missed; announce failures through a pre-mounted localized status region (PR #1196; successor to #1147; issue #1125).
 
 - **DOCX export:** Updated `docx` to 9.15.1 and its resolved `@types/node` dependency to 26.6.6; the existing export contract remains covered by focused tests (PR #1194; Dependabot source PR #1193).
 
