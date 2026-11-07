@@ -528,6 +528,44 @@ describe('wipeAllAppData', () => {
     });
   });
 
+  it('fails closed before cleanup when the database inventory API is missing', async () => {
+    const deleteDatabaseMock = vi.fn();
+    const cacheKeys = vi.fn();
+    vi.stubGlobal('indexedDB', { deleteDatabase: deleteDatabaseMock } as unknown as IDBFactory);
+    vi.stubGlobal('caches', { keys: cacheKeys, delete: vi.fn() });
+
+    await expect(wipeAllAppData()).rejects.toMatchObject({
+      name: 'FactoryResetError',
+      outcome: 'failed-before-primary-delete',
+      dataMayHaveBeenRemoved: false,
+    });
+
+    expect(deleteDatabaseMock).not.toHaveBeenCalled();
+    expect(cacheKeys).not.toHaveBeenCalled();
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(mockEndIdbReset).toHaveBeenCalledOnce();
+  });
+
+  it('fails closed before cleanup when the inventory contains an unclassifiable database', async () => {
+    const dbSpy = vi.spyOn(indexedDB, 'databases').mockResolvedValueOnce([{ version: 1 }]);
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+    const cacheKeys = vi.fn();
+    vi.stubGlobal('caches', { keys: cacheKeys, delete: vi.fn() });
+
+    await expect(wipeAllAppData()).rejects.toMatchObject({
+      name: 'FactoryResetError',
+      outcome: 'failed-before-primary-delete',
+      dataMayHaveBeenRemoved: false,
+    });
+
+    expect(delSpy).not.toHaveBeenCalled();
+    expect(cacheKeys).not.toHaveBeenCalled();
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(mockEndIdbReset).toHaveBeenCalledOnce();
+    dbSpy.mockRestore();
+    delSpy.mockRestore();
+  });
+
   // QNBS-v3: hard preserve-first gate — a shared origin can host a database from an unrelated app/tool; indexedDB.databases() enumerates the whole origin, so factory reset must never construct a deletion target from anything it doesn't own.
   it('never deletes a foreign, non-owned database on the shared origin, including when native enumeration succeeds', async () => {
     const dbSpy = vi.spyOn(indexedDB, 'databases').mockResolvedValue([
