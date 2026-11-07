@@ -93,9 +93,10 @@ describe('CI workflow policy', () => {
   // QNBS-v3: this workflow is protected; an empty transition manifest refuses a pin change until a base-owned predecessor admits the exact bytes.
   it('keeps the reviewer trust workflow on the admitted pnpm/setup pin', () => {
     const pnpmStep = pnpmSetupUsesBlock(reviewerTrustWorkflowSource);
-    expect(pnpmStep).toContain('pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0');
+    expect(pnpmStep).toContain('pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2');
     expect(pnpmStep).toContain('install: false');
-    expect(pnpmStep).not.toContain('node-version-file:');
+    expect(pnpmStep).toContain('node-version-file: false');
+    expect(pnpmStep).not.toContain('runtime:');
     // QNBS-v3: a `version` input breaks this required check whenever the base packageManager pin moves.
     expect(pnpmStep).not.toContain('version:');
   });
@@ -169,7 +170,7 @@ describe('CI workflow policy', () => {
     const pnpmStep = pnpmSetupUsesBlock(setupActionSource);
     const actionIndex = setupActionSource.indexOf('pnpm/setup@');
     const nodeIndex = setupActionSource.indexOf('actions/setup-node@');
-    expect(pnpmStep).toContain('pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024');
+    expect(pnpmStep).toContain('pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2');
     expect(pnpmStep).toContain('node-version-file: false');
     expect(pnpmStep).toContain('install: false');
     expect(pnpmStep).toContain(`version: ${expectedVersion}`);
@@ -204,7 +205,7 @@ describe('CI workflow policy', () => {
     const pnpmStep = pnpmSetupUsesBlock(policyBlock);
     const actionIndex = policyBlock.indexOf('pnpm/setup@');
     const nodeIndex = policyBlock.indexOf('actions/setup-node@');
-    expect(pnpmStep).toContain('pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024');
+    expect(pnpmStep).toContain('pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2');
     expect(pnpmStep).toContain('node-version-file: false');
     expect(pnpmStep).toContain(`version: ${expectedVersion}`);
     expect(pnpmStep).toContain('install: false');
