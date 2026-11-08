@@ -486,8 +486,14 @@ describe('Tauri release workflow policy', () => {
     expect(release).toContain('release-assets-guard.mjs remote');
     expect(release).toContain('merge-multiple: false');
     expect(release).toContain('gh api --method PATCH');
+    const publishedTagGuard = extractStepBlock(release, 'Refuse to overwrite a published release');
+    expect(publishedTagGuard).toContain('/releases?per_page=100');
+    expect(publishedTagGuard).toContain(
+      'a published release already exists for this tag; refusing overwrite',
+    );
     const releaseStepIndexes = [
       release.indexOf('Generate and validate all three signed updater manifest entries'),
+      release.indexOf('Refuse to overwrite a published release'),
       release.indexOf('Stage GitHub Release as a draft'),
       release.indexOf('Verify the complete uploaded draft asset inventory and SHA-256 digests'),
       release.indexOf('Publish the verified complete draft'),

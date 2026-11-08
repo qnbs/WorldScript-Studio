@@ -175,6 +175,26 @@ describe('signed updater manifest gate', () => {
 });
 
 describe('uploaded release asset verification', () => {
+  it('rejects a published inventory that omits any member of the complete asset matrix', () => {
+    const localAssets = [...completeAssets, 'latest.json'].map((name, index) => ({
+      name,
+      size: index + 1,
+      digest: `sha256:${String(index + 1).padStart(64, '0')}`,
+    }));
+    const uploadedAssets = localAssets.map((asset) => ({
+      ...asset,
+      name: asset.name.replaceAll(' ', '.'),
+    }));
+
+    expect(validateRemoteAssetRecords(localAssets, uploadedAssets).ok).toBe(true);
+    expect(
+      validateRemoteAssetRecords(
+        localAssets,
+        uploadedAssets.filter((asset) => asset.name !== 'WorldScript.Studio_1.29.3_amd64.deb'),
+      ).ok,
+    ).toBe(false);
+  });
+
   it('requires the uploaded inventory and SHA-256 digests to match the validated local files', () => {
     const localAsset = { name: 'latest.json', size: 32, digest: `sha256:${'a'.repeat(64)}` };
     const local = [localAsset];
