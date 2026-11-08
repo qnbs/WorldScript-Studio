@@ -1,10 +1,24 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
 const PLATFORMS = ['linux-x86_64', 'windows-x86_64', 'darwin-aarch64'];
+const SIGNED_ASSET_KEYS = [
+  'linuxDeb',
+  'linuxRpm',
+  'linuxAppImage',
+  'windowsSetup',
+  'windowsMsi',
+  'macUpdater',
+];
+const PLATFORM_ASSETS = [
+  ['linux-x86_64', 'linuxAppImage'],
+  ['windows-x86_64', 'windowsSetup'],
+  ['darwin-aarch64', 'macUpdater'],
+];
 
 function releasePatterns(version) {
   const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -31,139 +45,182 @@ function releasePatterns(version) {
   };
 }
 
-export function validateReleaseAssetNames(assetNames, version) {
-  const errors = [];
-  if (!RELEASE_VERSION.test(version)) {
-    return { ok: false, errors: ['version must be a plain X.Y.Z release version'], selected: {} };
-  }
+function duplicateNames(names) {
+  return [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
+}
 
-  const names = assetNames.filter((name) => typeof name === 'string');
-  const duplicateNames = [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
-  if (duplicateNames.length) errors.push(`duplicate asset names: ${duplicateNames.join(', ')}`);
-
-  const patterns = releasePatterns(version);
+function selectExpectedAssets(names, patterns, errors) {
   const selected = {};
   for (const [key, pattern] of Object.entries(patterns)) {
     const matches = names.filter((name) => pattern.test(name));
     if (matches.length !== 1) {
       errors.push(`${key}: expected exactly one matching asset, found ${matches.length}`);
-    } else {
-      selected[key] = matches[0];
+      continue;
     }
+    selected[key] = matches[0];
   }
+  return selected;
+}
 
+function requiredAssetNames(selected) {
   const required = new Set(Object.values(selected));
-  const signedAssets = [
-    selected.linuxDeb,
-    selected.linuxRpm,
-    selected.linuxAppImage,
-    selected.windowsSetup,
-    selected.windowsMsi,
-    selected.macUpdater,
-  ].filter(Boolean);
-  for (const asset of signedAssets) required.add(`${asset}.sig`);
+  for (const key of SIGNED_ASSET_KEYS) {
+    const asset = selected[key];
+    if (asset) required.add(`${asset}.sig`);
+  }
+  return required;
+}
 
+function reportMissingAndUnexpected(names, required, errors) {
   for (const name of names) {
     if (!required.has(name)) errors.push(`unexpected release asset: ${name}`);
   }
   for (const name of required) {
     if (!names.includes(name)) errors.push(`missing release asset: ${name}`);
   }
+}
 
+export function validateReleaseAssetNames(assetNames, version) {
+  if (!RELEASE_VERSION.test(version)) {
+    return { ok: false, errors: ['version must be a plain X.Y.Z release version'], selected: {} };
+  }
+
+  const names = assetNames.filter((name) => typeof name === 'string');
+  const errors = duplicateNames(names).map((name) => `duplicate asset names: ${name}`);
+  const selected = selectExpectedAssets(names, releasePatterns(version), errors);
+  reportMissingAndUnexpected(names, requiredAssetNames(selected), errors);
   return { ok: errors.length === 0, errors, selected };
 }
 
+function isObjectRecord(value) {
+  if (value === null) return false;
+  if (typeof value !== 'object') return false;
+  return !Array.isArray(value);
+}
+
+function hasBase64Shape(value) {
+  if (typeof value !== 'string') return false;
+  if (value.length === 0) return false;
+  return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value);
+}
+
 function validBase64(value) {
-  if (
-    typeof value !== 'string' ||
-    !value ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
-  )
-    return false;
+  if (!hasBase64Shape(value)) return false;
   return Buffer.from(value, 'base64').toString('base64') === value;
 }
 
-export function validateLatestManifest({ manifest, version, repository, assetNames, signatures }) {
-  const errors = [];
-  const assetCheck = validateReleaseAssetNames(assetNames, version);
-  errors.push(...assetCheck.errors);
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
-    errors.push('repository must be an owner/repository pair');
-  }
-  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
-    return { ok: false, errors: [...errors, 'latest.json must contain an object'] };
+function validRepositoryName(repository) {
+  if (typeof repository !== 'string') return false;
+  const parts = repository.split('/');
+  if (parts.length !== 2) return false;
+  return parts.every((part) => /^[A-Za-z0-9_.-]+$/.test(part));
+}
+
+function validateManifestFields(manifest, version, errors) {
+  if (!isObjectRecord(manifest)) {
+    errors.push('latest.json must contain an object');
+    return null;
   }
   if (manifest.version !== version) errors.push('latest.json version does not match the release');
-  if (typeof manifest.notes !== 'string' || !manifest.notes.trim())
+  if (typeof manifest.notes !== 'string' || !manifest.notes.trim()) {
     errors.push('latest.json notes are missing');
+  }
   if (typeof manifest.pub_date !== 'string' || Number.isNaN(Date.parse(manifest.pub_date))) {
     errors.push('latest.json pub_date is missing or invalid');
   }
-
-  const platformMap = {
-    'linux-x86_64': ['linuxAppImage'],
-    'windows-x86_64': ['windowsSetup'],
-    'darwin-aarch64': ['macUpdater'],
-  };
-  const platforms = manifest.platforms;
-  if (!platforms || typeof platforms !== 'object' || Array.isArray(platforms)) {
+  if (!isObjectRecord(manifest.platforms)) {
     errors.push('latest.json platforms must be an object');
-    return { ok: false, errors };
+    return null;
   }
-  const actualPlatforms = Object.keys(platforms).sort();
-  if (JSON.stringify(actualPlatforms) !== JSON.stringify([...PLATFORMS].sort())) {
+  validatePlatformNames(manifest.platforms, errors);
+  return manifest.platforms;
+}
+
+function validatePlatformNames(platforms, errors) {
+  const actual = Object.keys(platforms).sort();
+  const expected = [...PLATFORMS].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     errors.push(`latest.json must contain exactly: ${PLATFORMS.join(', ')}`);
   }
+}
 
-  for (const [platform, [selectedKey]] of Object.entries(platformMap)) {
-    const asset = assetCheck.selected[selectedKey];
-    const entry = platforms[platform];
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-      errors.push(`latest.json is missing ${platform}`);
-      continue;
-    }
-    const expectedUrl = asset
-      ? `https://github.com/${repository}/releases/download/v${version}/${asset.replaceAll(' ', '.')}`
-      : '';
-    if (entry.url !== expectedUrl)
-      errors.push(`${platform} URL does not target its required updater payload`);
-    if (!validBase64(entry.signature)) errors.push(`${platform} signature is missing or malformed`);
-    if (asset) {
-      const sidecar = signatures?.[`${asset}.sig`]?.trim();
-      if (!sidecar || entry.signature !== sidecar) {
-        errors.push(`${platform} signature does not match the published updater sidecar`);
-      }
-    }
+function expectedPlatformUrl(repository, version, asset) {
+  if (!asset) return '';
+  const fileName = asset.replaceAll(' ', '.');
+  return `https://github.com/${repository}/releases/download/v${version}/${fileName}`;
+}
+
+function validatePlatformEntry(platforms, platform, assetKey, context, errors) {
+  const entry = platforms[platform];
+  if (!isObjectRecord(entry)) {
+    errors.push(`latest.json is missing ${platform}`);
+    return;
   }
 
+  const asset = context.assetCheck.selected[assetKey];
+  if (entry.url !== expectedPlatformUrl(context.repository, context.version, asset)) {
+    errors.push(`${platform} URL does not target its required updater payload`);
+  }
+  if (!validBase64(entry.signature)) errors.push(`${platform} signature is missing or malformed`);
+  const sidecar = asset ? context.signatures?.[`${asset}.sig`]?.trim() : undefined;
+  if (!sidecar || entry.signature !== sidecar) {
+    errors.push(`${platform} signature does not match the published updater sidecar`);
+  }
+}
+
+function validatePlatformEntries(platforms, context, errors) {
+  for (const [platform, assetKey] of PLATFORM_ASSETS) {
+    validatePlatformEntry(platforms, platform, assetKey, context, errors);
+  }
+}
+
+export function validateLatestManifest({ manifest, version, repository, assetNames, signatures }) {
+  const assetCheck = validateReleaseAssetNames(assetNames, version);
+  const errors = [...assetCheck.errors];
+  if (!validRepositoryName(repository)) errors.push('repository must be an owner/repository pair');
+
+  const platforms = validateManifestFields(manifest, version, errors);
+  if (platforms) {
+    validatePlatformEntries(platforms, { assetCheck, repository, version, signatures }, errors);
+  }
   return { ok: errors.length === 0, errors };
 }
 
-export function validateRemoteAssetRecords(localAssets, remoteAssets) {
-  const errors = [];
-  const expected = new Map(localAssets.map((asset) => [asset.name.replaceAll(' ', '.'), asset]));
-  const actualNames = remoteAssets.map((asset) => asset.name);
-  const duplicates = [
-    ...new Set(actualNames.filter((name, index) => actualNames.indexOf(name) !== index)),
-  ];
-  if (duplicates.length) errors.push(`duplicate uploaded asset names: ${duplicates.join(', ')}`);
+function remoteAssetMap(remoteAssets) {
+  return new Map(remoteAssets.map((asset) => [asset.name, asset]));
+}
 
-  const actual = new Map(remoteAssets.map((asset) => [asset.name, asset]));
-  for (const [name, local] of expected) {
-    const remote = actual.get(name);
-    if (!remote) {
-      errors.push(`uploaded release is missing ${name}`);
-      continue;
-    }
-    if (Number(remote.size) !== Number(local.size))
-      errors.push(`${name} uploaded size differs from the validated file`);
-    if (remote.digest !== local.digest)
-      errors.push(`${name} uploaded SHA-256 differs from the validated file`);
+function compareUploadedAsset(expectedName, local, remote, errors) {
+  if (!remote) {
+    errors.push(`uploaded release is missing ${expectedName}`);
+    return;
   }
+  if (Number(remote.size) !== Number(local.size)) {
+    errors.push(`${expectedName} uploaded size differs from the validated file`);
+  }
+  if (remote.digest !== local.digest) {
+    errors.push(`${expectedName} uploaded SHA-256 differs from the validated file`);
+  }
+}
+
+export function validateRemoteAssetRecords(localAssets, remoteAssets) {
+  const errors = duplicateNames(remoteAssets.map((asset) => asset.name)).map(
+    (name) => `duplicate uploaded asset names: ${name}`,
+  );
+  const expected = new Map(localAssets.map((asset) => [asset.name.replaceAll(' ', '.'), asset]));
+  const actual = remoteAssetMap(remoteAssets);
+
+  for (const [name, local] of expected) compareUploadedAsset(name, local, actual.get(name), errors);
   for (const name of actual.keys()) {
-    if (!expected.has(name)) errors.push(`unexpected uploaded release asset: ${name}`);
+    if (!expected.has(name)) errors.push(`unexpected uploaded asset: ${name}`);
   }
   return { ok: errors.length === 0, errors };
+}
+
+async function digestFile(path) {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return `sha256:${hash.digest('hex')}`;
 }
 
 async function readAssetDirectory(directory) {
@@ -175,16 +232,26 @@ async function readAssetDirectory(directory) {
     const path = join(directory, entry.name);
     const metadata = await stat(path);
     if (metadata.size <= 0) throw new Error(`release asset is empty: ${entry.name}`);
-    assets.push({
-      name: entry.name,
-      path,
-      size: metadata.size,
-      digest: `sha256:${createHash('sha256')
-        .update(await readFile(path))
-        .digest('hex')}`,
-    });
+    assets.push({ name: entry.name, path, size: metadata.size, digest: await digestFile(path) });
   }
   return assets;
+}
+
+async function readSidecars(directory, assets) {
+  const sidecars = {};
+  for (const { name } of assets) {
+    if (name.endsWith('.sig')) sidecars[name] = await readFile(join(directory, name), 'utf8');
+  }
+  return sidecars;
+}
+
+async function loadReleaseInputs(directory) {
+  const assets = await readAssetDirectory(directory);
+  return {
+    assets,
+    names: assets.map((asset) => asset.name),
+    signatures: await readSidecars(directory, assets),
+  };
 }
 
 function report(result) {
@@ -196,6 +263,119 @@ function report(result) {
   console.log('release asset gate passed');
 }
 
+async function runAssetsMode(version, directory) {
+  const { names } = await loadReleaseInputs(directory);
+  report(validateReleaseAssetNames(names, version));
+}
+
+function manifestForRelease(version, repository, selected, signatures) {
+  const updater = (assetKey) => {
+    const asset = selected[assetKey];
+    return {
+      signature: asset ? (signatures[`${asset}.sig`] ?? '').trim() : '',
+      url: expectedPlatformUrl(repository, version, asset),
+    };
+  };
+  return {
+    version,
+    notes: 'See release notes',
+    pub_date: new Date().toISOString(),
+    platforms: {
+      'linux-x86_64': updater('linuxAppImage'),
+      'windows-x86_64': updater('windowsSetup'),
+      'darwin-aarch64': updater('macUpdater'),
+    },
+  };
+}
+
+async function runGenerateMode(version, directory, repository) {
+  const { names, signatures } = await loadReleaseInputs(directory);
+  const assetCheck = validateReleaseAssetNames(names, version);
+  if (!assetCheck.ok) return report(assetCheck);
+
+  const manifest = manifestForRelease(version, repository, assetCheck.selected, signatures);
+  const result = validateLatestManifest({
+    manifest,
+    version,
+    repository,
+    assetNames: names,
+    signatures,
+  });
+  if (!result.ok) return report(result);
+  await writeFile(join(directory, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log('generated and validated latest.json for all three signed updater platforms');
+}
+
+async function readManifest(directory) {
+  return JSON.parse(await readFile(join(directory, 'latest.json'), 'utf8'));
+}
+
+async function runValidateMode(version, directory, repository) {
+  const { names, signatures } = await loadReleaseInputs(directory);
+  const manifest = await readManifest(directory);
+  report(
+    validateLatestManifest({
+      manifest,
+      version,
+      repository,
+      assetNames: names.filter((name) => name !== 'latest.json'),
+      signatures,
+    }),
+  );
+}
+
+function parseRemoteAssetRecords(text) {
+  const records = [];
+  for (const line of text.trim().split(/\r?\n/).filter(Boolean)) {
+    const fields = line.split('\t');
+    if (fields.length !== 3 || !fields[0] || !/^\d+$/.test(fields[1] ?? '')) {
+      throw new Error('remote release asset inventory has an invalid TSV record');
+    }
+    records.push({ name: fields[0], size: Number(fields[1]), digest: fields[2] ?? '' });
+  }
+  return records;
+}
+
+function validateRemoteInputs(assets, manifestResult) {
+  if (!manifestResult.ok) return manifestResult;
+  const latestAssets = assets.filter((asset) => asset.name === 'latest.json');
+  if (
+    latestAssets.length !== 1 ||
+    !assets.every((asset) => /^sha256:[0-9a-f]{64}$/.test(asset.digest))
+  ) {
+    return {
+      ok: false,
+      errors: ['local release package must include latest.json and SHA-256 digests'],
+    };
+  }
+  return { ok: true, errors: [] };
+}
+
+async function runRemoteMode(version, directory, repository, inputFile) {
+  if (!inputFile) throw new Error('remote mode requires the paginated GitHub asset TSV path');
+  const inputs = await loadReleaseInputs(directory);
+  const manifest = await readManifest(directory);
+  const manifestResult = validateLatestManifest({
+    manifest,
+    version,
+    repository,
+    assetNames: inputs.names.filter((name) => name !== 'latest.json'),
+    signatures: inputs.signatures,
+  });
+  const inputResult = validateRemoteInputs(inputs.assets, manifestResult);
+  if (!inputResult.ok) return report(inputResult);
+
+  const remoteText = await readFile(inputFile, 'utf8');
+  report(validateRemoteAssetRecords(inputs.assets, parseRemoteAssetRecords(remoteText)));
+}
+
+const MODE_HANDLERS = {
+  assets: runAssetsMode,
+  generate: runGenerateMode,
+  validate: runValidateMode,
+  remote: runRemoteMode,
+};
+
 async function main(args) {
   const [mode, version, directory, repository, inputFile] = args;
   if (!mode || !version || !directory) {
@@ -203,100 +383,9 @@ async function main(args) {
       'usage: release-assets-guard.mjs <assets|generate|validate|remote> <version> <asset-dir> [repository] [input-file]',
     );
   }
-  const localAssets = await readAssetDirectory(directory);
-  const names = localAssets.map((asset) => asset.name);
-  const sidecars = Object.fromEntries(
-    await Promise.all(
-      names
-        .filter((name) => name.endsWith('.sig'))
-        .map(async (name) => [name, await readFile(join(directory, name), 'utf8')]),
-    ),
-  );
-
-  if (mode === 'assets') {
-    report(validateReleaseAssetNames(names, version));
-    return;
-  }
-  if (mode === 'generate') {
-    const assetCheck = validateReleaseAssetNames(names, version);
-    if (!assetCheck.ok) return report(assetCheck);
-    const { selected } = assetCheck;
-    const pubDate = new Date().toISOString();
-    const manifest = {
-      version,
-      notes: 'See release notes',
-      pub_date: pubDate,
-      platforms: {
-        'linux-x86_64': {
-          signature: sidecars[`${selected.linuxAppImage}.sig`]?.trim() ?? '',
-          url: `https://github.com/${repository}/releases/download/v${version}/${selected.linuxAppImage.replaceAll(' ', '.')}`,
-        },
-        'windows-x86_64': {
-          signature: sidecars[`${selected.windowsSetup}.sig`]?.trim() ?? '',
-          url: `https://github.com/${repository}/releases/download/v${version}/${selected.windowsSetup.replaceAll(' ', '.')}`,
-        },
-        'darwin-aarch64': {
-          signature: sidecars[`${selected.macUpdater}.sig`]?.trim() ?? '',
-          url: `https://github.com/${repository}/releases/download/v${version}/${selected.macUpdater.replaceAll(' ', '.')}`,
-        },
-      },
-    };
-    const result = validateLatestManifest({
-      manifest,
-      version,
-      repository,
-      assetNames: names,
-      signatures: sidecars,
-    });
-    if (!result.ok) return report(result);
-    await writeFile(join(directory, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-    console.log('generated and validated latest.json for all three signed updater platforms');
-    return;
-  }
-  if (mode === 'validate') {
-    const manifest = JSON.parse(await readFile(join(directory, 'latest.json'), 'utf8'));
-    const result = validateLatestManifest({
-      manifest,
-      version,
-      repository,
-      assetNames: names.filter((name) => name !== 'latest.json'),
-      signatures: sidecars,
-    });
-    report(result);
-    return;
-  }
-  if (mode === 'remote') {
-    if (!inputFile) throw new Error('remote mode requires the paginated GitHub asset TSV path');
-    const manifest = JSON.parse(await readFile(join(directory, 'latest.json'), 'utf8'));
-    const manifestCheck = validateLatestManifest({
-      manifest,
-      version,
-      repository,
-      assetNames: names.filter((name) => name !== 'latest.json'),
-      signatures: sidecars,
-    });
-    if (!manifestCheck.ok) return report(manifestCheck);
-    const remoteText = await readFile(inputFile, 'utf8');
-    const remoteAssets = remoteText
-      .trim()
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => {
-        const [name, size, digest] = line.split('\t');
-        return { name, size: Number(size), digest };
-      });
-    const digestCheck =
-      localAssets.filter(({ name }) => name === 'latest.json').length === 1 &&
-      localAssets.every(({ digest }) => /^sha256:[0-9a-f]{64}$/.test(digest));
-    if (!digestCheck)
-      return report({
-        ok: false,
-        errors: ['local release package must include latest.json and SHA-256 digests'],
-      });
-    report(validateRemoteAssetRecords(localAssets, remoteAssets));
-    return;
-  }
-  throw new Error(`unknown release gate mode: ${mode}`);
+  const handler = MODE_HANDLERS[mode];
+  if (!handler) throw new Error(`unknown release gate mode: ${mode}`);
+  await handler(version, directory, repository, inputFile);
 }
 
 if (process.argv[1] && basename(process.argv[1]) === 'release-assets-guard.mjs') {

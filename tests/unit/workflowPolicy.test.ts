@@ -467,6 +467,7 @@ describe('Tauri release workflow policy', () => {
     expect(release).toContain('draft: true');
     expect(release).toContain('overwrite_files: true');
     expect(release).toContain('release-assets-guard.mjs remote');
+    expect(release).toContain('merge-multiple: false');
     expect(release).toContain('gh api --method PATCH');
     expect(
       release.indexOf('Generate and validate all three signed updater manifest entries'),
@@ -474,6 +475,9 @@ describe('Tauri release workflow policy', () => {
     expect(
       release.indexOf('Verify the complete uploaded draft asset inventory and SHA-256 digests'),
     ).toBeLessThan(release.indexOf('Publish the verified complete draft'));
+    expect(release.indexOf('Publish the verified complete draft')).toBeLessThan(
+      release.indexOf('Verify published release state and final asset inventory'),
+    );
     expect(release).not.toContain('gh release upload');
   });
 

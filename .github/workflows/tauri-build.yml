@@ -365,7 +365,7 @@ jobs:
         with:
           pattern: tauri-bundle-*
           path: downloaded
-          merge-multiple: true
+          merge-multiple: false
 
       - name: Extract deterministic release notes
         run: |
@@ -474,3 +474,19 @@ jobs:
           RELEASE_ID="$(gh api "/repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id')"
           gh api --method PATCH "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
             -F draft=false --jq 'if .draft == false then .html_url else error("release remained a draft") end'
+
+      - name: Verify published release state and final asset inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          RELEASE_ID="$(gh api "/repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id')"
+          PUBLISHED_TAG="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.tag_name')"
+          DRAFT="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft')"
+          test "$PUBLISHED_TAG" = "$TAG" || { echo "::error::published release tag changed during final verification"; exit 1; }
+          test "$DRAFT" = false || { echo "::error::release is not publicly published after the visibility update"; exit 1; }
+          gh api --paginate --jq '.[] | [.name, (.size | tostring), (.digest // "")] | @tsv' \
+            "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/published-release-assets.tsv"
+          node scripts/release-assets-guard.mjs remote "$VERSION" release-assets "$GITHUB_REPOSITORY" "$RUNNER_TEMP/published-release-assets.tsv"
