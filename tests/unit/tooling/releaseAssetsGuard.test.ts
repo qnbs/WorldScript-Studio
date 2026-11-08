@@ -15,7 +15,7 @@ const installers = [
   `WorldScript Studio_${version}_x64_en-US.msi`,
   `WorldScript Studio_${version}_aarch64.dmg`,
   'WorldScript Studio.app.tar.gz',
-];
+] as const;
 const inventories = [
   'x86_64-unknown-linux-gnu',
   'x86_64-pc-windows-msvc',
@@ -175,16 +175,17 @@ describe('signed updater manifest gate', () => {
 
 describe('uploaded release asset verification', () => {
   it('requires the uploaded inventory and SHA-256 digests to match the validated local files', () => {
-    const local = [{ name: 'latest.json', size: 32, digest: `sha256:${'a'.repeat(64)}` }];
+    const localAsset = { name: 'latest.json', size: 32, digest: `sha256:${'a'.repeat(64)}` };
+    const local = [localAsset];
     expect(
       validateRemoteAssetRecords(local, [
-        { name: 'latest.json', size: 32, digest: local[0].digest },
+        { name: 'latest.json', size: 32, digest: localAsset.digest },
       ]).ok,
     ).toBe(true);
     expect(validateRemoteAssetRecords(local, []).ok).toBe(false);
     expect(
       validateRemoteAssetRecords(local, [
-        { name: 'latest.json', size: 33, digest: local[0].digest },
+        { name: 'latest.json', size: 33, digest: localAsset.digest },
       ]).ok,
     ).toBe(false);
     expect(
@@ -194,7 +195,7 @@ describe('uploaded release asset verification', () => {
     ).toBe(false);
     expect(
       validateRemoteAssetRecords(local, [
-        { name: 'latest.json', size: 32, digest: local[0].digest },
+        { name: 'latest.json', size: 32, digest: localAsset.digest },
         { name: 'unexpected.bin', size: 1, digest: `sha256:${'c'.repeat(64)}` },
       ]).ok,
     ).toBe(false);
