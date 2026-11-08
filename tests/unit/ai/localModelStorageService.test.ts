@@ -40,7 +40,7 @@ vi.mock('@domain/ai-core', () => ({
 vi.mock('../../../hooks/useTranslation', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, string>) =>
-      values?.count ? `${key}:${values.count}` : key,
+      values?.['count'] ? `${key}:${values['count']}` : key,
     language: 'en',
   }),
 }));
