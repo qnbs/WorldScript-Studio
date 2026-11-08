@@ -32,6 +32,7 @@ const scheduledSecurityWorkflowPath = fileURLToPath(
 const reviewerTrustWorkflowPath = fileURLToPath(
   new URL('../../.github/workflows/reviewer-governance-trust.yml', import.meta.url),
 );
+const expr = (expression: string) => `\${{ ${expression} }}`;
 const tauriManifestPath = fileURLToPath(new URL('../../src-tauri/Cargo.toml', import.meta.url));
 const workflowSource = readFileSync(workflowPath, 'utf8');
 const tauriWorkflowSource = readFileSync(tauriWorkflowPath, 'utf8');
@@ -412,6 +413,46 @@ describe('Tauri release workflow policy', () => {
     expect(preflight).toContain('scripts/check-tauri-plugin-versions.mjs');
     expect(preflight).not.toContain('pnpm install');
     expect(preflight).toMatch(/^ {4}permissions:\n {6}contents: read\s*$/m);
+  });
+
+  it('limits the updater-key preflight to workflow_dispatch on exact protected main and verifies both signature directions', () => {
+    const preflight = extractJobBlock(tauriWorkflowSource, 'updater-signing-preflight');
+    expect(extractJobIf(preflight)).toContain(
+      "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
+    );
+    expect(preflight).toContain(`ref: ${expr('github.sha')}`);
+    expect(preflight).toMatch(/^ {4}permissions:\n {6}contents: read\s*$/m);
+    expect(preflight).toContain(
+      `TAURI_SIGNING_PRIVATE_KEY: ${expr('secrets.TAURI_SIGNING_PRIVATE_KEY')}`,
+    );
+    expect(preflight).toContain(
+      `TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${expr('secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD')}`,
+    );
+    expect(preflight).toContain('--example verify-updater-artifact');
+    expect(preflight).toContain('--expect-failure --tamper');
+    expect(preflight).toContain('--expect-failure --wrong-key');
+    expect(preflight).not.toContain('upload-artifact');
+    expect(preflight).not.toContain('contents: write');
+  });
+
+  it('fails closed on missing upload files and validates a complete draft before public release', () => {
+    const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
+    const release = extractJobBlock(tauriWorkflowSource, 'release');
+    expect(bundle).toContain('if-no-files-found: error');
+    expect(release).toContain('release-assets-guard.mjs assets');
+    expect(release).toContain('release-assets-guard.mjs generate');
+    expect(release).toContain('release-assets-guard.mjs validate');
+    expect(release).toContain('draft: true');
+    expect(release).toContain('overwrite_files: true');
+    expect(release).toContain('release-assets-guard.mjs remote');
+    expect(release).toContain('gh api --method PATCH');
+    expect(
+      release.indexOf('Generate and validate all three signed updater manifest entries'),
+    ).toBeLessThan(release.indexOf('Stage GitHub Release as a draft'));
+    expect(
+      release.indexOf('Verify the complete uploaded draft asset inventory and SHA-256 digests'),
+    ).toBeLessThan(release.indexOf('Publish the verified complete draft'));
+    expect(release).not.toContain('gh release upload');
   });
 
   it('keeps release publication tag-only and downstream of bundle output', () => {
