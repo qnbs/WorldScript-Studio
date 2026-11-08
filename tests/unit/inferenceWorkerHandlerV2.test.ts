@@ -4,10 +4,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkerHandlerContext } from '../../packages/worker-bus/src/workerBootstrap';
 
-const { mockPipelineFactory } = vi.hoisted(() => ({ mockPipelineFactory: vi.fn() }));
+const { mockPipelineFactory, transformersEnv } = vi.hoisted(() => ({
+  mockPipelineFactory: vi.fn(),
+  transformersEnv: { cacheKey: 'transformers-cache' },
+}));
 
 vi.mock('@huggingface/transformers', () => ({
   pipeline: mockPipelineFactory,
+  env: transformersEnv,
 }));
 
 // QNBS-v3: [Imported after the mock is declared so the worker picks up the mocked factory.]
@@ -75,6 +79,7 @@ describe('inference.worker (v2) handleInference', () => {
     );
 
     expect(result).toEqual([Math.fround(0.1), Math.fround(0.2), Math.fround(0.3)]);
+    expect(transformersEnv.cacheKey).toBe('worldscript-transformers-cache');
     expect(pipe).toHaveBeenCalledWith(
       'x',
       expect.objectContaining({ pooling: 'mean', normalize: true }),

@@ -13,7 +13,7 @@ let transformersModule: { pipeline: (...args: unknown[]) => Promise<unknown> } |
 
 async function getTransformers() {
   if (!transformersModule) {
-    const mod = await import('@huggingface/transformers');
+    const mod = await import('../../packages/ai-core/src/vendor-transformers');
     transformersModule = mod as unknown as typeof transformersModule;
   }
   return transformersModule!;

@@ -27,7 +27,7 @@ export class KokoroTtsEngine implements TtsEngine {
     if (typeof WebAssembly === 'undefined') return false;
     if (typeof AudioContext === 'undefined') return false;
     try {
-      const { pipeline } = await import('@huggingface/transformers');
+      const { pipeline } = await import('../../packages/ai-core/src/vendor-transformers');
       return typeof pipeline === 'function';
     } catch {
       return false;
@@ -35,7 +35,7 @@ export class KokoroTtsEngine implements TtsEngine {
   }
 
   async initialize(): Promise<void> {
-    const { pipeline, env } = await import('@huggingface/transformers');
+    const { pipeline, env } = await import('../../packages/ai-core/src/vendor-transformers');
     interface XenovaEnv {
       backends?: { onnx?: { wasm?: { proxy?: boolean } } };
     }
