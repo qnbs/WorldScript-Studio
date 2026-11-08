@@ -70,7 +70,7 @@ describe('runEdgeBuild', () => {
     });
   });
 
-  it('a failed asset step stops before vite and returns its status', () => {
+  it('a failed preparation step stops before vite and returns its status', () => {
     const { spawn, calls } = recordingSpawn((args) => (isVite(args) ? 0 : 3));
     const log = vi.fn();
 

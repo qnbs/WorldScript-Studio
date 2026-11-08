@@ -13,7 +13,7 @@ export const EDGE_PREP_SCRIPTS = [
 ];
 
 /**
- * The edge build: every runtime asset step, then `vite build`. A failed step (nonzero status or a
+ * The edge build: every preparation step, then `vite build`. A failed step (nonzero status or a
  * signal) stops before vite and returns a nonzero exit code. `spawn` is node:child_process
  * `spawnSync`, injected so tests can run the sequence without building.
  */

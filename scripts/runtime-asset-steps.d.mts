@@ -1,4 +1,4 @@
-export const RUNTIME_ASSET_SCRIPTS: readonly string[];
+export const EDGE_PREP_SCRIPTS: readonly string[];
 
 export interface EdgeBuildSpawnResult {
   status: number | null;
