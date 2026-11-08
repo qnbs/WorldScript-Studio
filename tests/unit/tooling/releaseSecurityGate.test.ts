@@ -18,6 +18,8 @@ const expr = (expression: string) => `\${{ ${expression} }}`;
 const gateCondition =
   "needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha";
 const tauriReleaseCondition = `github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && ${gateCondition}`;
+const dockerTagPushCondition = `github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && ${gateCondition}`;
+const proofTagSimulationCondition = `github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && ${gateCondition}`;
 
 function mutate(text: string, from: string, to: string): string {
   expect(text, `fixture anchor not found: ${from}`).toContain(from);
@@ -38,11 +40,31 @@ describe('#911 release security gate: shipped workflows', () => {
     expect(checkWorkflowFile(join(workflows, name))).toEqual([]);
   });
 
-  it('Tauri release and GHCR build-push use the exact gate conditions', () => {
+  it('Tauri and GHCR publish only from exact gated v* tag pushes', () => {
     expect(source(TAURI)).toContain(expr(tauriReleaseCondition));
     expect(source(TAURI)).toContain('needs: [bundle, security-audit]');
-    expect(source(DOCKER)).toContain(expr(gateCondition));
+    expect(source(DOCKER)).toContain(expr(dockerTagPushCondition));
     expect(source(DOCKER)).toContain('needs: [security-audit]');
+  });
+
+  it('rejects a Docker publish job that could run from workflow_dispatch', () => {
+    const dispatchCanPublish = mutate(
+      source(DOCKER),
+      "github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && ",
+      '',
+    );
+    expect(messages(DOCKER, dispatchCanPublish)).toMatch(
+      /must require github\.event_name == 'push'/,
+    );
+  });
+
+  it('rejects a workflow_dispatch even when its ref happens to be a v* tag', () => {
+    const dispatchOnTag = mutate(
+      source(DOCKER),
+      "github.event_name == 'push'",
+      "github.event_name == 'workflow_dispatch'",
+    );
+    expect(messages(DOCKER, dispatchOnTag)).toMatch(/must require github\.event_name == 'push'/);
   });
 
   it('GHCR builds exactly the audited commit', () => {
@@ -92,8 +114,10 @@ describe('#911 release security gate: weakening it fails', () => {
         [
           'GHCR build-push when the audit is not cancelled',
           DOCKER,
-          expr(gateCondition),
-          expr(`!cancelled() && ${gateCondition}`),
+          expr(dockerTagPushCondition),
+          expr(
+            `github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && !cancelled() && ${gateCondition}`,
+          ),
           /must not use a status function/,
         ],
         [
@@ -233,8 +257,20 @@ describe('#911 non-publishing gate proof workflow', () => {
     expect(source(PROOF)).not.toMatch(/docker\/login-action|action-gh-release|gh release/);
   });
 
-  it('its stand-in uses the exact GHCR build-push condition and audits the dispatch input', () => {
-    expect(source(PROOF)).toContain(expr(gateCondition));
+  it('its stand-in simulates only a v* tag push and audits the dispatch input', () => {
+    expect(source(PROOF)).toContain(expr(proofTagSimulationCondition));
     expect(source(PROOF)).toContain(`EXPECTED_SHA: ${expr('inputs.expected-sha')}`);
+    expect(messages(PROOF, source(PROOF))).toEqual('');
+  });
+
+  it('rejects a proof stand-in that treats a simulated manual dispatch as a publish', () => {
+    const dispatchAsPublish = mutate(
+      source(PROOF),
+      "inputs.simulated_event == 'push'",
+      "inputs.simulated_event == 'workflow_dispatch'",
+    );
+    expect(messages(PROOF, dispatchAsPublish)).toMatch(
+      /must require inputs\.simulated_event == 'push'/,
+    );
   });
 });

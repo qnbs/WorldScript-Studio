@@ -71,10 +71,10 @@ jobs:
 
   build-push:
     name: Build & push image
-    # QNBS-v3 (#911): every pushed tag (version, major.minor, and `latest` from metadata-action's latest=auto or the raw rule) waits on a successful audit of this exact SHA; no status function, so a failed, skipped or cancelled audit leaves this job unrun.
+    # QNBS-v3 (#911): only signed v* tag pushes may publish; manual dispatch remains audit-only.
     needs: [security-audit]
     if: >-
-      ${{ needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # QNBS-v3: packages:write scoped to this job only — prevents privilege escalation in future jobs.

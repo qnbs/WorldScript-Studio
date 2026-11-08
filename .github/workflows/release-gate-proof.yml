@@ -1,8 +1,8 @@
-# Non-publishing proof of the #911 release security gate (same inlined audit job as tauri-build.yml / docker.yml). Dispatch it on main with:
-#   expected-sha = the dispatched commit  -> audit succeeds, the publish stand-in runs (echo only)
-#   expected-sha = another full SHA       -> audit may succeed, the stand-in is skipped (SHA mismatch)
-#   expected-sha = not-a-sha              -> audit fails, the stand-in is skipped
-# The stand-in's `if` is identical to docker.yml build-push (tests/unit/tooling/releaseSecurityGate.test.ts).
+# Non-publishing proof of the #911 release security gate. Dispatch on main with:
+#   expected-sha = dispatch SHA; simulated_event=push; simulated_ref_type=tag;
+#   simulated_ref=refs/tags/v1.29.3 -> audit succeeds, echo-only stand-in runs
+# A wrong SHA, non-tag ref, or simulated non-push event keeps the stand-in skipped.
+# The simulated event is data only; this workflow has no publishing permission or action.
 # Nothing here holds a write permission, logs in to a registry or creates a release.
 name: Release gate proof
 
@@ -13,6 +13,23 @@ on:
         description: SHA to hand to the release security audit (use a wrong or invalid value for the negative proofs).
         required: true
         type: string
+      simulated_event:
+        description: Event modeled by the no-write stand-in; choose push only for the positive tag-path proof.
+        required: true
+        type: choice
+        options: [push, workflow_dispatch]
+        default: workflow_dispatch
+      simulated_ref_type:
+        description: Ref type modeled by the no-write stand-in.
+        required: true
+        type: choice
+        options: [branch, tag]
+        default: branch
+      simulated_ref:
+        description: Ref modeled by the no-write stand-in, for example refs/tags/v1.29.3.
+        required: true
+        type: string
+        default: refs/heads/main
 
 permissions:
   contents: read
@@ -77,7 +94,7 @@ jobs:
     name: Publish stand-in (no side effects)
     needs: [security-audit]
     if: >-
-      ${{ needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
+      ${{ github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:

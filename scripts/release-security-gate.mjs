@@ -18,11 +18,32 @@ export const GITHUB_SHA = expression('github.sha');
 export const PROOF_INPUT_SHA = expression('inputs.expected-sha');
 export const AUDITED_SHA_OUTPUT = expression('steps.result.outputs.audited-sha');
 
+export const REQUIRED_DOCKER_PUBLISH_EVENTS = Object.freeze([
+  "github.event_name == 'push'",
+  "github.ref_type == 'tag'",
+  "startsWith(github.ref, 'refs/tags/v')",
+]);
+
+export const REQUIRED_PROOF_SIMULATION_CONDITIONS = Object.freeze([
+  "github.event_name == 'workflow_dispatch'",
+  "inputs.simulated_event == 'push'",
+  "inputs.simulated_ref_type == 'tag'",
+  "startsWith(inputs.simulated_ref, 'refs/tags/v')",
+]);
+
 /** Workflow → the jobs that publish (or stand in for publishing) and the SHA their audit must check. */
 export const RELEASE_GATED_WORKFLOWS = Object.freeze({
   'tauri-build.yml': { gatedJobs: ['release'], expectedSha: GITHUB_SHA },
-  'docker.yml': { gatedJobs: ['build-push'], expectedSha: GITHUB_SHA },
-  'release-gate-proof.yml': { gatedJobs: ['publish-stand-in'], expectedSha: PROOF_INPUT_SHA },
+  'docker.yml': {
+    gatedJobs: ['build-push'],
+    expectedSha: GITHUB_SHA,
+    requiredEventConditions: REQUIRED_DOCKER_PUBLISH_EVENTS,
+  },
+  'release-gate-proof.yml': {
+    gatedJobs: ['publish-stand-in'],
+    expectedSha: PROOF_INPUT_SHA,
+    requiredEventConditions: REQUIRED_PROOF_SIMULATION_CONDITIONS,
+  },
 });
 
 export const REQUIRED_GATE_CONDITIONS = Object.freeze([
@@ -154,8 +175,10 @@ function checkAuditJob(audit, expectedSha, fail) {
   checkAuditSteps(asList(audit.steps), expectedSha, fail);
 }
 
-function checkGateCondition(jobName, condition, fail) {
-  const missing = REQUIRED_GATE_CONDITIONS.filter((required) => !condition.includes(required));
+function checkGateCondition(jobName, condition, fail, requiredEventConditions = []) {
+  const missing = [...REQUIRED_GATE_CONDITIONS, ...requiredEventConditions].filter(
+    (required) => !condition.includes(required),
+  );
   for (const required of missing) fail(`job "${jobName}" if: must require ${required}`);
   if (STATUS_FUNCTION.test(condition)) {
     fail(
@@ -164,7 +187,7 @@ function checkGateCondition(jobName, condition, fail) {
   }
 }
 
-function checkGatedJob(jobName, job, fail) {
+function checkGatedJob(jobName, job, fail, requiredEventConditions) {
   if (!job) {
     fail(`gated job "${jobName}" is missing`);
     return;
@@ -172,7 +195,7 @@ function checkGatedJob(jobName, job, fail) {
   if (!asList(job.needs).includes('security-audit')) {
     fail(`job "${jobName}" must need "security-audit"`);
   }
-  checkGateCondition(jobName, String(job.if ?? ''), fail);
+  checkGateCondition(jobName, String(job.if ?? ''), fail, requiredEventConditions);
 }
 
 function checkNoUngatedWriters(jobs, gatedJobs, fail) {
@@ -207,7 +230,9 @@ export function checkReleaseSecurityWorkflow(fileName, source) {
   }
   const jobs = workflow?.jobs ?? {};
   checkAuditJob(jobs['security-audit'], spec.expectedSha, fail);
-  for (const jobName of spec.gatedJobs) checkGatedJob(jobName, jobs[jobName], fail);
+  for (const jobName of spec.gatedJobs) {
+    checkGatedJob(jobName, jobs[jobName], fail, spec.requiredEventConditions);
+  }
   checkNoUngatedWriters(jobs, spec.gatedJobs, fail);
   return failures;
 }
