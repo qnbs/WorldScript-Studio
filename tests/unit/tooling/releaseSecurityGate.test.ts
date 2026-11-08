@@ -28,6 +28,16 @@ function mutate(text: string, from: string, to: string): string {
   return text.replace(from, to);
 }
 
+function addVerifierStepSetting(text: string, setting: string): string {
+  const verifierStep = /^([ \t]*)- name: Verify GitHub signatures for the release tag$/m;
+  expect(text).toMatch(verifierStep);
+  return text.replace(
+    verifierStep,
+    (_match, indent: string) =>
+      `${indent}- name: Verify GitHub signatures for the release tag\n${indent}  ${setting}`,
+  );
+}
+
 const messages = (name: string, text: string) =>
   checkReleaseSecurityWorkflow(name, text)
     .map((failure) => failure.message)
@@ -138,6 +148,18 @@ describe('#911 release security gate: shipped workflows', () => {
     expect(messages(DOCKER, dispatchVerifier)).toMatch(
       /job "verify-release-tag" if: must require github\.event_name == 'push'/,
     );
+  });
+
+  it.each([
+    ['a verifier step that can be skipped', 'if: false', /must not have an if:/],
+    [
+      'a verifier step whose failure is ignored',
+      'continue-on-error: true',
+      /must not set continue-on-error/,
+    ],
+  ])('%s', (_label, unsafeSetting, expectedFailure) => {
+    const insecureVerifier = addVerifierStepSetting(source(DOCKER), unsafeSetting);
+    expect(messages(DOCKER, insecureVerifier)).toMatch(expectedFailure);
   });
 
   it('binds signature verification to the actual GitHub push context', () => {

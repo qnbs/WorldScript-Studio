@@ -227,6 +227,46 @@ function checkGateCondition(jobName, condition, fail, requiredEventConditions = 
   );
 }
 
+const TAG_VERIFIER_ENV = Object.freeze({
+  GITHUB_EVENT_NAME: expression('github.event_name'),
+  GITHUB_EVENT_PATH: expression('github.event_path'),
+  GITHUB_REF_NAME: expression('github.ref_name'),
+  GITHUB_REF_TYPE: expression('github.ref_type'),
+  GITHUB_REPOSITORY: expression('github.repository'),
+  GITHUB_TOKEN: expression('github.token'),
+});
+
+function checkTagVerifierCheckout(steps, fail) {
+  const checkoutIndex = steps.findIndex((step) => usesOf(step) === CHECKOUT_PIN);
+  if (checkoutIndex < 0) {
+    fail(`job "verify-release-tag" must use the pinned ${CHECKOUT_PIN} action`);
+    return -1;
+  }
+  const checkout = steps[checkoutIndex];
+  if (checkout.with?.['fetch-depth'] !== 0 || checkout.with?.['persist-credentials'] !== false) {
+    fail('job "verify-release-tag" must fetch tag history and disable checkout credentials');
+  }
+  return checkoutIndex;
+}
+
+function checkTagVerifierStep(steps, checkoutIndex, fail) {
+  const verifyIndex = steps.findIndex((step) => runOf(step).trim() === TAG_VERIFIER);
+  if (verifyIndex < 0) {
+    fail(`job "verify-release-tag" must run ${TAG_VERIFIER}`);
+    return;
+  }
+  const verifier = steps[verifyIndex];
+  const hasRealEventContext = Object.entries(TAG_VERIFIER_ENV).every(
+    ([key, value]) => verifier.env?.[key] === value,
+  );
+  if (!hasRealEventContext) {
+    fail('job "verify-release-tag" must pass the real tag-push context to the signature verifier');
+  }
+  if (checkoutIndex >= 0 && verifyIndex <= checkoutIndex) {
+    fail('job "verify-release-tag" must check out the full tag before signature verification');
+  }
+}
+
 function checkTagVerifierJob(job, fail) {
   if (!job) {
     fail('missing job "verify-release-tag"');
@@ -245,37 +285,9 @@ function checkTagVerifierJob(job, fail) {
     fail('job "verify-release-tag" must not set continue-on-error');
   }
   const steps = asList(job.steps);
-  const checkoutIndex = steps.findIndex((step) => usesOf(step) === CHECKOUT_PIN);
-  const verifyIndex = steps.findIndex((step) => runOf(step).trim() === TAG_VERIFIER);
-  if (checkoutIndex < 0) {
-    fail(`job "verify-release-tag" must use the pinned ${CHECKOUT_PIN} action`);
-  } else {
-    const checkout = steps[checkoutIndex];
-    if (checkout.with?.['fetch-depth'] !== 0 || checkout.with?.['persist-credentials'] !== false) {
-      fail('job "verify-release-tag" must fetch tag history and disable checkout credentials');
-    }
-  }
-  if (verifyIndex < 0) {
-    fail(`job "verify-release-tag" must run ${TAG_VERIFIER}`);
-  } else {
-    const verifier = steps[verifyIndex];
-    const expectedEnv = {
-      GITHUB_EVENT_NAME: expression('github.event_name'),
-      GITHUB_EVENT_PATH: expression('github.event_path'),
-      GITHUB_REF_NAME: expression('github.ref_name'),
-      GITHUB_REF_TYPE: expression('github.ref_type'),
-      GITHUB_REPOSITORY: expression('github.repository'),
-      GITHUB_TOKEN: expression('github.token'),
-    };
-    if (Object.entries(expectedEnv).some(([key, value]) => verifier.env?.[key] !== value)) {
-      fail(
-        'job "verify-release-tag" must pass the real tag-push context to the signature verifier',
-      );
-    }
-    if (checkoutIndex >= 0 && verifyIndex <= checkoutIndex) {
-      fail('job "verify-release-tag" must check out the full tag before signature verification');
-    }
-  }
+  const checkoutIndex = checkTagVerifierCheckout(steps, fail);
+  checkTagVerifierStep(steps, checkoutIndex, fail);
+  checkStepsAlwaysEnforced(steps, fail);
 }
 
 function checkGatedJob(jobName, job, fail, requiredEventConditions, requiredNeeds = []) {
