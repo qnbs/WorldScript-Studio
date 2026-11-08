@@ -874,8 +874,23 @@ describe('GitHub signature API controls', () => {
       if (url.includes('/git/tags/'))
         return new Response(
           JSON.stringify({
+            tag: 'v1.0.0',
             object: { sha: targetSha, type: 'commit' },
             verification: { verified: true, reason: 'valid' },
+          }),
+          { status: 200 },
+        );
+      if (url.includes('/branches/main'))
+        return new Response(
+          JSON.stringify({ name: 'main', protected: true, commit: { sha: targetSha } }),
+          { status: 200 },
+        );
+      if (url.includes('/compare/'))
+        return new Response(
+          JSON.stringify({
+            status: 'identical',
+            base_commit: { sha: targetSha },
+            head_commit: { sha: targetSha },
           }),
           { status: 200 },
         );
@@ -885,6 +900,7 @@ describe('GitHub signature API controls', () => {
       owner: 'qnbs',
       repo: 'WorldScript-Studio',
       tag: 'v1.0.0',
+      expectedCommitSha: targetSha,
       fetchImpl: tagFetch,
     });
     expect(tag.ok).toBe(true);
@@ -894,6 +910,7 @@ describe('GitHub signature API controls', () => {
       owner: 'qnbs',
       repo: 'WorldScript-Studio',
       tag: 'v1.0.0-lightweight',
+      expectedCommitSha: targetSha,
       fetchImpl: async () =>
         new Response(JSON.stringify({ object: { sha: targetSha, type: 'commit' } }), {
           status: 200,

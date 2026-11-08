@@ -10,18 +10,25 @@ function jsonResponse(value: unknown): Response {
   return new Response(JSON.stringify(value), { status: 200 });
 }
 
+type MainProvenanceOptions = {
+  mainProtected?: boolean;
+  mainSha?: string;
+  compareStatus?: string;
+  compareBaseSha?: string;
+  compareHeadSha?: string;
+};
+
 function tagFetch(
   targetSha = pushedCommitSha,
   tagVerified = true,
   commitVerified = true,
-  {
-    mainProtected = true,
-    mainSha = targetSha,
-    compareStatus = mainSha === targetSha ? 'identical' : 'ahead',
-    compareBaseSha = targetSha,
-    compareHeadSha = mainSha,
-  } = {},
+  options: MainProvenanceOptions = {},
 ) {
+  const mainProtected = options.mainProtected ?? true;
+  const mainSha = options.mainSha ?? targetSha;
+  const compareStatus = options.compareStatus ?? (mainSha === targetSha ? 'identical' : 'ahead');
+  const compareBaseSha = options.compareBaseSha ?? targetSha;
+  const compareHeadSha = options.compareHeadSha ?? mainSha;
   return vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(jsonResponse({ object: { sha: tagObjectSha, type: 'tag' } }))

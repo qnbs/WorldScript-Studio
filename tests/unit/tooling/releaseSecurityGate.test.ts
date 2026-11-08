@@ -19,9 +19,11 @@ const gateCondition =
   "needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha";
 const tagPushCondition =
   "github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')";
+const protectedDockerTagPushCondition = `${tagPushCondition} && github.ref_protected == true`;
 const tauriReleaseCondition = `${tagPushCondition} && ${gateCondition}`;
-const dockerTagPushCondition = `${tagPushCondition} && needs.verify-release-tag.result == 'success' && ${gateCondition}`;
+const dockerTagPushCondition = `${protectedDockerTagPushCondition} && needs.verify-release-tag.result == 'success' && ${gateCondition}`;
 const proofTagSimulationCondition = `github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && inputs.simulated_tag_signature == 'verified' && ${gateCondition}`;
+const trustedVerifierSha = '71dd3b6395511eb9c20a8fed629559f5389ddb41';
 
 function mutate(text: string, from: string, to: string): string {
   expect(text, `fixture anchor not found: ${from}`).toContain(from);
@@ -59,15 +61,19 @@ describe('#911 release security gate: shipped workflows', () => {
     expect(source(DOCKER)).toContain('needs: [security-audit, verify-release-tag]');
   });
 
-  it('verifies an annotated tag and its target commit with the read-only GitHub signature verifier', () => {
+  it('runs the read-only signature verifier from an immutable trusted checkout', () => {
     const verifier = source(DOCKER).slice(source(DOCKER).indexOf('  verify-release-tag:\n'));
-    expect(verifier).toContain(expr(tagPushCondition));
+    expect(verifier).toContain(expr(protectedDockerTagPushCondition));
     expect(verifier).toContain('permissions:\n      contents: read');
-    expect(verifier).toContain('fetch-depth: 0');
+    expect(verifier).toContain(`ref: ${trustedVerifierSha}`);
+    expect(verifier).toContain('path: trusted-verifier');
+    expect(verifier).toContain('fetch-depth: 1');
     expect(verifier).toContain('persist-credentials: false');
     expect(verifier).toContain('node scripts/signing/verify-github-signatures.mjs');
     expect(verifier).toContain(`GITHUB_REF_TYPE: ${expr('github.ref_type')}`);
+    expect(verifier).toContain(`GITHUB_SHA: ${expr('github.sha')}`);
     expect(verifier).toContain(`GITHUB_TOKEN: ${expr('github.token')}`);
+    expect(verifier).toContain('env -i PATH="$PATH"');
   });
 
   it('rejects a Docker publish job that could run from workflow_dispatch', () => {
@@ -78,6 +84,17 @@ describe('#911 release security gate: shipped workflows', () => {
     );
     expect(messages(DOCKER, dispatchCanPublish)).toMatch(
       /must require github\.event_name == 'push'/,
+    );
+  });
+
+  it('rejects an unprotected release tag even if it is a signed v* push', () => {
+    const unprotectedVerifier = mutate(
+      source(DOCKER),
+      expr(protectedDockerTagPushCondition),
+      expr(tagPushCondition),
+    );
+    expect(messages(DOCKER, unprotectedVerifier)).toMatch(
+      /must require github\.ref_protected == true/,
     );
   });
 
@@ -129,18 +146,65 @@ describe('#911 release security gate: shipped workflows', () => {
   it('rejects a Docker verifier that does not run the real GitHub signature check', () => {
     const noSignatureCheck = mutate(
       source(DOCKER),
-      'run: node scripts/signing/verify-github-signatures.mjs',
-      'run: echo "tag verified"',
+      'node scripts/signing/verify-github-signatures.mjs',
+      'node -e "process.exit(0)"',
     );
     expect(messages(DOCKER, noSignatureCheck)).toMatch(
-      /must run node scripts\/signing\/verify-github-signatures\.mjs/,
+      /must invoke node scripts\/signing\/verify-github-signatures\.mjs from the trusted checkout/,
     );
+  });
+
+  it('rejects a verifier checkout that follows the mutable tag or branch', () => {
+    const tagSuppliedVerifier = mutate(
+      source(DOCKER),
+      `ref: ${trustedVerifierSha}`,
+      `ref: ${expr('github.ref_name')}`,
+    );
+    expect(messages(DOCKER, tagSuppliedVerifier)).toMatch(/immutable trusted verifier/);
+  });
+
+  it('rejects verifier command wrappers that can alter execution before signature checking', () => {
+    const preloadedVerifier = mutate(
+      source(DOCKER),
+      'node scripts/signing/verify-github-signatures.mjs',
+      'node --require=./preload.mjs scripts/signing/verify-github-signatures.mjs',
+    );
+    expect(messages(DOCKER, preloadedVerifier)).toMatch(
+      /must run the pinned verifier from its trusted checkout with a clean environment/,
+    );
+  });
+
+  it('rejects NODE_OPTIONS or any extra variable in the verifier environment', () => {
+    const injectedStepEnv = mutate(
+      source(DOCKER),
+      `GITHUB_SHA: ${expr('github.sha')}`,
+      `GITHUB_SHA: ${expr('github.sha')}\n          NODE_OPTIONS: --require=./preload.mjs`,
+    );
+    expect(messages(DOCKER, injectedStepEnv)).toMatch(
+      /only the allowlisted real tag-push environment/,
+    );
+  });
+
+  it('rejects inherited workflow or job environment injection', () => {
+    const injectedWorkflowEnv = mutate(
+      source(DOCKER),
+      'jobs:\n',
+      'env:\n  NODE_OPTIONS: --require=./preload.mjs\njobs:\n',
+    );
+    expect(messages(DOCKER, injectedWorkflowEnv)).toMatch(/must not define inherited environment/);
+
+    const injectedJobEnv = mutate(
+      source(DOCKER),
+      '    steps:\n      - name: Check out the pinned trusted verifier',
+      '    env:\n      NODE_OPTIONS: --require=./preload.mjs\n    steps:\n      - name: Check out the pinned trusted verifier',
+    );
+    expect(messages(DOCKER, injectedJobEnv)).toMatch(/must not inherit environment/);
   });
 
   it('rejects a manually dispatched tag as input to the real signature-verification job', () => {
     const dispatchVerifier = mutate(
       source(DOCKER),
-      expr(tagPushCondition),
+      expr(protectedDockerTagPushCondition),
       expr(
         "github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')",
       ),
@@ -169,7 +233,7 @@ describe('#911 release security gate: shipped workflows', () => {
       `GITHUB_REF_TYPE: ${expr('inputs.simulated_ref_type')}`,
     );
     expect(messages(DOCKER, wrongContext)).toMatch(
-      /must pass the real tag-push context to the signature verifier/,
+      /must pass only the allowlisted real tag-push environment to the signature verifier/,
     );
   });
 

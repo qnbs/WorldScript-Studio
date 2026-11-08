@@ -34,6 +34,7 @@ function safeReport(commit) {
   };
 }
 
+// QNBS-v3: a signed tag may publish only a commit admitted to protected main history.
 async function verifyProtectedMainAncestry({ owner, repo, sha, token, fetchImpl }) {
   const branch = await fetchJson(
     fetchImpl,

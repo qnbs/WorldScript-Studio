@@ -24,8 +24,13 @@ export const REQUIRED_TAG_PUSH_CONDITIONS = Object.freeze([
   "startsWith(github.ref, 'refs/tags/v')",
 ]);
 
-export const REQUIRED_DOCKER_PUBLISH_CONDITIONS = Object.freeze([
+export const REQUIRED_DOCKER_TAG_PUSH_CONDITIONS = Object.freeze([
   ...REQUIRED_TAG_PUSH_CONDITIONS,
+  'github.ref_protected == true',
+]);
+
+export const REQUIRED_DOCKER_PUBLISH_CONDITIONS = Object.freeze([
+  ...REQUIRED_DOCKER_TAG_PUSH_CONDITIONS,
   "needs.verify-release-tag.result == 'success'",
 ]);
 
@@ -76,6 +81,8 @@ const CHECKOUT = 'actions/checkout@';
 const CHECKOUT_PIN = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const OSV_SCANNER = 'google/osv-scanner-action/osv-scanner-action@';
 const TAG_VERIFIER = 'node scripts/signing/verify-github-signatures.mjs';
+const TAG_VERIFIER_SCRIPT = 'scripts/signing/verify-github-signatures.mjs';
+const TAG_VERIFIER_SOURCE_SHA = '71dd3b6395511eb9c20a8fed629559f5389ddb41';
 
 function asList(value) {
   if (Array.isArray(value)) return value;
@@ -233,8 +240,15 @@ const TAG_VERIFIER_ENV = Object.freeze({
   GITHUB_REF_NAME: expression('github.ref_name'),
   GITHUB_REF_TYPE: expression('github.ref_type'),
   GITHUB_REPOSITORY: expression('github.repository'),
+  GITHUB_SHA: expression('github.sha'),
   GITHUB_TOKEN: expression('github.token'),
 });
+
+const TAG_VERIFIER_RUN = [
+  'env -i PATH="$PATH"',
+  ...Object.keys(TAG_VERIFIER_ENV).map((key) => `${key}="$${key}"`),
+  TAG_VERIFIER,
+].join(' ');
 
 function checkTagVerifierCheckout(steps, fail) {
   const checkoutIndex = steps.findIndex((step) => usesOf(step) === CHECKOUT_PIN);
@@ -243,27 +257,54 @@ function checkTagVerifierCheckout(steps, fail) {
     return -1;
   }
   const checkout = steps[checkoutIndex];
-  if (checkout.with?.['fetch-depth'] !== 0 || checkout.with?.['persist-credentials'] !== false) {
-    fail('job "verify-release-tag" must fetch tag history and disable checkout credentials');
+  if (
+    checkout.with?.ref !== TAG_VERIFIER_SOURCE_SHA ||
+    checkout.with?.path !== 'trusted-verifier' ||
+    checkout.with?.['fetch-depth'] !== 1 ||
+    checkout.with?.['persist-credentials'] !== false ||
+    checkout.env !== undefined
+  ) {
+    fail(
+      `job "verify-release-tag" must check out the immutable trusted verifier ${TAG_VERIFIER_SOURCE_SHA} without credentials`,
+    );
   }
   return checkoutIndex;
 }
 
 function checkTagVerifierStep(steps, checkoutIndex, fail) {
-  const verifyIndex = steps.findIndex((step) => runOf(step).trim() === TAG_VERIFIER);
+  const verifyIndex = steps.findIndex((step) => runOf(step).includes(TAG_VERIFIER_SCRIPT));
   if (verifyIndex < 0) {
-    fail(`job "verify-release-tag" must run ${TAG_VERIFIER}`);
+    fail(`job "verify-release-tag" must invoke ${TAG_VERIFIER} from the trusted checkout`);
     return;
   }
   const verifier = steps[verifyIndex];
+  const expectedKeys = Object.keys(TAG_VERIFIER_ENV).sort();
+  const actualKeys = Object.keys(verifier.env ?? {}).sort();
   const hasRealEventContext = Object.entries(TAG_VERIFIER_ENV).every(
     ([key, value]) => verifier.env?.[key] === value,
   );
-  if (!hasRealEventContext) {
-    fail('job "verify-release-tag" must pass the real tag-push context to the signature verifier');
+  if (
+    !hasRealEventContext ||
+    actualKeys.length !== expectedKeys.length ||
+    actualKeys.some((key, index) => key !== expectedKeys[index])
+  ) {
+    fail(
+      'job "verify-release-tag" must pass only the allowlisted real tag-push environment to the signature verifier',
+    );
+  }
+  if (
+    runOf(verifier).trim().replace(/\s+/g, ' ') !== TAG_VERIFIER_RUN ||
+    verifier['working-directory'] !== 'trusted-verifier' ||
+    verifier.shell !== 'bash'
+  ) {
+    fail(
+      'job "verify-release-tag" must run the pinned verifier from its trusted checkout with a clean environment',
+    );
   }
   if (checkoutIndex >= 0 && verifyIndex <= checkoutIndex) {
-    fail('job "verify-release-tag" must check out the full tag before signature verification');
+    fail(
+      'job "verify-release-tag" must check out the trusted verifier before signature verification',
+    );
   }
 }
 
@@ -275,7 +316,7 @@ function checkTagVerifierJob(job, fail) {
   checkExactCondition(
     'verify-release-tag',
     String(job.if ?? ''),
-    REQUIRED_TAG_PUSH_CONDITIONS,
+    REQUIRED_DOCKER_TAG_PUSH_CONDITIONS,
     fail,
   );
   if (!permissionsAreReadOnlyContents(job.permissions)) {
@@ -284,7 +325,13 @@ function checkTagVerifierJob(job, fail) {
   if (job['continue-on-error'] !== undefined) {
     fail('job "verify-release-tag" must not set continue-on-error');
   }
+  if (job.env !== undefined || job.container !== undefined || job.services !== undefined) {
+    fail('job "verify-release-tag" must not inherit environment or container injection');
+  }
   const steps = asList(job.steps);
+  if (steps.length !== 2) {
+    fail('job "verify-release-tag" must contain only the pinned checkout and verifier steps');
+  }
   const checkoutIndex = checkTagVerifierCheckout(steps, fail);
   checkTagVerifierStep(steps, checkoutIndex, fail);
   checkStepsAlwaysEnforced(steps, fail);
@@ -333,6 +380,9 @@ export function checkReleaseSecurityWorkflow(fileName, source) {
     return failures;
   }
   const jobs = workflow?.jobs ?? {};
+  if (spec.verifyTagJob && workflow?.env !== undefined) {
+    fail('Docker workflow must not define inherited environment variables');
+  }
   checkAuditJob(jobs['security-audit'], spec.expectedSha, fail);
   if (spec.verifyTagJob) checkTagVerifierJob(jobs['verify-release-tag'], fail);
   for (const jobName of spec.gatedJobs) {

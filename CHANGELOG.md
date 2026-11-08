@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Container publishing:** GHCR releases now require an actual `v*` tag push and a successful security audit of the exact commit; manual workflow dispatch remains non-publishing (PR #1205).
+- **Container publishing:** GHCR releases now require a protected, signed annotated `v*` tag bound to the triggering commit, verified by a pinned source, and the exact-commit security audit; manual dispatch remains non-publishing (PR #1205).
 
 <!-- release-candidate: v1.29.3 -->
 
