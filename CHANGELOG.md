@@ -7,70 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Desktop publishing:** Require the complete Linux, Windows and macOS ARM installer, signature, SBOM and notices matrix; cryptographically verify updater payloads; stage releases as drafts and revalidate the uploaded inventory immediately before publication (PR #1202; issue #1201).
+<!-- release-candidate: v1.29.3 -->
 
-- **Local AI storage:** Namespace the Transformers.js browser cache as WorldScript-owned and restrict cache counts and clearing to that bucket. Preserve WebLLM, vendor-global, legacy, and unrelated caches; localize the retained-cache and first-use download behavior, and report partial deletion failures instead of announcing a successful clear (PR #1200; issue #526; successor to #1148).
+## [1.29.3] — 2026-11-08
 
-- **Vercel retention:** Check the protected canonical Production URL with a team-scoped Vercel CLI request using one existing project automation-bypass secret; do not create or rotate secrets from a read-only run. Reject redirects and all responses except one HTTP 200, and document that the protected probe does not establish anonymous reachability (PR #1198; issue #627).
+- **Storage safety and privacy:** Factory Reset and startup recovery now clear only exact WorldScript-owned browser keys, preserve ambiguous same-origin values, and retain the encryption salt until primary IndexedDB deletion succeeds. Incomplete database inventories and deletion failures stop the reset and are announced accessibly (#1196; #1125).
 
-- **Storage reset:** Limit factory and startup cleanup to exact app-owned storage keys, disclose intentionally retained ambiguous same-origin browser values, and retain the IndexedDB encryption salt until primary deletion succeeds. Require a complete IndexedDB inventory before any destructive reset step so dynamic Local-First stores cannot be missed; announce failures through a pre-mounted localized status region (PR #1196; successor to #1147; issue #1125).
+- **Local model cache ownership:** Transformers.js uses a dedicated WorldScript cache bucket; counts and clears are limited to that bucket, and partial clear failures are reported. WebLLM, vendor-global, legacy, and other unowned caches are intentionally preserved. A changed WebLLM model-library URL may require preparing the model online again before offline use (#1200; #526; #1191).
 
-- **DOCX export:** Updated `docx` to 9.15.1 and its resolved `@types/node` dependency to 26.6.6; the existing export contract remains covered by focused tests (PR #1194; Dependabot source PR #1193).
+- **DOCX export:** Updated the export library to 9.15.1 while retaining the existing export contract and regression coverage (#1194).
 
-- **AI dependencies:** Updated the coordinated Vercel AI SDK family: `@ai-sdk/google` 4.0.109, `@ai-sdk/openai` 4.0.106, `@ai-sdk/react` 4.0.163, and `ai` 7.0.159. The lockfile keeps their provider, provider-utils, gateway, and MCP dependencies aligned; Redux Toolkit remains at 2.12.0 and WebLLM stays on its separate qualification path (PR #1189; Dependabot source PR #1184).
+- **AI providers and runtime:** Updated the coordinated AI SDK provider packages and the curated WebLLM runtime. Redux Toolkit remains pinned to 2.12.0 while 2.13.0 is held for prototype-named entity-ID regressions (#1189; #1191; #1183).
 
-- **Local AI runtime:** Updated the curated WebLLM runtime to 0.2.87, including its upstream model-configuration refresh. The supported model catalog and inference contract are unchanged. After an update that changes a versioned model-library URL, prepare each WebLLM model online before relying on it offline; unchanged model weights remain cached (PR #1191; Dependabot source PR #1190).
+- **Security and dependencies:** Updated DOMPurify and compatible dependency floors, Tauri plugins, rustix, and the tested UUID/IndexedDB packages (#1145; #1149; #1179; #1181; #1182). Four npm and ten Rust advisories remain time-bounded accepted risks tracked in #1163 and #1164; this release does not claim they are fixed, and their current waivers expire 2026-11-30.
 
-- **CI dependencies:** Upgrade the SHA-pinned `pnpm/setup` GitHub Action to v3.1.2 in the shared setup action and both policy workflows. Keep project Node selection with `actions/setup-node`, and preserve the trusted workflow's frozen, script-disabled install (PR #1188; Dependabot source PR #1160).
+- **Desktop release integrity:** Release publishing now requires the complete Linux, Windows, and macOS Apple Silicon installer and updater matrix, verified updater signatures, three SBOMs and notices files, validated update metadata, and a verified uploaded asset inventory before the release is made public (#1202; #1201).
 
-- **Developer tooling:** Updated Biome from 2.5.8 to 2.6.4 and aligned its configuration schema. Resolved the new component-factory findings and repo-wide lint diagnostics across test harnesses, retry timing, sorted entity pairs, Aurora cascade ordering, and DOM text reads; lowered the suppression ratchet by two removed directives (PR #1185; Dependabot source PR #1171).
+- **Build and developer tooling:** Updated the pnpm/setup GitHub Action, Biome, React/Vite and related test tooling while keeping Node selection explicit and the trusted workflow install frozen and script-disabled (#1188; #1185; #1168).
 
-- **Tauri dependencies:** Updated the locked Rust plugins `tauri-plugin-dialog` to 2.8.4, `tauri-plugin-updater` to 2.14.1, and `tauri-plugin-single-instance` to 2.5.5, with their resolved `rfd`, `base64`, and Windows target dependency changes (PR #1179; Dependabot source PR #1170).
-
-- **Rust dependencies:** Updated the resolved `rustix` lock entry from 1.1.5 to 1.1.6, including the upstream fix for truncated macOS `SCM_RIGHTS` messages (PR #1181; Dependabot source PR #1169).
-
-- **Dependencies:** Updated the test dependency `fake-indexeddb` to 6.2.7 and resolved `uuid` to 14.0.3 without narrowing its existing manifest range. Keep all resolved Redux Toolkit instances at 2.12.0 while 2.13.0 is held for prototype-named entity ID regressions (PR #1182; Dependabot source PR #1172).
-
-- **CI operations:** Defined a five-merge/24-hour, Pages-degraded recovery contract for #1176. Exact-main quality, security, CodeQL, Production, and review gates remain required; Vercel retention and deletions stay on hold until the full push workflow succeeds (PR #1177).
-
-- **Operations:** Made ordinary Vercel preview retention operator-agnostic across qualified local Claude Code CLI, Codex CLI, and future Cursor Cloud leases, with one maintainer-designated operator at a time. Cursor Cloud remains `NOT_ADMITTED` for deletions until the separate maintainer-approved capability gate in #1174; local credentials are never copied to Cloud. PRs open ready for review; SAFE-only and protection gates are unchanged (PR #1175).
-
-- **Dependencies:** Bumped React 19.3.1, Vite 8.3.5, the dev-tooling group (Playwright, Storybook, Vitest
-  and others), 42 minor/patch packages including the AI SDK and the `@tauri-apps/*` plugins, and the
-  matching Rust `tauri-plugin-*` crates (`notification` 2.8.0, `shell` 2.6.0, `updater` ~2.14). Biome is
-  held at 2.5.8 until its 2.6 rule changes are fixed in a separate change, and `@reduxjs/toolkit` is held at 2.12.0 because 2.13.0 changes how entity adapters treat prototype-named IDs (two existing tests fail); the language selector trigger now includes the visible language name in its accessible name (WCAG 2.5.3, newly reported by axe-core 4.14); `tauri-plugin-deep-link` moves to 2.6.3, which builds against `rust-ini` 0.21.3 (PR #1168; Dependabot source PRs
-  #1104, #1154, #1155, #1157, #1165).
-
-- **Rust dependencies:** Bumped `tokio` to 1.54.1 in the Tauri backend and `unicode-normalization` to
-  0.1.26 in the Rust Core workspace; lockfile-only, MSRV pins unchanged (PR #1167; Dependabot source PRs
-  #1153, #1156).
-
-- **CI dependencies:** Moved all four `github/codeql-action` references (`init`, `autobuild`, `analyze`,
-  `upload-sarif`) to v4.39.1 together, and bumped `Swatinem/rust-cache` and `docker/login-action`
-  (v4.7.0) in the workflows (PR #1166; Dependabot source PRs #1158, #1159).
-
-- **Security (dependencies):** Updated the shipped HTML sanitizer to DOMPurify 3.4.17, including
-  jsPDF's optional copy, for XHTML/SVG, shadow-root template and detached-hook fixes. Raised the
-  LHCI-only `ip-address` dependency floor to 10.7.4 for GHSA-rxp7-6hxx-x8q5 (PR #1145, #1132).
-  Focused sanitizer regressions and a transitive lockfile floor assertion cover both fixes.
-
-- **Security (dependencies):** Raised bounded floors for patched `undici`, `body-parser`,
-  `fast-uri`, `qs` and `serialize-javascript`; upgraded only Zod 4 and moved Lighthouse's
-  supported Puppeteer 25.x line to a release using Zod 4. Removed the OSV ignore for the
-  withdrawn `sprintf-js` advisory while retaining the package. Also raised `follow-redirects`
-  (>=1.16.2) and `joi` (>=18.3.1). Four advisories have no compatible fix and are accepted as
-  time-bounded vulnerabilities, not fixes: `deepmerge` (`GHSA-gcqx-w48m-w2h4`), Zod 3 via the
-  Codecov plugin (`GHSA-mrhx-c7xc-m3w5`), `glob` (`GHSA-3g3m-2fjr-6pw4`) and `minimatch`
-  (`GHSA-g3hv-75wg-m249`). Each ignore expires on 2026-11-30 at the latest; every affected copy is
-  development tooling and none is reachable from the production dependency graph in the lockfile.
-  A test pins the affected copies, their parent packages and that absence, and fails when they
-  change. Tracked in [#1146](https://github.com/qnbs/WorldScript-Studio/issues/1146) and
-  [#1163](https://github.com/qnbs/WorldScript-Studio/issues/1163) (PR #1149).
-
-- **Post-release v1.29.2 truth sync:** removed the release-candidate markers from README.md and
-  CHANGELOG.md now that the `v1.29.2` tag and GitHub Release are published, and recorded the real
-  release evidence in AUDIT.md, TODO.md and `docs/RELEASE-V1.29.2-EVIDENCE.md` (see `## [1.29.2]`
-  below and #1139).
+- **Storage-format scope:** This maintenance release adds no project storage format or encrypted-at-rest migration; the separately gated R-15 work remains outside v1.29.3 (#926).
 
 ## [1.29.2] — 2026-10-22
 

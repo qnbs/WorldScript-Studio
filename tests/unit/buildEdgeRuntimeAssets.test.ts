@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  EDGE_PREP_SCRIPTS,
   type EdgeBuildSpawn,
-  RUNTIME_ASSET_SCRIPTS,
   runEdgeBuild,
 } from '../../scripts/runtime-asset-steps.mjs';
 
@@ -28,18 +28,17 @@ function recordingSpawn(statusFor: (args: readonly string[]) => number | null = 
 const isVite = (args: readonly string[]) => args.join(' ') === 'exec vite build';
 
 /**
- * Production (Vercel) builds via scripts/build-edge.mjs, which calls `vite build` directly and so
- * skips npm's prebuild hook. Both paths must produce the gitignored runtime assets, or production
- * serves index.html for /duckdb/*.wasm.
+ * Edge builds call Vite directly, so their explicit prep sequence must sync the service worker
+ * version and produce the gitignored runtime assets normally prepared by lifecycle hooks.
  */
-describe('runtime asset steps', () => {
+describe('edge build preparation', () => {
   it('lists at least the self-hosted DuckDB assets', () => {
-    expect(RUNTIME_ASSET_SCRIPTS).toContain('copy-duckdb-assets.mjs');
+    expect(EDGE_PREP_SCRIPTS).toContain('copy-duckdb-assets.mjs');
   });
 
-  it('runs every step in prebuild, predev and prebuild:pages', () => {
+  it('runs every preparation step in prebuild, predev and prebuild:pages', () => {
     const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> };
-    for (const script of RUNTIME_ASSET_SCRIPTS) {
+    for (const script of EDGE_PREP_SCRIPTS) {
       expect(pkg.scripts['prebuild']).toContain(`node scripts/${script}`);
       expect(pkg.scripts['predev']).toContain(`node scripts/${script}`);
       // QNBS-v3: build:pages calls vite directly, so its own pre-hook must produce the same assets.
@@ -55,13 +54,13 @@ describe('runtime asset steps', () => {
 });
 
 describe('runEdgeBuild', () => {
-  it('runs every asset step with node, then vite build in production mode', () => {
+  it('runs every preparation step with node, then vite build in production mode', () => {
     const { spawn, calls } = recordingSpawn();
     const code = runEdgeBuild({ spawn, scriptsDir, env: { DEPLOY_TARGET: 'edge' }, log: vi.fn() });
 
     expect(code).toBe(0);
     expect(calls.map((call) => call.args.join(' '))).toEqual([
-      ...RUNTIME_ASSET_SCRIPTS.map((script) => resolve(scriptsDir, script)),
+      ...EDGE_PREP_SCRIPTS.map((script) => resolve(scriptsDir, script)),
       'exec vite build',
     ]);
     for (const step of calls.slice(0, -1)) expect(step.command).toBe(process.execPath);
@@ -71,13 +70,13 @@ describe('runEdgeBuild', () => {
     });
   });
 
-  it('a failed asset step stops before vite and returns its status', () => {
+  it('a failed preparation step stops before vite and returns its status', () => {
     const { spawn, calls } = recordingSpawn((args) => (isVite(args) ? 0 : 3));
     const log = vi.fn();
 
     expect(runEdgeBuild({ spawn, scriptsDir, env: {}, log })).toBe(3);
     expect(calls.some((call) => isVite(call.args))).toBe(false);
-    expect(log).toHaveBeenCalledWith(`[build-edge] ${RUNTIME_ASSET_SCRIPTS[0]} failed`);
+    expect(log).toHaveBeenCalledWith(`[build-edge] ${EDGE_PREP_SCRIPTS[0]} failed`);
   });
 
   it('an asset step killed by a signal (status null) also stops before vite', () => {
