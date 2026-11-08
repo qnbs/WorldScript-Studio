@@ -28,6 +28,14 @@ the deletion phase and again before any dependent repository mutation. If it
 has advanced, stop the retention wave and establish the new exact-main gate
 before continuing.
 
+The canonical Production HTTP predicate is an authenticated, team-scoped Vercel
+CLI request to the full canonical URL. The runner performs it only after the
+project/repository identity, READY Production deployment, and canonical alias
+bindings have been verified. This preserves Deployment Protection and proves
+the authorized operator request path; it does not establish anonymous/public
+reachability. Procedures that explicitly require a public HTTP check must keep
+that separate check.
+
 This lifecycle is **NORMAL MODE**. Dependent repository mutation waits for the
 full reconciliation above. Opt-in exceptions are limited to the bounded
 dependency/toolchain maintenance train in the next section and the separately

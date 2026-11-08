@@ -7,13 +7,14 @@ import { runRetention } from '../../../scripts/vercel-retention/apply.mjs';
 import { classify } from '../../../scripts/vercel-retention/classify.mjs';
 import {
   assertTrustedSource,
+  authenticatedHttpStatus,
   main,
   parseMode,
   printManifest,
   report,
 } from '../../../scripts/vercel-retention/cli.mjs';
 import { removeAlias, removeDeployment } from '../../../scripts/vercel-retention/provider.mjs';
-import { MAX_DELETIONS } from '../../../scripts/vercel-retention/scope.mjs';
+import { CANONICAL_URL, MAX_DELETIONS, SCOPE } from '../../../scripts/vercel-retention/scope.mjs';
 import {
   MAIN,
   makeDeps,
@@ -405,6 +406,67 @@ test('the entry points take no arguments', async () => {
     assert.throws(() => parseMode(argv), { reason: 'invalid-arguments' });
   assert.equal(parseMode(['dry-run']), 'dry-run');
   assert.equal(parseMode(['reconcile']), 'reconcile');
+});
+
+test('the protected production probe uses a team-scoped Vercel CLI HEAD and final status', () => {
+  const calls = [];
+  const status = authenticatedHttpStatus(
+    (command, args) => {
+      calls.push({ command, args });
+      return 'HTTP/1.1 302 Found\r\nlocation: /\r\n\r\nHTTP/2 200 \r\ncontent-type: text/html\r\n';
+    },
+    CANONICAL_URL,
+    SCOPE.team,
+  );
+
+  assert.equal(status, '200');
+  assert.deepEqual(calls, [
+    {
+      command: 'vercel',
+      args: ['--scope', SCOPE.team, 'curl', '--head', '--location', CANONICAL_URL],
+    },
+  ]);
+});
+
+test('the protected production probe fails closed on missing status or CLI failure', () => {
+  assert.equal(
+    authenticatedHttpStatus(() => 'Vercel CLI returned no HTTP status', CANONICAL_URL, SCOPE.team),
+    '',
+  );
+  assert.equal(
+    authenticatedHttpStatus(() => 'HTTP/1.1 403 Forbidden\r\n', CANONICAL_URL, SCOPE.team),
+    '403',
+  );
+  assert.equal(
+    authenticatedHttpStatus(
+      () => {
+        throw new Error(SECRET);
+      },
+      CANONICAL_URL,
+      SCOPE.team,
+    ),
+    '',
+  );
+  assert.equal(
+    authenticatedHttpStatus(() => 'HTTP/2 200\r\n', CANONICAL_URL, ''),
+    '',
+  );
+});
+
+test('initial, per-delete, and post-proof HTTP probes use the configured team', async () => {
+  const world = standardWorld();
+  const deps = makeDeps(world);
+  const originalHttp = deps.http;
+  const probes = [];
+  deps.http = (url, team) => {
+    probes.push({ url, team });
+    return originalHttp(url);
+  };
+
+  await runRetention(deps, 'reconcile');
+
+  assert.ok(probes.length > 2);
+  assert.ok(probes.every((probe) => probe.url === CANONICAL_URL && probe.team === SCOPE.team));
 });
 
 test('the package scripts are the two fixed commands without arguments or wildcards', () => {

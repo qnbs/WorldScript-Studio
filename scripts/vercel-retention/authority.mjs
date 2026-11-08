@@ -84,6 +84,6 @@ export function assertProduction(deps, world, sha) {
     world.aliases.some((alias) => alias.alias === host && alias.deploymentId === production.uid),
   );
   if (bound.length !== CANONICAL_ALIASES.length) refuse('canonical-aliases-not-bound');
-  if (deps.http(CANONICAL_URL) !== '200') refuse('canonical-http-failed');
+  if (deps.http(CANONICAL_URL, SCOPE.team) !== '200') refuse('canonical-http-failed');
   return production.uid;
 }

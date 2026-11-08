@@ -21,6 +21,7 @@ import {
   CANONICAL_URL,
   MAX_DELETIONS,
   PAUSE_MS,
+  SCOPE,
   TERMINAL_STATES,
 } from './scope.mjs';
 import { refuse } from './util.mjs';
@@ -221,7 +222,7 @@ async function postProof(session, plan) {
     deletionsStillSafe: deletionsStillSafe(after, session),
     productionSetStable: productionSetStable(after, plan),
     productionReady: isReadyProduction(after, session),
-    httpProduction: deps.http(CANONICAL_URL),
+    httpProduction: deps.http(CANONICAL_URL, SCOPE.team),
   };
   if (!proofHolds(summary.postproof, lost)) refuse('postproof-failed');
 }

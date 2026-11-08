@@ -91,6 +91,23 @@ export async function main(argv, deps, io = console) {
   report(io, await runRetention(deps, mode, (plan) => printManifest(io, plan.manifest)));
 }
 
+export function parseHttpStatus(output) {
+  if (typeof output !== 'string') return '';
+  const statuses = [...output.matchAll(/^HTTP\/[\d.]+\s+(\d{3})(?:\s+[^\r\n]*)?\s*$/gm)];
+  return statuses.at(-1)?.[1] ?? '';
+}
+
+// QNBS-v3: authority first binds this canonical URL to Production; a team-scoped Vercel CLI HEAD honors SSO without changing project protection.
+export function authenticatedHttpStatus(run, url, team) {
+  if (typeof team !== 'string' || team === '') return '';
+  try {
+    const response = run('vercel', ['--scope', team, 'curl', '--head', '--location', url]);
+    return parseHttpStatus(response);
+  } catch {
+    return '';
+  }
+}
+
 function realDeps() {
   const env = { ...process.env, NO_UPDATE_NOTIFIER: '1', VERCEL_TELEMETRY_DISABLED: '1' };
   const run = (command, args) =>
@@ -105,8 +122,7 @@ function realDeps() {
     vercel: (args) => run('vercel', args),
     gh: (args) => run('gh', args),
     git: (args) => run('git', args),
-    http: (url) =>
-      run('curl', ['-sS', '-o', '/dev/null', '-w', '%{http_code}', '-m', '20', url]).trim(),
+    http: (url, team) => authenticatedHttpStatus(run, url, team),
     packageJson: () => readFileSync('package.json', 'utf8'),
     holds: () => readFileSync(HOLDS_PATH, 'utf8'),
     lock: () => acquireLock(),
