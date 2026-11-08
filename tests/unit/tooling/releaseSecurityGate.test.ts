@@ -21,7 +21,7 @@ const tagPushCondition =
   "github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')";
 const protectedDockerTagPushCondition = `${tagPushCondition} && github.ref_protected == true`;
 const tauriReleaseCondition = `${tagPushCondition} && ${gateCondition}`;
-const dockerTagPushCondition = `${protectedDockerTagPushCondition} && needs.verify-release-tag.result == 'success' && ${gateCondition}`;
+const dockerTagPushCondition = `${protectedDockerTagPushCondition} && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && ${gateCondition}`;
 const proofTagSimulationCondition = `github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && inputs.simulated_tag_signature == 'verified' && ${gateCondition}`;
 const trustedVerifierSha = '71dd3b6395511eb9c20a8fed629559f5389ddb41';
 
@@ -70,6 +70,10 @@ describe('#911 release security gate: shipped workflows', () => {
     expect(verifier).toContain('fetch-depth: 1');
     expect(verifier).toContain('persist-credentials: false');
     expect(verifier).toContain('node scripts/signing/verify-github-signatures.mjs');
+    expect(verifier).toContain(
+      `verified-tag-sha: ${expr('steps.verify.outputs.verified-tag-sha')}`,
+    );
+    expect(verifier).toContain('echo "verified-tag-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"');
     expect(verifier).toContain(`GITHUB_REF_TYPE: ${expr('github.ref_type')}`);
     expect(verifier).toContain(`GITHUB_SHA: ${expr('github.sha')}`);
     expect(verifier).toContain(`GITHUB_TOKEN: ${expr('github.token')}`);
@@ -140,6 +144,24 @@ describe('#911 release security gate: shipped workflows', () => {
     );
     expect(messages(DOCKER, noVerifierResult)).toMatch(
       /must require needs\.verify-release-tag\.result == 'success'/,
+    );
+
+    const noVerifiedTargetEquality = mutate(
+      source(DOCKER),
+      'needs.verify-release-tag.outputs.verified-tag-sha == github.sha && ',
+      '',
+    );
+    expect(messages(DOCKER, noVerifiedTargetEquality)).toMatch(
+      /must require needs\.verify-release-tag\.outputs\.verified-tag-sha == github\.sha/,
+    );
+
+    const missingVerifierOutput = mutate(
+      source(DOCKER),
+      `verified-tag-sha: ${expr('steps.verify.outputs.verified-tag-sha')}`,
+      `verified-tag-sha: ${expr('github.sha')}`,
+    );
+    expect(messages(DOCKER, missingVerifierOutput)).toMatch(
+      /must expose only the verified tag target SHA/,
     );
   });
 

@@ -32,6 +32,7 @@ export const REQUIRED_DOCKER_TAG_PUSH_CONDITIONS = Object.freeze([
 export const REQUIRED_DOCKER_PUBLISH_CONDITIONS = Object.freeze([
   ...REQUIRED_DOCKER_TAG_PUSH_CONDITIONS,
   "needs.verify-release-tag.result == 'success'",
+  'needs.verify-release-tag.outputs.verified-tag-sha == github.sha',
 ]);
 
 export const REQUIRED_PROOF_SIMULATION_CONDITIONS = Object.freeze([
@@ -245,9 +246,9 @@ const TAG_VERIFIER_ENV = Object.freeze({
 });
 
 const TAG_VERIFIER_RUN = [
-  'env -i PATH="$PATH"',
+  'set -euo pipefail && env -i PATH="$PATH"',
   ...Object.keys(TAG_VERIFIER_ENV).map((key) => `${key}="$${key}"`),
-  TAG_VERIFIER,
+  `${TAG_VERIFIER} && echo "verified-tag-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"`,
 ].join(' ');
 
 function checkTagVerifierCheckout(steps, fail) {
@@ -278,6 +279,9 @@ function checkTagVerifierStep(steps, checkoutIndex, fail) {
     return;
   }
   const verifier = steps[verifyIndex];
+  if (verifier.id !== 'verify') {
+    fail('job "verify-release-tag" must expose the successful verifier step as "verify"');
+  }
   const expectedKeys = Object.keys(TAG_VERIFIER_ENV).sort();
   const actualKeys = Object.keys(verifier.env ?? {}).sort();
   const hasRealEventContext = Object.entries(TAG_VERIFIER_ENV).every(
@@ -324,6 +328,9 @@ function checkTagVerifierJob(job, fail) {
   }
   if (job['continue-on-error'] !== undefined) {
     fail('job "verify-release-tag" must not set continue-on-error');
+  }
+  if (job.outputs?.['verified-tag-sha'] !== expression('steps.verify.outputs.verified-tag-sha')) {
+    fail('job "verify-release-tag" must expose only the verified tag target SHA');
   }
   if (job.env !== undefined || job.container !== undefined || job.services !== undefined) {
     fail('job "verify-release-tag" must not inherit environment or container injection');

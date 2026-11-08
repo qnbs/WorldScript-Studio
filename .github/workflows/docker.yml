@@ -76,6 +76,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      verified-tag-sha: ${{ steps.verify.outputs.verified-tag-sha }}
     steps:
       - name: Check out the pinned trusted verifier
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -85,6 +87,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Verify GitHub signatures for the release tag
+        id: verify
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
@@ -96,18 +99,19 @@ jobs:
         shell: bash
         working-directory: trusted-verifier
         run: >-
-          env -i PATH="$PATH" GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME"
+          set -euo pipefail && env -i PATH="$PATH" GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME"
           GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_REF_NAME="$GITHUB_REF_NAME"
           GITHUB_REF_TYPE="$GITHUB_REF_TYPE" GITHUB_REPOSITORY="$GITHUB_REPOSITORY"
           GITHUB_SHA="$GITHUB_SHA" GITHUB_TOKEN="$GITHUB_TOKEN"
-          node scripts/signing/verify-github-signatures.mjs
+          node scripts/signing/verify-github-signatures.mjs &&
+          echo "verified-tag-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
   build-push:
     name: Build & push image
     # QNBS-v3 (#911): publish only a verified signed v* tag push after the exact-SHA audit.
     needs: [security-audit, verify-release-tag]
     if: >-
-      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && github.ref_protected == true && needs.verify-release-tag.result == 'success' && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && github.ref_protected == true && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # QNBS-v3: packages:write scoped to this job only — prevents privilege escalation in future jobs.
