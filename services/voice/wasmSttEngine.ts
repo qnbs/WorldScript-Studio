@@ -50,8 +50,8 @@ export class WasmSttEngine implements SttEngine {
   }
 
   async initialize(): Promise<void> {
-    // QNBS-v3: Dynamic import keeps @huggingface/transformers in vendor-ai-onnx chunk, not main bundle.
-    const { pipeline, env } = await import('@huggingface/transformers');
+    // QNBS-v3: Keep the shared Transformers.js proxy lazy so voice setup does not load its model chunk early.
+    const { pipeline, env } = await import('../../packages/ai-core/src/vendor-transformers');
     // Disable WASM proxy — run inline; proxy adds latency and SharedArrayBuffer dependency.
     interface XenovaEnv {
       backends?: { onnx?: { wasm?: { proxy?: boolean } } };

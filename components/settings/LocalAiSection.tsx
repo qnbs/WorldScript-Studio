@@ -189,14 +189,18 @@ export const LocalAiSection: FC = () => {
     }
     setClearing(true);
     try {
-      const { clearedCaches } = await clearLocalModels();
+      const { clearedCaches, failedCaches } = await clearLocalModels();
       clearReadyLocalModels();
       setReadyIds(new Set());
       await refreshStorage();
-      announce(
-        t('settings.ai.localAi.clearedAnnounce', { count: String(clearedCaches) }),
-        'polite',
-      );
+      if (failedCaches > 0) {
+        announce(t('settings.ai.localAi.clearFailed'), 'polite');
+      } else {
+        announce(
+          t('settings.ai.localAi.clearedAnnounce', { count: String(clearedCaches) }),
+          'polite',
+        );
+      }
     } catch (err) {
       logger.warn('LocalAiSection: clear local models failed', { err: String(err) });
       announce(t('settings.ai.localAi.clearFailed'), 'polite');
