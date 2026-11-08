@@ -44,12 +44,14 @@ export function safeReport(commit: RemoteCommit): RemoteReport;
 
 export function verifyRemoteCommitReports(commits: RemoteCommit[]): RemoteResult;
 export function hasCompleteCommitRange(expectedShas: string[], reports: RemoteReport[]): boolean;
+export function expectedTagCommitSha(eventAfter: string, githubSha: string): string;
 export function verifyRemotePullRequest(options: RemoteOptions): Promise<RemoteResult>;
 export function verifyRemoteCommitRange(options: RemoteCommitRangeOptions): Promise<RemoteResult>;
 export function verifyRemoteTag(options: {
   owner: string;
   repo: string;
   tag: string;
+  expectedCommitSha: string;
   token?: string;
   fetchImpl?: typeof fetch;
 }): Promise<RemoteResult>;

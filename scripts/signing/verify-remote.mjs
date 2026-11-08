@@ -77,6 +77,16 @@ export function hasCompleteCommitRange(expectedShas, reports) {
   return expectedShas.every((sha) => reports.some((report) => sha.startsWith(report.sha)));
 }
 
+export function expectedTagCommitSha(eventAfter, githubSha) {
+  if (!/^[0-9a-f]{40}$/i.test(String(eventAfter ?? '')))
+    throw new Error('push event does not contain a full tag target commit SHA');
+  if (!/^[0-9a-f]{40}$/i.test(String(githubSha ?? '')))
+    throw new Error('GitHub context does not contain a full commit SHA');
+  if (eventAfter.toLowerCase() !== githubSha.toLowerCase())
+    throw new Error('push event target does not match github.sha');
+  return eventAfter.toLowerCase();
+}
+
 export async function verifyRemotePullRequest(options) {
   const commits = await fetchPullRequestCommits(options);
   return verifyRemoteCommitReports(commits);
@@ -102,7 +112,17 @@ export async function verifyRemoteCommitRange({
   return verifyRemoteCommitReports(commits);
 }
 
-export async function verifyRemoteTag({ owner, repo, tag, token = '', fetchImpl = fetch }) {
+export async function verifyRemoteTag({
+  owner,
+  repo,
+  tag,
+  expectedCommitSha,
+  token = '',
+  fetchImpl = fetch,
+}) {
+  if (!/^[0-9a-f]{40}$/i.test(String(expectedCommitSha ?? '')))
+    throw new Error('expected tag target must be a full commit SHA');
+  const expectedSha = expectedCommitSha.toLowerCase();
   const ref = await fetchJson(
     fetchImpl,
     `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/tags/${encodeURIComponent(tag)}`,
@@ -135,6 +155,21 @@ export async function verifyRemoteTag({ owner, repo, tag, token = '', fetchImpl 
   targetSha = tagObject.object?.sha;
   if (tagObject.object?.type !== 'commit' || !targetSha)
     throw new Error('annotated tag does not target a commit');
+  if (targetSha.toLowerCase() !== expectedSha) {
+    return {
+      ok: false,
+      reports: [
+        tagReport,
+        {
+          sha: safeSha(targetSha),
+          subject: safeText(`tag ${tag}`, 160),
+          verified: false,
+          reason: 'tag target does not match the pushed event commit',
+        },
+      ],
+      reason: `${safeSha(targetSha)}: tag target does not match the pushed event commit`,
+    };
+  }
   const commit = await fetchJson(
     fetchImpl,
     `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(targetSha)}`,
