@@ -34,13 +34,10 @@ function safeReport(commit) {
   };
 }
 
-// QNBS-v3: compare's merge base must be the signed target; the API has no head_commit field.
+// QNBS-v3: require a stable protected-main snapshot across the ancestry API request.
 async function verifyProtectedMainAncestry({ owner, repo, sha, token, fetchImpl }) {
-  const branch = await fetchJson(
-    fetchImpl,
-    `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches/main`,
-    token,
-  );
+  const branchUrl = `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches/main`;
+  const branch = await fetchJson(fetchImpl, branchUrl, token);
   const mainSha = String(branch.commit?.sha ?? '').toLowerCase();
   if (branch.name !== 'main' || branch.protected !== true || !/^[0-9a-f]{40}$/.test(mainSha)) {
     throw new Error('protected main branch identity could not be verified');
@@ -57,6 +54,16 @@ async function verifyProtectedMainAncestry({ owner, repo, sha, token, fetchImpl 
     comparison.merge_base_commit?.sha?.toLowerCase() !== sha
   ) {
     throw new Error('release tag target is not contained in protected main');
+  }
+
+  const currentBranch = await fetchJson(fetchImpl, branchUrl, token);
+  const currentMainSha = String(currentBranch.commit?.sha ?? '').toLowerCase();
+  if (
+    currentBranch.name !== 'main' ||
+    currentBranch.protected !== true ||
+    currentMainSha !== mainSha
+  ) {
+    throw new Error('protected main changed during ancestry verification');
   }
 }
 

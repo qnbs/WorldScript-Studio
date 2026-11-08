@@ -11,6 +11,8 @@ const unrelatedMergeBaseSha = 'f'.repeat(40);
 type MainProvenanceOptions = {
   mainProtected?: boolean;
   mainSha?: string;
+  mainAfterProtected?: boolean;
+  mainAfterSha?: string;
   compareStatus?: string;
   compareBaseSha?: string;
   compareMergeBaseSha?: string;
@@ -64,6 +66,13 @@ function tagFetch(
     .mockResolvedValueOnce(
       new Response(JSON.stringify(compareResponse), { status: compareResponseStatus }),
     )
+    .mockResolvedValueOnce(
+      jsonResponse({
+        name: 'main',
+        protected: options.mainAfterProtected ?? mainProtected,
+        commit: { sha: options.mainAfterSha ?? mainSha },
+      }),
+    )
     .mockResolvedValueOnce(jsonResponse({ object: { sha: tagObjectSha, type: 'tag' } }));
 }
 
@@ -102,7 +111,7 @@ describe('release tag event binding', () => {
     expect(fetchImpl.mock.calls[4]?.[0]).toBe(
       `https://api.github.com/repos/qnbs/WorldScript-Studio/compare/${pushedCommitSha}...${options.mainSha ?? pushedCommitSha}`,
     );
-    expect(fetchImpl).toHaveBeenCalledTimes(6);
+    expect(fetchImpl).toHaveBeenCalledTimes(7);
   });
 
   it('rejects a tag retargeted to a different commit before checking that commit', async () => {
@@ -156,6 +165,9 @@ describe('release tag event binding', () => {
           merge_base_commit: { sha: pushedCommitSha },
         }),
       )
+      .mockResolvedValueOnce(
+        jsonResponse({ name: 'main', protected: true, commit: { sha: pushedCommitSha } }),
+      )
       .mockResolvedValueOnce(jsonResponse({ object: { sha: changedTagObjectSha, type: 'tag' } }));
 
     await expect(verifyTag(fetchImpl)).rejects.toThrow(/changed during signature verification/);
@@ -204,6 +216,19 @@ describe('release tag event binding', () => {
     const fetchImpl = tagFetch(pushedCommitSha, true, true, options);
 
     await expect(verifyTag(fetchImpl)).rejects.toThrow(error);
+  });
+
+  it.each([
+    { name: 'main moved during comparison', options: { mainAfterSha: unrelatedMergeBaseSha } },
+    { name: 'main lost protection during comparison', options: { mainAfterProtected: false } },
+  ])('rejects when $name', async ({ options }) => {
+    const fetchImpl = tagFetch(pushedCommitSha, true, true, {
+      mainSha: newerMainSha,
+      ...options,
+    });
+
+    await expect(verifyTag(fetchImpl)).rejects.toThrow(/protected main changed/);
+    expect(fetchImpl).toHaveBeenCalledTimes(6);
   });
 
   it('rejects a missing expected SHA before resolving a mutable tag ref', async () => {
