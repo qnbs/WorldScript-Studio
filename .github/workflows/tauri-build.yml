@@ -284,6 +284,51 @@ jobs:
           pnpm exec tauri build --config "$RESOURCES"
           echo "Tauri build completed successfully"
 
+      # QNBS-v3: the updater key probe proves key compatibility; verify each real target sidecar before its bundle can be uploaded.
+      - name: Cryptographically verify signed bundle artifacts
+        if: ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          find_bundle_asset() {
+            local name="$1"
+            local -a matches=()
+            mapfile -d '' matches < <(find src-tauri/target/release/bundle -type f -name "$name" -print0)
+            if [ "${#matches[@]}" -ne 1 ]; then
+              echo "::error::expected exactly one bundle asset named $name, found ${#matches[@]}"
+              return 1
+            fi
+            printf '%s' "${matches[0]}"
+          }
+
+          verify_bundle_signature() {
+            local artifact="$1"
+            test -s "$artifact"
+            test -s "$artifact.sig" || { echo "::error::missing signature sidecar for ${artifact##*/}"; exit 1; }
+            cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$artifact" "$artifact.sig"
+          }
+
+          case "$RUNNER_OS" in
+            Linux)
+              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_amd64.deb")"
+              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio-${VERSION}-1.x86_64.rpm")"
+              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_amd64.AppImage")"
+              ;;
+            Windows)
+              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_x64-setup.exe")"
+              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_x64_en-US.msi")"
+              ;;
+            macOS)
+              verify_bundle_signature "$(find_bundle_asset 'WorldScript Studio.app.tar.gz')"
+              ;;
+            *)
+              echo "::error::unsupported runner OS for updater signature verification: $RUNNER_OS"
+              exit 1
+              ;;
+          esac
+
       - name: Upload bundle directory
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

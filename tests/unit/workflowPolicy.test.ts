@@ -435,6 +435,28 @@ describe('Tauri release workflow policy', () => {
     expect(preflight).not.toContain('contents: write');
   });
 
+  it('cryptographically verifies every tagged platform bundle sidecar before artifact upload', () => {
+    const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
+    const verificationStart = bundle.indexOf(
+      'name: Cryptographically verify signed bundle artifacts',
+    );
+    const uploadStart = bundle.indexOf('name: Upload bundle directory');
+    const verification = bundle.slice(verificationStart, uploadStart);
+    const versionToken = '$' + '{VERSION}';
+
+    expect(verificationStart).toBeGreaterThan(-1);
+    expect(uploadStart).toBeGreaterThan(verificationStart);
+    expect(verification).toContain("github.event_name == 'push'");
+    expect(verification).toContain("github.ref_type == 'tag'");
+    expect(verification).toContain('--example verify-updater-artifact');
+    expect(verification).toContain(`WorldScript Studio_${versionToken}_amd64.deb`);
+    expect(verification).toContain(`WorldScript Studio-${versionToken}-1.x86_64.rpm`);
+    expect(verification).toContain(`WorldScript Studio_${versionToken}_amd64.AppImage`);
+    expect(verification).toContain(`WorldScript Studio_${versionToken}_x64-setup.exe`);
+    expect(verification).toContain(`WorldScript Studio_${versionToken}_x64_en-US.msi`);
+    expect(verification).toContain('WorldScript Studio.app.tar.gz');
+  });
+
   it('fails closed on missing upload files and validates a complete draft before public release', () => {
     const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
     const release = extractJobBlock(tauriWorkflowSource, 'release');
