@@ -431,12 +431,21 @@ const MODE_HANDLERS = {
 const CLI_USAGE =
   'usage: release-assets-guard.mjs <assets|generate|validate|remote> <version> <asset-dir> [repository] [input-file]';
 
+function requireCliArguments(args) {
+  if (args.slice(0, 3).some((argument) => !argument)) throw new Error(CLI_USAGE);
+}
+
+function resolveModeHandler(mode) {
+  if (!Object.hasOwn(MODE_HANDLERS, mode)) {
+    throw new Error(`unknown release gate mode: ${mode}`);
+  }
+  return MODE_HANDLERS[mode];
+}
+
 function parseCliInvocation(args) {
+  requireCliArguments(args);
   const [mode, version, directory, repository, inputFile] = args;
-  if (!mode || !version || !directory) throw new Error(CLI_USAGE);
-  const handler = Object.hasOwn(MODE_HANDLERS, mode) ? MODE_HANDLERS[mode] : undefined;
-  if (!handler) throw new Error(`unknown release gate mode: ${mode}`);
-  return { handler, version, directory, repository, inputFile };
+  return { handler: resolveModeHandler(mode), version, directory, repository, inputFile };
 }
 
 async function main(args) {
