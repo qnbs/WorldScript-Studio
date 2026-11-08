@@ -1,8 +1,8 @@
 # Non-publishing proof of the #911 release security gate. Dispatch on main with:
 #   expected-sha = dispatch SHA; simulated_event=push; simulated_ref_type=tag;
-#   simulated_ref=refs/tags/v1.29.3 -> audit succeeds, echo-only stand-in runs
-# A wrong SHA, non-tag ref, or simulated non-push event keeps the stand-in skipped.
-# The simulated event is data only; this workflow has no publishing permission or action.
+#   simulated_ref=refs/tags/v1.29.3; simulated_tag_signature=verified -> stand-in runs
+# A wrong SHA, non-tag ref, unverified signature result, or non-push simulation keeps it skipped.
+# Event/ref/signature inputs are data only; this workflow has no publishing permission or action.
 # Nothing here holds a write permission, logs in to a registry or creates a release.
 name: Release gate proof
 
@@ -30,6 +30,12 @@ on:
         required: true
         type: string
         default: refs/heads/main
+      simulated_tag_signature:
+        description: Simulated signature-verifier result; this input does not verify a real tag.
+        required: true
+        type: choice
+        options: [verified, rejected]
+        default: rejected
 
 permissions:
   contents: read
@@ -94,7 +100,7 @@ jobs:
     name: Publish stand-in (no side effects)
     needs: [security-audit]
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
+      ${{ github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && inputs.simulated_tag_signature == 'verified' && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:

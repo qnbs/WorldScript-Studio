@@ -69,12 +69,35 @@ jobs:
         id: result
         run: echo "audited-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+  verify-release-tag:
+    name: Verify release tag
+    if: >-
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify GitHub signatures for the release tag
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/signing/verify-github-signatures.mjs
+
   build-push:
     name: Build & push image
-    # QNBS-v3 (#911): only signed v* tag pushes may publish; manual dispatch remains audit-only.
-    needs: [security-audit]
+    # QNBS-v3 (#911): publish only a verified signed v* tag push after the exact-SHA audit.
+    needs: [security-audit, verify-release-tag]
     if: >-
-      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.verify-release-tag.result == 'success' && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # QNBS-v3: packages:write scoped to this job only — prevents privilege escalation in future jobs.

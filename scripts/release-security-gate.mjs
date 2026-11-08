@@ -18,10 +18,15 @@ export const GITHUB_SHA = expression('github.sha');
 export const PROOF_INPUT_SHA = expression('inputs.expected-sha');
 export const AUDITED_SHA_OUTPUT = expression('steps.result.outputs.audited-sha');
 
-export const REQUIRED_DOCKER_PUBLISH_EVENTS = Object.freeze([
+export const REQUIRED_TAG_PUSH_CONDITIONS = Object.freeze([
   "github.event_name == 'push'",
   "github.ref_type == 'tag'",
   "startsWith(github.ref, 'refs/tags/v')",
+]);
+
+export const REQUIRED_DOCKER_PUBLISH_CONDITIONS = Object.freeze([
+  ...REQUIRED_TAG_PUSH_CONDITIONS,
+  "needs.verify-release-tag.result == 'success'",
 ]);
 
 export const REQUIRED_PROOF_SIMULATION_CONDITIONS = Object.freeze([
@@ -29,15 +34,22 @@ export const REQUIRED_PROOF_SIMULATION_CONDITIONS = Object.freeze([
   "inputs.simulated_event == 'push'",
   "inputs.simulated_ref_type == 'tag'",
   "startsWith(inputs.simulated_ref, 'refs/tags/v')",
+  "inputs.simulated_tag_signature == 'verified'",
 ]);
 
 /** Workflow → the jobs that publish (or stand in for publishing) and the SHA their audit must check. */
 export const RELEASE_GATED_WORKFLOWS = Object.freeze({
-  'tauri-build.yml': { gatedJobs: ['release'], expectedSha: GITHUB_SHA },
+  'tauri-build.yml': {
+    gatedJobs: ['release'],
+    expectedSha: GITHUB_SHA,
+    requiredEventConditions: REQUIRED_TAG_PUSH_CONDITIONS,
+  },
   'docker.yml': {
     gatedJobs: ['build-push'],
     expectedSha: GITHUB_SHA,
-    requiredEventConditions: REQUIRED_DOCKER_PUBLISH_EVENTS,
+    requiredEventConditions: REQUIRED_DOCKER_PUBLISH_CONDITIONS,
+    requiredNeeds: ['verify-release-tag'],
+    verifyTagJob: true,
   },
   'release-gate-proof.yml': {
     gatedJobs: ['publish-stand-in'],
@@ -61,7 +73,9 @@ export const REQUIRED_SCAN_ARGS = Object.freeze([
 // A status function in a job `if` replaces the implicit success() requirement on its needs.
 const STATUS_FUNCTION = /\b(?:always|failure|cancelled|success)\s*\(/;
 const CHECKOUT = 'actions/checkout@';
+const CHECKOUT_PIN = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const OSV_SCANNER = 'google/osv-scanner-action/osv-scanner-action@';
+const TAG_VERIFIER = 'node scripts/signing/verify-github-signatures.mjs';
 
 function asList(value) {
   if (Array.isArray(value)) return value;
@@ -175,25 +189,103 @@ function checkAuditJob(audit, expectedSha, fail) {
   checkAuditSteps(asList(audit.steps), expectedSha, fail);
 }
 
-function checkGateCondition(jobName, condition, fail, requiredEventConditions = []) {
-  const missing = [...REQUIRED_GATE_CONDITIONS, ...requiredEventConditions].filter(
-    (required) => !condition.includes(required),
-  );
-  for (const required of missing) fail(`job "${jobName}" if: must require ${required}`);
-  if (STATUS_FUNCTION.test(condition)) {
+function normalizedCondition(condition) {
+  return condition
+    .trim()
+    .replace(/^\$\{\{\s*/, '')
+    .replace(/\s*\}\}$/, '')
+    .replace(/\s+/g, ' ');
+}
+
+function checkExactCondition(jobName, condition, requiredConditions, fail) {
+  const actual = normalizedCondition(condition);
+  const missing = requiredConditions.filter((predicate) => !actual.includes(predicate));
+  for (const predicate of missing) {
+    fail(`job "${jobName}" if: must require ${predicate}`);
+  }
+  // QNBS-v3: exact conjunction checks prevent alternate OR branches bypassing release gates.
+  if (actual.includes('||')) {
+    fail(`job "${jobName}" if: must not contain a permissive OR branch`);
+  }
+  const expected = requiredConditions.join(' && ');
+  if (actual !== expected) {
+    fail(`job "${jobName}" if: must equal the exact fail-closed condition "${expected}"`);
+  }
+  if (STATUS_FUNCTION.test(actual)) {
     fail(
       `job "${jobName}" if: must not use a status function; it would let the job run after a failed, skipped or cancelled audit`,
     );
   }
 }
 
-function checkGatedJob(jobName, job, fail, requiredEventConditions) {
+function checkGateCondition(jobName, condition, fail, requiredEventConditions = []) {
+  checkExactCondition(
+    jobName,
+    condition,
+    [...requiredEventConditions, ...REQUIRED_GATE_CONDITIONS],
+    fail,
+  );
+}
+
+function checkTagVerifierJob(job, fail) {
+  if (!job) {
+    fail('missing job "verify-release-tag"');
+    return;
+  }
+  checkExactCondition(
+    'verify-release-tag',
+    String(job.if ?? ''),
+    REQUIRED_TAG_PUSH_CONDITIONS,
+    fail,
+  );
+  if (!permissionsAreReadOnlyContents(job.permissions)) {
+    fail('job "verify-release-tag" must have exactly permissions: contents: read');
+  }
+  if (job['continue-on-error'] !== undefined) {
+    fail('job "verify-release-tag" must not set continue-on-error');
+  }
+  const steps = asList(job.steps);
+  const checkoutIndex = steps.findIndex((step) => usesOf(step) === CHECKOUT_PIN);
+  const verifyIndex = steps.findIndex((step) => runOf(step).trim() === TAG_VERIFIER);
+  if (checkoutIndex < 0) {
+    fail(`job "verify-release-tag" must use the pinned ${CHECKOUT_PIN} action`);
+  } else {
+    const checkout = steps[checkoutIndex];
+    if (checkout.with?.['fetch-depth'] !== 0 || checkout.with?.['persist-credentials'] !== false) {
+      fail('job "verify-release-tag" must fetch tag history and disable checkout credentials');
+    }
+  }
+  if (verifyIndex < 0) {
+    fail(`job "verify-release-tag" must run ${TAG_VERIFIER}`);
+  } else {
+    const verifier = steps[verifyIndex];
+    const expectedEnv = {
+      GITHUB_EVENT_NAME: expression('github.event_name'),
+      GITHUB_EVENT_PATH: expression('github.event_path'),
+      GITHUB_REF_NAME: expression('github.ref_name'),
+      GITHUB_REF_TYPE: expression('github.ref_type'),
+      GITHUB_REPOSITORY: expression('github.repository'),
+      GITHUB_TOKEN: expression('github.token'),
+    };
+    if (Object.entries(expectedEnv).some(([key, value]) => verifier.env?.[key] !== value)) {
+      fail(
+        'job "verify-release-tag" must pass the real tag-push context to the signature verifier',
+      );
+    }
+    if (checkoutIndex >= 0 && verifyIndex <= checkoutIndex) {
+      fail('job "verify-release-tag" must check out the full tag before signature verification');
+    }
+  }
+}
+
+function checkGatedJob(jobName, job, fail, requiredEventConditions, requiredNeeds = []) {
   if (!job) {
     fail(`gated job "${jobName}" is missing`);
     return;
   }
-  if (!asList(job.needs).includes('security-audit')) {
-    fail(`job "${jobName}" must need "security-audit"`);
+  const needs = asList(job.needs);
+  for (const required of ['security-audit', ...requiredNeeds]) {
+    if (!needs.includes(required)) fail(`job "${jobName}" must need "${required}"`);
   }
   checkGateCondition(jobName, String(job.if ?? ''), fail, requiredEventConditions);
 }
@@ -230,8 +322,9 @@ export function checkReleaseSecurityWorkflow(fileName, source) {
   }
   const jobs = workflow?.jobs ?? {};
   checkAuditJob(jobs['security-audit'], spec.expectedSha, fail);
+  if (spec.verifyTagJob) checkTagVerifierJob(jobs['verify-release-tag'], fail);
   for (const jobName of spec.gatedJobs) {
-    checkGatedJob(jobName, jobs[jobName], fail, spec.requiredEventConditions);
+    checkGatedJob(jobName, jobs[jobName], fail, spec.requiredEventConditions, spec.requiredNeeds);
   }
   checkNoUngatedWriters(jobs, spec.gatedJobs, fail);
   return failures;
