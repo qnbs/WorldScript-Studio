@@ -34,6 +34,32 @@ function safeReport(commit) {
   };
 }
 
+// QNBS-v3: compare's merge base must be the signed target; the API has no head_commit field.
+async function verifyProtectedMainAncestry({ owner, repo, sha, token, fetchImpl }) {
+  const branch = await fetchJson(
+    fetchImpl,
+    `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches/main`,
+    token,
+  );
+  const mainSha = String(branch.commit?.sha ?? '').toLowerCase();
+  if (branch.name !== 'main' || branch.protected !== true || !/^[0-9a-f]{40}$/.test(mainSha)) {
+    throw new Error('protected main branch identity could not be verified');
+  }
+
+  const comparison = await fetchJson(
+    fetchImpl,
+    `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/compare/${encodeURIComponent(`${sha}...${mainSha}`)}`,
+    token,
+  );
+  if (
+    !['ahead', 'identical'].includes(comparison.status) ||
+    comparison.base_commit?.sha?.toLowerCase() !== sha ||
+    comparison.merge_base_commit?.sha?.toLowerCase() !== sha
+  ) {
+    throw new Error('release tag target is not contained in protected main');
+  }
+}
+
 export async function fetchJson(fetchImpl, url, token) {
   const response = await fetchImpl(url, {
     headers: {
@@ -77,6 +103,21 @@ export function hasCompleteCommitRange(expectedShas, reports) {
   return expectedShas.every((sha) => reports.some((report) => sha.startsWith(report.sha)));
 }
 
+export function expectedTagCommitSha(eventAfter, githubSha) {
+  const eventSha = String(eventAfter ?? '');
+  const contextSha = String(githubSha ?? '');
+  if (!/^[0-9a-f]{40}$/i.test(eventSha))
+    throw new Error('push event does not contain a full tag target commit SHA');
+  if (/^0{40}$/i.test(eventSha))
+    throw new Error('push event does not contain a live tag target commit SHA');
+  if (!/^[0-9a-f]{40}$/i.test(contextSha))
+    throw new Error('GitHub context does not contain a full commit SHA');
+  if (/^0{40}$/i.test(contextSha)) throw new Error('GitHub context contains a deleted-ref SHA');
+  if (eventSha.toLowerCase() !== contextSha.toLowerCase())
+    throw new Error('push event target does not match github.sha');
+  return eventSha.toLowerCase();
+}
+
 export async function verifyRemotePullRequest(options) {
   const commits = await fetchPullRequestCommits(options);
   return verifyRemoteCommitReports(commits);
@@ -102,12 +143,21 @@ export async function verifyRemoteCommitRange({
   return verifyRemoteCommitReports(commits);
 }
 
-export async function verifyRemoteTag({ owner, repo, tag, token = '', fetchImpl = fetch }) {
-  const ref = await fetchJson(
-    fetchImpl,
-    `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/tags/${encodeURIComponent(tag)}`,
-    token,
-  );
+export async function verifyRemoteTag({
+  owner,
+  repo,
+  tag,
+  expectedCommitSha,
+  token = '',
+  fetchImpl = fetch,
+}) {
+  if (!/^[0-9a-f]{40}$/i.test(String(expectedCommitSha ?? '')))
+    throw new Error('expected tag target must be a full commit SHA');
+  if (/^0{40}$/i.test(expectedCommitSha))
+    throw new Error('expected tag target cannot be the deleted-ref SHA');
+  const expectedSha = expectedCommitSha.toLowerCase();
+  const refUrl = `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/tags/${encodeURIComponent(tag)}`;
+  const ref = await fetchJson(fetchImpl, refUrl, token);
   const object = ref.object;
   if (!object?.sha || !object.type) throw new Error('GitHub tag ref response was incomplete');
   if (object.type !== 'tag') {
@@ -126,6 +176,7 @@ export async function verifyRemoteTag({ owner, repo, tag, token = '', fetchImpl 
     `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/tags/${encodeURIComponent(object.sha)}`,
     token,
   );
+  if (tagObject.tag !== tag) throw new Error('annotated tag name does not match the pushed ref');
   tagReport = {
     sha: safeSha(object.sha),
     subject: safeText(`tag ${tag}`, 160),
@@ -135,6 +186,21 @@ export async function verifyRemoteTag({ owner, repo, tag, token = '', fetchImpl 
   targetSha = tagObject.object?.sha;
   if (tagObject.object?.type !== 'commit' || !targetSha)
     throw new Error('annotated tag does not target a commit');
+  if (targetSha.toLowerCase() !== expectedSha) {
+    return {
+      ok: false,
+      reports: [
+        tagReport,
+        {
+          sha: safeSha(targetSha),
+          subject: safeText(`tag ${tag}`, 160),
+          verified: false,
+          reason: 'tag target does not match the pushed event commit',
+        },
+      ],
+      reason: `${safeSha(targetSha)}: tag target does not match the pushed event commit`,
+    };
+  }
   const commit = await fetchJson(
     fetchImpl,
     `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(targetSha)}`,
@@ -143,7 +209,13 @@ export async function verifyRemoteTag({ owner, repo, tag, token = '', fetchImpl 
   const commitReport = safeReport(commit);
   const reports = tagReport ? [tagReport, commitReport] : [commitReport];
   const invalid = reports.find((report) => !report.verified);
-  return { ok: !invalid, reports, reason: invalid ? `${invalid.sha}: ${invalid.reason}` : '' };
+  if (invalid) return { ok: false, reports, reason: `${invalid.sha}: ${invalid.reason}` };
+  await verifyProtectedMainAncestry({ owner, repo, sha: expectedSha, token, fetchImpl });
+  const currentRef = await fetchJson(fetchImpl, refUrl, token);
+  if (currentRef.object?.type !== 'tag' || currentRef.object?.sha !== object.sha) {
+    throw new Error('release tag changed during signature verification');
+  }
+  return { ok: true, reports, reason: '', verifiedTagSha: expectedSha };
 }
 
 export { safeReport };
