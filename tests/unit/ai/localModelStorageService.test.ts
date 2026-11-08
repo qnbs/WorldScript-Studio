@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * Tests for services/ai/localModelStorageService.ts
  * QNBS-v3: Verifies on-disk model-cache estimation + clearing — bucket pattern matching, the
@@ -8,20 +7,64 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const releaseAllWebLlmEngines = vi.fn();
 const releaseAllOnnxSessions = vi.fn();
+const componentMocks = vi.hoisted(() => ({
+  announce: vi.fn(),
+  detectWebGpu: vi.fn(() => true),
+  healthReport: vi.fn(async () => ({ deviceClass: 'mid-range', gpuVramTier: 'medium' })),
+  modelRec: vi.fn(() => 'm-small'),
+  getReady: vi.fn(() => ['m-small']),
+  clearReady: vi.fn(),
+  abortPreload: vi.fn(),
+  busy: vi.fn(() => false),
+}));
 
 vi.mock('@domain/ai-core', () => ({
   releaseAllWebLlmEngines: () => releaseAllWebLlmEngines(),
   releaseAllOnnxSessions: () => releaseAllOnnxSessions(),
+  detectWebGpuSupport: () => componentMocks.detectWebGpu(),
+  WEBLLM_SUPPORTED_MODELS: [
+    { id: 'm-small', label: 'Small (~0.4 GB)' },
+    { id: 'm-big', label: 'Big (~5 GB)' },
+  ],
+  WEBLLM_MODEL_APPROX_MB: { 'm-small': 400, 'm-big': 5000 },
+  preloadLocalModel: vi.fn(),
+}));
+
+vi.mock('../../../hooks/useTranslation', () => ({
+  useTranslation: () => ({ t: (key: string) => key, language: 'en' }),
+}));
+vi.mock('../../../contexts/LiveRegionContext', () => ({
+  useAnnounce: () => componentMocks.announce,
+}));
+vi.mock('../../../services/ai/deviceHealthService', () => ({
+  getHealthReport: () => componentMocks.healthReport(),
+  getModelRecommendation: () => componentMocks.modelRec(),
+}));
+vi.mock('../../../services/localAiFacade', () => ({
+  preloadLocalModel: vi.fn(),
+  getLastLocalThroughput: () => null,
+  getReadyLocalModelIds: () => componentMocks.getReady(),
+  clearReadyLocalModels: () => componentMocks.clearReady(),
+  abortActivePreload: () => componentMocks.abortPreload(),
+  isLocalAiBusy: () => componentMocks.busy(),
+  subscribeLocalModelReady: () => () => {},
+}));
+vi.mock('../../../components/settings/LocalAiDownloadProgress', () => ({
+  LocalAiDownloadProgress: () => null,
 }));
 
 vi.mock('../../../services/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+import { LocalAiSection } from '../../../components/settings/LocalAiSection';
 import {
   clearLocalModels,
   estimateLocalModelStorage,
@@ -102,6 +145,14 @@ function installStorage(usage: number, quota: number) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  componentMocks.detectWebGpu.mockReturnValue(true);
+  componentMocks.healthReport.mockResolvedValue({
+    deviceClass: 'mid-range',
+    gpuVramTier: 'medium',
+  });
+  componentMocks.modelRec.mockReturnValue('m-small');
+  componentMocks.getReady.mockReturnValue(['m-small']);
+  componentMocks.busy.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -222,6 +273,36 @@ describe('clearLocalModels', () => {
     });
 
     await expect(clearLocalModels()).resolves.toEqual({ clearedCaches: 0, failedCaches: 1 });
+  });
+
+  it('announces a deletion failure while still resetting ready state and refreshing storage', async () => {
+    vi.stubGlobal('caches', {
+      keys: vi.fn(async () => [WORLD_SCRIPT_TRANSFORMERS_CACHE]),
+      delete: vi.fn(async () => false),
+    });
+    const estimate = vi.fn(async () => ({ usage: 100 * MB, quota: 1000 * MB }));
+    vi.stubGlobal('navigator', { storage: { estimate } });
+
+    const user = userEvent.setup();
+    render(createElement(LocalAiSection));
+    await screen.findByText('settings.ai.localAi.storageModelsCached');
+    estimate.mockClear();
+
+    await user.click(screen.getByText('settings.ai.localAi.clearButton'));
+    await user.click(screen.getByText('settings.ai.localAi.clearConfirmYes'));
+
+    await waitFor(() =>
+      expect(componentMocks.announce).toHaveBeenCalledWith(
+        'settings.ai.localAi.clearFailed',
+        'polite',
+      ),
+    );
+    expect(componentMocks.announce).not.toHaveBeenCalledWith(
+      'settings.ai.localAi.clearedAnnounce',
+      'polite',
+    );
+    expect(componentMocks.clearReady).toHaveBeenCalledTimes(1);
+    expect(estimate).toHaveBeenCalledTimes(1);
   });
 
   it('is a no-op delete count when the Cache API is absent', async () => {
