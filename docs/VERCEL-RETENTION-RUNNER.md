@@ -29,6 +29,29 @@ Both print one `RETENTION_MANIFEST …` line per preview, **before the first wri
 post-proof) after the pass, and exit non-zero with `RETENTION_STOP: <reason>` on any stop. They
 print no tokens, e-mail addresses or provider error text.
 
+## Protected Production HTTP probe
+
+After the runner confirms the exact project and repository identity, the READY Production
+deployment, and all three canonical aliases bound to that deployment, it reads the project's
+protection settings with `vercel --scope qnbs-projects project protection worldscript-studio
+--format json`. It requires the returned project ID and name to match the pinned project and
+requires exactly one existing automation-bypass secret. Missing, ambiguous, malformed, or
+mismatched protection data fails closed before the HTTP request. The secret value remains in
+process memory and is passed to `vercel --scope qnbs-projects curl --head <canonical-url>` through
+the child process environment; it is never printed, written to disk, or passed as a command-line
+argument. Supplying the existing secret explicitly prevents the CLI from generating a
+project-level secret during either `dry-run` or `reconcile`.
+
+The request does not follow redirects. The runner accepts exactly one HTTP status line, and only
+HTTP 200 passes; a redirect, SSO checkpoint, missing status, or CLI error fails closed as
+`canonical-http-failed`. The probe uses the existing project automation-bypass credential, not the
+operator's SSO session, and does not change project protection settings.
+
+This proves the protected Production request path through the project's existing automation-bypass
+credential. It does not prove anonymous/public reachability. Any separate incident procedure that
+explicitly requires a public HTTP check still needs that independent check; this probe does not
+replace it.
+
 ## What a pass does
 
 1. **Authority.** Reads `origin/main` and requires every push-triggered `CI / CD` and
@@ -36,7 +59,8 @@ print no tokens, e-mail addresses or provider error text.
    never stands in for it, and a run list as long as the request limit counts as possibly
    truncated. Requires Vercel Production `READY` on that SHA with the project's identity (project ID,
    GitHub organisation and repository) confirmed on the deployment itself, the three canonical
-   aliases bound to it, and the canonical host to answer HTTP 200. The project identity (ID, name,
+   aliases bound to it, and the canonical host to answer HTTP 200 through the existing-secret,
+   team-scoped Vercel CLI probe below. The project identity (ID, name,
    team, linked repository) must match the constants in `scope.mjs`, and the checkout's `origin`
    must be this repository (`origin-unexpected` otherwise), because main and the branch list are
    read through it while the provider and PR reads are pinned to the project.
@@ -147,22 +171,22 @@ authentication stop, not something an allow rule fixes.
 
 ## Stop reasons
 
-| Reason | Meaning |
-| --- | --- |
-| `runtime-mismatch` | The actual operator runtime is not Node 22 at or above 22.19.0. No external call or lock acquisition occurs. |
-| `gate-not-green:<workflow>` | A required push run on `main` for the exact SHA is missing, in flight or not a success. |
-| `runs-unreadable`, `runs-incomplete` | The run list could not be read, or was as long as the request limit and may be truncated. |
-| `invalid-holds` | The hold file is missing, malformed or lists something other than deployment IDs. |
-| `retention-already-running`, `retention-lock-unreadable`, `lock-unavailable` | Another `reconcile` holds the lock, the lock file is not a process ID, or the lock could not be taken. |
-| `production-not-ready-on-main`, `canonical-aliases-not-bound`, `canonical-http-failed` | Production is not proven on this SHA. |
-| `main-moved`, `main-moved-during-read` | `main` advanced (also checked again at the post-proof); start a new pass for the new SHA. |
-| `provider-read-failed`, `provider-pagination-limit`, `provider-pagination-stalled`, `provider-inventory-inconsistent`, `invalid-provider-response` | The inventory could not be read completely or consistently, or a record is malformed. |
-| `open-prs-incomplete`, `open-prs-malformed` | The open-PR snapshot is unreadable, possibly truncated, or has an incomplete record. |
-| `project-mismatch`, `repository-unconfirmed`, `origin-unexpected` | The provider project, or the checkout's `origin`, is not the expected one. |
-| `alias-remove-failed`, `delete-failed`, `delete-not-confirmed` | A write failed or could not be confirmed; nothing is retried. |
-| `postproof-failed` | A protected or deferred deployment is missing, a deleted one is back, a canonical or kept branch alias moved, Production is not `READY` or HTTP failed. |
-| `runner-source-modified`, `runner-source-differs-from-main`, `package-script-differs-from-main` | `reconcile` was started from a source that is not the reviewed `main`. |
-| `invalid-arguments` | Anything other than exactly `dry-run` or `reconcile`. |
+| Reason                                                                                                                                             | Meaning                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runtime-mismatch`                                                                                                                                 | The actual operator runtime is not Node 22 at or above 22.19.0. No external call or lock acquisition occurs.                                            |
+| `gate-not-green:<workflow>`                                                                                                                        | A required push run on `main` for the exact SHA is missing, in flight or not a success.                                                                 |
+| `runs-unreadable`, `runs-incomplete`                                                                                                               | The run list could not be read, or was as long as the request limit and may be truncated.                                                               |
+| `invalid-holds`                                                                                                                                    | The hold file is missing, malformed or lists something other than deployment IDs.                                                                       |
+| `retention-already-running`, `retention-lock-unreadable`, `lock-unavailable`                                                                       | Another `reconcile` holds the lock, the lock file is not a process ID, or the lock could not be taken.                                                  |
+| `production-not-ready-on-main`, `canonical-aliases-not-bound`, `canonical-http-failed`                                                             | Production is not proven on this SHA.                                                                                                                   |
+| `main-moved`, `main-moved-during-read`                                                                                                             | `main` advanced (also checked again at the post-proof); start a new pass for the new SHA.                                                               |
+| `provider-read-failed`, `provider-pagination-limit`, `provider-pagination-stalled`, `provider-inventory-inconsistent`, `invalid-provider-response` | The inventory could not be read completely or consistently, or a record is malformed.                                                                   |
+| `open-prs-incomplete`, `open-prs-malformed`                                                                                                        | The open-PR snapshot is unreadable, possibly truncated, or has an incomplete record.                                                                    |
+| `project-mismatch`, `repository-unconfirmed`, `origin-unexpected`                                                                                  | The provider project, or the checkout's `origin`, is not the expected one.                                                                              |
+| `alias-remove-failed`, `delete-failed`, `delete-not-confirmed`                                                                                     | A write failed or could not be confirmed; nothing is retried.                                                                                           |
+| `postproof-failed`                                                                                                                                 | A protected or deferred deployment is missing, a deleted one is back, a canonical or kept branch alias moved, Production is not `READY` or HTTP failed. |
+| `runner-source-modified`, `runner-source-differs-from-main`, `package-script-differs-from-main`                                                    | `reconcile` was started from a source that is not the reviewed `main`.                                                                                  |
+| `invalid-arguments`                                                                                                                                | Anything other than exactly `dry-run` or `reconcile`.                                                                                                   |
 
 ## Not covered
 
