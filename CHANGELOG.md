@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Release-tag verification:** Validate protected-main ancestry with the GitHub Compare API's returned base and merge-base commits, and bind the verified tag target to the triggering event SHA (PR #1207).
+
 <!-- release-candidate: v1.29.3 -->
 
 ## [1.29.3] — 2026-11-08
