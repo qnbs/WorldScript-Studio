@@ -72,12 +72,11 @@ function requiredAssetNames(selected) {
 }
 
 function reportMissingAndUnexpected(names, required, errors) {
-  for (const name of names) {
-    if (!required.has(name)) errors.push(`unexpected release asset: ${name}`);
-  }
-  for (const name of required) {
-    if (!names.includes(name)) errors.push(`missing release asset: ${name}`);
-  }
+  const knownNames = new Set(names);
+  const unexpected = names.filter((name) => !required.has(name));
+  const missing = [...required].filter((name) => !knownNames.has(name));
+  for (const name of unexpected) errors.push(`unexpected release asset: ${name}`);
+  for (const name of missing) errors.push(`missing release asset: ${name}`);
 }
 
 export function validateReleaseAssetNames(assetNames, version) {
@@ -190,6 +189,11 @@ function remoteAssetMap(remoteAssets) {
   return new Map(remoteAssets.map((asset) => [asset.name, asset]));
 }
 
+function reportDuplicateRemoteNames(remoteAssets, errors) {
+  const duplicates = duplicateNames(remoteAssets.map((asset) => asset.name));
+  for (const name of duplicates) errors.push(`duplicate uploaded asset names: ${name}`);
+}
+
 function compareUploadedAsset(expectedName, local, remote, errors) {
   if (!remote) {
     errors.push(`uploaded release is missing ${expectedName}`);
@@ -203,17 +207,22 @@ function compareUploadedAsset(expectedName, local, remote, errors) {
   }
 }
 
+function compareExpectedRemoteAssets(expected, actual, errors) {
+  for (const [name, local] of expected) compareUploadedAsset(name, local, actual.get(name), errors);
+}
+
+function reportUnexpectedRemoteAssets(expected, actual, errors) {
+  const unexpected = [...actual.keys()].filter((name) => !expected.has(name));
+  for (const name of unexpected) errors.push(`unexpected uploaded asset: ${name}`);
+}
+
 export function validateRemoteAssetRecords(localAssets, remoteAssets) {
-  const errors = duplicateNames(remoteAssets.map((asset) => asset.name)).map(
-    (name) => `duplicate uploaded asset names: ${name}`,
-  );
+  const errors = [];
+  reportDuplicateRemoteNames(remoteAssets, errors);
   const expected = new Map(localAssets.map((asset) => [asset.name.replaceAll(' ', '.'), asset]));
   const actual = remoteAssetMap(remoteAssets);
-
-  for (const [name, local] of expected) compareUploadedAsset(name, local, actual.get(name), errors);
-  for (const name of actual.keys()) {
-    if (!expected.has(name)) errors.push(`unexpected uploaded asset: ${name}`);
-  }
+  compareExpectedRemoteAssets(expected, actual, errors);
+  reportUnexpectedRemoteAssets(expected, actual, errors);
   return { ok: errors.length === 0, errors };
 }
 

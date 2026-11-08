@@ -295,7 +295,9 @@ jobs:
           find_bundle_asset() {
             local name="$1"
             local -a matches=()
-            mapfile -d '' matches < <(find src-tauri/target/release/bundle -type f -name "$name" -print0)
+            while IFS= read -r -d '' match; do
+              matches+=("$match")
+            done < <(find src-tauri/target/release/bundle -type f -name "$name" -print0)
             if [ "${#matches[@]}" -ne 1 ]; then
               echo "::error::expected exactly one bundle asset named $name, found ${#matches[@]}"
               return 1
@@ -440,6 +442,7 @@ jobs:
           ' "$RUNNER_TEMP/existing-releases.tsv"
 
       - name: Stage GitHub Release as a draft
+        id: stage_release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: release-assets/*
@@ -455,10 +458,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.stage_release.outputs.id }}
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          RELEASE_ID="$(gh api "/repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id')"
+          test -n "$RELEASE_ID" || { echo "::error::draft release action did not return a release ID"; exit 1; }
           DRAFT="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft')"
           test "$DRAFT" = true || { echo "::error::release must remain a draft until every uploaded asset is verified"; exit 1; }
           gh api --paginate --jq '.[] | [.name, (.size | tostring), (.digest // "")] | @tsv' \
@@ -469,9 +473,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.stage_release.outputs.id }}
         run: |
           set -euo pipefail
-          RELEASE_ID="$(gh api "/repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id')"
+          test -n "$RELEASE_ID" || { echo "::error::draft release action did not return a release ID"; exit 1; }
           gh api --method PATCH "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
             -F draft=false --jq 'if .draft == false then .html_url else error("release remained a draft") end'
 
@@ -479,10 +484,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.stage_release.outputs.id }}
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          RELEASE_ID="$(gh api "/repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id')"
           PUBLISHED_TAG="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.tag_name')"
           DRAFT="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft')"
           test "$PUBLISHED_TAG" = "$TAG" || { echo "::error::published release tag changed during final verification"; exit 1; }

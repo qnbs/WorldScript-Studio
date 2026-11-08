@@ -465,6 +465,8 @@ describe('Tauri release workflow policy', () => {
     expect(release).toContain('release-assets-guard.mjs generate');
     expect(release).toContain('release-assets-guard.mjs validate');
     expect(release).toContain('draft: true');
+    expect(release).toContain('id: stage_release');
+    expect(release).toContain('steps.stage_release.outputs.id');
     expect(release).toContain('overwrite_files: true');
     expect(release).toContain('release-assets-guard.mjs remote');
     expect(release).toContain('merge-multiple: false');
@@ -478,6 +480,7 @@ describe('Tauri release workflow policy', () => {
     expect(release.indexOf('Publish the verified complete draft')).toBeLessThan(
       release.indexOf('Verify published release state and final asset inventory'),
     );
+    expect(release).not.toContain('/releases/tags/$TAG');
     expect(release).not.toContain('gh release upload');
   });
 
