@@ -127,6 +127,56 @@ jobs:
       - name: Verify Tauri plugin Rust/npm version parity
         run: node scripts/check-tauri-plugin-versions.mjs
 
+  # QNBS-v3: workflow_dispatch on protected main signs a throwaway payload with the stored updater secret and verifies it against the shipped public key; no release artifacts are published.
+  updater-signing-preflight:
+    name: 🔐 Verify stored updater signing key
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        with:
+          workspaces: src-tauri
+          cache-all-crates: true
+          prefix-key: "v1-updater-signing-probe"
+      - name: Install Linux dependencies for the configured verifier example
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Verify exact main source and write a non-secret probe payload
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          test "$EXPECTED_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf '%s\n' 'WorldScript Studio updater signing preflight v1' > "$RUNNER_TEMP/worldscript-updater-probe.bin"
+      - name: Sign and cryptographically verify the configured updater key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${TAURI_SIGNING_PRIVATE_KEY:-}" || { echo "::error::updater signing secret is empty"; exit 1; }
+          VERSION="$(node -p "require('./package.json').version")"
+          PROBE="$RUNNER_TEMP/worldscript-updater-probe.bin"
+          pnpm exec tauri signer sign --app-version "$VERSION" "$PROBE" >/dev/null
+          test -s "$PROBE.sig"
+          cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$PROBE" "$PROBE.sig"
+          cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$PROBE" "$PROBE.sig" --expect-failure --tamper
+          cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$PROBE" "$PROBE.sig" --expect-failure --wrong-key
+
   bundle:
     name: Bundle (${{ matrix.os }})
     needs: [verify-release-tag, parity-preflight]
@@ -234,6 +284,55 @@ jobs:
           pnpm exec tauri build --config "$RESOURCES"
           echo "Tauri build completed successfully"
 
+      # QNBS-v3: the updater key probe proves key compatibility; verify each real target sidecar before its bundle can be uploaded.
+      - name: Cryptographically verify signed bundle artifacts
+        if: ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          find_bundle_asset() {
+            local name="$1"
+            # QNBS-v3: Tauri's published bundle names use dots for spaces; accept either exact basename while rejecting ambiguous duplicates.
+            local dotted_name="${name// /.}"
+            local -a matches=()
+            while IFS= read -r -d '' match; do
+              matches+=("$match")
+            done < <(find src-tauri/target/release/bundle -type f \( -name "$name" -o -name "$dotted_name" \) -print0)
+            if [ "${#matches[@]}" -ne 1 ]; then
+              echo "::error::expected exactly one bundle asset named $name, found ${#matches[@]}"
+              return 1
+            fi
+            printf '%s' "${matches[0]}"
+          }
+
+          verify_bundle_signature() {
+            local artifact="$1"
+            test -s "$artifact"
+            test -s "$artifact.sig" || { echo "::error::missing signature sidecar for ${artifact##*/}"; exit 1; }
+            cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$artifact" "$artifact.sig"
+          }
+
+          case "$RUNNER_OS" in
+            Linux)
+              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_amd64.deb")"
+              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio-${VERSION}-1.x86_64.rpm")"
+              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_amd64.AppImage")"
+              ;;
+            Windows)
+              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_x64-setup.exe")"
+              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_x64_en-US.msi")"
+              ;;
+            macOS)
+              verify_bundle_signature "$(find_bundle_asset 'WorldScript Studio.app.tar.gz')"
+              ;;
+            *)
+              echo "::error::unsupported runner OS for updater signature verification: $RUNNER_OS"
+              exit 1
+              ;;
+          esac
+
       - name: Upload bundle directory
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -241,7 +340,7 @@ jobs:
           path: |
             src-tauri/target/release/bundle/
             third-party/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
 
   # -----------------------------------------------------------------
@@ -270,7 +369,7 @@ jobs:
         with:
           pattern: tauri-bundle-*
           path: downloaded
-          merge-multiple: true
+          merge-multiple: false
 
       - name: Extract deterministic release notes
         run: |
@@ -292,130 +391,117 @@ jobs:
             exit 1
           fi
 
-      - name: Collect release assets
-        id: collect
+      - name: Collect and require the complete installer, updater, SBOM, and notices matrix
         run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          test -d downloaded
           mkdir -p release-assets
-          # QNBS-v3: *.sig and *.app.tar.gz included — sig files feed latest.json; .app.tar.gz is
-          # the macOS updater bundle (Tauri downloads this to apply updates, not the .dmg installer).
-          find downloaded -type f \( \
+          while IFS= read -r -d '' FILE; do
+            NAME="$(basename "$FILE")"
+            if [ -e "release-assets/$NAME" ]; then
+              echo "::error::duplicate release asset name: $NAME"
+              exit 1
+            fi
+            cp -- "$FILE" "release-assets/$NAME"
+          done < <(find downloaded -type f \( \
             -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \
             -o -name '*.msi' -o -name '*.exe' \
             -o -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \
-            \) -exec cp {} release-assets/ \;
-          # QNBS-v3: only installer/updater files decide whether a release is published; the #871 inventory is attached afterwards, so inventories alone can never publish an installer-less release.
-          if [ -z "$(ls -A release-assets 2>/dev/null)" ]; then
-            echo "has_assets=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No bundle files found to attach. Check Tauri bundle output paths."
-            exit 0
-          fi
-          find downloaded -type f \( -name '*.third-party-notices.txt' -o -name '*.cdx.json' \) \
-            -exec cp {} release-assets/ \;
-          # QNBS-v3: every bundled target must publish its own SBOM and notices (#871); a missing pair means the release would ship installers without their inventory.
-          for suffix in cdx.json third-party-notices.txt; do
-            count="$(find release-assets -maxdepth 1 -type f -name "*.${suffix}" | wc -l)"
-            if [ "$count" -ne 3 ]; then
-              echo "::error::expected 3 *.${suffix} release assets (one per bundle target), found ${count}"
+            \) -print0)
+          while IFS= read -r -d '' FILE; do
+            NAME="$(basename "$FILE")"
+            if [ -e "release-assets/$NAME" ]; then
+              echo "::error::duplicate release asset name: $NAME"
               exit 1
             fi
-          done
-          echo "Files to upload:" && ls -la release-assets/
-          echo "has_assets=true" >> "$GITHUB_OUTPUT"
+            cp -- "$FILE" "release-assets/$NAME"
+          done < <(find downloaded -type f \( -name '*.third-party-notices.txt' -o -name '*.cdx.json' \) -print0)
+          node scripts/release-assets-guard.mjs assets "$VERSION" release-assets
 
-      - name: Create GitHub Release
-        if: steps.collect.outputs.has_assets == 'true'
+      - name: Generate and validate all three signed updater manifest entries
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          node scripts/release-assets-guard.mjs generate "$VERSION" release-assets "$GITHUB_REPOSITORY"
+          node scripts/release-assets-guard.mjs validate "$VERSION" release-assets "$GITHUB_REPOSITORY"
+
+      - name: Refuse to overwrite a published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --jq '.[] | [.tag_name, (.draft | tostring)] | @tsv' \
+            "/repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/existing-releases.tsv"
+          awk -F '\t' -v tag="$TAG" '
+            $1 == tag { found = 1; if ($2 != "true") published = 1 }
+            END {
+              if (published) { print "::error::a published release already exists for this tag; refusing overwrite"; exit 1 }
+              if (found) print "Existing draft release found; only this same tag draft may be resumed."
+              else print "No release exists for this tag; a validated draft may be created."
+            }
+          ' "$RUNNER_TEMP/existing-releases.tsv"
+
+      - name: Stage GitHub Release as a draft
+        id: stage_release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: release-assets/*
           body_path: release-notes.md
           generate_release_notes: false
+          draft: true
+          overwrite_files: true
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate latest.json for auto-updater
-        if: steps.collect.outputs.has_assets == 'true'
+      - name: Verify the complete uploaded draft asset inventory and SHA-256 digests
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.stage_release.outputs.id }}
         run: |
-          # QNBS-v3: Tauri v2 updater manifest.
-          # Version must NOT have a 'v' prefix (matches tauri.conf.json version field).
-          # Platform keys: linux-x86_64, windows-x86_64, darwin-aarch64, darwin-x86_64.
-          VERSION="${GITHUB_REF_NAME#v}"   # strip 'v': v1.22.1 → 1.22.1
-          TAG="${GITHUB_REF_NAME}"
-          REPO_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
-          PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          test -n "$RELEASE_ID" || { echo "::error::draft release action did not return a release ID"; exit 1; }
+          DRAFT="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft')"
+          test "$DRAFT" = true || { echo "::error::release must remain a draft until every uploaded asset is verified"; exit 1; }
+          gh api --paginate --jq '.[] | [.name, (.size | tostring), (.digest // "")] | @tsv' \
+            "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/release-assets.tsv"
+          node scripts/release-assets-guard.mjs remote "$VERSION" release-assets "$GITHUB_REPOSITORY" "$RUNNER_TEMP/release-assets.tsv"
 
-          LINUX_URL="" LINUX_SIG=""
-          WIN_URL="" WIN_SIG=""
-          MAC_AARCH64_URL="" MAC_AARCH64_SIG=""
-          MAC_X64_URL="" MAC_X64_SIG=""
+      - name: Publish the verified complete draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.stage_release.outputs.id }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_ID" || { echo "::error::draft release action did not return a release ID"; exit 1; }
+          STAGED_TAG="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.tag_name')"
+          test "$STAGED_TAG" = "$TAG" || { echo "::error::staged release tag changed before publication"; exit 1; }
+          DRAFT="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft')"
+          test "$DRAFT" = true || { echo "::error::release must remain a draft until its final asset inventory is verified"; exit 1; }
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh api --paginate --jq '.[] | [.name, (.size | tostring), (.digest // "")] | @tsv' \
+            "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/prepublish-release-assets.tsv"
+          node scripts/release-assets-guard.mjs remote "$VERSION" release-assets "$GITHUB_REPOSITORY" "$RUNNER_TEMP/prepublish-release-assets.tsv"
+          gh api --method PATCH "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false --jq 'if .draft == false then .html_url else error("release remained a draft") end'
 
-          for SIG_FILE in release-assets/*.sig; do
-            [ -f "$SIG_FILE" ] || continue
-            BASE="${SIG_FILE%.sig}"
-            FNAME="$(basename "$BASE")"
-            # QNBS-v3: GitHub normalizes spaces in uploaded asset names to dots (e.g.
-            # "WorldScript Studio_*.AppImage" → "WorldScript.Studio_*.AppImage"). The bundle file on
-            # disk still has the space, so the updater URL MUST use the normalized name or it 404s.
-            URLNAME="${FNAME// /.}"
-            SIG_CONTENT="$(cat "$SIG_FILE")"
-            case "$FNAME" in
-              *.AppImage)
-                LINUX_URL="${REPO_URL}/${URLNAME}"; LINUX_SIG="$SIG_CONTENT" ;;
-              *-setup.exe)
-                # NSIS installer — preferred Windows updater format
-                WIN_URL="${REPO_URL}/${URLNAME}"; WIN_SIG="$SIG_CONTENT" ;;
-              *.msi)
-                # MSI fallback if no NSIS sig collected yet
-                [ -z "$WIN_SIG" ] && { WIN_URL="${REPO_URL}/${URLNAME}"; WIN_SIG="$SIG_CONTENT"; } ;;
-              *_aarch64.app.tar.gz)
-                # QNBS-v3: macOS updater bundle is .app.tar.gz (not .dmg).
-                # .dmg is the user-facing installer; .app.tar.gz is what Tauri downloads for in-app updates.
-                # aarch64 = macos-latest ARM runner. x64 has no runner in the matrix currently
-                # (macos-13 removed, see the matrix comment above) -- this case is unreachable
-                # until a working Intel runner is restored, kept so a future re-add needs no
-                # changes here.
-                MAC_AARCH64_URL="${REPO_URL}/${URLNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
-              *_x64.app.tar.gz)
-                MAC_X64_URL="${REPO_URL}/${URLNAME}"; MAC_X64_SIG="$SIG_CONTENT" ;;
-              *.app.tar.gz)
-                # Fallback for generic .app.tar.gz (older Tauri versions)
-                MAC_AARCH64_URL="${REPO_URL}/${URLNAME}"; MAC_AARCH64_SIG="$SIG_CONTENT" ;;
-            esac
-          done
-
-          # QNBS-v3: report per-arch sig coverage so a half-failed matrix (e.g. macos-13 dropped its
-          # bundle while macos-latest succeeded) is diagnosable instead of a bare "no sigs" failure.
-          MISSING=""
-          [ -z "$LINUX_SIG" ]       && MISSING="${MISSING} linux-x86_64"
-          [ -z "$WIN_SIG" ]         && MISSING="${MISSING} windows-x86_64"
-          [ -z "$MAC_AARCH64_SIG" ] && MISSING="${MISSING} darwin-aarch64"
-          [ -z "$MAC_X64_SIG" ]     && MISSING="${MISSING} darwin-x86_64"
-          [ -n "$MISSING" ] && echo "::warning::No signed bundle for platform(s):${MISSING}. They will be omitted from latest.json."
-
-          # Hard-fail only if NO platform produced a signed bundle.
-          if [ -z "$LINUX_SIG" ] && [ -z "$WIN_SIG" ] && [ -z "$MAC_AARCH64_SIG" ] && [ -z "$MAC_X64_SIG" ]; then
-            echo "::error::No signed bundles found in release-assets/. Verify TAURI_SIGNING_PRIVATE_KEY secret and that createUpdaterArtifacts=true."
-            exit 1
-          fi
-
-          jq -n \
-            --arg version "$VERSION" \
-            --arg pub_date "$PUB_DATE" \
-            --arg linux_url "$LINUX_URL"       --arg linux_sig "$LINUX_SIG" \
-            --arg win_url "$WIN_URL"            --arg win_sig "$WIN_SIG" \
-            --arg mac_aarch64_url "$MAC_AARCH64_URL" --arg mac_aarch64_sig "$MAC_AARCH64_SIG" \
-            --arg mac_x64_url "$MAC_X64_URL"    --arg mac_x64_sig "$MAC_X64_SIG" \
-            '{version:$version, notes:"See release notes", pub_date:$pub_date,
-              platforms:({}
-                | if $linux_sig!=""       then .+{"linux-x86_64":  {signature:$linux_sig,       url:$linux_url}}       else . end
-                | if $win_sig!=""         then .+{"windows-x86_64":{signature:$win_sig,          url:$win_url}}         else . end
-                | if $mac_aarch64_sig!="" then .+{"darwin-aarch64":{signature:$mac_aarch64_sig,  url:$mac_aarch64_url}} else . end
-                | if $mac_x64_sig!=""     then .+{"darwin-x86_64": {signature:$mac_x64_sig,      url:$mac_x64_url}}     else . end)}' \
-            > latest.json
-
-          echo "Generated latest.json:"
-          cat latest.json
-          # QNBS-v3: this job has no actions/checkout, so gh has no local git context — pass --repo
-          # explicitly or `gh release upload` aborts with "fatal: not a git repository" (v1.23.0 fix).
-          gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"
+      - name: Verify published release state and final asset inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ steps.stage_release.outputs.id }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          PUBLISHED_TAG="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.tag_name')"
+          DRAFT="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft')"
+          test "$PUBLISHED_TAG" = "$TAG" || { echo "::error::published release tag changed during final verification"; exit 1; }
+          test "$DRAFT" = false || { echo "::error::release is not publicly published after the visibility update"; exit 1; }
+          gh api --paginate --jq '.[] | [.name, (.size | tostring), (.digest // "")] | @tsv' \
+            "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/published-release-assets.tsv"
+          node scripts/release-assets-guard.mjs remote "$VERSION" release-assets "$GITHUB_REPOSITORY" "$RUNNER_TEMP/published-release-assets.tsv"

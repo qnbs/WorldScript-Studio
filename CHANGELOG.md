@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Desktop publishing:** Require the complete Linux, Windows and macOS ARM installer, signature, SBOM and notices matrix; cryptographically verify updater payloads; stage releases as drafts and revalidate the uploaded inventory immediately before publication (PR #1202; issue #1201).
+
 - **Local AI storage:** Namespace the Transformers.js browser cache as WorldScript-owned and restrict cache counts and clearing to that bucket. Preserve WebLLM, vendor-global, legacy, and unrelated caches; localize the retained-cache and first-use download behavior, and report partial deletion failures instead of announcing a successful clear (PR #1200; issue #526; successor to #1148).
 
 - **Vercel retention:** Check the protected canonical Production URL with a team-scoped Vercel CLI request using one existing project automation-bypass secret; do not create or rotate secrets from a read-only run. Reject redirects and all responses except one HTTP 200, and document that the protected probe does not establish anonymous reachability (PR #1198; issue #627).

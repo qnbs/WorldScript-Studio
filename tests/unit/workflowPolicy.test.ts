@@ -32,6 +32,7 @@ const scheduledSecurityWorkflowPath = fileURLToPath(
 const reviewerTrustWorkflowPath = fileURLToPath(
   new URL('../../.github/workflows/reviewer-governance-trust.yml', import.meta.url),
 );
+const expr = (expression: string) => `\${{ ${expression} }}`;
 const tauriManifestPath = fileURLToPath(new URL('../../src-tauri/Cargo.toml', import.meta.url));
 const workflowSource = readFileSync(workflowPath, 'utf8');
 const tauriWorkflowSource = readFileSync(tauriWorkflowPath, 'utf8');
@@ -39,6 +40,10 @@ const setupActionSource = readFileSync(setupActionPath, 'utf8');
 const cloudflareWorkflowSource = readFileSync(cloudflareWorkflowPath, 'utf8');
 const scheduledSecurityWorkflowSource = readFileSync(scheduledSecurityWorkflowPath, 'utf8');
 const reviewerTrustWorkflowSource = readFileSync(reviewerTrustWorkflowPath, 'utf8');
+
+function namedStepIndex(jobBlock: string, name: string): number {
+  return jobBlock.split('\n').indexOf(`      - name: ${name}`);
+}
 
 // QNBS-v3: follow relative ESM imports so a new evaluator dependency fails this test until it is locked too.
 function evaluatorImportClosure(entry: string): string[] {
@@ -412,6 +417,122 @@ describe('Tauri release workflow policy', () => {
     expect(preflight).toContain('scripts/check-tauri-plugin-versions.mjs');
     expect(preflight).not.toContain('pnpm install');
     expect(preflight).toMatch(/^ {4}permissions:\n {6}contents: read\s*$/m);
+  });
+
+  it('limits the updater-key preflight to workflow_dispatch on exact protected main and verifies both signature directions', () => {
+    const preflight = extractJobBlock(tauriWorkflowSource, 'updater-signing-preflight');
+    expect(extractJobIf(preflight).trim()).toBe(
+      `\${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}`,
+    );
+    expect(preflight).toContain(`ref: ${expr('github.sha')}`);
+    expect(preflight).toMatch(/^ {4}permissions:\n {6}contents: read\s*$/m);
+    expect(preflight).toContain(
+      `TAURI_SIGNING_PRIVATE_KEY: ${expr('secrets.TAURI_SIGNING_PRIVATE_KEY')}`,
+    );
+    expect(preflight).toContain(
+      `TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${expr('secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD')}`,
+    );
+    const signer = extractStepBlock(
+      preflight,
+      'Sign and cryptographically verify the configured updater key',
+    );
+    expect(
+      signer
+        .split('\n')
+        .filter((line) =>
+          /^ {10}cargo run --locked --manifest-path src-tauri\/Cargo\.toml --example verify-updater-artifact -- "\$PROBE" "\$PROBE\.sig"(?: |$)/.test(
+            line,
+          ),
+        ),
+    ).toEqual([
+      '          cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$PROBE" "$PROBE.sig"',
+      '          cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$PROBE" "$PROBE.sig" --expect-failure --tamper',
+      '          cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$PROBE" "$PROBE.sig" --expect-failure --wrong-key',
+    ]);
+    expect(preflight).not.toContain('upload-artifact');
+    expect(preflight).not.toContain('contents: write');
+  });
+
+  it('cryptographically verifies every tagged platform bundle sidecar before artifact upload', () => {
+    const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
+    const verificationStart = bundle.indexOf(
+      'name: Cryptographically verify signed bundle artifacts',
+    );
+    const uploadStart = bundle.indexOf('name: Upload bundle directory');
+    const verification = bundle.slice(verificationStart, uploadStart);
+    const versionToken = '$' + '{VERSION}';
+
+    expect(verificationStart).toBeGreaterThan(-1);
+    expect(uploadStart).toBeGreaterThan(verificationStart);
+    expect(verification).toContain("github.event_name == 'push'");
+    expect(verification).toContain("github.ref_type == 'tag'");
+    expect(verification).toContain('--example verify-updater-artifact');
+    expect(verification).toContain('local dotted_name="$' + '{name// /.}"');
+    expect(verification).toContain('-name "$name" -o -name "$dotted_name"');
+    expect(verification).toContain(`WorldScript Studio_${versionToken}_amd64.deb`);
+    expect(verification).toContain(`WorldScript Studio-${versionToken}-1.x86_64.rpm`);
+    expect(verification).toContain(`WorldScript Studio_${versionToken}_amd64.AppImage`);
+    expect(verification).toContain(`WorldScript Studio_${versionToken}_x64-setup.exe`);
+    expect(verification).toContain(`WorldScript Studio_${versionToken}_x64_en-US.msi`);
+    expect(verification).toContain('WorldScript Studio.app.tar.gz');
+  });
+
+  it('fails closed on missing upload files and validates a complete draft before public release', () => {
+    const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
+    const release = extractJobBlock(tauriWorkflowSource, 'release');
+    const publish = extractStepBlock(release, 'Publish the verified complete draft');
+    expect(bundle).toContain('if-no-files-found: error');
+    expect(release).toContain('release-assets-guard.mjs assets');
+    expect(release).toContain('release-assets-guard.mjs generate');
+    expect(release).toContain('release-assets-guard.mjs validate');
+    expect(release).toContain('draft: true');
+    expect(release).toContain('id: stage_release');
+    expect(release).toContain('steps.stage_release.outputs.id');
+    expect(release).toContain('overwrite_files: true');
+    expect(release).toContain('release-assets-guard.mjs remote');
+    expect(release).toContain('merge-multiple: false');
+    expect(release).toContain('gh api --method PATCH');
+    const publishedTagGuard = extractStepBlock(release, 'Refuse to overwrite a published release');
+    expect(publishedTagGuard).toContain('/releases?per_page=100');
+    expect(publishedTagGuard).toContain(
+      'a published release already exists for this tag; refusing overwrite',
+    );
+    const releaseStepIndexes = [
+      namedStepIndex(release, 'Generate and validate all three signed updater manifest entries'),
+      namedStepIndex(release, 'Refuse to overwrite a published release'),
+      namedStepIndex(release, 'Stage GitHub Release as a draft'),
+      namedStepIndex(
+        release,
+        'Verify the complete uploaded draft asset inventory and SHA-256 digests',
+      ),
+      namedStepIndex(release, 'Publish the verified complete draft'),
+      namedStepIndex(release, 'Verify published release state and final asset inventory'),
+    ];
+    expect(releaseStepIndexes.every((index) => index >= 0)).toBe(true);
+    expect(releaseStepIndexes).toEqual([...releaseStepIndexes].sort((left, right) => left - right));
+    const publishLines = publish.split('\n').map((line) => line.trimStart());
+    const assetFetchIndex = publishLines.findIndex((line) =>
+      line.startsWith('gh api --paginate --jq'),
+    );
+    expect(assetFetchIndex).toBeGreaterThanOrEqual(0);
+    expect(publishLines[assetFetchIndex + 1]).toContain(
+      '/releases/$RELEASE_ID/assets?per_page=100',
+    );
+    expect(publishLines[assetFetchIndex + 1]).toContain(
+      '$RUNNER_TEMP/prepublish-release-assets.tsv',
+    );
+    const prepublishIndexes = [
+      assetFetchIndex,
+      publishLines.findIndex((line) =>
+        line.startsWith('node scripts/release-assets-guard.mjs remote'),
+      ),
+      publishLines.findIndex((line) => line.startsWith('gh api --method PATCH')),
+    ];
+    expect(prepublishIndexes.every((index) => index >= 0)).toBe(true);
+    expect(prepublishIndexes).toEqual([...prepublishIndexes].sort((left, right) => left - right));
+    expect(publish).toContain('/releases/$RELEASE_ID/assets?per_page=100');
+    expect(release).not.toContain('/releases/tags/$TAG');
+    expect(release).not.toContain('gh release upload');
   });
 
   it('keeps release publication tag-only and downstream of bundle output', () => {
