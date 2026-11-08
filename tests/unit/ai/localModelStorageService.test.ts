@@ -76,6 +76,10 @@ async function listSourceFiles(directory: string, relativeDirectory = ''): Promi
   return files;
 }
 
+function normalizeSourcePath(path: string): string {
+  return path.replaceAll('\\', '/');
+}
+
 function installCaches(names: string[], deleteImpl?: (name: string) => Promise<boolean>) {
   const remaining = new Set(names);
   const del = vi.fn(async (name: string) => {
@@ -217,6 +221,12 @@ describe('clearLocalModels', () => {
 });
 
 describe('Transformers.js cache ownership boundary', () => {
+  it('normalizes Windows paths for the ownership allowlist', () => {
+    expect(normalizeSourcePath('packages\\ai-core\\src\\vendor-transformers.ts')).toBe(
+      'packages/ai-core/src/vendor-transformers.ts',
+    );
+  });
+
   it.each(transformersConsumers)('%s loads Transformers through the owned proxy', async (path) => {
     const source = await readFile(resolve(repositoryRoot, path), 'utf8');
 
@@ -230,10 +240,11 @@ describe('Transformers.js cache ownership boundary', () => {
     const directImports: string[] = [];
 
     for (const path of sourceFiles) {
-      if (path === 'packages/ai-core/src/vendor-transformers.ts') continue;
+      const normalizedPath = normalizeSourcePath(path);
+      if (normalizedPath === 'packages/ai-core/src/vendor-transformers.ts') continue;
       const source = await readFile(resolve(repositoryRoot, path), 'utf8');
       if (/(?:from\s+|import\s*\()\s*['"]@huggingface\/transformers['"]/.test(source)) {
-        directImports.push(path);
+        directImports.push(normalizedPath);
       }
     }
 
