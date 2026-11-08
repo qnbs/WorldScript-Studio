@@ -463,6 +463,8 @@ describe('Tauri release workflow policy', () => {
     expect(verification).toContain("github.event_name == 'push'");
     expect(verification).toContain("github.ref_type == 'tag'");
     expect(verification).toContain('--example verify-updater-artifact');
+    expect(verification).toContain('local dotted_name="$' + '{name// /.}"');
+    expect(verification).toContain('-name "$name" -o -name "$dotted_name"');
     expect(verification).toContain(`WorldScript Studio_${versionToken}_amd64.deb`);
     expect(verification).toContain(`WorldScript Studio-${versionToken}-1.x86_64.rpm`);
     expect(verification).toContain(`WorldScript Studio_${versionToken}_amd64.AppImage`);

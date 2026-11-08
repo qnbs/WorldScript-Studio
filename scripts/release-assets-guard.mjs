@@ -435,7 +435,7 @@ async function main(args) {
   if (!mode) throw new Error(usage);
   if (!version) throw new Error(usage);
   if (!directory) throw new Error(usage);
-  const handler = MODE_HANDLERS[mode];
+  const handler = Object.hasOwn(MODE_HANDLERS, mode) ? MODE_HANDLERS[mode] : undefined;
   if (!handler) throw new Error(`unknown release gate mode: ${mode}`);
   await handler(version, directory, repository, inputFile);
 }

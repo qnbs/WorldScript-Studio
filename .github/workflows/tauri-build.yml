@@ -294,10 +294,12 @@ jobs:
 
           find_bundle_asset() {
             local name="$1"
+            # QNBS-v3: Tauri's published bundle names use dots for spaces; accept either exact basename while rejecting ambiguous duplicates.
+            local dotted_name="${name// /.}"
             local -a matches=()
             while IFS= read -r -d '' match; do
               matches+=("$match")
-            done < <(find src-tauri/target/release/bundle -type f -name "$name" -print0)
+            done < <(find src-tauri/target/release/bundle -type f \( -name "$name" -o -name "$dotted_name" \) -print0)
             if [ "${#matches[@]}" -ne 1 ]; then
               echo "::error::expected exactly one bundle asset named $name, found ${#matches[@]}"
               return 1

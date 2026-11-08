@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   parseRemoteAssetRecords,
@@ -8,6 +10,7 @@ import {
 
 const version = '1.29.3';
 const repository = 'qnbs/WorldScript-Studio';
+const releaseAssetGuardPath = resolve(process.cwd(), 'scripts/release-assets-guard.mjs');
 const installers = [
   `WorldScript Studio_${version}_amd64.deb`,
   `WorldScript Studio-${version}-1.x86_64.rpm`,
@@ -86,6 +89,21 @@ describe('release asset completeness gate', () => {
         .ok,
     ).toBe(false);
   });
+});
+
+describe('release asset gate CLI dispatch', () => {
+  it.each(['constructor', 'toString', 'hasOwnProperty'])(
+    'rejects inherited property mode %s instead of treating it as a handler',
+    (mode) => {
+      const result = spawnSync(
+        process.execPath,
+        [releaseAssetGuardPath, mode, version, '.', repository],
+        { encoding: 'utf8' },
+      );
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(`unknown release gate mode: ${mode}`);
+    },
+  );
 });
 
 describe('signed updater manifest gate', () => {
