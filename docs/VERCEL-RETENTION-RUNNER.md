@@ -32,16 +32,25 @@ print no tokens, e-mail addresses or provider error text.
 ## Protected Production HTTP probe
 
 After the runner confirms the exact project and repository identity, the READY Production
-deployment, and all three canonical aliases bound to that deployment, it checks the canonical
-full URL with `vercel --scope qnbs-projects curl --head --location <canonical-url>`. Vercel CLI
-uses the local authenticated operator context to access a deployment protected by SSO; `--scope`
-pins the request to the expected team. The runner parses only the final HTTP status line, and a
-missing status or CLI error fails closed as `canonical-http-failed`. It does not print CLI error
-text, create a persistent bypass secret, or change project protection settings.
+deployment, and all three canonical aliases bound to that deployment, it reads the project's
+protection settings with `vercel --scope qnbs-projects project protection worldscript-studio
+--format json`. It requires the returned project ID and name to match the pinned project and
+requires exactly one existing automation-bypass secret. Missing, ambiguous, malformed, or
+mismatched protection data fails closed before the HTTP request. The secret value remains in
+process memory and is passed to `vercel --scope qnbs-projects curl --head <canonical-url>` through
+the child process environment; it is never printed, written to disk, or passed as a command-line
+argument. Supplying the existing secret explicitly prevents the CLI from generating a
+project-level secret during either `dry-run` or `reconcile`.
 
-This proves the authenticated Production request path. It does not prove anonymous/public
-reachability. Any separate incident procedure that explicitly requires a public HTTP check still
-needs that independent check; this authenticated probe does not replace it.
+The request does not follow redirects. The runner accepts exactly one HTTP status line, and only
+HTTP 200 passes; a redirect, SSO checkpoint, missing status, or CLI error fails closed as
+`canonical-http-failed`. The probe uses the existing project automation-bypass credential, not the
+operator's SSO session, and does not change project protection settings.
+
+This proves the protected Production request path through the project's existing automation-bypass
+credential. It does not prove anonymous/public reachability. Any separate incident procedure that
+explicitly requires a public HTTP check still needs that independent check; this probe does not
+replace it.
 
 ## What a pass does
 
@@ -50,7 +59,7 @@ needs that independent check; this authenticated probe does not replace it.
    never stands in for it, and a run list as long as the request limit counts as possibly
    truncated. Requires Vercel Production `READY` on that SHA with the project's identity (project ID,
    GitHub organisation and repository) confirmed on the deployment itself, the three canonical
-   aliases bound to it, and the canonical host to answer HTTP 200 through the authenticated,
+   aliases bound to it, and the canonical host to answer HTTP 200 through the existing-secret,
    team-scoped Vercel CLI probe below. The project identity (ID, name,
    team, linked repository) must match the constants in `scope.mjs`, and the checkout's `origin`
    must be this repository (`origin-unexpected` otherwise), because main and the branch list are

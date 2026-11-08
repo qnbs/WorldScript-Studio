@@ -9,6 +9,7 @@ import {
   assertTrustedSource,
   authenticatedHttpStatus,
   main,
+  parseHttpStatus,
   parseMode,
   printManifest,
   report,
@@ -411,31 +412,93 @@ test('the entry points take no arguments', async () => {
 test('the protected production probe uses a team-scoped Vercel CLI HEAD and final status', () => {
   const calls = [];
   const status = authenticatedHttpStatus(
-    (command, args) => {
-      calls.push({ command, args });
-      return 'HTTP/1.1 302 Found\r\nlocation: /\r\n\r\nHTTP/2 200 \r\ncontent-type: text/html\r\n';
+    (command, args, options) => {
+      calls.push({ command, args, options });
+      if (args.includes('protection'))
+        return JSON.stringify({
+          projectId: SCOPE.projectId,
+          name: SCOPE.project,
+          protectionBypass: { 'fixture-bypass-secret': { scope: 'automation-bypass' } },
+        });
+      return 'HTTP/2 200 \r\ncontent-type: text/html\r\n';
     },
     CANONICAL_URL,
     SCOPE.team,
+    SCOPE.project,
+    SCOPE.projectId,
   );
 
   assert.equal(status, '200');
   assert.deepEqual(calls, [
     {
       command: 'vercel',
-      args: ['--scope', SCOPE.team, 'curl', '--head', '--location', CANONICAL_URL],
+      args: ['--scope', SCOPE.team, 'project', 'protection', SCOPE.project, '--format', 'json'],
+      options: undefined,
+    },
+    {
+      command: 'vercel',
+      args: ['--scope', SCOPE.team, 'curl', '--head', CANONICAL_URL],
+      options: { env: { VERCEL_AUTOMATION_BYPASS_SECRET: 'fixture-bypass-secret' } },
     },
   ]);
+  assert.ok(!calls[1].args.includes('fixture-bypass-secret'));
 });
 
-test('the protected production probe fails closed on missing status or CLI failure', () => {
+test('the protected production probe fails closed without exactly one existing project secret', () => {
+  for (const protectionBypass of [
+    {},
+    {
+      'fixture-secret-one': { scope: 'automation-bypass' },
+      'fixture-secret-two': { scope: 'automation-bypass' },
+    },
+  ]) {
+    const calls = [];
+    assert.equal(
+      authenticatedHttpStatus(
+        (_command, args) => {
+          calls.push(args);
+          return JSON.stringify({
+            projectId: SCOPE.projectId,
+            name: SCOPE.project,
+            protectionBypass,
+          });
+        },
+        CANONICAL_URL,
+        SCOPE.team,
+        SCOPE.project,
+        SCOPE.projectId,
+      ),
+      '',
+    );
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].includes('protection'));
+  }
   assert.equal(
-    authenticatedHttpStatus(() => 'Vercel CLI returned no HTTP status', CANONICAL_URL, SCOPE.team),
+    authenticatedHttpStatus(
+      () => JSON.stringify({ projectId: 'prj_other', name: SCOPE.project, protectionBypass: {} }),
+      CANONICAL_URL,
+      SCOPE.team,
+      SCOPE.project,
+      SCOPE.projectId,
+    ),
     '',
   );
+});
+
+test('the protected production probe fails closed on redirect chains, missing status, or CLI failure', () => {
+  assert.equal(parseHttpStatus('HTTP/1.1 302 Found\r\n\r\nHTTP/2 200 OK\r\n'), '');
+  assert.equal(parseHttpStatus('HTTP/1.1 403 Forbidden\r\n'), '403');
+  assert.equal(parseHttpStatus('Vercel CLI returned no HTTP status'), '');
   assert.equal(
-    authenticatedHttpStatus(() => 'HTTP/1.1 403 Forbidden\r\n', CANONICAL_URL, SCOPE.team),
-    '403',
+    authenticatedHttpStatus(
+      () =>
+        JSON.stringify({ projectId: SCOPE.projectId, name: SCOPE.project, protectionBypass: {} }),
+      CANONICAL_URL,
+      SCOPE.team,
+      SCOPE.project,
+      SCOPE.projectId,
+    ),
+    '',
   );
   assert.equal(
     authenticatedHttpStatus(
@@ -444,11 +507,19 @@ test('the protected production probe fails closed on missing status or CLI failu
       },
       CANONICAL_URL,
       SCOPE.team,
+      SCOPE.project,
+      SCOPE.projectId,
     ),
     '',
   );
   assert.equal(
-    authenticatedHttpStatus(() => 'HTTP/2 200\r\n', CANONICAL_URL, ''),
+    authenticatedHttpStatus(
+      () => 'HTTP/2 200\r\n',
+      CANONICAL_URL,
+      '',
+      SCOPE.project,
+      SCOPE.projectId,
+    ),
     '',
   );
 });
@@ -458,15 +529,37 @@ test('initial, per-delete, and post-proof HTTP probes use the configured team', 
   const deps = makeDeps(world);
   const originalHttp = deps.http;
   const probes = [];
-  deps.http = (url, team) => {
-    probes.push({ url, team });
+  deps.http = (url, team, project, projectId) => {
+    probes.push({ url, team, project, projectId });
     return originalHttp(url);
   };
 
-  await runRetention(deps, 'reconcile');
+  const summary = await runRetention(deps, 'reconcile');
 
-  assert.ok(probes.length > 2);
-  assert.ok(probes.every((probe) => probe.url === CANONICAL_URL && probe.team === SCOPE.team));
+  assert.equal(probes.length, summary.safe + 2);
+  assert.ok(
+    probes.every(
+      (probe) =>
+        probe.url === CANONICAL_URL &&
+        probe.team === SCOPE.team &&
+        probe.project === SCOPE.project &&
+        probe.projectId === SCOPE.projectId,
+    ),
+  );
+});
+
+test('a failed post-proof HTTP check stops a reconciliation after the final probe', async () => {
+  const world = standardWorld();
+  const deps = makeDeps(world);
+  let probes = 0;
+  deps.http = () => (++probes === 6 ? '403' : '200');
+
+  const error = await stop(() => runRetention(deps, 'reconcile'));
+
+  assert.equal(probes, 6);
+  assert.equal(error.reason, 'postproof-failed');
+  assert.equal(error.summary.postproof.httpProduction, '403');
+  assert.deepEqual(error.summary.deleted, ['dpl_prev12', 'dpl_prev11', 'dpl_prev2', 'dpl_prev1']);
 });
 
 test('the package scripts are the two fixed commands without arguments or wildcards', () => {

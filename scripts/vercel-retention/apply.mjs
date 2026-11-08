@@ -222,7 +222,7 @@ async function postProof(session, plan) {
     deletionsStillSafe: deletionsStillSafe(after, session),
     productionSetStable: productionSetStable(after, plan),
     productionReady: isReadyProduction(after, session),
-    httpProduction: deps.http(CANONICAL_URL, SCOPE.team),
+    httpProduction: deps.http(CANONICAL_URL, SCOPE.team, SCOPE.project, SCOPE.projectId),
   };
   if (!proofHolds(summary.postproof, lost)) refuse('postproof-failed');
 }

@@ -94,14 +94,41 @@ export async function main(argv, deps, io = console) {
 export function parseHttpStatus(output) {
   if (typeof output !== 'string') return '';
   const statuses = [...output.matchAll(/^HTTP\/[\d.]+\s+(\d{3})(?:\s+[^\r\n]*)?\s*$/gm)];
-  return statuses.at(-1)?.[1] ?? '';
+  return statuses.length === 1 ? statuses[0][1] : '';
 }
 
-// QNBS-v3: authority first binds this canonical URL to Production; a team-scoped Vercel CLI HEAD honors SSO without changing project protection.
-export function authenticatedHttpStatus(run, url, team) {
-  if (typeof team !== 'string' || team === '') return '';
+function existingAutomationBypassSecret(run, team, project, projectId) {
+  if ([team, project, projectId].some((value) => typeof value !== 'string' || value === ''))
+    return '';
   try {
-    const response = run('vercel', ['--scope', team, 'curl', '--head', '--location', url]);
+    const output = run('vercel', [
+      '--scope',
+      team,
+      'project',
+      'protection',
+      project,
+      '--format',
+      'json',
+    ]);
+    const settings = JSON.parse(output);
+    if (settings.projectId !== projectId || settings.name !== project) return '';
+    const secrets = Object.entries(settings.protectionBypass ?? {}).filter(
+      ([secret, details]) => secret !== '' && details && details.scope === 'automation-bypass',
+    );
+    return secrets.length === 1 ? secrets[0][0] : '';
+  } catch {
+    return '';
+  }
+}
+
+// QNBS-v3: authority first binds this URL to Production; pass one existing scoped secret explicitly so vercel curl cannot create a project bypass during a read-only dry-run.
+export function authenticatedHttpStatus(run, url, team, project, projectId) {
+  const secret = existingAutomationBypassSecret(run, team, project, projectId);
+  if (!secret) return '';
+  try {
+    const response = run('vercel', ['--scope', team, 'curl', '--head', url], {
+      env: { VERCEL_AUTOMATION_BYPASS_SECRET: secret },
+    });
     return parseHttpStatus(response);
   } catch {
     return '';
@@ -110,11 +137,11 @@ export function authenticatedHttpStatus(run, url, team) {
 
 function realDeps() {
   const env = { ...process.env, NO_UPDATE_NOTIFIER: '1', VERCEL_TELEMETRY_DISABLED: '1' };
-  const run = (command, args) =>
+  const run = (command, args, options = {}) =>
     execFileSync(command, args, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-      env,
+      env: { ...env, ...options.env },
       maxBuffer: 64 * 1024 * 1024,
       timeout: 120000,
     });
@@ -122,7 +149,8 @@ function realDeps() {
     vercel: (args) => run('vercel', args),
     gh: (args) => run('gh', args),
     git: (args) => run('git', args),
-    http: (url, team) => authenticatedHttpStatus(run, url, team),
+    http: (url, team, project, projectId) =>
+      authenticatedHttpStatus(run, url, team, project, projectId),
     packageJson: () => readFileSync('package.json', 'utf8'),
     holds: () => readFileSync(HOLDS_PATH, 'utf8'),
     lock: () => acquireLock(),

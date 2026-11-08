@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Vercel retention:** Check the protected canonical Production URL with a team-scoped authenticated Vercel CLI request after verifying the exact-main deployment and aliases. Keep missing or non-200 responses fail-closed; document that this operator check does not establish anonymous reachability (PR #1198; issue #627).
+- **Vercel retention:** Check the protected canonical Production URL with a team-scoped Vercel CLI request using one existing project automation-bypass secret; do not create or rotate secrets from a read-only run. Reject redirects and all responses except one HTTP 200, and document that the protected probe does not establish anonymous reachability (PR #1198; issue #627).
 
 - **Storage reset:** Limit factory and startup cleanup to exact app-owned storage keys, disclose intentionally retained ambiguous same-origin browser values, and retain the IndexedDB encryption salt until primary deletion succeeds. Require a complete IndexedDB inventory before any destructive reset step so dynamic Local-First stores cannot be missed; announce failures through a pre-mounted localized status region (PR #1196; successor to #1147; issue #1125).
 
