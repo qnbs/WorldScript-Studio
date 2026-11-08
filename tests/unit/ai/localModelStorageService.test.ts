@@ -38,7 +38,11 @@ vi.mock('@domain/ai-core', () => ({
 }));
 
 vi.mock('../../../hooks/useTranslation', () => ({
-  useTranslation: () => ({ t: (key: string) => key, language: 'en' }),
+  useTranslation: () => ({
+    t: (key: string, values?: Record<string, string>) =>
+      values?.count ? `${key}:${values.count}` : key,
+    language: 'en',
+  }),
 }));
 vi.mock('../../../contexts/LiveRegionContext', () => ({
   useAnnounce: () => componentMocks.announce,
@@ -285,10 +289,13 @@ describe('clearLocalModels', () => {
 
     const user = userEvent.setup();
     render(createElement(LocalAiSection));
-    await screen.findByText('settings.ai.localAi.storageModelsCached');
+    await screen.findByText('settings.ai.localAi.storageModelsCached:1');
+    expect(screen.getByText('settings.ai.localAi.readyBadge')).not.toBeNull();
+    expect(screen.getByText('settings.ai.localAi.storageModelsCached:1')).not.toBeNull();
     estimate.mockClear();
 
-    await user.click(screen.getByText('settings.ai.localAi.clearButton'));
+    const clearButton = screen.getByText('settings.ai.localAi.clearButton');
+    await user.click(clearButton);
     await user.click(screen.getByText('settings.ai.localAi.clearConfirmYes'));
 
     await waitFor(() =>
@@ -303,6 +310,9 @@ describe('clearLocalModels', () => {
     );
     expect(componentMocks.clearReady).toHaveBeenCalledTimes(1);
     expect(estimate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('settings.ai.localAi.readyBadge')).toBeNull();
+    expect(screen.getByText('settings.ai.localAi.storageModelsCached:1')).not.toBeNull();
+    expect(clearButton).toBeEnabled();
   });
 
   it('is a no-op delete count when the Cache API is absent', async () => {
