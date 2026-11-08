@@ -149,7 +149,7 @@ function expectedPlatformUrl(repository, version, asset) {
   return `https://github.com/${repository}/releases/download/v${version}/${fileName}`;
 }
 
-function validatePlatformEntry(platforms, platform, assetKey, context, errors) {
+function validatePlatformEntry({ platforms, platform, assetKey, context, errors }) {
   const entry = platforms[platform];
   if (!isObjectRecord(entry)) {
     errors.push(`latest.json is missing ${platform}`);
@@ -169,7 +169,7 @@ function validatePlatformEntry(platforms, platform, assetKey, context, errors) {
 
 function validatePlatformEntries(platforms, context, errors) {
   for (const [platform, assetKey] of PLATFORM_ASSETS) {
-    validatePlatformEntry(platforms, platform, assetKey, context, errors);
+    validatePlatformEntry({ platforms, platform, assetKey, context, errors });
   }
 }
 
@@ -199,10 +199,19 @@ function compareUploadedAsset(expectedName, local, remote, errors) {
     errors.push(`uploaded release is missing ${expectedName}`);
     return;
   }
-  if (Number(remote.size) !== Number(local.size)) {
+  const remoteSize = Number(remote.size);
+  if (!Number.isSafeInteger(remoteSize)) {
+    errors.push(`${expectedName} uploaded size is missing or invalid`);
+  } else if (remoteSize <= 0) {
+    errors.push(`${expectedName} uploaded size must be positive`);
+  } else if (remoteSize !== Number(local.size)) {
     errors.push(`${expectedName} uploaded size differs from the validated file`);
   }
-  if (remote.digest !== local.digest) {
+  if (typeof remote.digest !== 'string') {
+    errors.push(`${expectedName} uploaded SHA-256 digest is missing or invalid`);
+  } else if (!/^sha256:[0-9a-f]{64}$/.test(remote.digest)) {
+    errors.push(`${expectedName} uploaded SHA-256 digest is missing or invalid`);
+  } else if (remote.digest !== local.digest) {
     errors.push(`${expectedName} uploaded SHA-256 differs from the validated file`);
   }
 }
@@ -333,14 +342,48 @@ async function runValidateMode(version, directory, repository) {
   );
 }
 
-function parseRemoteAssetRecords(text) {
+function splitRemoteAssetFields(line) {
+  const fields = line.split('\t');
+  if (fields.length !== 3) {
+    throw new Error('remote release asset inventory has an invalid TSV record');
+  }
+  return fields;
+}
+
+function parseRemoteAssetSize(sizeText) {
+  if (!/^\d+$/.test(sizeText)) {
+    throw new Error('remote release asset inventory has a non-integer asset size');
+  }
+  const size = Number(sizeText);
+  if (!Number.isSafeInteger(size)) {
+    throw new Error('remote release asset inventory has an unsafe asset size');
+  }
+  if (size <= 0) throw new Error('remote release asset inventory has a non-positive asset size');
+  return size;
+}
+
+function parseRemoteAssetDigest(digest) {
+  if (!/^sha256:[0-9a-f]{64}$/.test(digest)) {
+    throw new Error('remote release asset inventory is missing or has an invalid SHA-256 digest');
+  }
+  return digest;
+}
+
+function parseRemoteAssetRecord(line) {
+  const [name = '', sizeText = '', digest = ''] = splitRemoteAssetFields(line);
+  if (!name) throw new Error('remote release asset inventory has an empty asset name');
+  return {
+    name,
+    size: parseRemoteAssetSize(sizeText),
+    digest: parseRemoteAssetDigest(digest),
+  };
+}
+
+export function parseRemoteAssetRecords(text) {
   const records = [];
-  for (const line of text.trim().split(/\r?\n/).filter(Boolean)) {
-    const fields = line.split('\t');
-    if (fields.length !== 3 || !fields[0] || !/^\d+$/.test(fields[1] ?? '')) {
-      throw new Error('remote release asset inventory has an invalid TSV record');
-    }
-    records.push({ name: fields[0], size: Number(fields[1]), digest: fields[2] ?? '' });
+  for (const line of text.split(/\r?\n/)) {
+    if (!line) continue;
+    records.push(parseRemoteAssetRecord(line));
   }
   return records;
 }
@@ -387,11 +430,11 @@ const MODE_HANDLERS = {
 
 async function main(args) {
   const [mode, version, directory, repository, inputFile] = args;
-  if (!mode || !version || !directory) {
-    throw new Error(
-      'usage: release-assets-guard.mjs <assets|generate|validate|remote> <version> <asset-dir> [repository] [input-file]',
-    );
-  }
+  const usage =
+    'usage: release-assets-guard.mjs <assets|generate|validate|remote> <version> <asset-dir> [repository] [input-file]';
+  if (!mode) throw new Error(usage);
+  if (!version) throw new Error(usage);
+  if (!directory) throw new Error(usage);
   const handler = MODE_HANDLERS[mode];
   if (!handler) throw new Error(`unknown release gate mode: ${mode}`);
   await handler(version, directory, repository, inputFile);

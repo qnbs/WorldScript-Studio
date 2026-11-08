@@ -477,6 +477,14 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$RELEASE_ID" || { echo "::error::draft release action did not return a release ID"; exit 1; }
+          STAGED_TAG="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.tag_name')"
+          test "$STAGED_TAG" = "$TAG" || { echo "::error::staged release tag changed before publication"; exit 1; }
+          DRAFT="$(gh api "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft')"
+          test "$DRAFT" = true || { echo "::error::release must remain a draft until its final asset inventory is verified"; exit 1; }
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh api --paginate --jq '.[] | [.name, (.size | tostring), (.digest // "")] | @tsv' \
+            "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/prepublish-release-assets.tsv"
+          node scripts/release-assets-guard.mjs remote "$VERSION" release-assets "$GITHUB_REPOSITORY" "$RUNNER_TEMP/prepublish-release-assets.tsv"
           gh api --method PATCH "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
             -F draft=false --jq 'if .draft == false then .html_url else error("release remained a draft") end'
 

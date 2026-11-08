@@ -417,8 +417,8 @@ describe('Tauri release workflow policy', () => {
 
   it('limits the updater-key preflight to workflow_dispatch on exact protected main and verifies both signature directions', () => {
     const preflight = extractJobBlock(tauriWorkflowSource, 'updater-signing-preflight');
-    expect(extractJobIf(preflight)).toContain(
-      "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
+    expect(extractJobIf(preflight).trim()).toBe(
+      `\${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}`,
     );
     expect(preflight).toContain(`ref: ${expr('github.sha')}`);
     expect(preflight).toMatch(/^ {4}permissions:\n {6}contents: read\s*$/m);
@@ -428,9 +428,23 @@ describe('Tauri release workflow policy', () => {
     expect(preflight).toContain(
       `TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${expr('secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD')}`,
     );
-    expect(preflight).toContain('--example verify-updater-artifact');
-    expect(preflight).toContain('--expect-failure --tamper');
-    expect(preflight).toContain('--expect-failure --wrong-key');
+    const signer = extractStepBlock(
+      preflight,
+      'Sign and cryptographically verify the configured updater key',
+    );
+    expect(
+      signer
+        .split('\n')
+        .filter((line) =>
+          /^ {10}cargo run --locked --manifest-path src-tauri\/Cargo\.toml --example verify-updater-artifact -- "\$PROBE" "\$PROBE\.sig"(?: |$)/.test(
+            line,
+          ),
+        ),
+    ).toEqual([
+      '          cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$PROBE" "$PROBE.sig"',
+      '          cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$PROBE" "$PROBE.sig" --expect-failure --tamper',
+      '          cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$PROBE" "$PROBE.sig" --expect-failure --wrong-key',
+    ]);
     expect(preflight).not.toContain('upload-artifact');
     expect(preflight).not.toContain('contents: write');
   });
@@ -460,6 +474,7 @@ describe('Tauri release workflow policy', () => {
   it('fails closed on missing upload files and validates a complete draft before public release', () => {
     const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
     const release = extractJobBlock(tauriWorkflowSource, 'release');
+    const publish = extractStepBlock(release, 'Publish the verified complete draft');
     expect(bundle).toContain('if-no-files-found: error');
     expect(release).toContain('release-assets-guard.mjs assets');
     expect(release).toContain('release-assets-guard.mjs generate');
@@ -471,15 +486,24 @@ describe('Tauri release workflow policy', () => {
     expect(release).toContain('release-assets-guard.mjs remote');
     expect(release).toContain('merge-multiple: false');
     expect(release).toContain('gh api --method PATCH');
-    expect(
+    const releaseStepIndexes = [
       release.indexOf('Generate and validate all three signed updater manifest entries'),
-    ).toBeLessThan(release.indexOf('Stage GitHub Release as a draft'));
-    expect(
+      release.indexOf('Stage GitHub Release as a draft'),
       release.indexOf('Verify the complete uploaded draft asset inventory and SHA-256 digests'),
-    ).toBeLessThan(release.indexOf('Publish the verified complete draft'));
-    expect(release.indexOf('Publish the verified complete draft')).toBeLessThan(
+      release.indexOf('Publish the verified complete draft'),
       release.indexOf('Verify published release state and final asset inventory'),
-    );
+    ];
+    expect(releaseStepIndexes.every((index) => index >= 0)).toBe(true);
+    expect(releaseStepIndexes).toEqual([...releaseStepIndexes].sort((left, right) => left - right));
+    const prepublishIndexes = [
+      publish.indexOf('gh api --paginate --jq'),
+      publish.indexOf('prepublish-release-assets.tsv'),
+      publish.indexOf('node scripts/release-assets-guard.mjs remote'),
+      publish.indexOf('gh api --method PATCH'),
+    ];
+    expect(prepublishIndexes.every((index) => index >= 0)).toBe(true);
+    expect(prepublishIndexes).toEqual([...prepublishIndexes].sort((left, right) => left - right));
+    expect(publish).toContain('/releases/$RELEASE_ID/assets?per_page=100');
     expect(release).not.toContain('/releases/tags/$TAG');
     expect(release).not.toContain('gh release upload');
   });

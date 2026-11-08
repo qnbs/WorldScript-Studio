@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parseRemoteAssetRecords,
   validateLatestManifest,
   validateReleaseAssetNames,
   validateRemoteAssetRecords,
@@ -177,6 +178,15 @@ describe('uploaded release asset verification', () => {
   it('requires the uploaded inventory and SHA-256 digests to match the validated local files', () => {
     const localAsset = { name: 'latest.json', size: 32, digest: `sha256:${'a'.repeat(64)}` };
     const local = [localAsset];
+    expect(parseRemoteAssetRecords(`latest.json\t32\t${localAsset.digest}`)).toEqual([
+      { name: 'latest.json', size: 32, digest: localAsset.digest },
+    ]);
+    expect(() => parseRemoteAssetRecords('latest.json\tNaN\tsha256:invalid')).toThrow(
+      'non-integer asset size',
+    );
+    expect(() => parseRemoteAssetRecords('latest.json\t32\t')).toThrow(
+      'missing or has an invalid SHA-256 digest',
+    );
     expect(
       validateRemoteAssetRecords(local, [
         { name: 'latest.json', size: 32, digest: localAsset.digest },
@@ -193,6 +203,9 @@ describe('uploaded release asset verification', () => {
         { name: 'latest.json', size: 32, digest: `sha256:${'b'.repeat(64)}` },
       ]).ok,
     ).toBe(false);
+    expect(
+      validateRemoteAssetRecords(local, [{ name: 'latest.json', size: 32, digest: '' }]).errors,
+    ).toContain('latest.json uploaded SHA-256 digest is missing or invalid');
     expect(
       validateRemoteAssetRecords(local, [
         { name: 'latest.json', size: 32, digest: localAsset.digest },

@@ -206,5 +206,5 @@ See [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) for full secrets reference and p
 
 - macOS notarization requires `APPLE_*` secrets — see [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) § macOS code signing.
 - Windows Authenticode signing requires a CA-issued Authenticode certificate — track in [`TODO.md`](../TODO.md).
-- Promoting `tauri-intel-qualification.yml`'s `macos-15-intel` build into the production release matrix (real `latest.json` entry, `darwin-x86_64` updater key, ongoing soak testing) — see `docs/native/INTEL-MACOS-QUALIFICATION.md` for current status and the tracking issue.
+- Promoting `tauri-intel-qualification.yml`'s `macos-15-intel` build into the production release matrix requires extending the release guard's enumerated installer and updater-key matrix, its signed-manifest validation, and the platform-specific release tests before adding a real `darwin-x86_64` `latest.json` entry; ongoing soak testing is also required. See `docs/native/INTEL-MACOS-QUALIFICATION.md` for current status and the tracking issue.
 ```

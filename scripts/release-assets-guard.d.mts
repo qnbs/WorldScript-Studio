@@ -48,3 +48,5 @@ export function validateRemoteAssetRecords(
   localAssets: readonly ReleaseAssetRecord[],
   remoteAssets: readonly RemoteReleaseAssetRecord[],
 ): { ok: boolean; errors: string[] };
+
+export function parseRemoteAssetRecords(text: string): RemoteReleaseAssetRecord[];
