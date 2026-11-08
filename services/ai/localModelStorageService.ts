@@ -27,6 +27,12 @@ export interface LocalModelStorageEstimate {
 
 export interface ClearLocalModelsResult {
   clearedCaches: number;
+  failedCaches: number;
+}
+
+interface ModelCacheNamesResult {
+  names: string[];
+  failed: boolean;
 }
 
 function hasCacheApi(): boolean {
@@ -41,14 +47,14 @@ function isModelCacheName(name: string): boolean {
   return LOCAL_MODEL_CACHE_PATTERNS.some((re) => re.test(name));
 }
 
-async function listModelCacheNames(): Promise<string[]> {
-  if (!hasCacheApi()) return [];
+async function listModelCacheNames(): Promise<ModelCacheNamesResult> {
+  if (!hasCacheApi()) return { names: [], failed: false };
   try {
     const keys = await caches.keys();
-    return keys.filter(isModelCacheName);
+    return { names: keys.filter(isModelCacheName), failed: false };
   } catch (err) {
     logger.warn('localModelStorage: caches.keys() failed', { err: String(err) });
-    return [];
+    return { names: [], failed: true };
   }
 }
 
@@ -58,7 +64,7 @@ async function listModelCacheNames(): Promise<string[]> {
  * estimate (the dominant contributor is the model weights) and `modelCacheCount` proves models exist.
  */
 export async function estimateLocalModelStorage(): Promise<LocalModelStorageEstimate> {
-  const modelCacheCount = (await listModelCacheNames()).length;
+  const modelCacheCount = (await listModelCacheNames()).names.length;
 
   let usageMb: number | null = null;
   let quotaMb: number | null = null;
@@ -94,7 +100,7 @@ export async function estimateLocalModelStorage(): Promise<LocalModelStorageEsti
 /**
  * Free positively owned Transformers weights. Releases in-memory handles first, then
  * deletes only the app-namespaced Cache API bucket. Never throws —
- * partial failures are logged and the deleted count is returned so the UI can report honestly.
+ * partial failures are logged and counted so the UI can report them honestly.
  */
 export async function clearLocalModels(): Promise<ClearLocalModelsResult> {
   try {
@@ -110,20 +116,24 @@ export async function clearLocalModels(): Promise<ClearLocalModelsResult> {
     logger.warn('localModelStorage: releaseAllOnnxSessions failed', { err: String(err) });
   }
 
-  const names = await listModelCacheNames();
+  const { names, failed: listingFailed } = await listModelCacheNames();
   let clearedCaches = 0;
+  let failedCaches = listingFailed ? 1 : 0;
   for (const name of names) {
     try {
       const deleted = await caches.delete(name);
       if (deleted) clearedCaches += 1;
+      else failedCaches += 1;
     } catch (err) {
       logger.warn('localModelStorage: caches.delete failed', { cache: name, err: String(err) });
+      failedCaches += 1;
     }
   }
 
   logger.info('localModelStorage: cleared local model caches', {
     clearedCaches,
+    failedCaches,
     requested: names.length,
   });
-  return { clearedCaches };
+  return { clearedCaches, failedCaches };
 }

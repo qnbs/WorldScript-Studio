@@ -198,6 +198,7 @@ describe('clearLocalModels', () => {
 
     const result = await clearLocalModels();
     expect(result.clearedCaches).toBe(0);
+    expect(result.failedCaches).toBe(1);
     const estimate = await estimateLocalModelStorage();
     expect(estimate.modelCacheCount).toBe(1);
   });
@@ -208,7 +209,19 @@ describe('clearLocalModels', () => {
     const result = await clearLocalModels();
 
     expect(result.clearedCaches).toBe(0);
+    expect(result.failedCaches).toBe(1);
     expect(await estimateLocalModelStorage()).toMatchObject({ modelCacheCount: 1 });
+  });
+
+  it('reports cache enumeration failure so the UI does not announce a successful clear', async () => {
+    vi.stubGlobal('caches', {
+      keys: vi.fn(async () => {
+        throw new Error('synthetic cache listing failure');
+      }),
+      delete: vi.fn(),
+    });
+
+    await expect(clearLocalModels()).resolves.toEqual({ clearedCaches: 0, failedCaches: 1 });
   });
 
   it('is a no-op delete count when the Cache API is absent', async () => {
