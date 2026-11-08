@@ -41,6 +41,10 @@ const cloudflareWorkflowSource = readFileSync(cloudflareWorkflowPath, 'utf8');
 const scheduledSecurityWorkflowSource = readFileSync(scheduledSecurityWorkflowPath, 'utf8');
 const reviewerTrustWorkflowSource = readFileSync(reviewerTrustWorkflowPath, 'utf8');
 
+function namedStepIndex(jobBlock: string, name: string): number {
+  return jobBlock.split('\n').indexOf(`      - name: ${name}`);
+}
+
 // QNBS-v3: follow relative ESM imports so a new evaluator dependency fails this test until it is locked too.
 function evaluatorImportClosure(entry: string): string[] {
   const seen = new Set<string>();
@@ -494,20 +498,35 @@ describe('Tauri release workflow policy', () => {
       'a published release already exists for this tag; refusing overwrite',
     );
     const releaseStepIndexes = [
-      release.indexOf('Generate and validate all three signed updater manifest entries'),
-      release.indexOf('Refuse to overwrite a published release'),
-      release.indexOf('Stage GitHub Release as a draft'),
-      release.indexOf('Verify the complete uploaded draft asset inventory and SHA-256 digests'),
-      release.indexOf('Publish the verified complete draft'),
-      release.indexOf('Verify published release state and final asset inventory'),
+      namedStepIndex(release, 'Generate and validate all three signed updater manifest entries'),
+      namedStepIndex(release, 'Refuse to overwrite a published release'),
+      namedStepIndex(release, 'Stage GitHub Release as a draft'),
+      namedStepIndex(
+        release,
+        'Verify the complete uploaded draft asset inventory and SHA-256 digests',
+      ),
+      namedStepIndex(release, 'Publish the verified complete draft'),
+      namedStepIndex(release, 'Verify published release state and final asset inventory'),
     ];
     expect(releaseStepIndexes.every((index) => index >= 0)).toBe(true);
     expect(releaseStepIndexes).toEqual([...releaseStepIndexes].sort((left, right) => left - right));
+    const publishLines = publish.split('\n').map((line) => line.trimStart());
+    const assetFetchIndex = publishLines.findIndex((line) =>
+      line.startsWith('gh api --paginate --jq'),
+    );
+    expect(assetFetchIndex).toBeGreaterThanOrEqual(0);
+    expect(publishLines[assetFetchIndex + 1]).toContain(
+      '/releases/$RELEASE_ID/assets?per_page=100',
+    );
+    expect(publishLines[assetFetchIndex + 1]).toContain(
+      '$RUNNER_TEMP/prepublish-release-assets.tsv',
+    );
     const prepublishIndexes = [
-      publish.indexOf('gh api --paginate --jq'),
-      publish.indexOf('prepublish-release-assets.tsv'),
-      publish.indexOf('node scripts/release-assets-guard.mjs remote'),
-      publish.indexOf('gh api --method PATCH'),
+      assetFetchIndex,
+      publishLines.findIndex((line) =>
+        line.startsWith('node scripts/release-assets-guard.mjs remote'),
+      ),
+      publishLines.findIndex((line) => line.startsWith('gh api --method PATCH')),
     ];
     expect(prepublishIndexes.every((index) => index >= 0)).toBe(true);
     expect(prepublishIndexes).toEqual([...prepublishIndexes].sort((left, right) => left - right));

@@ -428,16 +428,25 @@ const MODE_HANDLERS = {
   remote: runRemoteMode,
 };
 
-async function main(args) {
+const CLI_USAGE =
+  'usage: release-assets-guard.mjs <assets|generate|validate|remote> <version> <asset-dir> [repository] [input-file]';
+
+function parseCliInvocation(args) {
   const [mode, version, directory, repository, inputFile] = args;
-  const usage =
-    'usage: release-assets-guard.mjs <assets|generate|validate|remote> <version> <asset-dir> [repository] [input-file]';
-  if (!mode) throw new Error(usage);
-  if (!version) throw new Error(usage);
-  if (!directory) throw new Error(usage);
+  if (!mode || !version || !directory) throw new Error(CLI_USAGE);
   const handler = Object.hasOwn(MODE_HANDLERS, mode) ? MODE_HANDLERS[mode] : undefined;
   if (!handler) throw new Error(`unknown release gate mode: ${mode}`);
-  await handler(version, directory, repository, inputFile);
+  return { handler, version, directory, repository, inputFile };
+}
+
+async function main(args) {
+  const invocation = parseCliInvocation(args);
+  await invocation.handler(
+    invocation.version,
+    invocation.directory,
+    invocation.repository,
+    invocation.inputFile,
+  );
 }
 
 if (process.argv[1] && basename(process.argv[1]) === 'release-assets-guard.mjs') {
