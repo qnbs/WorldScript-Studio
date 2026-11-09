@@ -23,7 +23,7 @@ const protectedDockerTagPushCondition = `${tagPushCondition} && github.ref_prote
 const tauriReleaseCondition = `${tagPushCondition} && ${gateCondition}`;
 const dockerTagPushCondition = `${protectedDockerTagPushCondition} && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && ${gateCondition}`;
 const proofTagSimulationCondition = `github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && inputs.simulated_tag_signature == 'verified' && ${gateCondition}`;
-const trustedVerifierSha = '71dd3b6395511eb9c20a8fed629559f5389ddb41';
+const trustedVerifierSha = '147470682b62d5bfe196bba803353d9f25cab8a7';
 
 function mutate(text: string, from: string, to: string): string {
   expect(text, `fixture anchor not found: ${from}`).toContain(from);

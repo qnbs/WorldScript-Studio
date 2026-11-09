@@ -83,7 +83,7 @@ const CHECKOUT_PIN = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
 const OSV_SCANNER = 'google/osv-scanner-action/osv-scanner-action@';
 const TAG_VERIFIER = 'node scripts/signing/verify-github-signatures.mjs';
 const TAG_VERIFIER_SCRIPT = 'scripts/signing/verify-github-signatures.mjs';
-const TAG_VERIFIER_SOURCE_SHA = '71dd3b6395511eb9c20a8fed629559f5389ddb41';
+const TAG_VERIFIER_SOURCE_SHA = '147470682b62d5bfe196bba803353d9f25cab8a7';
 
 function asList(value) {
   if (Array.isArray(value)) return value;
