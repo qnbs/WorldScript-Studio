@@ -20,8 +20,9 @@ const gateCondition =
 const tagPushCondition =
   "github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')";
 const protectedDockerTagPushCondition = `${tagPushCondition} && github.ref_protected == true`;
-const tauriReleaseCondition = `${tagPushCondition} && ${gateCondition}`;
 const dockerTagPushCondition = `${protectedDockerTagPushCondition} && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && ${gateCondition}`;
+// QNBS-v3: GHCR and Tauri publish behind the identical trusted-verifier conjunction.
+const tauriReleaseCondition = dockerTagPushCondition;
 const proofTagSimulationCondition = `github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && inputs.simulated_tag_signature == 'verified' && ${gateCondition}`;
 const trustedVerifierSha = '147470682b62d5bfe196bba803353d9f25cab8a7';
 
@@ -56,29 +57,32 @@ describe('#911 release security gate: shipped workflows', () => {
 
   it('Tauri and GHCR publish only from exact gated v* tag pushes', () => {
     expect(source(TAURI)).toContain(expr(tauriReleaseCondition));
-    expect(source(TAURI)).toContain('needs: [bundle, security-audit]');
+    expect(source(TAURI)).toContain('needs: [bundle, security-audit, verify-release-tag]');
     expect(source(DOCKER)).toContain(expr(dockerTagPushCondition));
     expect(source(DOCKER)).toContain('needs: [security-audit, verify-release-tag]');
   });
 
-  it('runs the read-only signature verifier from an immutable trusted checkout', () => {
-    const verifier = source(DOCKER).slice(source(DOCKER).indexOf('  verify-release-tag:\n'));
-    expect(verifier).toContain(expr(protectedDockerTagPushCondition));
-    expect(verifier).toContain('permissions:\n      contents: read');
-    expect(verifier).toContain(`ref: ${trustedVerifierSha}`);
-    expect(verifier).toContain('path: trusted-verifier');
-    expect(verifier).toContain('fetch-depth: 1');
-    expect(verifier).toContain('persist-credentials: false');
-    expect(verifier).toContain('node scripts/signing/verify-github-signatures.mjs');
-    expect(verifier).toContain(
-      `verified-tag-sha: ${expr('steps.verify.outputs.verified-tag-sha')}`,
-    );
-    expect(verifier).toContain('echo "verified-tag-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"');
-    expect(verifier).toContain(`GITHUB_REF_TYPE: ${expr('github.ref_type')}`);
-    expect(verifier).toContain(`GITHUB_SHA: ${expr('github.sha')}`);
-    expect(verifier).toContain(`GITHUB_TOKEN: ${expr('github.token')}`);
-    expect(verifier).toContain('env -i PATH="$PATH"');
-  });
+  it.each([DOCKER, TAURI])(
+    '%s runs the read-only signature verifier from an immutable trusted checkout',
+    (name) => {
+      const verifier = source(name).slice(source(name).indexOf('  verify-release-tag:\n'));
+      expect(verifier).toContain(expr(protectedDockerTagPushCondition));
+      expect(verifier).toContain('permissions:\n      contents: read');
+      expect(verifier).toContain(`ref: ${trustedVerifierSha}`);
+      expect(verifier).toContain('path: trusted-verifier');
+      expect(verifier).toContain('fetch-depth: 1');
+      expect(verifier).toContain('persist-credentials: false');
+      expect(verifier).toContain('node scripts/signing/verify-github-signatures.mjs');
+      expect(verifier).toContain(
+        `verified-tag-sha: ${expr('steps.verify.outputs.verified-tag-sha')}`,
+      );
+      expect(verifier).toContain('echo "verified-tag-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"');
+      expect(verifier).toContain(`GITHUB_REF_TYPE: ${expr('github.ref_type')}`);
+      expect(verifier).toContain(`GITHUB_SHA: ${expr('github.sha')}`);
+      expect(verifier).toContain(`GITHUB_TOKEN: ${expr('github.token')}`);
+      expect(verifier).toContain('env -i PATH="$PATH"');
+    },
+  );
 
   it('rejects a Docker publish job that could run from workflow_dispatch', () => {
     const dispatchCanPublish = mutate(
@@ -285,6 +289,151 @@ describe('#911 release security gate: shipped workflows', () => {
   });
 });
 
+describe('#1206 Tauri release trusts only the pinned-verifier proof', () => {
+  const releaseWith = (condition: string) =>
+    mutate(source(TAURI), expr(tauriReleaseCondition), expr(condition));
+  const withoutPart = (part: string) => releaseWith(tauriReleaseCondition.replace(part, ''));
+  const releaseCheckout = (ref: string) =>
+    `- name: Check out the exact audited commit\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${expr(ref)}`;
+
+  it('builds with the signing secrets only for the verified tag target and the exact commit', () => {
+    expect(source(TAURI)).toMatch(
+      /needs\.verify-release-tag\.result == 'success' &&\s+needs\.verify-release-tag\.outputs\.verified-tag-sha == github\.sha\s+\)/,
+    );
+    expect(source(TAURI)).toContain(
+      `ref: ${expr('github.sha')}\n          persist-credentials: false\n      # QNBS-v3: composite action`,
+    );
+  });
+
+  it.each<[string, () => string, RegExp]>([
+    [
+      'a release that could run from workflow_dispatch',
+      () => withoutPart(`${tagPushCondition} && `),
+      /job "release" if: must require github\.event_name == 'push'/,
+    ],
+    [
+      'a release for an unprotected tag',
+      () => withoutPart(' && github.ref_protected == true'),
+      /job "release" if: must require github\.ref_protected == true/,
+    ],
+    [
+      'a release that ignores the verifier result',
+      () => withoutPart(" && needs.verify-release-tag.result == 'success'"),
+      /job "release" if: must require needs\.verify-release-tag\.result == 'success'/,
+    ],
+    [
+      'a release that ignores the verified tag target',
+      () => withoutPart(' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha'),
+      /job "release" if: must require needs\.verify-release-tag\.outputs\.verified-tag-sha == github\.sha/,
+    ],
+    [
+      'a release with a permissive OR branch',
+      () => releaseWith(`${tauriReleaseCondition} || true`),
+      /job "release" if: must not contain a permissive OR branch/,
+    ],
+    [
+      'a release behind a status function',
+      () => releaseWith(`always() && ${tauriReleaseCondition}`),
+      /job "release" if: must not use a status function/,
+    ],
+    [
+      'a release without the verifier job dependency',
+      () =>
+        mutate(
+          source(TAURI),
+          'needs: [bundle, security-audit, verify-release-tag]',
+          'needs: [bundle, security-audit]',
+        ),
+      /job "release" must need "verify-release-tag"/,
+    ],
+    [
+      'a release that checks out the mutable tag ref',
+      () => mutate(source(TAURI), releaseCheckout('github.sha'), releaseCheckout('github.ref')),
+      /job "release" must check out ref/,
+    ],
+    [
+      'a verifier that is not pinned to trusted code',
+      () => mutate(source(TAURI), `ref: ${trustedVerifierSha}`, `ref: ${expr('github.ref_name')}`),
+      /immutable trusted verifier/,
+    ],
+    [
+      'a verifier job for an unprotected tag',
+      () => mutate(source(TAURI), expr(protectedDockerTagPushCondition), expr(tagPushCondition)),
+      /job "verify-release-tag" if: must require github\.ref_protected == true/,
+    ],
+    [
+      'a verifier job that a manual dispatch can start',
+      () =>
+        mutate(
+          source(TAURI),
+          expr(protectedDockerTagPushCondition),
+          expr(
+            "github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')",
+          ),
+        ),
+      /job "verify-release-tag" if: must require github\.event_name == 'push'/,
+    ],
+    [
+      'a verifier that does not run the real signature check',
+      () =>
+        mutate(
+          source(TAURI),
+          'node scripts/signing/verify-github-signatures.mjs',
+          'node -e "process.exit(0)"',
+        ),
+      /must invoke node scripts\/signing\/verify-github-signatures\.mjs from the trusted checkout/,
+    ],
+    [
+      'a verifier wrapped in a preload',
+      () =>
+        mutate(
+          source(TAURI),
+          'node scripts/signing/verify-github-signatures.mjs',
+          'node --require=./preload.mjs scripts/signing/verify-github-signatures.mjs',
+        ),
+      /must run the pinned verifier from its trusted checkout with a clean environment/,
+    ],
+    [
+      'a verifier environment with NODE_OPTIONS',
+      () =>
+        mutate(
+          source(TAURI),
+          `GITHUB_SHA: ${expr('github.sha')}`,
+          `GITHUB_SHA: ${expr('github.sha')}\n          NODE_OPTIONS: --require=./preload.mjs`,
+        ),
+      /only the allowlisted real tag-push environment/,
+    ],
+    [
+      'a verifier output that is not the verified tag target',
+      () =>
+        mutate(
+          source(TAURI),
+          `verified-tag-sha: ${expr('steps.verify.outputs.verified-tag-sha')}`,
+          `verified-tag-sha: ${expr('github.sha')}`,
+        ),
+      /must expose only the verified tag target SHA/,
+    ],
+    [
+      'a verifier step that can be skipped',
+      () => addVerifierStepSetting(source(TAURI), 'if: false'),
+      /must not have an if:/,
+    ],
+    [
+      'a verifier step whose failure is ignored',
+      () => addVerifierStepSetting(source(TAURI), 'continue-on-error: true'),
+      /must not set continue-on-error/,
+    ],
+    [
+      'an inherited workflow environment',
+      () =>
+        mutate(source(TAURI), 'jobs:\n', 'env:\n  NODE_OPTIONS: --require=./preload.mjs\njobs:\n'),
+      /must not define inherited environment/,
+    ],
+  ])('rejects %s', (_label, build, expected) => {
+    expect(messages(TAURI, build())).toMatch(expected);
+  });
+});
+
 describe('#911 release security gate: weakening it fails', () => {
   it.each(
     (
@@ -292,8 +441,8 @@ describe('#911 release security gate: weakening it fails', () => {
         [
           'Tauri release without the audit need',
           TAURI,
-          'needs: [bundle, security-audit]',
-          'needs: [bundle]',
+          'needs: [bundle, security-audit, verify-release-tag]',
+          'needs: [bundle, verify-release-tag]',
           /must need "security-audit"/,
         ],
         [
