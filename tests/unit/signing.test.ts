@@ -890,7 +890,7 @@ describe('GitHub signature API controls', () => {
           JSON.stringify({
             status: 'identical',
             base_commit: { sha: targetSha },
-            head_commit: { sha: targetSha },
+            merge_base_commit: { sha: targetSha },
           }),
           { status: 200 },
         );
@@ -904,6 +904,7 @@ describe('GitHub signature API controls', () => {
       fetchImpl: tagFetch,
     });
     expect(tag.ok).toBe(true);
+    expect(tag.verifiedTagSha).toBe(targetSha);
     expect(tag.reports).toHaveLength(2);
 
     const lightweight = await verifyRemoteTag({

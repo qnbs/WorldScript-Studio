@@ -50,14 +50,14 @@ try {
     }
   } else if (event === 'push' && process.env.GITHUB_REF_TYPE === 'tag') {
     const payload = readEventPayload();
-    const expectedRef = `refs/tags/${process.env.GITHUB_REF_NAME ?? ''}`;
-    if (payload.ref !== expectedRef || !process.env.GITHUB_REF_NAME?.startsWith('v'))
+    const tagName = process.env.GITHUB_REF_NAME ?? '';
+    if (payload.ref !== `refs/tags/${tagName}` || !tagName.startsWith('v'))
       fail('push event ref does not match the requested version tag');
     const expectedCommitSha = expectedTagCommitSha(payload.after, process.env.GITHUB_SHA);
     result = await verifyRemoteTag({
       owner,
       repo,
-      tag: process.env.GITHUB_REF_NAME,
+      tag: tagName,
       expectedCommitSha,
       token,
       fetchImpl,

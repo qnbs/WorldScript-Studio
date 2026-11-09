@@ -22,6 +22,10 @@ export interface RemoteResult {
   reason: string;
 }
 
+export interface VerifiedTagResult extends RemoteResult {
+  verifiedTagSha?: string;
+}
+
 export interface RemoteOptions {
   owner: string;
   repo: string;
@@ -54,4 +58,4 @@ export function verifyRemoteTag(options: {
   expectedCommitSha: string;
   token?: string;
   fetchImpl?: typeof fetch;
-}): Promise<RemoteResult>;
+}): Promise<VerifiedTagResult>;
