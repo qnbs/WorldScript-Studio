@@ -83,11 +83,11 @@ describe('#911 release security gate: shipped workflows', () => {
   it('rejects a Docker publish job that could run from workflow_dispatch', () => {
     const dispatchCanPublish = mutate(
       source(DOCKER),
-      "github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && ",
-      '',
+      expr(dockerTagPushCondition),
+      expr(dockerTagPushCondition.replace(`${tagPushCondition} && `, '')),
     );
     expect(messages(DOCKER, dispatchCanPublish)).toMatch(
-      /must require github\.event_name == 'push'/,
+      /job "build-push" if: must require github\.event_name == 'push'/,
     );
   });
 
@@ -105,10 +105,17 @@ describe('#911 release security gate: shipped workflows', () => {
   it('rejects a workflow_dispatch even when its ref happens to be a v* tag', () => {
     const dispatchOnTag = mutate(
       source(DOCKER),
-      "github.event_name == 'push'",
-      "github.event_name == 'workflow_dispatch'",
+      expr(dockerTagPushCondition),
+      expr(
+        dockerTagPushCondition.replace(
+          "github.event_name == 'push'",
+          "github.event_name == 'workflow_dispatch'",
+        ),
+      ),
     );
-    expect(messages(DOCKER, dispatchOnTag)).toMatch(/must require github\.event_name == 'push'/);
+    expect(messages(DOCKER, dispatchOnTag)).toMatch(
+      /job "build-push" if: must require github\.event_name == 'push'/,
+    );
   });
 
   it('rejects a permissive OR branch even when the required tag and audit predicates remain', () => {
