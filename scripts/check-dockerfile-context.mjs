@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// QNBS-v3 (#1223): every COPY/ADD source of the Dockerfile must exist in the build context and must not be excluded by .dockerignore; a stale source otherwise fails the container build only at the tag-gated publish job.
+// QNBS-v3 (#1223): every build-context COPY/ADD source of the Dockerfile must exist inside the build context and must not be excluded by .dockerignore; a stale source otherwise fails the container build only at the tag-gated publish job. Stage copies (COPY --from) read files a RUN step produces and cannot be checked statically; only a real container build covers them.
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { posix, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -10,11 +10,15 @@ const UNSUPPORTED_SOURCE = /[*?[\]$]|^[a-z]+:\/\//i;
 
 const isContentLine = (line) => line !== '' && !line.startsWith('#');
 
-// One logical instruction per string: backslash continuations are joined first.
+// One logical instruction per string. Docker removes comment lines before it joins backslash continuations, so a comment never continues and a comment inside a continuation disappears.
 const logicalLines = (text) =>
   text
-    .replace(/\\\r?\n/g, ' ')
     .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => !line.startsWith('#'))
+    .join('\n')
+    .replace(/\\\n/g, ' ')
+    .split('\n')
     .map((line) => line.trim())
     .filter(isContentLine);
 
@@ -97,6 +101,18 @@ function ignoreRules(text) {
     }));
 }
 
+// Pattern syntax this matcher does not implement ("?", character classes, escapes, "**"); it is reported instead of being read as a literal.
+const UNSUPPORTED_IGNORE = /[?[\]\\]|\*\*/;
+
+function ignorePatternErrors(dockerignoreText) {
+  return ignoreRules(dockerignoreText)
+    .filter((rule) => UNSUPPORTED_IGNORE.test(rule.pattern))
+    .map(
+      (rule) =>
+        `unsupported .dockerignore pattern (extend the check before using it): ${rule.pattern}`,
+    );
+}
+
 /** .dockerignore: root-anchored patterns, the last matching pattern wins, "!" re-includes. */
 export function dockerignoreExcludes(dockerignoreText, path) {
   return ignoreRules(dockerignoreText).reduce(
@@ -105,11 +121,12 @@ export function dockerignoreExcludes(dockerignoreText, path) {
   );
 }
 
-const normalize = (source) =>
-  source === '.' ? '.' : source.replace(/^\.\//, '').replace(/\/+$/, '');
+const escapesContext = (path) => posix.isAbsolute(path) || path === '..' || path.startsWith('../');
 
 function sourceProblem({ source, dockerignore, exists }) {
-  const path = normalize(source);
+  const normalized = posix.normalize(source);
+  if (escapesContext(normalized)) return `COPY/ADD source is outside the build context: ${source}`;
+  const path = normalized === '.' ? '.' : normalized.replace(/\/+$/, '');
   if (!exists(path)) return `COPY/ADD source is missing from the build context: ${source}`;
   const ignored = path !== '.' && dockerignoreExcludes(dockerignore, path);
   return ignored ? `COPY/ADD source is excluded by .dockerignore: ${source}` : null;
@@ -120,7 +137,7 @@ export function checkDockerfileContext({ dockerfile, dockerignore, exists }) {
   const problems = sources
     .map((source) => sourceProblem({ source, dockerignore, exists }))
     .filter(Boolean);
-  const all = [...errors, ...problems];
+  const all = [...errors, ...ignorePatternErrors(dockerignore), ...problems];
   return { ok: all.length === 0, errors: all, sources };
 }
 

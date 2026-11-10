@@ -100,3 +100,62 @@ describe('.dockerignore matching', () => {
     expect(dockerignoreExcludes('!keep\nkeep\n', 'keep')).toBe(true);
   });
 });
+
+describe('review findings on the checker (#1224)', () => {
+  it('does not let a comment that ends in a backslash swallow the next instruction', () => {
+    const { sources } = dockerfileCopySources('# keep the next line \\\nCOPY real.txt ./');
+
+    expect(sources).toEqual(['real.txt']);
+  });
+
+  it('drops a comment inside a continued instruction before joining the lines', () => {
+    const { sources } = dockerfileCopySources('COPY a.txt \\\n# a comment\n  ./dest/');
+
+    expect(sources).toEqual(['a.txt']);
+  });
+
+  it.each([
+    ['file?.json', 'a question mark'],
+    ['[ab]x', 'a character class'],
+    ['**/cache', 'a double star'],
+    ['a\\*b', 'an escape'],
+  ])(
+    'reports the unsupported .dockerignore pattern %s (%s) instead of reading it literally',
+    (pattern) => {
+      const result = checkDockerfileContext({
+        dockerfile: 'COPY file1.json ./',
+        dockerignore: `${pattern}\n`,
+        exists: () => true,
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.errors).toEqual([
+        `unsupported .dockerignore pattern (extend the check before using it): ${pattern}`,
+      ]);
+    },
+  );
+
+  it.each(['../secret', '/etc/passwd', 'a/../../b', '..'])(
+    'rejects the source %s that leaves the build context',
+    (source) => {
+      const result = checkDockerfileContext({
+        dockerfile: `COPY ${source} ./`,
+        dockerignore: '',
+        exists: () => true,
+      });
+
+      expect(result.errors).toEqual([`COPY/ADD source is outside the build context: ${source}`]);
+    },
+  );
+
+  it('normalizes a source that stays inside the context', () => {
+    const present = new Set(['b']);
+    const result = checkDockerfileContext({
+      dockerfile: 'COPY ./a/../b/ ./',
+      dockerignore: '',
+      exists: (path) => present.has(path),
+    });
+
+    expect(result.errors).toEqual([]);
+  });
+});
