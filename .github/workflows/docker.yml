@@ -82,7 +82,7 @@ jobs:
       - name: Check out the pinned trusted verifier
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: d348d863f0cc230e3fad64924eb8c76dab91ad0e
+          ref: d46ae7969b6a8034de0c998ac3376e4fb7474f4a
           path: trusted-verifier
           fetch-depth: 1
           persist-credentials: false
