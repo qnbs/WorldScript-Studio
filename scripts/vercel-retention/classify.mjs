@@ -90,11 +90,14 @@ const unknownReasons = (deployment) =>
 
 const FAILED_STATES = new Set(['ERROR', 'CANCELED']);
 
-// QNBS-v3: a deployment belongs to an open PR when it carries that PR's number or, because a push that predates the PR (or a provider that omitted the number) leaves no number, when it was built from the head branch of an open PR. A branch that merely still exists does not count: merged branches are kept and would pin every Preview forever.
+// QNBS-v3: a deployment belongs to an open PR when it carries that PR's number or, only when it carries no number at all (a push that predates the PR, or a provider that omitted it), when it was built from the head branch of an open PR. An explicit number of a closed PR is never overridden by a shared branch name, and a branch that merely still exists does not count: merged branches are kept and would pin every Preview forever.
+const hasNoPrNumber = (meta) => [undefined, null, ''].includes(meta.githubPrId);
+
 const belongsToOpenPr = (meta, context) =>
-  [context.prNumbers.has(meta.githubPrId), context.openPrBranches.has(meta.githubCommitRef)].some(
-    Boolean,
-  );
+  [
+    context.prNumbers.has(meta.githubPrId),
+    hasNoPrNumber(meta) && context.openPrBranches.has(meta.githubCommitRef),
+  ].some(Boolean);
 
 // QNBS-v3: only an open PR needs its failed or canceled Preview.
 function failedPreviewNeeded(deployment, context) {

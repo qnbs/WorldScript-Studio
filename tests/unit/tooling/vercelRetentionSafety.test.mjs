@@ -129,6 +129,18 @@ test('a Preview without a PR number on a branch that heads no open PR stays dele
   assert.ok(summary.deleted.includes('dpl_prev32'));
 });
 
+// QNBS-v3 (#1213 review): an explicit closed-PR number is not overridden by a branch name that an open fork PR happens to share.
+test('a Preview of a closed PR is not kept because an open PR reuses its branch name', async () => {
+  const world = standardWorld();
+  find(world, 'dpl_prev11').meta.githubCommitRef = 'feat/open';
+  world.aliases.push(
+    aliasEntry('worldscript-studio-feat-open-stale.vercel.app', 'dpl_prev11', 262),
+  );
+  const summary = await reconcile(world);
+  assert.deepEqual(verdicts(summary).dpl_prev11.reasons, []);
+  assert.ok(summary.deleted.includes('dpl_prev11'));
+});
+
 test('an alias read twice with different content means the inventory moved and is refused', async () => {
   const world = standardWorld();
   world.pageSize = 4;
