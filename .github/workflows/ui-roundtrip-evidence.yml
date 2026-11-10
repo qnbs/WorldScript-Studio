@@ -106,6 +106,11 @@ jobs:
             if ($code -ne 0) { throw "phase $phase reported failed checks" }
           }
 
+          # The environment variable is ignored by this app, so use the documented WebView2 registry override for the app executable.
+          $argKey = 'HKCU:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $argKey -Force | Out-Null
+          New-ItemProperty -Path $argKey -Name 'worldscript-studio.exe' -Value '--remote-debugging-port=9222 --remote-allow-origins=*' -PropertyType String -Force | Out-Null
+          Write-Host "registry override: $((Get-ItemProperty -Path $argKey).'worldscript-studio.exe')"
           $oldSetup = (Get-ChildItem old -Filter '*x64-setup.exe' | Select-Object -First 1).FullName
           $p = Start-Process -FilePath $oldSetup -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "old NSIS setup exit code $($p.ExitCode)" }
