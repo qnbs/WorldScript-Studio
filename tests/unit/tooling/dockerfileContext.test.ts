@@ -90,6 +90,9 @@ describe('.dockerignore matching', () => {
     ['/packages/', 'packages', true],
     ['packages', 'packages-extra', false],
     ['src-tauri/target', 'src-tauri', false],
+    // A wildcard that matches a parent directory excludes everything below it (#1224 review).
+    ['packages/*', 'packages/sub/file', true],
+    ['build*', 'build-out/x.txt', true],
   ])('pattern %s against %s is %s', (pattern, path, expected) => {
     expect(dockerignoreExcludes(`${pattern}\n`, path)).toBe(expected);
   });
