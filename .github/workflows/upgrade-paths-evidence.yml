@@ -7,6 +7,9 @@ on:
   push:
     branches:
       - 'evidence/upgrade-paths-*'
+    paths-ignore:
+      - '.github/workflows/ui-roundtrip-evidence.yml'
+      - 'evidence/ui-roundtrip/**'
 
 permissions:
   contents: read

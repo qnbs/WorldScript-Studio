@@ -1,0 +1,127 @@
+# Throwaway evidence workflow for the v1.29.3 qualification. It lives only on an evidence branch and is never merged.
+# It installs the published v1.29.2 NSIS setup on a real Windows runner, creates a project and text through the packaged UI,
+# upgrades to the non-publishing candidate installer, and reads the data back through the packaged UI of the new version.
+
+name: UI roundtrip evidence
+
+on:
+  push:
+    branches:
+      - 'evidence/upgrade-paths-*'
+    paths:
+      - '.github/workflows/ui-roundtrip-evidence.yml'
+      - 'evidence/ui-roundtrip/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-roundtrip-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows packaged UI roundtrip across the upgrade
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out the evidence script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the candidate bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: tauri-bundle-windows-latest
+          path: cand
+          run-id: 42808890729
+          github-token: ${{ github.token }}
+      - name: Download the published v1.29.2 setup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download v1.29.2 --repo "$env:GITHUB_REPOSITORY" --pattern '*x64-setup.exe' --dir old
+      - name: Install the debugging client
+        working-directory: evidence/ui-roundtrip
+        run: npm install --no-save --no-audit --no-fund playwright-core@1.64.1
+      - name: Roundtrip across the upgrade
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:RUNNER_TEMP 'roundtrip'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $suffix = [guid]::NewGuid().ToString('N').Substring(0, 12)
+          $token1 = "ROUNDTRIP-OLD-$suffix"
+          $token2 = "ROUNDTRIP-NEW-$suffix"
+          $data = Join-Path $env:LOCALAPPDATA 'com.worldscript.studio'
+          function Get-Entries {
+            $roots = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+            @(Get-ItemProperty -Path $roots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'WorldScript Studio*' })
+          }
+          function Start-App($entry) {
+            $exe = Join-Path $entry.InstallLocation.Trim('"') 'worldscript-studio.exe'
+            $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
+            Start-Process -FilePath $exe -PassThru
+          }
+          function Stop-App {
+            Get-Process -Name 'worldscript-studio' -ErrorAction SilentlyContinue | ForEach-Object { [void]$_.CloseMainWindow() }
+            Start-Sleep -Seconds 10
+            Get-Process -Name 'worldscript-studio' -ErrorAction SilentlyContinue | Stop-Process -Force
+            Get-Process -Name 'msedgewebview2' -ErrorAction SilentlyContinue | Stop-Process -Force
+            Start-Sleep -Seconds 3
+          }
+          function Invoke-Phase([string]$phase, [string[]]$more) {
+            Push-Location (Join-Path $env:GITHUB_WORKSPACE 'evidence/ui-roundtrip')
+            node roundtrip.mjs $phase $out $token1 @more
+            $code = $LASTEXITCODE
+            Pop-Location
+            if ($code -ne 0) { throw "phase $phase reported failed checks" }
+          }
+
+          $oldSetup = (Get-ChildItem old -Filter '*x64-setup.exe' | Select-Object -First 1).FullName
+          $p = Start-Process -FilePath $oldSetup -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "old NSIS setup exit code $($p.ExitCode)" }
+          $old = Get-Entries
+          if ($old.Count -ne 1 -or $old[0].DisplayVersion -ne '1.29.2') { throw "expected one 1.29.2 entry, found: $($old | ConvertTo-Json -Compress)" }
+
+          Write-Host '== 1. v1.29.2: create a project and text through the packaged UI'
+          [void](Start-App $old[0])
+          try { Invoke-Phase 'seed' @() } finally { Stop-App }
+
+          $newSetup = (Get-ChildItem cand -Recurse -Filter '*_1.29.3_x64-setup.exe' | Select-Object -First 1).FullName
+          $p = Start-Process -FilePath $newSetup -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "new NSIS setup exit code $($p.ExitCode)" }
+          $new = Get-Entries
+          if ($new.Count -ne 1 -or $new[0].DisplayVersion -ne '1.29.3') { throw "expected one 1.29.3 entry, found: $($new | ConvertTo-Json -Compress)" }
+          $productVersion = (Get-Item (Join-Path $new[0].InstallLocation.Trim('"') 'worldscript-studio.exe')).VersionInfo.ProductVersion
+          if ($productVersion -notlike '1.29.3*') { throw "installed binary reports $productVersion" }
+
+          Write-Host '== 2. candidate: read the v1.29.2 data back, then write more'
+          [void](Start-App $new[0])
+          try { Invoke-Phase 'verify' @('--seed-json', (Join-Path $out 'result-seed.json'), '--append', $token2) } finally { Stop-App }
+          Copy-Item (Join-Path $out 'result-verify.json') (Join-Path $out 'result-verify-after-upgrade.json')
+
+          Write-Host '== 3. candidate restarted: the text written by both versions is still there'
+          [void](Start-App $new[0])
+          try { Invoke-Phase 'verify' @('--expect', "$token1,$token2") } finally { Stop-App }
+
+          Write-Host '== 4. negative control: with the profile data removed the check must see nothing'
+          foreach ($dir in 'IndexedDB', 'Local Storage', 'Session Storage', 'File System') {
+            $path = Join-Path $data "EBWebView\Default\$dir"
+            if (Test-Path $path) { Remove-Item -Recurse -Force $path }
+          }
+          [void](Start-App $new[0])
+          try { Invoke-Phase 'absent' @() } finally { Stop-App }
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows packaged UI roundtrip 1.29.2 to 1.29.3`n- project and text created in the packaged v1.29.2 UI, read back in the packaged $productVersion UI after an NSIS upgrade`n- the candidate wrote more text, which survived a restart together with the old text`n- negative control (profile data removed) shows the check can fail`n- scope: Windows WebView2 only; Linux and macOS have no debugging port in their web views"
+      - name: Upload the roundtrip results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-roundtrip-results
+          path: ${{ runner.temp }}/roundtrip
+          if-no-files-found: warn
