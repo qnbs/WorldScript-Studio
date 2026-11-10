@@ -35,9 +35,9 @@ async function runReviewerConfigAdmission(classification, full) {
 }
 
 // QNBS-v3: tests that mention a changed file ran green locally; anything not run is named, never skipped silently.
-async function runRelatedTestsAdmission(classification, full) {
+async function runRelatedTestsAdmission(classification) {
   const name = 'Related unit tests';
-  if (full || classification.kind === 'AMBIGUOUS' || classification.files.length === 0) {
+  if (classification.kind === 'AMBIGUOUS' || classification.files.length === 0) {
     report(name, 'DEFERRED_TO_REQUIRED_CI', 'no resolved change evidence to select tests from');
     return;
   }
@@ -177,7 +177,7 @@ async function main() {
     );
   }
 
-  await runRelatedTestsAdmission(classification, full);
+  await runRelatedTestsAdmission(classification);
 
   if (typecheckRequired) {
     await runCheck('TypeScript (single checker)', () =>

@@ -13,13 +13,19 @@ const present = () => true;
 describe('related unit tests for local admission', () => {
   it.each([
     ['tests/unit/a.test.ts', true],
+    ['tests/unit/a.spec.tsx', true],
     ['components/Foo.test.tsx', true],
-    ['scripts/check.test.mjs', true],
+    ['components/deep/Foo.spec.ts', true],
+    ['packages/ui/tests/a.test.ts', true],
+    ['scripts/check.test.mjs', false],
+    ['tests/unit/a.test.mjs', false],
+    ['scripts/check.test.ts', false],
+    ['packages/ui/src/a.test.ts', false],
     ['tests/e2e/flow.spec.ts', false],
     ['tests/e2e/helpers.test.ts', false],
     ['tests/unit/a.ts', false],
     ['.worktrees/x/tests/unit/a.test.ts', false],
-  ])('classifies %s as a unit test: %s', (file, expected) => {
+  ])('classifies %s as a Vitest unit test: %s', (file, expected) => {
     expect(isUnitTestFile(file)).toBe(expected);
   });
 
@@ -35,7 +41,11 @@ describe('related unit tests for local admission', () => {
     ],
     ['features/lora/index.ts', ['features/lora/index.ts', 'features/lora/index']],
     ['config/csp-connect-src.json', ['config/csp-connect-src.json', 'csp-connect-src.json']],
+    ['src-tauri/tauri.conf.json', ['src-tauri/tauri.conf.json', 'tauri.conf.json']],
     ['package.json', []],
+    ['tsconfig.json', []],
+    ['docs/data.json', []],
+    ['tests/fixtures/a.json', []],
     ['locales/en/common.json', []],
     ['README.md', []],
     ['tests/unit/a.test.ts', []],
@@ -105,6 +115,13 @@ describe('related unit tests for local admission', () => {
       expect(timeout).toBeGreaterThan(120_000);
       expect(Number.isFinite(timeout)).toBe(true);
     }
+  });
+
+  it('selects the CSP tests that read a changed Tauri configuration file', () => {
+    const { tests } = selectRelatedTests(['src-tauri/tauri.conf.json']);
+    expect(tests).toEqual(
+      expect.arrayContaining(['tests/unit/csp.test.ts', 'tests/unit/cspCorrectness.test.ts']),
+    );
   });
 
   it('is routed by the admission registry for sources and for its own implementation', () => {

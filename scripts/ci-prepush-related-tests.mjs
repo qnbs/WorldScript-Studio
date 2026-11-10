@@ -11,22 +11,38 @@ export const RELATED_TEST_LIMIT = 8;
 // QNBS-v3: the repo-wide typecheck and a related-test run legitimately exceed the 120 s default child bound on a 2-core machine; still bounded, never unlimited.
 export const LOCAL_CHECK_TIMEOUTS_MS = Object.freeze({ typecheck: 600_000, relatedTests: 480_000 });
 
-const TEST_FILE = /\.test\.(?:ts|tsx|mts|mjs)$/;
+// QNBS-v3: mirrors the include list of vitest.config.ts exactly; a selected file Vitest would not run makes `vitest run` fail.
+const UNIT_TEST_LOCATIONS = [
+  /^tests\/.+\.(?:test|spec)\.tsx?$/,
+  /^components\/.+\.(?:test|spec)\.tsx?$/,
+  /^packages\/[^/]+\/tests\/.+\.(?:test|spec)\.tsx?$/,
+];
+const TEST_FILE = /\.(?:test|spec)\.[^/]+$/;
 const TS_FAMILY = new Set(['.ts', '.tsx', '.mts', '.cts']);
 const BASENAME_FAMILY = new Set(['.yml', '.yaml', '.mjs', '.cjs', '.js', '.json']);
 const SOURCE_EXTENSIONS = new Set([...TS_FAMILY, ...BASENAME_FAMILY]);
-const JSON_ROOTS = ['config/', 'scripts/', '.github/'];
+const EXCLUDED_JSON_ROOTS = [
+  'locales/',
+  'public/',
+  'community-templates/',
+  'docs/',
+  'reports/',
+  'tests/',
+];
 const GENERIC_BASENAME = /^(?:index|types|constants|utils)\.|^package\.json$|^tsconfig[^/]*\.json$/;
 const EXCLUDED_TEST_ROOTS = ['tests/e2e/', 'node_modules/', '.worktrees/'];
 
 export function isUnitTestFile(file) {
-  return TEST_FILE.test(file) && !EXCLUDED_TEST_ROOTS.some((root) => file.startsWith(root));
+  return (
+    UNIT_TEST_LOCATIONS.some((location) => location.test(file)) &&
+    !EXCLUDED_TEST_ROOTS.some((root) => file.startsWith(root))
+  );
 }
 
 function isGovernedSource(file) {
   const extension = extname(file);
   if (!SOURCE_EXTENSIONS.has(extension) || TEST_FILE.test(file)) return false;
-  return extension !== '.json' || JSON_ROOTS.some((root) => file.startsWith(root));
+  return extension !== '.json' || !EXCLUDED_JSON_ROOTS.some((root) => file.startsWith(root));
 }
 
 /** Strings that a test mentions when it reads or imports `file`; workflows are read by basename. */
@@ -38,7 +54,8 @@ export function relatedTestNeedles(file) {
   if (BASENAME_FAMILY.has(extension) && !GENERIC_BASENAME.test(basename(file))) {
     needles.add(basename(file));
   }
-  return [...needles];
+  // QNBS-v3: a bare generic name such as package.json would match nearly every test, so only path-qualified needles survive.
+  return [...needles].filter((needle) => needle.includes('/') || !GENERIC_BASENAME.test(needle));
 }
 
 // QNBS-v3: git grep exits 1 for "no match", which is a normal empty result and not a failure.
@@ -55,8 +72,8 @@ function searchTestsWithGit(needle) {
         '--',
         '*.test.ts',
         '*.test.tsx',
-        '*.test.mts',
-        '*.test.mjs',
+        '*.spec.ts',
+        '*.spec.tsx',
       ],
       { cwd: repoRoot, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 },
     );
