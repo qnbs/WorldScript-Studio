@@ -71,8 +71,19 @@ jobs:
           }
           function Start-App($entry) {
             $exe = Join-Path $entry.InstallLocation.Trim('"') 'worldscript-studio.exe'
-            $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
+            $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222 --remote-allow-origins=*'
             Start-Process -FilePath $exe -PassThru
+          }
+          function Show-Diag([string]$label) {
+            Start-Sleep -Seconds 25
+            Write-Host "--- diagnostics: $label"
+            Write-Host "env args: $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"
+            Get-CimInstance Win32_Process | Where-Object { $_.Name -in 'worldscript-studio.exe', 'msedgewebview2.exe' } | ForEach-Object {
+              $cmd = [string]$_.CommandLine
+              Write-Host "$($_.ProcessId) $($_.Name) :: $($cmd.Substring(0, [Math]::Min(260, $cmd.Length)))"
+            }
+            netstat -ano | Select-String ':9222'
+            try { Write-Host (Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:9222/json/version' -TimeoutSec 5).Content } catch { Write-Host "no answer on port 9222: $($_.Exception.Message)" }
           }
           function Stop-App {
             Get-Process -Name 'worldscript-studio' -ErrorAction SilentlyContinue | ForEach-Object { [void]$_.CloseMainWindow() }
@@ -97,6 +108,7 @@ jobs:
 
           Write-Host '== 1. v1.29.2: create a project and text through the packaged UI'
           [void](Start-App $old[0])
+          Show-Diag 'v1.29.2 after start'
           try { Invoke-Phase 'seed' @() } finally { Stop-App }
 
           $newSetup = (Get-ChildItem cand -Recurse -Filter '*_1.29.3_x64-setup.exe' | Select-Object -First 1).FullName
