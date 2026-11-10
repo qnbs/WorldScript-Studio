@@ -46,9 +46,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download v1.29.2 --repo "$env:GITHUB_REPOSITORY" --pattern '*x64-setup.exe' --dir old
-      - name: Install the debugging client
-        working-directory: evidence/ui-roundtrip
-        run: npm install --no-save --no-audit --no-fund playwright-core@1.64.1
+      - name: Install the debugging client outside the workspace
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'pw'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item evidence/ui-roundtrip/roundtrip.mjs $dir
+          Push-Location $dir
+          npm init -y | Out-Null
+          npm install --no-audit --no-fund playwright-core@1.64.1
+          if ($LASTEXITCODE -ne 0) { throw 'npm install failed' }
+          Pop-Location
       - name: Roundtrip across the upgrade
         run: |
           $ErrorActionPreference = 'Stop'
@@ -75,7 +82,7 @@ jobs:
             Start-Sleep -Seconds 3
           }
           function Invoke-Phase([string]$phase, [string[]]$more) {
-            Push-Location (Join-Path $env:GITHUB_WORKSPACE 'evidence/ui-roundtrip')
+            Push-Location (Join-Path $env:RUNNER_TEMP 'pw')
             node roundtrip.mjs $phase $out $token1 @more
             $code = $LASTEXITCODE
             Pop-Location
