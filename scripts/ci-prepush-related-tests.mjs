@@ -32,6 +32,15 @@ const EXCLUDED_JSON_ROOTS = [
 const GENERIC_BASENAME = /^(?:index|types|constants|utils)\.|^package\.json$|^tsconfig[^/]*\.json$/;
 const EXCLUDED_TEST_ROOTS = ['tests/e2e/', 'node_modules/', '.worktrees/'];
 
+// QNBS-v3: a git hook hands its own GIT_* variables to children, which breaks tests that run git in disposable repositories; undefined values are dropped by spawn.
+export function gitFreeTestEnv(source = process.env) {
+  return Object.fromEntries(
+    Object.keys(source)
+      .filter((key) => key.startsWith('GIT_'))
+      .map((key) => [key, undefined]),
+  );
+}
+
 export function isUnitTestFile(file) {
   return (
     UNIT_TEST_LOCATIONS.some((location) => location.test(file)) &&

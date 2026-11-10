@@ -11,6 +11,7 @@ import {
   resolveManualEvidence,
 } from './ci-prepush-range-resolver.mjs';
 import {
+  gitFreeTestEnv,
   LOCAL_CHECK_TIMEOUTS_MS,
   RELATED_TEST_LIMIT,
   selectRelatedTests,
@@ -58,6 +59,7 @@ async function runRelatedTestsAdmission(classification) {
     console.log(`[local-admission] related test files: ${selection.tests.join(', ')}`);
     await runCheck(name, () =>
       runLocalBinary('vitest', ['run', ...selection.tests], {
+        env: gitFreeTestEnv(),
         timeoutMs: LOCAL_CHECK_TIMEOUTS_MS.relatedTests,
       }),
     );

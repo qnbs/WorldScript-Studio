@@ -1,6 +1,8 @@
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { shouldRunAdmissionCheck } from '../../../scripts/ci-prepush-check-registry.mjs';
 import {
+  gitFreeTestEnv,
   isUnitTestFile,
   LOCAL_CHECK_TIMEOUTS_MS,
   RELATED_TEST_LIMIT,
@@ -107,6 +109,28 @@ describe('related unit tests for local admission', () => {
         'tests/unit/workflowPolicy.test.ts',
       ]),
     );
+  });
+
+  // The pre-push hook run of signing.test.ts failed because git hands GIT_* variables to its children.
+  it('removes every GIT_* variable and nothing else from the test environment', () => {
+    const cleared = gitFreeTestEnv({
+      GIT_DIR: '.git',
+      GIT_INDEX_FILE: 'x',
+      PATH: '/bin',
+      GITHUB_SHA: 'y',
+    });
+    expect(Object.keys(cleared).sort()).toEqual(['GIT_DIR', 'GIT_INDEX_FILE']);
+
+    const hookEnv = { ...process.env, GIT_DIR: '.git', GIT_INDEX_FILE: 'x' };
+    const child = spawnSync(
+      process.execPath,
+      [
+        '-e',
+        "console.log(Object.keys(process.env).filter((key) => key.startsWith('GIT_')).length)",
+      ],
+      { env: { ...hookEnv, ...gitFreeTestEnv(hookEnv) }, encoding: 'utf8' },
+    );
+    expect(child.stdout.trim()).toBe('0');
   });
 
   // The full-range typecheck of a new branch took 123 s and was killed by the 120 s default child bound.

@@ -7,6 +7,7 @@ export interface RelatedTestSelection {
   total: number;
 }
 
+export function gitFreeTestEnv(source?: Record<string, string | undefined>): Record<string, undefined>;
 export function isUnitTestFile(file: string): boolean;
 export function relatedTestNeedles(file: string): string[];
 export function selectRelatedTests(
