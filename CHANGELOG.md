@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Evidence branch only (never merged):** throwaway workflows that qualified the v1.29.x candidates, including a no-push container build of the Docker fix for #1223 (PR #1224).
 <!-- release-candidate: v1.29.4 -->
 
 ## [1.29.4] — 2026-11-10
