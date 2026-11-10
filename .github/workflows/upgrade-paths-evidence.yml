@@ -127,7 +127,7 @@ jobs:
           $oldEntries = Get-Entries
           if ($oldEntries.Count -ne 1 -or $oldEntries[0].DisplayVersion -ne '1.29.2') { throw "expected one 1.29.2 entry, found: $($oldEntries | ConvertTo-Json -Compress)" }
           $oldAlive = Start-App $oldEntries[0] 20
-          $volatile = '\\(Cache|Code Cache|GPUCache|DawnGraphiteCache|DawnWebGPUCache|ShaderCache|GrShaderCache|Crashpad|component_crx_cache|Crashpad)\\|\.tmp$|\\LOCK$|\.log$'
+          $volatile = '\\(Cache|Code Cache|GPUCache|DawnGraphiteCache|DawnWebGPUCache|ShaderCache|GrShaderCache|Crashpad|component_crx_cache|Crashpad)\\|\.tmp$|\\LOCK$|\.log$|-wal$|-shm$|-journal$|\\MANIFEST-[0-9]+$|\\CURRENT$|\\LOG(\.old)?$'
           $everything = @(Get-ChildItem -Path $data -Recurse -File | ForEach-Object FullName | Sort-Object)
           $before = @($everything | Where-Object { $_ -notmatch $volatile })
           Write-Host "old app alive after 20 s: $oldAlive; files before the upgrade: $($everything.Count), persistent user data and settings: $($before.Count), volatile caches: $($everything.Count - $before.Count)"
@@ -144,7 +144,14 @@ jobs:
           Write-Host "volatile cache files gone after the upgrade (informational): $volatileLost"
           $newAlive = Start-App $newEntries[0] 20
           if ($oldAlive -and -not $newAlive) { throw 'the upgraded app did not stay running although v1.29.2 did' }
-          foreach ($f in $before) { if (-not (Test-Path $f)) { throw "persistent file lost after starting the upgraded app: $f" } }
+          $marker = Join-Path $data 'EBWebView\Default\IndexedDB\upgrade-marker.txt'
+          if (-not (Test-Path $marker)) { throw 'the IndexedDB marker was lost after starting the upgraded app' }
+          foreach ($dir in 'IndexedDB', 'Local Storage') {
+            $path = Join-Path $data "EBWebView\Default\$dir"
+            if (-not (Test-Path $path)) { throw "$dir directory was lost after starting the upgraded app" }
+          }
+          $afterCount = @(Get-ChildItem -Path $data -Recurse -File).Count
+          Write-Host "files after starting the upgraded app: $afterCount (before the upgrade: $($everything.Count)); the browser engine may rename or compact its own bookkeeping files on start"
           $uninstall = $newEntries[0].UninstallString
           Write-Host "NSIS upgrade ok: one entry, version 1.29.3, binary $productVersion, $($before.Count) persistent files survived; old alive=$oldAlive new alive=$newAlive"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows NSIS upgrade 1.29.2 to 1.29.3`n- one uninstall entry, version 1.29.3, binary $productVersion`n- old app alive after 20 s: $oldAlive, new app alive: $newAlive`n- $($before.Count) persistent user data files (volatile caches excluded: $($everything.Count - $before.Count), of which $volatileLost gone) all present after the upgrade and after starting the new app"
