@@ -82,6 +82,12 @@ jobs:
               $cmd = [string]$_.CommandLine
               Write-Host "$($_.ProcessId) $($_.Name) :: $($cmd.Substring(0, [Math]::Min(260, $cmd.Length)))"
             }
+            $browser = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -match '--embedded-browser-webview' } | Select-Object -First 1
+            if ($browser) { Write-Host "BROWSER PROCESS $($browser.ProcessId) FULL COMMAND LINE: $($browser.CommandLine)" } else { Write-Host 'no browser process with --embedded-browser-webview found' }
+            $ids = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in 'worldscript-studio.exe', 'msedgewebview2.exe' } | ForEach-Object { $_.ProcessId })
+            netstat -ano | Select-String 'LISTENING' | Where-Object { $ids -contains [int](($_ -split '\s+')[-1]) } | ForEach-Object { Write-Host "listening: $_" }
+            $port = Join-Path $env:LOCALAPPDATA 'com.worldscript.studio\EBWebView\DevToolsActivePort'
+            if (Test-Path $port) { Write-Host "DevToolsActivePort: $(Get-Content $port -Raw)" } else { Write-Host 'no DevToolsActivePort file' }
             netstat -ano | Select-String ':9222'
             try { Write-Host (Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:9222/json/version' -TimeoutSec 5).Content } catch { Write-Host "no answer on port 9222: $($_.Exception.Message)" }
           }
