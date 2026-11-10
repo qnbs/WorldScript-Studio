@@ -67,14 +67,41 @@ async function verifyProtectedMainAncestry({ owner, repo, sha, token, fetchImpl 
   }
 }
 
+// QNBS-v3: iterative glob match without building a RegExp from the pattern; "*" and "?" never consume a "/".
+function globMatches(pattern, text) {
+  let p = 0;
+  let t = 0;
+  let starP = -1;
+  let starT = -1;
+  while (t < text.length) {
+    if (p < pattern.length && pattern[p] === '*') {
+      starP = p;
+      starT = t;
+      p += 1;
+    } else if (
+      p < pattern.length &&
+      (pattern[p] === '?' ? text[t] !== '/' : pattern[p] === text[t])
+    ) {
+      p += 1;
+      t += 1;
+    } else if (starP !== -1 && text[starT] !== '/') {
+      starT += 1;
+      t = starT;
+      p = starP + 1;
+    } else {
+      return false;
+    }
+  }
+  while (pattern[p] === '*') p += 1;
+  return p === pattern.length;
+}
+
 // QNBS-v3: ruleset ref patterns are fnmatch-like; syntax outside this safe subset, including "**", is unknown (null), never a match.
 export function refPatternMatches(pattern, ref) {
   if (pattern === '~ALL') return true;
   if (typeof pattern !== 'string' || !/^[A-Za-z0-9._\-/*?]+$/.test(pattern)) return null;
   if (pattern.includes('**')) return null;
-  const tokens = { '.': '\\.', '*': '[^/]*', '?': '[^/]' };
-  const source = pattern.replace(/[.*?]/g, (token) => tokens[token]);
-  return new RegExp(`^${source}$`).test(ref);
+  return globMatches(pattern, ref);
 }
 
 const TAG_PROTECTION_RULES = Object.freeze(['creation', 'update', 'deletion', 'non_fast_forward']);
