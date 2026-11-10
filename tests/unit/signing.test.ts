@@ -894,6 +894,24 @@ describe('GitHub signature API controls', () => {
           }),
           { status: 200 },
         );
+      if (/\/rulesets\?/.test(url))
+        return new Response(
+          JSON.stringify([
+            { id: 1, target: 'tag', enforcement: 'active', source_type: 'Repository' },
+          ]),
+          { status: 200 },
+        );
+      if (/\/rulesets\/1$/.test(url))
+        return new Response(
+          JSON.stringify({
+            id: 1,
+            target: 'tag',
+            enforcement: 'active',
+            conditions: { ref_name: { include: ['refs/tags/v*'], exclude: [] } },
+            rules: ['creation', 'update', 'deletion', 'non_fast_forward'].map((type) => ({ type })),
+          }),
+          { status: 200 },
+        );
       return new Response(JSON.stringify(verifiedCommit(targetSha)), { status: 200 });
     };
     const tag = await verifyRemoteTag({

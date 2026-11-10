@@ -19,12 +19,11 @@ const gateCondition =
   "needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha";
 const tagPushCondition =
   "github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')";
-const protectedDockerTagPushCondition = `${tagPushCondition} && github.ref_protected == true`;
-const dockerTagPushCondition = `${protectedDockerTagPushCondition} && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && ${gateCondition}`;
+const dockerTagPushCondition = `${tagPushCondition} && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && ${gateCondition}`;
 // QNBS-v3: GHCR and Tauri publish behind the identical trusted-verifier conjunction.
 const tauriReleaseCondition = dockerTagPushCondition;
 const proofTagSimulationCondition = `github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && inputs.simulated_tag_signature == 'verified' && ${gateCondition}`;
-const trustedVerifierSha = '147470682b62d5bfe196bba803353d9f25cab8a7';
+const trustedVerifierSha = 'd348d863f0cc230e3fad64924eb8c76dab91ad0e';
 
 function mutate(text: string, from: string, to: string): string {
   expect(text, `fixture anchor not found: ${from}`).toContain(from);
@@ -66,7 +65,7 @@ describe('#911 release security gate: shipped workflows', () => {
     '%s runs the read-only signature verifier from an immutable trusted checkout',
     (name) => {
       const verifier = source(name).slice(source(name).indexOf('  verify-release-tag:\n'));
-      expect(verifier).toContain(expr(protectedDockerTagPushCondition));
+      expect(verifier).toContain(expr(tagPushCondition));
       expect(verifier).toContain('permissions:\n      contents: read');
       expect(verifier).toContain(`ref: ${trustedVerifierSha}`);
       expect(verifier).toContain('path: trusted-verifier');
@@ -95,16 +94,42 @@ describe('#911 release security gate: shipped workflows', () => {
     );
   });
 
-  it('rejects an unprotected release tag even if it is a signed v* push', () => {
-    const unprotectedVerifier = mutate(
-      source(DOCKER),
-      expr(protectedDockerTagPushCondition),
-      expr(tagPushCondition),
-    );
-    expect(messages(DOCKER, unprotectedVerifier)).toMatch(
-      /must require github\.ref_protected == true/,
-    );
+  // QNBS-v3 (#1206): github.ref_protected is unreliable for tag pushes; tag protection is verified inside the pinned verifier instead.
+  it.each([DOCKER, TAURI])('%s does not depend on github.ref_protected', (name) => {
+    expect(source(name)).not.toContain('ref_protected');
   });
+
+  // QNBS-v3 (#1206): the proof must run the same pinned verifier as production, with no way to write anything.
+  it('the tag verifier proof is dispatch-only, read-only and pinned like the release verifiers', () => {
+    const proof = source('tag-verifier-proof.yml');
+    expect(proof).toContain(`ref: ${trustedVerifierSha}`);
+    expect(proof).toMatch(/^on:\n {2}workflow_dispatch:/m);
+    expect(proof).not.toMatch(/^ {2}(?:push|pull_request|schedule|release):/m);
+    expect(proof).not.toMatch(/: write\b|id-token|secrets\./);
+    expect(checkWorkflowFile(join(workflows, 'tag-verifier-proof.yml'))).toEqual([]);
+  });
+
+  it.each([DOCKER, TAURI])(
+    '%s rejects a verifier condition that is looser or stricter than the exact one',
+    (name) => {
+      const looser = mutate(
+        source(name),
+        expr(tagPushCondition),
+        expr(`${tagPushCondition} || true`),
+      );
+      expect(messages(name, looser)).toMatch(
+        /job "verify-release-tag" if: must not contain a permissive OR branch/,
+      );
+      const stricter = mutate(
+        source(name),
+        expr(tagPushCondition),
+        expr(`${tagPushCondition} && github.ref_protected == true`),
+      );
+      expect(messages(name, stricter)).toMatch(
+        /job "verify-release-tag" if: must equal the exact fail-closed condition/,
+      );
+    },
+  );
 
   it('rejects a workflow_dispatch even when its ref happens to be a v* tag', () => {
     const dispatchOnTag = mutate(
@@ -237,7 +262,7 @@ describe('#911 release security gate: shipped workflows', () => {
   it('rejects a manually dispatched tag as input to the real signature-verification job', () => {
     const dispatchVerifier = mutate(
       source(DOCKER),
-      expr(protectedDockerTagPushCondition),
+      expr(tagPushCondition),
       expr(
         "github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')",
       ),
@@ -317,11 +342,6 @@ describe('#1206 Tauri release trusts only the pinned-verifier proof', () => {
       'a release that could run from workflow_dispatch',
       () => withoutPart(`${tagPushCondition} && `),
       /job "release" if: must require github\.event_name == 'push'/,
-    ],
-    [
-      'a release for an unprotected tag',
-      () => withoutPart(' && github.ref_protected == true'),
-      /job "release" if: must require github\.ref_protected == true/,
     ],
     [
       'a release that ignores the verifier result',
@@ -415,16 +435,11 @@ describe('#1206 Tauri release trusts only the pinned-verifier proof', () => {
       /immutable trusted verifier/,
     ],
     [
-      'a verifier job for an unprotected tag',
-      () => mutate(source(TAURI), expr(protectedDockerTagPushCondition), expr(tagPushCondition)),
-      /job "verify-release-tag" if: must require github\.ref_protected == true/,
-    ],
-    [
       'a verifier job that a manual dispatch can start',
       () =>
         mutate(
           source(TAURI),
-          expr(protectedDockerTagPushCondition),
+          expr(tagPushCondition),
           expr(
             "github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')",
           ),

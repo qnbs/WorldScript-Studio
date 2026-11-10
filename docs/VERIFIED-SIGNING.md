@@ -12,6 +12,11 @@ but different checks:
 - Annotated release tags have two objects to verify: the tag object and its target commit.
   Lightweight release tags are rejected because they have no independently verifiable tag
   object; a verified target commit alone is insufficient for a release tag.
+- The tag verifier also reads the repository's active tag rulesets and requires that, for the
+  pushed ref, creation, update, deletion and non-fast-forward are all covered. It does not rely on
+  `github.ref_protected`, which community reports describe as `false` for tag pushes. The API hides
+  `bypass_actors` from callers without admin rights, so that no actor can bypass the immutability
+  ruleset stays a setting a maintainer verifies with an authenticated read.
 
 ## Local setup and recovery
 
@@ -58,10 +63,10 @@ committer timestamp is within the stated trailing window. Keep the command outpu
 with the release evidence when refreshing these figures.
 
 | Window ending 2026-08-23 UTC | Verified | Unverified | Total |
-| --- | ---: | ---: | ---: |
-| 7 days | 89 | 0 | 89 |
-| 14 days | 124 | 0 | 124 |
-| 30 days | 178 | 0 | 178 |
+| ---------------------------- | -------: | ---------: | ----: |
+| 7 days                       |       89 |          0 |    89 |
+| 14 days                      |      124 |          0 |   124 |
+| 30 days                      |      178 |          0 |   178 |
 
 This snapshot intentionally distinguishes the signed squash result from the source history that
 preceded it. Open and merged PR source histories should be audited separately when investigating

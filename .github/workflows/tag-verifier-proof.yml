@@ -1,0 +1,61 @@
+# Read-only proof (#1206): the pinned release-tag verifier runs with the production token against an existing tag.
+# It has no write permission and publishes nothing; it exists so the ruleset read is proven before a real tag is pushed.
+
+name: Tag verifier proof
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing annotated release tag to verify, read-only
+        required: true
+        default: v1.29.2
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-existing-tag:
+    name: Verify an existing tag with the production token
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the pinned trusted verifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: d348d863f0cc230e3fad64924eb8c76dab91ad0e
+          path: trusted-verifier
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Run the pinned verifier against the existing tag
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        shell: bash
+        working-directory: trusted-verifier
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'EOF'
+          import { fetchJson, verifyRemoteTag } from './scripts/signing/verify-remote.mjs';
+
+          const tag = process.env.RELEASE_TAG ?? '';
+          if (!/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error('tag must look like v1.2.3');
+          const [owner, repo] = (process.env.GITHUB_REPOSITORY ?? '').split('/');
+          const token = process.env.GITHUB_TOKEN ?? '';
+          const api = `https://api.github.com/repos/${owner}/${repo}/git`;
+          const ref = await fetchJson(fetch, `${api}/ref/tags/${tag}`, token);
+          const tagObject = await fetchJson(fetch, `${api}/tags/${ref.object.sha}`, token);
+          const result = await verifyRemoteTag({
+            owner,
+            repo,
+            tag,
+            expectedCommitSha: tagObject.object.sha,
+            token,
+          });
+          console.log(JSON.stringify({ tag, ok: result.ok, reason: result.reason }));
+          if (!result.ok) process.exit(1);
+          EOF

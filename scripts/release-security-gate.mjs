@@ -24,14 +24,9 @@ export const REQUIRED_TAG_PUSH_CONDITIONS = Object.freeze([
   "startsWith(github.ref, 'refs/tags/v')",
 ]);
 
-export const REQUIRED_PROTECTED_TAG_PUSH_CONDITIONS = Object.freeze([
-  ...REQUIRED_TAG_PUSH_CONDITIONS,
-  'github.ref_protected == true',
-]);
-
-// QNBS-v3: GHCR and Tauri publish only behind the same trusted-verifier proof of the pushed tag.
+// QNBS-v3: GHCR and Tauri publish only behind the same trusted-verifier proof of the pushed tag; tag protection is checked inside that verifier, not via github.ref_protected.
 export const REQUIRED_VERIFIED_TAG_PUBLISH_CONDITIONS = Object.freeze([
-  ...REQUIRED_PROTECTED_TAG_PUSH_CONDITIONS,
+  ...REQUIRED_TAG_PUSH_CONDITIONS,
   "needs.verify-release-tag.result == 'success'",
   'needs.verify-release-tag.outputs.verified-tag-sha == github.sha',
 ]);
@@ -94,7 +89,7 @@ const CHECKOUT_PIN = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
 const OSV_SCANNER = 'google/osv-scanner-action/osv-scanner-action@';
 const TAG_VERIFIER = 'node scripts/signing/verify-github-signatures.mjs';
 const TAG_VERIFIER_SCRIPT = 'scripts/signing/verify-github-signatures.mjs';
-const TAG_VERIFIER_SOURCE_SHA = '147470682b62d5bfe196bba803353d9f25cab8a7';
+const TAG_VERIFIER_SOURCE_SHA = 'd348d863f0cc230e3fad64924eb8c76dab91ad0e';
 
 function asList(value) {
   if (Array.isArray(value)) return value;
@@ -331,7 +326,7 @@ function checkTagVerifierJob(job, fail) {
   checkExactCondition(
     'verify-release-tag',
     String(job.if ?? ''),
-    REQUIRED_PROTECTED_TAG_PUSH_CONDITIONS,
+    REQUIRED_TAG_PUSH_CONDITIONS,
     fail,
   );
   if (!permissionsAreReadOnlyContents(job.permissions)) {
