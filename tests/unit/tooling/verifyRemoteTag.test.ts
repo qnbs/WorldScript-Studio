@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { expectedTagCommitSha, verifyRemoteTag } from '../../../scripts/signing/verify-remote.mjs';
+import {
+  expectedTagCommitSha,
+  refPatternMatches,
+  verifyRemoteTag,
+} from '../../../scripts/signing/verify-remote.mjs';
 
 const tagObjectSha = 'a'.repeat(40);
 const pushedCommitSha = 'b'.repeat(40);
@@ -18,10 +22,67 @@ type MainProvenanceOptions = {
   compareMergeBaseSha?: string;
   compareResponse?: unknown;
   compareHttpStatus?: number;
+  rulesets?: TestRuleset[];
+  rulesetListHttpStatus?: number;
+  rulesetResponses?: Response[];
+};
+
+type TestRuleset = {
+  id: number;
+  rules: string[];
+  target?: string;
+  enforcement?: string;
+  source_type?: string;
+  include?: string[];
+  exclude?: string[];
 };
 
 function jsonResponse(value: unknown): Response {
   return new Response(JSON.stringify(value), { status: 200 });
+}
+
+// The two repository tag rulesets as configured in production: creation is restricted, tags are immutable.
+const productionRulesets: TestRuleset[] = [
+  { id: 26812638, rules: ['creation', 'non_fast_forward'] },
+  { id: 26812769, rules: ['update', 'deletion', 'non_fast_forward'] },
+];
+
+// The verifier reads the list and then one detail per active repository tag ruleset, in list order.
+function rulesetResponses(
+  rulesets: TestRuleset[] = productionRulesets,
+  listStatus = 200,
+): Response[] {
+  if (listStatus !== 200) return [new Response('unavailable', { status: listStatus })];
+  const withDefaults = rulesets.map((ruleset) => ({
+    target: 'tag',
+    enforcement: 'active',
+    source_type: 'Repository',
+    include: ['refs/tags/v*'],
+    exclude: [],
+    ...ruleset,
+  }));
+  const summaries = withDefaults.map(({ id, target, enforcement, source_type }) => ({
+    id,
+    name: `ruleset-${id}`,
+    target,
+    enforcement,
+    source_type,
+  }));
+  const details = withDefaults
+    .filter(
+      ({ target, enforcement, source_type }) =>
+        target === 'tag' && enforcement === 'active' && source_type === 'Repository',
+    )
+    .map(({ id, target, enforcement, include, exclude, rules }) =>
+      jsonResponse({
+        id,
+        target,
+        enforcement,
+        conditions: { ref_name: { include, exclude } },
+        rules: rules.map((type) => ({ type })),
+      }),
+    );
+  return [jsonResponse(summaries), ...details];
 }
 
 function tagFetch(
@@ -41,39 +102,34 @@ function tagFetch(
     merge_base_commit: { sha: compareMergeBaseSha },
   };
   const compareResponseStatus = options.compareHttpStatus ?? 200;
-  return vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(jsonResponse({ object: { sha: tagObjectSha, type: 'tag' } }))
-    .mockResolvedValueOnce(
-      jsonResponse({
-        tag: 'v1.29.3',
-        object: { sha: targetSha, type: 'commit' },
-        verification: { verified: tagVerified, reason: tagVerified ? 'valid' : 'unsigned' },
-      }),
-    )
-    .mockResolvedValueOnce(
-      jsonResponse({
-        sha: targetSha,
-        commit: {
-          message: 'release',
-          verification: { verified: commitVerified, reason: commitVerified ? 'valid' : 'unsigned' },
-        },
-      }),
-    )
-    .mockResolvedValueOnce(
-      jsonResponse({ name: 'main', protected: mainProtected, commit: { sha: mainSha } }),
-    )
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify(compareResponse), { status: compareResponseStatus }),
-    )
-    .mockResolvedValueOnce(
-      jsonResponse({
-        name: 'main',
-        protected: options.mainAfterProtected ?? mainProtected,
-        commit: { sha: options.mainAfterSha ?? mainSha },
-      }),
-    )
-    .mockResolvedValueOnce(jsonResponse({ object: { sha: tagObjectSha, type: 'tag' } }));
+  const responses = [
+    jsonResponse({ object: { sha: tagObjectSha, type: 'tag' } }),
+    jsonResponse({
+      tag: 'v1.29.3',
+      object: { sha: targetSha, type: 'commit' },
+      verification: { verified: tagVerified, reason: tagVerified ? 'valid' : 'unsigned' },
+    }),
+    jsonResponse({
+      sha: targetSha,
+      commit: {
+        message: 'release',
+        verification: { verified: commitVerified, reason: commitVerified ? 'valid' : 'unsigned' },
+      },
+    }),
+    jsonResponse({ name: 'main', protected: mainProtected, commit: { sha: mainSha } }),
+    new Response(JSON.stringify(compareResponse), { status: compareResponseStatus }),
+    jsonResponse({
+      name: 'main',
+      protected: options.mainAfterProtected ?? mainProtected,
+      commit: { sha: options.mainAfterSha ?? mainSha },
+    }),
+    ...(options.rulesetResponses ??
+      rulesetResponses(options.rulesets, options.rulesetListHttpStatus)),
+    jsonResponse({ object: { sha: tagObjectSha, type: 'tag' } }),
+  ];
+  const fetchImpl = vi.fn<typeof fetch>();
+  for (const response of responses) fetchImpl.mockResolvedValueOnce(response);
+  return fetchImpl;
 }
 
 function verifyTag(fetchImpl: typeof fetch, expectedCommitSha = pushedCommitSha, tag = 'v1.29.3') {
@@ -111,7 +167,10 @@ describe('release tag event binding', () => {
     expect(fetchImpl.mock.calls[4]?.[0]).toBe(
       `https://api.github.com/repos/qnbs/WorldScript-Studio/compare/${pushedCommitSha}...${options.mainSha ?? pushedCommitSha}`,
     );
-    expect(fetchImpl).toHaveBeenCalledTimes(7);
+    expect(fetchImpl).toHaveBeenCalledTimes(10);
+    expect(fetchImpl.mock.calls[6]?.[0]).toBe(
+      'https://api.github.com/repos/qnbs/WorldScript-Studio/rulesets?targets=tag&includes_parents=true&per_page=100',
+    );
   });
 
   it('rejects a tag retargeted to a different commit before checking that commit', async () => {
@@ -167,8 +226,11 @@ describe('release tag event binding', () => {
       )
       .mockResolvedValueOnce(
         jsonResponse({ name: 'main', protected: true, commit: { sha: pushedCommitSha } }),
-      )
-      .mockResolvedValueOnce(jsonResponse({ object: { sha: changedTagObjectSha, type: 'tag' } }));
+      );
+    for (const response of rulesetResponses()) fetchImpl.mockResolvedValueOnce(response);
+    fetchImpl.mockResolvedValueOnce(
+      jsonResponse({ object: { sha: changedTagObjectSha, type: 'tag' } }),
+    );
 
     await expect(verifyTag(fetchImpl)).rejects.toThrow(/changed during signature verification/);
   });
@@ -229,6 +291,156 @@ describe('release tag event binding', () => {
 
     await expect(verifyTag(fetchImpl)).rejects.toThrow(/protected main changed/);
     expect(fetchImpl).toHaveBeenCalledTimes(6);
+  });
+
+  it('accepts protection that is split across several active tag rulesets', async () => {
+    const fetchImpl = tagFetch(pushedCommitSha, true, true, {
+      rulesets: [
+        { id: 1, rules: ['creation'], include: ['refs/tags/v*'] },
+        { id: 2, rules: ['update', 'deletion'], include: ['refs/tags/**'] },
+        { id: 3, rules: ['non_fast_forward'], include: ['~ALL'] },
+      ],
+    });
+    const result = await verifyTag(fetchImpl);
+
+    expect(result.ok).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(11);
+  });
+
+  // QNBS-v3: github.ref_protected is unreliable for tags, so the ruleset coverage itself must fail closed on every gap.
+  it.each([
+    {
+      name: 'no tag ruleset at all',
+      rulesets: [],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+    {
+      name: 'a ruleset that only restricts creation',
+      rulesets: [{ id: 1, rules: ['creation', 'non_fast_forward'] }],
+      error: /for: update, deletion$/,
+    },
+    {
+      name: 'a ruleset that does not restrict creation',
+      rulesets: [{ id: 1, rules: ['update', 'deletion', 'non_fast_forward'] }],
+      error: /for: creation$/,
+    },
+    {
+      name: 'a ruleset that is only evaluated, not enforced',
+      rulesets: [
+        {
+          id: 1,
+          rules: ['creation', 'update', 'deletion', 'non_fast_forward'],
+          enforcement: 'evaluate',
+        },
+      ],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+    {
+      name: 'a disabled ruleset',
+      rulesets: [
+        {
+          id: 1,
+          rules: ['creation', 'update', 'deletion', 'non_fast_forward'],
+          enforcement: 'disabled',
+        },
+      ],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+    {
+      name: 'a branch ruleset with the same rules',
+      rulesets: [
+        { id: 1, rules: ['creation', 'update', 'deletion', 'non_fast_forward'], target: 'branch' },
+      ],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+    {
+      name: 'an inherited ruleset whose rules cannot be read',
+      rulesets: [
+        {
+          id: 1,
+          rules: ['creation', 'update', 'deletion', 'non_fast_forward'],
+          source_type: 'Organization',
+        },
+      ],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+    {
+      name: 'a ruleset for another tag pattern',
+      rulesets: [
+        {
+          id: 1,
+          rules: ['creation', 'update', 'deletion', 'non_fast_forward'],
+          include: ['refs/tags/release-*'],
+        },
+      ],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+    {
+      name: 'a ruleset that excludes this tag',
+      rulesets: [
+        {
+          id: 1,
+          rules: ['creation', 'update', 'deletion', 'non_fast_forward'],
+          exclude: ['refs/tags/v1.29.*'],
+        },
+      ],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+    {
+      name: 'a ruleset whose exclude syntax is unknown',
+      rulesets: [
+        {
+          id: 1,
+          rules: ['creation', 'update', 'deletion', 'non_fast_forward'],
+          exclude: ['refs/tags/v1.29.[0-9]'],
+        },
+      ],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+    {
+      name: 'a ruleset whose include syntax is unknown',
+      rulesets: [
+        {
+          id: 1,
+          rules: ['creation', 'update', 'deletion', 'non_fast_forward'],
+          include: ['refs/tags/v{1,2}*'],
+        },
+      ],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+  ])('rejects $name', async ({ rulesets, error }) => {
+    const fetchImpl = tagFetch(pushedCommitSha, true, true, { rulesets });
+
+    await expect(verifyTag(fetchImpl)).rejects.toThrow(error);
+  });
+
+  it('rejects when the ruleset list is unavailable or possibly truncated', async () => {
+    await expect(
+      verifyTag(tagFetch(pushedCommitSha, true, true, { rulesetListHttpStatus: 503 })),
+    ).rejects.toThrow(/GitHub API request failed \(503\)/);
+
+    const truncated = Array.from({ length: 100 }, (_, id) => ({ id: id + 1, rules: ['creation'] }));
+    const fetchImpl = tagFetch(pushedCommitSha, true, true, {
+      rulesetResponses: [jsonResponse(truncated)],
+    });
+
+    await expect(verifyTag(fetchImpl)).rejects.toThrow(/could not be read completely/);
+  });
+
+  it.each([
+    ['~ALL', 'refs/tags/v1.29.3', true],
+    ['refs/tags/v*', 'refs/tags/v1.29.3', true],
+    ['refs/tags/v*', 'refs/tags/x1.29.3', false],
+    ['refs/tags/v*', 'refs/tags/v1/evil', false],
+    ['refs/tags/**', 'refs/tags/v1/evil', true],
+    ['refs/tags/v1.29.?', 'refs/tags/v1.29.3', true],
+    ['refs/tags/v1.29.3', 'refs/tags/v1x29x3', false],
+    ['refs/tags/v1.29.[0-9]', 'refs/tags/v1.29.3', null],
+    ['refs/tags/v{1,2}', 'refs/tags/v1', null],
+    ['', 'refs/tags/v1', null],
+    [undefined, 'refs/tags/v1', null],
+  ])('matches ruleset pattern %s against %s as %s', (pattern, ref, expected) => {
+    expect(refPatternMatches(pattern, ref)).toBe(expected);
   });
 
   it('rejects a missing expected SHA before resolving a mutable tag ref', async () => {

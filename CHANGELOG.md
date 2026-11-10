@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Release-tag verification:** The tag verifier now requires active tag rulesets that cover creation, update, deletion and non-fast-forward for the pushed ref, read directly from the rulesets API instead of `github.ref_protected` (PR #1210).
 - **Container publishing:** GHCR releases now require a protected, signed annotated `v*` tag bound to the triggering commit, verified by a pinned source, and the exact-commit security audit; manual dispatch remains non-publishing (PR #1205).
 - **Desktop publishing:** The Tauri release now verifies the pushed protected `v*` tag with the verifier from a pinned protected-`main` commit instead of from the tag, requires that proof and the exact-commit audit, and publishes the audited commit rather than the tag ref (PR #1208).
 - **Release-tag verification:** Validate protected-main ancestry with the GitHub Compare API's returned base and merge-base commits, and bind the verified tag target to the triggering event SHA (PR #1207).
