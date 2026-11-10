@@ -185,18 +185,22 @@ export function hasCompleteCommitRange(expectedShas, reports) {
   return expectedShas.every((sha) => reports.some((report) => sha.startsWith(report.sha)));
 }
 
-export function expectedTagCommitSha(eventAfter, githubSha) {
-  const eventSha = String(eventAfter ?? '');
+// QNBS-v3: github.sha is the commit a tag push builds; it is never the push event's "after", which for an annotated tag is the tag object, so the two must not be compared with each other.
+export function contextCommitSha(githubSha) {
   const contextSha = String(githubSha ?? '');
-  if (!/^[0-9a-f]{40}$/i.test(eventSha))
-    throw new Error('push event does not contain a full tag target commit SHA');
-  if (/^0{40}$/i.test(eventSha))
-    throw new Error('push event does not contain a live tag target commit SHA');
   if (!/^[0-9a-f]{40}$/i.test(contextSha))
     throw new Error('GitHub context does not contain a full commit SHA');
   if (/^0{40}$/i.test(contextSha)) throw new Error('GitHub context contains a deleted-ref SHA');
-  if (eventSha.toLowerCase() !== contextSha.toLowerCase())
-    throw new Error('push event target does not match github.sha');
+  return contextSha.toLowerCase();
+}
+
+// QNBS-v3: the push event must announce a full, live pushed object; it is bound to the annotated tag object the live ref resolves to inside verifyRemoteTag.
+export function eventTagObjectSha(eventAfter) {
+  const eventSha = String(eventAfter ?? '');
+  if (!/^[0-9a-f]{40}$/i.test(eventSha))
+    throw new Error('push event does not contain a full pushed tag object SHA');
+  if (/^0{40}$/i.test(eventSha))
+    throw new Error('push event does not contain a live pushed tag object SHA');
   return eventSha.toLowerCase();
 }
 
@@ -225,19 +229,34 @@ export async function verifyRemoteCommitRange({
   return verifyRemoteCommitReports(commits);
 }
 
+function expectedTagTargetSha(value) {
+  if (!/^[0-9a-f]{40}$/i.test(String(value ?? '')))
+    throw new Error('expected tag target must be a full commit SHA');
+  if (/^0{40}$/i.test(value)) throw new Error('expected tag target cannot be the deleted-ref SHA');
+  return value.toLowerCase();
+}
+
+// QNBS-v3: the pushed object must be exactly the annotated tag object that is verified afterwards; the SHAs are public and printed in full so a failure shows both values.
+function assertEventMatchesTagObject(eventObjectSha, liveObjectSha, expectedSha) {
+  if (!/^[0-9a-f]{40}$/i.test(String(liveObjectSha)))
+    throw new Error('GitHub tag ref did not return a full tag object SHA');
+  if (eventObjectSha !== liveObjectSha.toLowerCase())
+    throw new Error(
+      `push event object does not match the live release tag object (event ${eventObjectSha}, tag ${liveObjectSha.toLowerCase()}, expected commit ${expectedSha})`,
+    );
+}
+
 export async function verifyRemoteTag({
   owner,
   repo,
   tag,
   expectedCommitSha,
+  eventAfter,
   token = '',
   fetchImpl = fetch,
 }) {
-  if (!/^[0-9a-f]{40}$/i.test(String(expectedCommitSha ?? '')))
-    throw new Error('expected tag target must be a full commit SHA');
-  if (/^0{40}$/i.test(expectedCommitSha))
-    throw new Error('expected tag target cannot be the deleted-ref SHA');
-  const expectedSha = expectedCommitSha.toLowerCase();
+  const expectedSha = expectedTagTargetSha(expectedCommitSha);
+  const eventObjectSha = eventTagObjectSha(eventAfter);
   const refUrl = `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/tags/${encodeURIComponent(tag)}`;
   const ref = await fetchJson(fetchImpl, refUrl, token);
   const object = ref.object;
@@ -251,6 +270,7 @@ export async function verifyRemoteTag({
     };
     return { ok: false, reports: [report], reason: `${report.sha}: ${report.reason}` };
   }
+  assertEventMatchesTagObject(eventObjectSha, object.sha, expectedSha);
   let tagReport = null;
   let targetSha = object.sha;
   const tagObject = await fetchJson(

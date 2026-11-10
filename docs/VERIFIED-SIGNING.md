@@ -12,6 +12,18 @@ but different checks:
 - Annotated release tags have two objects to verify: the tag object and its target commit.
   Lightweight release tags are rejected because they have no independently verifiable tag
   object; a verified target commit alone is insufficient for a release tag.
+- The tag push event is bound to the verified tag object, not to the commit: the gate requires the
+  event's `after` to equal the object the live tag ref resolves to (the annotated tag object), and
+  that tag object's target commit to equal `github.sha`. A missing, malformed or all-zero `after`, a
+  different object, a retargeted ref or a lightweight tag fails closed, and a mismatch prints both
+  SHAs. `github.sha` is never compared with `after`: an annotated tag object and its commit are
+  different objects, so that comparison could not pass for the only tag type the gate accepts.
+  Observed on the v1.29.3 tag push (Docker run 42856755012): `github.sha` was the tagged commit and
+  `after` was a different, non-zero SHA. The exact value could not be read back (the Events API does
+  not list the tag push and `event.json` stays on the runner), so the end-to-end test models it as
+  the tag object, and the gate prints both values when they differ. The release workflows check out
+  the verifier at a pinned commit, so a change to this gate takes effect for a tag only after those
+  pins name a commit that contains it.
 - The tag verifier also reads the repository's active tag rulesets and requires that, for the
   pushed ref, creation, update, deletion and non-fast-forward are all covered. It does not rely on
   `github.ref_protected`, which community reports describe as `false` for tag pushes. The API hides

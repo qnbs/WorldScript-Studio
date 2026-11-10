@@ -919,6 +919,7 @@ describe('GitHub signature API controls', () => {
       repo: 'WorldScript-Studio',
       tag: 'v1.0.0',
       expectedCommitSha: targetSha,
+      eventAfter: tagObjectSha,
       fetchImpl: tagFetch,
     });
     expect(tag.ok).toBe(true);
@@ -930,6 +931,7 @@ describe('GitHub signature API controls', () => {
       repo: 'WorldScript-Studio',
       tag: 'v1.0.0-lightweight',
       expectedCommitSha: targetSha,
+      eventAfter: targetSha,
       fetchImpl: async () =>
         new Response(JSON.stringify({ object: { sha: targetSha, type: 'commit' } }), {
           status: 200,
