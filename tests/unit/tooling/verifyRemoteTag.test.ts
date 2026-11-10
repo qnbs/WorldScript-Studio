@@ -297,7 +297,7 @@ describe('release tag event binding', () => {
     const fetchImpl = tagFetch(pushedCommitSha, true, true, {
       rulesets: [
         { id: 1, rules: ['creation'], include: ['refs/tags/v*'] },
-        { id: 2, rules: ['update', 'deletion'], include: ['refs/tags/**'] },
+        { id: 2, rules: ['update', 'deletion'], include: ['refs/tags/*'] },
         { id: 3, rules: ['non_fast_forward'], include: ['~ALL'] },
       ],
     });
@@ -398,6 +398,28 @@ describe('release tag event binding', () => {
       error: /for: creation, update, deletion, non_fast_forward/,
     },
     {
+      name: 'a ruleset that includes the tag only through a double-star pattern',
+      rulesets: [
+        {
+          id: 1,
+          rules: ['creation', 'update', 'deletion', 'non_fast_forward'],
+          include: ['refs/tags/**'],
+        },
+      ],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+    {
+      name: 'a ruleset that excludes the tag through a double-star pattern',
+      rulesets: [
+        {
+          id: 1,
+          rules: ['creation', 'update', 'deletion', 'non_fast_forward'],
+          exclude: ['refs/tags/**/v*'],
+        },
+      ],
+      error: /for: creation, update, deletion, non_fast_forward/,
+    },
+    {
       name: 'a ruleset whose include syntax is unknown',
       rulesets: [
         {
@@ -432,7 +454,10 @@ describe('release tag event binding', () => {
     ['refs/tags/v*', 'refs/tags/v1.29.3', true],
     ['refs/tags/v*', 'refs/tags/x1.29.3', false],
     ['refs/tags/v*', 'refs/tags/v1/evil', false],
-    ['refs/tags/**', 'refs/tags/v1/evil', true],
+    ['refs/tags/**', 'refs/tags/v1/evil', null],
+    ['refs/tags/**', 'refs/tags/v1', null],
+    ['refs/tags/**/v*', 'refs/tags/v1', null],
+    ['refs/tags/*', 'refs/tags/v1.29.3', true],
     ['refs/tags/v1.29.?', 'refs/tags/v1.29.3', true],
     ['refs/tags/v1.29.3', 'refs/tags/v1x29x3', false],
     ['refs/tags/v1.29.[0-9]', 'refs/tags/v1.29.3', null],

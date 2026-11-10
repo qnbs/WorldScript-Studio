@@ -67,12 +67,13 @@ async function verifyProtectedMainAncestry({ owner, repo, sha, token, fetchImpl 
   }
 }
 
-// QNBS-v3: ruleset ref patterns are fnmatch-like; any syntax outside this safe subset is unknown (null), never a match.
+// QNBS-v3: ruleset ref patterns are fnmatch-like; syntax outside this safe subset, including "**", is unknown (null), never a match.
 export function refPatternMatches(pattern, ref) {
   if (pattern === '~ALL') return true;
   if (typeof pattern !== 'string' || !/^[A-Za-z0-9._\-/*?]+$/.test(pattern)) return null;
-  const tokens = { '.': '\\.', '**': '.*', '*': '[^/]*', '?': '[^/]' };
-  const source = pattern.replace(/\*\*|[.*?]/g, (token) => tokens[token]);
+  if (pattern.includes('**')) return null;
+  const tokens = { '.': '\\.', '*': '[^/]*', '?': '[^/]' };
+  const source = pattern.replace(/[.*?]/g, (token) => tokens[token]);
   return new RegExp(`^${source}$`).test(ref);
 }
 
