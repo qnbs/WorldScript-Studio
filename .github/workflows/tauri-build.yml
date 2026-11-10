@@ -20,25 +20,40 @@ jobs:
   verify-release-tag:
     name: Verify release tag
     if: >-
-      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && github.ref_protected == true }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      verified-tag-sha: ${{ steps.verify.outputs.verified-tag-sha }}
     steps:
-      - name: Check out the tagged source
+      # QNBS-v3 (#1206): the verifier comes from an immutable protected-main commit, never from the tag under verification.
+      - name: Check out the pinned trusted verifier
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          ref: 147470682b62d5bfe196bba803353d9f25cab8a7
+          path: trusted-verifier
+          fetch-depth: 1
           persist-credentials: false
       - name: Verify GitHub signatures for the release tag
+        id: verify
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_REF_TYPE: ${{ github.ref_type }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/signing/verify-github-signatures.mjs
+        shell: bash
+        working-directory: trusted-verifier
+        run: >-
+          set -euo pipefail && env -i PATH="$PATH" GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME"
+          GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_REF_NAME="$GITHUB_REF_NAME"
+          GITHUB_REF_TYPE="$GITHUB_REF_TYPE" GITHUB_REPOSITORY="$GITHUB_REPOSITORY"
+          GITHUB_SHA="$GITHUB_SHA" GITHUB_TOKEN="$GITHUB_TOKEN"
+          node scripts/signing/verify-github-signatures.mjs &&
+          echo "verified-tag-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
   # QNBS-v3 (#911): exact-ref OSV audit of the tagged commit; `release` runs only on its success for the identical SHA.
   security-audit:
@@ -187,7 +202,10 @@ jobs:
         needs.parity-preflight.result == 'success' &&
         (
           github.event_name == 'workflow_dispatch' ||
-          needs.verify-release-tag.result == 'success'
+          (
+            needs.verify-release-tag.result == 'success' &&
+            needs.verify-release-tag.outputs.verified-tag-sha == github.sha
+          )
         )
       }}
     runs-on: ${{ matrix.os }}
@@ -210,6 +228,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       # QNBS-v3: composite action handles pnpm/node setup + frozen install.
       - uses: ./.github/actions/setup
@@ -349,18 +368,18 @@ jobs:
   release:
     name: GitHub Release
     # QNBS-v3 (#911): no status function in `if`, so any failed, skipped or cancelled need (bundle or security-audit) leaves this job unrun.
-    needs: [bundle, security-audit]
+    needs: [bundle, security-audit, verify-release-tag]
     if: >-
-      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && github.ref_protected == true && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
     steps:
-      - name: Check out the exact release tag
+      - name: Check out the exact audited commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 

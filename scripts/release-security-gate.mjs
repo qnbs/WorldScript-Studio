@@ -24,13 +24,14 @@ export const REQUIRED_TAG_PUSH_CONDITIONS = Object.freeze([
   "startsWith(github.ref, 'refs/tags/v')",
 ]);
 
-export const REQUIRED_DOCKER_TAG_PUSH_CONDITIONS = Object.freeze([
+export const REQUIRED_PROTECTED_TAG_PUSH_CONDITIONS = Object.freeze([
   ...REQUIRED_TAG_PUSH_CONDITIONS,
   'github.ref_protected == true',
 ]);
 
-export const REQUIRED_DOCKER_PUBLISH_CONDITIONS = Object.freeze([
-  ...REQUIRED_DOCKER_TAG_PUSH_CONDITIONS,
+// QNBS-v3: GHCR and Tauri publish only behind the same trusted-verifier proof of the pushed tag.
+export const REQUIRED_VERIFIED_TAG_PUBLISH_CONDITIONS = Object.freeze([
+  ...REQUIRED_PROTECTED_TAG_PUSH_CONDITIONS,
   "needs.verify-release-tag.result == 'success'",
   'needs.verify-release-tag.outputs.verified-tag-sha == github.sha',
 ]);
@@ -48,14 +49,19 @@ export const RELEASE_GATED_WORKFLOWS = Object.freeze({
   'tauri-build.yml': {
     gatedJobs: ['release'],
     expectedSha: GITHUB_SHA,
-    requiredEventConditions: REQUIRED_TAG_PUSH_CONDITIONS,
+    requiredEventConditions: REQUIRED_VERIFIED_TAG_PUBLISH_CONDITIONS,
+    requiredNeeds: ['verify-release-tag'],
+    verifyTagJob: true,
+    exactCheckoutRef: GITHUB_SHA,
+    bundleJobs: ['bundle'],
   },
   'docker.yml': {
     gatedJobs: ['build-push'],
     expectedSha: GITHUB_SHA,
-    requiredEventConditions: REQUIRED_DOCKER_PUBLISH_CONDITIONS,
+    requiredEventConditions: REQUIRED_VERIFIED_TAG_PUBLISH_CONDITIONS,
     requiredNeeds: ['verify-release-tag'],
     verifyTagJob: true,
+    exactCheckoutRef: GITHUB_SHA,
   },
   'release-gate-proof.yml': {
     gatedJobs: ['publish-stand-in'],
@@ -63,6 +69,11 @@ export const RELEASE_GATED_WORKFLOWS = Object.freeze({
     requiredEventConditions: REQUIRED_PROOF_SIMULATION_CONDITIONS,
   },
 });
+
+// QNBS-v3 (#1206): bundle holds the updater signing secrets; manual builds stay allowed, tag builds need the verifier proof.
+export const TAURI_BUNDLE_CONDITION =
+  "always() && !cancelled() && needs.parity-preflight.result == 'success' && ( github.event_name == 'workflow_dispatch' || ( needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha ) )";
+export const TAURI_BUNDLE_NEEDS = Object.freeze(['verify-release-tag', 'parity-preflight']);
 
 export const REQUIRED_GATE_CONDITIONS = Object.freeze([
   "needs.security-audit.result == 'success'",
@@ -320,7 +331,7 @@ function checkTagVerifierJob(job, fail) {
   checkExactCondition(
     'verify-release-tag',
     String(job.if ?? ''),
-    REQUIRED_DOCKER_TAG_PUSH_CONDITIONS,
+    REQUIRED_PROTECTED_TAG_PUSH_CONDITIONS,
     fail,
   );
   if (!permissionsAreReadOnlyContents(job.permissions)) {
@@ -344,16 +355,42 @@ function checkTagVerifierJob(job, fail) {
   checkStepsAlwaysEnforced(steps, fail);
 }
 
-function checkGatedJob(jobName, job, fail, requiredEventConditions, requiredNeeds = []) {
+// QNBS-v3: a writer must act on the audited commit, not on a tag ref that could move after the audit.
+function checkGatedCheckouts(jobName, job, exactCheckoutRef, fail) {
+  const checkouts = asList(job.steps).filter((step) => usesOf(step).startsWith(CHECKOUT));
+  const onExactRef =
+    checkouts.length > 0 && checkouts.every((checkout) => checkout.with?.ref === exactCheckoutRef);
+  if (!onExactRef) fail(`job "${jobName}" must check out ref: ${exactCheckoutRef}`);
+}
+
+function checkGatedJob(jobName, job, fail, spec) {
   if (!job) {
     fail(`gated job "${jobName}" is missing`);
     return;
   }
   const needs = asList(job.needs);
-  for (const required of ['security-audit', ...requiredNeeds]) {
+  for (const required of ['security-audit', ...(spec.requiredNeeds ?? [])]) {
     if (!needs.includes(required)) fail(`job "${jobName}" must need "${required}"`);
   }
-  checkGateCondition(jobName, String(job.if ?? ''), fail, requiredEventConditions);
+  checkGateCondition(jobName, String(job.if ?? ''), fail, spec.requiredEventConditions);
+  if (spec.exactCheckoutRef) checkGatedCheckouts(jobName, job, spec.exactCheckoutRef, fail);
+}
+
+function checkBundleJob(jobName, job, expectedSha, fail) {
+  if (!job) {
+    fail(`bundle job "${jobName}" is missing`);
+    return;
+  }
+  const needs = asList(job.needs);
+  for (const required of TAURI_BUNDLE_NEEDS) {
+    if (!needs.includes(required)) fail(`job "${jobName}" must need "${required}"`);
+  }
+  if (normalizedCondition(String(job.if ?? '')) !== TAURI_BUNDLE_CONDITION) {
+    fail(
+      `job "${jobName}" if: must equal the exact fail-closed condition "${TAURI_BUNDLE_CONDITION}"`,
+    );
+  }
+  checkGatedCheckouts(jobName, job, expectedSha, fail);
 }
 
 function checkNoUngatedWriters(jobs, gatedJobs, fail) {
@@ -388,12 +425,15 @@ export function checkReleaseSecurityWorkflow(fileName, source) {
   }
   const jobs = workflow?.jobs ?? {};
   if (spec.verifyTagJob && workflow?.env !== undefined) {
-    fail('Docker workflow must not define inherited environment variables');
+    fail('Release workflow must not define inherited environment variables');
   }
   checkAuditJob(jobs['security-audit'], spec.expectedSha, fail);
   if (spec.verifyTagJob) checkTagVerifierJob(jobs['verify-release-tag'], fail);
   for (const jobName of spec.gatedJobs) {
-    checkGatedJob(jobName, jobs[jobName], fail, spec.requiredEventConditions, spec.requiredNeeds);
+    checkGatedJob(jobName, jobs[jobName], fail, spec);
+  }
+  for (const jobName of spec.bundleJobs ?? []) {
+    checkBundleJob(jobName, jobs[jobName], spec.expectedSha, fail);
   }
   checkNoUngatedWriters(jobs, spec.gatedJobs, fail);
   return failures;
