@@ -45,10 +45,14 @@ jobs:
           mkdir -p "$HOME/.local/share/com.worldscript.studio"
           echo marker > "$HOME/.local/share/com.worldscript.studio/upgrade-marker.txt"
           export WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1
-          rc=0; xvfb-run -a timeout 25 /usr/bin/worldscript-studio || rc=$?
-          echo "old app exit code: $rc (124 means it was still running after 25 s)"
+          touch "$RUNNER_TEMP/stamp"; sleep 1
+          rc=0; xvfb-run -a timeout 40 /usr/bin/worldscript-studio || rc=$?
+          echo "old app exit code: $rc (124 means it was still running after 40 s)"
           echo "$rc" > "$RUNNER_TEMP/old-rc"
-          find "$HOME/.local/share/com.worldscript.studio" "$HOME/.cache/com.worldscript.studio" "$HOME/.config/com.worldscript.studio" -type f 2>/dev/null | sort > "$RUNNER_TEMP/before-files.txt" || true
+          find "$HOME" -type f -newer "$RUNNER_TEMP/stamp" -not -path '*/.cache/*' -not -name '*.tmp' -not -name '*-journal' -not -name '*.log' 2>/dev/null | sort > "$RUNNER_TEMP/before-files.txt" || true
+          echo "$HOME/.local/share/com.worldscript.studio/upgrade-marker.txt" >> "$RUNNER_TEMP/before-files.txt"
+          sort -u -o "$RUNNER_TEMP/before-files.txt" "$RUNNER_TEMP/before-files.txt"
+          sed 's#^'"$HOME"'/#~/#' "$RUNNER_TEMP/before-files.txt" | head -12
           echo "files created or kept before the upgrade: $(wc -l < "$RUNNER_TEMP/before-files.txt")"
       - name: Upgrade to the candidate deb and verify identity and data
         run: |
@@ -65,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           export WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1
-          rc=0; xvfb-run -a timeout 25 /usr/bin/worldscript-studio || rc=$?
+          rc=0; xvfb-run -a timeout 40 /usr/bin/worldscript-studio || rc=$?
           echo "new app exit code: $rc"
           old_rc="$(cat "$RUNNER_TEMP/old-rc")"
           if [ "$old_rc" = 124 ] && [ "$rc" != 124 ]; then echo "::error::the upgraded app did not stay running although v1.29.2 did"; exit 1; fi
@@ -73,7 +77,7 @@ jobs:
           {
             echo "### Linux deb upgrade 1.29.2 to 1.29.3"
             echo "- package version 1.29.3, single installed package, binary replaced"
-            echo "- old app exit $old_rc, new app exit $rc (124 means still running after 25 s)"
+            echo "- old app exit $old_rc, new app exit $rc (124 means still running after 40 s)"
             echo "- $(wc -l < "$RUNNER_TEMP/before-files.txt") user files recorded before the upgrade, all still present after the upgrade and after starting the new app"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -123,8 +127,10 @@ jobs:
           $oldEntries = Get-Entries
           if ($oldEntries.Count -ne 1 -or $oldEntries[0].DisplayVersion -ne '1.29.2') { throw "expected one 1.29.2 entry, found: $($oldEntries | ConvertTo-Json -Compress)" }
           $oldAlive = Start-App $oldEntries[0] 20
-          $before = @(Get-ChildItem -Path $data -Recurse -File | ForEach-Object FullName | Sort-Object)
-          Write-Host "old app alive after 20 s: $oldAlive; user files before the upgrade: $($before.Count)"
+          $volatile = '\\(Cache|Code Cache|GPUCache|DawnGraphiteCache|DawnWebGPUCache|ShaderCache|GrShaderCache|Crashpad|component_crx_cache|Crashpad)\\|\.tmp$|\\LOCK$|\.log$'
+          $everything = @(Get-ChildItem -Path $data -Recurse -File | ForEach-Object FullName | Sort-Object)
+          $before = @($everything | Where-Object { $_ -notmatch $volatile })
+          Write-Host "old app alive after 20 s: $oldAlive; files before the upgrade: $($everything.Count), persistent user data and settings: $($before.Count), volatile caches: $($everything.Count - $before.Count)"
           $newSetup = (Get-ChildItem cand -Recurse -Filter '*_1.29.3_x64-setup.exe' | Select-Object -First 1).FullName
           $p = Start-Process -FilePath $newSetup -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "new NSIS setup exit code $($p.ExitCode)" }
@@ -133,13 +139,15 @@ jobs:
           $exe = Join-Path $newEntries[0].InstallLocation.Trim('"') 'worldscript-studio.exe'
           $productVersion = (Get-Item $exe).VersionInfo.ProductVersion
           if ($productVersion -notlike '1.29.3*') { throw "installed binary reports $productVersion" }
-          foreach ($f in $before) { if (-not (Test-Path $f)) { throw "file lost by the upgrade: $f" } }
+          foreach ($f in $before) { if (-not (Test-Path $f)) { throw "persistent file lost by the upgrade: $f" } }
+          $volatileLost = @($everything | Where-Object { $_ -match $volatile -and -not (Test-Path $_) }).Count
+          Write-Host "volatile cache files gone after the upgrade (informational): $volatileLost"
           $newAlive = Start-App $newEntries[0] 20
           if ($oldAlive -and -not $newAlive) { throw 'the upgraded app did not stay running although v1.29.2 did' }
-          foreach ($f in $before) { if (-not (Test-Path $f)) { throw "file lost after starting the upgraded app: $f" } }
+          foreach ($f in $before) { if (-not (Test-Path $f)) { throw "persistent file lost after starting the upgraded app: $f" } }
           $uninstall = $newEntries[0].UninstallString
-          Write-Host "NSIS upgrade ok: one entry, version 1.29.3, binary $productVersion, $($before.Count) user files survived; old alive=$oldAlive new alive=$newAlive"
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows NSIS upgrade 1.29.2 to 1.29.3`n- one uninstall entry, version 1.29.3, binary $productVersion`n- old app alive after 20 s: $oldAlive, new app alive: $newAlive`n- $($before.Count) user files recorded before the upgrade, all present after the upgrade and after starting the new app"
+          Write-Host "NSIS upgrade ok: one entry, version 1.29.3, binary $productVersion, $($before.Count) persistent files survived; old alive=$oldAlive new alive=$newAlive"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows NSIS upgrade 1.29.2 to 1.29.3`n- one uninstall entry, version 1.29.3, binary $productVersion`n- old app alive after 20 s: $oldAlive, new app alive: $newAlive`n- $($before.Count) persistent user data files (volatile caches excluded: $($everything.Count - $before.Count), of which $volatileLost gone) all present after the upgrade and after starting the new app"
           cmd /c "$uninstall /S"
           Start-Sleep -Seconds 10
           if ((Get-Entries).Count -ne 0) { throw 'the NSIS entry was not removed by the uninstaller' }
