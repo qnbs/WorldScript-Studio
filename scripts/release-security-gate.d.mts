@@ -22,10 +22,13 @@ export const RELEASE_GATED_WORKFLOWS: Readonly<
       requiredNeeds?: readonly string[];
       verifyTagJob?: boolean;
       exactCheckoutRef?: string;
+      bundleJobs?: readonly string[];
     }
   >
 >;
 
+export const TAURI_BUNDLE_CONDITION: string;
+export const TAURI_BUNDLE_NEEDS: readonly string[];
 export const REQUIRED_GATE_CONDITIONS: readonly string[];
 export const REQUIRED_SCAN_ARGS: readonly string[];
 

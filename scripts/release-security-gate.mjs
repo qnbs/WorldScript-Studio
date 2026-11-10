@@ -53,6 +53,7 @@ export const RELEASE_GATED_WORKFLOWS = Object.freeze({
     requiredNeeds: ['verify-release-tag'],
     verifyTagJob: true,
     exactCheckoutRef: GITHUB_SHA,
+    bundleJobs: ['bundle'],
   },
   'docker.yml': {
     gatedJobs: ['build-push'],
@@ -68,6 +69,11 @@ export const RELEASE_GATED_WORKFLOWS = Object.freeze({
     requiredEventConditions: REQUIRED_PROOF_SIMULATION_CONDITIONS,
   },
 });
+
+// QNBS-v3 (#1206): bundle holds the updater signing secrets; manual builds stay allowed, tag builds need the verifier proof.
+export const TAURI_BUNDLE_CONDITION =
+  "always() && !cancelled() && needs.parity-preflight.result == 'success' && ( github.event_name == 'workflow_dispatch' || ( needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha ) )";
+export const TAURI_BUNDLE_NEEDS = Object.freeze(['verify-release-tag', 'parity-preflight']);
 
 export const REQUIRED_GATE_CONDITIONS = Object.freeze([
   "needs.security-audit.result == 'success'",
@@ -370,6 +376,23 @@ function checkGatedJob(jobName, job, fail, spec) {
   if (spec.exactCheckoutRef) checkGatedCheckouts(jobName, job, spec.exactCheckoutRef, fail);
 }
 
+function checkBundleJob(jobName, job, expectedSha, fail) {
+  if (!job) {
+    fail(`bundle job "${jobName}" is missing`);
+    return;
+  }
+  const needs = asList(job.needs);
+  for (const required of TAURI_BUNDLE_NEEDS) {
+    if (!needs.includes(required)) fail(`job "${jobName}" must need "${required}"`);
+  }
+  if (normalizedCondition(String(job.if ?? '')) !== TAURI_BUNDLE_CONDITION) {
+    fail(
+      `job "${jobName}" if: must equal the exact fail-closed condition "${TAURI_BUNDLE_CONDITION}"`,
+    );
+  }
+  checkGatedCheckouts(jobName, job, expectedSha, fail);
+}
+
 function checkNoUngatedWriters(jobs, gatedJobs, fail) {
   const ungated = Object.entries(jobs).filter(
     ([jobName, job]) => !gatedJobs.includes(jobName) && hasWritePermission(job),
@@ -408,6 +431,9 @@ export function checkReleaseSecurityWorkflow(fileName, source) {
   if (spec.verifyTagJob) checkTagVerifierJob(jobs['verify-release-tag'], fail);
   for (const jobName of spec.gatedJobs) {
     checkGatedJob(jobName, jobs[jobName], fail, spec);
+  }
+  for (const jobName of spec.bundleJobs ?? []) {
+    checkBundleJob(jobName, jobs[jobName], spec.expectedSha, fail);
   }
   checkNoUngatedWriters(jobs, spec.gatedJobs, fail);
   return failures;

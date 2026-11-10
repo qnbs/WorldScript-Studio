@@ -296,6 +296,13 @@ describe('#1206 Tauri release trusts only the pinned-verifier proof', () => {
   const releaseCheckout = (ref: string) =>
     `- name: Check out the exact audited commit\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${expr(ref)}`;
 
+  // The bundle job's checkout with its exact-ref line (`true`), without a ref (`false`), or with another ref expression.
+  const bundleCheckout = (ref: string | boolean) => {
+    const refLine =
+      ref === false ? '' : `          ref: ${expr(ref === true ? 'github.sha' : ref)}\n`;
+    return `${refLine}          persist-credentials: false\n      # QNBS-v3: composite action`;
+  };
+
   it('builds with the signing secrets only for the verified tag target and the exact commit', () => {
     expect(source(TAURI)).toMatch(
       /needs\.verify-release-tag\.result == 'success' &&\s+needs\.verify-release-tag\.outputs\.verified-tag-sha == github\.sha\s+\)/,
@@ -350,6 +357,57 @@ describe('#1206 Tauri release trusts only the pinned-verifier proof', () => {
       'a release that checks out the mutable tag ref',
       () => mutate(source(TAURI), releaseCheckout('github.sha'), releaseCheckout('github.ref')),
       /job "release" must check out ref/,
+    ],
+    [
+      'a bundle without the verifier dependency',
+      () =>
+        mutate(
+          source(TAURI),
+          'needs: [verify-release-tag, parity-preflight]',
+          'needs: [parity-preflight]',
+        ),
+      /job "bundle" must need "verify-release-tag"/,
+    ],
+    [
+      'a bundle that ignores the verified tag target',
+      () =>
+        mutate(
+          source(TAURI),
+          ' &&\n            needs.verify-release-tag.outputs.verified-tag-sha == github.sha',
+          '',
+        ),
+      /job "bundle" if: must equal the exact fail-closed condition/,
+    ],
+    [
+      'a bundle that ignores the verifier result',
+      () =>
+        mutate(source(TAURI), "needs.verify-release-tag.result == 'success' &&\n            ", ''),
+      /job "bundle" if: must equal the exact fail-closed condition/,
+    ],
+    [
+      'a bundle with an extra unconditional branch',
+      () =>
+        mutate(
+          source(TAURI),
+          "github.event_name == 'workflow_dispatch' ||\n          (",
+          "github.event_name == 'workflow_dispatch' || true ||\n          (",
+        ),
+      /job "bundle" if: must equal the exact fail-closed condition/,
+    ],
+    [
+      'a bundle that skips the plugin parity result',
+      () => mutate(source(TAURI), "        needs.parity-preflight.result == 'success' &&\n", ''),
+      /job "bundle" if: must equal the exact fail-closed condition/,
+    ],
+    [
+      'a bundle that checks out the default ref',
+      () => mutate(source(TAURI), bundleCheckout(true), bundleCheckout(false)),
+      /job "bundle" must check out ref/,
+    ],
+    [
+      'a bundle that checks out the mutable tag ref',
+      () => mutate(source(TAURI), bundleCheckout(true), bundleCheckout('github.ref')),
+      /job "bundle" must check out ref/,
     ],
     [
       'a verifier that is not pinned to trusted code',
