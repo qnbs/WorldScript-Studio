@@ -80,6 +80,18 @@ const admissionCheckRegistry = Object.freeze([
     ]),
   },
   {
+    name: 'relatedTests',
+    // QNBS-v3: the selector itself narrows to tests that mention a changed file; this only gates whether to ask it.
+    matches: (file) => /\.(ts|tsx|mts|cts|mjs|cjs|js|ya?ml|json)$/i.test(file),
+    implementationFiles: new Set([
+      routingAuthority,
+      runnerAuthority,
+      'scripts/ci-prepush-classifier.mjs',
+      'scripts/ci-prepush-range-resolver.mjs',
+      'scripts/ci-prepush-related-tests.mjs',
+    ]),
+  },
+  {
     name: 'reviewerConfig',
     matches: (file) => reviewerConfigPaths.has(file),
     implementationFiles: new Set([

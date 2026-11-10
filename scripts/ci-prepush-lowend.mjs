@@ -10,12 +10,38 @@ import {
   isMainModule,
   resolveManualEvidence,
 } from './ci-prepush-range-resolver.mjs';
-import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/shared.mjs';
+import {
+  gitFreeTestEnv,
+  LOCAL_CHECK_TIMEOUTS_MS,
+  RELATED_TEST_LIMIT,
+  selectRelatedTests,
+} from './ci-prepush-related-tests.mjs';
+import { ensureDependencyState, runLocalBinaryDetailed, runNodeScript } from './hooks/shared.mjs';
 import { PR_BUDGET_EXIT_CODES } from './pr-budget.mjs';
 
 function report(name, status, detail = '') {
   console.log(`[local-admission] ${name.padEnd(26)} ${status}${detail ? ` — ${detail}` : ''}`);
   return status;
+}
+
+// QNBS-v3: a bounded child that dies silently must still say how it ended (exit status, signal, timeout) so a hook FAIL is diagnosable.
+async function runDetailedCheck(name, run) {
+  const result = await run();
+  const failed =
+    result.error || result.timedOut || result.interrupted || (result.status ?? 1) !== 0;
+  if (!failed) {
+    report(name, 'PASS');
+    return;
+  }
+  const facts = [
+    `exit ${result.status ?? 'none'}`,
+    `signal ${result.signal ?? 'none'}`,
+    result.timedOut ? 'timed out' : null,
+    result.interrupted ? 'interrupted' : null,
+    result.error ? String(result.error.message ?? result.error) : null,
+  ].filter(Boolean);
+  report(name, 'FAIL', facts.join(', '));
+  process.exit(result.status || 1);
 }
 
 async function runCheck(name, run) {
@@ -27,6 +53,37 @@ async function runCheck(name, run) {
 async function runReviewerConfigAdmission(classification, full) {
   if (shouldRunAdmissionCheck('reviewerConfig', classification.files) || full)
     await runCheck('Reviewer config', () => runNodeScript('scripts/check-reviewer-config.mjs'));
+}
+
+// QNBS-v3: tests that mention a changed file ran green locally; anything not run is named, never skipped silently.
+async function runRelatedTestsAdmission(classification) {
+  const name = 'Related unit tests';
+  if (classification.kind === 'AMBIGUOUS' || classification.files.length === 0) {
+    report(name, 'DEFERRED_TO_REQUIRED_CI', 'no resolved change evidence to select tests from');
+    return;
+  }
+  if (!shouldRunAdmissionCheck('relatedTests', classification.files)) {
+    report(name, 'NONE', 'no governed source, workflow or script changed');
+    return;
+  }
+  const selection = selectRelatedTests(classification.files);
+  if (selection.status === 'NONE') {
+    report(name, 'NONE', 'no unit test mentions the changed files');
+  } else if (selection.status === 'DEFERRED') {
+    report(
+      name,
+      'DEFERRED_TO_REQUIRED_CI',
+      `${selection.total} related test files exceed the local limit of ${RELATED_TEST_LIMIT}; run the ones you need with pnpm exec vitest run <file>`,
+    );
+  } else {
+    console.log(`[local-admission] related test files: ${selection.tests.join(', ')}`);
+    await runDetailedCheck(name, () =>
+      runLocalBinaryDetailed('vitest', ['run', ...selection.tests], {
+        env: gitFreeTestEnv(),
+        timeoutMs: LOCAL_CHECK_TIMEOUTS_MS.relatedTests,
+      }),
+    );
+  }
 }
 
 async function main() {
@@ -142,10 +199,16 @@ async function main() {
     );
   }
 
+  await runRelatedTestsAdmission(classification);
+
   if (typecheckRequired) {
-    await runCheck('TypeScript (single checker)', () =>
+    await runDetailedCheck('TypeScript (single checker)', () =>
       // QNBS-v3: one checker bounds memory use on constrained developer machines.
-      runLocalBinary('tsgo', ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1']),
+      runLocalBinaryDetailed(
+        'tsgo',
+        ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1'],
+        { timeoutMs: LOCAL_CHECK_TIMEOUTS_MS.typecheck },
+      ),
     );
   } else {
     report('TypeScript', 'DEFERRED_TO_REQUIRED_CI', 'no TypeScript-impacting changes detected');
