@@ -107,7 +107,7 @@ jobs:
             @(Get-ItemProperty -Path $roots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'WorldScript Studio*' })
           }
           function Start-App($entry, $seconds) {
-            $exe = Join-Path $entry.InstallLocation 'worldscript-studio.exe'
+            $exe = Join-Path $entry.InstallLocation.Trim('"') 'worldscript-studio.exe'
             $p = Start-Process -FilePath $exe -PassThru
             Start-Sleep -Seconds $seconds
             $alive = -not $p.HasExited
@@ -130,7 +130,7 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "new NSIS setup exit code $($p.ExitCode)" }
           $newEntries = Get-Entries
           if ($newEntries.Count -ne 1 -or $newEntries[0].DisplayVersion -ne '1.29.3') { throw "expected one 1.29.3 entry, found: $($newEntries | ConvertTo-Json -Compress)" }
-          $exe = Join-Path $newEntries[0].InstallLocation 'worldscript-studio.exe'
+          $exe = Join-Path $newEntries[0].InstallLocation.Trim('"') 'worldscript-studio.exe'
           $productVersion = (Get-Item $exe).VersionInfo.ProductVersion
           if ($productVersion -notlike '1.29.3*') { throw "installed binary reports $productVersion" }
           foreach ($f in $before) { if (-not (Test-Path $f)) { throw "file lost by the upgrade: $f" } }
