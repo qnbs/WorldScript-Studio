@@ -1,0 +1,233 @@
+# Throwaway evidence workflow for the v1.29.3 qualification. It lives only on an evidence branch and is never merged.
+# It installs the published v1.29.2 packages on real runners, upgrades them with the non-publishing candidate packages and checks identity and user data.
+
+name: Upgrade paths evidence
+
+on:
+  push:
+    branches:
+      - 'evidence/upgrade-paths-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upgrade-paths-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux deb upgrade
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Download the candidate bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: tauri-bundle-ubuntu-22.04
+          path: cand
+          run-id: 42767893489
+          github-token: ${{ github.token }}
+      - name: Download the published v1.29.2 package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download v1.29.2 --repo "$GITHUB_REPOSITORY" --pattern '*_amd64.deb' --dir old
+      - name: Install v1.29.2, run it and record the user data it created
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y xvfb "./old/$(ls old | head -1)"
+          dpkg -s world-script-studio | grep -x 'Version: 1.29.2'
+          sha256sum /usr/bin/worldscript-studio | cut -d' ' -f1 > "$RUNNER_TEMP/old-binary.sha"
+          mkdir -p "$HOME/.local/share/com.worldscript.studio"
+          echo marker > "$HOME/.local/share/com.worldscript.studio/upgrade-marker.txt"
+          export WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1
+          rc=0; xvfb-run -a timeout 25 /usr/bin/worldscript-studio || rc=$?
+          echo "old app exit code: $rc (124 means it was still running after 25 s)"
+          echo "$rc" > "$RUNNER_TEMP/old-rc"
+          find "$HOME/.local/share/com.worldscript.studio" "$HOME/.cache/com.worldscript.studio" "$HOME/.config/com.worldscript.studio" -type f 2>/dev/null | sort > "$RUNNER_TEMP/before-files.txt" || true
+          echo "files created or kept before the upgrade: $(wc -l < "$RUNNER_TEMP/before-files.txt")"
+      - name: Upgrade to the candidate deb and verify identity and data
+        run: |
+          set -euo pipefail
+          cp "$(find cand -name '*_1.29.3_amd64.deb' -print -quit)" new.deb
+          sudo apt-get install -y ./new.deb
+          dpkg -s world-script-studio | grep -x 'Version: 1.29.3'
+          test "$(dpkg -l | grep -c '^ii  world-script-studio ')" = 1
+          test "$(sha256sum /usr/bin/worldscript-studio | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/old-binary.sha")"
+          test -f "$HOME/.local/share/com.worldscript.studio/upgrade-marker.txt"
+          while IFS= read -r f; do test -e "$f" || { echo "::error::file lost by the upgrade: $f"; exit 1; }; done < "$RUNNER_TEMP/before-files.txt"
+          echo "all $(wc -l < "$RUNNER_TEMP/before-files.txt") recorded user files survived the package upgrade"
+      - name: Start the upgraded app and confirm the data is still there
+        run: |
+          set -euo pipefail
+          export WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1
+          rc=0; xvfb-run -a timeout 25 /usr/bin/worldscript-studio || rc=$?
+          echo "new app exit code: $rc"
+          old_rc="$(cat "$RUNNER_TEMP/old-rc")"
+          if [ "$old_rc" = 124 ] && [ "$rc" != 124 ]; then echo "::error::the upgraded app did not stay running although v1.29.2 did"; exit 1; fi
+          while IFS= read -r f; do test -e "$f" || { echo "::error::file lost after starting the upgraded app: $f"; exit 1; }; done < "$RUNNER_TEMP/before-files.txt"
+          {
+            echo "### Linux deb upgrade 1.29.2 to 1.29.3"
+            echo "- package version 1.29.3, single installed package, binary replaced"
+            echo "- old app exit $old_rc, new app exit $rc (124 means still running after 25 s)"
+            echo "- $(wc -l < "$RUNNER_TEMP/before-files.txt") user files recorded before the upgrade, all still present after the upgrade and after starting the new app"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  windows:
+    name: Windows NSIS and MSI upgrade
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Download the candidate bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: tauri-bundle-windows-latest
+          path: cand
+          run-id: 42767893489
+          github-token: ${{ github.token }}
+      - name: Download the published v1.29.2 packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download v1.29.2 --repo "$env:GITHUB_REPOSITORY" --pattern '*x64-setup.exe' --pattern '*.msi' --dir old
+      - name: Upgrade the NSIS installer and verify identity and data
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Get-Entries {
+            $roots = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+            @(Get-ItemProperty -Path $roots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'WorldScript Studio*' })
+          }
+          function Start-App($entry, $seconds) {
+            $exe = Join-Path $entry.InstallLocation 'worldscript-studio.exe'
+            $p = Start-Process -FilePath $exe -PassThru
+            Start-Sleep -Seconds $seconds
+            $alive = -not $p.HasExited
+            if ($alive) { Stop-Process -Id $p.Id -Force }
+            return $alive
+          }
+          $data = Join-Path $env:LOCALAPPDATA 'com.worldscript.studio'
+          New-Item -ItemType Directory -Force -Path (Join-Path $data 'EBWebView\Default\IndexedDB') | Out-Null
+          Set-Content -Path (Join-Path $data 'EBWebView\Default\IndexedDB\upgrade-marker.txt') -Value marker
+          $oldSetup = (Get-ChildItem old -Filter '*x64-setup.exe' | Select-Object -First 1).FullName
+          $p = Start-Process -FilePath $oldSetup -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "old NSIS setup exit code $($p.ExitCode)" }
+          $oldEntries = Get-Entries
+          if ($oldEntries.Count -ne 1 -or $oldEntries[0].DisplayVersion -ne '1.29.2') { throw "expected one 1.29.2 entry, found: $($oldEntries | ConvertTo-Json -Compress)" }
+          $oldAlive = Start-App $oldEntries[0] 20
+          $before = @(Get-ChildItem -Path $data -Recurse -File | ForEach-Object FullName | Sort-Object)
+          Write-Host "old app alive after 20 s: $oldAlive; user files before the upgrade: $($before.Count)"
+          $newSetup = (Get-ChildItem cand -Recurse -Filter '*_1.29.3_x64-setup.exe' | Select-Object -First 1).FullName
+          $p = Start-Process -FilePath $newSetup -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "new NSIS setup exit code $($p.ExitCode)" }
+          $newEntries = Get-Entries
+          if ($newEntries.Count -ne 1 -or $newEntries[0].DisplayVersion -ne '1.29.3') { throw "expected one 1.29.3 entry, found: $($newEntries | ConvertTo-Json -Compress)" }
+          $exe = Join-Path $newEntries[0].InstallLocation 'worldscript-studio.exe'
+          $productVersion = (Get-Item $exe).VersionInfo.ProductVersion
+          if ($productVersion -notlike '1.29.3*') { throw "installed binary reports $productVersion" }
+          foreach ($f in $before) { if (-not (Test-Path $f)) { throw "file lost by the upgrade: $f" } }
+          $newAlive = Start-App $newEntries[0] 20
+          if ($oldAlive -and -not $newAlive) { throw 'the upgraded app did not stay running although v1.29.2 did' }
+          foreach ($f in $before) { if (-not (Test-Path $f)) { throw "file lost after starting the upgraded app: $f" } }
+          $uninstall = $newEntries[0].UninstallString
+          Write-Host "NSIS upgrade ok: one entry, version 1.29.3, binary $productVersion, $($before.Count) user files survived; old alive=$oldAlive new alive=$newAlive"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows NSIS upgrade 1.29.2 to 1.29.3`n- one uninstall entry, version 1.29.3, binary $productVersion`n- old app alive after 20 s: $oldAlive, new app alive: $newAlive`n- $($before.Count) user files recorded before the upgrade, all present after the upgrade and after starting the new app"
+          cmd /c "$uninstall /S"
+          Start-Sleep -Seconds 10
+          if ((Get-Entries).Count -ne 0) { throw 'the NSIS entry was not removed by the uninstaller' }
+      - name: Upgrade the MSI package and verify identity and data
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Get-Entries {
+            $roots = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+            @(Get-ItemProperty -Path $roots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'WorldScript Studio*' })
+          }
+          $data = Join-Path $env:LOCALAPPDATA 'com.worldscript.studio'
+          New-Item -ItemType Directory -Force -Path $data | Out-Null
+          Set-Content -Path (Join-Path $data 'upgrade-marker-msi.txt') -Value marker
+          $oldMsi = (Get-ChildItem old -Filter '*.msi' | Select-Object -First 1).FullName
+          $p = Start-Process -FilePath msiexec.exe -ArgumentList '/i', "`"$oldMsi`"", '/qn', '/norestart' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "old MSI exit code $($p.ExitCode)" }
+          $oldEntries = Get-Entries
+          if ($oldEntries.Count -ne 1 -or $oldEntries[0].DisplayVersion -ne '1.29.2') { throw "expected one 1.29.2 entry, found: $($oldEntries | ConvertTo-Json -Compress)" }
+          $oldCode = $oldEntries[0].PSChildName
+          $newMsi = (Get-ChildItem cand -Recurse -Filter '*_1.29.3_x64_en-US.msi' | Select-Object -First 1).FullName
+          $p = Start-Process -FilePath msiexec.exe -ArgumentList '/i', "`"$newMsi`"", '/qn', '/norestart' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "new MSI exit code $($p.ExitCode)" }
+          $newEntries = Get-Entries
+          if ($newEntries.Count -ne 1 -or $newEntries[0].DisplayVersion -ne '1.29.3') { throw "expected one 1.29.3 entry after the major upgrade, found: $($newEntries | ConvertTo-Json -Compress)" }
+          $newCode = $newEntries[0].PSChildName
+          if ($newCode -eq $oldCode) { throw 'the ProductCode did not change' }
+          if (-not (Test-Path (Join-Path $data 'upgrade-marker-msi.txt'))) { throw 'user data marker lost by the MSI upgrade' }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows MSI major upgrade 1.29.2 to 1.29.3`n- ProductCode $oldCode replaced by $newCode, one entry remains at 1.29.3`n- user data marker survived"
+          $p = Start-Process -FilePath msiexec.exe -ArgumentList '/x', $newCode, '/qn', '/norestart' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "MSI uninstall exit code $($p.ExitCode)" }
+
+  macos:
+    name: macOS dmg upgrade
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Download the candidate bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: tauri-bundle-macos-latest
+          path: cand
+          run-id: 42767893489
+          github-token: ${{ github.token }}
+      - name: Download the published v1.29.2 package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download v1.29.2 --repo "$GITHUB_REPOSITORY" --pattern '*aarch64.dmg' --dir old
+      - name: Install v1.29.2, run it, upgrade to the candidate and verify identity and data
+        run: |
+          set -euo pipefail
+          APP="/Applications/WorldScript Studio.app"
+          plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$APP/Contents/Info.plist"; }
+          install_dmg() {
+            hdiutil attach "$1" -nobrowse -readonly -mountpoint "$RUNNER_TEMP/dmgmnt" > /dev/null
+            rm -rf "$APP"
+            cp -R "$RUNNER_TEMP/dmgmnt/WorldScript Studio.app" /Applications/
+            hdiutil detach "$RUNNER_TEMP/dmgmnt" > /dev/null
+          }
+          smoke() {
+            "$APP/Contents/MacOS/worldscript-studio" > "$RUNNER_TEMP/app.log" 2>&1 &
+            pid=$!
+            sleep 20
+            if kill -0 "$pid" 2>/dev/null; then kill "$pid"; echo alive; else echo exited; fi
+          }
+          mkdir -p "$HOME/Library/Application Support/com.worldscript.studio"
+          echo marker > "$HOME/Library/Application Support/com.worldscript.studio/upgrade-marker.txt"
+          install_dmg "old/$(ls old | head -1)"
+          test "$(plist CFBundleShortVersionString)" = 1.29.2
+          test "$(plist CFBundleIdentifier)" = com.worldscript.studio
+          old_state="$(smoke)"
+          echo "old app after 20 s: $old_state"
+          find "$HOME/Library/Application Support/com.worldscript.studio" "$HOME/Library/WebKit/com.worldscript.studio" "$HOME/Library/Caches/com.worldscript.studio" -type f 2>/dev/null | sort > "$RUNNER_TEMP/before-files.txt" || true
+          echo "user files recorded before the upgrade: $(wc -l < "$RUNNER_TEMP/before-files.txt")"
+          install_dmg "$(find cand -name '*_1.29.3_aarch64.dmg' -print -quit)"
+          test "$(plist CFBundleShortVersionString)" = 1.29.3
+          test "$(plist CFBundleIdentifier)" = com.worldscript.studio
+          while IFS= read -r f; do test -e "$f" || { echo "::error::file lost by the upgrade: $f"; exit 1; }; done < "$RUNNER_TEMP/before-files.txt"
+          new_state="$(smoke)"
+          echo "new app after 20 s: $new_state"
+          if [ "$old_state" = alive ] && [ "$new_state" != alive ]; then echo "::error::the upgraded app did not stay running although v1.29.2 did"; exit 1; fi
+          while IFS= read -r f; do test -e "$f" || { echo "::error::file lost after starting the upgraded app: $f"; exit 1; }; done < "$RUNNER_TEMP/before-files.txt"
+          codesign -dv "$APP" 2>&1 | head -4 || true
+          {
+            echo "### macOS dmg upgrade 1.29.2 to 1.29.3"
+            echo "- bundle identifier com.worldscript.studio, version 1.29.3 after replacing the app"
+            echo "- old app $old_state after 20 s, new app $new_state"
+            echo "- $(wc -l < "$RUNNER_TEMP/before-files.txt") user files recorded before the upgrade, all present after the upgrade and after starting the new app"
+          } >> "$GITHUB_STEP_SUMMARY"
