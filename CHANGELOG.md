@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- release-candidate: v1.29.4 -->
+
+## [1.29.4] — 2026-11-10
+
+- **Release status:** `v1.29.3` was tagged on 2026-11-10 but never published: the release-tag verifier could not pass for any annotated tag, so both publish workflows stopped at `Verify release tag` before building or publishing anything. Everything listed under 1.29.3 below ships in 1.29.4 together with the corrected verifier and its re-pin; the `v1.29.3` tag stays as an unpublished, immutable tag (#1201).
+
 - **Release tag gate:** The GHCR and Tauri tag workflows and the read-only proof workflow now check out the corrected tag verifier (the merge commit of #1218) instead of the earlier one that could not pass for any annotated tag, the policy checker and its tests pin the same commit and reject the defective one, and the proof workflow passes the live tag object as the event value the verifier now requires (PR #1220).
 - **Release tag gate:** The release-tag verifier compared the push event's `after` with `github.sha`, which no annotated tag can satisfy, so every signed annotated release tag failed with `push event target does not match github.sha` (the v1.29.3 tag run published nothing). It now binds the event's `after` to the live annotated tag object, requires that object's target to equal `github.sha`, and prints both SHAs on a mismatch, with a real-shaped end-to-end regression test for annotated tags, lightweight tags, wrong targets, manipulated events, invalid signatures and unprotected tags. A new release tag only uses the fix once the verifier pins in `docker.yml` and `tauri-build.yml` name a commit that contains it (separate follow-up PR), and a push event can only be observed with a real tag push (PR #1218).
 - **Vercel retention:** Previews are now deleted as soon as no open PR retains them and no common protection gate applies (the current `main` commit, a hold, the branch alias of an open PR's head branch), regardless of whether their branch still exists, and their branch aliases go with them; Production history is left to the provider's retention (PR #1213).
@@ -17,9 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release-tag verification:** Validate protected-main ancestry with the GitHub Compare API's returned base and merge-base commits, and bind the verified tag target to the triggering event SHA (PR #1207).
 - **Local admission:** `ci:prepush` now runs up to eight unit test files that mention a changed file, so most stale test expectations fail before the push instead of in CI. Larger sets, ambiguous change evidence and a few excluded files are reported as deferred to required CI (PR #1209).
 
-<!-- release-candidate: v1.29.3 -->
-
 ## [1.29.3] — 2026-11-08
+
+_Tagged `v1.29.3` on 2026-11-10 but never published; shipped as 1.29.4._
 
 - **Storage safety and privacy:** Factory Reset and startup recovery now clear only exact WorldScript-owned browser keys, preserve ambiguous same-origin values, and retain the encryption salt until primary IndexedDB deletion succeeds. Incomplete database inventories and deletion failures stop the reset and are announced accessibly (#1196; #1125).
 
