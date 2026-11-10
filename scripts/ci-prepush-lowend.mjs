@@ -10,7 +10,11 @@ import {
   isMainModule,
   resolveManualEvidence,
 } from './ci-prepush-range-resolver.mjs';
-import { RELATED_TEST_LIMIT, selectRelatedTests } from './ci-prepush-related-tests.mjs';
+import {
+  LOCAL_CHECK_TIMEOUTS_MS,
+  RELATED_TEST_LIMIT,
+  selectRelatedTests,
+} from './ci-prepush-related-tests.mjs';
 import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/shared.mjs';
 import { PR_BUDGET_EXIT_CODES } from './pr-budget.mjs';
 
@@ -33,7 +37,7 @@ async function runReviewerConfigAdmission(classification, full) {
 // QNBS-v3: tests that mention a changed file ran green locally; anything not run is named, never skipped silently.
 async function runRelatedTestsAdmission(classification, full) {
   const name = 'Related unit tests';
-  if (full || classification.files.length === 0) {
+  if (full || classification.kind === 'AMBIGUOUS' || classification.files.length === 0) {
     report(name, 'DEFERRED_TO_REQUIRED_CI', 'no resolved change evidence to select tests from');
     return;
   }
@@ -52,7 +56,11 @@ async function runRelatedTestsAdmission(classification, full) {
     );
   } else {
     console.log(`[local-admission] related test files: ${selection.tests.join(', ')}`);
-    await runCheck(name, () => runLocalBinary('vitest', ['run', ...selection.tests]));
+    await runCheck(name, () =>
+      runLocalBinary('vitest', ['run', ...selection.tests], {
+        timeoutMs: LOCAL_CHECK_TIMEOUTS_MS.relatedTests,
+      }),
+    );
   }
 }
 
@@ -174,7 +182,9 @@ async function main() {
   if (typecheckRequired) {
     await runCheck('TypeScript (single checker)', () =>
       // QNBS-v3: one checker bounds memory use on constrained developer machines.
-      runLocalBinary('tsgo', ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1']),
+      runLocalBinary('tsgo', ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1'], {
+        timeoutMs: LOCAL_CHECK_TIMEOUTS_MS.typecheck,
+      }),
     );
   } else {
     report('TypeScript', 'DEFERRED_TO_REQUIRED_CI', 'no TypeScript-impacting changes detected');

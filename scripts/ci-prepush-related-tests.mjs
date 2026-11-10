@@ -8,6 +8,9 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // QNBS-v3: a bounded local run keeps a 2-core machine usable; a larger set is reported as deferred, never silently dropped.
 export const RELATED_TEST_LIMIT = 8;
 
+// QNBS-v3: the repo-wide typecheck and a related-test run legitimately exceed the 120 s default child bound on a 2-core machine; still bounded, never unlimited.
+export const LOCAL_CHECK_TIMEOUTS_MS = Object.freeze({ typecheck: 600_000, relatedTests: 480_000 });
+
 const TEST_FILE = /\.test\.(?:ts|tsx|mts|mjs)$/;
 const TS_FAMILY = new Set(['.ts', '.tsx', '.mts', '.cts']);
 const BASENAME_FAMILY = new Set(['.yml', '.yaml', '.mjs', '.cjs', '.js', '.json']);

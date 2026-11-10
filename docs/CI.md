@@ -395,9 +395,11 @@ change classification instead of always running:
   (a `git grep` on the path, the extension-less import path, and the basename for workflows and
   scripts, so a test that reads a workflow from disk is found too). This is an explicit file list,
   never a suite-wide run. More than 8 matching files are reported as `DEFERRED_TO_REQUIRED_CI`
-  with the count (run the ones you need with `pnpm exec vitest run <file>`); missing change
-  evidence is reported as deferred as well, never skipped silently. End-to-end specs are never
-  selected locally.
+  with the count (run the ones you need with `pnpm exec vitest run <file>`); missing or
+  ambiguous change evidence is reported as deferred as well, never skipped silently. End-to-end
+  specs are never selected locally. The related-test run and the single-checker typecheck have
+  their own bounded timeouts (8 and 10 minutes) because the 120 s default child bound killed a
+  full-range typecheck on a 2-core machine.
 
 - **TypeScript (single-checker)** — skipped, reporting `DEFERRED_TO_REQUIRED_CI`, when the
   classification is `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, or

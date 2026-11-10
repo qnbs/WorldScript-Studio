@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { shouldRunAdmissionCheck } from '../../../scripts/ci-prepush-check-registry.mjs';
 import {
   isUnitTestFile,
+  LOCAL_CHECK_TIMEOUTS_MS,
   RELATED_TEST_LIMIT,
   relatedTestNeedles,
   selectRelatedTests,
@@ -96,6 +97,14 @@ describe('related unit tests for local admission', () => {
         'tests/unit/workflowPolicy.test.ts',
       ]),
     );
+  });
+
+  // The full-range typecheck of a new branch took 123 s and was killed by the 120 s default child bound.
+  it('bounds the heavy local checks above the default child limit without removing the bound', () => {
+    for (const timeout of Object.values(LOCAL_CHECK_TIMEOUTS_MS)) {
+      expect(timeout).toBeGreaterThan(120_000);
+      expect(Number.isFinite(timeout)).toBe(true);
+    }
   });
 
   it('is routed by the admission registry for sources and for its own implementation', () => {
