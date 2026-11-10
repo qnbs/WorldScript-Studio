@@ -90,18 +90,21 @@ const unknownReasons = (deployment) =>
 
 const FAILED_STATES = new Set(['ERROR', 'CANCELED']);
 
-// QNBS-v3: only an open PR needs its failed or canceled Preview; a branch that merely still exists does not, because merged branches are kept and would pin every Preview forever.
-function failedPreviewNeeded(deployment, context) {
-  const needed = context.prNumbers.has(deployment.meta?.githubPrId);
-  return FAILED_STATES.has(deployment.readyState) && needed;
-}
-
-// QNBS-v3: an alias is the review URL of an open PR when the deployment carries that PR's number or, because a push that predates the PR (or a provider that omitted the number) leaves no number, when it was built from the head branch of an open PR.
-const holdsOpenPrAlias = (meta, aliases, context) =>
-  aliases.length > 0 &&
+// QNBS-v3: a deployment belongs to an open PR when it carries that PR's number or, because a push that predates the PR (or a provider that omitted the number) leaves no number, when it was built from the head branch of an open PR. A branch that merely still exists does not count: merged branches are kept and would pin every Preview forever.
+const belongsToOpenPr = (meta, context) =>
   [context.prNumbers.has(meta.githubPrId), context.openPrBranches.has(meta.githubCommitRef)].some(
     Boolean,
   );
+
+// QNBS-v3: only an open PR needs its failed or canceled Preview.
+function failedPreviewNeeded(deployment, context) {
+  return (
+    FAILED_STATES.has(deployment.readyState) && belongsToOpenPr(deployment.meta ?? {}, context)
+  );
+}
+
+const holdsOpenPrAlias = (meta, aliases, context) =>
+  aliases.length > 0 && belongsToOpenPr(meta, context);
 
 function protectionReasons(deployment, aliases, context) {
   const meta = deployment.meta ?? {};

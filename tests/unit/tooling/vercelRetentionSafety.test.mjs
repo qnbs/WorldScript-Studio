@@ -157,6 +157,15 @@ for (const state of ['ERROR', 'CANCELED']) {
     assert.ok(find(world, 'dpl_prev1'));
   });
 
+  // QNBS-v3 (#1213 review): without a PR number the open PR's head branch still ties the failed Preview to that PR.
+  test(`a ${state} Preview without a PR number on an open PR's head branch is kept`, async () => {
+    const world = standardWorld();
+    world.deployments.push(preview(33, { readyState: state, meta: { githubPrId: undefined } }));
+    const summary = await reconcile(world);
+    assert.deepEqual(verdicts(summary).dpl_prev33.reasons, ['failed-preview-needed']);
+    assert.ok(find(world, 'dpl_prev33'));
+  });
+
   test(`a ${state} Preview of a closed PR is deleted once its branch is gone`, async () => {
     const world = standardWorld();
     find(world, 'dpl_prev11').readyState = state;
