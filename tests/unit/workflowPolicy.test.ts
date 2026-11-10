@@ -375,7 +375,13 @@ describe('Tauri release workflow policy', () => {
   it('runs the signature verifier only for real version-tag pushes with read-only access', () => {
     const verifier = extractJobBlock(tauriWorkflowSource, 'verify-release-tag');
     expect(verifier).toMatch(
-      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) \}\}$/m,
+      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) && github\.ref_protected == true \}\}$/m,
+    );
+    // QNBS-v3 (#1206): the verifier runs from a pinned protected-main checkout, never from the tag under verification.
+    expect(verifier).toContain('path: trusted-verifier');
+    expect(verifier).toContain('working-directory: trusted-verifier');
+    expect(verifier).toMatch(
+      /verified-tag-sha: \$\{\{ steps\.verify\.outputs\.verified-tag-sha \}\}/,
     );
     expect(verifier).toContain('scripts/signing/verify-github-signatures.mjs');
     expect(verifier).toMatch(/^ {4}permissions:\n {6}contents: read\s*$/m);
@@ -392,6 +398,10 @@ describe('Tauri release workflow policy', () => {
     expect(bundle).toContain('!cancelled()');
     expect(bundle).toMatch(/github\.event_name == 'workflow_dispatch'/);
     expect(bundle).toMatch(/needs\.verify-release-tag\.result == 'success'/);
+    // QNBS-v3 (#1206): a tagged build also needs the verified tag target to equal the event SHA before signing secrets are used.
+    expect(bundle).toMatch(
+      /needs\.verify-release-tag\.result == 'success'\s*&&\s*needs\.verify-release-tag\.outputs\.verified-tag-sha == github\.sha/,
+    );
     expect(bundle).toMatch(
       /always\(\)\s*&&\s*!cancelled\(\)[\s\S]+github\.event_name == 'workflow_dispatch'[\s\S]+needs\.verify-release-tag\.result == 'success'/,
     );
@@ -537,15 +547,20 @@ describe('Tauri release workflow policy', () => {
 
   it('keeps release publication tag-only and downstream of bundle output', () => {
     const release = extractJobBlock(tauriWorkflowSource, 'release');
-    expect(extractNeeds(tauriWorkflowSource, 'release')).toEqual(['bundle', 'security-audit']);
-    // QNBS-v3 (#911): tag-only AND an exact-SHA security audit success; tests/unit/tooling/releaseSecurityGate.test.ts covers the weakened variants.
+    expect(extractNeeds(tauriWorkflowSource, 'release')).toEqual([
+      'bundle',
+      'security-audit',
+      'verify-release-tag',
+    ]);
+    // QNBS-v3 (#911, #1206): protected tag push, verifier proof for the event SHA AND an exact-SHA security audit success; tests/unit/tooling/releaseSecurityGate.test.ts covers the weakened variants.
     expect(release).toMatch(
-      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) && needs\.security-audit\.result == 'success' && needs\.security-audit\.outputs\.audited-sha == github\.sha \}\}$/m,
+      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) && github\.ref_protected == true && needs\.verify-release-tag\.result == 'success' && needs\.verify-release-tag\.outputs\.verified-tag-sha == github\.sha && needs\.security-audit\.result == 'success' && needs\.security-audit\.outputs\.audited-sha == github\.sha \}\}$/m,
     );
     expect(release).not.toContain('workflow_dispatch');
     expect(release).toContain('body_path: release-notes.md');
     expect(release).toContain('generate_release_notes: false');
-    expect(release).toContain('Check out the exact release tag');
+    expect(release).toContain('Check out the exact audited commit');
+    expect(release).not.toMatch(/ref: \$\{\{ github\.ref \}\}/);
     expect(release).toContain('Release notes claim #332 or #341 closure');
     expect(release).toContain('index($0, "## [" version "] — ")');
     expect(release).not.toContain('2026-08-23');
