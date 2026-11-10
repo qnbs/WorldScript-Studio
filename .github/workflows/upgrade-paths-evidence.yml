@@ -46,7 +46,7 @@ jobs:
           find "$HOME/.local/share/com.worldscript.studio/databases/indexeddb" -name 'IndexedDB.sqlite*' 2>/dev/null | while read -r f; do
             rel="${f#"$HOME"/}"; mkdir -p "$copy/$(dirname "$rel")"; cp "$f" "$copy/$rel"
           done
-          find "$copy" -name IndexedDB.sqlite | sort | while read -r f; do
+          find "$copy" -name IndexedDB.sqlite3 | sort | while read -r f; do
             echo "== ${f#"$copy"/}"
             sqlite3 "$f" "SELECT key || '=' || value FROM IDBDatabaseInfo WHERE key IN ('DatabaseName','DatabaseVersion','MaxObjectStoreID') ORDER BY key; SELECT 'objectStores=' || COUNT(*) FROM ObjectStoreInfo;"
           done
@@ -67,7 +67,7 @@ jobs:
           sed 's#^'"$HOME"'/#~/#' "$RUNNER_TEMP/before-files.txt" | head -12
           echo "files created or kept before the upgrade: $(wc -l < "$RUNNER_TEMP/before-files.txt")"
           bash "$RUNNER_TEMP/idb_dump.sh" > "$RUNNER_TEMP/idb-before.txt"
-          echo "IndexedDB databases written by v1.29.2: $(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt")"; grep -E '^(DatabaseName|DatabaseVersion)=' "$RUNNER_TEMP/idb-before.txt" | head -12
+          echo "IndexedDB databases written by v1.29.2: $(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)"; grep -E '^(DatabaseName|DatabaseVersion)=' "$RUNNER_TEMP/idb-before.txt" | head -12
       - name: Upgrade to the candidate deb and verify identity and data
         run: |
           set -euo pipefail
@@ -90,15 +90,15 @@ jobs:
           while IFS= read -r f; do test -e "$f" || { echo "::error::file lost after starting the upgraded app: $f"; exit 1; }; done < "$RUNNER_TEMP/before-files.txt"
           sudo apt-get install -y sqlite3 > /dev/null
           bash "$RUNNER_TEMP/idb_dump.sh" > "$RUNNER_TEMP/idb-after.txt"
-          test "$(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt")" -ge 1 || echo "::warning::v1.29.2 wrote no IndexedDB database within 40 s, so only file survival is evidenced"
+          test "$(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)" -ge 1 || echo "::warning::v1.29.2 wrote no IndexedDB database within 40 s, so only file survival is evidenced"
           diff -u "$RUNNER_TEMP/idb-before.txt" "$RUNNER_TEMP/idb-after.txt" || { echo "::error::IndexedDB metadata changed across the upgrade and the first start of the new app"; exit 1; }
-          echo "IndexedDB metadata (database names, versions, object store counts) identical before and after: $(grep -c '^== ' "$RUNNER_TEMP/idb-after.txt") databases"
+          echo "IndexedDB metadata (database names, versions, object store counts) identical before and after: $(grep -c '^== ' "$RUNNER_TEMP/idb-after.txt" || true) databases"
           {
             echo "### Linux deb upgrade 1.29.2 to 1.29.3"
             echo "- package version 1.29.3, single installed package, binary replaced"
             echo "- old app exit $old_rc, new app exit $rc (124 means still running after 40 s)"
             echo "- $(wc -l < "$RUNNER_TEMP/before-files.txt") user files recorded before the upgrade, all still present after the upgrade and after starting the new app"
-            echo "- $(grep -c '^== ' "$RUNNER_TEMP/idb-after.txt") IndexedDB databases written by v1.29.2 have identical names, versions and object store counts after the upgrade and the first start of v1.29.3"
+            echo "- $(grep -c '^== ' "$RUNNER_TEMP/idb-after.txt" || true) IndexedDB databases written by v1.29.2 have identical names, versions and object store counts after the upgrade and the first start of v1.29.3"
           } >> "$GITHUB_STEP_SUMMARY"
 
   windows:
@@ -253,7 +253,7 @@ jobs:
           find "$HOME/Library/Application Support/com.worldscript.studio" "$HOME/Library/WebKit/com.worldscript.studio" "$HOME/Library/Caches/com.worldscript.studio" -type f 2>/dev/null | sort > "$RUNNER_TEMP/before-files.txt" || true
           echo "user files recorded before the upgrade: $(wc -l < "$RUNNER_TEMP/before-files.txt")"
           idb_dump() {
-            find "$HOME/Library" -path '*com.worldscript.studio*' -name 'IndexedDB.sqlite' 2>/dev/null | sort | while read -r f; do
+            find "$HOME/Library" -path '*com.worldscript.studio*' -name 'IndexedDB.sqlite3' 2>/dev/null | sort | while read -r f; do
               echo "== ${f#"$HOME"/}"
               cp "$f" "$RUNNER_TEMP/idb.copy"; for ext in -wal -shm; do [ -e "$f$ext" ] && cp "$f$ext" "$RUNNER_TEMP/idb.copy$ext"; done
               sqlite3 "$RUNNER_TEMP/idb.copy" "SELECT key || '=' || value FROM IDBDatabaseInfo WHERE key IN ('DatabaseName','DatabaseVersion','MaxObjectStoreID') ORDER BY key; SELECT 'objectStores=' || COUNT(*) FROM ObjectStoreInfo;"
@@ -261,7 +261,7 @@ jobs:
             done
           }
           idb_dump > "$RUNNER_TEMP/idb-before.txt"
-          echo "IndexedDB databases written by v1.29.2: $(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt")"
+          echo "IndexedDB databases written by v1.29.2: $(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)"
           install_dmg "$(find cand -name '*_1.29.3_aarch64.dmg' -print -quit)"
           test "$(plist CFBundleShortVersionString)" = 1.29.3
           test "$(plist CFBundleIdentifier)" = com.worldscript.studio
@@ -271,9 +271,9 @@ jobs:
           if [ "$old_state" = alive ] && [ "$new_state" != alive ]; then echo "::error::the upgraded app did not stay running although v1.29.2 did"; exit 1; fi
           while IFS= read -r f; do test -e "$f" || { echo "::error::file lost after starting the upgraded app: $f"; exit 1; }; done < "$RUNNER_TEMP/before-files.txt"
           idb_dump > "$RUNNER_TEMP/idb-after.txt"
-          test "$(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt")" -ge 1 || echo "::warning::v1.29.2 wrote no IndexedDB database within 20 s, so only file survival is evidenced"
+          test "$(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)" -ge 1 || echo "::warning::v1.29.2 wrote no IndexedDB database within 20 s, so only file survival is evidenced"
           diff -u "$RUNNER_TEMP/idb-before.txt" "$RUNNER_TEMP/idb-after.txt" || { echo "::error::IndexedDB metadata changed across the upgrade and the first start of the new app"; exit 1; }
-          echo "IndexedDB metadata identical before and after: $(grep -c '^== ' "$RUNNER_TEMP/idb-after.txt") databases"
+          echo "IndexedDB metadata identical before and after: $(grep -c '^== ' "$RUNNER_TEMP/idb-after.txt" || true) databases"
           codesign -dv "$APP" 2>&1 | head -4 || true
           {
             echo "### macOS dmg upgrade 1.29.2 to 1.29.3"
