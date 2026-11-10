@@ -90,22 +90,30 @@ const unknownReasons = (deployment) =>
 
 const FAILED_STATES = new Set(['ERROR', 'CANCELED']);
 
-// QNBS-v3: a failed or canceled Preview is deletable only when no open PR and no existing branch still needs it, so such a Preview of a living branch or an open PR is protected whatever its PR lifecycle says.
-function failedPreviewNeeded(deployment, context) {
-  const meta = deployment.meta ?? {};
-  const needed = [
-    context.branches.has(meta.githubCommitRef),
+// QNBS-v3: a deployment belongs to an open PR when it carries that PR's number or, only when it carries no number at all (a push that predates the PR, or a provider that omitted it), when it was built from the head branch of an open PR. An explicit number of a closed PR is never overridden by a shared branch name, and a branch that merely still exists does not count: merged branches are kept and would pin every Preview forever.
+const hasNoPrNumber = (meta) => [undefined, null, ''].includes(meta.githubPrId);
+
+const belongsToOpenPr = (meta, context) =>
+  [
     context.prNumbers.has(meta.githubPrId),
-  ];
-  return FAILED_STATES.has(deployment.readyState) && needed.some(Boolean);
+    hasNoPrNumber(meta) && context.openPrBranches.has(meta.githubCommitRef),
+  ].some(Boolean);
+
+// QNBS-v3: only an open PR needs its failed or canceled Preview.
+function failedPreviewNeeded(deployment, context) {
+  return (
+    FAILED_STATES.has(deployment.readyState) && belongsToOpenPr(deployment.meta ?? {}, context)
+  );
 }
+
+const holdsOpenPrAlias = (meta, aliases, context) =>
+  aliases.length > 0 && belongsToOpenPr(meta, context);
 
 function protectionReasons(deployment, aliases, context) {
   const meta = deployment.meta ?? {};
   const reasons = [];
   if (aliases.some((alias) => CANONICAL_ALIASES.includes(alias))) reasons.push('canonical-alias');
-  if (aliases.length > 0 && context.branches.has(meta.githubCommitRef))
-    reasons.push('active-branch-alias');
+  if (holdsOpenPrAlias(meta, aliases, context)) reasons.push('active-branch-alias');
   if (context.newestThree.has(deployment.uid)) reasons.push('open-pr-newest-three');
   if (context.heads.has(meta.githubCommitSha)) reasons.push('main-or-open-head');
   if (context.holds.has(deployment.uid)) reasons.push('explicit-hold');
@@ -122,12 +130,8 @@ function lifecycleOf(deployment, context) {
 }
 
 // QNBS-v3: an alias host the removal command would refuse (a custom domain, a nested label) makes the preview UNKNOWN up front, so a pass can never start on a deployment whose alias it is unable to remove.
-function lifecycleUnknown(lifecycle, aliases) {
-  const reasons = [];
-  if (lifecycle === 'no-pr-branch-exists') reasons.push('no-pr-branch-exists');
-  if (lifecycle === 'orphan' && aliases.length > 0) reasons.push('orphan-with-alias');
-  if (aliases.some((host) => !ALIAS_HOST.test(host))) reasons.push('alias-host-unsupported');
-  return reasons;
+function lifecycleUnknown(aliases) {
+  return aliases.some((host) => !ALIAS_HOST.test(host)) ? ['alias-host-unsupported'] : [];
 }
 
 function verdictOf(protection, unknown) {
@@ -149,7 +153,7 @@ function classifyPreview(deployment, context) {
   const aliases = context.aliasesOf.get(deployment.uid) ?? [];
   const lifecycle = lifecycleOf(deployment, context);
   const protection = protectionReasons(deployment, aliases, context);
-  const unknown = [...unknownReasons(deployment), ...lifecycleUnknown(lifecycle, aliases)];
+  const unknown = [...unknownReasons(deployment), ...lifecycleUnknown(aliases)];
   return {
     id: deployment.uid,
     verdict: verdictOf(protection, unknown),
@@ -171,6 +175,7 @@ export function classify(world) {
     aliasesOf: aliasesByDeployment(world.aliases),
     branches: new Set([...world.branches, ...world.prs.map((pr) => pr.headRefName)]),
     prNumbers: new Set(world.prs.map((pr) => String(pr.number))),
+    openPrBranches: new Set(world.prs.map((pr) => pr.headRefName)),
     heads: new Set([world.main, ...world.prs.map((pr) => pr.headRefOid)]),
     newestThree: newestThreeOfOpenPrs(world.prs, previews),
     holds: world.holds,

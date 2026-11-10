@@ -180,8 +180,10 @@ describe('active ordinary per-merge Preview retention', () => {
   it('states the guarantees the canonical runner implements, not stronger ones', () => {
     expect(policy).toContain('before the first write for each ID, that ID is revalidated');
     expect(policy).toContain(
-      'to name a branch that is gone; the alias of a branch that still exists',
+      'to belong to a deployment that no open PR retains; the alias of a retained open-PR Preview stays',
     );
+    // QNBS-v3 (#627): branch existence is neither a protection nor a blocker any more.
+    expect(policy).toContain('BRANCH_EXISTENCE = neither a protection nor a blocker');
     expect(policy).toContain('a read that fails (403, 429, 5xx) is retried once');
     expect(policy).toContain('a write that fails is never retried and stops the run unless');
     expect(policy).toContain('A read may retry once and a second failure stops the wave');

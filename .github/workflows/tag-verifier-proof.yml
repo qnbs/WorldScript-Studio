@@ -26,7 +26,7 @@ jobs:
       - name: Check out the pinned trusted verifier
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: d348d863f0cc230e3fad64924eb8c76dab91ad0e
+          ref: d46ae7969b6a8034de0c998ac3376e4fb7474f4a
           path: trusted-verifier
           fetch-depth: 1
           persist-credentials: false
@@ -54,6 +54,8 @@ jobs:
             repo,
             tag,
             expectedCommitSha: tagObject.object.sha,
+            // A dispatch has no push event, so the live ref object stands in for the event's after; a real tag push is the only full proof of that path.
+            eventAfter: ref.object.sha,
             token,
           });
           console.log(JSON.stringify({ tag, ok: result.ok, reason: result.reason }));

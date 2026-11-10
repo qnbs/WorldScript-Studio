@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { commitsInRange, pushCommitShas } from './signing-core.mjs';
 import {
-  expectedTagCommitSha,
+  contextCommitSha,
   hasCompleteCommitRange,
   verifyRemoteCommitRange,
   verifyRemotePullRequest,
@@ -53,12 +53,13 @@ try {
     const tagName = process.env.GITHUB_REF_NAME ?? '';
     if (payload.ref !== `refs/tags/${tagName}` || !tagName.startsWith('v'))
       fail('push event ref does not match the requested version tag');
-    const expectedCommitSha = expectedTagCommitSha(payload.after, process.env.GITHUB_SHA);
+    const expectedCommitSha = contextCommitSha(process.env.GITHUB_SHA);
     result = await verifyRemoteTag({
       owner,
       repo,
       tag: tagName,
       expectedCommitSha,
+      eventAfter: payload.after,
       token,
       fetchImpl,
     });

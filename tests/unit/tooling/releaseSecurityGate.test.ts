@@ -23,7 +23,9 @@ const dockerTagPushCondition = `${tagPushCondition} && needs.verify-release-tag.
 // QNBS-v3: GHCR and Tauri publish behind the identical trusted-verifier conjunction.
 const tauriReleaseCondition = dockerTagPushCondition;
 const proofTagSimulationCondition = `github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && inputs.simulated_tag_signature == 'verified' && ${gateCondition}`;
-const trustedVerifierSha = 'd348d863f0cc230e3fad64924eb8c76dab91ad0e';
+const trustedVerifierSha = 'd46ae7969b6a8034de0c998ac3376e4fb7474f4a';
+// QNBS-v3 (#1218): this verifier compared the push event's after with github.sha, which no annotated tag can satisfy, so no workflow may pin it again.
+const defectiveVerifierSha = 'd348d863f0cc230e3fad64924eb8c76dab91ad0e';
 
 function mutate(text: string, from: string, to: string): string {
   expect(text, `fixture anchor not found: ${from}`).toContain(from);
@@ -60,6 +62,13 @@ describe('#911 release security gate: shipped workflows', () => {
     expect(source(DOCKER)).toContain(expr(dockerTagPushCondition));
     expect(source(DOCKER)).toContain('needs: [security-audit, verify-release-tag]');
   });
+
+  it.each([DOCKER, TAURI, 'tag-verifier-proof.yml'])(
+    '%s no longer pins the defective verifier',
+    (name) => {
+      expect(source(name)).not.toContain(defectiveVerifierSha);
+    },
+  );
 
   it.each([DOCKER, TAURI])(
     '%s runs the read-only signature verifier from an immutable trusted checkout',
@@ -103,6 +112,7 @@ describe('#911 release security gate: shipped workflows', () => {
   it('the tag verifier proof is dispatch-only, read-only and pinned like the release verifiers', () => {
     const proof = source('tag-verifier-proof.yml');
     expect(proof).toContain(`ref: ${trustedVerifierSha}`);
+    expect(proof).toContain('eventAfter: ref.object.sha');
     expect(proof).toMatch(/^on:\n {2}workflow_dispatch:/m);
     expect(proof).not.toMatch(/^ {2}(?:push|pull_request|schedule|release):/m);
     expect(proof).not.toMatch(/: write\b|id-token|secrets\./);
