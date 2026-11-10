@@ -141,6 +141,12 @@ describe('related unit tests for local admission', () => {
     }
   });
 
+  // The pre-push hook gave the whole gate the 120 s default and SIGTERMed it mid-typecheck.
+  it('gives the whole gate more time than its two heavy steps together', () => {
+    const { gate, typecheck, relatedTests } = LOCAL_CHECK_TIMEOUTS_MS;
+    expect(gate).toBeGreaterThan(typecheck + relatedTests);
+  });
+
   it('selects the CSP tests that read a changed Tauri configuration file', () => {
     const { tests } = selectRelatedTests(['src-tauri/tauri.conf.json']);
     expect(tests).toEqual(

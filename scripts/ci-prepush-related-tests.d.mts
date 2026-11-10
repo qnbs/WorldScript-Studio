@@ -1,5 +1,9 @@
 export const RELATED_TEST_LIMIT: number;
-export const LOCAL_CHECK_TIMEOUTS_MS: Readonly<{ typecheck: number; relatedTests: number }>;
+export const LOCAL_CHECK_TIMEOUTS_MS: Readonly<{
+  typecheck: number;
+  relatedTests: number;
+  gate: number;
+}>;
 
 export interface RelatedTestSelection {
   status: 'NONE' | 'RUN' | 'DEFERRED';

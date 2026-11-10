@@ -8,8 +8,12 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // QNBS-v3: a bounded local run keeps a 2-core machine usable; a larger set is reported as deferred, never silently dropped.
 export const RELATED_TEST_LIMIT = 8;
 
-// QNBS-v3: the repo-wide typecheck and a related-test run legitimately exceed the 120 s default child bound on a 2-core machine; still bounded, never unlimited.
-export const LOCAL_CHECK_TIMEOUTS_MS = Object.freeze({ typecheck: 600_000, relatedTests: 480_000 });
+// QNBS-v3: the typecheck, a related-test run and the whole gate legitimately exceed the 120 s default child bound on a 2-core machine; still bounded, never unlimited.
+export const LOCAL_CHECK_TIMEOUTS_MS = Object.freeze({
+  typecheck: 600_000,
+  relatedTests: 480_000,
+  gate: 1_500_000,
+});
 
 // QNBS-v3: mirrors the include list of vitest.config.ts exactly; a selected file Vitest would not run makes `vitest run` fail.
 const UNIT_TEST_LOCATIONS = [
