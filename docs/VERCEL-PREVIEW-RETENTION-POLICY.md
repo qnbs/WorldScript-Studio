@@ -662,8 +662,8 @@ COMMON_PROTECTION_GATES
 AND (
   (no open PR retains it: closed or merged PR, or no PR at all)
   OR
-  (an open PR and existing branch have this deployment as an older
-   generation outside the exact protected set)
+  (an open PR has this deployment as an older generation outside the exact
+   protected set, whether or not its branch still exists)
 )
 ```
 
@@ -673,7 +673,7 @@ Additional rules:
   bypasses the common protection gates above; a current-main commit, protected
   alias, protected review evidence, nonterminal state, or unknown metadata still
   prevents deletion.
-- For an existing active PR or branch, only generations older than the exact
+- For an active PR, only generations older than the exact
   retained set may be deleted, and only when they carry no separate active
   alias or review evidence. This is the only open-PR deletion path.
 - Failed or canceled Previews may be deleted only when no open PR, hold or review
