@@ -67,6 +67,81 @@ async function verifyProtectedMainAncestry({ owner, repo, sha, token, fetchImpl 
   }
 }
 
+// QNBS-v3: iterative glob match without building a RegExp from the pattern; "*" and "?" never consume a "/".
+function globMatches(pattern, text) {
+  let p = 0;
+  let t = 0;
+  let starP = -1;
+  let starT = -1;
+  while (t < text.length) {
+    if (p < pattern.length && pattern[p] === '*') {
+      starP = p;
+      starT = t;
+      p += 1;
+    } else if (
+      p < pattern.length &&
+      (pattern[p] === '?' ? text[t] !== '/' : pattern[p] === text[t])
+    ) {
+      p += 1;
+      t += 1;
+    } else if (starP !== -1 && text[starT] !== '/') {
+      starT += 1;
+      t = starT;
+      p = starP + 1;
+    } else {
+      return false;
+    }
+  }
+  while (pattern[p] === '*') p += 1;
+  return p === pattern.length;
+}
+
+// QNBS-v3: ruleset ref patterns are fnmatch-like; syntax outside this safe subset, including "**", is unknown (null), never a match.
+export function refPatternMatches(pattern, ref) {
+  if (pattern === '~ALL') return true;
+  if (typeof pattern !== 'string' || !/^[A-Za-z0-9._\-/*?]+$/.test(pattern)) return null;
+  if (pattern.includes('**')) return null;
+  return globMatches(pattern, ref);
+}
+
+const TAG_PROTECTION_RULES = Object.freeze(['creation', 'update', 'deletion', 'non_fast_forward']);
+const RULESET_LIST_LIMIT = 100;
+
+// QNBS-v3: github.ref_protected is unreliable for tags, so require active tag rulesets covering creation and immutability (bypass_actors stays admin-only, see docs/VERIFIED-SIGNING.md).
+async function verifyTagRulesetProtection({ owner, repo, tag, token, fetchImpl }) {
+  const base = `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/rulesets`;
+  const summaries = await fetchJson(
+    fetchImpl,
+    `${base}?targets=tag&includes_parents=true&per_page=${RULESET_LIST_LIMIT}`,
+    token,
+  );
+  if (!Array.isArray(summaries) || summaries.length >= RULESET_LIST_LIMIT) {
+    throw new Error('tag ruleset list could not be read completely');
+  }
+  const ref = `refs/tags/${tag}`;
+  const covered = new Set();
+  for (const summary of summaries) {
+    const readable =
+      summary?.target === 'tag' &&
+      summary.enforcement === 'active' &&
+      summary.source_type === 'Repository' &&
+      Number.isInteger(summary.id);
+    if (!readable) continue;
+    const ruleset = await fetchJson(fetchImpl, `${base}/${summary.id}`, token);
+    if (ruleset.target !== 'tag' || ruleset.enforcement !== 'active') continue;
+    const include = [].concat(ruleset.conditions?.ref_name?.include ?? []);
+    const exclude = [].concat(ruleset.conditions?.ref_name?.exclude ?? []);
+    const included = include.some((pattern) => refPatternMatches(pattern, ref) === true);
+    const excluded = exclude.some((pattern) => refPatternMatches(pattern, ref) !== false);
+    if (!included || excluded) continue;
+    for (const rule of ruleset.rules ?? []) covered.add(rule?.type);
+  }
+  const missing = TAG_PROTECTION_RULES.filter((rule) => !covered.has(rule));
+  if (missing.length > 0) {
+    throw new Error(`release tag is not covered by active tag rulesets for: ${missing.join(', ')}`);
+  }
+}
+
 export async function fetchJson(fetchImpl, url, token) {
   const response = await fetchImpl(url, {
     headers: {
@@ -218,6 +293,7 @@ export async function verifyRemoteTag({
   const invalid = reports.find((report) => !report.verified);
   if (invalid) return { ok: false, reports, reason: `${invalid.sha}: ${invalid.reason}` };
   await verifyProtectedMainAncestry({ owner, repo, sha: expectedSha, token, fetchImpl });
+  await verifyTagRulesetProtection({ owner, repo, tag, token, fetchImpl });
   const currentRef = await fetchJson(fetchImpl, refUrl, token);
   if (currentRef.object?.type !== 'tag' || currentRef.object?.sha !== object.sha) {
     throw new Error('release tag changed during signature verification');
