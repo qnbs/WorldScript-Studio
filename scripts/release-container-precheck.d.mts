@@ -21,6 +21,8 @@ export interface PrecheckJob {
   conclusion: string | null;
 }
 
+export function latestTrustedRun(sha: string, runs: PrecheckRun[] | null): PrecheckRun | null;
+
 export function classifyContainerPrecheck(input: {
   sha: string;
   runs: PrecheckRun[] | null;

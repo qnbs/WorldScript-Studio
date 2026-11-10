@@ -61,6 +61,20 @@ describe('checkBundleDompurify', () => {
     expect(result.errors).toContain(error);
   });
 
+  it('accepts repeated copies of one fixed version (the requirement is one version, not one copy)', () => {
+    const result = checkBundleDompurify([
+      file(minified('3.4.17')),
+      file(minified('3.4.17'), 'assets/other.js'),
+    ]);
+
+    expect(result).toEqual({
+      ok: true,
+      versions: ['3.4.17'],
+      files: ['assets/other.js', 'assets/vendor.js'],
+      errors: [],
+    });
+  });
+
   it('compares versions numerically', () => {
     expect(checkBundleDompurify([file(minified('3.4.100'))]).ok).toBe(true);
     expect(checkBundleDompurify([file(minified('3.4.9'))]).ok).toBe(false);

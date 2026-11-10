@@ -26,8 +26,13 @@ const dockerfile = await (await import('node:fs/promises'))
 if (dockerfile !== null) {
   const dockerPnpm = checkDockerfilePnpm(dockerfile, expectedPnpmVersion);
   if (!dockerPnpm.ok) {
+    const problems = [
+      ...dockerPnpm.mismatched.map((pin) => `pins pnpm ${pin}`),
+      ...dockerPnpm.bypasses.map((line) => `installs pnpm outside packageManager (${line})`),
+      ...(dockerPnpm.corepackInstall ? [] : ['has no `RUN corepack install` step']),
+    ];
     console.error(
-      `[toolchain] Dockerfile pins pnpm ${dockerPnpm.mismatched.join(', ')}; use packageManager (pnpm ${expectedPnpmVersion}) via \`corepack install\`.`,
+      `[toolchain] Dockerfile ${problems.join('; ')}; take pnpm ${expectedPnpmVersion} from packageManager via \`corepack install\`.`,
     );
     process.exit(1);
   }

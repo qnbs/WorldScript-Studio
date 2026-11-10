@@ -1,10 +1,10 @@
 # Non-publishing container build of the exact commit (#1223).
 # The publishing workflow (docker.yml) builds the image only for a verified v* tag, so a broken
 # Dockerfile stayed invisible from #1149 (2026-11-05) until the v1.29.4 tag. This workflow builds
-# the same Dockerfile without registry credentials on every PR that touches a container input, on
-# every push to main (so every release candidate SHA has a build), and on manual dispatch for the
-# pre-tag release rehearsal. It never logs in and never pushes. It loads the image only into the
-# runner's local Docker to read the web bundle and check the DOMPurify build the image serves.
+# the same Dockerfile without registry credentials on every pull request, on every push to main
+# (so every release candidate SHA has a build), and on manual dispatch for the pre-tag release
+# rehearsal. It never logs in and never pushes. It loads the image only into the runner's local
+# Docker to read the web bundle and check the DOMPurify version the image serves.
 # scripts/docker-build-parity.mjs keeps the build inputs and the check steps equal to docker.yml;
 # scripts/release-container-precheck.mjs requires a green run of this job for the exact commit
 # before a v* tag is pushed.
@@ -12,24 +12,8 @@
 name: Docker build check
 
 on:
+  # Every pull request: the image copies the whole build context (COPY . .), so any source file can change what it serves.
   pull_request:
-    paths:
-      - Dockerfile
-      - .dockerignore
-      - nginx.conf
-      - package.json
-      - pnpm-lock.yaml
-      - pnpm-workspace.yaml
-      - .npmrc
-      - packages/**
-      - vite.config.ts
-      - index.html
-      - public/**
-      - scripts/check-dockerfile-context.mjs
-      - scripts/check-image-bundle.mjs
-      - scripts/pnpm-version-policy.mjs
-      - .github/workflows/docker-build-check.yml
-      - .github/workflows/docker.yml
   push:
     branches: [main]
   workflow_dispatch:

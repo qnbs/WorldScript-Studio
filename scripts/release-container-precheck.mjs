@@ -24,7 +24,8 @@ const trustedRunChecks = (sha) => [
   (run) => run.head_branch === DEFAULT_BRANCH,
 ];
 
-function latestRunFor(sha, runs) {
+/** The newest push or dispatch run of the build check on main for exactly this commit, or null. */
+export function latestTrustedRun(sha, runs) {
   const checks = trustedRunChecks(sha);
   const matching = (runs ?? []).filter((run) => checks.every((check) => check(run)));
   return [...matching].sort(newestFirst)[0] ?? null;
@@ -49,13 +50,13 @@ function jobProblem(run, jobs) {
  */
 export function classifyContainerPrecheck({ sha, runs, jobsByRun }) {
   if (!SHA.test(String(sha ?? ''))) return failure('the candidate is not a 40-hex commit SHA');
-  const run = latestRunFor(sha, runs);
+  const run = latestTrustedRun(sha, runs);
   if (!run) {
     return failure(`no push or dispatch run of ${BUILD_CHECK_WORKFLOW} on main for ${sha}`);
   }
   const problem = runProblem(run) ?? jobProblem(run, jobsByRun?.[run.id]);
   if (problem) return failure(problem);
-  return { ok: true, reason: 'PASS', runId: run.id, url: run.html_url };
+  return { ok: true, reason: 'PASS', runId: run.id, url: run.html_url ?? null };
 }
 
 function ghJson(path) {
@@ -71,12 +72,14 @@ function main(sha) {
     `repos/${REPOSITORY}/actions/workflows/docker-build-check.yml/runs?head_sha=${sha}&per_page=100`,
   );
   const runs = listed?.workflow_runs ?? null;
-  const jobsByRun = Object.fromEntries(
-    (runs ?? []).map((run) => [
-      run.id,
-      ghJson(`repos/${REPOSITORY}/actions/runs/${run.id}/jobs?per_page=100`)?.jobs ?? null,
-    ]),
-  );
+  // Only the newest trusted run decides, so only its jobs are fetched.
+  const latest = latestTrustedRun(sha, runs);
+  const jobsByRun = latest
+    ? {
+        [latest.id]:
+          ghJson(`repos/${REPOSITORY}/actions/runs/${latest.id}/jobs?per_page=100`)?.jobs ?? null,
+      }
+    : {};
   const result = classifyContainerPrecheck({ sha, runs, jobsByRun });
   const where = result.url ? ` (${result.url})` : '';
   process.stdout.write(

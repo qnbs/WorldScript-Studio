@@ -116,6 +116,17 @@ describe('release container precheck (#1223)', () => {
     );
   });
 
+  it('reports a missing run URL as null', () => {
+    const { html_url: _url, ...withoutUrl } = run();
+    const result = classifyContainerPrecheck({
+      sha: SHA,
+      runs: [withoutUrl],
+      jobsByRun: jobs('success'),
+    });
+
+    expect(result).toEqual({ ok: true, reason: 'PASS', runId: 1, url: null });
+  });
+
   it('rejects a candidate that is not a full commit SHA', () => {
     const result = classifyContainerPrecheck({
       sha: 'v1.29.5',

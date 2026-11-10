@@ -18,22 +18,42 @@ export function isVersionAtLeast(version, minimum) {
   return true;
 }
 
+const contentLines = (dockerfile) =>
+  String(dockerfile)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('#'));
+
 /** Every explicit `pnpm@<version>` pin in a Dockerfile (comments ignored). */
 export function findDockerfilePnpmPins(dockerfile) {
-  const pins = [];
-  for (const rawLine of String(dockerfile).split('\n')) {
-    const line = rawLine.trim();
-    if (line.startsWith('#')) continue;
-    for (const match of line.matchAll(/\bpnpm@([^\s"'\\]+)/g)) pins.push(match[1]);
-  }
-  return pins;
+  return contentLines(dockerfile).flatMap((line) =>
+    [...line.matchAll(/\bpnpm@([^\s"'\\]+)/g)].map((match) => match[1]),
+  );
+}
+
+// Ways to get pnpm that bypass package.json#packageManager: a global npm or yarn install, a Corepack prepare or use step, or the standalone installer.
+const PNPM_BYPASSES = [
+  /\b(?:npm|yarn)\b[^#]*\b(?:i|install|add)\b[^#]*\bpnpm\b/,
+  /\bcorepack\s+(?:prepare|use)\b/,
+  /\bget\.pnpm\.io\b/,
+];
+const COREPACK_INSTALL = /^RUN\b.*\bcorepack\s+install\b/;
+
+/** Dockerfile lines that install pnpm without reading `packageManager` (comments ignored). */
+export function findDockerfilePnpmBypasses(dockerfile) {
+  return contentLines(dockerfile).filter((line) =>
+    PNPM_BYPASSES.some((pattern) => pattern.test(line)),
+  );
 }
 
 /**
- * The container must resolve pnpm from `packageManager`: either no explicit pin (Corepack reads
- * package.json) or only pins equal to the project pin.
+ * The image must take pnpm only from `packageManager`: a `RUN corepack install` step and no other
+ * pnpm installer (no explicit pin, no global install, no Corepack prepare or use).
  */
 export function checkDockerfilePnpm(dockerfile, expectedVersion) {
   const mismatched = findDockerfilePnpmPins(dockerfile).filter((pin) => pin !== expectedVersion);
-  return mismatched.length === 0 ? { ok: true, mismatched } : { ok: false, mismatched };
+  const bypasses = findDockerfilePnpmBypasses(dockerfile);
+  const corepackInstall = contentLines(dockerfile).some((line) => COREPACK_INSTALL.test(line));
+  const ok = [corepackInstall, bypasses.length === 0, mismatched.length === 0].every(Boolean);
+  return { ok, mismatched, bypasses, corepackInstall };
 }

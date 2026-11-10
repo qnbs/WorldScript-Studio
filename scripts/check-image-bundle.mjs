@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// QNBS-v3 (#1223): the container image must serve a DOMPurify build that contains the 3.4.17 fixes (GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr, GHSA-c6gr-qvv4-5v3f). The lockfile does not prove what the image serves, so this reads the web bundle extracted from the built image. No build found, more than one build, or an older build is a failure.
+// QNBS-v3 (#1223): the container image must serve a DOMPurify build that contains the 3.4.17 fixes (GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr, GHSA-c6gr-qvv4-5v3f). The lockfile does not prove what the image serves, so this reads the web bundle extracted from the built image. No DOMPurify build, more than one DOMPurify version, or an older version is a failure; repeated copies of one fixed version are accepted.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import process from 'node:process';
