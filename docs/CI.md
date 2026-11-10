@@ -387,8 +387,17 @@ the local block above; GitHub Actions owns those heavy checks on this hardware.
 (`scripts/ci-prepush-classifier.mjs`), then runs docs/release-truth, CSP, desktop-import boundary,
 native-readiness, Tauri plugin version-parity, and dependency-state checks unconditionally on every invocation. It does **not**
 run Biome lint — full-repository lint stays CI-owned (`quality` job); only staged files are linted
-locally, by the separate pre-commit hook (`lint-staged`). Two check groups are conditional on the
+locally, by the separate pre-commit hook (`lint-staged`). Three check groups are conditional on the
 change classification instead of always running:
+
+- **Related unit tests** (`scripts/ci-prepush-related-tests.mjs`) — runs the unit test files that
+  were changed plus every unit test that mentions a changed source, workflow, script or config file
+  (a `git grep` on the path, the extension-less import path, and the basename for workflows and
+  scripts, so a test that reads a workflow from disk is found too). This is an explicit file list,
+  never a suite-wide run. More than 8 matching files are reported as `DEFERRED_TO_REQUIRED_CI`
+  with the count (run the ones you need with `pnpm exec vitest run <file>`); missing change
+  evidence is reported as deferred as well, never skipped silently. End-to-end specs are never
+  selected locally.
 
 - **TypeScript (single-checker)** — skipped, reporting `DEFERRED_TO_REQUIRED_CI`, when the
   classification is `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, or

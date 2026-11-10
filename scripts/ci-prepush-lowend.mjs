@@ -10,6 +10,7 @@ import {
   isMainModule,
   resolveManualEvidence,
 } from './ci-prepush-range-resolver.mjs';
+import { RELATED_TEST_LIMIT, selectRelatedTests } from './ci-prepush-related-tests.mjs';
 import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/shared.mjs';
 import { PR_BUDGET_EXIT_CODES } from './pr-budget.mjs';
 
@@ -27,6 +28,32 @@ async function runCheck(name, run) {
 async function runReviewerConfigAdmission(classification, full) {
   if (shouldRunAdmissionCheck('reviewerConfig', classification.files) || full)
     await runCheck('Reviewer config', () => runNodeScript('scripts/check-reviewer-config.mjs'));
+}
+
+// QNBS-v3: tests that mention a changed file ran green locally; anything not run is named, never skipped silently.
+async function runRelatedTestsAdmission(classification, full) {
+  const name = 'Related unit tests';
+  if (full || classification.files.length === 0) {
+    report(name, 'DEFERRED_TO_REQUIRED_CI', 'no resolved change evidence to select tests from');
+    return;
+  }
+  if (!shouldRunAdmissionCheck('relatedTests', classification.files)) {
+    report(name, 'NONE', 'no governed source, workflow or script changed');
+    return;
+  }
+  const selection = selectRelatedTests(classification.files);
+  if (selection.status === 'NONE') {
+    report(name, 'NONE', 'no unit test mentions the changed files');
+  } else if (selection.status === 'DEFERRED') {
+    report(
+      name,
+      'DEFERRED_TO_REQUIRED_CI',
+      `${selection.total} related test files exceed the local limit of ${RELATED_TEST_LIMIT}; run the ones you need with pnpm exec vitest run <file>`,
+    );
+  } else {
+    console.log(`[local-admission] related test files: ${selection.tests.join(', ')}`);
+    await runCheck(name, () => runLocalBinary('vitest', ['run', ...selection.tests]));
+  }
 }
 
 async function main() {
@@ -141,6 +168,8 @@ async function main() {
       ),
     );
   }
+
+  await runRelatedTestsAdmission(classification, full);
 
   if (typecheckRequired) {
     await runCheck('TypeScript (single checker)', () =>

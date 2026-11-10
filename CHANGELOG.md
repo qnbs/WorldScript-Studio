@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Container publishing:** GHCR releases now require a protected, signed annotated `v*` tag bound to the triggering commit, verified by a pinned source, and the exact-commit security audit; manual dispatch remains non-publishing (PR #1205).
 - **Release-tag verification:** Validate protected-main ancestry with the GitHub Compare API's returned base and merge-base commits, and bind the verified tag target to the triggering event SHA (PR #1207).
+- **Local admission:** `ci:prepush` now runs the unit tests that mention a changed file (up to 8, otherwise reported as deferred), so a changed workflow or script no longer reaches CI with stale test expectations (PR #1209).
 
 <!-- release-candidate: v1.29.3 -->
 
