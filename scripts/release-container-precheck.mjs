@@ -8,15 +8,25 @@ export const REPOSITORY = 'qnbs/WorldScript-Studio';
 export const BUILD_CHECK_WORKFLOW = '.github/workflows/docker-build-check.yml';
 export const BUILD_CHECK_JOB = '🐳 Container build check (no push)';
 
+export const DEFAULT_BRANCH = 'main';
+// QNBS-v3 (#1225 review): only push and dispatch runs on main count, because a pull_request run takes its workflow definition from the PR merge ref and could keep the job name while dropping the build.
+export const TRUSTED_EVENTS = Object.freeze(['push', 'workflow_dispatch']);
+
 const SHA = /^[0-9a-f]{40}$/;
 const failure = (reason) => ({ ok: false, reason, runId: null, url: null });
 
 const newestFirst = (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at);
 
+const trustedRunChecks = (sha) => [
+  (run) => run.head_sha === sha,
+  (run) => run.path === BUILD_CHECK_WORKFLOW,
+  (run) => TRUSTED_EVENTS.includes(run.event),
+  (run) => run.head_branch === DEFAULT_BRANCH,
+];
+
 function latestRunFor(sha, runs) {
-  const matching = (runs ?? []).filter(
-    (run) => run.head_sha === sha && run.path === BUILD_CHECK_WORKFLOW,
-  );
+  const checks = trustedRunChecks(sha);
+  const matching = (runs ?? []).filter((run) => checks.every((check) => check(run)));
   return [...matching].sort(newestFirst)[0] ?? null;
 }
 
@@ -40,7 +50,9 @@ function jobProblem(run, jobs) {
 export function classifyContainerPrecheck({ sha, runs, jobsByRun }) {
   if (!SHA.test(String(sha ?? ''))) return failure('the candidate is not a 40-hex commit SHA');
   const run = latestRunFor(sha, runs);
-  if (!run) return failure(`no ${BUILD_CHECK_WORKFLOW} run for ${sha}`);
+  if (!run) {
+    return failure(`no push or dispatch run of ${BUILD_CHECK_WORKFLOW} on main for ${sha}`);
+  }
   const problem = runProblem(run) ?? jobProblem(run, jobsByRun?.[run.id]);
   if (problem) return failure(problem);
   return { ok: true, reason: 'PASS', runId: run.id, url: run.html_url };

@@ -10,9 +10,12 @@ import {
 
 const SHA = 'a'.repeat(40);
 const URL = 'https://github.com/qnbs/WorldScript-Studio/actions/runs/1';
+const NO_TRUSTED_RUN = `no push or dispatch run of ${BUILD_CHECK_WORKFLOW} on main`;
 const run = (overrides: Partial<PrecheckRun> = {}): PrecheckRun => ({
   id: 1,
   head_sha: SHA,
+  head_branch: 'main',
+  event: 'push',
   path: BUILD_CHECK_WORKFLOW,
   status: 'completed',
   conclusion: 'success',
@@ -27,21 +30,42 @@ const jobs = (conclusion: string | null): Record<string, PrecheckJob[]> => ({
 type Case = [string, PrecheckRun[] | null, Record<string, PrecheckJob[] | null>, string];
 
 describe('release container precheck (#1223)', () => {
-  it('passes a successful build-check job on the exact commit', () => {
+  it.each([
+    ['a push run on main', run()],
+    ['a dispatch run on main', run({ event: 'workflow_dispatch' })],
+  ])('passes a successful build-check job of %s on the exact commit', (_name, trusted) => {
     expect(
-      classifyContainerPrecheck({ sha: SHA, runs: [run()], jobsByRun: jobs('success') }),
+      classifyContainerPrecheck({ sha: SHA, runs: [trusted], jobsByRun: jobs('success') }),
     ).toEqual({ ok: true, reason: 'PASS', runId: 1, url: URL });
   });
 
   const failures: Case[] = [
-    ['no run exists', [], jobs('success'), `no ${BUILD_CHECK_WORKFLOW} run`],
-    ['the run list is unreadable', null, jobs('success'), `no ${BUILD_CHECK_WORKFLOW} run`],
-    ['the run is for another commit', [run({ head_sha: 'b'.repeat(40) })], jobs('success'), 'no '],
+    ['no run exists', [], jobs('success'), NO_TRUSTED_RUN],
+    ['the run list is unreadable', null, jobs('success'), NO_TRUSTED_RUN],
+    [
+      'the run is for another commit',
+      [run({ head_sha: 'b'.repeat(40) })],
+      jobs('success'),
+      NO_TRUSTED_RUN,
+    ],
     [
       'the run is from another workflow',
       [run({ path: '.github/workflows/docker.yml' })],
       jobs('success'),
-      'no ',
+      NO_TRUSTED_RUN,
+    ],
+    // #1225 review: a pull_request run takes its workflow from the PR merge ref, so it never counts.
+    [
+      'only a pull_request run exists for the commit',
+      [run({ event: 'pull_request', head_branch: 'feature/no-op-build' })],
+      jobs('success'),
+      NO_TRUSTED_RUN,
+    ],
+    [
+      'the push run is on another branch',
+      [run({ head_branch: 'release/x' })],
+      jobs('success'),
+      NO_TRUSTED_RUN,
     ],
     [
       'the build is still running',
@@ -66,6 +90,22 @@ describe('release container precheck (#1223)', () => {
 
     expect(result.ok).toBe(false);
     expect(result.reason).toContain(reason);
+  });
+
+  it('ignores a newer pull_request run and decides on the trusted main run', () => {
+    const runs = [
+      run({ conclusion: 'failure' }),
+      run({
+        id: 2,
+        event: 'pull_request',
+        head_branch: 'feature/x',
+        created_at: '2026-11-11T11:00:00Z',
+      }),
+    ];
+
+    expect(classifyContainerPrecheck({ sha: SHA, runs, jobsByRun: jobs('success') }).reason).toBe(
+      'latest run 1 concluded failure',
+    );
   });
 
   it('lets the newest run decide, so an older success cannot hide a later failure', () => {

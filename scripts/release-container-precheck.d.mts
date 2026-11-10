@@ -1,10 +1,14 @@
 export const REPOSITORY: string;
 export const BUILD_CHECK_WORKFLOW: string;
 export const BUILD_CHECK_JOB: string;
+export const DEFAULT_BRANCH: string;
+export const TRUSTED_EVENTS: readonly string[];
 
 export interface PrecheckRun {
   id: number;
   head_sha: string;
+  head_branch: string;
+  event: string;
   path: string;
   status: string;
   conclusion: string | null;
