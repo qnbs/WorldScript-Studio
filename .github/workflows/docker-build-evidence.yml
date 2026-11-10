@@ -1,0 +1,69 @@
+# Throwaway evidence workflow for the v1.29.4 incident (#1223). It lives only on an evidence branch and is never merged.
+# It builds the production Dockerfile WITHOUT pushing and without any registry login or secret: first the tree of the fix
+# (PR #1224, expected to build), then the unfixed v1.29.4 target as a negative control (expected to fail at the stale COPY).
+
+name: Docker build evidence
+
+on:
+  push:
+    branches:
+      - 'evidence/upgrade-paths-*'
+    paths:
+      - '.github/workflows/docker-build-evidence.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-build-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixed:
+    name: Build the fixed tree (no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the fix commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: f7a6b1c2c2320fbbfc87830a875bf9bc5f7a4187
+          persist-credentials: false
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build the image without pushing
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64
+          tags: worldscript-studio:evidence-nopush
+
+  unfixed:
+    name: Build the unfixed v1.29.4 target (negative control, expected to fail)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the v1.29.4 target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: baba33f12262e6503c094eb0097446d422742da0
+          persist-credentials: false
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build the image without pushing
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64
+          tags: worldscript-studio:evidence-nopush-unfixed
