@@ -103,6 +103,44 @@ test('the branch alias of an open fork PR is protected although its ref is not i
   assert.deepEqual(touched, []);
 });
 
+// QNBS-v3 (#1213 review): a Preview without a PR number that was built from an open PR's head branch holds that PR's review alias, so neither it nor its alias is removed.
+test('the branch alias of a Preview without a PR number is protected while its branch heads an open PR', async () => {
+  const world = standardWorld();
+  const orphan = preview(31, { meta: { githubPrId: undefined } });
+  world.deployments.push(orphan);
+  world.aliases.push(aliasEntry('worldscript-studio-feat-open-nopr.vercel.app', orphan.uid, 260));
+  const summary = await reconcile(world);
+  assert.equal(verdicts(summary).dpl_prev31.verdict, 'PROTECTED');
+  assert.ok(verdicts(summary).dpl_prev31.reasons.includes('active-branch-alias'));
+  assert.ok(find(world, 'dpl_prev31'));
+  assert.deepEqual(
+    world.writes.filter((entry) => entry.includes('feat-open-nopr')),
+    [],
+  );
+});
+
+test('a Preview without a PR number on a branch that heads no open PR stays deletable with its alias', async () => {
+  const world = standardWorld();
+  const loose = preview(32, { meta: { githubCommitRef: 'chore/other', githubPrId: undefined } });
+  world.deployments.push(loose);
+  world.aliases.push(aliasEntry('worldscript-studio-chore-other.vercel.app', loose.uid, 261));
+  const summary = await reconcile(world);
+  assert.deepEqual(verdicts(summary).dpl_prev32.reasons, []);
+  assert.ok(summary.deleted.includes('dpl_prev32'));
+});
+
+// QNBS-v3 (#1213 review): an explicit closed-PR number is not overridden by a branch name that an open fork PR happens to share.
+test('a Preview of a closed PR is not kept because an open PR reuses its branch name', async () => {
+  const world = standardWorld();
+  find(world, 'dpl_prev11').meta.githubCommitRef = 'feat/open';
+  world.aliases.push(
+    aliasEntry('worldscript-studio-feat-open-stale.vercel.app', 'dpl_prev11', 262),
+  );
+  const summary = await reconcile(world);
+  assert.deepEqual(verdicts(summary).dpl_prev11.reasons, []);
+  assert.ok(summary.deleted.includes('dpl_prev11'));
+});
+
 test('an alias read twice with different content means the inventory moved and is refused', async () => {
   const world = standardWorld();
   world.pageSize = 4;
@@ -112,14 +150,32 @@ test('an alias read twice with different content means the inventory moved and i
 });
 
 for (const state of ['ERROR', 'CANCELED']) {
-  test(`a ${state} Preview of a closed PR is kept while its branch still exists`, async () => {
+  // QNBS-v3 (#627): a merged branch is kept, so a failed Preview of a closed PR is deleted although its branch still exists.
+  test(`a ${state} Preview of a closed PR is deleted although its branch still exists`, async () => {
     const world = standardWorld();
     world.branches.add('fix/gone');
-    world.aliases = world.aliases.filter((entry) => entry.deploymentId !== 'dpl_prev12');
     find(world, 'dpl_prev11').readyState = state;
     const summary = await reconcile(world);
-    assert.deepEqual(verdicts(summary).dpl_prev11.reasons, ['failed-preview-needed']);
-    assert.ok(find(world, 'dpl_prev11'));
+    assert.deepEqual(verdicts(summary).dpl_prev11.reasons, []);
+    assert.ok(summary.deleted.includes('dpl_prev11'));
+    assert.equal(find(world, 'dpl_prev11'), undefined);
+  });
+
+  test(`a ${state} Preview of an open PR is still kept for the review`, async () => {
+    const world = standardWorld();
+    find(world, 'dpl_prev1').readyState = state;
+    const summary = await reconcile(world);
+    assert.deepEqual(verdicts(summary).dpl_prev1.reasons, ['failed-preview-needed']);
+    assert.ok(find(world, 'dpl_prev1'));
+  });
+
+  // QNBS-v3 (#1213 review): without a PR number the open PR's head branch still ties the failed Preview to that PR.
+  test(`a ${state} Preview without a PR number on an open PR's head branch is kept`, async () => {
+    const world = standardWorld();
+    world.deployments.push(preview(33, { readyState: state, meta: { githubPrId: undefined } }));
+    const summary = await reconcile(world);
+    assert.deepEqual(verdicts(summary).dpl_prev33.reasons, ['failed-preview-needed']);
+    assert.ok(find(world, 'dpl_prev33'));
   });
 
   test(`a ${state} Preview of a closed PR is deleted once its branch is gone`, async () => {
@@ -129,6 +185,34 @@ for (const state of ['ERROR', 'CANCELED']) {
     assert.ok(summary.deleted.includes('dpl_prev11'));
   });
 }
+
+// QNBS-v3 (#627): only an open PR, the main commit or an open head protects a Preview; the mere existence of its branch or alias no longer does.
+test('a Preview of a living branch without a PR is deleted together with its branch alias', async () => {
+  const world = standardWorld();
+  find(world, 'dpl_prev21').meta.githubCommitSha = 'd'.repeat(40);
+  const summary = await reconcile(world);
+  assert.equal(verdicts(summary).dpl_prev21.verdict, 'SAFE');
+  assert.ok(summary.deleted.includes('dpl_prev21'));
+  const alias = world.writes.findIndex((entry) => entry.includes('chore-loose'));
+  const removal = world.writes.findIndex((entry) => entry.startsWith('remove dpl_prev21'));
+  assert.ok(alias >= 0 && alias < removal, 'the branch alias goes before its deployment');
+});
+
+test('the branch alias of a closed PR is removed with its deployment although the branch exists', async () => {
+  const world = standardWorld();
+  world.branches.add('fix/gone');
+  const summary = await reconcile(world);
+  assert.ok(summary.deleted.includes('dpl_prev12'));
+  assert.ok(world.writes.some((entry) => entry.includes('fix-gone')));
+  assert.equal(find(world, 'dpl_prev12'), undefined);
+});
+
+test('a Preview that builds the current main commit stays protected whatever its branch', async () => {
+  const world = standardWorld();
+  const summary = await reconcile(world);
+  assert.ok(verdicts(summary).dpl_prev21.reasons.includes('main-or-open-head'));
+  assert.ok(find(world, 'dpl_prev21'));
+});
 
 test('a main that advances between the last deletion and the post-proof is refused', async () => {
   const world = standardWorld();

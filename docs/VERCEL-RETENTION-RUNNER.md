@@ -77,25 +77,23 @@ replace it.
    nothing new stops as `provider-pagination-stalled` instead of passing as complete.
 3. **Classification** (pure, in `classify.mjs`). Anything that is, is moving to (`ROLLING`), was
    promoted as, or can roll back to Production never enters the preview classification. A preview
-   is `PROTECTED` when it carries a canonical alias, an alias of a branch that still exists (a
-   branch of an open PR counts even when it lives in a fork), is among the newest `min(3, available)`
+   is `PROTECTED` when it carries a canonical alias, an alias while its PR is open, is among the newest `min(3, available)`
    dated plain previews of an open PR (custom environments and unrecognized substates are ranked
    out, so they cannot take a retained slot), builds `main` or an open PR head, is named in
    `.github/vercel-retention-holds.json` as review or retest evidence, or has failed or been canceled
-   while its branch or an open PR still exists. It is `UNKNOWN` when its identity, state, rollback
+   while its PR is still open. A branch that merely still exists protects nothing. It is `UNKNOWN` when its identity, state, rollback
    flag, branch (it must be a non-empty string), commit SHA or creation time (a positive integer that
    is not in the future) is missing or contradictory, when it carries any environment id or a
    promotion substate other than `STAGED`, when one of its aliases is a host the removal command would refuse (a custom
    domain, a nested label), when its PR identifier is
-   present but not a plain decimal string, when its target is not the
-   plain Preview (a custom environment such as `staging`), or when it has no PR but a live branch or
-   an orphan alias. Only the rest is `SAFE`. The manifest line shows ID, verdict, branch, PR, commit,
+   present but not a plain decimal string, or when its target is not the
+   plain Preview (a custom environment such as `staging`). Only the rest is `SAFE`. The manifest line shows ID, verdict, branch, PR, commit,
    state/target, creation time, alias hosts, lifecycle and reasons: a gate that passed adds no
    reason, every protecting or failing gate is named, so the SAFE set can be reviewed and the plan
    is printed before any deletion starts.
 4. **Deletion** (`reconcile` only), at most 25 per pass, newest first. For every ID the run re-reads
    `main`, the gates and the whole provider state and re-classifies it. A changed verdict only defers
-   that ID. A branch alias of a gone branch is removed first, after it is shown to bind to that
+   that ID. A branch alias of the deployment is removed first, after it is shown to bind to that
    deployment and not to be canonical (an alias removal that fails is settled by re-reading the
    binding: gone means it landed and the pass goes on without a retry, still bound stops the pass);
    then `vercel remove <dpl_id> --safe --yes`. Each call names

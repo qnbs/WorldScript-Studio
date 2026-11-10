@@ -322,8 +322,8 @@ these predicates:
    window that remains between a read and a write is stated under "Not covered"
    in the [runner reference](VERCEL-RETENTION-RUNNER.md);
 4. a branch alias is removed only after it is shown to bind to that deployment,
-   to be neither Production nor `main`, and to name a branch that is gone; the
-   alias of a branch that still exists stays whatever the state of its PR;
+   to be neither Production nor `main`, and to belong to a deployment that no open
+   PR retains; the alias of a retained open-PR Preview stays;
 5. a read that fails (403, 429, 5xx) is retried once and a second failure
    stops the run; a write that fails is never retried and stops the run unless
    a re-read of the alias binding or of the deployment inventory shows that the
@@ -561,12 +561,44 @@ builds, exit 0 skips).
 The nightly record pruner keeps the newest three Vercel records per environment (ten until
 2026-10-21), plus `main` and every open PR head; see `docs/PAGES-DEPLOYMENT-RECORD-PRUNING.md`.
 
+## Lifecycle-scoped Preview retention from 2026-11-10
+
+This dated successor changes which Previews the ordinary-mode runner protects. It was
+ordered by the maintainer and is recorded in
+[GH #627](https://github.com/qnbs/WorldScript-Studio/issues/627) and QNB-67. The earlier
+records stay unchanged as history. The previous rules protected every Preview whose branch
+still existed and every failed or canceled Preview of such a branch. Merged branches are
+kept (`delete_branch_on_merge = false`), so nothing ever became `SAFE`: the project held 91
+deployments and the runner classified none of them as deletable.
+
+```text
+PREVIEW_PROTECTION = canonical alias | newest three Previews of an open PR | head of an open PR
+                     | current main commit | explicit hold | alias of a retained open-PR Preview
+                     | alias of a Preview built from an open PR head branch
+                     | failed or canceled Preview of an open PR
+BRANCH_EXISTENCE = neither a protection nor a blocker
+PRODUCTION_HISTORY = provider-side deployment retention; the runner never deletes Production-class deployments
+ONE_OFF_SWEEP = 2026-11-10, maintainer-directed, recorded in GH #627
+```
+
+A Preview is therefore `SAFE` as soon as no open PR retains it and no common protection gate
+applies, whether its PR is closed or merged or it never had one, and regardless of whether its
+branch exists. Its branch alias is removed with it. A Preview with no PR that builds the current
+`main` commit, or that holds the branch alias of an open PR's head branch, stays protected. Any
+other Preview with no PR is deleted by the next pass even if the work is still in progress; open
+a PR to keep the newest three. The runner still never deletes a
+Production-class deployment and never changes project settings. The bounded history of
+Production deployments is the provider's retention setting of the project (1 day, at least
+10 kept), which only the maintainer changes. Every other rule of this policy is unchanged:
+the common protection gates, the per-ID revalidation, the one-writer lease and the
+post-cleanup proof.
+
 ## Protected state
 
 The cleanup must never delete or modify:
 
 - a deployment with `target=production`;
-- a deployment carrying a Production, `main`, or currently active branch alias;
+- a deployment carrying a Production, `main`, or open-PR branch alias;
 - every deployment in the pre-cleanup protected Production/rollback snapshot;
 - a deployment that the provider identifies as previously promoted to
   Production or eligible for rollback, including `readySubstate=PROMOTED` or
@@ -617,7 +649,7 @@ provider/project/team/repository identity matches expected scope
 AND current-main gate is anchored to the live current main SHA
 target != production
 AND state is a recognized terminal state
-AND no Production/main/active-branch alias
+AND no Production/main/open-PR alias
 AND rollback/promotion eligibility is definitively false
 AND not in the exact protected Production/rollback ID set
 AND not in the exact protected open-PR ID set
@@ -628,10 +660,10 @@ AND commit != the head of an open PR
 SAFE_TO_DELETE:
 COMMON_PROTECTION_GATES
 AND (
-  (PR is closed/merged OR its branch no longer exists)
+  (no open PR retains it: closed or merged PR, or no PR at all)
   OR
-  (an open PR and existing branch have this deployment as an older
-   generation outside the exact protected set)
+  (an open PR has this deployment as an older generation outside the exact
+   protected set, whether or not its branch still exists)
 )
 ```
 
@@ -641,16 +673,15 @@ Additional rules:
   bypasses the common protection gates above; a current-main commit, protected
   alias, protected review evidence, nonterminal state, or unknown metadata still
   prevents deletion.
-- For an existing active PR or branch, only generations older than the exact
+- For an active PR, only generations older than the exact
   retained set may be deleted, and only when they carry no separate active
   alias or review evidence. This is the only open-PR deletion path.
-- Failed or canceled Previews may be deleted only when no open PR, existing
-  branch, alias, or review evidence still needs them.
-- A deployment without `githubPrId` is a `STALE_ORPHAN_PREVIEW` only when its
-  branch is gone, its commit is neither current `main` nor an open-PR head, and
-  it has no alias. An orphan alias must be verified as non-Production,
-  non-`main`, and unrelated to every open PR before it is removed; delete the
-  deployment only after that alias removal succeeds.
+- Failed or canceled Previews may be deleted only when no open PR, hold or review
+  evidence still needs them; a branch that still exists does not.
+- A deployment without `githubPrId` is a `STALE_ORPHAN_PREVIEW` when its commit is
+  neither current `main` nor an open-PR head. Its alias must be verified as
+  non-Production, non-`main`, and unrelated to every open PR before it is removed;
+  delete the deployment only after that alias removal succeeds.
 - Age is supporting evidence, never the sole deletion criterion.
 - Missing or contradictory metadata is `UNKNOWN_REVIEW_REQUIRED`, not an
   implicit delete.

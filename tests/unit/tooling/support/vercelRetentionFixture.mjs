@@ -66,7 +66,10 @@ export function standardWorld() {
   const closed = [11, 12].map((n) =>
     preview(n, { meta: { githubCommitRef: 'fix/gone', githubPrId: '7' } }),
   );
-  const loose = preview(21, { meta: { githubCommitRef: 'chore/loose', githubPrId: undefined } });
+  // QNBS-v3: the loose preview has no PR, so it stays protected only because it builds the current main commit; a living branch alone no longer protects it.
+  const loose = preview(21, {
+    meta: { githubCommitRef: 'chore/loose', githubPrId: undefined, githubCommitSha: MAIN },
+  });
   return {
     main: MAIN,
     runs: greenRuns(),
