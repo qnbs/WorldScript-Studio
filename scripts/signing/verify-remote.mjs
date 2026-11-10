@@ -229,6 +229,23 @@ export async function verifyRemoteCommitRange({
   return verifyRemoteCommitReports(commits);
 }
 
+function expectedTagTargetSha(value) {
+  if (!/^[0-9a-f]{40}$/i.test(String(value ?? '')))
+    throw new Error('expected tag target must be a full commit SHA');
+  if (/^0{40}$/i.test(value)) throw new Error('expected tag target cannot be the deleted-ref SHA');
+  return value.toLowerCase();
+}
+
+// QNBS-v3: the pushed object must be exactly the annotated tag object that is verified afterwards; the SHAs are public and printed in full so a failure shows both values.
+function assertEventMatchesTagObject(eventObjectSha, liveObjectSha, expectedSha) {
+  if (!/^[0-9a-f]{40}$/i.test(String(liveObjectSha)))
+    throw new Error('GitHub tag ref did not return a full tag object SHA');
+  if (eventObjectSha !== liveObjectSha.toLowerCase())
+    throw new Error(
+      `push event object does not match the live release tag object (event ${eventObjectSha}, tag ${liveObjectSha.toLowerCase()}, expected commit ${expectedSha})`,
+    );
+}
+
 export async function verifyRemoteTag({
   owner,
   repo,
@@ -238,11 +255,7 @@ export async function verifyRemoteTag({
   token = '',
   fetchImpl = fetch,
 }) {
-  if (!/^[0-9a-f]{40}$/i.test(String(expectedCommitSha ?? '')))
-    throw new Error('expected tag target must be a full commit SHA');
-  if (/^0{40}$/i.test(expectedCommitSha))
-    throw new Error('expected tag target cannot be the deleted-ref SHA');
-  const expectedSha = expectedCommitSha.toLowerCase();
+  const expectedSha = expectedTagTargetSha(expectedCommitSha);
   const eventObjectSha = eventTagObjectSha(eventAfter);
   const refUrl = `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/tags/${encodeURIComponent(tag)}`;
   const ref = await fetchJson(fetchImpl, refUrl, token);
@@ -257,13 +270,7 @@ export async function verifyRemoteTag({
     };
     return { ok: false, reports: [report], reason: `${report.sha}: ${report.reason}` };
   }
-  // QNBS-v3: the pushed object must be exactly the annotated tag object that is verified below; the SHAs are public and printed in full so a failure shows both values.
-  if (!/^[0-9a-f]{40}$/i.test(String(object.sha)))
-    throw new Error('GitHub tag ref did not return a full tag object SHA');
-  if (eventObjectSha !== object.sha.toLowerCase())
-    throw new Error(
-      `push event object does not match the live release tag object (event ${eventObjectSha}, tag ${object.sha.toLowerCase()}, expected commit ${expectedSha})`,
-    );
+  assertEventMatchesTagObject(eventObjectSha, object.sha, expectedSha);
   let tagReport = null;
   let targetSha = object.sha;
   const tagObject = await fetchJson(
