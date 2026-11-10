@@ -9,7 +9,6 @@ WORKDIR /app
 
 # Install deps (cache layer — only invalidated when lock file changes)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY patches/ ./patches/
 COPY packages/ ./packages/
 RUN pnpm install --frozen-lockfile
 
