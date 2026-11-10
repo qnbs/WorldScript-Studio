@@ -16,12 +16,32 @@ import {
   RELATED_TEST_LIMIT,
   selectRelatedTests,
 } from './ci-prepush-related-tests.mjs';
-import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/shared.mjs';
+import { ensureDependencyState, runLocalBinaryDetailed, runNodeScript } from './hooks/shared.mjs';
 import { PR_BUDGET_EXIT_CODES } from './pr-budget.mjs';
 
 function report(name, status, detail = '') {
   console.log(`[local-admission] ${name.padEnd(26)} ${status}${detail ? ` — ${detail}` : ''}`);
   return status;
+}
+
+// QNBS-v3: a bounded child that dies silently must still say how it ended (exit status, signal, timeout) so a hook FAIL is diagnosable.
+async function runDetailedCheck(name, run) {
+  const result = await run();
+  const failed =
+    result.error || result.timedOut || result.interrupted || (result.status ?? 1) !== 0;
+  if (!failed) {
+    report(name, 'PASS');
+    return;
+  }
+  const facts = [
+    `exit ${result.status ?? 'none'}`,
+    `signal ${result.signal ?? 'none'}`,
+    result.timedOut ? 'timed out' : null,
+    result.interrupted ? 'interrupted' : null,
+    result.error ? String(result.error.message ?? result.error) : null,
+  ].filter(Boolean);
+  report(name, 'FAIL', facts.join(', '));
+  process.exit(result.status || 1);
 }
 
 async function runCheck(name, run) {
@@ -57,8 +77,8 @@ async function runRelatedTestsAdmission(classification) {
     );
   } else {
     console.log(`[local-admission] related test files: ${selection.tests.join(', ')}`);
-    await runCheck(name, () =>
-      runLocalBinary('vitest', ['run', ...selection.tests], {
+    await runDetailedCheck(name, () =>
+      runLocalBinaryDetailed('vitest', ['run', ...selection.tests], {
         env: gitFreeTestEnv(),
         timeoutMs: LOCAL_CHECK_TIMEOUTS_MS.relatedTests,
       }),
@@ -182,11 +202,13 @@ async function main() {
   await runRelatedTestsAdmission(classification);
 
   if (typecheckRequired) {
-    await runCheck('TypeScript (single checker)', () =>
+    await runDetailedCheck('TypeScript (single checker)', () =>
       // QNBS-v3: one checker bounds memory use on constrained developer machines.
-      runLocalBinary('tsgo', ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1'], {
-        timeoutMs: LOCAL_CHECK_TIMEOUTS_MS.typecheck,
-      }),
+      runLocalBinaryDetailed(
+        'tsgo',
+        ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1'],
+        { timeoutMs: LOCAL_CHECK_TIMEOUTS_MS.typecheck },
+      ),
     );
   } else {
     report('TypeScript', 'DEFERRED_TO_REQUIRED_CI', 'no TypeScript-impacting changes detected');
