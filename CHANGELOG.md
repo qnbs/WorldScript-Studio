@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Release tag gate:** The release-tag verifier compared the push event's `after` with `github.sha`, which no annotated tag can satisfy, so every signed annotated release tag failed with `push event target does not match github.sha` (the v1.29.3 tag run published nothing). It now binds the event's `after` to the live annotated tag object, requires that object's target to equal `github.sha`, and prints both SHAs on a mismatch, with a real-shaped end-to-end regression test for annotated tags, lightweight tags, wrong targets, manipulated events, invalid signatures and unprotected tags (PR #1218).
 - **Vercel retention:** Previews are now deleted as soon as no open PR retains them and no common protection gate applies (the current `main` commit, a hold, the branch alias of an open PR's head branch), regardless of whether their branch still exists, and their branch aliases go with them; Production history is left to the provider's retention (PR #1213).
 - **Release publishing:** GHCR and Tauri release gates no longer rely on `github.ref_protected`; they run the verifier pinned to the ruleset-checking protected-`main` commit, and a read-only dispatch proof exercises it with the production token (PR #1211).
 - **Release-tag verification:** The tag verifier now requires active tag rulesets that cover creation, update, deletion and non-fast-forward for the pushed ref, read directly from the rulesets API instead of `github.ref_protected` (PR #1210).

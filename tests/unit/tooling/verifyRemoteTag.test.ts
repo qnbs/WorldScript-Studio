@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  expectedTagCommitSha,
+  contextCommitSha,
+  eventTagObjectSha,
   refPatternMatches,
   verifyRemoteTag,
 } from '../../../scripts/signing/verify-remote.mjs';
@@ -132,24 +133,89 @@ function tagFetch(
   return fetchImpl;
 }
 
-function verifyTag(fetchImpl: typeof fetch, expectedCommitSha = pushedCommitSha, tag = 'v1.29.3') {
+// For an annotated tag the push event announces the tag object, never the commit it points to.
+function verifyTag(
+  fetchImpl: typeof fetch,
+  expectedCommitSha = pushedCommitSha,
+  tag = 'v1.29.3',
+  eventAfter: string = tagObjectSha,
+) {
   return verifyRemoteTag({
     owner: 'qnbs',
     repo: 'WorldScript-Studio',
     tag,
     expectedCommitSha,
+    eventAfter,
     fetchImpl,
   });
 }
 
 describe('release tag event binding', () => {
-  it('requires the push event target and github.sha to agree', () => {
-    expect(expectedTagCommitSha(pushedCommitSha, pushedCommitSha)).toBe(pushedCommitSha);
-    expect(() => expectedTagCommitSha(pushedCommitSha, retargetedCommitSha)).toThrow(
-      /does not match github\.sha/,
+  it('accepts only a full, live github.sha as the commit a tag push builds', () => {
+    expect(contextCommitSha(pushedCommitSha.toUpperCase())).toBe(pushedCommitSha);
+    expect(() => contextCommitSha('abc123')).toThrow(/full commit SHA/);
+    expect(() => contextCommitSha('')).toThrow(/full commit SHA/);
+    expect(() => contextCommitSha('0'.repeat(40))).toThrow(/deleted-ref SHA/);
+  });
+
+  it('accepts only a full, live pushed object from the push event', () => {
+    expect(eventTagObjectSha(tagObjectSha.toUpperCase())).toBe(tagObjectSha);
+    expect(() => eventTagObjectSha('not-a-sha')).toThrow(/full pushed tag object/);
+    expect(() => eventTagObjectSha('')).toThrow(/full pushed tag object/);
+    expect(() => eventTagObjectSha('0'.repeat(40))).toThrow(/live pushed tag object/);
+  });
+
+  it('does not equate the push event object with github.sha for an annotated tag', async () => {
+    expect(tagObjectSha).not.toBe(pushedCommitSha);
+    const result = await verifyTag(tagFetch());
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects a push event that announces a different object than the live annotated tag', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: tagObjectSha, type: 'tag' } }));
+
+    await expect(
+      verifyTag(fetchImpl, pushedCommitSha, 'v1.29.3', changedTagObjectSha),
+    ).rejects.toThrow(/push event object does not match the live release tag object/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a push event that announces the commit instead of the tag object', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: tagObjectSha, type: 'tag' } }));
+
+    await expect(verifyTag(fetchImpl, pushedCommitSha, 'v1.29.3', pushedCommitSha)).rejects.toThrow(
+      new RegExp(
+        `event ${pushedCommitSha}, tag ${tagObjectSha}, expected commit ${pushedCommitSha}`,
+      ),
     );
-    expect(() => expectedTagCommitSha('not-a-sha', pushedCommitSha)).toThrow(/full tag target/);
-    expect(() => expectedTagCommitSha('0'.repeat(40), '0'.repeat(40))).toThrow(/live tag target/);
+  });
+
+  it.each([
+    ['a missing event object', ''],
+    ['a malformed event object', 'not-a-sha'],
+    ['a deleted-ref event object', '0'.repeat(40)],
+  ])('rejects %s before any network request', async (_label, eventAfter) => {
+    const fetchImpl = vi.fn<typeof fetch>();
+
+    await expect(verifyTag(fetchImpl, pushedCommitSha, 'v1.29.3', eventAfter)).rejects.toThrow(
+      /push event does not contain a (full|live) pushed tag object SHA/,
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('rejects a lightweight tag before comparing the event object', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: pushedCommitSha, type: 'commit' } }));
+    const result = await verifyTag(fetchImpl, pushedCommitSha, 'v1.29.3', pushedCommitSha);
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/not an annotated tag/);
   });
 
   it.each([

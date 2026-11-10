@@ -48,7 +48,8 @@ export function safeReport(commit: RemoteCommit): RemoteReport;
 
 export function verifyRemoteCommitReports(commits: RemoteCommit[]): RemoteResult;
 export function hasCompleteCommitRange(expectedShas: string[], reports: RemoteReport[]): boolean;
-export function expectedTagCommitSha(eventAfter: string, githubSha: string): string;
+export function contextCommitSha(githubSha: string): string;
+export function eventTagObjectSha(eventAfter: string): string;
 export function refPatternMatches(pattern: unknown, ref: string): boolean | null;
 export function verifyRemotePullRequest(options: RemoteOptions): Promise<RemoteResult>;
 export function verifyRemoteCommitRange(options: RemoteCommitRangeOptions): Promise<RemoteResult>;
@@ -57,6 +58,7 @@ export function verifyRemoteTag(options: {
   repo: string;
   tag: string;
   expectedCommitSha: string;
+  eventAfter: string;
   token?: string;
   fetchImpl?: typeof fetch;
 }): Promise<VerifiedTagResult>;
