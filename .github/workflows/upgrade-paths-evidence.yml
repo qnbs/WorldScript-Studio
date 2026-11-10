@@ -129,8 +129,9 @@ jobs:
           $oldAlive = Start-App $oldEntries[0] 20
           $volatile = '\\(Cache|Code Cache|GPUCache|DawnGraphiteCache|DawnWebGPUCache|ShaderCache|GrShaderCache|Crashpad|component_crx_cache|Crashpad)\\|\.tmp$|\\LOCK$|\.log$|-wal$|-shm$|-journal$|\\MANIFEST-[0-9]+$|\\CURRENT$|\\LOG(\.old)?$'
           $everything = @(Get-ChildItem -Path $data -Recurse -File | ForEach-Object FullName | Sort-Object)
-          $before = @($everything | Where-Object { $_ -notmatch $volatile })
-          Write-Host "old app alive after 20 s: $oldAlive; files before the upgrade: $($everything.Count), persistent user data and settings: $($before.Count), volatile caches: $($everything.Count - $before.Count)"
+          $userDataDirs = '\\EBWebView\\Default\\(IndexedDB|Local Storage|Session Storage|File System)\\'
+          $before = @($everything | Where-Object { $_ -match $userDataDirs -and $_ -notmatch $volatile })
+          Write-Host "old app alive after 20 s: $oldAlive; files before the upgrade: $($everything.Count), user data files in IndexedDB, Local Storage, Session Storage and File System: $($before.Count), other browser engine files: $($everything.Count - $before.Count)"
           $newSetup = (Get-ChildItem cand -Recurse -Filter '*_1.29.3_x64-setup.exe' | Select-Object -First 1).FullName
           $p = Start-Process -FilePath $newSetup -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "new NSIS setup exit code $($p.ExitCode)" }
@@ -154,7 +155,7 @@ jobs:
           Write-Host "files after starting the upgraded app: $afterCount (before the upgrade: $($everything.Count)); the browser engine may rename or compact its own bookkeeping files on start"
           $uninstall = $newEntries[0].UninstallString
           Write-Host "NSIS upgrade ok: one entry, version 1.29.3, binary $productVersion, $($before.Count) persistent files survived; old alive=$oldAlive new alive=$newAlive"
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows NSIS upgrade 1.29.2 to 1.29.3`n- one uninstall entry, version 1.29.3, binary $productVersion`n- old app alive after 20 s: $oldAlive, new app alive: $newAlive`n- $($before.Count) persistent user data files (volatile caches excluded: $($everything.Count - $before.Count), of which $volatileLost gone) all present after the upgrade and after starting the new app"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows NSIS upgrade 1.29.2 to 1.29.3`n- one uninstall entry, version 1.29.3, binary $productVersion`n- old app alive after 20 s: $oldAlive, new app alive: $newAlive`n- $($before.Count) user data files (IndexedDB, Local Storage, Session Storage, File System; the other $($everything.Count - $before.Count) browser engine files are excluded, of which $volatileLost cache files are gone) all present after the upgrade and after starting the new app"
           cmd /c "$uninstall /S"
           Start-Sleep -Seconds 10
           if ((Get-Entries).Count -ne 0) { throw 'the NSIS entry was not removed by the uninstaller' }
