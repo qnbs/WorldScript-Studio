@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Vercel retention:** Previews are now deleted as soon as no open PR retains them, whether or not their branch still exists, and their branch aliases go with them; Production history is left to the provider's retention (PR #1212).
 - **Release publishing:** GHCR and Tauri release gates no longer rely on `github.ref_protected`; they run the verifier pinned to the ruleset-checking protected-`main` commit, and a read-only dispatch proof exercises it with the production token (PR #1211).
 - **Release-tag verification:** The tag verifier now requires active tag rulesets that cover creation, update, deletion and non-fast-forward for the pushed ref, read directly from the rulesets API instead of `github.ref_protected` (PR #1210).
 - **Container publishing:** GHCR releases now require a protected, signed annotated `v*` tag bound to the triggering commit, verified by a pinned source, and the exact-commit security audit; manual dispatch remains non-publishing (PR #1205).

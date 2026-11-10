@@ -90,21 +90,17 @@ const unknownReasons = (deployment) =>
 
 const FAILED_STATES = new Set(['ERROR', 'CANCELED']);
 
-// QNBS-v3: a failed or canceled Preview is deletable only when no open PR and no existing branch still needs it, so such a Preview of a living branch or an open PR is protected whatever its PR lifecycle says.
+// QNBS-v3: only an open PR needs its failed or canceled Preview; a branch that merely still exists does not, because merged branches are kept and would pin every Preview forever.
 function failedPreviewNeeded(deployment, context) {
-  const meta = deployment.meta ?? {};
-  const needed = [
-    context.branches.has(meta.githubCommitRef),
-    context.prNumbers.has(meta.githubPrId),
-  ];
-  return FAILED_STATES.has(deployment.readyState) && needed.some(Boolean);
+  const needed = context.prNumbers.has(deployment.meta?.githubPrId);
+  return FAILED_STATES.has(deployment.readyState) && needed;
 }
 
 function protectionReasons(deployment, aliases, context) {
   const meta = deployment.meta ?? {};
   const reasons = [];
   if (aliases.some((alias) => CANONICAL_ALIASES.includes(alias))) reasons.push('canonical-alias');
-  if (aliases.length > 0 && context.branches.has(meta.githubCommitRef))
+  if (aliases.length > 0 && context.prNumbers.has(meta.githubPrId))
     reasons.push('active-branch-alias');
   if (context.newestThree.has(deployment.uid)) reasons.push('open-pr-newest-three');
   if (context.heads.has(meta.githubCommitSha)) reasons.push('main-or-open-head');
@@ -122,12 +118,8 @@ function lifecycleOf(deployment, context) {
 }
 
 // QNBS-v3: an alias host the removal command would refuse (a custom domain, a nested label) makes the preview UNKNOWN up front, so a pass can never start on a deployment whose alias it is unable to remove.
-function lifecycleUnknown(lifecycle, aliases) {
-  const reasons = [];
-  if (lifecycle === 'no-pr-branch-exists') reasons.push('no-pr-branch-exists');
-  if (lifecycle === 'orphan' && aliases.length > 0) reasons.push('orphan-with-alias');
-  if (aliases.some((host) => !ALIAS_HOST.test(host))) reasons.push('alias-host-unsupported');
-  return reasons;
+function lifecycleUnknown(aliases) {
+  return aliases.some((host) => !ALIAS_HOST.test(host)) ? ['alias-host-unsupported'] : [];
 }
 
 function verdictOf(protection, unknown) {
@@ -149,7 +141,7 @@ function classifyPreview(deployment, context) {
   const aliases = context.aliasesOf.get(deployment.uid) ?? [];
   const lifecycle = lifecycleOf(deployment, context);
   const protection = protectionReasons(deployment, aliases, context);
-  const unknown = [...unknownReasons(deployment), ...lifecycleUnknown(lifecycle, aliases)];
+  const unknown = [...unknownReasons(deployment), ...lifecycleUnknown(aliases)];
   return {
     id: deployment.uid,
     verdict: verdictOf(protection, unknown),

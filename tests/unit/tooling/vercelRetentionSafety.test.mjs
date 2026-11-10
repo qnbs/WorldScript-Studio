@@ -112,14 +112,23 @@ test('an alias read twice with different content means the inventory moved and i
 });
 
 for (const state of ['ERROR', 'CANCELED']) {
-  test(`a ${state} Preview of a closed PR is kept while its branch still exists`, async () => {
+  // QNBS-v3 (#627): a merged branch is kept, so a failed Preview of a closed PR is deleted although its branch still exists.
+  test(`a ${state} Preview of a closed PR is deleted although its branch still exists`, async () => {
     const world = standardWorld();
     world.branches.add('fix/gone');
-    world.aliases = world.aliases.filter((entry) => entry.deploymentId !== 'dpl_prev12');
     find(world, 'dpl_prev11').readyState = state;
     const summary = await reconcile(world);
-    assert.deepEqual(verdicts(summary).dpl_prev11.reasons, ['failed-preview-needed']);
-    assert.ok(find(world, 'dpl_prev11'));
+    assert.deepEqual(verdicts(summary).dpl_prev11.reasons, []);
+    assert.ok(summary.deleted.includes('dpl_prev11'));
+    assert.equal(find(world, 'dpl_prev11'), undefined);
+  });
+
+  test(`a ${state} Preview of an open PR is still kept for the review`, async () => {
+    const world = standardWorld();
+    find(world, 'dpl_prev1').readyState = state;
+    const summary = await reconcile(world);
+    assert.deepEqual(verdicts(summary).dpl_prev1.reasons, ['failed-preview-needed']);
+    assert.ok(find(world, 'dpl_prev1'));
   });
 
   test(`a ${state} Preview of a closed PR is deleted once its branch is gone`, async () => {
@@ -129,6 +138,34 @@ for (const state of ['ERROR', 'CANCELED']) {
     assert.ok(summary.deleted.includes('dpl_prev11'));
   });
 }
+
+// QNBS-v3 (#627): only an open PR, the main commit or an open head protects a Preview; the mere existence of its branch or alias no longer does.
+test('a Preview of a living branch without a PR is deleted together with its branch alias', async () => {
+  const world = standardWorld();
+  find(world, 'dpl_prev21').meta.githubCommitSha = 'd'.repeat(40);
+  const summary = await reconcile(world);
+  assert.equal(verdicts(summary).dpl_prev21.verdict, 'SAFE');
+  assert.ok(summary.deleted.includes('dpl_prev21'));
+  const alias = world.writes.findIndex((entry) => entry.includes('chore-loose'));
+  const removal = world.writes.findIndex((entry) => entry.startsWith('remove dpl_prev21'));
+  assert.ok(alias >= 0 && alias < removal, 'the branch alias goes before its deployment');
+});
+
+test('the branch alias of a closed PR is removed with its deployment although the branch exists', async () => {
+  const world = standardWorld();
+  world.branches.add('fix/gone');
+  const summary = await reconcile(world);
+  assert.ok(summary.deleted.includes('dpl_prev12'));
+  assert.ok(world.writes.some((entry) => entry.includes('fix-gone')));
+  assert.equal(find(world, 'dpl_prev12'), undefined);
+});
+
+test('a Preview that builds the current main commit stays protected whatever its branch', async () => {
+  const world = standardWorld();
+  const summary = await reconcile(world);
+  assert.ok(verdicts(summary).dpl_prev21.reasons.includes('main-or-open-head'));
+  assert.ok(find(world, 'dpl_prev21'));
+});
 
 test('a main that advances between the last deletion and the post-proof is refused', async () => {
   const world = standardWorld();
