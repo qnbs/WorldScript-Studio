@@ -574,16 +574,19 @@ deployments and the runner classified none of them as deletable.
 ```text
 PREVIEW_PROTECTION = canonical alias | newest three Previews of an open PR | head of an open PR
                      | current main commit | explicit hold | alias of a retained open-PR Preview
+                     | alias of a Preview built from an open PR head branch
                      | failed or canceled Preview of an open PR
 BRANCH_EXISTENCE = neither a protection nor a blocker
 PRODUCTION_HISTORY = provider-side deployment retention; the runner never deletes Production-class deployments
 ONE_OFF_SWEEP = 2026-11-10, maintainer-directed, recorded in GH #627
 ```
 
-A Preview is therefore `SAFE` as soon as no open PR retains it, whether its PR is closed or
-merged or it never had one, and whether or not its branch exists. Its branch alias is removed
-with it. A Preview with no PR is deleted by the next pass even if the work is still in
-progress; open a PR to keep the newest three. The runner still never deletes a
+A Preview is therefore `SAFE` as soon as no open PR retains it and no common protection gate
+applies, whether its PR is closed or merged or it never had one, and regardless of whether its
+branch exists. Its branch alias is removed with it. A Preview with no PR that builds the current
+`main` commit, or that holds the branch alias of an open PR's head branch, stays protected. Any
+other Preview with no PR is deleted by the next pass even if the work is still in progress; open
+a PR to keep the newest three. The runner still never deletes a
 Production-class deployment and never changes project settings. The bounded history of
 Production deployments is the provider's retention setting of the project (1 day, at least
 10 kept), which only the maintainer changes. Every other rule of this policy is unchanged:

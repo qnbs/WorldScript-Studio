@@ -96,12 +96,18 @@ function failedPreviewNeeded(deployment, context) {
   return FAILED_STATES.has(deployment.readyState) && needed;
 }
 
+// QNBS-v3: an alias is the review URL of an open PR when the deployment carries that PR's number or, because a push that predates the PR (or a provider that omitted the number) leaves no number, when it was built from the head branch of an open PR.
+const holdsOpenPrAlias = (meta, aliases, context) =>
+  aliases.length > 0 &&
+  [context.prNumbers.has(meta.githubPrId), context.openPrBranches.has(meta.githubCommitRef)].some(
+    Boolean,
+  );
+
 function protectionReasons(deployment, aliases, context) {
   const meta = deployment.meta ?? {};
   const reasons = [];
   if (aliases.some((alias) => CANONICAL_ALIASES.includes(alias))) reasons.push('canonical-alias');
-  if (aliases.length > 0 && context.prNumbers.has(meta.githubPrId))
-    reasons.push('active-branch-alias');
+  if (holdsOpenPrAlias(meta, aliases, context)) reasons.push('active-branch-alias');
   if (context.newestThree.has(deployment.uid)) reasons.push('open-pr-newest-three');
   if (context.heads.has(meta.githubCommitSha)) reasons.push('main-or-open-head');
   if (context.holds.has(deployment.uid)) reasons.push('explicit-hold');
@@ -163,6 +169,7 @@ export function classify(world) {
     aliasesOf: aliasesByDeployment(world.aliases),
     branches: new Set([...world.branches, ...world.prs.map((pr) => pr.headRefName)]),
     prNumbers: new Set(world.prs.map((pr) => String(pr.number))),
+    openPrBranches: new Set(world.prs.map((pr) => pr.headRefName)),
     heads: new Set([world.main, ...world.prs.map((pr) => pr.headRefOid)]),
     newestThree: newestThreeOfOpenPrs(world.prs, previews),
     holds: world.holds,

@@ -103,6 +103,32 @@ test('the branch alias of an open fork PR is protected although its ref is not i
   assert.deepEqual(touched, []);
 });
 
+// QNBS-v3 (#1213 review): a Preview without a PR number that was built from an open PR's head branch holds that PR's review alias, so neither it nor its alias is removed.
+test('the branch alias of a Preview without a PR number is protected while its branch heads an open PR', async () => {
+  const world = standardWorld();
+  const orphan = preview(31, { meta: { githubPrId: undefined } });
+  world.deployments.push(orphan);
+  world.aliases.push(aliasEntry('worldscript-studio-feat-open-nopr.vercel.app', orphan.uid, 260));
+  const summary = await reconcile(world);
+  assert.equal(verdicts(summary).dpl_prev31.verdict, 'PROTECTED');
+  assert.ok(verdicts(summary).dpl_prev31.reasons.includes('active-branch-alias'));
+  assert.ok(find(world, 'dpl_prev31'));
+  assert.deepEqual(
+    world.writes.filter((entry) => entry.includes('feat-open-nopr')),
+    [],
+  );
+});
+
+test('a Preview without a PR number on a branch that heads no open PR stays deletable with its alias', async () => {
+  const world = standardWorld();
+  const loose = preview(32, { meta: { githubCommitRef: 'chore/other', githubPrId: undefined } });
+  world.deployments.push(loose);
+  world.aliases.push(aliasEntry('worldscript-studio-chore-other.vercel.app', loose.uid, 261));
+  const summary = await reconcile(world);
+  assert.deepEqual(verdicts(summary).dpl_prev32.reasons, []);
+  assert.ok(summary.deleted.includes('dpl_prev32'));
+});
+
 test('an alias read twice with different content means the inventory moved and is refused', async () => {
   const world = standardWorld();
   world.pageSize = 4;
