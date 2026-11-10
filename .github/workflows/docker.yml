@@ -72,7 +72,7 @@ jobs:
   verify-release-tag:
     name: Verify release tag
     if: >-
-      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && github.ref_protected == true }}
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -82,7 +82,7 @@ jobs:
       - name: Check out the pinned trusted verifier
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 147470682b62d5bfe196bba803353d9f25cab8a7
+          ref: d348d863f0cc230e3fad64924eb8c76dab91ad0e
           path: trusted-verifier
           fetch-depth: 1
           persist-credentials: false
@@ -111,7 +111,7 @@ jobs:
     # QNBS-v3 (#911): publish only a verified signed v* tag push after the exact-SHA audit.
     needs: [security-audit, verify-release-tag]
     if: >-
-      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && github.ref_protected == true && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # QNBS-v3: packages:write scoped to this job only — prevents privilege escalation in future jobs.

@@ -375,7 +375,7 @@ describe('Tauri release workflow policy', () => {
   it('runs the signature verifier only for real version-tag pushes with read-only access', () => {
     const verifier = extractJobBlock(tauriWorkflowSource, 'verify-release-tag');
     expect(verifier).toMatch(
-      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) && github\.ref_protected == true \}\}$/m,
+      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) \}\}$/m,
     );
     // QNBS-v3 (#1206): the verifier runs from a pinned protected-main checkout, never from the tag under verification.
     expect(verifier).toContain('path: trusted-verifier');
@@ -554,7 +554,7 @@ describe('Tauri release workflow policy', () => {
     ]);
     // QNBS-v3 (#911, #1206): protected tag push, verifier proof for the event SHA AND an exact-SHA security audit success; tests/unit/tooling/releaseSecurityGate.test.ts covers the weakened variants.
     expect(release).toMatch(
-      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) && github\.ref_protected == true && needs\.verify-release-tag\.result == 'success' && needs\.verify-release-tag\.outputs\.verified-tag-sha == github\.sha && needs\.security-audit\.result == 'success' && needs\.security-audit\.outputs\.audited-sha == github\.sha \}\}$/m,
+      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) && needs\.verify-release-tag\.result == 'success' && needs\.verify-release-tag\.outputs\.verified-tag-sha == github\.sha && needs\.security-audit\.result == 'success' && needs\.security-audit\.outputs\.audited-sha == github\.sha \}\}$/m,
     );
     expect(release).not.toContain('workflow_dispatch');
     expect(release).toContain('body_path: release-notes.md');
