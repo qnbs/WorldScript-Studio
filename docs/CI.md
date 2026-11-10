@@ -394,13 +394,25 @@ change classification instead of always running:
   were changed plus every unit test that mentions a changed source, workflow, script or config file
   (a `git grep` on the path, the extension-less import path, and the basename for workflows and
   scripts, so a test that reads a workflow from disk is found too). This is an explicit file list,
-  never a suite-wide run. More than 8 matching files are reported as `DEFERRED_TO_REQUIRED_CI`
-  with the count (run the ones you need with `pnpm exec vitest run <file>`); missing or
-  ambiguous change evidence is reported as deferred as well, never skipped silently. End-to-end
-  specs are never selected locally. Some changes select nothing by design, so run the tests that matter by hand: root `package.json` and `tsconfig*.json` have no path-qualified search string and a bare name would match almost every test, so they select nothing. Files named `index`, `types`, `constants` or `utils` are searched only by their directory path, never by the bare name. JSON under `locales/`, `public/`, `community-templates/`, `docs/`, `reports/` and `tests/` is not searched. A deleted test file is not run. The related-test run and the single-checker typecheck have
-  their own bounded timeouts (8 and 10 minutes) because the 120 s default child bound killed a
-  full-range typecheck on a 2-core machine.
+  never a suite-wide run, and it mirrors the include list of `vitest.config.ts`. End-to-end specs
+  are never selected locally. More than 8 matching files are reported as
+  `DEFERRED_TO_REQUIRED_CI` with the count (run the ones you need with
+  `pnpm exec vitest run <file>`); missing or ambiguous change evidence is reported as deferred as
+  well, never skipped silently.
 
+  Some changes select nothing by design, so run the tests that matter by hand. Root
+  `package.json` and `tsconfig*.json` have no path-qualified search string and a bare name would
+  match almost every test, so they select nothing. Files named `index`, `types`, `constants` or
+  `utils` are searched only by their directory path, never by the bare name. JSON under
+  `locales/`, `public/`, `community-templates/`, `docs/`, `reports/` and `tests/` is not searched.
+  A deleted test file is not run.
+
+  The run starts without any `GIT_*` variable, because the hooks hand them to their children and
+  that breaks tests which run git in disposable repositories. The related-test run (8 minutes),
+  the single-checker typecheck (10 minutes) and the whole pre-push gate (25 minutes) each have a
+  finite bound. The 120 s default child bound used to SIGTERM the whole gate mid-step, which
+  showed only as a bare `FAIL`; a failed step now prints its exit status, signal and whether it
+  timed out or was interrupted.
 - **TypeScript (single-checker)** — skipped, reporting `DEFERRED_TO_REQUIRED_CI`, when the
   classification is `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, or
   non-TypeScript `TEST_ONLY`. Runs for every other classification, including `AMBIGUOUS`/`MIXED`.
