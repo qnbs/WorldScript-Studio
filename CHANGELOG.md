@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Container build:** The Docker image build copied a `patches/` directory that PR #1149 had emptied, so the GHCR publish job of the real `v1.29.4` tag run failed at `COPY patches/ ./patches/` (nothing was pushed). The stale line is removed, and a test now checks that every build-context `COPY`/`ADD` source of the Dockerfile exists inside the build context and is not excluded by `.dockerignore` (stage copies with `--from` are out of scope and covered only by a real container build). The fix does not act retroactively: the tag `v1.29.4` is immutable and keeps the defect, and no container image was published for it (PR #1224).
+
 <!-- release-candidate: v1.29.4 -->
 
 ## [1.29.4] — 2026-11-10
