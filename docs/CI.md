@@ -397,7 +397,7 @@ change classification instead of always running:
   never a suite-wide run. More than 8 matching files are reported as `DEFERRED_TO_REQUIRED_CI`
   with the count (run the ones you need with `pnpm exec vitest run <file>`); missing or
   ambiguous change evidence is reported as deferred as well, never skipped silently. End-to-end
-  specs are never selected locally. The related-test run and the single-checker typecheck have
+  specs are never selected locally. Some changes select nothing by design, so run the tests that matter by hand: root `package.json` and `tsconfig*.json` have no path-qualified search string and a bare name would match almost every test, so they select nothing. Files named `index`, `types`, `constants` or `utils` are searched only by their directory path, never by the bare name. JSON under `locales/`, `public/`, `community-templates/`, `docs/`, `reports/` and `tests/` is not searched. A deleted test file is not run. The related-test run and the single-checker typecheck have
   their own bounded timeouts (8 and 10 minutes) because the 120 s default child bound killed a
   full-range typecheck on a 2-core machine.
 
