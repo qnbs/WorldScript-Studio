@@ -140,8 +140,9 @@ const aptCalls = (calls: string[]) => calls.filter((call) => call.startsWith('ap
 // 2026-11-11: no *.ubuntu.com mirror resolved on the runners, and apt-get kept retrying until the 45-minute job timeout (dispatch 43037609935).
 describe('apt installs in the release workflow stay bounded', () => {
   it('run through the helper with a step timeout of at most 15 minutes in every workflow', () => {
-    expect(new Set(aptSteps.map(({ file }) => file))).toEqual(
-      new Set(['ci.yml', 'tauri-build.yml']),
+    // At least the known users must be found, so the scan cannot pass vacuously; another bounded workflow is fine.
+    expect([...new Set(aptSteps.map(({ file }) => file))]).toEqual(
+      expect.arrayContaining(['ci.yml', 'tauri-build.yml']),
     );
     expect(aptSteps.length).toBeGreaterThanOrEqual(4);
     for (const { file, step } of aptSteps) {
