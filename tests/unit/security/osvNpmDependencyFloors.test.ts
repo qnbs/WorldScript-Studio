@@ -34,6 +34,18 @@ function referencesResolvedVersion(reference: string, versions: string[]): boole
 
 // The expiry every OSV waiver was requalified for on 2026-11-11 (#1163, #1164).
 const WAIVER_EXPIRY = '2027-01-31T00:00:00Z';
+// The advisories requalified on 2026-11-11; any other ID needs its own review before it may be waived.
+const REQUALIFIED_WAIVER_IDS = [
+  'RUSTSEC-2024-0429',
+  'RUSTSEC-2024-0370',
+  'RUSTSEC-2026-0370',
+  'RUSTSEC-2026-0371',
+  'RUSTSEC-2026-0372',
+  'GHSA-gcqx-w48m-w2h4',
+  'GHSA-mrhx-c7xc-m3w5',
+  'GHSA-3g3m-2fjr-6pw4',
+  'GHSA-g3hv-75wg-m249',
+];
 
 // Active `ignoreUntil` values of one [[IgnoredVulns]] block. OSV reads only uncommented keys, so a commented-out line must not satisfy the expiry check.
 // The waiver file uses single-line strings only. A multi-line string (""" or ''') could hide a key-like line or an escaped delimiter, so the guard fails closed instead of parsing TOML string escapes.
@@ -258,14 +270,19 @@ describe('OSV npm dependency floors', () => {
   });
 
   // #1233 review: every waiver, Rust ones included, carries exactly one active expiry.
-  it('gives every OSV waiver exactly one active expiry, the requalified date', () => {
+  // #1233 review: the reviewed advisory set is pinned, so swapping, adding or removing an ID cannot keep a waiver green.
+  it('gives exactly the nine requalified advisories one active expiry each', () => {
     const toml = readFileSync(resolve(projectRoot, 'src-tauri/osv-scanner.toml'), 'utf8');
     const blocks = toml.split('[[IgnoredVulns]]').slice(1);
-    expect(blocks).toHaveLength(9);
-    for (const block of blocks) {
-      const id = /^id\s*=\s*"([^"]+)"/m.exec(block)?.[1];
-      expect(activeIgnoreUntil(block), `${id} expiry`).toEqual([WAIVER_EXPIRY]);
-    }
+    const ids = blocks.map((block) => {
+      const active = [...block.matchAll(/^id\s*=\s*"([^"]+)"\s*(?:#.*)?$/gm)].map(
+        (match) => match[1],
+      );
+      expect(active, 'exactly one active id per waiver').toHaveLength(1);
+      expect(activeIgnoreUntil(block), `${active[0]} expiry`).toEqual([WAIVER_EXPIRY]);
+      return active[0];
+    });
+    expect(ids.sort()).toEqual([...REQUALIFIED_WAIVER_IDS].sort());
   });
 
   it('does not count a commented-out ignoreUntil as an active expiry', () => {
