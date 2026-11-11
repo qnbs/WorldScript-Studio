@@ -83,6 +83,12 @@ describe('Dockerfile pnpm pin (#1223)', () => {
     );
   });
 
+  it('does not count corepack install inside a shell comment', () => {
+    expect(
+      checkDockerfilePnpm('RUN echo ok # && corepack install\n', '12.13.0').corepackInstall,
+    ).toBe(false);
+  });
+
   it('rejects an installer that is split across a backslash continuation', () => {
     const result = checkDockerfilePnpm(
       `RUN corepack install\nRUN npm install -g \\\n    pnpm\n${assertion}\n`,

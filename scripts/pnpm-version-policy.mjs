@@ -39,7 +39,8 @@ const PNPM_BYPASSES = [
   /\bget\.pnpm\.io\b/,
 ];
 // `corepack install` at a command position of a RUN instruction; the keyword is case-insensitive, the shell command is not.
-const COREPACK_INSTALL = /^[Rr][Uu][Nn]\s+(?:.*(?:&&|;)\s*)?corepack\s+install\b/;
+// No `#` before it, since a shell comment would swallow the rest of the line.
+const COREPACK_INSTALL = /^[Rr][Uu][Nn]\s+(?:[^#]*(?:&&|;)\s*)?corepack\s+install\b/;
 // The in-build assertion that the active pnpm equals the packageManager pin, directly before the install.
 const VERSION_ASSERTION =
   /^[Rr][Uu][Nn]\s+test "\$\(pnpm --version\)" = "\$\(node -p "require\('\.\/package\.json'\)\.packageManager\.split\('@'\)\[1\]\.split\('\+'\)\[0\]"\)" && pnpm install --frozen-lockfile$/;

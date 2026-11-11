@@ -175,7 +175,8 @@ function earlierRunErrors(job, name) {
 }
 
 function unconditionalErrors(job, name) {
-  return [job.checkBuild, job.extract, job.bundleCheck]
+  // The push step too: `if: always()` there would publish after a failed check.
+  return [job.checkBuild, job.extract, job.bundleCheck, job.pushBuild]
     .map((index) => job.steps[index])
     .filter((step) => step && (step.if !== undefined || step['continue-on-error'] !== undefined))
     .map(
@@ -183,18 +184,26 @@ function unconditionalErrors(job, name) {
     );
 }
 
+// The whole check workflow is read-only: exactly one job, read-only permissions, no registry login in any step.
 function readOnlyErrors(document, job) {
-  const errors = [];
   const readOnly = { contents: 'read' };
-  if (!sameJson(document.permissions, readOnly) || !sameJson(job?.permissions, readOnly)) {
-    errors.push(`the build check must hold exactly permissions: { contents: read }`);
-  }
-  if (stepsOf(job).some((step) => usesOf(step).startsWith(LOGIN))) {
-    errors.push('the build check must not log in to a registry');
-  }
-  if (job?.name !== BUILD_CHECK_JOB)
-    errors.push(`the build check job must be named "${BUILD_CHECK_JOB}"`);
-  return errors;
+  const allSteps = Object.values(document.jobs ?? {}).flatMap(stepsOf);
+  const rules = [
+    [
+      sameJson(document.permissions, readOnly) && sameJson(job?.permissions, readOnly),
+      'the build check must hold exactly permissions: { contents: read }',
+    ],
+    [
+      sameJson(Object.keys(document.jobs ?? {}), [CHECK_JOB]),
+      `docker-build-check.yml must contain only the ${CHECK_JOB} job`,
+    ],
+    [
+      !allSteps.some((step) => usesOf(step).startsWith(LOGIN)),
+      'the build check must not log in to a registry',
+    ],
+    [job?.name === BUILD_CHECK_JOB, `the build check job must be named "${BUILD_CHECK_JOB}"`],
+  ];
+  return rules.filter(([ok]) => !ok).map(([, message]) => message);
 }
 
 // Exact triggers: the build check runs on every pull request, every push to main and on dispatch; the publish workflow runs on v* tags and dispatch. Any added filter or removed event fails.

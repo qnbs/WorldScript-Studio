@@ -137,6 +137,25 @@ const drift: Case[] = [
     },
     'must build, extract, check and push the image as consecutive steps',
   ],
+  // #1225 review: the push must not run after a failed check, and no other job may write.
+  [
+    'the push step runs even after a failed check',
+    (d) => {
+      Object.assign(named(publishSteps(d), 'Build and push'), { if: 'always()' });
+    },
+    'step "Build and push" must not set if: or continue-on-error',
+  ],
+  [
+    'the build check workflow adds a job that can write packages',
+    (d) => {
+      d.check.jobs['extra'] = {
+        name: 'Extra',
+        permissions: { contents: 'read', packages: 'write' },
+        steps: [{ uses: `docker/login-action@${'e'.repeat(40)}` }],
+      };
+    },
+    'docker-build-check.yml must contain only the build-check job',
+  ],
   // #1225 review: the triggers are part of the promise, so removing or filtering an event fails.
   [
     'the build check drops its pull_request trigger',
