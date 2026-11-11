@@ -19,7 +19,10 @@ const gateCondition =
   "needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha";
 const tagPushCondition =
   "github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')";
-const dockerTagPushCondition = `${tagPushCondition} && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && ${gateCondition}`;
+// QNBS-v3 (#1219): both publishers also wait on the exact-commit container precheck, before the audit predicates.
+const containerPrecheckCondition =
+  "needs.container-precheck.result == 'success' && needs.container-precheck.outputs.prechecked-sha == github.sha";
+const dockerTagPushCondition = `${tagPushCondition} && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && ${containerPrecheckCondition} && ${gateCondition}`;
 // QNBS-v3: GHCR and Tauri publish behind the identical trusted-verifier conjunction.
 const tauriReleaseCondition = dockerTagPushCondition;
 const proofTagSimulationCondition = `github.event_name == 'workflow_dispatch' && inputs.simulated_event == 'push' && inputs.simulated_ref_type == 'tag' && startsWith(inputs.simulated_ref, 'refs/tags/v') && inputs.simulated_tag_signature == 'verified' && ${gateCondition}`;
@@ -58,9 +61,13 @@ describe('#911 release security gate: shipped workflows', () => {
 
   it('Tauri and GHCR publish only from exact gated v* tag pushes', () => {
     expect(source(TAURI)).toContain(expr(tauriReleaseCondition));
-    expect(source(TAURI)).toContain('needs: [bundle, security-audit, verify-release-tag]');
+    expect(source(TAURI)).toContain(
+      'needs: [bundle, security-audit, verify-release-tag, container-precheck]',
+    );
     expect(source(DOCKER)).toContain(expr(dockerTagPushCondition));
-    expect(source(DOCKER)).toContain('needs: [security-audit, verify-release-tag]');
+    expect(source(DOCKER)).toContain(
+      'needs: [security-audit, verify-release-tag, container-precheck]',
+    );
   });
 
   it.each([DOCKER, TAURI, 'tag-verifier-proof.yml'])(
@@ -178,15 +185,16 @@ describe('#911 release security gate: shipped workflows', () => {
   it('requires the signature-verification result as well as the verifier job dependency', () => {
     const noVerifierDependency = mutate(
       source(DOCKER),
-      'needs: [security-audit, verify-release-tag]',
-      'needs: [security-audit]',
+      'needs: [security-audit, verify-release-tag, container-precheck]',
+      'needs: [security-audit, container-precheck]',
     );
     expect(messages(DOCKER, noVerifierDependency)).toMatch(/must need "verify-release-tag"/);
 
+    // The publisher's own condition, not the precheck job's verifier clause.
     const noVerifierResult = mutate(
       source(DOCKER),
-      "needs.verify-release-tag.result == 'success' && ",
-      '',
+      "startsWith(github.ref, 'refs/tags/v') && needs.verify-release-tag.result == 'success' && ",
+      "startsWith(github.ref, 'refs/tags/v') && ",
     );
     expect(messages(DOCKER, noVerifierResult)).toMatch(
       /must require needs\.verify-release-tag\.result == 'success'/,
@@ -324,6 +332,163 @@ describe('#911 release security gate: shipped workflows', () => {
   });
 });
 
+describe('#1219 both publishing channels wait on the container precheck', () => {
+  const precheckJob = (name: string) => {
+    const text = source(name);
+    const start = text.indexOf('\n  container-precheck:\n');
+    return text.slice(start, text.indexOf('\n\n  ', text.indexOf('id: result', start)));
+  };
+
+  it('GHCR and the desktop release share one identical read-only precheck job', () => {
+    expect(precheckJob(DOCKER)).toContain('node scripts/release-container-precheck.mjs');
+    expect(precheckJob(DOCKER)).toBe(precheckJob(TAURI));
+  });
+
+  it.each(
+    (
+      [
+        [
+          'Tauri release without the precheck need',
+          TAURI,
+          'needs: [bundle, security-audit, verify-release-tag, container-precheck]',
+          'needs: [bundle, security-audit, verify-release-tag]',
+          /job "release" must need "container-precheck"/,
+        ],
+        [
+          'GHCR build-push without the precheck need',
+          DOCKER,
+          'needs: [security-audit, verify-release-tag, container-precheck]',
+          'needs: [security-audit, verify-release-tag]',
+          /job "build-push" must need "container-precheck"/,
+        ],
+        [
+          'Tauri release that ignores the precheck result',
+          TAURI,
+          `${containerPrecheckCondition} && `,
+          '',
+          /job "release" if: must require needs\.container-precheck\.result == 'success'/,
+        ],
+        [
+          'GHCR build-push that ignores which commit was prechecked',
+          DOCKER,
+          ' && needs.container-precheck.outputs.prechecked-sha == github.sha',
+          '',
+          /prechecked-sha == github\.sha/,
+        ],
+        [
+          'a precheck that can write to Actions',
+          DOCKER,
+          '      contents: read\n      actions: read\n',
+          '      contents: read\n      actions: write\n',
+          /must hold exactly permissions: \{ contents: read, actions: read \}/,
+        ],
+        [
+          'a precheck that may fail without stopping the release',
+          TAURI,
+          '    timeout-minutes: 25\n',
+          '    timeout-minutes: 25\n    continue-on-error: true\n',
+          /job "container-precheck" must not set env, continue-on-error, container, services/,
+        ],
+        // #1234 review: the precheck runs tag code with an Actions token, so a tag push must prove the tag first.
+        [
+          'a precheck that does not wait for the tag verifier',
+          DOCKER,
+          '    needs: [verify-release-tag]\n    if: >-\n      ${{ always() && !cancelled() && ( github.event_name',
+          '    if: >-\n      ${{ always() && !cancelled() && ( github.event_name',
+          /job "container-precheck" must need verify-release-tag and run only on a dispatch or after the verifier proof/,
+        ],
+        [
+          'a precheck that also runs for an unverified tag',
+          TAURI,
+          "( github.event_name == 'workflow_dispatch' || ( needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha ) ) }}\n    runs-on: ubuntu-latest\n    timeout-minutes: 25",
+          "( github.event_name == 'workflow_dispatch' || github.event_name == 'push' ) }}\n    runs-on: ubuntu-latest\n    timeout-minutes: 25",
+          /job "container-precheck" must need verify-release-tag and run only on a dispatch or after the verifier proof/,
+        ],
+        [
+          'a precheck whose timeout cancels it before its own wait ends',
+          TAURI,
+          '    runs-on: ubuntu-latest\n    timeout-minutes: 25\n',
+          '    runs-on: ubuntu-latest\n    timeout-minutes: 1\n',
+          /job "container-precheck" must set timeout-minutes: 25/,
+        ],
+        [
+          'a precheck without a timeout',
+          DOCKER,
+          '    runs-on: ubuntu-latest\n    timeout-minutes: 25\n',
+          '    runs-on: ubuntu-latest\n',
+          /job "container-precheck" must set timeout-minutes: 25/,
+        ],
+        [
+          'a precheck on a self-hosted runner that could forge its output',
+          DOCKER,
+          '    runs-on: ubuntu-latest\n    timeout-minutes: 25\n',
+          '    runs-on: self-hosted\n    timeout-minutes: 25\n',
+          /job "container-precheck" must run on the GitHub-hosted ubuntu-latest runner/,
+        ],
+        [
+          'a precheck that swallows a failure',
+          DOCKER,
+          '--wait-seconds 1200 "$GITHUB_SHA"\n',
+          '--wait-seconds 1200 "$GITHUB_SHA" || true\n',
+          /job "container-precheck" must run exactly/,
+        ],
+        [
+          'a precheck of a mutable ref instead of the exact commit',
+          TAURI,
+          `ref: ${expr('github.sha')}\n          persist-credentials: false\n\n      - name: Require a successful`,
+          `ref: ${expr('github.ref')}\n          persist-credentials: false\n\n      - name: Require a successful`,
+          /job "container-precheck" must run exactly/,
+        ],
+        [
+          'a precheck output that does not come from the passed check',
+          DOCKER,
+          `prechecked-sha: ${expr('steps.result.outputs.prechecked-sha')}`,
+          `prechecked-sha: ${expr('github.sha')}`,
+          /must expose only prechecked-sha from its result step/,
+        ],
+        [
+          'a precheck step with a shell override',
+          TAURI,
+          `GH_TOKEN: ${expr('github.token')}\n`,
+          `GH_TOKEN: ${expr('github.token')}\n        shell: sh\n`,
+          /job "container-precheck" must run exactly/,
+        ],
+      ] as const
+    ).map(([label, name, from, to, message]) => ({ label, name, from, to, message })),
+  )('$label fails', ({ name, from, to, message }) => {
+    expect(messages(name, mutate(source(name), from, to))).toMatch(message);
+  });
+
+  // #1234 review: workflow-level defaults reach the precheck that holds GH_TOKEN, past the job-level checks.
+  it.each([
+    [DOCKER, 'shell: sh'],
+    [DOCKER, 'working-directory: alt'],
+    [TAURI, 'shell: sh'],
+    [TAURI, 'working-directory: alt'],
+  ])('%s with workflow-level defaults (%s) fails', (name, setting) => {
+    const text = source(name).replace(
+      '\njobs:\n',
+      `\ndefaults:\n  run:\n    ${setting}\n\njobs:\n`,
+    );
+    expect(text).toContain('\ndefaults:\n');
+    expect(messages(name, text)).toMatch(/must not define workflow-level defaults/);
+  });
+
+  it.each([
+    [DOCKER, '  build-push:\n'],
+    [TAURI, '  release:\n'],
+  ])('%s without the precheck job fails', (name, publisher) => {
+    const text = source(name);
+    const start = text.indexOf('  container-precheck:\n');
+    const next = text.indexOf(publisher, start);
+    expect(start).toBeGreaterThan(0);
+    expect(next).toBeGreaterThan(start);
+    expect(messages(name, text.slice(0, start) + text.slice(next))).toMatch(
+      /missing job "container-precheck"/,
+    );
+  });
+});
+
 describe('#1206 Tauri release trusts only the pinned-verifier proof', () => {
   const releaseWith = (condition: string) =>
     mutate(source(TAURI), expr(tauriReleaseCondition), expr(condition));
@@ -378,8 +543,8 @@ describe('#1206 Tauri release trusts only the pinned-verifier proof', () => {
       () =>
         mutate(
           source(TAURI),
-          'needs: [bundle, security-audit, verify-release-tag]',
-          'needs: [bundle, security-audit]',
+          'needs: [bundle, security-audit, verify-release-tag, container-precheck]',
+          'needs: [bundle, security-audit, container-precheck]',
         ),
       /job "release" must need "verify-release-tag"/,
     ],
@@ -524,15 +689,15 @@ describe('#911 release security gate: weakening it fails', () => {
         [
           'Tauri release without the audit need',
           TAURI,
-          'needs: [bundle, security-audit, verify-release-tag]',
-          'needs: [bundle, verify-release-tag]',
+          'needs: [bundle, security-audit, verify-release-tag, container-precheck]',
+          'needs: [bundle, verify-release-tag, container-precheck]',
           /must need "security-audit"/,
         ],
         [
           'GHCR build-push without the audit need',
           DOCKER,
-          'needs: [security-audit, verify-release-tag]',
-          'needs: [verify-release-tag]',
+          'needs: [security-audit, verify-release-tag, container-precheck]',
+          'needs: [verify-release-tag, container-precheck]',
           /must need "security-audit"/,
         ],
         [

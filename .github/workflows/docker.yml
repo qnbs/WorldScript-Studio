@@ -106,12 +106,42 @@ jobs:
           node scripts/signing/verify-github-signatures.mjs &&
           echo "verified-tag-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
+  container-precheck:
+    name: 🐳 Container precheck (exact commit)
+    # QNBS-v3 (#1219): GHCR and the desktop release both wait on this job, so a missing or failed no-push build check of the tagged commit stops both channels together instead of leaving a partial release.
+    # QNBS-v3 (#1219): like the bundle job, a tag push runs it only after the pinned verifier proved the tag; a manual dispatch runs it without that proof.
+    needs: [verify-release-tag]
+    if: >-
+      ${{ always() && !cancelled() && ( github.event_name == 'workflow_dispatch' || ( needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha ) ) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      prechecked-sha: ${{ steps.result.outputs.prechecked-sha }}
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Require a successful no-push build check of this commit on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-container-precheck.mjs --wait-seconds 1200 "$GITHUB_SHA"
+
+      - name: Record the prechecked SHA
+        id: result
+        run: echo "prechecked-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
   build-push:
     name: Build & push image
     # QNBS-v3 (#911): publish only a verified signed v* tag push after the exact-SHA audit.
-    needs: [security-audit, verify-release-tag]
+    needs: [security-audit, verify-release-tag, container-precheck]
     if: >-
-      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && needs.container-precheck.result == 'success' && needs.container-precheck.outputs.prechecked-sha == github.sha && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
     runs-on: ubuntu-latest
     # QNBS-v3 (#1223): room for the pre-push check build; the push build reuses its cache.
     timeout-minutes: 30

@@ -551,10 +551,11 @@ describe('Tauri release workflow policy', () => {
       'bundle',
       'security-audit',
       'verify-release-tag',
+      'container-precheck',
     ]);
-    // QNBS-v3 (#911, #1206): protected tag push, verifier proof for the event SHA AND an exact-SHA security audit success; tests/unit/tooling/releaseSecurityGate.test.ts covers the weakened variants.
+    // QNBS-v3 (#911, #1206, #1219): protected tag push, verifier proof for the event SHA, the exact-commit container precheck AND an exact-SHA security audit success; tests/unit/tooling/releaseSecurityGate.test.ts covers the weakened variants.
     expect(release).toMatch(
-      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) && needs\.verify-release-tag\.result == 'success' && needs\.verify-release-tag\.outputs\.verified-tag-sha == github\.sha && needs\.security-audit\.result == 'success' && needs\.security-audit\.outputs\.audited-sha == github\.sha \}\}$/m,
+      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) && needs\.verify-release-tag\.result == 'success' && needs\.verify-release-tag\.outputs\.verified-tag-sha == github\.sha && needs\.container-precheck\.result == 'success' && needs\.container-precheck\.outputs\.prechecked-sha == github\.sha && needs\.security-audit\.result == 'success' && needs\.security-audit\.outputs\.audited-sha == github\.sha \}\}$/m,
     );
     expect(release).not.toContain('workflow_dispatch');
     expect(release).toContain('body_path: release-notes.md');

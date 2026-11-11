@@ -77,33 +77,53 @@ export function classifyContainerPrecheck({ sha, runs, totalCount, jobsByRun }) 
   return { ok: true, reason: 'PASS', runId: run.id, url: run.html_url ?? null };
 }
 
+// QNBS-v3 (#1219): at tag time the build check of the merge can still be queued or running; waiting for it (bounded) keeps a correctly sequenced tag from failing on timing alone, and the same classifier still decides.
+/** True while there is no trusted run for the commit yet or its newest trusted run has not completed. */
+export function isPending(sha, runs) {
+  const run = latestTrustedRun(sha, runs);
+  return run === null || run.status !== 'completed';
+}
+
+/** `[--wait-seconds N] <sha>`; waitSeconds is NaN when the value is not a non-negative integer. */
+export function parseArgs(argv) {
+  const args = [...(argv ?? [])];
+  const flag = args.indexOf('--wait-seconds');
+  if (flag < 0) return { sha: args[0], waitSeconds: 0 };
+  // Digits only: Number('') is 0 and Number('1e3') is 1000, so neither may pass as a wait.
+  const raw = String(args[flag + 1] ?? '');
+  args.splice(flag, 2);
+  const value = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  return { sha: args[0], waitSeconds: Number.isSafeInteger(value) ? value : Number.NaN };
+}
+
+const POLL_SECONDS = 30;
+const GH_TIMEOUT_MS = 60_000;
+
+/** Seconds to sleep before the next poll: the poll interval, but never past the deadline. */
+export function nextSleepSeconds(deadline, now) {
+  return Math.max(0, Math.min(POLL_SECONDS, (deadline - now) / 1000));
+}
+const sleep = (seconds) => new Promise((done) => setTimeout(done, seconds * 1000));
+
 function ghJson(path) {
   try {
-    return JSON.parse(execFileSync('gh', ['api', path], { encoding: 'utf8' }));
+    // A stalled request must not outlive the wait: it counts as unreadable and is retried until the deadline.
+    return JSON.parse(
+      execFileSync('gh', ['api', path], { encoding: 'utf8', timeout: GH_TIMEOUT_MS }),
+    );
   } catch {
     return null;
   }
 }
 
-function main(sha) {
+function readRuns(sha) {
   const listed = ghJson(
     `repos/${REPOSITORY}/actions/workflows/docker-build-check.yml/runs?head_sha=${sha}&per_page=100`,
   );
-  const runs = listed?.workflow_runs ?? null;
-  // Only the newest trusted run decides, so only its jobs are fetched.
-  const latest = latestTrustedRun(sha, runs);
-  const jobsByRun = latest
-    ? {
-        [latest.id]:
-          ghJson(`repos/${REPOSITORY}/actions/runs/${latest.id}/jobs?per_page=100`)?.jobs ?? null,
-      }
-    : {};
-  const result = classifyContainerPrecheck({
-    sha,
-    runs,
-    totalCount: listed?.total_count ?? null,
-    jobsByRun,
-  });
+  return { runs: listed?.workflow_runs ?? null, totalCount: listed?.total_count ?? null };
+}
+
+function report(sha, result) {
   const where = result.url ? ` (${result.url})` : '';
   process.stdout.write(
     `container-precheck: ${result.ok ? 'PASS' : 'FAIL'} ${sha} — ${result.reason}${where}\n`,
@@ -111,4 +131,30 @@ function main(sha) {
   process.exitCode = result.ok ? 0 : 1;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main(process.argv[2]);
+async function main(argv) {
+  const { sha, waitSeconds } = parseArgs(argv);
+  if (Number.isNaN(waitSeconds)) {
+    report(sha, failure('--wait-seconds needs a non-negative integer'));
+    return;
+  }
+  const deadline = Date.now() + waitSeconds * 1000;
+  let state = readRuns(sha);
+  const keepWaiting = () =>
+    SHA.test(String(sha ?? '')) && isPending(sha, state.runs) && Date.now() < deadline;
+  while (keepWaiting()) {
+    process.stdout.write(`container-precheck: waiting for the build check of ${sha}\n`);
+    await sleep(nextSleepSeconds(deadline, Date.now()));
+    state = readRuns(sha);
+  }
+  // Only the newest trusted run decides, so only its jobs are fetched.
+  const latest = latestTrustedRun(sha, state.runs);
+  const jobsByRun = latest
+    ? {
+        [latest.id]:
+          ghJson(`repos/${REPOSITORY}/actions/runs/${latest.id}/jobs?per_page=100`)?.jobs ?? null,
+      }
+    : {};
+  report(sha, classifyContainerPrecheck({ sha, ...state, jobsByRun }));
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) await main(process.argv.slice(2));
