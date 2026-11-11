@@ -33,6 +33,10 @@ describe('release container precheck (#1223)', () => {
   it.each([
     ['a push run on main', run()],
     ['a dispatch run on main', run({ event: 'workflow_dispatch' })],
+    [
+      'a run whose path carries the main ref',
+      run({ path: `${BUILD_CHECK_WORKFLOW}@refs/heads/main` }),
+    ],
   ])('passes a successful build-check job of %s on the exact commit', (_name, trusted) => {
     expect(
       classifyContainerPrecheck({ sha: SHA, runs: [trusted], jobsByRun: jobs('success') }),
@@ -51,6 +55,12 @@ describe('release container precheck (#1223)', () => {
     [
       'the run is from another workflow',
       [run({ path: '.github/workflows/docker.yml' })],
+      jobs('success'),
+      NO_TRUSTED_RUN,
+    ],
+    [
+      'the run path carries another ref',
+      [run({ path: `${BUILD_CHECK_WORKFLOW}@refs/heads/other` })],
       jobs('success'),
       NO_TRUSTED_RUN,
     ],

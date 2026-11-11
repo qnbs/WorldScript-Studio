@@ -1,3 +1,5 @@
+import { logicalLines } from './check-dockerfile-context.mjs';
+
 export function parseVersion(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
   return match ? match.slice(1).map(Number) : null;
@@ -18,11 +20,8 @@ export function isVersionAtLeast(version, minimum) {
   return true;
 }
 
-const contentLines = (dockerfile) =>
-  String(dockerfile)
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line !== '' && !line.startsWith('#'));
+// One string per Dockerfile instruction, parsed like Docker: comment lines dropped, then backslash continuations joined.
+const contentLines = (dockerfile) => logicalLines(String(dockerfile));
 
 /** Every explicit `pnpm@<version>` pin in a Dockerfile (comments ignored). */
 export function findDockerfilePnpmPins(dockerfile) {
@@ -37,7 +36,8 @@ const PNPM_BYPASSES = [
   /\bcorepack\s+(?:prepare|use)\b/,
   /\bget\.pnpm\.io\b/,
 ];
-const COREPACK_INSTALL = /^RUN\b.*\bcorepack\s+install\b/;
+// Dockerfile keywords are case-insensitive; the shell command itself is not.
+const COREPACK_INSTALL = /^[Rr][Uu][Nn]\s.*\bcorepack\s+install\b/;
 
 /** Dockerfile lines that install pnpm without reading `packageManager` (comments ignored). */
 export function findDockerfilePnpmBypasses(dockerfile) {

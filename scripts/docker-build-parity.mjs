@@ -11,29 +11,39 @@ const SETUP_BUILDX = 'docker/setup-buildx-action@';
 const CHECKOUT = 'actions/checkout@';
 const LOGIN = 'docker/login-action@';
 const EXTRACT = 'docker cp';
-// Inputs that change what is built. Tags, labels, cache, push and load only change where the result goes.
-const ESSENTIAL_INPUTS = [
-  'context',
-  'file',
-  'platforms',
-  'target',
-  'build-args',
-  'build-contexts',
-  'secrets',
-  'secret-files',
-  'ssh',
-  'network',
-  'no-cache',
-  'pull',
-];
+// Deny by default: these inputs only choose where the result goes or how it is cached and attested; every other input must be equal in all three builds.
+export const DESTINATION_INPUTS = Object.freeze([
+  'push',
+  'load',
+  'tags',
+  'labels',
+  'cache-from',
+  'cache-to',
+  'provenance',
+  'sbom',
+]);
+// The check must execute, not merely mention, its command, and a failing command must fail the step.
+const STRICT_SHELL = /^set -euo pipefail$/m;
+const COMMANDS = {
+  extract: /^docker cp "\$container:\/usr\/share\/nginx\/html" "\$RUNNER_TEMP\/image-html"$/m,
+  bundleCheck: /^node scripts\/check-image-bundle\.mjs "\$RUNNER_TEMP\/image-html"(?: |$)/m,
+};
 
 const asDocument = (source) => (typeof source === 'string' ? parse(source) : source) ?? {};
 const stepsOf = (job) => (Array.isArray(job?.steps) ? job.steps : []);
 const usesOf = (step) => String(step?.uses ?? '');
 const runOf = (step) => String(step?.run ?? '');
-const isCheckBuild = (step) => step?.with?.load === true && step?.with?.push !== true;
+// The build action reads its inputs as strings, so `push: "true"` publishes exactly like `push: true`.
+const flag = (value) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase() === 'true';
+const isCheckBuild = (step) => flag(step?.with?.load) && !flag(step?.with?.push);
 const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-const essentialInputs = (step) => ESSENTIAL_INPUTS.map((key) => step?.with?.[key] ?? null);
+const buildInputs = (step) =>
+  Object.entries(step?.with ?? {})
+    .filter(([key]) => !DESTINATION_INPUTS.includes(key))
+    .sort(([a], [b]) => a.localeCompare(b));
 
 /** The build, extract and bundle-check steps of one job, by index (-1 when absent). */
 function locate(job) {
@@ -45,7 +55,7 @@ function locate(job) {
     steps,
     builds,
     checkBuild: builds.find((index) => isCheckBuild(steps[index])) ?? -1,
-    pushBuild: builds.find((index) => steps[index]?.with?.push === true) ?? -1,
+    pushBuild: builds.find((index) => flag(steps[index]?.with?.push)) ?? -1,
     extract: steps.findIndex((step) => runOf(step).includes(EXTRACT)),
     bundleCheck: steps.findIndex((step) => runOf(step).includes(BUNDLE_CHECK)),
     pin: (prefix) => steps.find((step) => usesOf(step).startsWith(prefix))?.uses ?? null,
@@ -92,8 +102,10 @@ function parityErrors(publish, check) {
   ];
   if (new Set(builds.map(usesOf)).size !== 1)
     errors.push('every image build must use the same pinned build-push action');
-  if (!builds.every((step) => sameJson(essentialInputs(step), essentialInputs(builds[0])))) {
-    errors.push(`essential build inputs differ (${ESSENTIAL_INPUTS.join(', ')})`);
+  if (!builds.every((step) => sameJson(buildInputs(step), buildInputs(builds[0])))) {
+    errors.push(
+      `build inputs other than ${DESTINATION_INPUTS.join(', ')} differ between the image builds`,
+    );
   }
   for (const prefix of [CHECKOUT, SETUP_BUILDX]) {
     if (publish.pin(prefix) === null || publish.pin(prefix) !== check.pin(prefix)) {
@@ -113,6 +125,15 @@ function sameCheckSteps(publish, check) {
   return pairs
     .filter(([a, b, key]) => !sameJson(publish.steps[a]?.[key], check.steps[b]?.[key]))
     .map(([, , key]) => `the image check steps must have the same ${key} in both jobs`);
+}
+
+function commandErrors(job, name) {
+  return Object.entries(COMMANDS)
+    .filter(([role, command]) => {
+      const run = runOf(job.steps[job[role]]);
+      return !(STRICT_SHELL.test(run) && command.test(run));
+    })
+    .map(([role]) => `${name} must execute its ${role} command under set -euo pipefail`);
 }
 
 function unconditionalErrors(job, name) {
@@ -152,6 +173,8 @@ export function dockerBuildParity(publishSource, checkSource) {
   return [
     ...parityErrors(publish, check),
     ...sameCheckSteps(publish, check),
+    ...commandErrors(publish, PUBLISH_JOB),
+    ...commandErrors(check, CHECK_JOB),
     ...unconditionalErrors(publish, PUBLISH_JOB),
     ...unconditionalErrors(check, CHECK_JOB),
     ...readOnlyErrors(checkDocument, checkJob),

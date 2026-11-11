@@ -8,7 +8,7 @@ interface Step {
   name?: string;
   uses?: string;
   run?: string;
-  with?: { platforms?: string; push?: boolean; [key: string]: unknown };
+  with?: { platforms?: string; push?: boolean | string; [key: string]: unknown };
   'continue-on-error'?: boolean;
 }
 interface Job {
@@ -60,7 +60,53 @@ const drift: Case[] = [
     (d) => {
       inputs(named(checkSteps(d), CHECK_BUILD)).platforms = 'linux/arm64';
     },
-    'essential build inputs differ',
+    'differ between the image builds',
+  ],
+  // #1225 review: deny by default, so an input the module does not list (here shm-size) still counts.
+  [
+    'the check sets a build input the other builds do not',
+    (d) => {
+      inputs(named(checkSteps(d), CHECK_BUILD))['shm-size'] = '2g';
+    },
+    'differ between the image builds',
+  ],
+  // #1225 review: the action reads inputs as strings, so a quoted "true" pushes.
+  [
+    'the publish check build pushes through a quoted push input',
+    (d) => {
+      inputs(named(publishSteps(d), 'Build the image for the pre-push check')).push = 'true';
+    },
+    'must build once with load: true for the check and once with push: true',
+  ],
+  // #1225 review: mentioning the command is not running it.
+  [
+    'both jobs only echo the bundle check',
+    (d) => {
+      for (const steps of [publishSteps(d), checkSteps(d)]) {
+        named(steps, BUNDLE_CHECK).run = 'set -euo pipefail\necho scripts/check-image-bundle.mjs\n';
+      }
+    },
+    'must execute its bundleCheck command under set -euo pipefail',
+  ],
+  [
+    'both jobs run the bundle check without set -euo pipefail',
+    (d) => {
+      for (const steps of [publishSteps(d), checkSteps(d)]) {
+        const step = named(steps, BUNDLE_CHECK);
+        step.run = (step.run ?? '').replace('set -euo pipefail\n', '');
+      }
+    },
+    'must execute its bundleCheck command under set -euo pipefail',
+  ],
+  [
+    'both jobs only echo the extraction',
+    (d) => {
+      for (const steps of [publishSteps(d), checkSteps(d)]) {
+        named(steps, 'Extract the web bundle from the built image').run =
+          'set -euo pipefail\necho docker cp skipped\n';
+      }
+    },
+    'must execute its extract command under set -euo pipefail',
   ],
   [
     'the check uses another build-push pin',

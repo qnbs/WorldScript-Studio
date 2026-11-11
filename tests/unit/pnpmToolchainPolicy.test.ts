@@ -64,6 +64,23 @@ describe('Dockerfile pnpm pin (#1223)', () => {
     expect(result.bypasses).toEqual([line]);
   });
 
+  // #1225 review: parse instructions like Docker (case-insensitive keyword, continuations joined).
+  it('accepts a lowercase run keyword for corepack install', () => {
+    expect(checkDockerfilePnpm('run corepack enable && corepack install\n', '12.13.0').ok).toBe(
+      true,
+    );
+  });
+
+  it('rejects an installer that is split across a backslash continuation', () => {
+    const result = checkDockerfilePnpm(
+      'RUN corepack install\nRUN npm install -g \\\n    pnpm\n',
+      '12.13.0',
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.bypasses).toHaveLength(1);
+  });
+
   it('requires a corepack install step', () => {
     const noInstall = 'RUN corepack enable\nRUN pnpm install --frozen-lockfile\n';
     expect(checkDockerfilePnpm(noInstall, '12.13.0')).toEqual({

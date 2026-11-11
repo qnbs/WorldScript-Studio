@@ -17,9 +17,12 @@ const failure = (reason) => ({ ok: false, reason, runId: null, url: null });
 
 const newestFirst = (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at);
 
+// The runs API reports the bare workflow path; a `@refs/heads/main` suffix is accepted as the same workflow on main.
+const workflowPathOf = (run) => String(run.path ?? '').replace(/@refs\/heads\/main$/, '');
+
 const trustedRunChecks = (sha) => [
   (run) => run.head_sha === sha,
-  (run) => run.path === BUILD_CHECK_WORKFLOW,
+  (run) => workflowPathOf(run) === BUILD_CHECK_WORKFLOW,
   (run) => TRUSTED_EVENTS.includes(run.event),
   (run) => run.head_branch === DEFAULT_BRANCH,
 ];
