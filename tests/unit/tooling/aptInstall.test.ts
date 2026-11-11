@@ -151,6 +151,15 @@ describe('apt installs in the release workflow stay bounded', () => {
     }
   });
 
+  it('make a helper change run the ci.yml gates that use it', () => {
+    const ci = readFileSync(join(WORKFLOW_DIR, 'ci.yml'), 'utf8');
+    const filters = ci.match(/grep -qE '\^\([^']*\)' <<< "\$CHANGED"/g) ?? [];
+    expect(filters).toHaveLength(2);
+    for (const filter of filters) {
+      expect(filter).toContain('scripts/ci/apt-install\\.sh$');
+    }
+  });
+
   it('keep every probe, both apt calls and their kill grace inside the 15-minute step cap', () => {
     const seconds = (name: string): number => {
       const match = new RegExp(String.raw`^${name}=(\d+)$`, 'm').exec(script);
