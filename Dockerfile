@@ -12,7 +12,8 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack install
 COPY packages/ ./packages/
-RUN pnpm install --frozen-lockfile
+# QNBS-v3 (#1225): the build fails unless the active pnpm is the packageManager pin, however pnpm got onto the PATH.
+RUN test "$(pnpm --version)" = "$(node -p "require('./package.json').packageManager.split('@')[1].split('+')[0]")" && pnpm install --frozen-lockfile
 
 # Copy source and build
 COPY . .

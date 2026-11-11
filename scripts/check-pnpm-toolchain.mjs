@@ -30,6 +30,9 @@ if (dockerfile !== null) {
       ...dockerPnpm.mismatched.map((pin) => `pins pnpm ${pin}`),
       ...dockerPnpm.bypasses.map((line) => `installs pnpm outside packageManager (${line})`),
       ...(dockerPnpm.corepackInstall ? [] : ['has no `RUN corepack install` step']),
+      ...(dockerPnpm.versionAssertion
+        ? []
+        : ['lacks the pnpm version assertion before `pnpm install`']),
     ];
     console.error(
       `[toolchain] Dockerfile ${problems.join('; ')}; take pnpm ${expectedPnpmVersion} from packageManager via \`corepack install\`.`,

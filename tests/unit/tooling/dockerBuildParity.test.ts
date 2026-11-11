@@ -86,7 +86,7 @@ const drift: Case[] = [
         named(steps, BUNDLE_CHECK).run = 'set -euo pipefail\necho scripts/check-image-bundle.mjs\n';
       }
     },
-    'must execute its bundleCheck command under set -euo pipefail',
+    'must contain the canonical bundleCheck step unchanged',
   ],
   [
     'both jobs run the bundle check without set -euo pipefail',
@@ -96,7 +96,7 @@ const drift: Case[] = [
         step.run = (step.run ?? '').replace('set -euo pipefail\n', '');
       }
     },
-    'must execute its bundleCheck command under set -euo pipefail',
+    'must contain the canonical bundleCheck step unchanged',
   ],
   [
     'both jobs only echo the extraction',
@@ -106,7 +106,7 @@ const drift: Case[] = [
           'set -euo pipefail\necho docker cp skipped\n';
       }
     },
-    'must execute its extract command under set -euo pipefail',
+    'must contain the canonical extract step unchanged',
   ],
   [
     'the check uses another build-push pin',
@@ -157,7 +157,44 @@ const drift: Case[] = [
       const step = named(checkSteps(d), 'Extract the web bundle from the built image');
       step.run = `${step.run ?? ''}\ntrue`;
     },
-    'the same run in both jobs',
+    'build-check must contain the canonical extract step unchanged',
+  ],
+  // #1225 review: canonical steps close the class of weakened checks, not single variants.
+  [
+    'the publish bundle check swallows a failure with || true',
+    (d) => {
+      const step = named(publishSteps(d), BUNDLE_CHECK);
+      step.run = (step.run ?? '').replace(
+        '"$GITHUB_STEP_SUMMARY"\n',
+        '"$GITHUB_STEP_SUMMARY" || true\n',
+      );
+    },
+    'build-push must contain the canonical bundleCheck step unchanged',
+  ],
+  [
+    'the publish bundle check overrides PATH',
+    (d) => {
+      Object.assign(named(publishSteps(d), BUNDLE_CHECK), { env: { PATH: '/tmp/fake:/usr/bin' } });
+    },
+    'build-push must contain the canonical bundleCheck step unchanged',
+  ],
+  [
+    'the publish job sets a job-level environment',
+    (d) => {
+      Object.assign(jobOf(d.publish, 'build-push'), { env: { PATH: '/tmp/fake:/usr/bin' } });
+    },
+    'build-push must not set env or defaults at job or workflow level',
+  ],
+  [
+    'the publish job writes GITHUB_PATH before the check',
+    (d) => {
+      const steps = publishSteps(d);
+      steps.splice(steps.indexOf(named(steps, 'Extract the web bundle from the built image')), 0, {
+        name: 'Prepend a directory',
+        run: 'echo /tmp/fake >> "$GITHUB_PATH"',
+      });
+    },
+    'build-push must not run other commands before the bundle check',
   ],
   [
     'the check logs in to a registry',

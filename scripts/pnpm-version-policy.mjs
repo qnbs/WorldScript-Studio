@@ -30,14 +30,19 @@ export function findDockerfilePnpmPins(dockerfile) {
   );
 }
 
-// Ways to get pnpm that bypass package.json#packageManager: a global npm or yarn install, a Corepack prepare or use step, or the standalone installer.
+// Scope: a drift guard over the Dockerfile text, not a shell sandbox. The semantic proof is the version assertion inside the build (VERSION_ASSERTION, required below), which fails for any pnpm that is not the packageManager pin, and the build check runs that build on every pull request.
+// Common ways to get pnpm that bypass package.json#packageManager.
 const PNPM_BYPASSES = [
   /\b(?:npm|yarn)\b[^#]*\b(?:i|install|add)\b[^#]*\bpnpm\b/,
+  /\b(?:npx|npm\s+exec|dlx)\b[^#]*\bpnpm\b/,
   /\bcorepack\s+(?:prepare|use)\b/,
   /\bget\.pnpm\.io\b/,
 ];
-// Dockerfile keywords are case-insensitive; the shell command itself is not.
-const COREPACK_INSTALL = /^[Rr][Uu][Nn]\s.*\bcorepack\s+install\b/;
+// `corepack install` at a command position of a RUN instruction; the keyword is case-insensitive, the shell command is not.
+const COREPACK_INSTALL = /^[Rr][Uu][Nn]\s+(?:.*(?:&&|;)\s*)?corepack\s+install\b/;
+// The in-build assertion that the active pnpm equals the packageManager pin, directly before the install.
+const VERSION_ASSERTION =
+  /^[Rr][Uu][Nn]\s+test "\$\(pnpm --version\)" = "\$\(node -p "require\('\.\/package\.json'\)\.packageManager\.split\('@'\)\[1\]\.split\('\+'\)\[0\]"\)" && pnpm install --frozen-lockfile$/;
 
 /** Dockerfile lines that install pnpm without reading `packageManager` (comments ignored). */
 export function findDockerfilePnpmBypasses(dockerfile) {
@@ -47,13 +52,21 @@ export function findDockerfilePnpmBypasses(dockerfile) {
 }
 
 /**
- * The image must take pnpm only from `packageManager`: a `RUN corepack install` step and no other
- * pnpm installer (no explicit pin, no global install, no Corepack prepare or use).
+ * The image must take pnpm only from `packageManager`: a `RUN corepack install` step, the in-build
+ * version assertion before `pnpm install`, and no other pnpm installer (no explicit pin, no global
+ * install, no npx/npm exec/dlx, no Corepack prepare or use).
  */
 export function checkDockerfilePnpm(dockerfile, expectedVersion) {
+  const lines = contentLines(dockerfile);
   const mismatched = findDockerfilePnpmPins(dockerfile).filter((pin) => pin !== expectedVersion);
   const bypasses = findDockerfilePnpmBypasses(dockerfile);
-  const corepackInstall = contentLines(dockerfile).some((line) => COREPACK_INSTALL.test(line));
-  const ok = [corepackInstall, bypasses.length === 0, mismatched.length === 0].every(Boolean);
-  return { ok, mismatched, bypasses, corepackInstall };
+  const corepackInstall = lines.some((line) => COREPACK_INSTALL.test(line));
+  const versionAssertion = lines.some((line) => VERSION_ASSERTION.test(line));
+  const ok = [
+    corepackInstall,
+    versionAssertion,
+    bypasses.length === 0,
+    mismatched.length === 0,
+  ].every(Boolean);
+  return { ok, mismatched, bypasses, corepackInstall, versionAssertion };
 }

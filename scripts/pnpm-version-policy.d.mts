@@ -5,4 +5,10 @@ export function findDockerfilePnpmBypasses(dockerfile: string): string[];
 export function checkDockerfilePnpm(
   dockerfile: string,
   expectedVersion: string,
-): { ok: boolean; mismatched: string[]; bypasses: string[]; corepackInstall: boolean };
+): {
+  ok: boolean;
+  mismatched: string[];
+  bypasses: string[];
+  corepackInstall: boolean;
+  versionAssertion: boolean;
+};

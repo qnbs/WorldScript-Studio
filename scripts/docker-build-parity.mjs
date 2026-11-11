@@ -22,12 +22,26 @@ export const DESTINATION_INPUTS = Object.freeze([
   'provenance',
   'sbom',
 ]);
-// The check must execute, not merely mention, its command, and a failing command must fail the step.
-const STRICT_SHELL = /^set -euo pipefail$/m;
-const COMMANDS = {
-  extract: /^docker cp "\$container:\/usr\/share\/nginx\/html" "\$RUNNER_TEMP\/image-html"$/m,
-  bundleCheck: /^node scripts\/check-image-bundle\.mjs "\$RUNNER_TEMP\/image-html"(?: |$)/m,
-};
+// The exact command text of the extraction and the bundle check in both jobs. Any variant (`|| true`, `set +e`, another path or tool) fails, so the check cannot be weakened without changing this module and its test.
+export const CANONICAL_RUN = Object.freeze({
+  extract: [
+    'set -euo pipefail',
+    'test -n "$IMAGE_ID"',
+    'container="$(docker create "$IMAGE_ID")"',
+    'docker cp "$container:/usr/share/nginx/html" "$RUNNER_TEMP/image-html"',
+    'docker rm "$container" > /dev/null',
+    '',
+  ].join('\n'),
+  bundleCheck: [
+    'set -euo pipefail',
+    'node scripts/check-image-bundle.mjs "$RUNNER_TEMP/image-html" | tee -a "$GITHUB_STEP_SUMMARY"',
+    '',
+  ].join('\n'),
+});
+const IMAGE_ID_ENV = /^\$\{\{ steps\.image-check-build\.outputs\.imageid \}\}$/;
+const CONTEXT_CHECK_RUN = 'node scripts/check-dockerfile-context.mjs';
+// Run steps allowed before the bundle check; anything else could rewrite PATH or the environment through GITHUB_PATH or GITHUB_ENV.
+const EARLIER_RUNS = [CANONICAL_RUN.extract, CONTEXT_CHECK_RUN];
 
 const asDocument = (source) => (typeof source === 'string' ? parse(source) : source) ?? {};
 const stepsOf = (job) => (Array.isArray(job?.steps) ? job.steps : []);
@@ -115,25 +129,48 @@ function parityErrors(publish, check) {
   return errors;
 }
 
-function sameCheckSteps(publish, check) {
-  const pairs = [
-    [publish.checkBuild, check.checkBuild, 'id'],
-    [publish.extract, check.extract, 'run'],
-    [publish.extract, check.extract, 'env'],
-    [publish.bundleCheck, check.bundleCheck, 'run'],
-  ];
-  return pairs
-    .filter(([a, b, key]) => !sameJson(publish.steps[a]?.[key], check.steps[b]?.[key]))
-    .map(([, , key]) => `the image check steps must have the same ${key} in both jobs`);
+function sameCheckBuildId(publish, check) {
+  return sameJson(publish.steps[publish.checkBuild]?.id, check.steps[check.checkBuild]?.id)
+    ? []
+    : ['the check builds must have the same id in both jobs'];
 }
 
-function commandErrors(job, name) {
-  return Object.entries(COMMANDS)
-    .filter(([role, command]) => {
-      const run = runOf(job.steps[job[role]]);
-      return !(STRICT_SHELL.test(run) && command.test(run));
-    })
-    .map(([role]) => `${name} must execute its ${role} command under set -euo pipefail`);
+const onlyKeys = (step, allowed) => Object.keys(step ?? {}).every((key) => allowed.includes(key));
+const imageIdEnv = (step) =>
+  sameJson(Object.keys(step?.env ?? {}), ['IMAGE_ID']) &&
+  IMAGE_ID_ENV.test(String(step?.env?.IMAGE_ID));
+
+// Canonical step definitions: no extra keys (an env override, shell, working-directory, if or continue-on-error) and the exact command text.
+const CANONICAL_CHECKS = {
+  extract: (step) => [
+    onlyKeys(step, ['name', 'env', 'run']),
+    imageIdEnv(step),
+    runOf(step) === CANONICAL_RUN.extract,
+  ],
+  bundleCheck: (step) => [
+    onlyKeys(step, ['name', 'run']),
+    runOf(step) === CANONICAL_RUN.bundleCheck,
+  ],
+};
+
+function canonicalErrors(job, name) {
+  return Object.entries(CANONICAL_CHECKS)
+    .filter(([role, checks]) => !checks(job.steps[job[role]]).every(Boolean))
+    .map(([role]) => `${name} must contain the canonical ${role} step unchanged`);
+}
+
+function scopeErrors(document, job, name) {
+  const scoped = [document, job].some(
+    (scope) => scope?.env !== undefined || scope?.defaults !== undefined,
+  );
+  return scoped ? [`${name} must not set env or defaults at job or workflow level`] : [];
+}
+
+function earlierRunErrors(job, name) {
+  const foreign = job.steps
+    .slice(0, job.bundleCheck)
+    .filter((step) => step?.run !== undefined && !EARLIER_RUNS.includes(String(step.run)));
+  return foreign.length > 0 ? [`${name} must not run other commands before the bundle check`] : [];
 }
 
 function unconditionalErrors(job, name) {
@@ -172,9 +209,13 @@ export function dockerBuildParity(publishSource, checkSource) {
   if (shape.length > 0) return [...shape, ...readOnlyErrors(checkDocument, checkJob)];
   return [
     ...parityErrors(publish, check),
-    ...sameCheckSteps(publish, check),
-    ...commandErrors(publish, PUBLISH_JOB),
-    ...commandErrors(check, CHECK_JOB),
+    ...sameCheckBuildId(publish, check),
+    ...canonicalErrors(publish, PUBLISH_JOB),
+    ...canonicalErrors(check, CHECK_JOB),
+    ...scopeErrors(publishDocument, publishJob, PUBLISH_JOB),
+    ...scopeErrors(checkDocument, checkJob, CHECK_JOB),
+    ...earlierRunErrors(publish, PUBLISH_JOB),
+    ...earlierRunErrors(check, CHECK_JOB),
     ...unconditionalErrors(publish, PUBLISH_JOB),
     ...unconditionalErrors(check, CHECK_JOB),
     ...readOnlyErrors(checkDocument, checkJob),
