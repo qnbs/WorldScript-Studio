@@ -52,6 +52,10 @@ const inputs = (step: Step) => {
 
 const CHECK_BUILD = 'Build the image without pushing';
 const BUNDLE_CHECK = 'Check the DOMPurify build inside the image';
+const CONTEXT_CHECK = 'Check every COPY/ADD source against the build context';
+const SETUP_BUILDX = 'Set up Docker Buildx';
+const CHECK_PREFIX_ERROR =
+  'build-check must run exactly checkout, the context check and Buildx setup before its build';
 
 type Case = [string, (d: Documents) => void, string];
 
@@ -271,6 +275,43 @@ const drift: Case[] = [
       jobOf(d.check, 'build-check').permissions = { contents: 'read', packages: 'write' };
     },
     'exactly permissions: { contents: read }',
+  ],
+  // #1223 follow-up (b): an action before the build could rewrite PATH, the environment or the build context.
+  [
+    'the build check runs another action before its build',
+    (d) => {
+      const steps = checkSteps(d);
+      steps.splice(steps.indexOf(named(steps, CHECK_BUILD)), 0, {
+        name: 'Set up Node',
+        uses: `actions/setup-node@${'c'.repeat(40)}`,
+      });
+    },
+    CHECK_PREFIX_ERROR,
+  ],
+  [
+    'the build check sets up Buildx before the context check',
+    (d) => {
+      const steps = checkSteps(d);
+      const context = named(steps, CONTEXT_CHECK);
+      const buildx = named(steps, SETUP_BUILDX);
+      steps.splice(steps.indexOf(context), 2, buildx, context);
+    },
+    CHECK_PREFIX_ERROR,
+  ],
+  [
+    'the build check configures Buildx differently from the publish job',
+    (d) => {
+      inputs(named(checkSteps(d), SETUP_BUILDX))['driver-opts'] = 'image=moby/buildkit:master';
+    },
+    CHECK_PREFIX_ERROR,
+  ],
+  [
+    'the build check drops the context check',
+    (d) => {
+      const steps = checkSteps(d);
+      steps.splice(steps.indexOf(named(steps, CONTEXT_CHECK)), 1);
+    },
+    CHECK_PREFIX_ERROR,
   ],
 ];
 

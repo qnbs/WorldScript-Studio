@@ -168,6 +168,25 @@ function canonicalErrors(job, name) {
     .map(([role]) => `${name} must contain the canonical ${role} step unchanged`);
 }
 
+// QNBS-v3 (#1223 follow-up b): before its build the check runs exactly these steps without extra keys, so no other action or command can change the context, PATH or environment that the build and the bundle check see.
+const CHECK_PREFIX = [
+  (step) => onlyKeys(step, ['name', 'uses', 'with']) && usesOf(step).startsWith(CHECKOUT),
+  (step) => onlyKeys(step, ['name', 'run']) && runOf(step) === CONTEXT_CHECK_RUN,
+  (step) => onlyKeys(step, ['name', 'uses']) && usesOf(step).startsWith(SETUP_BUILDX),
+];
+
+function checkPrefixErrors(check) {
+  const prefix = check.steps.slice(0, check.checkBuild);
+  const canonical =
+    prefix.length === CHECK_PREFIX.length &&
+    CHECK_PREFIX.every((matches, index) => matches(prefix[index]));
+  return canonical
+    ? []
+    : [
+        `${CHECK_JOB} must run exactly checkout, the context check and Buildx setup before its build`,
+      ];
+}
+
 function scopeErrors(document, job, name) {
   const scoped = [document, job].some(
     (scope) => scope?.env !== undefined || scope?.defaults !== undefined,
@@ -249,6 +268,7 @@ export function dockerBuildParity(publishSource, checkSource) {
     ...sameCheckBuildId(publish, check),
     ...canonicalErrors(publish, PUBLISH_JOB),
     ...canonicalErrors(check, CHECK_JOB),
+    ...checkPrefixErrors(check),
     ...scopeErrors(publishDocument, publishJob, PUBLISH_JOB),
     ...scopeErrors(checkDocument, checkJob, CHECK_JOB),
     ...earlierRunErrors(publish, PUBLISH_JOB),
