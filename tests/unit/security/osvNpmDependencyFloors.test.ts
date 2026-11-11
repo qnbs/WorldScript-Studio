@@ -36,15 +36,25 @@ function referencesResolvedVersion(reference: string, versions: string[]): boole
 const WAIVER_EXPIRY = '2027-01-31T00:00:00Z';
 
 // Active `ignoreUntil` values of one [[IgnoredVulns]] block. OSV reads only uncommented keys, so a commented-out line must not satisfy the expiry check.
+// A line inside a multi-line TOML string (""" or ''') is text, not a key, even when it reads like one.
+const MULTILINE_QUOTES = ['"""', "'''"];
+const opensMultiline = (line: string) =>
+  MULTILINE_QUOTES.find((quote) => (line.split(quote).length - 1) % 2 === 1) ?? null;
+
 function activeIgnoreUntil(block: string): string[] {
-  return block
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => !line.startsWith('#'))
-    .flatMap((line) => {
-      const value = /^ignoreUntil\s*=\s*"([^"]*)"\s*(?:#.*)?$/.exec(line)?.[1];
-      return value === undefined ? [] : [value];
-    });
+  const values: string[] = [];
+  let openQuote: string | null = null;
+  for (const line of block.split('\n').map((text) => text.trim())) {
+    if (openQuote !== null) {
+      if (line.includes(openQuote)) openQuote = null;
+      continue;
+    }
+    if (line.startsWith('#')) continue;
+    const value = /^ignoreUntil\s*=\s*"([^"]*)"\s*(?:#.*)?$/.exec(line)?.[1];
+    if (value !== undefined) values.push(value);
+    openQuote = opensMultiline(line);
+  }
+  return values;
 }
 
 const projectRoot = process.cwd();
@@ -269,6 +279,21 @@ describe('OSV npm dependency floors', () => {
       WAIVER_EXPIRY,
     ]);
     expect(activeIgnoreUntil(`${commented}ignoreUntil = 2027-01-31T00:00:00Z\n`)).toEqual([]);
+  });
+
+  // #1233 review: a key-like line inside a multi-line reason string is text, not an expiry.
+  it.each([
+    ['"""', '"""'],
+    ["'''", "'''"],
+  ])('does not count an ignoreUntil line inside a %s multi-line string', (open, close) => {
+    const inString = `\nid = "GHSA-test"\nreason = ${open}first line\nignoreUntil = "${WAIVER_EXPIRY}"\n${close}\n`;
+    expect(activeIgnoreUntil(inString)).toEqual([]);
+    expect(activeIgnoreUntil(`${inString}ignoreUntil = "${WAIVER_EXPIRY}"\n`)).toEqual([
+      WAIVER_EXPIRY,
+    ]);
+    expect(
+      activeIgnoreUntil(`reason = ${open}one line${close}\nignoreUntil = "${WAIVER_EXPIRY}"\n`),
+    ).toEqual([WAIVER_EXPIRY]);
   });
 
   it('keeps every waived package out of the production dependency graph', () => {
