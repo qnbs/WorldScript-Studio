@@ -42,20 +42,20 @@ GitHub Release or GHCR publication exists. Only the maintainer creates the tag.
 Record the exact SHA, run URL, artifact or image digest, result and any limitation only after a
 terminal result exists. A result from another SHA does not qualify the candidate.
 
-| Gate                                 | Evidence to record                                                                                         | Status  |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------- | ------- |
-| Resulting-main CI/CD and CodeQL      | Exact push run IDs and SHA                                                                                 | PENDING |
-| Vercel Production and retention      | READY deployment, canonical HTTP, exact-main SAFE/PROTECTED/UNKNOWN and postproof                          | PENDING |
-| No-push image build of the candidate | `docker-build-check.yml` push run on the candidate: pnpm version, DOMPurify version in the image, image id | PENDING |
-| Container precheck                   | `node scripts/release-container-precheck.mjs <sha>` PASS, with `total_count` of the run list               | PENDING |
-| Exact-ref OSV                        | Fresh scan of `pnpm-lock.yaml`, `src-tauri/Cargo.lock` and `crates/Cargo.lock`; waiver horizon             | PENDING |
-| 3-OS candidate builds                | Exact-SHA non-publishing Tauri dispatch; Linux, Windows and macOS Apple Silicon                            | PENDING |
-| Upgrade paths                        | 1.29.2 → 1.29.5 and 1.29.4 → 1.29.5 on Linux, Windows and macOS                                            | PENDING |
-| Read-only release preflight          | Main SHA, tag rulesets, release identity and signing key, versions, verifier pins, GHCR baseline           | PENDING |
-| Signed annotated tag                 | Tag-object and target-commit verification                                                                  | PENDING |
-| Tauri publication                    | Exact-tag run, 20 assets, `latest.json`, updater signatures with `version:1.29.5`                          | PENDING |
-| GHCR publication                     | Exact-tag run, in-job pre-push check, `1.29.5`/`1.29`/`latest` digest, revision label                      | PENDING |
-| Published image check                | Anonymous pull of the published digest; bundle check reports DOMPurify ≥ 3.4.17                            | PENDING |
+| Gate                                 | Evidence to record                                                                                                                                   | Status  |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Resulting-main CI/CD and CodeQL      | Exact push run IDs and SHA                                                                                                                           | PENDING |
+| Vercel Production and retention      | READY deployment, canonical HTTP, exact-main SAFE/PROTECTED/UNKNOWN and postproof                                                                    | PENDING |
+| No-push image build of the candidate | `docker-build-check.yml` push run on the candidate: pnpm version, DOMPurify version in the image, image id                                           | PENDING |
+| Container precheck                   | `node scripts/release-container-precheck.mjs <sha>` PASS on a complete run list: `total_count` equals the fetched runs (at most 100), otherwise FAIL | PENDING |
+| Exact-ref OSV                        | Fresh scan of `pnpm-lock.yaml`, `src-tauri/Cargo.lock` and `crates/Cargo.lock`; waiver horizon                                                       | PENDING |
+| 3-OS candidate builds                | Exact-SHA non-publishing Tauri dispatch; Linux, Windows and macOS Apple Silicon                                                                      | PENDING |
+| Upgrade paths                        | 1.29.2 → 1.29.5 and 1.29.4 → 1.29.5 on Linux, Windows and macOS                                                                                      | PENDING |
+| Read-only release preflight          | Main SHA, tag rulesets, release identity and signing key, versions, verifier pins, GHCR baseline                                                     | PENDING |
+| Signed annotated tag                 | Tag-object and target-commit verification                                                                                                            | PENDING |
+| Tauri publication                    | Exact-tag run, 20 assets, `latest.json`, updater signatures with `version:1.29.5`                                                                    | PENDING |
+| GHCR publication                     | Exact-tag run, in-job pre-push check, `1.29.5`/`1.29`/`latest` digest, revision label                                                                | PENDING |
+| Published image check                | Anonymous pull of the published digest; bundle check reports DOMPurify ≥ 3.4.17                                                                      | PENDING |
 
 ## Scope and known limitations
 
