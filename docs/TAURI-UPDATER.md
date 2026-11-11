@@ -22,7 +22,7 @@ The desktop app ships with [`tauri-plugin-updater`](https://v2.tauri.app/plugin/
    - `TAURI_SIGNING_PRIVATE_KEY` — private key material for signing bundles / updater artifacts.
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — password for the key file, if used.
 
-4. **Endpoints** — default endpoint points at the GitHub Releases static URL pattern for `latest.json`. Adjust if you host updates elsewhere (must be HTTPS in production).
+4. **Endpoints** — the only endpoint is the GitHub Releases URL `releases/latest/download/latest.json`. The release job generates that file with `scripts/release-assets-guard.mjs` and uploads it as a release asset. The former GitHub Pages mirror was never produced and answered 404, so it was removed (#1214). A second endpoint may be added only together with a release step that publishes a guard-validated manifest there. `tests/unit/tooling/updaterEndpoints.test.ts` and `src-tauri/tests/updater_config.rs` pin the list. Endpoints must use HTTPS.
 
 ## GitHub Secrets checklist
 
