@@ -50,7 +50,7 @@ const FAKES: Record<string, string> = {
     '#!/bin/sh',
     'echo "apt-get $*" >> "$FAKE_CALLS"',
     'if [ "$FAKE_APT_HANG" = ignore-term ]; then trap "" TERM; fi',
-    'if [ -n "$FAKE_APT_HANG" ]; then sleep 30; fi',
+    'if [ -n "$FAKE_APT_HANG" ]; then exec sleep 30; fi',
     'case " $* " in *" update "*) exit "$FAKE_UPDATE_STATUS";; esac',
     '',
   ].join('\n'),
@@ -93,8 +93,11 @@ function runHelper(options: {
   }
   const calls = join(root, 'calls.log');
   writeFileSync(calls, '');
+  // Watchdog: a helper that never stops is killed here and shows up as `signal`, so no test can hang on it.
   const result = spawnSync('bash', [SCRIPT, 'libfoo-dev', 'patchelf'], {
     encoding: 'utf8',
+    timeout: 20_000,
+    killSignal: 'SIGKILL',
     env: {
       ...process.env,
       PATH: `${bin}:${process.env['PATH'] ?? ''}`,
@@ -109,6 +112,7 @@ function runHelper(options: {
   const read = (file: string) => readFileSync(join(etc, file), 'utf8');
   return {
     status: result.status,
+    signal: result.signal,
     output: `${result.stdout}${result.stderr}`,
     calls: readFileSync(calls, 'utf8').split('\n').filter(Boolean),
     read,
@@ -208,9 +212,8 @@ describe.skipIf(process.platform !== 'linux')('apt-install.sh on a simulated run
     ['stops on TERM', 'term'],
     ['ignores TERM until the kill grace ends', 'ignore-term'],
   ] as const)('stops a hung apt call that %s and reports it as a timeout', (_label, hang) => {
-    const started = Date.now();
     const run = runHelper({ hang });
-    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(run.signal, 'the helper must stop on its own before the watchdog').toBeNull();
     expect(run.status).toBe(1);
     expect(run.output).toContain('::error::apt-get update did not finish within 300s');
     expect(aptCalls(run.calls)).toHaveLength(1);
