@@ -32,6 +32,39 @@ function referencesResolvedVersion(reference: string, versions: string[]): boole
   return versions.some((version) => reference === version || reference.startsWith(`${version}(`));
 }
 
+// The expiry every OSV waiver was requalified for on 2026-11-11 (#1163, #1164).
+const WAIVER_EXPIRY = '2027-01-31T00:00:00Z';
+// The advisories requalified on 2026-11-11; any other ID needs its own review before it may be waived.
+const REQUALIFIED_WAIVER_IDS = [
+  'RUSTSEC-2024-0429',
+  'RUSTSEC-2024-0370',
+  'RUSTSEC-2026-0370',
+  'RUSTSEC-2026-0371',
+  'RUSTSEC-2026-0372',
+  'GHSA-gcqx-w48m-w2h4',
+  'GHSA-mrhx-c7xc-m3w5',
+  'GHSA-3g3m-2fjr-6pw4',
+  'GHSA-g3hv-75wg-m249',
+];
+
+// Active `ignoreUntil` values of one [[IgnoredVulns]] block. OSV reads only uncommented keys, so a commented-out line must not satisfy the expiry check.
+// The waiver file uses single-line strings only. A multi-line string (""" or ''') could hide a key-like line or an escaped delimiter, so the guard fails closed instead of parsing TOML string escapes.
+const MULTILINE_STRING = /"""|'''/;
+
+function activeIgnoreUntil(block: string): string[] {
+  if (MULTILINE_STRING.test(block)) {
+    throw new Error('multi-line TOML strings are not supported in OSV waiver blocks');
+  }
+  return block
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => !line.startsWith('#'))
+    .flatMap((line) => {
+      const value = /^ignoreUntil\s*=\s*"([^"]*)"\s*(?:#.*)?$/.exec(line)?.[1];
+      return value === undefined ? [] : [value];
+    });
+}
+
 const projectRoot = process.cwd();
 const packageManifest = JSON.parse(
   readFileSync(resolve(projectRoot, 'package.json'), 'utf8'),
@@ -219,7 +252,7 @@ describe('OSV npm dependency floors', () => {
         .split('[[IgnoredVulns]]')
         .find((part) => part.includes(`id = "${rule.id}"`));
       expect(block, `${rule.id} needs its ignore entry`).toBeDefined();
-      expect(block).toMatch(/ignoreUntil = "2026-11-30T00:00:00Z"/);
+      expect(activeIgnoreUntil(block ?? ''), `${rule.id} expiry`).toEqual([WAIVER_EXPIRY]);
 
       // Fail-closed: the waiver is advisory-wide for OSV, so the test pins what it was reviewed for.
       // A stale waiver (no affected copy left) or a new affected copy / parent must re-open it.
@@ -234,6 +267,57 @@ describe('OSV npm dependency floors', () => {
         ).toEqual(rule.reviewedParents[version]);
       }
     }
+  });
+
+  // #1233 review: every waiver, Rust ones included, carries exactly one active expiry.
+  // #1233 review: the reviewed advisory set is pinned, so swapping, adding or removing an ID cannot keep a waiver green.
+  it('gives exactly the nine requalified advisories one active expiry each', () => {
+    const toml = readFileSync(resolve(projectRoot, 'src-tauri/osv-scanner.toml'), 'utf8');
+    const blocks = toml.split('[[IgnoredVulns]]').slice(1);
+    const ids = blocks.map((block) => {
+      const active = [...block.matchAll(/^id\s*=\s*"([^"]+)"\s*(?:#.*)?$/gm)].map(
+        (match) => match[1],
+      );
+      expect(active, 'exactly one active id per waiver').toHaveLength(1);
+      expect(activeIgnoreUntil(block), `${active[0]} expiry`).toEqual([WAIVER_EXPIRY]);
+      return active[0];
+    });
+    expect(ids.sort()).toEqual([...REQUALIFIED_WAIVER_IDS].sort());
+  });
+
+  it('does not count a commented-out ignoreUntil as an active expiry', () => {
+    const commented = `\nid = "GHSA-test"\n# ignoreUntil = "${WAIVER_EXPIRY}"\nreason = "fixture"\n`;
+    expect(activeIgnoreUntil(commented)).toEqual([]);
+    expect(activeIgnoreUntil(`${commented}ignoreUntil = "${WAIVER_EXPIRY}" # reviewed\n`)).toEqual([
+      WAIVER_EXPIRY,
+    ]);
+    expect(activeIgnoreUntil(`${commented}ignoreUntil = 2027-01-31T00:00:00Z\n`)).toEqual([]);
+  });
+
+  // #1233 review: a key-like line or an escaped delimiter inside a multi-line string must not pass; the guard refuses multi-line strings.
+  it.each([
+    [
+      'a """ string with a key-like line',
+      `reason = """first\nignoreUntil = "${WAIVER_EXPIRY}"\n"""`,
+    ],
+    [
+      "a ''' string with a key-like line",
+      `reason = '''first\nignoreUntil = "${WAIVER_EXPIRY}"\n'''`,
+    ],
+    [
+      'an escaped delimiter inside a """ string',
+      `reason = """a \\""" b\nignoreUntil = "${WAIVER_EXPIRY}"\n"""`,
+    ],
+    ['a one-line """ string', `reason = """one line"""\nignoreUntil = "${WAIVER_EXPIRY}"`],
+  ])('fails closed on %s', (_name, body) => {
+    expect(() => activeIgnoreUntil(`\nid = "GHSA-test"\n${body}\n`)).toThrow(
+      'multi-line TOML strings are not supported',
+    );
+  });
+
+  it('keeps the shipped waiver file free of multi-line strings', () => {
+    const toml = readFileSync(resolve(projectRoot, 'src-tauri/osv-scanner.toml'), 'utf8');
+    expect(toml).not.toMatch(MULTILINE_STRING);
   });
 
   it('keeps every waived package out of the production dependency graph', () => {
