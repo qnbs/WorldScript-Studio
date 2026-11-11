@@ -5,6 +5,7 @@ import {
   BUILD_CHECK_WORKFLOW,
   classifyContainerPrecheck,
   isPending,
+  nextSleepSeconds,
   type PrecheckJob,
   type PrecheckRun,
   parseArgs,
@@ -226,6 +227,15 @@ describe('release container precheck wait (#1219)', () => {
     [['abc', '--wait-seconds', '0'], { sha: 'abc', waitSeconds: 0 }],
   ])('parses %j', (argv, expected) => {
     expect(parseArgs(argv)).toEqual(expected);
+  });
+
+  // #1234 review: the last sleep stops at the deadline instead of overrunning it by up to one poll.
+  it.each([
+    [100_000, 0, 30],
+    [12_000, 0, 12],
+    [0, 5_000, 0],
+  ])('sleeps %d ms deadline at %d ms for %d s', (deadline, now, seconds) => {
+    expect(nextSleepSeconds(deadline, now)).toBe(seconds);
   });
 
   it.each([['-5'], ['1.5'], ['soon'], [undefined]])('rejects --wait-seconds %s', (value) => {

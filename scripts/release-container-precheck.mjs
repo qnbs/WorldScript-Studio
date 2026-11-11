@@ -96,6 +96,11 @@ export function parseArgs(argv) {
 }
 
 const POLL_SECONDS = 30;
+
+/** Seconds to sleep before the next poll: the poll interval, but never past the deadline. */
+export function nextSleepSeconds(deadline, now) {
+  return Math.max(0, Math.min(POLL_SECONDS, (deadline - now) / 1000));
+}
 const sleep = (seconds) => new Promise((done) => setTimeout(done, seconds * 1000));
 
 function ghJson(path) {
@@ -133,7 +138,7 @@ async function main(argv) {
     SHA.test(String(sha ?? '')) && isPending(sha, state.runs) && Date.now() < deadline;
   while (keepWaiting()) {
     process.stdout.write(`container-precheck: waiting for the build check of ${sha}\n`);
-    await sleep(POLL_SECONDS);
+    await sleep(nextSleepSeconds(deadline, Date.now()));
     state = readRuns(sha);
   }
   // Only the newest trusted run decides, so only its jobs are fetched.

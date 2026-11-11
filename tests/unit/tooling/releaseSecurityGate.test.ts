@@ -405,6 +405,20 @@ describe('#1219 both publishing channels wait on the container precheck', () => 
           /job "container-precheck" must need verify-release-tag and run only on a dispatch or after the verifier proof/,
         ],
         [
+          'a precheck whose timeout cancels it before its own wait ends',
+          TAURI,
+          '    runs-on: ubuntu-latest\n    timeout-minutes: 25\n',
+          '    runs-on: ubuntu-latest\n    timeout-minutes: 1\n',
+          /job "container-precheck" must set timeout-minutes: 25/,
+        ],
+        [
+          'a precheck without a timeout',
+          DOCKER,
+          '    runs-on: ubuntu-latest\n    timeout-minutes: 25\n',
+          '    runs-on: ubuntu-latest\n',
+          /job "container-precheck" must set timeout-minutes: 25/,
+        ],
+        [
           'a precheck on a self-hosted runner that could forge its output',
           DOCKER,
           '    runs-on: ubuntu-latest\n    timeout-minutes: 25\n',
@@ -443,6 +457,21 @@ describe('#1219 both publishing channels wait on the container precheck', () => 
     ).map(([label, name, from, to, message]) => ({ label, name, from, to, message })),
   )('$label fails', ({ name, from, to, message }) => {
     expect(messages(name, mutate(source(name), from, to))).toMatch(message);
+  });
+
+  // #1234 review: workflow-level defaults reach the precheck that holds GH_TOKEN, past the job-level checks.
+  it.each([
+    [DOCKER, 'shell: sh'],
+    [DOCKER, 'working-directory: alt'],
+    [TAURI, 'shell: sh'],
+    [TAURI, 'working-directory: alt'],
+  ])('%s with workflow-level defaults (%s) fails', (name, setting) => {
+    const text = source(name).replace(
+      '\njobs:\n',
+      `\ndefaults:\n  run:\n    ${setting}\n\njobs:\n`,
+    );
+    expect(text).toContain('\ndefaults:\n');
+    expect(messages(name, text)).toMatch(/must not define workflow-level defaults/);
   });
 
   it.each([

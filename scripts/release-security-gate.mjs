@@ -417,6 +417,11 @@ const CONTAINER_PRECHECK_RULES = [
     (job) => job['runs-on'] === 'ubuntu-latest',
     `job "${CONTAINER_PRECHECK_JOB}" must run on the GitHub-hosted ubuntu-latest runner`,
   ],
+  // The job must outlast the precheck's own 1200-second wait, or a timeout would cancel it and block the publisher.
+  [
+    (job) => job['timeout-minutes'] === 25,
+    `job "${CONTAINER_PRECHECK_JOB}" must set timeout-minutes: 25 (longer than its 20-minute wait)`,
+  ],
   [
     (job) => sameJson(job.permissions, { contents: 'read', actions: 'read' }),
     `job "${CONTAINER_PRECHECK_JOB}" must hold exactly permissions: { contents: read, actions: read }`,
@@ -499,6 +504,18 @@ function checkNoUngatedWriters(jobs, gatedJobs, fail) {
   }
 }
 
+// QNBS-v3 (#1234 review): workflow-level env or defaults (run shell or working-directory) would reach every job, including the precheck that holds GH_TOKEN, past the job-level checks.
+function checkWorkflowScope(workflow, spec, fail) {
+  if (!spec.verifyTagJob) return;
+  if (workflow?.env !== undefined)
+    fail('Release workflow must not define inherited environment variables');
+  if (workflow?.defaults !== undefined) {
+    fail(
+      'Release workflow must not define workflow-level defaults (run shell or working-directory)',
+    );
+  }
+}
+
 // The verifier and container-precheck jobs that a workflow's publishers depend on.
 function checkGateJobs(jobs, spec, fail) {
   if (spec.verifyTagJob) checkTagVerifierJob(jobs['verify-release-tag'], fail);
@@ -525,9 +542,7 @@ export function checkReleaseSecurityWorkflow(fileName, source) {
     return failures;
   }
   const jobs = workflow?.jobs ?? {};
-  if (spec.verifyTagJob && workflow?.env !== undefined) {
-    fail('Release workflow must not define inherited environment variables');
-  }
+  checkWorkflowScope(workflow, spec, fail);
   checkAuditJob(jobs['security-audit'], spec.expectedSha, fail);
   checkGateJobs(jobs, spec, fail);
   for (const jobName of spec.gatedJobs) {

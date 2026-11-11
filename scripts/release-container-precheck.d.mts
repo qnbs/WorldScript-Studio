@@ -26,6 +26,8 @@ export function latestTrustedRun(sha: string, runs: PrecheckRun[] | null): Prech
 
 export function isPending(sha: string, runs: PrecheckRun[] | null): boolean;
 
+export function nextSleepSeconds(deadline: number, now: number): number;
+
 export function parseArgs(argv: readonly string[] | null): { sha: string | undefined; waitSeconds: number };
 
 export function classifyContainerPrecheck(input: {
