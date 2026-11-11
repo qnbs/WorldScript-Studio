@@ -17,6 +17,7 @@ interface Job {
   steps: Step[];
 }
 interface Workflow {
+  on?: Record<string, unknown>;
   permissions?: unknown;
   jobs: Record<string, Job | undefined>;
 }
@@ -135,6 +136,28 @@ const drift: Case[] = [
       );
     },
     'must build, extract, check and push the image as consecutive steps',
+  ],
+  // #1225 review: the triggers are part of the promise, so removing or filtering an event fails.
+  [
+    'the build check drops its pull_request trigger',
+    (d) => {
+      d.check.on = { push: { branches: ['main'] }, workflow_dispatch: null };
+    },
+    'docker-build-check.yml triggers must be exactly',
+  ],
+  [
+    'the build check filters pull requests by path',
+    (d) => {
+      d.check.on = { ...d.check.on, pull_request: { paths: ['Dockerfile'] } };
+    },
+    'docker-build-check.yml triggers must be exactly',
+  ],
+  [
+    'the publish workflow drops its tag trigger',
+    (d) => {
+      d.publish.on = { workflow_dispatch: null };
+    },
+    'docker.yml triggers must be exactly',
   ],
   // #1225 review: a step between the check and the push could change the context the push rebuilds.
   [

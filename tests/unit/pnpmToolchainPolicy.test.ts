@@ -108,6 +108,17 @@ describe('Dockerfile pnpm pin (#1223)', () => {
     });
   });
 
+  // #1225 review: every install must be the asserted one, not just one of them.
+  it('rejects a bare pnpm install next to the asserted install', () => {
+    const result = checkDockerfilePnpm(
+      `RUN corepack install\nRUN pnpm install\n${assertion}\n`,
+      '12.13.0',
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.versionAssertion).toBe(false);
+  });
+
   it('requires a corepack install step', () => {
     expect(checkDockerfilePnpm(`RUN corepack enable\n${assertion}\n`, '12.13.0')).toEqual({
       ok: false,

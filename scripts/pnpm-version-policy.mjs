@@ -61,7 +61,10 @@ export function checkDockerfilePnpm(dockerfile, expectedVersion) {
   const mismatched = findDockerfilePnpmPins(dockerfile).filter((pin) => pin !== expectedVersion);
   const bypasses = findDockerfilePnpmBypasses(dockerfile);
   const corepackInstall = lines.some((line) => COREPACK_INSTALL.test(line));
-  const versionAssertion = lines.some((line) => VERSION_ASSERTION.test(line));
+  // Every pnpm install must be the asserted instruction, so no install runs before the version is verified.
+  const installs = lines.filter((line) => /\bpnpm\s+(?:install|i|add)\b/.test(line));
+  const versionAssertion =
+    installs.length > 0 && installs.every((line) => VERSION_ASSERTION.test(line));
   const ok = [
     corepackInstall,
     versionAssertion,

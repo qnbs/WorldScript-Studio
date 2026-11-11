@@ -197,6 +197,21 @@ function readOnlyErrors(document, job) {
   return errors;
 }
 
+// Exact triggers: the build check runs on every pull request, every push to main and on dispatch; the publish workflow runs on v* tags and dispatch. Any added filter or removed event fails.
+export const CANONICAL_TRIGGERS = Object.freeze({
+  publish: { push: { tags: ['v*'] }, workflow_dispatch: null },
+  check: { pull_request: null, push: { branches: ['main'] }, workflow_dispatch: null },
+});
+
+function triggerErrors(publishDocument, checkDocument) {
+  return [
+    ['docker.yml', publishDocument.on, CANONICAL_TRIGGERS.publish],
+    ['docker-build-check.yml', checkDocument.on, CANONICAL_TRIGGERS.check],
+  ]
+    .filter(([, actual, expected]) => !sameJson(actual, expected))
+    .map(([file, , expected]) => `${file} triggers must be exactly ${JSON.stringify(expected)}`);
+}
+
 /** @returns {string[]} every parity violation between docker.yml and docker-build-check.yml */
 export function dockerBuildParity(publishSource, checkSource) {
   const publishDocument = asDocument(publishSource);
@@ -206,8 +221,12 @@ export function dockerBuildParity(publishSource, checkSource) {
   if (!publishJob || !checkJob) return [`missing job ${publishJob ? CHECK_JOB : PUBLISH_JOB}`];
   const publish = locate(publishJob);
   const check = locate(checkJob);
+  const always = [
+    ...triggerErrors(publishDocument, checkDocument),
+    ...readOnlyErrors(checkDocument, checkJob),
+  ];
   const shape = shapeErrors(publish, check);
-  if (shape.length > 0) return [...shape, ...readOnlyErrors(checkDocument, checkJob)];
+  if (shape.length > 0) return [...shape, ...always];
   return [
     ...parityErrors(publish, check),
     ...sameCheckBuildId(publish, check),
@@ -219,6 +238,6 @@ export function dockerBuildParity(publishSource, checkSource) {
     ...earlierRunErrors(check, CHECK_JOB),
     ...unconditionalErrors(publish, PUBLISH_JOB),
     ...unconditionalErrors(check, CHECK_JOB),
-    ...readOnlyErrors(checkDocument, checkJob),
+    ...always,
   ];
 }
