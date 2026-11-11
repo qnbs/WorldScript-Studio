@@ -56,6 +56,11 @@ const REAL_SIGNATURE_1_29_5 =
 const REAL_SIGNATURE_1_29_2 =
   'dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUcUNTeGZzY2laYXNpOGVLY1lJaU0rZWhsNGV4blBEVEZrb1FuSnBZZ1RPTUlETmN2MnRUaGlTQk1TbG9ReEk4OVh3VThCUDhzRVNKWld3eEJJdWl6UmVtVWJyVHVGOUFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNjgwNzIzCWZpbGU6V29ybGRTY3JpcHQgU3R1ZGlvXzEuMjkuMl9hbWQ2NC5BcHBJbWFnZQoxalpSRnR6cVQvU0t6dEMzWHBkMDJHWkt1Y2tyVWxBZG92N0krS3JmYjIva1RnSEIyRjZZNnV3WXVNYkErQmtRWnpwak45WDdLUVpGWVZ4a3NNbkhCUT09Cg==';
 
+const entry = (asset: string) => ({
+  signature: signatures[`${asset}.sig`],
+  url: `https://github.com/${repository}/releases/download/v${version}/${asset.replaceAll(' ', '.')}`,
+});
+
 function manifest() {
   return {
     version,
@@ -78,6 +83,9 @@ function manifest() {
         signature: signatures[`${installers[8]}.sig`],
         url: `https://github.com/${repository}/releases/download/v${version}/${installers[8].replaceAll(' ', '.')}`,
       },
+      'linux-x86_64-deb': entry(installers[0]),
+      'linux-x86_64-rpm': entry(installers[1]),
+      'windows-x86_64-msi': entry(installers[4]),
     },
   };
 }
@@ -280,6 +288,76 @@ describe('signed version binding (#1215)', () => {
       signatures: { ...signatures, [`${installers[6]}.sig`]: prefixed },
     });
     expect(result).toEqual({ ok: true, errors: [] });
+  });
+});
+
+// The plugin (2.14.1 get_urls) tries `{os}-{arch}-{installer}`, then `{os}-{arch}`; mirror it for every shipped installer.
+const INSTALLERS: Array<[string, string, RegExp]> = [
+  ['linux-x86_64', 'deb', /\.deb$/],
+  ['linux-x86_64', 'rpm', /\.rpm$/],
+  ['linux-x86_64', 'appimage', /\.AppImage$/],
+  ['windows-x86_64', 'msi', /\.msi$/],
+  ['windows-x86_64', 'nsis', /-setup\.exe$/],
+  ['darwin-aarch64', 'app', /^WorldScript\.Studio\.app\.tar\.gz$/],
+  ['darwin-x86_64', 'app', /^WorldScript\.Studio_x64\.app\.tar\.gz$/],
+];
+
+describe('per-installer updater entries (#1248)', () => {
+  it.each(INSTALLERS)(
+    'gives a %s %s install a payload of its own format',
+    (target, installer, format) => {
+      const platforms = manifest().platforms as Record<string, { url: string }>;
+      const found = platforms[`${target}-${installer}`] ?? platforms[target];
+      expect(found, `${target}-${installer}`).toBeDefined();
+      expect(found?.url.split('/').pop()).toMatch(format);
+    },
+  );
+
+  it('accepts the generated manifest with the three per-installer entries', () => {
+    expect(
+      validateLatestManifest({
+        manifest: manifest(),
+        version,
+        repository,
+        assetNames: completeAssets,
+        signatures,
+      }),
+    ).toEqual({ ok: true, errors: [] });
+  });
+
+  it('rejects a per-installer entry that points at the wrong package or misses', () => {
+    const wrong = manifest();
+    (wrong.platforms as Record<string, unknown>)['linux-x86_64-deb'] = entry(installers[2]);
+    const missing = manifest();
+    delete (missing.platforms as Record<string, unknown>)['windows-x86_64-msi'];
+    for (const changed of [wrong, missing]) {
+      expect(
+        validateLatestManifest({
+          manifest: changed,
+          version,
+          repository,
+          assetNames: completeAssets,
+          signatures,
+        }).ok,
+      ).toBe(false);
+    }
+  });
+
+  it('applies the signed-version check to the per-installer entries too', () => {
+    const otherVersion = boundSignature(installers[1], '1.29.2');
+    const changed = manifest();
+    (changed.platforms as Record<string, { signature: string }>)['linux-x86_64-rpm'].signature =
+      otherVersion;
+    const result = validateLatestManifest({
+      manifest: changed,
+      version,
+      repository,
+      assetNames: completeAssets,
+      signatures: { ...signatures, [`${installers[1]}.sig`]: otherVersion },
+    });
+    expect(result.errors).toContain(
+      `linux-x86_64-rpm signature does not bind version ${version} (signed: 1.29.2)`,
+    );
   });
 });
 

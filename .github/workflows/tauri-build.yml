@@ -525,7 +525,7 @@ jobs:
           done < <(find downloaded -type f \( -name '*.third-party-notices.txt' -o -name '*.cdx.json' \) -print0)
           node scripts/release-assets-guard.mjs assets "$VERSION" release-assets
 
-      - name: Generate and validate all four signed updater manifest entries
+      - name: Generate and validate every signed updater manifest entry
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"

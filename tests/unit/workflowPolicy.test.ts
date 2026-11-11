@@ -508,7 +508,7 @@ describe('Tauri release workflow policy', () => {
       'a published release already exists for this tag; refusing overwrite',
     );
     const releaseStepIndexes = [
-      namedStepIndex(release, 'Generate and validate all four signed updater manifest entries'),
+      namedStepIndex(release, 'Generate and validate every signed updater manifest entry'),
       namedStepIndex(release, 'Refuse to overwrite a published release'),
       namedStepIndex(release, 'Stage GitHub Release as a draft'),
       namedStepIndex(
