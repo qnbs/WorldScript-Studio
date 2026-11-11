@@ -305,6 +305,14 @@ const drift: Case[] = [
     },
     CHECK_PREFIX_ERROR,
   ],
+  // #1228 review: the builder configuration must match in both directions.
+  [
+    'the publish job configures Buildx differently from the check',
+    (d) => {
+      inputs(named(publishSteps(d), SETUP_BUILDX))['driver-opts'] = 'image=moby/buildkit:master';
+    },
+    'Buildx setup must take the same inputs in both jobs',
+  ],
   [
     'the build check drops the context check',
     (d) => {

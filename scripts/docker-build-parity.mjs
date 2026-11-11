@@ -127,7 +127,17 @@ function parityErrors(publish, check) {
       errors.push(`${prefix.slice(0, -1)} must be pinned to the same commit in both jobs`);
     }
   }
-  return [...errors, ...checkoutErrors(check)];
+  return [...errors, ...builderErrors(publish, check), ...checkoutErrors(check)];
+}
+
+// The builder is part of the build: Buildx setup must take the same inputs and environment in both jobs, so the check cannot pass on a different builder than the release uses.
+function builderErrors(publish, check) {
+  const [publishSetup, checkSetup] = [publish, check].map((job) =>
+    job.steps.find((step) => usesOf(step).startsWith(SETUP_BUILDX)),
+  );
+  const same =
+    sameJson(publishSetup?.with, checkSetup?.with) && sameJson(publishSetup?.env, checkSetup?.env);
+  return same ? [] : ['Buildx setup must take the same inputs in both jobs'];
 }
 
 // The build check must build the event commit that the precheck credits, so its checkout takes no ref or other inputs. The publish checkout is pinned to github.sha by release-security-gate.mjs.
