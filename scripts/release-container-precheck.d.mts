@@ -27,5 +27,7 @@ export function latestTrustedRun(sha: string, runs: PrecheckRun[] | null): Prech
 export function classifyContainerPrecheck(input: {
   sha: string;
   runs: PrecheckRun[] | null;
+  /** The runs API's total_count for the same query; any mismatch with runs.length fails. */
+  totalCount: number | null;
   jobsByRun: Record<string, PrecheckJob[] | null> | null;
 }): { ok: boolean; reason: string; runId: number | null; url: string | null };

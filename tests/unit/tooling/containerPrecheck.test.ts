@@ -29,6 +29,10 @@ const jobs = (conclusion: string | null): Record<string, PrecheckJob[]> => ({
 
 type Case = [string, PrecheckRun[] | null, Record<string, PrecheckJob[] | null>, string];
 
+// A complete run list: total_count equals the fetched runs unless a test says otherwise.
+const precheck = (runs: PrecheckRun[], totalCount: number | null = runs.length) =>
+  classifyContainerPrecheck({ sha: SHA, runs, totalCount, jobsByRun: jobs('success') });
+
 describe('release container precheck (#1223)', () => {
   it.each([
     ['a push run on main', run()],
@@ -39,13 +43,18 @@ describe('release container precheck (#1223)', () => {
     ],
   ])('passes a successful build-check job of %s on the exact commit', (_name, trusted) => {
     expect(
-      classifyContainerPrecheck({ sha: SHA, runs: [trusted], jobsByRun: jobs('success') }),
+      classifyContainerPrecheck({
+        sha: SHA,
+        runs: [trusted],
+        totalCount: 1,
+        jobsByRun: jobs('success'),
+      }),
     ).toEqual({ ok: true, reason: 'PASS', runId: 1, url: URL });
   });
 
   const failures: Case[] = [
     ['no run exists', [], jobs('success'), NO_TRUSTED_RUN],
-    ['the run list is unreadable', null, jobs('success'), NO_TRUSTED_RUN],
+    ['the run list is unreadable', null, jobs('success'), 'the run list is unreadable'],
     [
       'the run is for another commit',
       [run({ head_sha: 'b'.repeat(40) })],
@@ -96,7 +105,12 @@ describe('release container precheck (#1223)', () => {
   ];
 
   it.each(failures)('fails when %s', (_name, runs, jobsByRun, reason) => {
-    const result = classifyContainerPrecheck({ sha: SHA, runs, jobsByRun });
+    const result = classifyContainerPrecheck({
+      sha: SHA,
+      runs,
+      totalCount: runs?.length ?? null,
+      jobsByRun,
+    });
 
     expect(result.ok).toBe(false);
     expect(result.reason).toContain(reason);
@@ -113,28 +127,43 @@ describe('release container precheck (#1223)', () => {
       }),
     ];
 
-    expect(classifyContainerPrecheck({ sha: SHA, runs, jobsByRun: jobs('success') }).reason).toBe(
-      'latest run 1 concluded failure',
-    );
+    expect(precheck(runs).reason).toBe('latest run 1 concluded failure');
   });
 
   it('lets the newest run decide, so an older success cannot hide a later failure', () => {
     const runs = [run(), run({ id: 2, conclusion: 'failure', created_at: '2026-11-11T11:00:00Z' })];
 
-    expect(classifyContainerPrecheck({ sha: SHA, runs, jobsByRun: jobs('success') }).reason).toBe(
-      'latest run 2 concluded failure',
-    );
+    expect(precheck(runs).reason).toBe('latest run 2 concluded failure');
   });
 
   it('reports a missing run URL as null', () => {
     const { html_url: _url, ...withoutUrl } = run();
-    const result = classifyContainerPrecheck({
-      sha: SHA,
-      runs: [withoutUrl],
-      jobsByRun: jobs('success'),
-    });
 
-    expect(result).toEqual({ ok: true, reason: 'PASS', runId: 1, url: null });
+    expect(precheck([withoutUrl])).toEqual({ ok: true, reason: 'PASS', runId: 1, url: null });
+  });
+
+  // #1223 follow-up (a): a newer failed run beyond the first page must not leave an older success in charge.
+  it('fails closed when the API reports more runs than were fetched', () => {
+    expect(precheck([run()], 101)).toEqual({
+      ok: false,
+      reason: 'the run list is incomplete: 1 of 101 runs fetched',
+      runId: null,
+      url: null,
+    });
+  });
+
+  it.each([
+    ['is missing', null],
+    ['is negative', -1],
+    ['is not an integer', 1.5],
+  ])('fails closed when total_count %s', (_name, totalCount) => {
+    expect(precheck([run()], totalCount).reason).toBe('the run list has no total_count');
+  });
+
+  it('fails closed when total_count is smaller than the fetched runs', () => {
+    expect(precheck([run(), run({ id: 2 })], 1).reason).toBe(
+      'the run list is incomplete: 2 of 1 runs fetched',
+    );
   });
 
   it('lets the newest attempt decide, so a failed rerun of an older run is not hidden', () => {
@@ -143,15 +172,14 @@ describe('release container precheck (#1223)', () => {
       run({ id: 2, created_at: '2026-11-11T11:00:00Z', run_started_at: '2026-11-11T11:00:00Z' }),
     ];
 
-    expect(classifyContainerPrecheck({ sha: SHA, runs, jobsByRun: jobs('success') }).reason).toBe(
-      'latest run 1 concluded failure',
-    );
+    expect(precheck(runs).reason).toBe('latest run 1 concluded failure');
   });
 
   it('rejects a candidate that is not a full commit SHA, even with a matching run', () => {
     const result = classifyContainerPrecheck({
       sha: 'v1.29.5',
       runs: [run({ head_sha: 'v1.29.5' })],
+      totalCount: 1,
       jobsByRun: jobs('success'),
     });
 

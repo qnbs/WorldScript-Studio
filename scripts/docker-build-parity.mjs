@@ -127,7 +127,28 @@ function parityErrors(publish, check) {
       errors.push(`${prefix.slice(0, -1)} must be pinned to the same commit in both jobs`);
     }
   }
-  return [...errors, ...checkoutErrors(check)];
+  return [...errors, ...builderErrors(publish, check), ...checkoutErrors(check)];
+}
+
+const setupIndexes = (job) =>
+  job.steps.flatMap((step, index) => (usesOf(step).startsWith(SETUP_BUILDX) ? [index] : []));
+const withoutName = (step) =>
+  Object.entries(step ?? {})
+    .filter(([key]) => key !== 'name')
+    .sort(([a], [b]) => a.localeCompare(b));
+
+// The builder is part of the build: each job sets up Buildx exactly once before its check build, and both setup steps are identical apart from their name (inputs, environment, if, continue-on-error), so the check cannot pass on a different builder than the release uses.
+function builderErrors(publish, check) {
+  const jobs = [publish, check];
+  const setups = jobs.map(setupIndexes);
+  const once = setups.every(
+    (indexes, i) => indexes.length === 1 && indexes[0] < (jobs[i]?.checkBuild ?? -1),
+  );
+  if (!once) return ['each job must set up Buildx exactly once, before its check build'];
+  const [publishSetup, checkSetup] = jobs.map((job, i) => job.steps[setups[i]?.[0] ?? -1]);
+  return sameJson(withoutName(publishSetup), withoutName(checkSetup))
+    ? []
+    : ['Buildx setup must be identical in both jobs apart from its name'];
 }
 
 // The build check must build the event commit that the precheck credits, so its checkout takes no ref or other inputs. The publish checkout is pinned to github.sha by release-security-gate.mjs.
@@ -166,6 +187,25 @@ function canonicalErrors(job, name) {
   return Object.entries(CANONICAL_CHECKS)
     .filter(([role, checks]) => !checks(job.steps[job[role]]).every(Boolean))
     .map(([role]) => `${name} must contain the canonical ${role} step unchanged`);
+}
+
+// QNBS-v3 (#1223 follow-up b): before its build the check runs exactly these steps without extra keys, so no other action or command can change the context, PATH or environment that the build and the bundle check see.
+const CHECK_PREFIX = [
+  (step) => onlyKeys(step, ['name', 'uses', 'with']) && usesOf(step).startsWith(CHECKOUT),
+  (step) => onlyKeys(step, ['name', 'run']) && runOf(step) === CONTEXT_CHECK_RUN,
+  (step) => onlyKeys(step, ['name', 'uses']) && usesOf(step).startsWith(SETUP_BUILDX),
+];
+
+function checkPrefixErrors(check) {
+  const prefix = check.steps.slice(0, check.checkBuild);
+  const canonical =
+    prefix.length === CHECK_PREFIX.length &&
+    CHECK_PREFIX.every((matches, index) => matches(prefix[index]));
+  return canonical
+    ? []
+    : [
+        `${CHECK_JOB} must run exactly checkout, the context check and Buildx setup before its build`,
+      ];
 }
 
 function scopeErrors(document, job, name) {
@@ -249,6 +289,7 @@ export function dockerBuildParity(publishSource, checkSource) {
     ...sameCheckBuildId(publish, check),
     ...canonicalErrors(publish, PUBLISH_JOB),
     ...canonicalErrors(check, CHECK_JOB),
+    ...checkPrefixErrors(check),
     ...scopeErrors(publishDocument, publishJob, PUBLISH_JOB),
     ...scopeErrors(checkDocument, checkJob, CHECK_JOB),
     ...earlierRunErrors(publish, PUBLISH_JOB),
