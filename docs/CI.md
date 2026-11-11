@@ -492,6 +492,8 @@ in the toolchain-admission unit itself:**
   warning). Already-known/current-owner; `cargo-deny` has no `deny.toml` yet, so it defaults to a
   stricter unmaintained-as-error policy than `cargo-audit`'s accepted-warnings baseline — a future
   `deny.toml` should align the two rather than either tool being treated as newly authoritative.
+  The `unic-*` crates have since left both Cargo lockfiles; their OSV waivers were retired on
+  2026-11-11 (#1164).
 - `osv-scanner` on `pnpm-lock.yaml`: 1 known vulnerability, `adm-zip` `GHSA-vwc7-r8mq-g2x9` (Medium,
   no fixed version). False-positive-or-acceptable: matches the already-tracked, exhaustively
   investigated BLOCKED_UPSTREAM/MITIGATED disposition (issue #87); tool output corroborates the
