@@ -42,7 +42,7 @@ published image contains DOMPurify 3.4.17. Readback record: #1201.
 | `CANDIDATE` | Exact protected main SHA frozen after push CI/CD, CodeQL, Pages, Production, build check and retention     | REACHED 2026-11-11 ~03:20Z |
 | `QUALIFIED` | Container precheck, fresh exact-candidate OSV, 3-OS packaging, asset inventory, updater and upgrade checks | REACHED 2026-11-11 03:31Z  |
 | `TAGGED`    | Signed annotated `v1.29.5` tag verified against the qualified SHA                                          | REACHED 2026-11-11 06:25Z  |
-| `PUBLISHED` | Exact-tag Tauri and Docker workflows both succeed (desktop assets and GHCR image)                          | REACHED 2026-11-11 06:52Z  |
+| `PUBLISHED` | All three tag workflows succeed: Tauri (desktop assets), Docker (GHCR image) and tag CI/CD                 | REACHED 2026-11-11 06:52Z  |
 | `VERIFIED`  | Release, updater manifest and signatures, checksums, and the published GHCR digest's bundle check          | REACHED 2026-11-11 06:55Z  |
 
 ## Candidate and release gates
