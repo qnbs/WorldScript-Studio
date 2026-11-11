@@ -1,8 +1,25 @@
 # v1.29.4 release evidence
 
-**Status: PREPARATION IN PROGRESS — NOT RELEASED.** The latest published release remains
-[v1.29.2](https://github.com/qnbs/WorldScript-Studio/releases/tag/v1.29.2). `v1.29.3` was tagged but
-never published (below). No `v1.29.4` tag, GitHub Release, or GHCR publication has been created.
+**Status: PARTIAL — desktop PUBLISHED and VERIFIED; container image NOT PUBLISHED.** The signed
+annotated tag `v1.29.4` (tag object `5bc6dff16dc0476e4068c3552e24f579d903e0a3` →
+`baba33f12262e6503c094eb0097446d422742da0`) was pushed once on 2026-11-10T20:39:31Z. The Tauri run
+published the [GitHub Release](https://github.com/qnbs/WorldScript-Studio/releases/tag/v1.29.4) with
+the desktop installers and the updater. The Docker run failed at the image build on the stale
+`COPY patches/` line (#1223), so nothing was pushed and GHCR `latest`, `1.29` and `1.29.2` still serve
+1.29.2. By this ladder, `PUBLISHED` means every tag-triggered workflow succeeded, so 1.29.4 is a
+partial publication. The container image follows with 1.29.5 (`docs/RELEASE-V1.29.5-EVIDENCE.md`).
+`v1.29.3` was tagged but never published (below).
+
+## Result per channel
+
+| Channel   | Run                                                                                        | Result                                                                                                                                                                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop   | Tauri [42897616548](https://github.com/qnbs/WorldScript-Studio/actions/runs/42897616548)   | Published 2026-11-10T20:55:35Z, Latest, 20 assets. Verified: 16 downloaded files equal GitHub's digests; 5 signed installers and 3 updater payloads verify against the shipped key with trusted comment `version:1.29.4`; `latest.json` valid. |
+| Container | Docker [42897616305](https://github.com/qnbs/WorldScript-Studio/actions/runs/42897616305)  | Failed at `Build and push` (`"/patches": not found`); nothing pushed. GHCR `1.29.4` returns 404.                                                                                                                                               |
+| Tag CI    | CI / CD [42897616241](https://github.com/qnbs/WorldScript-Studio/actions/runs/42897616241) | Success; `Verify release tag` passed in all three tag workflows.                                                                                                                                                                               |
+
+Known gaps: the secondary updater endpoint returns 404 (#1214), and the updater client end-to-end
+upgrade is not tested on an installed app (#1217).
 
 ## The v1.29.3 attempt (tagged, never published)
 
@@ -29,14 +46,16 @@ never published (below). No `v1.29.4` tag, GitHub Release, or GHCR publication h
 
 ## State ladder
 
-| State       | Required evidence                                                                                  | Status  |
-| ----------- | -------------------------------------------------------------------------------------------------- | ------- |
-| `PREPARED`  | Signed version-preparation PR merged; version metadata synchronized; resulting-main gates complete | PENDING |
-| `CANDIDATE` | Exact protected main SHA frozen after push CI/CD, CodeQL, Pages, Production, and retention proof   | PENDING |
-| `QUALIFIED` | Fresh exact-candidate OSV, 3-OS packaging, asset inventory, updater and recovery checks terminal   | PENDING |
-| `TAGGED`    | Signed annotated `v1.29.4` tag verified against the qualified SHA                                  | PENDING |
-| `PUBLISHED` | Exact-tag Tauri and GHCR workflows publish the complete signed asset set                           | PENDING |
-| `VERIFIED`  | Release, updater manifest/signatures, checksums, GHCR, and post-release truth sync read back       | PENDING |
+| State       | Required evidence                                                                                  | Status                                                             |
+| ----------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `PREPARED`  | Signed version-preparation PR merged; version metadata synchronized; resulting-main gates complete | DONE: #1221 merged as `baba33f1`                                   |
+| `CANDIDATE` | Exact protected main SHA frozen after push CI/CD, CodeQL, Pages, Production, and retention proof   | DONE: `baba33f1`                                                   |
+| `QUALIFIED` | Fresh exact-candidate OSV, 3-OS packaging, asset inventory, updater and recovery checks terminal   | PARTIAL: the container build was not exercised by any pre-tag gate |
+| `TAGGED`    | Signed annotated `v1.29.4` tag verified against the qualified SHA                                  | DONE: tag object `5bc6dff1`, `verified=true`                       |
+| `PUBLISHED` | Exact-tag Tauri and GHCR workflows publish the complete signed asset set                           | PARTIAL: desktop published, container not                          |
+| `VERIFIED`  | Release, updater manifest/signatures, checksums, GHCR, and post-release truth sync read back       | DONE for desktop; container not applicable                         |
+
+A skipped job is not a pass: the 1.29.4 qualification exercised the desktop path and the container audit, but no gate ran the real image build, so the stale `COPY patches/` first failed at the tag. Since #1225, a no-push image build with an in-image DOMPurify check runs on every pull request and every push to `main`, and the publishing job runs the same check before its push.
 
 ## Candidate and release gates
 
@@ -45,17 +64,17 @@ limitation only after a terminal result exists. A result from another SHA does n
 candidate. Simulated, read-only production and real publish evidence stay separate; a real tag push that
 has not happened is never recorded as proven.
 
-| Gate                            | Evidence to record                                                                                        | Status  |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------- | ------- |
-| Resulting-main CI/CD and CodeQL | Exact push run IDs and SHA                                                                                | PENDING |
-| Vercel Production and retention | READY deployment, three aliases, exact-main SAFE/PROTECTED/UNKNOWN and postproof                          | PENDING |
-| Exact-ref OSV                   | Fresh scan of `pnpm-lock.yaml`, `src-tauri/Cargo.lock`, and `crates/Cargo.lock`                           | PENDING |
-| 3-OS candidate builds           | Exact-SHA non-publishing workflow dispatch; Linux, Windows, and macOS Apple Silicon                       | PENDING |
-| Complete release assets         | All expected installers, signatures, three SBOMs, three notices, and `latest.json`                        | PENDING |
-| Verifier pin closure            | Every pin and `TAG_VERIFIER_SOURCE_SHA` names the merged fix commit; verifier files at the pin match      | PENDING |
-| Read-only release preflight     | Main SHA, tag rulesets, release identity and signing key, versions, waivers, GHCR baseline, updater state | PENDING |
-| Signed annotated tag            | Tag-object and target-commit verification                                                                 | PENDING |
-| Tauri/GHCR publication          | Exact-tag runs, complete assets, manifest and immutable image digest                                      | PENDING |
+| Gate                            | Evidence to record                                                                                        | Status                                                        |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Resulting-main CI/CD and CodeQL | Exact push run IDs and SHA                                                                                | DONE: CI/CD 42889554750, CodeQL 42889554807                   |
+| Vercel Production and retention | READY deployment, three aliases, exact-main SAFE/PROTECTED/UNKNOWN and postproof                          | DONE: Production deployment 7692623065 success                |
+| Exact-ref OSV                   | Fresh scan of `pnpm-lock.yaml`, `src-tauri/Cargo.lock`, and `crates/Cargo.lock`                           | DONE: exact-ref audit job of Docker dispatch 42889665843      |
+| 3-OS candidate builds           | Exact-SHA non-publishing workflow dispatch; Linux, Windows, and macOS Apple Silicon                       | DONE: Tauri dispatch 42889659684                              |
+| Complete release assets         | All expected installers, signatures, three SBOMs, three notices, and `latest.json`                        | DONE: 20 assets in Release 440899211                          |
+| Verifier pin closure            | Every pin and `TAG_VERIFIER_SOURCE_SHA` names the merged fix commit; verifier files at the pin match      | DONE: pin `d46ae796` (#1218, #1220)                           |
+| Read-only release preflight     | Main SHA, tag rulesets, release identity and signing key, versions, waivers, GHCR baseline, updater state | DONE: 54 PASS / 0 FAIL                                        |
+| Signed annotated tag            | Tag-object and target-commit verification                                                                 | DONE: `git tag -v` good                                       |
+| Tauri/GHCR publication          | Exact-tag runs, complete assets, manifest and immutable image digest                                      | PARTIAL: Tauri 42897616548 success; Docker 42897616305 failed |
 
 ## Scope and known limitations
 
