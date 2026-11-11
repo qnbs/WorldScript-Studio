@@ -49,12 +49,25 @@ function jobProblem(run, jobs) {
   return null;
 }
 
+// QNBS-v3 (#1223 follow-up a): the newest run can decide only when every run of the commit was fetched, so a list beyond one page or without a count fails closed instead of crediting an older success.
+function runListProblem(runs, totalCount) {
+  if (!Array.isArray(runs)) return 'the run list is unreadable';
+  if (!Number.isSafeInteger(totalCount) || totalCount < 0) return 'the run list has no total_count';
+  if (totalCount !== runs.length) {
+    return `the run list is incomplete: ${runs.length} of ${totalCount} runs fetched`;
+  }
+  return null;
+}
+
 /**
- * @param {{sha: string, runs: object[] | null, jobsByRun: Record<string, object[]> | null}} input
- *        runs: workflow runs of docker-build-check.yml; jobsByRun: jobs keyed by run id
+ * @param {{sha: string, runs: object[] | null, totalCount: number | null, jobsByRun: Record<string, object[]> | null}} input
+ *        runs: workflow runs of docker-build-check.yml; totalCount: the API's total_count for
+ *        that list; jobsByRun: jobs keyed by run id
  */
-export function classifyContainerPrecheck({ sha, runs, jobsByRun }) {
+export function classifyContainerPrecheck({ sha, runs, totalCount, jobsByRun }) {
   if (!SHA.test(String(sha ?? ''))) return failure('the candidate is not a 40-hex commit SHA');
+  const incomplete = runListProblem(runs, totalCount);
+  if (incomplete) return failure(incomplete);
   const run = latestTrustedRun(sha, runs);
   if (!run) {
     return failure(`no push or dispatch run of ${BUILD_CHECK_WORKFLOW} on main for ${sha}`);
@@ -85,7 +98,12 @@ function main(sha) {
           ghJson(`repos/${REPOSITORY}/actions/runs/${latest.id}/jobs?per_page=100`)?.jobs ?? null,
       }
     : {};
-  const result = classifyContainerPrecheck({ sha, runs, jobsByRun });
+  const result = classifyContainerPrecheck({
+    sha,
+    runs,
+    totalCount: listed?.total_count ?? null,
+    jobsByRun,
+  });
   const where = result.url ? ` (${result.url})` : '';
   process.stdout.write(
     `container-precheck: ${result.ok ? 'PASS' : 'FAIL'} ${sha} — ${result.reason}${where}\n`,

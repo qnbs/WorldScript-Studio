@@ -52,6 +52,10 @@ const inputs = (step: Step) => {
 
 const CHECK_BUILD = 'Build the image without pushing';
 const BUNDLE_CHECK = 'Check the DOMPurify build inside the image';
+const CONTEXT_CHECK = 'Check every COPY/ADD source against the build context';
+const SETUP_BUILDX = 'Set up Docker Buildx';
+const CHECK_PREFIX_ERROR =
+  'build-check must run exactly checkout, the context check and Buildx setup before its build';
 
 type Case = [string, (d: Documents) => void, string];
 
@@ -213,6 +217,23 @@ const drift: Case[] = [
     },
     'must not set if: or continue-on-error',
   ],
+  // #1228 review: a skipped build must fail parity in both jobs, not only a dropped or reordered one.
+  [
+    'the build check skips its image build',
+    (d) => {
+      Object.assign(named(checkSteps(d), CHECK_BUILD), { if: 'false' });
+    },
+    `build-check step "${CHECK_BUILD}" must not set if: or continue-on-error`,
+  ],
+  [
+    'the publish job skips its pre-push check build',
+    (d) => {
+      Object.assign(named(publishSteps(d), 'Build the image for the pre-push check'), {
+        if: "github.event_name != 'push'",
+      });
+    },
+    'build-push step "Build the image for the pre-push check" must not set if: or continue-on-error',
+  ],
   [
     'the extraction differs between the jobs',
     (d) => {
@@ -271,6 +292,71 @@ const drift: Case[] = [
       jobOf(d.check, 'build-check').permissions = { contents: 'read', packages: 'write' };
     },
     'exactly permissions: { contents: read }',
+  ],
+  // #1223 follow-up (b): an action before the build could rewrite PATH, the environment or the build context.
+  [
+    'the build check runs another action before its build',
+    (d) => {
+      const steps = checkSteps(d);
+      steps.splice(steps.indexOf(named(steps, CHECK_BUILD)), 0, {
+        name: 'Set up Node',
+        uses: `actions/setup-node@${'c'.repeat(40)}`,
+      });
+    },
+    CHECK_PREFIX_ERROR,
+  ],
+  [
+    'the build check sets up Buildx before the context check',
+    (d) => {
+      const steps = checkSteps(d);
+      const context = named(steps, CONTEXT_CHECK);
+      const buildx = named(steps, SETUP_BUILDX);
+      steps.splice(steps.indexOf(context), 2, buildx, context);
+    },
+    CHECK_PREFIX_ERROR,
+  ],
+  [
+    'the build check configures Buildx differently from the publish job',
+    (d) => {
+      inputs(named(checkSteps(d), SETUP_BUILDX))['driver-opts'] = 'image=moby/buildkit:master';
+    },
+    CHECK_PREFIX_ERROR,
+  ],
+  // #1228 review: the builder configuration must match in both directions.
+  [
+    'the publish job configures Buildx differently from the check',
+    (d) => {
+      inputs(named(publishSteps(d), SETUP_BUILDX))['driver-opts'] = 'image=moby/buildkit:master';
+    },
+    'Buildx setup must be identical in both jobs apart from its name',
+  ],
+  // #1228 review: a skipped setup leaves the publish build on another builder.
+  [
+    'the publish job skips its Buildx setup',
+    (d) => {
+      Object.assign(named(publishSteps(d), SETUP_BUILDX), { if: 'false' });
+    },
+    'Buildx setup must be identical in both jobs apart from its name',
+  ],
+  [
+    'the publish job sets up a second builder before its check build',
+    (d) => {
+      const steps = publishSteps(d);
+      steps.splice(steps.indexOf(named(steps, 'Build the image for the pre-push check')), 0, {
+        name: 'Set up another builder',
+        uses: named(steps, SETUP_BUILDX).uses ?? '',
+        with: { 'driver-opts': 'image=moby/buildkit:master' },
+      });
+    },
+    'each job must set up Buildx exactly once, before its check build',
+  ],
+  [
+    'the build check drops the context check',
+    (d) => {
+      const steps = checkSteps(d);
+      steps.splice(steps.indexOf(named(steps, CONTEXT_CHECK)), 1);
+    },
+    CHECK_PREFIX_ERROR,
   ],
 ];
 
