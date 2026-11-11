@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -17,13 +25,21 @@ const AZURE = 'http://azure.archive.ubuntu.com/ubuntu';
 const KERNEL = 'https://mirrors.edge.kernel.org/ubuntu';
 const ALL_HOSTS = ['azure.archive.ubuntu.com', 'archive.ubuntu.com', 'mirrors.edge.kernel.org'];
 
-const workflow = parse(readFileSync('.github/workflows/tauri-build.yml', 'utf8')) as {
-  jobs: Record<string, { steps?: Step[] }>;
-};
+const WORKFLOW_DIR = '.github/workflows';
+const workflowSteps = readdirSync(WORKFLOW_DIR)
+  .filter((file) => /\.ya?ml$/.test(file))
+  .flatMap((file) => {
+    const workflow = parse(readFileSync(join(WORKFLOW_DIR, file), 'utf8')) as {
+      jobs?: Record<string, { steps?: Step[] }>;
+    };
+    return Object.values(workflow.jobs ?? {}).flatMap((job) =>
+      (job.steps ?? []).map((step) => ({ file, step })),
+    );
+  });
 const script = readFileSync(SCRIPT, 'utf8');
-const aptSteps = Object.values(workflow.jobs)
-  .flatMap((job) => job.steps ?? [])
-  .filter((step) => /apt-get|apt-install\.sh/.test(String(step.run ?? '')));
+const aptSteps = workflowSteps.filter(({ step }) =>
+  /apt-get|apt-install\.sh/.test(String(step.run ?? '')),
+);
 
 // Stand-ins for the runner commands; `timeout`, `sed` and `tee` stay real. With FAKE_TIMEOUT_SECONDS the fake
 // sudo shortens the helper's `timeout --kill-after=N SECONDS` to that many seconds (kill grace 1 s), like a faster clock.
@@ -123,11 +139,15 @@ const aptCalls = (calls: string[]) => calls.filter((call) => call.startsWith('ap
 
 // 2026-11-11: no *.ubuntu.com mirror resolved on the runners, and apt-get kept retrying until the 45-minute job timeout (dispatch 43037609935).
 describe('apt installs in the release workflow stay bounded', () => {
-  it('run through the helper with a step timeout of at most 15 minutes', () => {
-    expect(aptSteps.length).toBeGreaterThanOrEqual(2);
-    for (const step of aptSteps) {
-      expect(step.run, step.name).toMatch(/^bash scripts\/ci\/apt-install\.sh \S/);
-      expect(step['timeout-minutes'], step.name).toBeLessThanOrEqual(15);
+  it('run through the helper with a step timeout of at most 15 minutes in every workflow', () => {
+    expect(new Set(aptSteps.map(({ file }) => file))).toEqual(
+      new Set(['ci.yml', 'tauri-build.yml']),
+    );
+    expect(aptSteps.length).toBeGreaterThanOrEqual(4);
+    for (const { file, step } of aptSteps) {
+      const label = `${file}: ${step.name}`;
+      expect(step.run, label).toMatch(/^bash scripts\/ci\/apt-install\.sh \S/);
+      expect(step['timeout-minutes'], label).toBeLessThanOrEqual(15);
     }
   });
 
