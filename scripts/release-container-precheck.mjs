@@ -97,6 +97,7 @@ export function parseArgs(argv) {
 }
 
 const POLL_SECONDS = 30;
+const GH_TIMEOUT_MS = 60_000;
 
 /** Seconds to sleep before the next poll: the poll interval, but never past the deadline. */
 export function nextSleepSeconds(deadline, now) {
@@ -106,7 +107,10 @@ const sleep = (seconds) => new Promise((done) => setTimeout(done, seconds * 1000
 
 function ghJson(path) {
   try {
-    return JSON.parse(execFileSync('gh', ['api', path], { encoding: 'utf8' }));
+    // A stalled request must not outlive the wait: it counts as unreadable and is retried until the deadline.
+    return JSON.parse(
+      execFileSync('gh', ['api', path], { encoding: 'utf8', timeout: GH_TIMEOUT_MS }),
+    );
   } catch {
     return null;
   }
