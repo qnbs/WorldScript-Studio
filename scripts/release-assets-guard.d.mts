@@ -36,6 +36,9 @@ export function validateReleaseAssetNames(
   version: string,
 ): AssetValidationResult;
 
+/** The version an updater signature's trusted comment binds, or null when it binds none (#1215). */
+export function signedUpdaterVersion(signature: unknown): string | null;
+
 export function validateLatestManifest(input: {
   manifest: unknown;
   version: string;

@@ -108,6 +108,39 @@ function validBase64(value) {
   return Buffer.from(value, 'base64').toString('base64') === value;
 }
 
+const TRUSTED_COMMENT_PREFIX = 'trusted comment: ';
+
+/**
+ * The version an updater signature binds, read the way the shipped client reads it (#1215):
+ * minisign-verify 0.3.0 takes the third line of the decoded signature as the trusted comment
+ * (`trusted comment: ` prefix, lines split like Rust `str::lines`), and tauri-plugin-updater 2.14.1
+ * takes the first tab-separated `version:` field. Returns null when the signature binds none.
+ */
+export function signedUpdaterVersion(signature) {
+  if (!validBase64(signature)) return null;
+  const lines = Buffer.from(signature, 'base64')
+    .toString('utf8')
+    .split('\n')
+    .map((line) => line.replace(/\r$/, ''));
+  const trusted = lines[2];
+  if (!trusted?.startsWith(TRUSTED_COMMENT_PREFIX)) return null;
+  const field = trusted
+    .slice(TRUSTED_COMMENT_PREFIX.length)
+    .split('\t')
+    .find((part) => part.startsWith('version:'));
+  return field === undefined ? null : field.slice('version:'.length);
+}
+
+// Clients with requireSignedVersion reject a payload whose signature binds no or another version.
+function validateSignedVersion(platform, signature, version, errors) {
+  const signed = signedUpdaterVersion(signature);
+  if (signed === null || signed.replace(/^v+/, '') !== version) {
+    errors.push(
+      `${platform} signature does not bind version ${version} (signed: ${signed ?? 'none'})`,
+    );
+  }
+}
+
 function validRepositoryName(repository) {
   if (typeof repository !== 'string') return false;
   const parts = repository.split('/');
@@ -165,6 +198,7 @@ function validatePlatformEntry({ platforms, platform, assetKey, context, errors 
   if (!sidecar || entry.signature !== sidecar) {
     errors.push(`${platform} signature does not match the published updater sidecar`);
   }
+  validateSignedVersion(platform, entry.signature, context.version, errors);
 }
 
 function validatePlatformEntries(platforms, context, errors) {
