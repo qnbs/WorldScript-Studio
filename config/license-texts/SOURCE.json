@@ -1,0 +1,16 @@
+{
+  "$comment": "Canonical SPDX license texts, unmodified, used by scripts/generate-third-party-inventory.mjs for packages that ship no license file. Update only from a tagged spdx/license-list-data release and re-pin every SHA-256. The SPDX LGPL-3.0-or-later text already contains the GPL-3.0 text it incorporates.",
+  "source": "https://github.com/spdx/license-list-data",
+  "tag": "v3.29.0",
+  "path": "text/<id>.txt",
+  "sha256": {
+    "Apache-2.0": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+    "BSD-2-Clause": "f32fb3b417a194167cfad068223fc975ba96c5960513a10f66a3c28720aec1df",
+    "BSD-3-Clause": "5a93d5831e1297ab10fe643e1a631e83be392896da14ee2951285a79012df69d",
+    "ISC": "521c6f0ed8e64736684f89843d16a4df6b4b7449acbcfc6ca6630a3037ca8c53",
+    "LGPL-3.0-or-later": "996af0513df21f7496288951c41428a03c174e9e4a9d63665c57d670f845ccb1",
+    "MIT": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+    "MPL-2.0": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172",
+    "Zlib": "bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d"
+  }
+}

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -10,11 +11,13 @@ import type {
   PnpmLockfile,
 } from '../../../scripts/generate-third-party-inventory.d.mts';
 import {
+  canonicalLicenseTexts,
   classifyComponents,
   collectJsComponents,
   collectRustComponents,
   isAutoAccepted,
   licenseEntry,
+  licenseIdsOf,
   normalizeLicenseExpression,
   packageUrl,
   productionPackageKeys,
@@ -295,6 +298,7 @@ describe('classification and rendering', () => {
         unclassified: ['npm:bare@1.0.0'],
         review: ['cargo:lib@1.0.0 (LGPL-3.0-or-later)'],
         missingText: ['cargo:lib@1.0.0 (LGPL-3.0-or-later)'],
+        withoutAnyText: [],
       },
     );
   });
@@ -327,5 +331,84 @@ describe('classification and rendering', () => {
       JSON.parse(renderSbom(components, { ...context, target: 'aarch64-apple-darwin' }))
         .serialNumber,
     ).not.toBe(sbom.serialNumber);
+  });
+});
+
+// #575: a package that ships no license file gets the pinned canonical SPDX text of its licenses.
+describe('canonical license texts for packages without a license file (#575)', () => {
+  const canonical: Record<string, string> = {
+    MIT: 'canonical MIT text',
+    'Apache-2.0': 'canonical Apache text',
+  };
+  const fakeCanonical = (id: string) => canonical[id] ?? null;
+
+  it.each([
+    ['MIT', ['MIT']],
+    ['Zlib OR Apache-2.0 OR MIT', ['Zlib', 'Apache-2.0', 'MIT']],
+    ['(MIT AND ISC)', ['MIT', 'ISC']],
+    ['Apache-2.0 WITH LLVM-exception', ['Apache-2.0']],
+  ])('reads the license ids of %s', (expression, ids) => {
+    expect(licenseIdsOf(expression)).toEqual(ids);
+  });
+
+  it('adds the canonical text and metadata authors only where the package ships none', () => {
+    const notices = renderNotices(
+      [
+        component({ name: 'bare-a', texts: [], authors: ['Jane Doe <jane@example.org>'] }),
+        component({ name: 'bare-b', texts: [] }),
+        component({ name: 'own', texts: [{ file: 'LICENSE', text: 'own MIT text' }] }),
+      ],
+      context,
+      fakeCanonical,
+    );
+    expect(notices.match(/canonical MIT text/g)).toHaveLength(1);
+    expect(
+      notices.match(/\[canonical SPDX text of MIT; the package ships no license file/g),
+    ).toHaveLength(2);
+    expect(notices).toContain(
+      '[canonical SPDX text of MIT; the package ships no license file: identical to the text printed for npm:bare-a@1.0.0]',
+    );
+    expect(notices).toContain('Copyright holders (package metadata): Jane Doe <jane@example.org>');
+    expect(notices).toContain('own MIT text');
+    expect(notices).toContain('Source code of the MPL-2.0 components is available');
+  });
+
+  it('lists a package whose license has no canonical text as without any license text', () => {
+    const result = classifyComponents(
+      [
+        component({ name: 'bare', texts: [] }),
+        component({ name: 'duckish', license: 'BSD', texts: [] }),
+        component({ name: 'own' }),
+      ],
+      fakeCanonical,
+    );
+    expect(result.missingText).toEqual(['npm:bare@1.0.0 (MIT)', 'npm:duckish@1.0.0 (BSD)']);
+    expect(result.withoutAnyText).toEqual(['npm:duckish@1.0.0 (BSD)']);
+  });
+
+  it('reads canonical texts only from the pinned directory', () => {
+    expect(canonicalLicenseTexts('../../package.json')).toEqual([]);
+    expect(canonicalLicenseTexts('MIT')[0]?.text).toContain('Permission is hereby granted');
+    expect(canonicalLicenseTexts('Zlib OR Apache-2.0 OR MIT')).toHaveLength(3);
+  });
+
+  it('pins every vendored canonical text by SHA-256 to a tagged SPDX release', () => {
+    const dir = join(__dirname, '../../../config/license-texts');
+    const source = JSON.parse(readFileSync(join(dir, 'SOURCE.json'), 'utf8')) as {
+      tag: string;
+      sha256: Record<string, string>;
+    };
+    const ids = readdirSync(dir)
+      .filter((file) => file.endsWith('.txt'))
+      .map((file) => file.slice(0, -'.txt'.length))
+      .sort();
+    expect(ids).toEqual(Object.keys(source.sha256).sort());
+    for (const id of ids) {
+      const digest = createHash('sha256')
+        .update(readFileSync(join(dir, `${id}.txt`)))
+        .digest('hex');
+      expect(digest, id).toBe(source.sha256[id]);
+    }
+    expect(source.tag).toMatch(/^v\d+\.\d+\.\d+$/);
   });
 });

@@ -11,8 +11,13 @@ export interface InventoryComponent {
   version: string;
   license: string | null;
   homepage: string | null;
+  /** Copyright holders from the package metadata (cargo `authors`, npm `author`). */
+  authors?: string[];
   texts: LicenseText[];
 }
+
+/** Returns the canonical SPDX text for a license id, or null when none is pinned. */
+export type ReadCanonicalText = (id: string) => string | null;
 
 export interface InventoryContext {
   version: string;
@@ -32,6 +37,7 @@ export interface PnpmLicenseEntry {
   paths: string[];
   license?: string;
   homepage?: string;
+  author?: string;
 }
 
 export interface PnpmLockfileNode {
@@ -91,14 +97,27 @@ export function collectRustComponents(
   readTexts?: ReadLicenseTexts,
 ): InventoryComponent[];
 export function compareComponents(a: InventoryComponent, b: InventoryComponent): number;
-export function classifyComponents(components: InventoryComponent[]): {
+export function licenseIdsOf(expression: string | null): string[];
+export function canonicalLicenseTexts(
+  expression: string | null,
+  readCanonical?: ReadCanonicalText,
+): LicenseText[];
+export function classifyComponents(
+  components: InventoryComponent[],
+  readCanonical?: ReadCanonicalText,
+): {
   unclassified: string[];
   review: string[];
   missingText: string[];
+  withoutAnyText: string[];
 };
 export function licenseEntry(
   expression: string,
 ): Array<{ expression: string } | { license: { id: string } | { name: string } }>;
-export function renderNotices(components: InventoryComponent[], context: InventoryContext): string;
+export function renderNotices(
+  components: InventoryComponent[],
+  context: InventoryContext,
+  readCanonical?: ReadCanonicalText,
+): string;
 export function renderSbom(components: InventoryComponent[], context: InventoryContext): string;
 export function main(argv?: string[]): void;

@@ -68,8 +68,41 @@ const SCOPE_STATEMENT = [
   'Rust scope: crates linked into the desktop binary for this target (normal dependencies;',
   '  first-party path crates and compile-time-only proc-macro crates excluded).',
   'JavaScript scope: the pnpm production dependency graph (including optional and workspace-package dependencies), a superset of the bundled modules.',
+  'Where a package ships no license file, the unmodified canonical SPDX text of each license in its',
+  '  expression is included and marked as such, with the copyright holders from its metadata.',
+  'Source code of the MPL-2.0 components is available from the homepages listed with them.',
   'This inventory is generated from package metadata and is not a legal opinion.',
 ];
+
+// QNBS-v3 (#575): canonical texts are pinned, unmodified SPDX files (config/license-texts/SOURCE.json); a package's own license file always takes precedence over them.
+const CANONICAL_TEXT_DIR = join(root, 'config', 'license-texts');
+const SPDX_ID = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/;
+
+/** The license identifiers of an SPDX expression, without operators and without WITH exceptions. */
+export function licenseIdsOf(expression) {
+  const tokens = String(expression ?? '')
+    .replace(/[()]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  return tokens.filter(
+    (token, index) => !/^(?:AND|OR|WITH)$/i.test(token) && !/^WITH$/i.test(tokens[index - 1] ?? ''),
+  );
+}
+
+function readCanonicalText(id) {
+  const path = join(CANONICAL_TEXT_DIR, `${id}.txt`);
+  return SPDX_ID.test(id) && existsSync(path) ? readNormalizedText(path) : null;
+}
+
+/** Canonical SPDX texts for every license of the expression that has one; unknown ids yield none. */
+export function canonicalLicenseTexts(expression, readCanonical = readCanonicalText) {
+  return licenseIdsOf(expression).flatMap((id) => {
+    const text = readCanonical(id);
+    return text
+      ? [{ file: `canonical SPDX text of ${id}; the package ships no license file`, text }]
+      : [];
+  });
+}
 
 function depthDelta(token) {
   if (token === '(') return 1;
@@ -242,6 +275,7 @@ export function collectJsComponents(
           version,
           license: normalizeLicenseExpression(entry.license),
           homepage: entry.homepage ?? null,
+          authors: entry.author ? [String(entry.author)] : [],
           texts: readTexts(storeDirectory(entry, version)),
         })),
     );
@@ -286,6 +320,7 @@ function rustComponent(pkg, readTexts) {
     version: pkg.version,
     license: normalizeLicenseExpression(pkg.license),
     homepage: pkg.homepage ?? pkg.repository ?? null,
+    authors: Array.isArray(pkg.authors) ? pkg.authors.map(String) : [],
     texts: readTexts(dirname(pkg.manifest_path), pkg.license_file ? [pkg.license_file] : []),
   };
 }
@@ -307,20 +342,26 @@ export function compareComponents(a, b) {
   );
 }
 
-export function classifyComponents(components) {
+export function classifyComponents(components, readCanonical = readCanonicalText) {
   const unclassified = [];
   const review = [];
   const missingText = [];
+  const withoutAnyText = [];
   for (const component of components) {
     const id = `${component.ecosystem}:${component.name}@${component.version}`;
     if (!component.license) {
       unclassified.push(id);
       continue;
     }
-    if (!isAutoAccepted(component.license)) review.push(`${id} (${component.license})`);
-    if (component.texts.length === 0) missingText.push(`${id} (${component.license})`);
+    const entry = `${id} (${component.license})`;
+    if (!isAutoAccepted(component.license)) review.push(entry);
+    if (component.texts.length > 0) continue;
+    missingText.push(entry);
+    if (canonicalLicenseTexts(component.license, readCanonical).length === 0) {
+      withoutAnyText.push(entry);
+    }
   }
-  return { unclassified, review, missingText };
+  return { unclassified, review, missingText, withoutAnyText };
 }
 
 function scopeLines(context) {
@@ -348,22 +389,35 @@ function licenseTextLines(id, texts, firstSeen) {
   });
 }
 
-function componentLines(component, firstSeen) {
+// A package without its own license file gets the canonical texts of its licenses and the copyright holders its metadata names.
+function fallbackLines(component, readCanonical) {
+  if (component.texts.length > 0) return { holders: [], texts: [] };
+  const authors = component.authors ?? [];
+  return {
+    holders:
+      authors.length > 0 ? [`Copyright holders (package metadata): ${authors.join('; ')}`] : [],
+    texts: canonicalLicenseTexts(component.license, readCanonical),
+  };
+}
+
+function componentLines(component, firstSeen, readCanonical) {
   const id = `${component.ecosystem}:${component.name}@${component.version}`;
   const homepage = component.homepage ? [`Homepage: ${component.homepage}`] : [];
+  const fallback = fallbackLines(component, readCanonical);
   return [
     '-'.repeat(78),
     id,
     `License: ${component.license}`,
     ...homepage,
-    ...licenseTextLines(id, component.texts, firstSeen),
+    ...fallback.holders,
+    ...licenseTextLines(id, [...component.texts, ...fallback.texts], firstSeen),
     '',
   ];
 }
 
-export function renderNotices(components, context) {
+export function renderNotices(components, context, readCanonical = readCanonicalText) {
   const sorted = [...components].sort(compareComponents);
-  const { review, missingText } = classifyComponents(sorted);
+  const { review, missingText, withoutAnyText } = classifyComponents(sorted, readCanonical);
   const firstSeen = new Map();
   const lines = [
     'THIRD-PARTY SOFTWARE NOTICES',
@@ -374,8 +428,15 @@ export function renderNotices(components, context) {
     `Components: ${sorted.length}`,
     '',
     ...bulletList('Licenses flagged for human review', review),
-    ...bulletList('Components whose package ships no license text', missingText),
-    ...sorted.flatMap((component) => componentLines(component, firstSeen)),
+    ...bulletList(
+      'Components whose package ships no license text (canonical SPDX text included below)',
+      missingText,
+    ),
+    ...bulletList(
+      'Components without any license text (no canonical text for their license)',
+      withoutAnyText,
+    ),
+    ...sorted.flatMap((component) => componentLines(component, firstSeen, readCanonical)),
   ];
   return `${lines.join('\n')}\n`;
 }
@@ -507,7 +568,7 @@ export function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   const context = resolveContext(options.target);
   const components = collectAllComponents(context.target);
-  const { unclassified, review, missingText } = classifyComponents(components);
+  const { unclassified, review, missingText, withoutAnyText } = classifyComponents(components);
   if (unclassified.length > 0) {
     const list = unclassified.map((id) => `  - ${id}`).join('\n');
     console.error(`::error::${unclassified.length} shipped component(s) lack license metadata:`);
@@ -519,7 +580,8 @@ export function main(argv = process.argv.slice(2)) {
   const files = writeInventory(outDir, components, context);
   console.log(
     `Third-party inventory for ${context.target}: ${components.length} components ` +
-      `(review: ${review.length}, without license text: ${missingText.length}) → ${outDir}`,
+      `(review: ${review.length}, without own license text: ${missingText.length}, ` +
+      `without any license text: ${withoutAnyText.length}) → ${outDir}`,
   );
   // Bare file names: the workflow composes platform-neutral relative paths from them.
   if (process.env.GITHUB_OUTPUT) {
