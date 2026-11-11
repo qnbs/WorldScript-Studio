@@ -61,7 +61,8 @@ describe('Node runtimes take the newest security patch of their major (#1245)', 
   });
 
   it('pin the Docker builder to an exact, digest-pinned Node patch on the .nvmrc major, and assert it at build time', () => {
-    const dockerfile = readFileSync('Dockerfile', 'utf8');
+    // A Windows checkout with core.autocrlf=true has CRLF line endings; compare on LF.
+    const dockerfile = readFileSync('Dockerfile', 'utf8').replace(/\r\n/g, '\n');
     const from =
       /^FROM node:(\d+)\.(\d+)\.(\d+)-alpine[\d.]*@sha256:[0-9a-f]{64} AS builder\n/m.exec(
         dockerfile,
