@@ -89,10 +89,11 @@ export function parseArgs(argv) {
   const args = [...(argv ?? [])];
   const flag = args.indexOf('--wait-seconds');
   if (flag < 0) return { sha: args[0], waitSeconds: 0 };
-  const value = Number(args[flag + 1]);
+  // Digits only: Number('') is 0 and Number('1e3') is 1000, so neither may pass as a wait.
+  const raw = String(args[flag + 1] ?? '');
   args.splice(flag, 2);
-  const valid = Number.isSafeInteger(value) && value >= 0;
-  return { sha: args[0], waitSeconds: valid ? value : Number.NaN };
+  const value = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  return { sha: args[0], waitSeconds: Number.isSafeInteger(value) ? value : Number.NaN };
 }
 
 const POLL_SECONDS = 30;

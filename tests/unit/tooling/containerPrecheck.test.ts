@@ -238,8 +238,12 @@ describe('release container precheck wait (#1219)', () => {
     expect(nextSleepSeconds(deadline, now)).toBe(seconds);
   });
 
-  it.each([['-5'], ['1.5'], ['soon'], [undefined]])('rejects --wait-seconds %s', (value) => {
-    const argv = value === undefined ? ['abc', '--wait-seconds'] : ['--wait-seconds', value, 'abc'];
-    expect(Number.isNaN(parseArgs(argv).waitSeconds)).toBe(true);
-  });
+  it.each([['-5'], ['1.5'], ['soon'], [''], [' 5'], ['1e3'], [undefined]])(
+    'rejects --wait-seconds %s',
+    (value) => {
+      const argv =
+        value === undefined ? ['abc', '--wait-seconds'] : ['--wait-seconds', value, 'abc'];
+      expect(Number.isNaN(parseArgs(argv).waitSeconds)).toBe(true);
+    },
+  );
 });
