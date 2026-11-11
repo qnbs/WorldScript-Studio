@@ -36,25 +36,21 @@ function referencesResolvedVersion(reference: string, versions: string[]): boole
 const WAIVER_EXPIRY = '2027-01-31T00:00:00Z';
 
 // Active `ignoreUntil` values of one [[IgnoredVulns]] block. OSV reads only uncommented keys, so a commented-out line must not satisfy the expiry check.
-// A line inside a multi-line TOML string (""" or ''') is text, not a key, even when it reads like one.
-const MULTILINE_QUOTES = ['"""', "'''"];
-const opensMultiline = (line: string) =>
-  MULTILINE_QUOTES.find((quote) => (line.split(quote).length - 1) % 2 === 1) ?? null;
+// The waiver file uses single-line strings only. A multi-line string (""" or ''') could hide a key-like line or an escaped delimiter, so the guard fails closed instead of parsing TOML string escapes.
+const MULTILINE_STRING = /"""|'''/;
 
 function activeIgnoreUntil(block: string): string[] {
-  const values: string[] = [];
-  let openQuote: string | null = null;
-  for (const line of block.split('\n').map((text) => text.trim())) {
-    if (openQuote !== null) {
-      if (line.includes(openQuote)) openQuote = null;
-      continue;
-    }
-    if (line.startsWith('#')) continue;
-    const value = /^ignoreUntil\s*=\s*"([^"]*)"\s*(?:#.*)?$/.exec(line)?.[1];
-    if (value !== undefined) values.push(value);
-    openQuote = opensMultiline(line);
+  if (MULTILINE_STRING.test(block)) {
+    throw new Error('multi-line TOML strings are not supported in OSV waiver blocks');
   }
-  return values;
+  return block
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => !line.startsWith('#'))
+    .flatMap((line) => {
+      const value = /^ignoreUntil\s*=\s*"([^"]*)"\s*(?:#.*)?$/.exec(line)?.[1];
+      return value === undefined ? [] : [value];
+    });
 }
 
 const projectRoot = process.cwd();
@@ -281,19 +277,30 @@ describe('OSV npm dependency floors', () => {
     expect(activeIgnoreUntil(`${commented}ignoreUntil = 2027-01-31T00:00:00Z\n`)).toEqual([]);
   });
 
-  // #1233 review: a key-like line inside a multi-line reason string is text, not an expiry.
+  // #1233 review: a key-like line or an escaped delimiter inside a multi-line string must not pass; the guard refuses multi-line strings.
   it.each([
-    ['"""', '"""'],
-    ["'''", "'''"],
-  ])('does not count an ignoreUntil line inside a %s multi-line string', (open, close) => {
-    const inString = `\nid = "GHSA-test"\nreason = ${open}first line\nignoreUntil = "${WAIVER_EXPIRY}"\n${close}\n`;
-    expect(activeIgnoreUntil(inString)).toEqual([]);
-    expect(activeIgnoreUntil(`${inString}ignoreUntil = "${WAIVER_EXPIRY}"\n`)).toEqual([
-      WAIVER_EXPIRY,
-    ]);
-    expect(
-      activeIgnoreUntil(`reason = ${open}one line${close}\nignoreUntil = "${WAIVER_EXPIRY}"\n`),
-    ).toEqual([WAIVER_EXPIRY]);
+    [
+      'a """ string with a key-like line',
+      `reason = """first\nignoreUntil = "${WAIVER_EXPIRY}"\n"""`,
+    ],
+    [
+      "a ''' string with a key-like line",
+      `reason = '''first\nignoreUntil = "${WAIVER_EXPIRY}"\n'''`,
+    ],
+    [
+      'an escaped delimiter inside a """ string',
+      `reason = """a \\""" b\nignoreUntil = "${WAIVER_EXPIRY}"\n"""`,
+    ],
+    ['a one-line """ string', `reason = """one line"""\nignoreUntil = "${WAIVER_EXPIRY}"`],
+  ])('fails closed on %s', (_name, body) => {
+    expect(() => activeIgnoreUntil(`\nid = "GHSA-test"\n${body}\n`)).toThrow(
+      'multi-line TOML strings are not supported',
+    );
+  });
+
+  it('keeps the shipped waiver file free of multi-line strings', () => {
+    const toml = readFileSync(resolve(projectRoot, 'src-tauri/osv-scanner.toml'), 'utf8');
+    expect(toml).not.toMatch(MULTILINE_STRING);
   });
 
   it('keeps every waived package out of the production dependency graph', () => {
