@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Desktop dependencies:** `rustix` 1.1.4 → 1.1.6 in the desktop lockfile fixes RUSTSEC-2026-0486 (GHSA-jh2m-fhpj-3vr7, unsound): its xattr functions marked unwritten bytes as initialized for a zero-length buffer. The desktop app does not call the affected functions; its only path to them, `tauri-plugin-updater` → `tar` → `xattr`, sets extended attributes only when unpacking them is enabled, which the updater never does (PR #1231).
 - **Release records:** The v1.29.5 evidence record is now `VERIFIED`, with the signed tag, the three tag runs, the release and updater readback and the check of the published GHCR image (DOMPurify 3.4.17). The README release badge shows v1.29.5, and the v1.29.4 record notes that its container image shipped with 1.29.5 (PR #1227).
 - **Container precheck:** `release-container-precheck.mjs` now fails unless the API's `total_count` equals the fetched build-check runs, so a newer failed run beyond the first page cannot leave an older success in charge. Before its build, the build check may run only checkout of the event commit, the Dockerfile context check and Buildx setup, without extra keys, so no other action can change the build context, `PATH` or environment that the build and the bundle check see (PR #1228).
 
