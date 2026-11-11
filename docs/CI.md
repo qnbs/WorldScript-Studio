@@ -589,7 +589,7 @@ act pull_request -j quality -s CODECOV_TOKEN="$CODECOV_TOKEN" -W .github/workflo
 | `.lighthouserc.cjs`                         | Lighthouse assertions and collect URL                                                                                                               |
 | `vitest.config.ts`                          | Coverage thresholds, reporters                                                                                                                      |
 | `scripts/check-bundle-budget.mjs`           | Chunk size budget after `pnpm run build`                                                                                                            |
-| `renovate.json`                             | Renovate Bot: patch auto-merge policy                                                                                                               |
+| `.github/renovate.json`                     | Renovate disabled (`enabled: false`); Dependabot is the only update bot, holds in `config/dependency-holds.json`                                    |
 | `.github/actions/setup/action.yml`          | Composite action: Node + pnpm setup reused by all jobs                                                                                              |
 | `.github/dependabot.yml`                    | Dependabot: npm, Cargo (`src-tauri`, `crates`) and GitHub Actions, monthly, grouped minor/patch per ecosystem                                       |
 | `.github/workflows/scorecard.yml`           | OpenSSF Scorecard weekly run → Code Scanning SARIF                                                                                                  |

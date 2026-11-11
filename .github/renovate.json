@@ -1,34 +1,5 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "dependencyDashboard": true,
-  "prHourlyLimit": 5,
-  "prConcurrentLimit": 10,
-  "packageRules": [
-    {
-      "matchManagers": ["npm"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "automerge": true
-    },
-    {
-      "matchPackagePatterns": [
-        "^react",
-        "^vite",
-        "^tailwind",
-        "^storybook",
-        "^@storybook",
-        "^@vitejs",
-        "^@tauri-apps"
-      ],
-      "rangeStrategy": "bump",
-      "automerge": false
-    },
-    {
-      "groupName": "react-vite-storybook majors",
-      "matchPackagePatterns": ["^react", "^vite", "^@vitejs", "^storybook", "^@storybook"],
-      "matchUpdateTypes": ["major"],
-      "automerge": false,
-      "labels": ["major-update"]
-    }
-  ]
+  "description": "Disabled on purpose: Dependabot (.github/dependabot.yml) is the only update bot. Held versions live in config/dependency-holds.json and must not be bypassed by an automerge rule.",
+  "enabled": false
 }
