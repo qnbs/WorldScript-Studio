@@ -4,7 +4,8 @@
 After the bounded floors in this PR (`follow-redirects` >=1.16.2, `joi` >=18.3.1, Zod 4 >=4.6.6,
 `undici`, `fast-uri`, `qs`, `body-parser`, `serialize-javascript`, DOMPurify, `ip-address`), four
 advisories remain. Each has a time-limited `src-tauri/osv-scanner.toml` ignore that expires on
-2026-11-30 at the latest. A green OSV scan with these ignores does not mean the packages are fixed.
+2027-01-31 at the latest (originally 2026-11-30; on 2026-11-11 all four were requalified with
+unchanged copies and parents and extended by maintainer decision, #1163). A green OSV scan with these ignores does not mean the packages are fixed.
 OSV filters an ignore for the whole advisory, not for one version, lockfile or call site; the
 guard is `tests/unit/security/osvNpmDependencyFloors.test.ts`, which fails when an affected copy, a
 parent package of an affected copy or a production path appears, or when no affected copy is left.
@@ -17,16 +18,16 @@ repository's tool configuration and so already runs code in the same job. The on
 `pull_request_target` (`reviewer-governance-trust.yml`) is the base-ref governance check and does not
 run these tools over pull-request content.
 
-| Advisory | Package, affected range, fix | Resolved affected copies and parents (`pnpm why`) | Attack condition | Risk assessment | Alternatives checked |
-|---|---|---|---|---|---|
-| `GHSA-gcqx-w48m-w2h4` | `deepmerge` >=4.2.0 <=4.3.1, low; no fix | 4.3.1 via `@rollup/plugin-node-resolve` 16.0.3 <- `workbox-build` <- `vite-plugin-pwa` (build); `jest-config` 30.5.1 <- `@storybook/test-runner` (test) | `mergeObject` merging an object with attacker-chosen `__proto__` keys | Low. Inputs are tool configuration | No patched release exists; parents' latest releases still use 4.3.1; no backport evaluated |
-| `GHSA-mrhx-c7xc-m3w5` | `zod` <4.6.6, high; fixed 4.6.6 | 3.25.76 via `@codecov/bundler-plugin-core` 2.0.1 (`^3.22.4`) <- `@codecov/vite-plugin` | Validating an oversized constrained collection with Zod 3 | Low in practice. It validates its own build options. High score kept in view | Global Zod 3 -> 4 override rejected (parent declares `^3`, unproven); removing the Codecov plugin rejected by the owner's choice; Codecov has no Zod 4 release |
-| `GHSA-3g3m-2fjr-6pw4` | `glob` >=9.0.0 <14.0.2, medium; fixed 14.0.2 | 10.5.0 via `test-exclude` 7.0.2; 11.1.0 via `workbox-build` 7.4.1; 13.0.6 via `@jest/reporters`, `jest-config`, `jest-runtime`, `@joshwooding/vite-plugin-react-docgen-typescript`. `glob` 7.2.3 is outside the range | A caller passes an `AbortSignal` and relies on it to stop a traversal over an attacker-influenced tree | Low. A text search of these parents finds no `AbortSignal` use next to a glob call (heuristic, not a proof) | No patch on the 9-13 lines. Latest parents still depend on `glob` ^11 (`workbox-build` 7.4.1), ^13 (`test-exclude` 8.0.0, `@jest/reporters` 30.5.2). A blanket override to 14 is outside every declared parent range and unverifiable locally |
-| `GHSA-g3hv-75wg-m249` | `minimatch` >=7.0.0 <11.0.1, medium; fixed 11.0.1 | 9.0.9 via `glob` 10.5.0; 10.2.6 via `@stryker-mutator/core` 9.6.1, `glob` 11.1.0 and 13.0.6, `test-exclude` 7.0.2. 3.1.5 and 5.1.9 are not affected by this advisory and are not covered | An attacker-chosen glob pattern amplifies CPU and memory | Low. Patterns come from Vitest, Jest, Stryker and Workbox configuration in the repository | No patch on the 7-10 lines. `@stryker-mutator/core` 10.1.1 still uses `~10.2.4`; `test-exclude` 8.0.0 uses `^10.2.2`. Same override objection as glob |
+| Advisory              | Package, affected range, fix                      | Resolved affected copies and parents (`pnpm why`)                                                                                                                                                                     | Attack condition                                                                                       | Risk assessment                                                                                             | Alternatives checked                                                                                                                                                                                                                          |
+| --------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GHSA-gcqx-w48m-w2h4` | `deepmerge` >=4.2.0 <=4.3.1, low; no fix          | 4.3.1 via `@rollup/plugin-node-resolve` 16.0.3 <- `workbox-build` <- `vite-plugin-pwa` (build); `jest-config` 30.5.1 <- `@storybook/test-runner` (test)                                                               | `mergeObject` merging an object with attacker-chosen `__proto__` keys                                  | Low. Inputs are tool configuration                                                                          | No patched release exists; parents' latest releases still use 4.3.1; no backport evaluated                                                                                                                                                    |
+| `GHSA-mrhx-c7xc-m3w5` | `zod` <4.6.6, high; fixed 4.6.6                   | 3.25.76 via `@codecov/bundler-plugin-core` 2.0.1 (`^3.22.4`) <- `@codecov/vite-plugin`                                                                                                                                | Validating an oversized constrained collection with Zod 3                                              | Low in practice. It validates its own build options. High score kept in view                                | Global Zod 3 -> 4 override rejected (parent declares `^3`, unproven); removing the Codecov plugin rejected by the owner's choice; Codecov has no Zod 4 release                                                                                |
+| `GHSA-3g3m-2fjr-6pw4` | `glob` >=9.0.0 <14.0.2, medium; fixed 14.0.2      | 10.5.0 via `test-exclude` 7.0.2; 11.1.0 via `workbox-build` 7.4.1; 13.0.6 via `@jest/reporters`, `jest-config`, `jest-runtime`, `@joshwooding/vite-plugin-react-docgen-typescript`. `glob` 7.2.3 is outside the range | A caller passes an `AbortSignal` and relies on it to stop a traversal over an attacker-influenced tree | Low. A text search of these parents finds no `AbortSignal` use next to a glob call (heuristic, not a proof) | No patch on the 9-13 lines. Latest parents still depend on `glob` ^11 (`workbox-build` 7.4.1), ^13 (`test-exclude` 8.0.0, `@jest/reporters` 30.5.2). A blanket override to 14 is outside every declared parent range and unverifiable locally |
+| `GHSA-g3hv-75wg-m249` | `minimatch` >=7.0.0 <11.0.1, medium; fixed 11.0.1 | 9.0.9 via `glob` 10.5.0; 10.2.6 via `@stryker-mutator/core` 9.6.1, `glob` 11.1.0 and 13.0.6, `test-exclude` 7.0.2. 3.1.5 and 5.1.9 are not affected by this advisory and are not covered                              | An attacker-chosen glob pattern amplifies CPU and memory                                               | Low. Patterns come from Vitest, Jest, Stryker and Workbox configuration in the repository                   | No patch on the 7-10 lines. `@stryker-mutator/core` 10.1.1 still uses `~10.2.4`; `test-exclude` 8.0.0 uses `^10.2.2`. Same override objection as glob                                                                                         |
 
 Protections that stay in force: all hosted security, CI, CodeQL and review gates; the three-lockfile
 OSV scan; `minimumReleaseAge`; frozen-lockfile installs. Re-check trigger: any new release of a
-listed parent, any new affected copy or parent (the test fails), and at the latest 2026-11-30. The
+listed parent, any new affected copy or parent (the test fails), and at the latest 2027-01-15. The
 2026-10-30 `glob`/`minimatch` advisories were published after the first #1149 head; the remediation
 follow-up is tracked in #1163. `follow-redirects` and `joi` were raised in place within their major.
 An earlier draft of this entry listed `minimatch` 3.x and 5.x as affected by `GHSA-g3hv-75wg-m249`;
@@ -124,21 +125,21 @@ change landed — all 14 findings CONFIRMED, no baseline drift, base SHA `f5f9c1
 
 ### Finding table
 
-| ID | Severity | Finding | Resolution |
-|---|---|---|---|
-| F-01 | 🔴 P0 | `script-src 'self'` missing `'wasm-unsafe-eval'` on all 5 CSP surfaces — `WebAssembly.instantiate` blocked in every deployed Chromium browser since 2026-05-27 (`faad8f0`); the entire advertised local-inference stack never functioned in production | Fixed on all 5 surfaces; [ADR-0013](docs/adr/0013-csp-wasm-and-blob-frames.md) |
-| F-02 | 🔴 P0 | Unhashed inline `<script>` in `index.html`, added in the same commit as the broken `script-src`, contradicting that commit's own CSP-strategy comment | Moved into `index.tsx` as a same-origin module |
-| F-03 | 🔴 P0 | No `frame-src`/`child-src` anywhere → `blob:` iframes (Binder PDF preview, ManuscriptResearchSplit) fall back to `default-src 'self'` and are blocked | `frame-src 'self' blob:` added to all 5 surfaces |
-| F-04 | 🔴 P0 | No gate could have caught F-01/F-02 — existing CSP tests check cross-surface consistency only; `smoke-prod-build.mjs` only listened for `pageerror`, which CSP violations never fire | New 3-layer test architecture: Layer A (consistency, existing) / Layer B (`tests/unit/cspCorrectness.test.ts`, new) / Layer C (hardened `smoke-prod-build.mjs`, real violation + WASM probes). `docs/CI.md` gate-governance table |
-| F-05/F-06 | 🟠 P1 — **resolved 2026-08-14** | Desktop API-key encryption previously derived its key from publicly reconstructible material — obfuscation, not encryption | PR #363 moved desktop API-key persistence onto the same random, non-extractable generated-key store used by the browser path and closed the Gemini split-persistence bug tracked by #358. The old filesystem-derived helper remains only as unused legacy code in `services/fs/fsCore.ts`; it is not an active API-key storage path. Full desktop project-file encryption is a separate open R-15 requirement tracked in issue #445. |
-| F-07 | 🟠 P1 | README/CLAUDE.md made a blanket "encrypted at rest" claim; a fabricated `tauri-plugin-stronghold` OS-keychain claim had zero trace in the codebase; `SECURITY-THREAT-MODEL.md` never mentioned `fsCore.ts`/`settingsFsStore.ts` | Doc truth-up: differentiated 4-mechanism table in README, fabricated claim removed, threat-model gained a mitigations row + attack tree |
-| F-08 | 🟠 P1 | Tauri `connect-src` missing LanguageTool's port and the Hugging Face hosts WebLLM/Transformers.js resolve models from | Fixed; scope widened during verification — the LanguageTool port was missing on **all 5** surfaces, not just Tauri; the real weight-file CDN (`us.aws.cdn.hf.co`) traced empirically via `curl`, not guessed |
-| F-09 | 🟠 P1 | DuckDB-WASM loaded from an unversioned, floating-`latest` third-party CDN — already unreachable under the (correctly-scoped) `worker-src` CSP, so this was dead code, not just a supply-chain risk | Self-hosted from the pinned npm dependency via `scripts/copy-duckdb-assets.mjs` (gitignored, ~72 MB, never committed) |
-| F-10 | 🟡 P2 | Two conflicting production URLs; the in-app link and the Italian locale pointed at a dead domain | Empirically resolved (live 200 vs. 404 check) — no maintainer input needed. Unified into a `PRODUCTION_URL` constant + new drift gate |
-| F-11 | 🟡 P2 | Release/tag drift — `v1.24.1` tag 5 commits behind `HEAD` | Version bumped to `1.24.2` in this sprint (WS-7); `v1.24.2` tagged and published 2026-07-29 |
-| F-12 | 🟡 P2 | Storybook built 3× per CI run; `ci.yml` header still said "StoryCraft Studio" | Deduped to 1×, header fixed. Bonus: the Storybook test-runner's flags were invalid for the installed CLI version, so it had never actually executed a single story on any prior CI run — fixed, and its `\|\| true` (which was itself hiding the failure) replaced with `continue-on-error: true` |
-| F-13 | 🟡 P2 | Coverage ratchet stale since 2026-06-06; 4 non-blocking CI gates with no stated exit criterion | Ratchet raised to CI-measured values (see quality-gate line above); `docs/CI.md` gained an exit-criteria table for all 4 |
-| F-14 | 🟡 P2 | Two live worker generations (v1 + WorkerBus v2) for DuckDB/inference, confirmed via real call-site tracing | **Resolved.** Consolidated as the dedicated migration sprint [ADR-0014](docs/adr/0014-worker-generation-duplication.md) called for — [ADR-0015](docs/adr/0015-worker-generation-consolidation.md), PRs #286–288/#290. Both v1 files deleted; correction loops on the migration PRs also caught and fixed 4 real bugs the untested v2 files had drifted on (dropped SQL params, pool-termination hangs, respawn connection loss, a missing export that broke production builds) |
+| ID        | Severity                        | Finding                                                                                                                                                                                                                                                | Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| F-01      | 🔴 P0                           | `script-src 'self'` missing `'wasm-unsafe-eval'` on all 5 CSP surfaces — `WebAssembly.instantiate` blocked in every deployed Chromium browser since 2026-05-27 (`faad8f0`); the entire advertised local-inference stack never functioned in production | Fixed on all 5 surfaces; [ADR-0013](docs/adr/0013-csp-wasm-and-blob-frames.md)                                                                                                                                                                                                                                                                                                                                                                                                 |
+| F-02      | 🔴 P0                           | Unhashed inline `<script>` in `index.html`, added in the same commit as the broken `script-src`, contradicting that commit's own CSP-strategy comment                                                                                                  | Moved into `index.tsx` as a same-origin module                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| F-03      | 🔴 P0                           | No `frame-src`/`child-src` anywhere → `blob:` iframes (Binder PDF preview, ManuscriptResearchSplit) fall back to `default-src 'self'` and are blocked                                                                                                  | `frame-src 'self' blob:` added to all 5 surfaces                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| F-04      | 🔴 P0                           | No gate could have caught F-01/F-02 — existing CSP tests check cross-surface consistency only; `smoke-prod-build.mjs` only listened for `pageerror`, which CSP violations never fire                                                                   | New 3-layer test architecture: Layer A (consistency, existing) / Layer B (`tests/unit/cspCorrectness.test.ts`, new) / Layer C (hardened `smoke-prod-build.mjs`, real violation + WASM probes). `docs/CI.md` gate-governance table                                                                                                                                                                                                                                              |
+| F-05/F-06 | 🟠 P1 — **resolved 2026-08-14** | Desktop API-key encryption previously derived its key from publicly reconstructible material — obfuscation, not encryption                                                                                                                             | PR #363 moved desktop API-key persistence onto the same random, non-extractable generated-key store used by the browser path and closed the Gemini split-persistence bug tracked by #358. The old filesystem-derived helper remains only as unused legacy code in `services/fs/fsCore.ts`; it is not an active API-key storage path. Full desktop project-file encryption is a separate open R-15 requirement tracked in issue #445.                                           |
+| F-07      | 🟠 P1                           | README/CLAUDE.md made a blanket "encrypted at rest" claim; a fabricated `tauri-plugin-stronghold` OS-keychain claim had zero trace in the codebase; `SECURITY-THREAT-MODEL.md` never mentioned `fsCore.ts`/`settingsFsStore.ts`                        | Doc truth-up: differentiated 4-mechanism table in README, fabricated claim removed, threat-model gained a mitigations row + attack tree                                                                                                                                                                                                                                                                                                                                        |
+| F-08      | 🟠 P1                           | Tauri `connect-src` missing LanguageTool's port and the Hugging Face hosts WebLLM/Transformers.js resolve models from                                                                                                                                  | Fixed; scope widened during verification — the LanguageTool port was missing on **all 5** surfaces, not just Tauri; the real weight-file CDN (`us.aws.cdn.hf.co`) traced empirically via `curl`, not guessed                                                                                                                                                                                                                                                                   |
+| F-09      | 🟠 P1                           | DuckDB-WASM loaded from an unversioned, floating-`latest` third-party CDN — already unreachable under the (correctly-scoped) `worker-src` CSP, so this was dead code, not just a supply-chain risk                                                     | Self-hosted from the pinned npm dependency via `scripts/copy-duckdb-assets.mjs` (gitignored, ~72 MB, never committed)                                                                                                                                                                                                                                                                                                                                                          |
+| F-10      | 🟡 P2                           | Two conflicting production URLs; the in-app link and the Italian locale pointed at a dead domain                                                                                                                                                       | Empirically resolved (live 200 vs. 404 check) — no maintainer input needed. Unified into a `PRODUCTION_URL` constant + new drift gate                                                                                                                                                                                                                                                                                                                                          |
+| F-11      | 🟡 P2                           | Release/tag drift — `v1.24.1` tag 5 commits behind `HEAD`                                                                                                                                                                                              | Version bumped to `1.24.2` in this sprint (WS-7); `v1.24.2` tagged and published 2026-07-29                                                                                                                                                                                                                                                                                                                                                                                    |
+| F-12      | 🟡 P2                           | Storybook built 3× per CI run; `ci.yml` header still said "StoryCraft Studio"                                                                                                                                                                          | Deduped to 1×, header fixed. Bonus: the Storybook test-runner's flags were invalid for the installed CLI version, so it had never actually executed a single story on any prior CI run — fixed, and its `\|\| true` (which was itself hiding the failure) replaced with `continue-on-error: true`                                                                                                                                                                              |
+| F-13      | 🟡 P2                           | Coverage ratchet stale since 2026-06-06; 4 non-blocking CI gates with no stated exit criterion                                                                                                                                                         | Ratchet raised to CI-measured values (see quality-gate line above); `docs/CI.md` gained an exit-criteria table for all 4                                                                                                                                                                                                                                                                                                                                                       |
+| F-14      | 🟡 P2                           | Two live worker generations (v1 + WorkerBus v2) for DuckDB/inference, confirmed via real call-site tracing                                                                                                                                             | **Resolved.** Consolidated as the dedicated migration sprint [ADR-0014](docs/adr/0014-worker-generation-duplication.md) called for — [ADR-0015](docs/adr/0015-worker-generation-consolidation.md), PRs #286–288/#290. Both v1 files deleted; correction loops on the migration PRs also caught and fixed 4 real bugs the untested v2 files had drifted on (dropped SQL params, pool-termination hangs, respawn connection loss, a missing export that broke production builds) |
 
 ### Post-mortem: why no gate caught F-01 for two months
 
@@ -153,7 +154,7 @@ broken CSPs satisfy that property perfectly. It is a **consistency** gate, not a
 gate, and nothing in the test suite or CI pipeline ever claimed otherwise — the gap wasn't a
 disabled check or a skipped test, it was a class of defect nobody had written a test for.
 `scripts/smoke-prod-build.mjs` loads the actual production build in real headless Chromium — the
-one place that *could* have caught this — but listened only for the `pageerror` DOM event, which
+one place that _could_ have caught this — but listened only for the `pageerror` DOM event, which
 CSP violations do not fire (they surface as `console` warnings and `securitypolicyviolation`
 events instead).
 
@@ -167,11 +168,11 @@ Losing either layer independently would still leave one standing.
 
 **The gate-design lesson, generalized:** a passing test suite proves the properties it actually
 encodes, nothing more. "CSP tests are green" was true and irrelevant — the tests encoded
-*consistency*, and the defect was in *correctness*. The durable fix isn't more tests of the same
+_consistency_, and the defect was in _correctness_. The durable fix isn't more tests of the same
 kind; it's asking, for any gate, "what specific property does this check, and what class of defect
 would pass it anyway?" — and this sprint's own execution surfaced two more instances of exactly
 that pattern worth naming: the Storybook test-runner's `\|\| true` (F-12) turned a hard CLI
-argument-parsing failure into a green step for as long as it existed — the *identical* mechanism,
+argument-parsing failure into a green step for as long as it existed — the _identical_ mechanism,
 one workstream over. And this sprint's own new F-10 drift gate initially excluded
 `locales/it/help.json`, the one file with real incident history, on the mistaken belief it was
 generated content — caught by a reviewer, not by first-pass design. Three separate instances of
@@ -217,7 +218,7 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 **Scope:** Two user-reported runtime i18n bugs traced to a whole **bug class** that `i18n:check` (parity-only) structurally cannot catch.
 
 - **Bug 1 — single-brace placeholders never interpolate.** `contexts/I18nContext.tsx` only substitutes `{{token}}`; the entire `copilot.json` module plus 2 keys each in `objects.json`/`settings.json` were authored with **single-brace** `{token}`, so they rendered literally (user saw `Du bist hier: {view}`). Converted **292 occurrences → `{{…}}`** across all 11 locales. `copilot.contextLabel` already passes a localized view name (`t(viewNavigationLabelKey(currentView))`), so the brace fix alone makes it render the real page name.
-- **Bug 1b — translated placeholder NAMES.** es/pt had localized the *param names* (`{count}`→`{contar}`, `{seconds}`→`{segundos}`, and pt `roster.resultCount` `{{count}}`→`{{contagem}}`), which never match the names the code passes. Reverted to canonical English tokens.
+- **Bug 1b — translated placeholder NAMES.** es/pt had localized the _param names_ (`{count}`→`{contar}`, `{seconds}`→`{segundos}`, and pt `roster.resultCount` `{{count}}`→`{{contagem}}`), which never match the names the code passes. Reverted to canonical English tokens.
 - **Bug 2 — missing `common.abort` key.** `ProForgeDashboard.tsx` calls `t('common.abort')` but the key existed in **no** locale, so the raw key rendered as the pipeline abort button. Added to all 11 (de "Abbrechen", es "Interrumpir", fr "Interrompre", it "Interrompi", pt "Interromper", ja/zh "中止", el "Διακοπή"; ar/he EN fallback per RTL-stub policy).
 - **Systemic guard.** New `tests/unit/i18nPlaceholders.test.ts` scans every shipped bundle and fails CI on (a) any single-brace placeholder and (b) any locale placeholder name absent from the English source — closing the gap that let all of the above ship green. The token-consistency check **caught the third bug** (pt `contagem`) that manual greps missed.
 
@@ -229,7 +230,7 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 
 - **Bundle budget tightened (PR #130, `4bc237d`):** ceilings lowered **`--max-kb 6500 --max-entry-kb 4000` → `--max-kb 6200 --max-entry-kb 2500`** in both `package.json` `bundle:budget` and `scripts/check-bundle-budget.mjs` defaults (still single-source-of-truth, just new values). **This supersedes every `6500/4000` figure in earlier (dated) AUDIT/TODO/ROADMAP entries.**
 - **ai-core runtime chunks split (PR #130):** new `vendor-webllm` / `vendor-transformers` / `vendor-onnx` proxy modules give Vite stable lazy-chunk names (replacing generic `lib-*`). Heavy-runtime `manualChunks` branches now match **before** the `vendor-ai-core` catch-all (a CodeAnt-flagged ordering bug had swept WebLLM/ONNX/Transformers back into the precached `vendor-ai-core` chunk). Verified sizes: `vendor-webllm` ≈ 6.0 MB, `vendor-onnx` ≈ 401 KB — both **excluded from SW precache**; the small `vendor-ai-core` orchestration layer stays precached. The largest chunk (`vendor-webllm`) is the binding constraint against the 6200 KB per-chunk ceiling (tight margin). `bundle:report` script added for CI trend tracking. `smoke:prod` mounts clean.
-- **AI-settings localization (PR #129, `c3fcf12`):** `settings.openRouter.*` + `settings.aiMode.*` keys were shipping as **English placeholders in all non-EN locales** (i18n:check verifies key *parity*, not translation quality, so the gate stayed green). Translated across all 11 locales; bundles rebuilt. Regression guard added to the smoke-test protocol (step 1.9).
+- **AI-settings localization (PR #129, `c3fcf12`):** `settings.openRouter.*` + `settings.aiMode.*` keys were shipping as **English placeholders in all non-EN locales** (i18n:check verifies key _parity_, not translation quality, so the gate stayed green). Translated across all 11 locales; bundles rebuilt. Regression guard added to the smoke-test protocol (step 1.9).
 
 ## v1.23 AI Execution Mode Section — Localization, Modern UI & A11y Hardening (2026-06-14)
 
@@ -239,6 +240,7 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 **Quality gate (2026-06-14):** lint ✅ · typecheck ✅ · i18n:check ✅ (**2639 keys × 11 locales**, +7 `settings.aiMode.*`) · suppression-ratchet ✅ (no new `biome-ignore`) · targeted unit tests ✅ (`AiExecutionModeSection` 10, `aiModeService` 25).
 
 ### Changes
+
 - **Localization:** `AiModeIndicator` no longer hardcodes `OpenRouter` / `OpenRouter Free` / `OR ⚠` / `/20 RPM` — replaced with i18n keys `settings.aiMode.indicator.openRouter[Free]`, `…orShort`, `…rpm` (`{{count}}` locale-formatted). Added across all 11 locales.
 - **Modern UI:** section wrapped in `Card` / `CardHeader` / `CardContent` (consistent with `OpenRouterSection`); kept `--sc-*` tokens, no `dark:` prefixes, no new colors.
 - **A11y:** mode cards are now a true ARIA radio group — native `<input type="radio">` (visually-hidden, shared `name`) inside styled `<label>`s, giving free arrow-key/Home/End navigation + roving tabindex + `focus-visible` ring; container `role="radiogroup"` + `aria-labelledby`; mode change announced via `useAnnounce()` (reuses `settings.aiMode.activeLabel`).
@@ -254,44 +256,44 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 
 ### CodeAnt AI review (11/11 addressed)
 
-| # | File | Comment | Fix |
-|---|------|---------|-----|
-| 1 | `components/settings/OpenRouterSection.tsx` | Hardcoded free-model labels | Replaced with i18n keys `settings.openRouter.freeModel.*` resolved via `t(...)` |
-| 2 | `components/settings/OpenRouterSection.tsx` | Model-catalog fetch ungated | Added `assertCloudAiAllowed('openrouter')` pre-flight; UI shows `settings.openRouter.policyBlocked` |
-| 3 | `components/settings/OpenRouterSection.tsx` | Test-connection ungated | Same policy gate; returns policy-blocked message if disallowed |
-| 4 | `components/ui/Select.tsx` | Search input stops all keydown propagation | Removed the blanket `onKeyDown` stop so Escape and all other keys bubble normally |
-| 5 | `services/ai/openrouterModels.ts` | `/models` fetch ungated | `assertCloudAiAllowed('openrouter')` before any outbound request |
-| 6 | `services/ai/openrouterModels.ts` | Key-validation probe ungated | Same policy gate before `validateOpenRouterKey` network call |
-| 7 | `services/ai/openrouterModels.ts` | Malformed localStorage cache cast | Added `isValidCacheEntry()` runtime shape check (`fetchedAt` number + `models` array) |
-| 8 | `components/settings/OpenRouterSection.tsx` | Model catalog fetched without API key | Component keeps `storedKey`, passes it to `fetchOpenRouterModels(storedKey ?? undefined)` |
-| 9 | `components/settings/OpenRouterSection.tsx` | Select hidden when catalog fetch fails | Select now always renders with static free-tier + custom options; error shown as non-blocking alert |
-| 10 | `components/settings/OpenRouterSection.tsx` | No re-fetch after key save/clear | `storedKey` state is a dependency of the catalog effect; cache clear triggers refresh with new credentials |
-| 11 | `components/ui/Select.tsx` | Search input blanket `onKeyDown` stop (duplicate path) | Same fix as #4 — propagation stop removed |
+| #   | File                                        | Comment                                                | Fix                                                                                                        |
+| --- | ------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| 1   | `components/settings/OpenRouterSection.tsx` | Hardcoded free-model labels                            | Replaced with i18n keys `settings.openRouter.freeModel.*` resolved via `t(...)`                            |
+| 2   | `components/settings/OpenRouterSection.tsx` | Model-catalog fetch ungated                            | Added `assertCloudAiAllowed('openrouter')` pre-flight; UI shows `settings.openRouter.policyBlocked`        |
+| 3   | `components/settings/OpenRouterSection.tsx` | Test-connection ungated                                | Same policy gate; returns policy-blocked message if disallowed                                             |
+| 4   | `components/ui/Select.tsx`                  | Search input stops all keydown propagation             | Removed the blanket `onKeyDown` stop so Escape and all other keys bubble normally                          |
+| 5   | `services/ai/openrouterModels.ts`           | `/models` fetch ungated                                | `assertCloudAiAllowed('openrouter')` before any outbound request                                           |
+| 6   | `services/ai/openrouterModels.ts`           | Key-validation probe ungated                           | Same policy gate before `validateOpenRouterKey` network call                                               |
+| 7   | `services/ai/openrouterModels.ts`           | Malformed localStorage cache cast                      | Added `isValidCacheEntry()` runtime shape check (`fetchedAt` number + `models` array)                      |
+| 8   | `components/settings/OpenRouterSection.tsx` | Model catalog fetched without API key                  | Component keeps `storedKey`, passes it to `fetchOpenRouterModels(storedKey ?? undefined)`                  |
+| 9   | `components/settings/OpenRouterSection.tsx` | Select hidden when catalog fetch fails                 | Select now always renders with static free-tier + custom options; error shown as non-blocking alert        |
+| 10  | `components/settings/OpenRouterSection.tsx` | No re-fetch after key save/clear                       | `storedKey` state is a dependency of the catalog effect; cache clear triggers refresh with new credentials |
+| 11  | `components/ui/Select.tsx`                  | Search input blanket `onKeyDown` stop (duplicate path) | Same fix as #4 — propagation stop removed                                                                  |
 
 ### Delivered
 
-| # | Area | What shipped |
-|---|------|-------------|
-| i18n | `locales/en/settings.json` + `locales/en/common.json` | 32 new keys for OpenRouter UI and generic search/no-results labels; propagated to all 10 non-EN locales and rebuilt bundles. |
-| UI primitive | `components/ui/Select.tsx` | Optional `searchable` prop with case-insensitive filtering across options and groups; keyboard closure and ARIA listbox behavior retained. |
-| Model catalog | `services/ai/openrouterModels.ts` | New service: fetches OpenRouter `/models`, caches in `localStorage` (1 h TTL), validates API keys, normalizes pricing/context-length fields. |
-| Provider hardening | `services/ai/providers/openrouterProvider.ts` | Shared request builder; timestamp-array trimming on every RPM record; `callbacks.onError` invoked before stream throws; optional circuit-breaker `localStorage` persistence. |
-| Settings panel | `components/settings/OpenRouterSection.tsx` | Rewritten with searchable `Select`, key save/remove/test-connection flows, model fetch loading/error states, AI-mode warnings (local/offline), inline status badges, and screen-reader alerts. |
-| Error boundary | `components/SettingsView.tsx` | `OpenRouterSection` wrapped in `ViewErrorBoundary` with translated `viewLabel`. |
-| Tests | `tests/unit/settings/OpenRouterSection.test.tsx` | 7 new tests covering toggle, key save/remove, model selection, custom model commit, and circuit reset. |
+| #                  | Area                                                  | What shipped                                                                                                                                                                                   |
+| ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| i18n               | `locales/en/settings.json` + `locales/en/common.json` | 32 new keys for OpenRouter UI and generic search/no-results labels; propagated to all 10 non-EN locales and rebuilt bundles.                                                                   |
+| UI primitive       | `components/ui/Select.tsx`                            | Optional `searchable` prop with case-insensitive filtering across options and groups; keyboard closure and ARIA listbox behavior retained.                                                     |
+| Model catalog      | `services/ai/openrouterModels.ts`                     | New service: fetches OpenRouter `/models`, caches in `localStorage` (1 h TTL), validates API keys, normalizes pricing/context-length fields.                                                   |
+| Provider hardening | `services/ai/providers/openrouterProvider.ts`         | Shared request builder; timestamp-array trimming on every RPM record; `callbacks.onError` invoked before stream throws; optional circuit-breaker `localStorage` persistence.                   |
+| Settings panel     | `components/settings/OpenRouterSection.tsx`           | Rewritten with searchable `Select`, key save/remove/test-connection flows, model fetch loading/error states, AI-mode warnings (local/offline), inline status badges, and screen-reader alerts. |
+| Error boundary     | `components/SettingsView.tsx`                         | `OpenRouterSection` wrapped in `ViewErrorBoundary` with translated `viewLabel`.                                                                                                                |
+| Tests              | `tests/unit/settings/OpenRouterSection.test.tsx`      | 7 new tests covering toggle, key save/remove, model selection, custom model commit, and circuit reset.                                                                                         |
 
 ### Files changed (non-locale)
 
-| File | Change |
-|------|--------|
-| `components/ui/Select.tsx` | Added `searchable` prop and search input filtering |
-| `tests/unit/Select.test.tsx` | +3 tests for searchable filtering and empty state |
-| `services/ai/openrouterModels.ts` | New model catalog + key validation service |
-| `services/ai/providers/openrouterProvider.ts` | Shared builder, RPM trimming, error callback, CB persistence |
-| `tests/unit/ai/openrouterProvider.test.ts` | +4 tests for models, validation, CB persistence, RPM trimming |
-| `components/settings/OpenRouterSection.tsx` | Full rewrite with modern Select and validation flows |
-| `components/SettingsView.tsx` | `ViewErrorBoundary` wrapper for `case 'openrouter'` |
-| `tests/unit/settings/OpenRouterSection.test.tsx` | New 7-test suite |
+| File                                             | Change                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------- |
+| `components/ui/Select.tsx`                       | Added `searchable` prop and search input filtering            |
+| `tests/unit/Select.test.tsx`                     | +3 tests for searchable filtering and empty state             |
+| `services/ai/openrouterModels.ts`                | New model catalog + key validation service                    |
+| `services/ai/providers/openrouterProvider.ts`    | Shared builder, RPM trimming, error callback, CB persistence  |
+| `tests/unit/ai/openrouterProvider.test.ts`       | +4 tests for models, validation, CB persistence, RPM trimming |
+| `components/settings/OpenRouterSection.tsx`      | Full rewrite with modern Select and validation flows          |
+| `components/SettingsView.tsx`                    | `ViewErrorBoundary` wrapper for `case 'openrouter'`           |
+| `tests/unit/settings/OpenRouterSection.test.tsx` | New 7-test suite                                              |
 
 **Quality gate (2026-06-03 — RTL/i18n Beta, C-6):** lint ✅ (1097 files, 0 warnings) · typecheck ✅ · i18n:check ✅ (**2259 keys × 7 locales** — `ar`/`he` now in the parity gate, no longer English stubs) · build + smoke:prod (font/index.css change — verified). **ar/he UI fully translated** across all 18 modules (help.json English fallback for Beta); **Noto Sans Arabic/Hebrew + Naskh** fonts wired (`index.tsx`, `--font-ui-rtl`/`--font-editor-rtl` tokens); **RTL layout**: `[dir="rtl"]` CSS net (text-align/float flips, `.rtl-auto-mirror`, `.rtl-keep-ltr`), shell logical-property conversion (Sidebar/Modal/CommandPalette/Toast), canvas LTR islands (PlotCanvas/CharacterGraphView keep coordinate math LTR), WelcomePortal ar/he selectors. "(Beta)" labels retained in language pickers. Glossary: `docs/I18N-GLOSSARY-RTL.md`. Remaining (community): native-speaker review + help-prose translation.
 
@@ -304,25 +306,25 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 
 ### Delivered
 
-| # | Area | What shipped |
-|---|------|-------------|
-| P1-2 | Voice WASM download UI | `VoiceModelDownloadModal` — progress bar, cancel, retry, per-model (STT/TTS); triggered from `VoiceSettingsSection` via separate Whisper + Kokoro buttons. `VoiceCommandService.downloadVoiceModels(type, signal?)` drives the download pipeline. |
-| CodeAnt 1 (HIGH) | `locales/ja/writer.json` | Restored canonical `{{title}}` / `{{selection}}` placeholders — they had been localised to `{{タイトル}}` / `{{選択内容}}` causing them to render as literal strings at runtime. |
-| CodeAnt 2 | `VoiceSettingsSection.tsx` | Added dedicated "Download TTS Model" button; previously hardcoded to `stt` made the Kokoro TTS download path unreachable. |
-| CodeAnt 3 | `VoiceModelDownloadModal.tsx` | Wired `AbortController` via `abortRef` — cancel button and modal `onClose` now abort any in-flight fetch; all async checkpoints guard `signal.aborted`. |
-| P2-1 | `CloudSyncBackend` | Last-Write-Wins conflict-resolution metadata: every `save*` call now wraps payload in `{ data, meta: { lastModified, deviceId, version } }`; `load*` unwraps transparently. +8 unit tests (19 total). |
-| i18n | Locale quality sweep | Translation corrections in pt/el/ja/zh/de/fr/es/it/ar/he; all 11 bundles rebuilt (2348 keys). |
+| #                | Area                          | What shipped                                                                                                                                                                                                                                      |
+| ---------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1-2             | Voice WASM download UI        | `VoiceModelDownloadModal` — progress bar, cancel, retry, per-model (STT/TTS); triggered from `VoiceSettingsSection` via separate Whisper + Kokoro buttons. `VoiceCommandService.downloadVoiceModels(type, signal?)` drives the download pipeline. |
+| CodeAnt 1 (HIGH) | `locales/ja/writer.json`      | Restored canonical `{{title}}` / `{{selection}}` placeholders — they had been localised to `{{タイトル}}` / `{{選択内容}}` causing them to render as literal strings at runtime.                                                                  |
+| CodeAnt 2        | `VoiceSettingsSection.tsx`    | Added dedicated "Download TTS Model" button; previously hardcoded to `stt` made the Kokoro TTS download path unreachable.                                                                                                                         |
+| CodeAnt 3        | `VoiceModelDownloadModal.tsx` | Wired `AbortController` via `abortRef` — cancel button and modal `onClose` now abort any in-flight fetch; all async checkpoints guard `signal.aborted`.                                                                                           |
+| P2-1             | `CloudSyncBackend`            | Last-Write-Wins conflict-resolution metadata: every `save*` call now wraps payload in `{ data, meta: { lastModified, deviceId, version } }`; `load*` unwraps transparently. +8 unit tests (19 total).                                             |
+| i18n             | Locale quality sweep          | Translation corrections in pt/el/ja/zh/de/fr/es/it/ar/he; all 11 bundles rebuilt (2348 keys).                                                                                                                                                     |
 
 ### Files changed (non-locale)
 
-| File | Change |
-|------|--------|
+| File                                           | Change                                                      |
+| ---------------------------------------------- | ----------------------------------------------------------- |
 | `components/voice/VoiceModelDownloadModal.tsx` | New component — WASM model download UI with AbortController |
-| `components/settings/VoiceSettingsSection.tsx` | Separate STT + TTS download buttons |
-| `services/voice/voiceCommandService.ts` | `downloadVoiceModels(type, signal?)` export |
-| `services/cloudSync/cloudSyncBackend.ts` | LWW `saveWithMetadata` / `loadWithMetadata` helpers |
-| `tests/unit/cloudSyncBackend.test.ts` | +8 LWW assertions |
-| `tests/unit/pandocTauri.test.ts` | +3 edge-case assertions |
+| `components/settings/VoiceSettingsSection.tsx` | Separate STT + TTS download buttons                         |
+| `services/voice/voiceCommandService.ts`        | `downloadVoiceModels(type, signal?)` export                 |
+| `services/cloudSync/cloudSyncBackend.ts`       | LWW `saveWithMetadata` / `loadWithMetadata` helpers         |
+| `tests/unit/cloudSyncBackend.test.ts`          | +8 LWW assertions                                           |
+| `tests/unit/pandocTauri.test.ts`               | +3 edge-case assertions                                     |
 
 ## Deep Correction Plan — 2026-06-06
 
@@ -352,14 +354,14 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 
 ### Changes
 
-| File | Change |
-|------|--------|
-| `package.json` | Added `@typescript/native-preview@beta` and `@typescript/typescript6` alias |
-| `tsconfig.tsgo.json` | New tsgo-specific config (excludes `vite/client` types) |
-| `.github/workflows/ci.yml` | Updated typecheck step to use tsgo |
-| `pnpm-workspace.yaml` | Disabled `strictPeerDependencies` for tsgo compatibility |
-| `pnpm-workspace.yaml` | Added `strictPeerDependencies: false` |
-| `docs/TS7-MIGRATION.md` | Migration guide created |
+| File                       | Change                                                                      |
+| -------------------------- | --------------------------------------------------------------------------- |
+| `package.json`             | Added `@typescript/native-preview@beta` and `@typescript/typescript6` alias |
+| `tsconfig.tsgo.json`       | New tsgo-specific config (excludes `vite/client` types)                     |
+| `.github/workflows/ci.yml` | Updated typecheck step to use tsgo                                          |
+| `pnpm-workspace.yaml`      | Disabled `strictPeerDependencies` for tsgo compatibility                    |
+| `pnpm-workspace.yaml`      | Added `strictPeerDependencies: false`                                       |
+| `docs/TS7-MIGRATION.md`    | Migration guide created                                                     |
 
 ### Verification
 
@@ -378,11 +380,11 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 
 **Root-caused 3 pre-existing build blockers (tauri-build red since 2026-05-30, never diagnosed):**
 
-| # | File | Issue | Fix |
-|---|------|-------|-----|
-| 1 | `src-tauri/Cargo.toml` | `specta = "2"` / `tauri-specta = "2"` unused (no `.rs` ref) and unresolvable (`"2"`=^2 stable, only `2.0.0-rc.*` exist) → resolution fails before any compile | Removed both dead deps |
-| 2 | `src-tauri/src/lora.rs` | `LoraEnvReport` deserialized via `serde_json::from_str` (lora.rs:209) but derived only `Serialize` → E0277 broke whole-crate compile | Added `Deserialize` |
-| 3 | `task_supervisor.rs` | `json` import test-only; `RustTaskRequest` wire-contract fields not read by dispatcher | `json` → test mod; `#[allow(dead_code)]` with note |
+| #   | File                    | Issue                                                                                                                                                         | Fix                                                |
+| --- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| 1   | `src-tauri/Cargo.toml`  | `specta = "2"` / `tauri-specta = "2"` unused (no `.rs` ref) and unresolvable (`"2"`=^2 stable, only `2.0.0-rc.*` exist) → resolution fails before any compile | Removed both dead deps                             |
+| 2   | `src-tauri/src/lora.rs` | `LoraEnvReport` deserialized via `serde_json::from_str` (lora.rs:209) but derived only `Serialize` → E0277 broke whole-crate compile                          | Added `Deserialize`                                |
+| 3   | `task_supervisor.rs`    | `json` import test-only; `RustTaskRequest` wire-contract fields not read by dispatcher                                                                        | `json` → test mod; `#[allow(dead_code)]` with note |
 
 **Remaining (not code):** `tauri-build` still exits non-zero at the very end on the updater signing step (`incorrect updater private key password: Missing comment in secret key`) — a malformed `TAURI_SIGNING_PRIVATE_KEY` repo secret; the app + all 3 bundles build fine. The Windows runner separately fails in the `./.github/actions/setup` composite (self-installer `3221226505`) — env/infra, not Rust. Both are maintainer secrets/infra tasks, tracked for follow-up.
 
@@ -392,11 +394,11 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 
 ### Findings & fixes
 
-| # | File | Issue | Fix |
-|---|------|-------|-----|
-| 1 | `workers/inference.worker.ts:34-98` + `workers/v2/inference.worker.ts:21-56` | Byte-identical pipeline-LRU logic duplicated across both workers; **neither disposed the evicted pipeline** → VRAM/RAM leak (same bug-class as WebLLM eviction, 2026-06-01 #1) | Extracted `services/ai/pipelineLruCache.ts` (`PipelineLruCache<T>`): dispose-on-evict, **in-flight load dedup**, injectable clock for deterministic tests. Both workers now consume it; duplication removed. |
-| 2 | `services/ai/aiRetry.ts` (self-review) | Sound (exp-backoff + full jitter + `Retry-After` precedence + hostile-value clamp + injectable RNG). Gap: no property-based invariant tests | ✅ Added invariant tests for `computeRetryDelayMs` (exponential, non-decreasing, cap, jitter∈[0,capped)) + `parseRetryAfterMs` (ms/seconds/string/header/clamp) + a Retry-After-beats-backoff integration test. 19 tests total. |
-| 3 | `hooks/useLoraView.ts:70-72` (self-review) | `projectId ? selectDatasetForProject(projectId) : () => []` recreates the memoized selector each render | ✅ `useMemo`-wrapped selector keyed on `projectId`; module-level stable empty selector. 12 existing tests still green (behavior-preserving). |
+| #   | File                                                                         | Issue                                                                                                                                                                          | Fix                                                                                                                                                                                                                             |
+| --- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `workers/inference.worker.ts:34-98` + `workers/v2/inference.worker.ts:21-56` | Byte-identical pipeline-LRU logic duplicated across both workers; **neither disposed the evicted pipeline** → VRAM/RAM leak (same bug-class as WebLLM eviction, 2026-06-01 #1) | Extracted `services/ai/pipelineLruCache.ts` (`PipelineLruCache<T>`): dispose-on-evict, **in-flight load dedup**, injectable clock for deterministic tests. Both workers now consume it; duplication removed.                    |
+| 2   | `services/ai/aiRetry.ts` (self-review)                                       | Sound (exp-backoff + full jitter + `Retry-After` precedence + hostile-value clamp + injectable RNG). Gap: no property-based invariant tests                                    | ✅ Added invariant tests for `computeRetryDelayMs` (exponential, non-decreasing, cap, jitter∈[0,capped)) + `parseRetryAfterMs` (ms/seconds/string/header/clamp) + a Retry-After-beats-backoff integration test. 19 tests total. |
+| 3   | `hooks/useLoraView.ts:70-72` (self-review)                                   | `projectId ? selectDatasetForProject(projectId) : () => []` recreates the memoized selector each render                                                                        | ✅ `useMemo`-wrapped selector keyed on `projectId`; module-level stable empty selector. 12 existing tests still green (behavior-preserving).                                                                                    |
 
 **Non-finding:** latency telemetry is already recorded at the facade (`localAiFacade.ts` → `localWorkerBus.recordResult(elapsedMs, …)`), so no new worker→main telemetry hop was needed.
 
@@ -414,31 +416,31 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 
 ### Issues Resolved
 
-| # | File | Issue | Fix |
-|---|------|-------|-----|
-| 1 | `webllmOptimizer.ts:78-80` | No `dispose()` on engine cache eviction → GPU memory leak | Added `void entry.engine.dispose?.()` before `engineCache.delete()` |
-| 2 | `webllmOptimizer.ts:129-131` | `releaseWebLlm` only deleted one power-preference variant | Now deletes both `high-performance` + `low-power` variants when preference unspecified |
-| 3 | `listenerMiddleware.ts:398` | `releaseAllOnnxSessions()` called without `await` (async fn) | Added `await` — ensures GPU session cleanup completes before re-enabling |
-| 4 | `computeShaderFactory.ts:80-106` | `getComputeDevice` race condition — concurrent callers each create a GPU device | Promise-mutex (`deviceInitPromise`) serialises concurrent calls |
-| 5 | `listenerMiddleware.ts:368` | Adaptive engine window gate not set on cold-start (flag already true from localStorage) | `initAdaptiveAiOnStartup()` called from `App.tsx` on mount |
-| 6 | `localAiDeviceProfiler.ts:284-286` | `recommendBackend()` returned `transformers-webgpu` even when WebGPU unavailable | Changed to `onnx-wasm` for the no-GPU / high-memory path |
-| 7 | `adaptiveAiEngine.ts:220-225` | `WarmedModelEntry` missing `task` field | Added `task: AiTaskType` to interface and set on `prewarmModel` |
-| 8 | `telemetryService.ts` | Telemetry recorded even when `enableDuckDbAnalytics` is off | `setTelemetryEnabled()` gate; `App.tsx` syncs flag on every change |
-| 9 | `listenerMiddleware.ts:372` | Direct `window` access without SSR/worker guard | Added `typeof window !== 'undefined'` guard |
-| 10 | `AiSections.tsx:57` | `useAdaptiveAi` hook mounted even when AI feature disabled | Parent-level conditional mount (`{adaptiveAiEnabled && <AdaptiveAiHardwarePanel />}`) |
-| 11-14 | `AdaptiveAiHardwarePanel.tsx` | 7 hardcoded strings (capability names, available/unavailable, compute shaders label) | Replaced all with `t()` calls; 7 new i18n keys × 5 locales |
+| #     | File                               | Issue                                                                                   | Fix                                                                                    |
+| ----- | ---------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1     | `webllmOptimizer.ts:78-80`         | No `dispose()` on engine cache eviction → GPU memory leak                               | Added `void entry.engine.dispose?.()` before `engineCache.delete()`                    |
+| 2     | `webllmOptimizer.ts:129-131`       | `releaseWebLlm` only deleted one power-preference variant                               | Now deletes both `high-performance` + `low-power` variants when preference unspecified |
+| 3     | `listenerMiddleware.ts:398`        | `releaseAllOnnxSessions()` called without `await` (async fn)                            | Added `await` — ensures GPU session cleanup completes before re-enabling               |
+| 4     | `computeShaderFactory.ts:80-106`   | `getComputeDevice` race condition — concurrent callers each create a GPU device         | Promise-mutex (`deviceInitPromise`) serialises concurrent calls                        |
+| 5     | `listenerMiddleware.ts:368`        | Adaptive engine window gate not set on cold-start (flag already true from localStorage) | `initAdaptiveAiOnStartup()` called from `App.tsx` on mount                             |
+| 6     | `localAiDeviceProfiler.ts:284-286` | `recommendBackend()` returned `transformers-webgpu` even when WebGPU unavailable        | Changed to `onnx-wasm` for the no-GPU / high-memory path                               |
+| 7     | `adaptiveAiEngine.ts:220-225`      | `WarmedModelEntry` missing `task` field                                                 | Added `task: AiTaskType` to interface and set on `prewarmModel`                        |
+| 8     | `telemetryService.ts`              | Telemetry recorded even when `enableDuckDbAnalytics` is off                             | `setTelemetryEnabled()` gate; `App.tsx` syncs flag on every change                     |
+| 9     | `listenerMiddleware.ts:372`        | Direct `window` access without SSR/worker guard                                         | Added `typeof window !== 'undefined'` guard                                            |
+| 10    | `AiSections.tsx:57`                | `useAdaptiveAi` hook mounted even when AI feature disabled                              | Parent-level conditional mount (`{adaptiveAiEnabled && <AdaptiveAiHardwarePanel />}`)  |
+| 11-14 | `AdaptiveAiHardwarePanel.tsx`      | 7 hardcoded strings (capability names, available/unavailable, compute shaders label)    | Replaced all with `t()` calls; 7 new i18n keys × 5 locales                             |
 
 ### E2E Stabilisation
 
-| Test Category | Previous State | Fix |
-|---------------|----------------|-----|
-| Welcome/command-palette axe | contrast 2.03–2.91:1 (fails WCAG AA) | WelcomePortal design tokens; waitForSpaReady waits for theme class |
-| World-view / plot-board navigation | strict mode violation (multiple locator matches) | `/World Building/i`, `/Scene Board/i` exact labels |
-| LoRA wizard | 13 failures (view not routed in App.tsx) | `test.skip(true, ...)` — Phase 2.2 pending |
-| Export flow | "Apply Outline" never appeared | `seedGeminiApiKey` uses `role="switch"` + disables `localStorageOnly` |
-| Scene Board ARIA | `role="tablist"` with `button` children (critical) | `role="toolbar"` on mode selector group |
-| Act Swimlane ARIA | `<ul>` with `[role=button]` div children (serious) | `SceneCard` wrapped in `<li>` |
-| VRT | Missing baselines (all tests failed) | 4 Chromium 1280×720 baseline PNGs committed |
+| Test Category                      | Previous State                                     | Fix                                                                   |
+| ---------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------- |
+| Welcome/command-palette axe        | contrast 2.03–2.91:1 (fails WCAG AA)               | WelcomePortal design tokens; waitForSpaReady waits for theme class    |
+| World-view / plot-board navigation | strict mode violation (multiple locator matches)   | `/World Building/i`, `/Scene Board/i` exact labels                    |
+| LoRA wizard                        | 13 failures (view not routed in App.tsx)           | `test.skip(true, ...)` — Phase 2.2 pending                            |
+| Export flow                        | "Apply Outline" never appeared                     | `seedGeminiApiKey` uses `role="switch"` + disables `localStorageOnly` |
+| Scene Board ARIA                   | `role="tablist"` with `button` children (critical) | `role="toolbar"` on mode selector group                               |
+| Act Swimlane ARIA                  | `<ul>` with `[role=button]` div children (serious) | `SceneCard` wrapped in `<li>`                                         |
+| VRT                                | Missing baselines (all tests failed)               | 4 Chromium 1280×720 baseline PNGs committed                           |
 
 ### CI Pipeline Improvements
 
@@ -455,16 +457,16 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 
 ### Phase-by-Phase Summary
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 0 | Diagnostics & baseline | ✅ |
-| 1 | ONNX/Transformers.js real inference, feature flags, gateway | ✅ |
-| 2 | Device profiler + adaptive AI engine | ✅ |
-| 3 | WebLLM, ONNX, WebNN optimizers (cached, prewarmed) | ✅ |
-| 4 | WGSL compute shaders (textProcessing, attention, feedForward, kvCache) | ✅ |
-| 5 | Domain integration: RAG GPU cosine, useAdaptiveAi hook, hardware panel, listener, voice eco-mode, i18n | ✅ |
-| 6 | benchmarkService + telemetryService (local DuckDB, no cloud) | ✅ |
-| 7 | Final validation: lint, i18n parity, test suites, tsconfig fix, AUDIT/AGENTS update | ✅ |
+| Phase | Description                                                                                            | Status |
+| ----- | ------------------------------------------------------------------------------------------------------ | ------ |
+| 0     | Diagnostics & baseline                                                                                 | ✅     |
+| 1     | ONNX/Transformers.js real inference, feature flags, gateway                                            | ✅     |
+| 2     | Device profiler + adaptive AI engine                                                                   | ✅     |
+| 3     | WebLLM, ONNX, WebNN optimizers (cached, prewarmed)                                                     | ✅     |
+| 4     | WGSL compute shaders (textProcessing, attention, feedForward, kvCache)                                 | ✅     |
+| 5     | Domain integration: RAG GPU cosine, useAdaptiveAi hook, hardware panel, listener, voice eco-mode, i18n | ✅     |
+| 6     | benchmarkService + telemetryService (local DuckDB, no cloud)                                           | ✅     |
+| 7     | Final validation: lint, i18n parity, test suites, tsconfig fix, AUDIT/AGENTS update                    | ✅     |
 
 ### Known-debt items resolved
 
@@ -503,72 +505,76 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 **Scope:** AI stack (`packages/ai-core`, `services/ai/`, `services/voice/`, `workers/`), GPU/WebNN/compute infrastructure, Stryker coverage gaps, feature-flag readiness for v1.20+.
 
 ### Environment Fix
+
 - `@xenova/transformers` and `@mlc-ai/web-llm` were missing from `packages/ai-core/node_modules` despite being in `pnpm-lock.yaml`. Cause: `optionalDependencies` in workspace package were not installed on the low-end dev machine (likely due to a previous `--no-optional` install or prune). Fix: `pnpm install --prefer-offline` restored both packages. Typecheck now passes cleanly.
 
 ### Quality Gate Status (Phase 0 baseline)
-| Gate | Status | Detail |
-|------|--------|--------|
-| lint | ✅ | 1022 files, 0 errors, 21s |
-| typecheck | ✅ | 0 errors (after env fix) |
-| i18n:check | ✅ | 2129 keys × 5 locales (+ ar/he) |
-| localAiFacade tests | ✅ | 6/6 passed |
-| aiProviderService tests | ✅ | 46/46 passed |
-| fallbackChain tests | ✅ | 21/21 passed |
+
+| Gate                    | Status | Detail                          |
+| ----------------------- | ------ | ------------------------------- |
+| lint                    | ✅     | 1022 files, 0 errors, 21s       |
+| typecheck               | ✅     | 0 errors (after env fix)        |
+| i18n:check              | ✅     | 2129 keys × 5 locales (+ ar/he) |
+| localAiFacade tests     | ✅     | 6/6 passed                      |
+| aiProviderService tests | ✅     | 46/46 passed                    |
+| fallbackChain tests     | ✅     | 21/21 passed                    |
 
 ### Critical Findings (P0 — must fix before v1.20)
 
-| ID | File | Finding | Proposed Fix |
-|----|------|---------|--------------|
-| P0-F1 | `packages/ai-core/src/index.ts` | ONNX Runtime Web is a **stub**: `runLocalTextGeneration()` detects `ort.InferenceSession.create` but returns a diagnostic string instead of running a model. | Implement real ONNX inference with execution provider selection (`webgpu` → `wasm` → `webnn`). Load model from `ONNX_SUPPORTED_MODELS`. |
-| P0-F2 | `packages/ai-core/src/index.ts` | Transformers.js main-thread path is a **stub**: detects `pipeline()` but returns a diagnostic string. | Implement real `pipeline('text-generation', …)` call with `device` auto-selection. |
-| P0-F3 | `services/ai/inferenceGateway.ts` | `modelList()` returns `[]`; `healthCheck()` returns `{status:'ok', provider:'unknown'}` with no latency probe. | Implement model enumeration (cloud + local) and latency probing. |
-| P0-F4 | `services/voice/sileroVadEngine.ts` | Completely inactive: `isAvailable()` returns `false`; `initialize()` throws; `processChunk()` returns `null`. | Refactor `VadEngine` interface to support async `processChunk()`, then wire Silero ONNX model. |
-| P0-F5 | `services/ai/webGpuDetectorService.ts` | Missing `requestAdapter` options: no `powerPreference` (`low-power`/`high-performance`), no `forceFallbackAdapter`, no feature inspection (`timestamp-query`, `maxComputeWorkgroupSize`). | Add adapter option probing and feature flag detection. |
-| P0-F6 | `services/ai/deviceHealthService.ts` | No WebNN detection (`navigator.ml`), no NPU detection, no compute shader capability check. | Add `localAiDeviceProfiler` (Phase 2) to supersede static heuristics. |
-| P0-F7 | `services/ai/modelRecommendations.ts` | `onnxModel` for `vramTier === 'medium'` is a **WebLLM model ID** (`Qwen2.5-0.5B-Instruct-q4f16_1-MLC`) instead of an ONNX model. | Fix to a valid ONNX model ID (e.g., `Xenova/Qwen2.5-0.5B-Instruct` or `HuggingFaceTB/SmolLM2-135M-Instruct`). |
-| P0-F8 | `services/ai/aiPolicy.ts` | `assertCloudAiAllowed` only exempts `ollama` and `webllm` as local providers. `onnx` and `transformers` are treated as cloud (will throw in `localStorageOnly` mode). | Add `onnx` and `transformers` to the local-provider exemption set. |
-| P0-F9 | `services/ai/hybridFallback.ts` | Fallback chain does not include `onnx` or `transformers` as fallback targets. | Extend chain to support all local inference providers. |
+| ID    | File                                   | Finding                                                                                                                                                                                   | Proposed Fix                                                                                                                            |
+| ----- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| P0-F1 | `packages/ai-core/src/index.ts`        | ONNX Runtime Web is a **stub**: `runLocalTextGeneration()` detects `ort.InferenceSession.create` but returns a diagnostic string instead of running a model.                              | Implement real ONNX inference with execution provider selection (`webgpu` → `wasm` → `webnn`). Load model from `ONNX_SUPPORTED_MODELS`. |
+| P0-F2 | `packages/ai-core/src/index.ts`        | Transformers.js main-thread path is a **stub**: detects `pipeline()` but returns a diagnostic string.                                                                                     | Implement real `pipeline('text-generation', …)` call with `device` auto-selection.                                                      |
+| P0-F3 | `services/ai/inferenceGateway.ts`      | `modelList()` returns `[]`; `healthCheck()` returns `{status:'ok', provider:'unknown'}` with no latency probe.                                                                            | Implement model enumeration (cloud + local) and latency probing.                                                                        |
+| P0-F4 | `services/voice/sileroVadEngine.ts`    | Completely inactive: `isAvailable()` returns `false`; `initialize()` throws; `processChunk()` returns `null`.                                                                             | Refactor `VadEngine` interface to support async `processChunk()`, then wire Silero ONNX model.                                          |
+| P0-F5 | `services/ai/webGpuDetectorService.ts` | Missing `requestAdapter` options: no `powerPreference` (`low-power`/`high-performance`), no `forceFallbackAdapter`, no feature inspection (`timestamp-query`, `maxComputeWorkgroupSize`). | Add adapter option probing and feature flag detection.                                                                                  |
+| P0-F6 | `services/ai/deviceHealthService.ts`   | No WebNN detection (`navigator.ml`), no NPU detection, no compute shader capability check.                                                                                                | Add `localAiDeviceProfiler` (Phase 2) to supersede static heuristics.                                                                   |
+| P0-F7 | `services/ai/modelRecommendations.ts`  | `onnxModel` for `vramTier === 'medium'` is a **WebLLM model ID** (`Qwen2.5-0.5B-Instruct-q4f16_1-MLC`) instead of an ONNX model.                                                          | Fix to a valid ONNX model ID (e.g., `Xenova/Qwen2.5-0.5B-Instruct` or `HuggingFaceTB/SmolLM2-135M-Instruct`).                           |
+| P0-F8 | `services/ai/aiPolicy.ts`              | `assertCloudAiAllowed` only exempts `ollama` and `webllm` as local providers. `onnx` and `transformers` are treated as cloud (will throw in `localStorageOnly` mode).                     | Add `onnx` and `transformers` to the local-provider exemption set.                                                                      |
+| P0-F9 | `services/ai/hybridFallback.ts`        | Fallback chain does not include `onnx` or `transformers` as fallback targets.                                                                                                             | Extend chain to support all local inference providers.                                                                                  |
 
 ### Important Findings (P1 — should fix in v1.20)
 
-| ID | File | Finding | Proposed Fix |
-|----|------|---------|--------------|
-| P1-F1 | `stryker.conf.json` | Missing mutation targets for AI/GPU/voice files: `webGpuDetectorService.ts`, `gpuResourceManager.ts`, `localAiFacade.ts`, `deviceHealthService.ts`, `localEmbeddingService.ts`, `inference.worker.ts`, `voiceCommandService.ts`, `vadEngine.ts`, `sttEngine.ts`. | Add targets to `mutate` array. |
-| P1-F2 | `features/featureFlags/featureFlagsSlice.ts` | Missing flags for upcoming v1.20 features: WebNN inference, compute shaders, adaptive AI engine. | Add `enableWebnnInference`, `enableComputeShaders`, `enableAdaptiveAiEngine`. |
-| P1-F3 | `services/ai/ecoModeService.ts` | Only battery-based eco detection; no thermal throttling, no CPU load detection, no memory-pressure eco mode. | Integrate with `deviceHealthService` memory pressure and `gpuResourceManager` queue depth. |
-| P1-F4 | `workers/inference.worker.ts` | No `AbortSignal` propagation into the actual `pipeline()` call; worker cancel only removes from `abortMap` but does not stop the running inference. | Pass `AbortSignal` into Xenova pipeline options if supported; else document limitation. |
-| P1-F5 | `services/ai/aiRetry.ts` | Linear backoff only; no exponential backoff, no jitter, no retry-after header parsing. | Keep linear for simplicity (local AI), add jitter for cloud paths. |
-| P1-F6 | `services/ai/fetchAdapter.ts` | No request timeout, no retry, no circuit-breaker for Tauri fetch failures. | Add `AbortSignal.timeout()` and fallback chain. |
+| ID    | File                                         | Finding                                                                                                                                                                                                                                                          | Proposed Fix                                                                               |
+| ----- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| P1-F1 | `stryker.conf.json`                          | Missing mutation targets for AI/GPU/voice files: `webGpuDetectorService.ts`, `gpuResourceManager.ts`, `localAiFacade.ts`, `deviceHealthService.ts`, `localEmbeddingService.ts`, `inference.worker.ts`, `voiceCommandService.ts`, `vadEngine.ts`, `sttEngine.ts`. | Add targets to `mutate` array.                                                             |
+| P1-F2 | `features/featureFlags/featureFlagsSlice.ts` | Missing flags for upcoming v1.20 features: WebNN inference, compute shaders, adaptive AI engine.                                                                                                                                                                 | Add `enableWebnnInference`, `enableComputeShaders`, `enableAdaptiveAiEngine`.              |
+| P1-F3 | `services/ai/ecoModeService.ts`              | Only battery-based eco detection; no thermal throttling, no CPU load detection, no memory-pressure eco mode.                                                                                                                                                     | Integrate with `deviceHealthService` memory pressure and `gpuResourceManager` queue depth. |
+| P1-F4 | `workers/inference.worker.ts`                | No `AbortSignal` propagation into the actual `pipeline()` call; worker cancel only removes from `abortMap` but does not stop the running inference.                                                                                                              | Pass `AbortSignal` into Xenova pipeline options if supported; else document limitation.    |
+| P1-F5 | `services/ai/aiRetry.ts`                     | Linear backoff only; no exponential backoff, no jitter, no retry-after header parsing.                                                                                                                                                                           | Keep linear for simplicity (local AI), add jitter for cloud paths.                         |
+| P1-F6 | `services/ai/fetchAdapter.ts`                | No request timeout, no retry, no circuit-breaker for Tauri fetch failures.                                                                                                                                                                                       | Add `AbortSignal.timeout()` and fallback chain.                                            |
 
 ### Status Reconciliation — verified in code 2026-06-02
 
 The P0/P1 tables above were authored against the pre-Phase-2.1 tree. A line-by-line re-verification against the **current** code shows most are already resolved; only `aiRetry` and `fetchAdapter` remain open.
 
-| ID | Status | Evidence (current code) |
-|----|--------|-------------------------|
-| P0-F1 | ✅ FIXED | Real ONNX text-generation pipelines (Phase 2.1). |
-| P0-F2 | ✅ FIXED | Real `pipeline('text-generation', …)` via `@huggingface/transformers@3.8.1` (Phase 2.1). |
-| P0-F3 | ✅ FIXED | `services/ai/inferenceGateway.ts:91-134` — real `modelList()` enumerates cloud + WebLLM + ONNX catalogs; `healthCheck()` runs a latency probe via `embedText`. |
-| P0-F4 | ✅ FIXED | Silero VAD v4 ONNX implementation (Phase 1.2). |
-| P0-F5 | ✅ FIXED | `services/ai/webGpuDetectorService.ts:28-102` — `powerPreference` + `forceFallbackAdapter` options, `timestamp-query` + `maxComputeWorkgroupSize` feature inspection, `requestAdapterInfo`. |
-| P0-F6 | ✅ FIXED | Superseded by `localAiDeviceProfiler` (WebGPU/WebNN/DirectML + memory/battery detection). |
-| P0-F7 | ✅ FIXED | `services/ai/modelRecommendations.ts:77-82` — ONNX tiers use valid `Xenova/Qwen2.5-1.5B/0.5B-Instruct` + `SmolLM2-135M` IDs. |
-| P0-F8 | ✅ FIXED | `services/ai/aiPolicy.ts:5` — `LOCAL_INFERENCE_PROVIDERS` includes `onnx` + `transformers`. |
-| P0-F9 | ✅ FIXED | `services/ai/hybridFallback.ts:28` — local-provider set includes `onnx` + `transformers`; cloud fallback wired. |
-| P1-F1 | ✅ FIXED | Stryker `mutate` expanded 34→40 (B-8). |
-| P1-F2 | ✅ FIXED | `enableAdaptiveAiEngine` + compute/WebNN gates added (Phase 1.3). |
-| P1-F3 | ✅ FIXED | RAM-pressure eco-mode added (Phase 1.3). |
-| P1-F4 | ✅ FIXED | `AbortSignal` propagated end-to-end into the worker (Phase 2.1). |
+| ID    | Status           | Evidence (current code)                                                                                                                                                                                                                                                  |
+| ----- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P0-F1 | ✅ FIXED         | Real ONNX text-generation pipelines (Phase 2.1).                                                                                                                                                                                                                         |
+| P0-F2 | ✅ FIXED         | Real `pipeline('text-generation', …)` via `@huggingface/transformers@3.8.1` (Phase 2.1).                                                                                                                                                                                 |
+| P0-F3 | ✅ FIXED         | `services/ai/inferenceGateway.ts:91-134` — real `modelList()` enumerates cloud + WebLLM + ONNX catalogs; `healthCheck()` runs a latency probe via `embedText`.                                                                                                           |
+| P0-F4 | ✅ FIXED         | Silero VAD v4 ONNX implementation (Phase 1.2).                                                                                                                                                                                                                           |
+| P0-F5 | ✅ FIXED         | `services/ai/webGpuDetectorService.ts:28-102` — `powerPreference` + `forceFallbackAdapter` options, `timestamp-query` + `maxComputeWorkgroupSize` feature inspection, `requestAdapterInfo`.                                                                              |
+| P0-F6 | ✅ FIXED         | Superseded by `localAiDeviceProfiler` (WebGPU/WebNN/DirectML + memory/battery detection).                                                                                                                                                                                |
+| P0-F7 | ✅ FIXED         | `services/ai/modelRecommendations.ts:77-82` — ONNX tiers use valid `Xenova/Qwen2.5-1.5B/0.5B-Instruct` + `SmolLM2-135M` IDs.                                                                                                                                             |
+| P0-F8 | ✅ FIXED         | `services/ai/aiPolicy.ts:5` — `LOCAL_INFERENCE_PROVIDERS` includes `onnx` + `transformers`.                                                                                                                                                                              |
+| P0-F9 | ✅ FIXED         | `services/ai/hybridFallback.ts:28` — local-provider set includes `onnx` + `transformers`; cloud fallback wired.                                                                                                                                                          |
+| P1-F1 | ✅ FIXED         | Stryker `mutate` expanded 34→40 (B-8).                                                                                                                                                                                                                                   |
+| P1-F2 | ✅ FIXED         | `enableAdaptiveAiEngine` + compute/WebNN gates added (Phase 1.3).                                                                                                                                                                                                        |
+| P1-F3 | ✅ FIXED         | RAM-pressure eco-mode added (Phase 1.3).                                                                                                                                                                                                                                 |
+| P1-F4 | ✅ FIXED         | `AbortSignal` propagated end-to-end into the worker (Phase 2.1).                                                                                                                                                                                                         |
 | P1-F5 | ✅ FIXED (v1.20) | `services/ai/aiRetry.ts` — capped exponential backoff + full jitter; honors server `Retry-After` (seconds / HTTP-date / `retryAfterMs`) over the computed delay, clamped to 30s. Pure `computeRetryDelayMs`/`parseRetryAfterMs` helpers + injectable rng; 13 unit tests. |
-| P1-F6 | ✅ FIXED (v1.20) | `services/ai/fetchAdapter.ts` — opt-in `timeoutMs` (DEFAULT OFF, streaming-safe) composing `AbortSignal.timeout` with the caller signal via `AbortSignal.any`. Existing no-arg callers unchanged; 5 unit tests. |
+| P1-F6 | ✅ FIXED (v1.20) | `services/ai/fetchAdapter.ts` — opt-in `timeoutMs` (DEFAULT OFF, streaming-safe) composing `AbortSignal.timeout` with the caller signal via `AbortSignal.any`. Existing no-arg callers unchanged; 5 unit tests.                                                          |
 
 ### Performance / Benchmark Gaps
+
 - **No benchmark infrastructure at all** — no Vitest `bench()`, no Playwright perf specs, no token/sec tracking.
 - **No GPU tracing** — no `timestamp-query` usage, no CDP trace collection.
 - **No model pre-warming** — every local inference cold-starts.
 - **No IO-Binding / Graph Capture** for ONNX — repeated inference pays full overhead.
 
 ### Next Steps
+
 1. **Phase 1**: Fix P0-F1..P0-F9 (ONNX real inference, gateway stubs, Silero VAD, policy fixes, model recommendation bug).
 2. **Phase 2**: Build `localAiDeviceProfiler` + `adaptiveAiEngine` with WebNN/NPU detection.
 3. **Phase 3**: Production-ready WebLLM/ONNX/WebNN/DirectML with pre-warming and IO-Binding.
@@ -582,16 +588,19 @@ The P0/P1 tables above were authored against the pre-Phase-2.1 tree. A line-by-l
 ## Follow-up Audit — 2026-05-31 (i18n Audit + Settings + CI Stabilization)
 
 ### i18n: Community Templates Localized
+
 - All 14 community templates now have locale-specific JSON files for DE, FR, ES, IT
 - `communityTemplateService.ts` is locale-aware — tries `index.<lang>.json`, falls back to EN
 - `useFocusTrap.ts` bug fixed: selector now excludes `tabIndex=-1` inputs (mobile keyboard no longer pops on palette open)
 - 27 DE voice settings keys translated; total 2129 keys (up from 2117)
 
 ### Settings: New Danger Zone features
+
 - **Factory Reset** (`services/factoryResetService.ts`): wipes all IDB databases, localStorage, SW caches
 - **Repeat Onboarding**: dispatches `worldscript:openPortal` event; `useApp.ts` listener re-opens WelcomePortal
 
 ### CI: Stabilization
+
 - `deploy-cloudflare-pages.yml` paused (manual trigger only) — eliminates phantom 0-job failures on branch pushes
 - Fixed 3 TS errors (invalid Modal size prop + null-check for test mock) that caused cascade-skip of E2E/Build/Storybook
 
@@ -605,11 +614,11 @@ The P0/P1 tables above were authored against the pre-Phase-2.1 tree. A line-by-l
 
 Three security findings identified and fixed in the same session:
 
-| ID | Severity | Finding | Fix |
-|----|----------|---------|-----|
-| C1-F1 | **High** | PBKDF2 iterations = 100,000 — below OWASP 2024 minimum (600k for SHA-256); WorldScript's own code uses 310k | Raised to 600,000 across all 5 KDF sites (`collab-transport/crypto.js`, `collaborationService.ts`, `storageEncryptionService.ts`, `cloudSyncEncryption.ts`, `libraryBackupService.ts`) |
-| C1-F2 | **High** | `extractable: true` on the derived `CryptoKey` — violates SEC-RULE-5; allows key export via `crypto.subtle.exportKey()` | Changed to `extractable: false` |
-| C1-F3 | **Medium** | `promise.reject(...)` in decrypt() not `return`ed — error is swallowed, decrypt continues with garbage IV/ciphertext | Added `return` before the rejection |
+| ID    | Severity   | Finding                                                                                                                 | Fix                                                                                                                                                                                    |
+| ----- | ---------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1-F1 | **High**   | PBKDF2 iterations = 100,000 — below OWASP 2024 minimum (600k for SHA-256); WorldScript's own code uses 310k             | Raised to 600,000 across all 5 KDF sites (`collab-transport/crypto.js`, `collaborationService.ts`, `storageEncryptionService.ts`, `cloudSyncEncryption.ts`, `libraryBackupService.ts`) |
+| C1-F2 | **High**   | `extractable: true` on the derived `CryptoKey` — violates SEC-RULE-5; allows key export via `crypto.subtle.exportKey()` | Changed to `extractable: false`                                                                                                                                                        |
+| C1-F3 | **Medium** | `promise.reject(...)` in decrypt() not `return`ed — error is swallowed, decrypt continues with garbage IV/ciphertext    | Added `return` before the rejection                                                                                                                                                    |
 
 **Verification:** `pnpm exec vitest run tests/unit/collaborationService.test.ts` — 38/38 passing after fixes.
 
@@ -653,29 +662,29 @@ Three security findings identified and fixed in the same session:
 
 **Root causes addressed:**
 
-| Category | Files | Fix |
-|----------|-------|-----|
-| `exactOptionalPropertyTypes` in ProForge pipeline | 7 agent files + slice + orchestrator | Conditional spread `...(val !== undefined && { key: val })` pattern |
-| `AIRequestOptions` requires `model`+`provider` | 7 pipeline agents + `baseAgent.ts` | Added `buildAiOpts()` protected helper to `BaseAgent` |
-| Wrong module paths in `toolRegistry.ts` | 1 | `'../../app/store'` → `'../../../app/store'` |
-| Missing `author` in `EpubExportOptions` | `productionAgent.ts` | Added `author: project.author ?? 'Unknown'` |
-| `AiModel`/`AIProvider` type imports missing | `baseAgent.ts` | Added imports |
-| Voice component wrong imports | `VoicePrivacyConsentModal.tsx`, `VoicePrivacyStatus.tsx` | Fixed `useTranslation` import path; `Modal` named import; `setVoiceSettings` action |
-| `noUncheckedIndexedAccess` in test fixtures | 35+ test files | `[i]!` non-null assertions, `?.` optional chaining |
-| `StorySection` shape mismatch (no `type`/`order`) | 5 test files | Removed non-existent fixture fields |
-| `StorySection.act` literal type `1\|2\|3` | `SceneRevisionPanel.test.tsx` | `act: 1 as const` |
-| `AiModel`, `Theme`, `MindMapNodeType`, `StoryObjectType` union literals | 4 test files | Replaced with valid enum members |
-| `PrivacySettings` required fields (6 fields) | `aiPolicyAndUtils.test.ts` | Added `basePrivacy()` helper with all required fields |
-| `DeviceHealthReport` shape mismatch | `modelRecommendations.test.ts` | Removed non-existent fields, added missing ones |
-| `FlatHelpArticle` shape mismatch | `HelpSearchPanel.test.tsx` | `bodyKey`+`tags` → `contentKey` |
-| `FeatureFlagsState.enableProForge` missing | 3 command test files | Added `enableProForge: false` to mock objects |
-| Unused variables (`_result`, `_moveEvent`) | 2 test files | Removed or voided |
-| `versionControlActions.restoreSnapshot` missing | `versionControlSlice.ts` | Added stub reducer (typed signal only) |
-| `useTransientUiStore` selector type mismatch | `CompileWizardModal.test.tsx` | `any` cast with biome-ignore per occurrence |
-| `useAppSelector` selector type mismatch | `useProForgeOrchestrator.test.ts` | `any` cast with biome-ignore on `mockImplementation` |
-| `getByRole('combobox', { name: undefined })` | `ToolsPanel.test.tsx` | `getAllByRole('combobox')[0]` |
-| Generic `t<T>` function type cast | `useTranslation.test.tsx` | Double-cast `as unknown as <T>(k,opts?)=>T` |
-| `AsyncThunk.fulfilled.match` property | `BackupQuickActionsCard.test.tsx` | `Object.assign` + `as unknown as` cast |
+| Category                                                                | Files                                                    | Fix                                                                                 |
+| ----------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `exactOptionalPropertyTypes` in ProForge pipeline                       | 7 agent files + slice + orchestrator                     | Conditional spread `...(val !== undefined && { key: val })` pattern                 |
+| `AIRequestOptions` requires `model`+`provider`                          | 7 pipeline agents + `baseAgent.ts`                       | Added `buildAiOpts()` protected helper to `BaseAgent`                               |
+| Wrong module paths in `toolRegistry.ts`                                 | 1                                                        | `'../../app/store'` → `'../../../app/store'`                                        |
+| Missing `author` in `EpubExportOptions`                                 | `productionAgent.ts`                                     | Added `author: project.author ?? 'Unknown'`                                         |
+| `AiModel`/`AIProvider` type imports missing                             | `baseAgent.ts`                                           | Added imports                                                                       |
+| Voice component wrong imports                                           | `VoicePrivacyConsentModal.tsx`, `VoicePrivacyStatus.tsx` | Fixed `useTranslation` import path; `Modal` named import; `setVoiceSettings` action |
+| `noUncheckedIndexedAccess` in test fixtures                             | 35+ test files                                           | `[i]!` non-null assertions, `?.` optional chaining                                  |
+| `StorySection` shape mismatch (no `type`/`order`)                       | 5 test files                                             | Removed non-existent fixture fields                                                 |
+| `StorySection.act` literal type `1\|2\|3`                               | `SceneRevisionPanel.test.tsx`                            | `act: 1 as const`                                                                   |
+| `AiModel`, `Theme`, `MindMapNodeType`, `StoryObjectType` union literals | 4 test files                                             | Replaced with valid enum members                                                    |
+| `PrivacySettings` required fields (6 fields)                            | `aiPolicyAndUtils.test.ts`                               | Added `basePrivacy()` helper with all required fields                               |
+| `DeviceHealthReport` shape mismatch                                     | `modelRecommendations.test.ts`                           | Removed non-existent fields, added missing ones                                     |
+| `FlatHelpArticle` shape mismatch                                        | `HelpSearchPanel.test.tsx`                               | `bodyKey`+`tags` → `contentKey`                                                     |
+| `FeatureFlagsState.enableProForge` missing                              | 3 command test files                                     | Added `enableProForge: false` to mock objects                                       |
+| Unused variables (`_result`, `_moveEvent`)                              | 2 test files                                             | Removed or voided                                                                   |
+| `versionControlActions.restoreSnapshot` missing                         | `versionControlSlice.ts`                                 | Added stub reducer (typed signal only)                                              |
+| `useTransientUiStore` selector type mismatch                            | `CompileWizardModal.test.tsx`                            | `any` cast with biome-ignore per occurrence                                         |
+| `useAppSelector` selector type mismatch                                 | `useProForgeOrchestrator.test.ts`                        | `any` cast with biome-ignore on `mockImplementation`                                |
+| `getByRole('combobox', { name: undefined })`                            | `ToolsPanel.test.tsx`                                    | `getAllByRole('combobox')[0]`                                                       |
+| Generic `t<T>` function type cast                                       | `useTranslation.test.tsx`                                | Double-cast `as unknown as <T>(k,opts?)=>T`                                         |
+| `AsyncThunk.fulfilled.match` property                                   | `BackupQuickActionsCard.test.tsx`                        | `Object.assign` + `as unknown as` cast                                              |
 
 **Quality gate (2026-05-27 — v1.18.1):** lint ✅ (Biome — 0 errors) · typecheck ✅ (0 errors — tsgo --noEmit) · i18n:check ✅ (2062 keys × 5 locales) · tests ✅
 
@@ -689,35 +698,35 @@ Three security findings identified and fixed in the same session:
 
 **Changes shipped:**
 
-| Phase | Area | What changed |
-|-------|------|--------------|
-| H | Vocabulary | Stage labels, loading messages, RAG "passages" rename, non-technical feature flag descriptions |
-| H | Tests | Behavioral tests replacing implementation-detail assertions across 8 agent test files |
-| A | `BaseAgent` | Abstract base class in `pipelineAgents/baseAgent.ts` — ~200 LOC removed from 8 agents |
-| A | `aiConstants.ts` | New consolidation module for `CREATIVITY_TO_TEMPERATURE`, `LOCAL_BACKEND_PRESET_DEFAULT_URL`, `ORCHESTRATION_READY_PROVIDERS` — re-export shims keep existing imports valid |
-| A | `listenerMiddleware.ts` | `addDebouncedListener` factory; `getOriginalState()` synchronous capture fix (RTK constraint) |
-| P-1 | `supervisorAgent.ts` | New heuristic quality gate (no AI calls) — detects fallback sentinels, evaluates pacing and grammar ratios |
-| P-2 | Orchestrator | `executeStageWithSupervision` retry loop; hard gate: intake `qualityScore < 30` → fail |
-| P-3 | Self-evaluation | `BaseAgent.selfReflect()` — re-runs DiagnosticAgent/StructuralAgent on INCOHERENT flag; `reflectionNotes` in types |
-| P-4 | Honest fallbacks | All `createFallback*` use 0 scores + `isFallback: true`; SupervisorAgent detects and retries |
-| P-5 | `PipelineReviewPanel` | Critical Actions card, severity-grouped view, Quick Accept High-Confidence button (confidence ≥ 0.85) |
-| X-1 | `SettingsView` | `NAV_GROUPS` + `NavGroupHeader` — semantic sidebar grouping |
-| X-2 | Flow Mode | `transientUiStore` `flowMode`/`setFlowMode`; `WriterViewUI` Escape key exits |
-| X-3 | Empty states | `<EmptyState>` for Characters, World, SceneBoard, ProForge views |
-| i18n | All 5 locales | `proforge.pipeline.title`, `proforge.pipeline.noneActive`, loading messages, stage labels — 2055 keys × 5 locales |
+| Phase | Area                    | What changed                                                                                                                                                                |
+| ----- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H     | Vocabulary              | Stage labels, loading messages, RAG "passages" rename, non-technical feature flag descriptions                                                                              |
+| H     | Tests                   | Behavioral tests replacing implementation-detail assertions across 8 agent test files                                                                                       |
+| A     | `BaseAgent`             | Abstract base class in `pipelineAgents/baseAgent.ts` — ~200 LOC removed from 8 agents                                                                                       |
+| A     | `aiConstants.ts`        | New consolidation module for `CREATIVITY_TO_TEMPERATURE`, `LOCAL_BACKEND_PRESET_DEFAULT_URL`, `ORCHESTRATION_READY_PROVIDERS` — re-export shims keep existing imports valid |
+| A     | `listenerMiddleware.ts` | `addDebouncedListener` factory; `getOriginalState()` synchronous capture fix (RTK constraint)                                                                               |
+| P-1   | `supervisorAgent.ts`    | New heuristic quality gate (no AI calls) — detects fallback sentinels, evaluates pacing and grammar ratios                                                                  |
+| P-2   | Orchestrator            | `executeStageWithSupervision` retry loop; hard gate: intake `qualityScore < 30` → fail                                                                                      |
+| P-3   | Self-evaluation         | `BaseAgent.selfReflect()` — re-runs DiagnosticAgent/StructuralAgent on INCOHERENT flag; `reflectionNotes` in types                                                          |
+| P-4   | Honest fallbacks        | All `createFallback*` use 0 scores + `isFallback: true`; SupervisorAgent detects and retries                                                                                |
+| P-5   | `PipelineReviewPanel`   | Critical Actions card, severity-grouped view, Quick Accept High-Confidence button (confidence ≥ 0.85)                                                                       |
+| X-1   | `SettingsView`          | `NAV_GROUPS` + `NavGroupHeader` — semantic sidebar grouping                                                                                                                 |
+| X-2   | Flow Mode               | `transientUiStore` `flowMode`/`setFlowMode`; `WriterViewUI` Escape key exits                                                                                                |
+| X-3   | Empty states            | `<EmptyState>` for Characters, World, SceneBoard, ProForge views                                                                                                            |
+| i18n  | All 5 locales           | `proforge.pipeline.title`, `proforge.pipeline.noneActive`, loading messages, stage labels — 2055 keys × 5 locales                                                           |
 
 **New files:** `services/ai/aiConstants.ts`, `services/proForge/pipelineAgents/baseAgent.ts`, `services/proForge/pipelineAgents/supervisorAgent.ts`
 
 **Test fixes (6 files, 84 tests recovered):**
 
-| File | Root cause | Fix |
-|------|-----------|-----|
-| `listenerMiddleware.test.ts` | `getOriginalState()` after `await` | Synchronous capture before first `await` |
-| `writing/WriterViewUI.test.tsx` | `useWriterViewContext` missing mock | Added `vi.mock('../../../contexts/WriterViewContext')` |
-| `proForge/components/ProForgeDashboard.test.tsx` | i18n key assertion | Changed to `screen.getByText('proforge.pipeline.noneActive')` |
-| `thunks/writingAndCharacterThunks.test.ts` | `assertCloudAiAllowedSync` throws in localStorageOnly mode | Added `vi.mock('../../../services/ai/aiPolicy')` |
-| `thunks/outlineAndWorldThunks.test.ts` | same | same |
-| `thunks/plotBoardAiThunks.test.ts` | same | same |
+| File                                             | Root cause                                                 | Fix                                                           |
+| ------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------- |
+| `listenerMiddleware.test.ts`                     | `getOriginalState()` after `await`                         | Synchronous capture before first `await`                      |
+| `writing/WriterViewUI.test.tsx`                  | `useWriterViewContext` missing mock                        | Added `vi.mock('../../../contexts/WriterViewContext')`        |
+| `proForge/components/ProForgeDashboard.test.tsx` | i18n key assertion                                         | Changed to `screen.getByText('proforge.pipeline.noneActive')` |
+| `thunks/writingAndCharacterThunks.test.ts`       | `assertCloudAiAllowedSync` throws in localStorageOnly mode | Added `vi.mock('../../../services/ai/aiPolicy')`              |
+| `thunks/outlineAndWorldThunks.test.ts`           | same                                                       | same                                                          |
+| `thunks/plotBoardAiThunks.test.ts`               | same                                                       | same                                                          |
 
 **Quality gate (2026-05-27 — v1.18.0):** lint ✅ (Biome — 0 errors) · typecheck ✅ · i18n:check ✅ (2055 keys × 5 locales) · tests ✅ (84 previously-failing tests green; no regressions)
 
@@ -731,26 +740,26 @@ Three security findings identified and fixed in the same session:
 
 **Changes shipped:**
 
-| Area | File | What changed |
-|------|------|--------------|
-| Tab leader | `packages/ai-core/src/tabLeaderElection.ts` | localStorage heartbeat (5s refresh, 12s stale) for fast-path leader detection across reloads; `surrenderLeadership()` export; default election timeout 280→800ms |
-| Tab leader | `packages/ai-core/src/index.ts` | Re-exports `surrenderLeadership` |
-| Embedding cache | `services/ai/localEmbeddingService.ts` | LRU in-memory cache (1 000 entries, ~400ms hit savings per RAG query); worker health-check ping/pong (30s interval, 5s timeout → auto-restart) |
-| GPU mutex | `services/localAiFacade.ts` | Acquires `gpuResourceManager` GPU slot before WebLLM/ONNX-WebGPU init; always releases + calls `surrenderLeadership()` in `finally` |
-| Worker | `workers/inference.worker.ts` | `WORKER_PING` → `WORKER_PONG` handler for health-check protocol |
-| AI policy | `features/project/aiThunkUtils.ts` | `assertCloudAiAllowedSync` called at thunk entry — one enforcement point instead of per-caller |
-| RAG stability | `services/localRagService.ts` | `indexedAt` changed from `now - offset` to stable `(i+1)*1000` — consistent across re-indexing runs |
-| Turbo | `turbo.json` | Added `mutation` pipeline task (no cache) |
-| Docs | `CLAUDE.md`, `.github/copilot-instructions.md`, `.cursor/rules/` | Updated architecture docs to reflect ProForge, Voice, Feature Flags, RTCDataChannel patch, checkStorageHealth, Tauri CSP |
+| Area            | File                                                             | What changed                                                                                                                                                     |
+| --------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tab leader      | `packages/ai-core/src/tabLeaderElection.ts`                      | localStorage heartbeat (5s refresh, 12s stale) for fast-path leader detection across reloads; `surrenderLeadership()` export; default election timeout 280→800ms |
+| Tab leader      | `packages/ai-core/src/index.ts`                                  | Re-exports `surrenderLeadership`                                                                                                                                 |
+| Embedding cache | `services/ai/localEmbeddingService.ts`                           | LRU in-memory cache (1 000 entries, ~400ms hit savings per RAG query); worker health-check ping/pong (30s interval, 5s timeout → auto-restart)                   |
+| GPU mutex       | `services/localAiFacade.ts`                                      | Acquires `gpuResourceManager` GPU slot before WebLLM/ONNX-WebGPU init; always releases + calls `surrenderLeadership()` in `finally`                              |
+| Worker          | `workers/inference.worker.ts`                                    | `WORKER_PING` → `WORKER_PONG` handler for health-check protocol                                                                                                  |
+| AI policy       | `features/project/aiThunkUtils.ts`                               | `assertCloudAiAllowedSync` called at thunk entry — one enforcement point instead of per-caller                                                                   |
+| RAG stability   | `services/localRagService.ts`                                    | `indexedAt` changed from `now - offset` to stable `(i+1)*1000` — consistent across re-indexing runs                                                              |
+| Turbo           | `turbo.json`                                                     | Added `mutation` pipeline task (no cache)                                                                                                                        |
+| Docs            | `CLAUDE.md`, `.github/copilot-instructions.md`, `.cursor/rules/` | Updated architecture docs to reflect ProForge, Voice, Feature Flags, RTCDataChannel patch, checkStorageHealth, Tauri CSP                                         |
 
 **Tests added (32 new tests across 4 files):**
 
-| File | New tests |
-|------|-----------|
-| `tests/unit/tabLeaderElection.test.ts` | +6 (heartbeat fast-path, stale detection, `surrenderLeadership` cleanup) |
-| `tests/unit/inferenceWorker.test.ts` | +1 (WORKER_PING → WORKER_PONG) |
-| `tests/unit/localAiFacade.test.ts` | +3 (GPU acquire/release, no-GPU skip, error path) |
-| `tests/unit/aiThunkUtils.test.ts` | +3 (policy call args, policy rejection, payload creator not called on block) |
+| File                                   | New tests                                                                    |
+| -------------------------------------- | ---------------------------------------------------------------------------- |
+| `tests/unit/tabLeaderElection.test.ts` | +6 (heartbeat fast-path, stale detection, `surrenderLeadership` cleanup)     |
+| `tests/unit/inferenceWorker.test.ts`   | +1 (WORKER_PING → WORKER_PONG)                                               |
+| `tests/unit/localAiFacade.test.ts`     | +3 (GPU acquire/release, no-GPU skip, error path)                            |
+| `tests/unit/aiThunkUtils.test.ts`      | +3 (policy call args, policy rejection, payload creator not called on block) |
 
 **Quality gate (2026-05-26 — v1.17.2):** lint ✅ (Biome — 0 errors, 895 files) · typecheck ✅ · tests ✅ (32 new, all suites green)
 
@@ -764,18 +773,18 @@ Three security findings identified and fixed in the same session:
 
 **New test files added (122+ new test files, ~600+ new tests):**
 
-| Area | Files | Tests |
-|------|-------|-------|
-| `settings/` components | 17 | ~140 |
-| `writing/` components | 3 | ~45 |
-| `manuscript/` components | 2 | ~31 |
-| `mind-map/` components | 4 | ~45 |
-| `ui/` atoms | 2 | ~20 |
-| `services/` (ai, voice, misc) | 24 | ~180 |
-| `hooks/` | 17 | ~150 |
-| `features/` slices & types | 3 | ~33 |
-| Root-level components | 34 | ~330 |
-| `proForge/` pipeline | 10 | ~120 |
+| Area                          | Files | Tests |
+| ----------------------------- | ----- | ----- |
+| `settings/` components        | 17    | ~140  |
+| `writing/` components         | 3     | ~45   |
+| `manuscript/` components      | 2     | ~31   |
+| `mind-map/` components        | 4     | ~45   |
+| `ui/` atoms                   | 2     | ~20   |
+| `services/` (ai, voice, misc) | 24    | ~180  |
+| `hooks/`                      | 17    | ~150  |
+| `features/` slices & types    | 3     | ~33   |
+| Root-level components         | 34    | ~330  |
+| `proForge/` pipeline          | 10    | ~120  |
 
 **Key modules newly covered:**
 - `components/writing/AiScratchpad.tsx` — 15 tests (TTS, history nav, accept)
@@ -794,7 +803,7 @@ Three security findings identified and fixed in the same session:
 - `components/settings/PrivacySection.tsx` — 8 tests
 - `components/settings/SettingsOverviewCard.tsx` — 10 tests
 - `components/settings/SettingsModals.tsx` — 14 tests
-- + 70 more components and services fully covered for the first time
+- - 70 more components and services fully covered for the first time
 
 **Maintenance pass (2026-05-26 — v1.17.1):**
 - 30+ TypeScript errors fixed in ProForge pipeline test suite (15 files)
@@ -1449,19 +1458,19 @@ WorldScript Studio is a well-architected React 19 + Redux Toolkit PWA with stron
 
 ### Scorecard
 
-| Aspect           | Rating | Notes                                                      |
-| ---------------- | ------ | ---------------------------------------------------------- |
-| Type Safety      | ★★★★★  | Strict mode, exactOptionalPropertyTypes                    |
-| Architecture     | ★★★★☆  | Clean feature-sliced design, clear patterns                |
-| Accessibility    | ★★★★☆  | Strong ARIA, focus management, color-blind modes           |
-| i18n             | ★★★★★  | Modular, 5 languages, persistent selection                 |
-| PWA / Offline    | ★★★★★  | Workbox, versioned caches, smart strategies                |
-| State Management | ★★★★☆  | Redux-Undo well integrated, auto-save validated            |
-| Security         | ★★★★☆  | CSP hardened, non-extractable CryptoKey, PSK collab, import validation |
+| Aspect           | Rating | Notes                                                                                                                                       |
+| ---------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Type Safety      | ★★★★★  | Strict mode, exactOptionalPropertyTypes                                                                                                     |
+| Architecture     | ★★★★☆  | Clean feature-sliced design, clear patterns                                                                                                 |
+| Accessibility    | ★★★★☆  | Strong ARIA, focus management, color-blind modes                                                                                            |
+| i18n             | ★★★★★  | Modular, 5 languages, persistent selection                                                                                                  |
+| PWA / Offline    | ★★★★★  | Workbox, versioned caches, smart strategies                                                                                                 |
+| State Management | ★★★★☆  | Redux-Undo well integrated, auto-save validated                                                                                             |
+| Security         | ★★★★☆  | CSP hardened, non-extractable CryptoKey, PSK collab, import validation                                                                      |
 | Test Coverage    | ★★★★☆  | 1 641 Vitest-Tests (Unit) / 150 Dateien; 62.86 % Statements, 64.68 % Lines, 49.06 % Branches; Playwright-E2E, glob-basierte Coverage-Floors |
-| Documentation    | ★★★★★  | README, CONTRIBUTING, ROADMAP, TODO, CHANGELOG, AUDIT      |
-| Performance      | ★★★★☆  | Code-splitting with 10+ manual chunks, Lighthouse CI       |
-| CI/CD            | ★★★★★  | security→quality→build (inkl. i18n-Gate, bundle:budget, analyze-Artifact), e2e, Lighthouse, Storybook, Pages-Deploy |
+| Documentation    | ★★★★★  | README, CONTRIBUTING, ROADMAP, TODO, CHANGELOG, AUDIT                                                                                       |
+| Performance      | ★★★★☆  | Code-splitting with 10+ manual chunks, Lighthouse CI                                                                                        |
+| CI/CD            | ★★★★★  | security→quality→build (inkl. i18n-Gate, bundle:budget, analyze-Artifact), e2e, Lighthouse, Storybook, Pages-Deploy                         |
 
 ---
 
@@ -1733,21 +1742,21 @@ Multiple `console.log`, `console.warn`, and `console.error` calls throughout the
 
 ## Recommended Next Steps (Prioritized)
 
-| #   | Action                                    | Effort | Impact | Priority      |
-| --- | ----------------------------------------- | ------ | ------ | ------------- |
-| 1   | ~~Add Tauri CSP~~                         | Low    | High   | ✅ Done       |
-| 2   | ~~Add AbortController to AI thunks~~      | Medium | High   | ✅ Done       |
-| 3   | ~~Validate undo-envelope reconstruction~~ | Low    | High   | ✅ Done       |
-| 4   | ~~Add per-view error boundaries~~         | Low    | Medium | ✅ Done       |
-| 5   | ~~Make Redux logger opt-in~~              | Low    | Medium | ✅ Done       |
-| 6   | Fix `noExplicitAny` — 2 literal + **137 biome-ignore suppressions** (133 in test mocks [legitimate per CLAUDE.md pattern], 4 in production files) | Medium | Medium | 🟡 4 production fixed; 133 test mocks accepted |
-| 7   | Raise unit/integration coverage toward **50–70 %** (Vitest `vitest.config.ts`: breites `coverage.include`, Schwellen = aktueller Gesamt‑%; CI gate) | High | High | 🟡 Ongoing |
-| 8   | Add DevContainer configuration            | Low    | Medium | 🟠 Backlog    |
-| 9   | Fix ManuscriptView resize memory leak     | Low    | Medium | 🟠 Backlog    |
-| 10  | ~~Add performance budgets~~               | Medium | Medium | ✅ Done       |
-| 11  | ~~Encrypt P2P collaboration~~             | Medium | Medium | ✅ Done (PSK) |
-| 12  | ~~Align Tauri/npm versions~~              | Low    | Low    | ✅ Done       |
-| 14  | Add logging framework                     | Medium | Low    | 🟢 Backlog    |
+| #   | Action                                                                                                                                              | Effort | Impact | Priority                                       |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ | ---------------------------------------------- |
+| 1   | ~~Add Tauri CSP~~                                                                                                                                   | Low    | High   | ✅ Done                                        |
+| 2   | ~~Add AbortController to AI thunks~~                                                                                                                | Medium | High   | ✅ Done                                        |
+| 3   | ~~Validate undo-envelope reconstruction~~                                                                                                           | Low    | High   | ✅ Done                                        |
+| 4   | ~~Add per-view error boundaries~~                                                                                                                   | Low    | Medium | ✅ Done                                        |
+| 5   | ~~Make Redux logger opt-in~~                                                                                                                        | Low    | Medium | ✅ Done                                        |
+| 6   | Fix `noExplicitAny` — 2 literal + **137 biome-ignore suppressions** (133 in test mocks [legitimate per CLAUDE.md pattern], 4 in production files)   | Medium | Medium | 🟡 4 production fixed; 133 test mocks accepted |
+| 7   | Raise unit/integration coverage toward **50–70 %** (Vitest `vitest.config.ts`: breites `coverage.include`, Schwellen = aktueller Gesamt‑%; CI gate) | High   | High   | 🟡 Ongoing                                     |
+| 8   | Add DevContainer configuration                                                                                                                      | Low    | Medium | 🟠 Backlog                                     |
+| 9   | Fix ManuscriptView resize memory leak                                                                                                               | Low    | Medium | 🟠 Backlog                                     |
+| 10  | ~~Add performance budgets~~                                                                                                                         | Medium | Medium | ✅ Done                                        |
+| 11  | ~~Encrypt P2P collaboration~~                                                                                                                       | Medium | Medium | ✅ Done (PSK)                                  |
+| 12  | ~~Align Tauri/npm versions~~                                                                                                                        | Low    | Low    | ✅ Done                                        |
+| 14  | Add logging framework                                                                                                                               | Medium | Low    | 🟢 Backlog                                     |
 
 ---
 
@@ -1779,32 +1788,32 @@ WorldScript Studio was assessed as a strong, modern React/TypeScript application
 
 ### Critical Findings (Baseline)
 
-1. **Desktop-Backend stored Provider API keys unencrypted** — `services/fileSystemService.ts` saved keys as plaintext via `saveApiKey()`. → *Resolved: AES-GCM encryption applied.*
+1. **Desktop-Backend stored Provider API keys unencrypted** — `services/fileSystemService.ts` saved keys as plaintext via `saveApiKey()`. → _Resolved: AES-GCM encryption applied._
 2. ~~**Type incompatibility between StorageBackend and dbService**~~ — Addressed: contract in `services/storageBackend.ts`; IndexedDB + Tauri FS both implement it; proxy uses `StoryProject` for `saveProject`.
-3. **`AUTO_SNAPSHOT_INTERVAL` mismatch** — `services/dbService.ts` used 30s but comment said 30 minutes. → *Clarified and documented.*
-4. **No production logging control** — `console.*` calls scattered across services without environment filtering. → *Logger service introduced (`services/logger.ts`).*
-5. **`DECRYPT_FAILED` as API key sentinel** — `dbService.ts` returned the string `'DECRYPT_FAILED'` on decrypt errors instead of `null`. → *Resolved: explicit recovery flow with UI warning added.*
+3. **`AUTO_SNAPSHOT_INTERVAL` mismatch** — `services/dbService.ts` used 30s but comment said 30 minutes. → _Clarified and documented._
+4. **No production logging control** — `console.*` calls scattered across services without environment filtering. → _Logger service introduced (`services/logger.ts`)._
+5. **`DECRYPT_FAILED` as API key sentinel** — `dbService.ts` returned the string `'DECRYPT_FAILED'` on decrypt errors instead of `null`. → _Resolved: explicit recovery flow with UI warning added._
 
 ### High-Priority Findings (Baseline)
 
-- Incomplete E2E test coverage → *Ongoing improvement.*
-- Storage backend dynamic initialization could cause runtime errors → *Guards added.*
-- Scattered `console.*` statements in service files → *Centralized via logger.*
-- Auto-save persistence validation at risk from redux-undo format changes → *`serializeProjectForSave()` extraction recommended.*
+- Incomplete E2E test coverage → _Ongoing improvement._
+- Storage backend dynamic initialization could cause runtime errors → _Guards added._
+- Scattered `console.*` statements in service files → _Centralized via logger._
+- Auto-save persistence validation at risk from redux-undo format changes → _`serializeProjectForSave()` extraction recommended._
 
 ### Medium-Priority Findings (Baseline)
 
-- No performance budget / bundle limits → *Lighthouse CI added.*
-- No per-view Error Boundaries → *Added with recovery button.*
-- Feature flag system incomplete → *FeatureFlags slice exists, runtime toggle deferred.*
-- No dedicated logging service → *`services/logger.ts` created.*
-- Unsafe type casts in `fileSystemService.ts` → *Partially addressed.*
+- No performance budget / bundle limits → _Lighthouse CI added._
+- No per-view Error Boundaries → _Added with recovery button._
+- Feature flag system incomplete → _FeatureFlags slice exists, runtime toggle deferred._
+- No dedicated logging service → _`services/logger.ts` created._
+- Unsafe type casts in `fileSystemService.ts` → _Partially addressed._
 
 ### Low-Priority Findings (Baseline)
 
-- Storybook expansion needed → *10 stories now available.*
-- Changelog standardization → *Keep a Changelog format adopted.*
-- Outdated dependencies → *Conservative remediation applied.*
+- Storybook expansion needed → _10 stories now available._
+- Changelog standardization → _Keep a Changelog format adopted._
+- Outdated dependencies → _Conservative remediation applied._
 
 ### Remediation Steps Applied Post-Baseline
 
@@ -1822,84 +1831,84 @@ WorldScript Studio was assessed as a strong, modern React/TypeScript application
 
 ### Plugin System Hardening (P0)
 
-| Status | Item |
-|--------|------|
-| ✅ | Replaced unsafe Worker global eval with function-scope sandbox in `workers/plugin.worker.ts` |
-| ✅ | Added runtime guards for `Function.prototype.constructor`, `eval`, `WebAssembly`, async/generator constructors |
-| ✅ | Normalized ESM `export function run` syntax for `new Function` execution |
-| ✅ | Converted denied async APIs to synchronous throwers so misuse always propagates |
-| ✅ | Made worker handler throw on plugin failures instead of returning `{ success: false }` |
-| ✅ | Added read-only project snapshot + side-effect bridge in `services/pluginRegistry.ts` |
-| ✅ | Added `plugin.sandbox` capability to WorkerBus v2 schema |
-| ✅ | Added telemetry logging to `pluginRegistry.ts` (loadPlugin method) |
-| ✅ | Created/extended `tests/unit/workers/plugin.worker.test.ts` (18 tests) |
-| ✅ | Created/extended `tests/unit/plugins/pluginRegistryLoad.test.ts` (8 tests) |
-| ✅ | Updated `docs/PLUGINS-BETA.md` with accurate sandbox/limitations description |
-| ⬜ | Full timeout/abort coupling for dynamic `import()` and sync loops (P0-2) |
+| Status | Item                                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------------------- |
+| ✅     | Replaced unsafe Worker global eval with function-scope sandbox in `workers/plugin.worker.ts`                   |
+| ✅     | Added runtime guards for `Function.prototype.constructor`, `eval`, `WebAssembly`, async/generator constructors |
+| ✅     | Normalized ESM `export function run` syntax for `new Function` execution                                       |
+| ✅     | Converted denied async APIs to synchronous throwers so misuse always propagates                                |
+| ✅     | Made worker handler throw on plugin failures instead of returning `{ success: false }`                         |
+| ✅     | Added read-only project snapshot + side-effect bridge in `services/pluginRegistry.ts`                          |
+| ✅     | Added `plugin.sandbox` capability to WorkerBus v2 schema                                                       |
+| ✅     | Added telemetry logging to `pluginRegistry.ts` (loadPlugin method)                                             |
+| ✅     | Created/extended `tests/unit/workers/plugin.worker.test.ts` (18 tests)                                         |
+| ✅     | Created/extended `tests/unit/plugins/pluginRegistryLoad.test.ts` (8 tests)                                     |
+| ✅     | Updated `docs/PLUGINS-BETA.md` with accurate sandbox/limitations description                                   |
+| ⬜     | Full timeout/abort coupling for dynamic `import()` and sync loops (P0-2)                                       |
 
 ### Supply-Chain Hardening (P1)
 
-| Status | Item |
-|--------|------|
-| ✅ | Added `strictDepBuilds: true` to `pnpm-workspace.yaml` |
-| ✅ | Added `blockExoticSubdeps: true` to `pnpm-workspace.yaml` |
-| ✅ | Added `minimumReleaseAge: 10080` (7 days) to `pnpm-workspace.yaml` |
-| ✅ | Added security justification comments to `pnpm-workspace.yaml` overrides |
+| Status | Item                                                                     |
+| ------ | ------------------------------------------------------------------------ |
+| ✅     | Added `strictDepBuilds: true` to `pnpm-workspace.yaml`                   |
+| ✅     | Added `blockExoticSubdeps: true` to `pnpm-workspace.yaml`                |
+| ✅     | Added `minimumReleaseAge: 10080` (7 days) to `pnpm-workspace.yaml`       |
+| ✅     | Added security justification comments to `pnpm-workspace.yaml` overrides |
 
 ### OpenRouter Provider Hardening (P1)
 
-| Status | Item |
-|--------|------|
-| ✅ | Expanded `tests/unit/ai/openrouterProvider.test.ts` to 19 tests covering streaming, 429 retry, Retry-After, circuit breaker, non-OK errors, AbortSignal, malformed SSE, RPM tracking |
-| ✅ | Added test-only delay provider hook to keep retry tests fast and deterministic |
+| Status | Item                                                                                                                                                                                 |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ✅     | Expanded `tests/unit/ai/openrouterProvider.test.ts` to 19 tests covering streaming, 429 retry, Retry-After, circuit breaker, non-OK errors, AbortSignal, malformed SSE, RPM tracking |
+| ✅     | Added test-only delay provider hook to keep retry tests fast and deterministic                                                                                                       |
 
 ### Copilot Apply-Flow Hardening (P1)
 
-| Status | Item |
-|--------|------|
-| ✅ | Extended `tests/unit/copilot/useGlobalCopilot.test.ts` with 7 `applyLastSuggestion` tests (70% gate, empty section, missing section, status lifecycle, dispatch verification) |
+| Status | Item                                                                                                                                                                          |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ✅     | Extended `tests/unit/copilot/useGlobalCopilot.test.ts` with 7 `applyLastSuggestion` tests (70% gate, empty section, missing section, status lifecycle, dispatch verification) |
 
 ### Mutation Testing Expansion (P1)
 
-| Status | Item |
-|--------|------|
-| ✅ | Added `services/ai/aiRetry.ts` to mutation targets |
-| ✅ | Added `services/ai/fetchAdapter.ts` to mutation targets |
-| ✅ | Added `services/ai/routingLogger.ts` to mutation targets |
-| ✅ | Added `services/copilot/heuristicEngine.ts`, `insightGenerator.ts`, `actionApplier.ts`, `copilotContextService.ts` to mutation targets |
-| ✅ | Added `services/ai/aiModeService.ts`, `services/ai/providers/openrouterProvider.ts`, `services/pluginRegistry.ts` to mutation targets |
+| Status | Item                                                                                                                                   |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| ✅     | Added `services/ai/aiRetry.ts` to mutation targets                                                                                     |
+| ✅     | Added `services/ai/fetchAdapter.ts` to mutation targets                                                                                |
+| ✅     | Added `services/ai/routingLogger.ts` to mutation targets                                                                               |
+| ✅     | Added `services/copilot/heuristicEngine.ts`, `insightGenerator.ts`, `actionApplier.ts`, `copilotContextService.ts` to mutation targets |
+| ✅     | Added `services/ai/aiModeService.ts`, `services/ai/providers/openrouterProvider.ts`, `services/pluginRegistry.ts` to mutation targets  |
 
 ### Voice Pipeline Status
 
-| Status | Item |
-|--------|------|
-| 🔄 | `test.fixme` tests in `whisper-stt.spec.ts` remain (headless CI limitation) |
-| ✅ | VoiceActivityCoordinator has comprehensive unit tests (11 tests) |
-| ✅ | Voice nightly workflow (`voice-nightly.yml`) configured correctly |
+| Status | Item                                                                        |
+| ------ | --------------------------------------------------------------------------- |
+| 🔄     | `test.fixme` tests in `whisper-stt.spec.ts` remain (headless CI limitation) |
+| ✅     | VoiceActivityCoordinator has comprehensive unit tests (11 tests)            |
+| ✅     | Voice nightly workflow (`voice-nightly.yml`) configured correctly           |
 
 ### Tauri Build Pipeline
 
-| Status | Item |
-|--------|------|
-| ✅ | `tauri-build.yml` has proper workflow_dispatch handling |
-| ✅ | Signing key logic correctly disables updater artifacts when no key present |
-| ⬜ | Full verification pending maintainer secrets |
+| Status | Item                                                                       |
+| ------ | -------------------------------------------------------------------------- |
+| ✅     | `tauri-build.yml` has proper workflow_dispatch handling                    |
+| ✅     | Signing key logic correctly disables updater artifacts when no key present |
+| ⬜     | Full verification pending maintainer secrets                               |
 
 ### Error Handling & Observability
 
-| Status | Item |
-|--------|------|
-| ✅ | Plugin execution errors logged via structured logger |
-| ✅ | Voice error paths set `setVoiceError` in Redux |
-| ✅ | Storage encryption errors throw descriptive messages |
+| Status | Item                                                 |
+| ------ | ---------------------------------------------------- |
+| ✅     | Plugin execution errors logged via structured logger |
+| ✅     | Voice error paths set `setVoiceError` in Redux       |
+| ✅     | Storage encryption errors throw descriptive messages |
 
 ### Tauri Build Pipeline (updated)
 
-| Status | Item |
-|--------|------|
-| ✅ | `tauri-build.yml` references `secrets.TAURI_SIGNING_PRIVATE_KEY` and password correctly |
-| ✅ | Workflow unsets signing keys and disables updater artifacts for `workflow_dispatch` test builds |
-| 🔄 | Full end-to-end signing verification pending next tag or manual workflow dispatch with secrets |
+| Status | Item                                                                                            |
+| ------ | ----------------------------------------------------------------------------------------------- |
+| ✅     | `tauri-build.yml` references `secrets.TAURI_SIGNING_PRIVATE_KEY` and password correctly         |
+| ✅     | Workflow unsets signing keys and disables updater artifacts for `workflow_dispatch` test builds |
+| 🔄     | Full end-to-end signing verification pending next tag or manual workflow dispatch with secrets  |
 
 ---
 
@@ -1915,26 +1924,26 @@ day its advisory was elevated to GitHub-reviewed status, and the `adm-zip` row, 
 (set at or above the patched version) as preventive supply-chain pins; several apply only to
 dev/test transitive deps and are never shipped to users.
 
-| Package | Override | Advisory | Justification |
-|---------|----------|----------|---------------|
-| esbuild | >=0.28.1 | GHSA-67mh-4wv8-2f99 | Dev-server CORS let any website send requests to the esbuild dev server and read the response (≤0.24.2; fixed 0.25.0). Build-tool only, never shipped. Pinned in the 2026-06 security merge. |
-| serialize-javascript | >=7.0.3 | GHSA-76p7-773f-r4q5 / CVE-2024-11831 | Regex XSS in serialized output (<6.0.2). |
-| tmp | ^0.2.6 | GHSA-52f5-9888-hmc6 / CVE-2025-54798 | Arbitrary temp file/dir write via symlink `dir` parameter (≤0.2.3; fixed 0.2.4). |
-| @xmldom/xmldom | >=0.9.12 | GHSA-6gmq-8vp8-gcm6 / CVE-2026-83610 (supersedes GHSA-5fg8-2547-mr8q / CVE-2022-39353) | XML fragment injection via invalid `EntityReference.nodeName` during `requireWellFormed` serialization (≥0.9.0 ≤0.9.11; fixed 0.9.12). The prior `>=0.8.13` floor no longer excluded this — Dependabot alert #79, 2026-09-02. Ships via `mammoth` (`.docx` export), a production dependency. |
-| protobufjs | >=7.5.6 | GHSA-h755-8qp9-cq85 / CVE-2023-36665 | Prototype pollution (6.10.0–7.2.3; fixed 7.2.4). |
-| axios | >=1.15.2 | GHSA-jr5f-v2jv-69x6 / CVE-2025-27152 | SSRF + credential leak via absolute URL. |
-| adm-zip | >=0.6.1 | GHSA-xcpc-8h2w-3j85 / GHSA-7q85-xj36-vmfc / GHSA-vwc7-r8mq-g2x9 | Transitive via `onnxruntime-node@1.24.3`; `0.6.1` is outside the vulnerable ranges, and its tarball adds the extraction symlink-path guard and duplicate-entry fail-closed behavior relevant to the old advisory. The 2026-09-11 release satisfies the 7-day minimum age; `pnpm audit` is clean and the `allowBuilds: onnxruntime-node: false` policy remains active. |
-| basic-ftp | >=6.2.1 | GHSA-5rq4-664w-9x2c / CVE-2026-27699; GHSA-c475-qrg2-pj4r (#938) | Path traversal in `downloadToDir()` (<5.2.0); GHSA-c475-qrg2-pj4r fixed in 6.2.1. Dev/test transitive (`@lhci/cli` / `lighthouse` → `proxy-agent` → `get-uri`). |
-| fast-uri | >=3.1.6 | GHSA-5jgf-p345-68v8 / GHSA-f65p-4m7j-42xc / GHSA-fph4-wmhf-6fwf / GHSA-jqff-g426-hqxp (supersedes GHSA-q3j6-qgpj-74h6 / CVE-2026-6321) | Host confusion / SSRF via percent-encoding and IPv6 normalization (resolved 3.1.5 vulnerable; fixed at or above 3.1.6). The prior `>=3.1.5` floor no longer excluded this — found via a routine `pnpm audit` sweep, 2026-09-02. Dev-only transitive (`@stryker-mutator/core`, `workbox-build`), never shipped. |
-| ws | >=8.20.1 | GHSA-3h5v-q93c-6h6q / CVE-2024-37890 | DoS when handling a request with many HTTP headers (fixed 8.17.1). |
-| brace-expansion | >=5.0.6 | GHSA-v6h2-p8h4-qcjw / CVE-2025-5889 | ReDoS in `expand()` (fixed 1.1.12 / 2.0.2 / 3.0.1 / 4.0.1). |
-| qs | >=6.16.0 | GHSA-4mjr-xmp4-gh2g / GHSA-x5fp-wj9c-mxmx (supersedes GHSA-hrpp-h998-j3pp / CVE-2022-24999) | Array-limit bypass via bracket-key comma parsing, and a DoS via attacker-controlled `isBuffer` (resolved 6.15.2 vulnerable; fixed 6.16.0). Dev-only transitive (`@lhci/cli`, `@stryker-mutator/core`, `http-server`), never shipped. `6.16.0` was published 2026-08-29 and was admitted via a temporary, version-scoped `minimumReleaseAgeExclude: qs@6.16.0` entry while it aged inside this repo's 7-day `minimumReleaseAge` quarantine (same mechanism/precedent as `nanoid@3.3.18`, PR #362). That exclusion has since been removed (#588): `6.16.0` is now well past the 7-day floor and a normal frozen install resolves it unconditionally under the standard quarantine, with no version-scoped exception in effect. Future qs releases remain governed by the normal `minimumReleaseAge` quarantine like any other dependency. |
-| chrome-launcher | ^1.2.1 | preventive pin — no direct advisory | Lighthouse-CI dev transitive; conservative floor, dev-only. |
-| ip-address | >=10.1.1 | preventive pin — no direct advisory | Dev/test transitive hardening; no advisory matches this floor. |
-| uuid | >=11.1.1 | preventive pin — no direct advisory | Conservative version floor; no security advisory applies (the prior "collision" note was inaccurate). |
-| joi (transitive via the root devDependency `wait-on@9.1.0`, and via `wait-on@7.2.0` ← `jest-process-manager` ← `@storybook/test-runner`) | >=18.2.6 <19 | transitive hardening (dev-only) | `wait-on@7.2.0` originally pulled an older `joi`; the lockfile resolves `joi@18.2.9` for both `wait-on@7.2.0` and `wait-on@9.1.0`. Floor 18.2.6 = GHSA-6h2x-m376-mqjq fix (PR #909). Dev/test toolchain only, never shipped. |
-| fflate | >=0.8.3 | GHSA-px8p-9vwx-vf98 / CVE-2026-45820 | `unzipSync()` infinite loop on a crafted ZIP64 archive missing its required extra field (≤0.8.2; fixed at or above 0.8.3). Transitive via `jspdf@4.2.1` (PDF export), whose own `^0.8.1` range already permits the patched version. Advisory elevated to GitHub-reviewed status 2026-09-03, discovered via a routine Security Audit CI failure the same day. |
-| lighthouse | 13.4.1 (exact) | GHSA-jmr9-qjv8-65gv + GHSA-7pqw-9j4j-h8q3 (extract-zip, no fixed version exists) | `@lhci/cli@0.15.1` (latest published release) hard-pins `lighthouse@12.6.1`, whose `puppeteer-core` → `@puppeteer/browsers@2.x` chain pulls the vulnerable `extract-zip`. Lighthouse 13.4.1's `puppeteer-core` (^25.x) moves to `@puppeteer/browsers@3.x`, which replaced `extract-zip` with `modern-tar`, eliminating it from the graph. Exact-pinned rather than a `>=` floor because `@lhci/cli@0.15.1` is untested against later Lighthouse majors — only 13.4.1's CLI-subprocess bridge has been compatibility-verified (`lhci healthcheck` + a real end-to-end Lighthouse audit). Dev-only transitive (Lighthouse CI), never shipped. Remove this override (or raise it) if `@lhci/cli` publishes a release with a non-exact `lighthouse` range, or if `extract-zip` is otherwise fully retired from the ecosystem. |
+| Package                                                                                                                                  | Override       | Advisory                                                                                                                               | Justification                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| esbuild                                                                                                                                  | >=0.28.1       | GHSA-67mh-4wv8-2f99                                                                                                                    | Dev-server CORS let any website send requests to the esbuild dev server and read the response (≤0.24.2; fixed 0.25.0). Build-tool only, never shipped. Pinned in the 2026-06 security merge.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| serialize-javascript                                                                                                                     | >=7.0.3        | GHSA-76p7-773f-r4q5 / CVE-2024-11831                                                                                                   | Regex XSS in serialized output (<6.0.2).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| tmp                                                                                                                                      | ^0.2.6         | GHSA-52f5-9888-hmc6 / CVE-2025-54798                                                                                                   | Arbitrary temp file/dir write via symlink `dir` parameter (≤0.2.3; fixed 0.2.4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| @xmldom/xmldom                                                                                                                           | >=0.9.12       | GHSA-6gmq-8vp8-gcm6 / CVE-2026-83610 (supersedes GHSA-5fg8-2547-mr8q / CVE-2022-39353)                                                 | XML fragment injection via invalid `EntityReference.nodeName` during `requireWellFormed` serialization (≥0.9.0 ≤0.9.11; fixed 0.9.12). The prior `>=0.8.13` floor no longer excluded this — Dependabot alert #79, 2026-09-02. Ships via `mammoth` (`.docx` export), a production dependency.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| protobufjs                                                                                                                               | >=7.5.6        | GHSA-h755-8qp9-cq85 / CVE-2023-36665                                                                                                   | Prototype pollution (6.10.0–7.2.3; fixed 7.2.4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| axios                                                                                                                                    | >=1.15.2       | GHSA-jr5f-v2jv-69x6 / CVE-2025-27152                                                                                                   | SSRF + credential leak via absolute URL.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| adm-zip                                                                                                                                  | >=0.6.1        | GHSA-xcpc-8h2w-3j85 / GHSA-7q85-xj36-vmfc / GHSA-vwc7-r8mq-g2x9                                                                        | Transitive via `onnxruntime-node@1.24.3`; `0.6.1` is outside the vulnerable ranges, and its tarball adds the extraction symlink-path guard and duplicate-entry fail-closed behavior relevant to the old advisory. The 2026-09-11 release satisfies the 7-day minimum age; `pnpm audit` is clean and the `allowBuilds: onnxruntime-node: false` policy remains active.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| basic-ftp                                                                                                                                | >=6.2.1        | GHSA-5rq4-664w-9x2c / CVE-2026-27699; GHSA-c475-qrg2-pj4r (#938)                                                                       | Path traversal in `downloadToDir()` (<5.2.0); GHSA-c475-qrg2-pj4r fixed in 6.2.1. Dev/test transitive (`@lhci/cli` / `lighthouse` → `proxy-agent` → `get-uri`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| fast-uri                                                                                                                                 | >=3.1.6        | GHSA-5jgf-p345-68v8 / GHSA-f65p-4m7j-42xc / GHSA-fph4-wmhf-6fwf / GHSA-jqff-g426-hqxp (supersedes GHSA-q3j6-qgpj-74h6 / CVE-2026-6321) | Host confusion / SSRF via percent-encoding and IPv6 normalization (resolved 3.1.5 vulnerable; fixed at or above 3.1.6). The prior `>=3.1.5` floor no longer excluded this — found via a routine `pnpm audit` sweep, 2026-09-02. Dev-only transitive (`@stryker-mutator/core`, `workbox-build`), never shipped.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ws                                                                                                                                       | >=8.20.1       | GHSA-3h5v-q93c-6h6q / CVE-2024-37890                                                                                                   | DoS when handling a request with many HTTP headers (fixed 8.17.1).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| brace-expansion                                                                                                                          | >=5.0.6        | GHSA-v6h2-p8h4-qcjw / CVE-2025-5889                                                                                                    | ReDoS in `expand()` (fixed 1.1.12 / 2.0.2 / 3.0.1 / 4.0.1).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| qs                                                                                                                                       | >=6.16.0       | GHSA-4mjr-xmp4-gh2g / GHSA-x5fp-wj9c-mxmx (supersedes GHSA-hrpp-h998-j3pp / CVE-2022-24999)                                            | Array-limit bypass via bracket-key comma parsing, and a DoS via attacker-controlled `isBuffer` (resolved 6.15.2 vulnerable; fixed 6.16.0). Dev-only transitive (`@lhci/cli`, `@stryker-mutator/core`, `http-server`), never shipped. `6.16.0` was published 2026-08-29 and was admitted via a temporary, version-scoped `minimumReleaseAgeExclude: qs@6.16.0` entry while it aged inside this repo's 7-day `minimumReleaseAge` quarantine (same mechanism/precedent as `nanoid@3.3.18`, PR #362). That exclusion has since been removed (#588): `6.16.0` is now well past the 7-day floor and a normal frozen install resolves it unconditionally under the standard quarantine, with no version-scoped exception in effect. Future qs releases remain governed by the normal `minimumReleaseAge` quarantine like any other dependency. |
+| chrome-launcher                                                                                                                          | ^1.2.1         | preventive pin — no direct advisory                                                                                                    | Lighthouse-CI dev transitive; conservative floor, dev-only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ip-address                                                                                                                               | >=10.1.1       | preventive pin — no direct advisory                                                                                                    | Dev/test transitive hardening; no advisory matches this floor.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| uuid                                                                                                                                     | >=11.1.1       | preventive pin — no direct advisory                                                                                                    | Conservative version floor; no security advisory applies (the prior "collision" note was inaccurate).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| joi (transitive via the root devDependency `wait-on@9.1.0`, and via `wait-on@7.2.0` ← `jest-process-manager` ← `@storybook/test-runner`) | >=18.2.6 <19   | transitive hardening (dev-only)                                                                                                        | `wait-on@7.2.0` originally pulled an older `joi`; the lockfile resolves `joi@18.2.9` for both `wait-on@7.2.0` and `wait-on@9.1.0`. Floor 18.2.6 = GHSA-6h2x-m376-mqjq fix (PR #909). Dev/test toolchain only, never shipped.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| fflate                                                                                                                                   | >=0.8.3        | GHSA-px8p-9vwx-vf98 / CVE-2026-45820                                                                                                   | `unzipSync()` infinite loop on a crafted ZIP64 archive missing its required extra field (≤0.8.2; fixed at or above 0.8.3). Transitive via `jspdf@4.2.1` (PDF export), whose own `^0.8.1` range already permits the patched version. Advisory elevated to GitHub-reviewed status 2026-09-03, discovered via a routine Security Audit CI failure the same day.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| lighthouse                                                                                                                               | 13.4.1 (exact) | GHSA-jmr9-qjv8-65gv + GHSA-7pqw-9j4j-h8q3 (extract-zip, no fixed version exists)                                                       | `@lhci/cli@0.15.1` (latest published release) hard-pins `lighthouse@12.6.1`, whose `puppeteer-core` → `@puppeteer/browsers@2.x` chain pulls the vulnerable `extract-zip`. Lighthouse 13.4.1's `puppeteer-core` (^25.x) moves to `@puppeteer/browsers@3.x`, which replaced `extract-zip` with `modern-tar`, eliminating it from the graph. Exact-pinned rather than a `>=` floor because `@lhci/cli@0.15.1` is untested against later Lighthouse majors — only 13.4.1's CLI-subprocess bridge has been compatibility-verified (`lhci healthcheck` + a real end-to-end Lighthouse audit). Dev-only transitive (Lighthouse CI), never shipped. Remove this override (or raise it) if `@lhci/cli` publishes a release with a non-exact `lighthouse` range, or if `extract-zip` is otherwise fully retired from the ecosystem.               |
 
 **Dependency hygiene status (2026-06-13):**
 - `pnpm audit --audit-level=high` → 0 vulnerabilities.

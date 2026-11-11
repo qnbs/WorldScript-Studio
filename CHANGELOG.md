@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **OSV waivers:** The nine remaining waivers (four npm, five Rust) were requalified against the current lockfiles with unchanged affected copies and parents, and none has a fix path yet. By maintainer decision they now expire on 2027-01-31 instead of 2026-11-30, with the next requalification due by 2027-01-15 (#1163, #1164) (PR #1232).
 - **Desktop dependencies:** `rustix` 1.1.4 → 1.1.6 in the desktop lockfile fixes RUSTSEC-2026-0486 (GHSA-jh2m-fhpj-3vr7, unsound): its xattr functions marked unwritten bytes as initialized for a zero-length buffer. The desktop app does not call the affected functions; its only path to them, `tauri-plugin-updater` → `tar` → `xattr`, sets extended attributes only when unpacking them is enabled, which the updater never does (PR #1231).
 - **OSV waivers:** The five `unic-*` waivers (RUSTSEC-2025-0075, -0080, -0081, -0098 and -0100) are removed, because no `unic-*` crate remains in either Cargo lockfile and the scheduled OSV scan reported them as unused. Nine waivers remain, all expiring on 2026-11-30 (#1163, #1164); none is added or extended (PR #1230).
 - **Release records:** The v1.29.5 evidence record is now `VERIFIED`, with the signed tag, the three tag runs, the release and updater readback and the check of the published GHCR image (DOMPurify 3.4.17). The README release badge shows v1.29.5, and the v1.29.4 record notes that its container image shipped with 1.29.5 (PR #1227).
