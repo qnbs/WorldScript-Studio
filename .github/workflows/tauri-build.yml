@@ -165,9 +165,9 @@ jobs:
           cache-all-crates: true
           prefix-key: "v1-updater-signing-probe"
       - name: Install Linux dependencies for the configured verifier example
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+        # QNBS-v3: bounded and mirror-tolerant; an unresolvable azure mirror once used up the whole 45-minute job timeout.
+        timeout-minutes: 15
+        run: bash scripts/ci/apt-install.sh libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - name: Verify exact main source and write a non-secret probe payload
         env:
           EXPECTED_SHA: ${{ github.sha }}
@@ -244,9 +244,9 @@ jobs:
 
       - name: Install Linux dependencies (WebKitGTK)
         if: contains(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+        # QNBS-v3: bounded and mirror-tolerant; an unresolvable azure mirror once used up the whole 45-minute job timeout.
+        timeout-minutes: 15
+        run: bash scripts/ci/apt-install.sh libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - name: Install macOS dependencies (create-dmg)
         if: contains(matrix.os, 'macos')
