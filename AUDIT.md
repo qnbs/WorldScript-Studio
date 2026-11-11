@@ -4,8 +4,7 @@
 After the bounded floors in this PR (`follow-redirects` >=1.16.2, `joi` >=18.3.1, Zod 4 >=4.6.6,
 `undici`, `fast-uri`, `qs`, `body-parser`, `serialize-javascript`, DOMPurify, `ip-address`), four
 advisories remain. Each has a time-limited `src-tauri/osv-scanner.toml` ignore that expires on
-2027-01-31 at the latest (originally 2026-11-30; on 2026-11-11 all four were requalified with
-unchanged copies and parents and extended by maintainer decision, #1163). A green OSV scan with these ignores does not mean the packages are fixed.
+2026-11-30 at the latest. A green OSV scan with these ignores does not mean the packages are fixed.
 OSV filters an ignore for the whole advisory, not for one version, lockfile or call site; the
 guard is `tests/unit/security/osvNpmDependencyFloors.test.ts`, which fails when an affected copy, a
 parent package of an affected copy or a production path appears, or when no affected copy is left.
@@ -27,7 +26,7 @@ run these tools over pull-request content.
 
 Protections that stay in force: all hosted security, CI, CodeQL and review gates; the three-lockfile
 OSV scan; `minimumReleaseAge`; frozen-lockfile installs. Re-check trigger: any new release of a
-listed parent, any new affected copy or parent (the test fails), and at the latest 2027-01-15. The
+listed parent, any new affected copy or parent (the test fails), and at the latest 2026-11-30. The
 2026-10-30 `glob`/`minimatch` advisories were published after the first #1149 head; the remediation
 follow-up is tracked in #1163. `follow-redirects` and `joi` were raised in place within their major.
 An earlier draft of this entry listed `minimatch` 3.x and 5.x as affected by `GHSA-g3hv-75wg-m249`;

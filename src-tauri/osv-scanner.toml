@@ -100,7 +100,8 @@ reason = "zvariant_derive 5.12.0 / 4.2.0: unmaintained (macros provided by zbus 
 # whole advisory, not for one version, lockfile or call site. The guard around the wider waiver is
 # tests/unit/security/osvNpmDependencyFloors.test.ts: it fails when an affected copy, an affected
 # copy's parent package, or a production path appears, or when no affected copy is left (stale
-# waiver). Full per-advisory record, alternatives and re-check trigger: AUDIT.md (2026-11-05).
+# waiver). Full per-advisory record, alternatives and re-check trigger: AUDIT.md (2026-11-05), which
+# records the original 2026-11-30 expiry; the 2026-11-11 requalification is recorded in #1163 / #1164.
 # Every entry expires on 2027-01-31 at the latest (requalified 2026-11-11 with unchanged copies and
 # parents; next requalification by 2027-01-15); remove it as soon as a parent ships a fix.
 
