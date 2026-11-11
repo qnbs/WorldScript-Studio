@@ -15,6 +15,21 @@ fn shipped_updater_requires_a_signed_version() {
     assert!(shipped_updater_config().require_signed_version);
 }
 
+// The release workflow publishes `latest.json` only as a GitHub Release asset; the former GitHub
+// Pages mirror was never produced and answered 404 (#1214).
+#[test]
+fn shipped_updater_checks_only_the_published_release_manifest() {
+    let endpoints: Vec<String> = shipped_updater_config()
+        .endpoints
+        .iter()
+        .map(|url| url.to_string())
+        .collect();
+    assert_eq!(
+        endpoints,
+        ["https://github.com/qnbs/WorldScript-Studio/releases/latest/download/latest.json"]
+    );
+}
+
 #[test]
 fn shipped_updater_keeps_downgrades_and_insecure_transport_off() {
     let config = shipped_updater_config();
