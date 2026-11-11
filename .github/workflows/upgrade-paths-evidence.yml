@@ -1,5 +1,5 @@
 # Throwaway evidence workflow for the v1.29.5 qualification. It lives only on an evidence branch and is never merged.
-# It installs the published v1.29.2 packages on real runners, upgrades them with the non-publishing candidate packages and checks identity and user data.
+# It installs the published v1.29.4 packages on real runners, upgrades them with the non-publishing candidate packages and checks identity and user data.
 
 name: Upgrade paths evidence
 
@@ -34,11 +34,11 @@ jobs:
           path: cand
           run-id: 42950263925
           github-token: ${{ github.token }}
-      - name: Download the published v1.29.2 package
+      - name: Download the published v1.29.4 package
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download v1.29.2 --repo "$GITHUB_REPOSITORY" --pattern '*_amd64.deb' --dir old
-      - name: Install v1.29.2, run it and record the user data it created
+        run: gh release download v1.29.4 --repo "$GITHUB_REPOSITORY" --pattern '*_amd64.deb' --dir old
+      - name: Install v1.29.4, run it and record the user data it created
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -55,7 +55,7 @@ jobs:
           done
           DUMP
           sudo apt-get install -y xvfb sqlite3 "./old/$(ls old | head -1)"
-          dpkg -s world-script-studio | grep -x 'Version: 1.29.2'
+          dpkg -s world-script-studio | grep -x 'Version: 1.29.4'
           sha256sum /usr/bin/worldscript-studio | cut -d' ' -f1 > "$RUNNER_TEMP/old-binary.sha"
           mkdir -p "$HOME/.local/share/com.worldscript.studio"
           echo marker > "$HOME/.local/share/com.worldscript.studio/upgrade-marker.txt"
@@ -70,7 +70,7 @@ jobs:
           sed 's#^'"$HOME"'/#~/#' "$RUNNER_TEMP/before-files.txt" | head -12
           echo "files created or kept before the upgrade: $(wc -l < "$RUNNER_TEMP/before-files.txt")"
           bash "$RUNNER_TEMP/idb_dump.sh" > "$RUNNER_TEMP/idb-before.txt"
-          echo "IndexedDB databases written by v1.29.2: $(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)"; grep -E '^(DatabaseName|DatabaseVersion)=' "$RUNNER_TEMP/idb-before.txt" | head -12
+          echo "IndexedDB databases written by v1.29.4: $(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)"; grep -E '^(DatabaseName|DatabaseVersion)=' "$RUNNER_TEMP/idb-before.txt" | head -12
       - name: Upgrade to the candidate deb and verify identity and data
         run: |
           set -euo pipefail
@@ -89,19 +89,19 @@ jobs:
           rc=0; xvfb-run -a timeout 40 /usr/bin/worldscript-studio || rc=$?
           echo "new app exit code: $rc"
           old_rc="$(cat "$RUNNER_TEMP/old-rc")"
-          if [ "$old_rc" = 124 ] && [ "$rc" != 124 ]; then echo "::error::the upgraded app did not stay running although v1.29.2 did"; exit 1; fi
+          if [ "$old_rc" = 124 ] && [ "$rc" != 124 ]; then echo "::error::the upgraded app did not stay running although v1.29.4 did"; exit 1; fi
           while IFS= read -r f; do test -e "$f" || { echo "::error::file lost after starting the upgraded app: $f"; exit 1; }; done < "$RUNNER_TEMP/before-files.txt"
           sudo apt-get install -y sqlite3 > /dev/null
           bash "$RUNNER_TEMP/idb_dump.sh" > "$RUNNER_TEMP/idb-after.txt"
-          test "$(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)" -ge 1 || echo "::warning::v1.29.2 wrote no IndexedDB database within 40 s, so only file survival is evidenced"
+          test "$(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)" -ge 1 || echo "::warning::v1.29.4 wrote no IndexedDB database within 40 s, so only file survival is evidenced"
           diff -u "$RUNNER_TEMP/idb-before.txt" "$RUNNER_TEMP/idb-after.txt" || { echo "::error::IndexedDB metadata changed across the upgrade and the first start of the new app"; exit 1; }
           echo "IndexedDB metadata (database names, versions, object store counts) identical before and after: $(grep -c '^== ' "$RUNNER_TEMP/idb-after.txt" || true) databases"
           {
-            echo "### Linux deb upgrade 1.29.2 to 1.29.5"
+            echo "### Linux deb upgrade 1.29.4 to 1.29.5"
             echo "- package version 1.29.5, single installed package, binary replaced"
             echo "- old app exit $old_rc, new app exit $rc (124 means still running after 40 s)"
             echo "- $(wc -l < "$RUNNER_TEMP/before-files.txt") user files recorded before the upgrade, all still present after the upgrade and after starting the new app"
-            echo "- $(grep -c '^== ' "$RUNNER_TEMP/idb-after.txt" || true) IndexedDB databases written by v1.29.2 have identical names, versions and object store counts after the upgrade and the first start of v1.29.5"
+            echo "- $(grep -c '^== ' "$RUNNER_TEMP/idb-after.txt" || true) IndexedDB databases written by v1.29.4 have identical names, versions and object store counts after the upgrade and the first start of v1.29.5"
           } >> "$GITHUB_STEP_SUMMARY"
 
   windows:
@@ -122,10 +122,10 @@ jobs:
           path: cand
           run-id: 42950263925
           github-token: ${{ github.token }}
-      - name: Download the published v1.29.2 packages
+      - name: Download the published v1.29.4 packages
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download v1.29.2 --repo "$env:GITHUB_REPOSITORY" --pattern '*x64-setup.exe' --pattern '*.msi' --dir old
+        run: gh release download v1.29.4 --repo "$env:GITHUB_REPOSITORY" --pattern '*x64-setup.exe' --pattern '*.msi' --dir old
       - name: Upgrade the NSIS installer and verify identity and data
         run: |
           $ErrorActionPreference = 'Stop'
@@ -148,7 +148,7 @@ jobs:
           $p = Start-Process -FilePath $oldSetup -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "old NSIS setup exit code $($p.ExitCode)" }
           $oldEntries = Get-Entries
-          if ($oldEntries.Count -ne 1 -or $oldEntries[0].DisplayVersion -ne '1.29.2') { throw "expected one 1.29.2 entry, found: $($oldEntries | ConvertTo-Json -Compress)" }
+          if ($oldEntries.Count -ne 1 -or $oldEntries[0].DisplayVersion -ne '1.29.4') { throw "expected one 1.29.4 entry, found: $($oldEntries | ConvertTo-Json -Compress)" }
           $oldAlive = Start-App $oldEntries[0] 20
           $volatile = '\\(Cache|Code Cache|GPUCache|DawnGraphiteCache|DawnWebGPUCache|ShaderCache|GrShaderCache|Crashpad|component_crx_cache|Crashpad)\\|\.tmp$|\\LOCK$|\.log$|-wal$|-shm$|-journal$|\\MANIFEST-[0-9]+$|\\CURRENT$|\\LOG(\.old)?$'
           $everything = @(Get-ChildItem -Path $data -Recurse -File | ForEach-Object FullName | Sort-Object)
@@ -167,7 +167,7 @@ jobs:
           $volatileLost = @($everything | Where-Object { $_ -match $volatile -and -not (Test-Path $_) }).Count
           Write-Host "volatile cache files gone after the upgrade (informational): $volatileLost"
           $newAlive = Start-App $newEntries[0] 20
-          if ($oldAlive -and -not $newAlive) { throw 'the upgraded app did not stay running although v1.29.2 did' }
+          if ($oldAlive -and -not $newAlive) { throw 'the upgraded app did not stay running although v1.29.4 did' }
           $marker = Join-Path $data 'EBWebView\Default\IndexedDB\upgrade-marker.txt'
           if (-not (Test-Path $marker)) { throw 'the IndexedDB marker was lost after starting the upgraded app' }
           foreach ($dir in 'IndexedDB', 'Local Storage') {
@@ -178,7 +178,7 @@ jobs:
           Write-Host "files after starting the upgraded app: $afterCount (before the upgrade: $($everything.Count)); the browser engine may rename or compact its own bookkeeping files on start"
           $uninstall = $newEntries[0].UninstallString
           Write-Host "NSIS upgrade ok: one entry, version 1.29.5, binary $productVersion, $($before.Count) persistent files survived; old alive=$oldAlive new alive=$newAlive"
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows NSIS upgrade 1.29.2 to 1.29.5`n- one uninstall entry, version 1.29.5, binary $productVersion`n- old app alive after 20 s: $oldAlive, new app alive: $newAlive`n- $($before.Count) user data files (IndexedDB, Local Storage, Session Storage, File System; the other $($everything.Count - $before.Count) browser engine files are excluded, of which $volatileLost cache files are gone) all present after the upgrade and after starting the new app"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows NSIS upgrade 1.29.4 to 1.29.5`n- one uninstall entry, version 1.29.5, binary $productVersion`n- old app alive after 20 s: $oldAlive, new app alive: $newAlive`n- $($before.Count) user data files (IndexedDB, Local Storage, Session Storage, File System; the other $($everything.Count - $before.Count) browser engine files are excluded, of which $volatileLost cache files are gone) all present after the upgrade and after starting the new app"
           cmd /c "$uninstall /S"
           Start-Sleep -Seconds 10
           if ((Get-Entries).Count -ne 0) { throw 'the NSIS entry was not removed by the uninstaller' }
@@ -196,7 +196,7 @@ jobs:
           $p = Start-Process -FilePath msiexec.exe -ArgumentList '/i', "`"$oldMsi`"", '/qn', '/norestart' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "old MSI exit code $($p.ExitCode)" }
           $oldEntries = Get-Entries
-          if ($oldEntries.Count -ne 1 -or $oldEntries[0].DisplayVersion -ne '1.29.2') { throw "expected one 1.29.2 entry, found: $($oldEntries | ConvertTo-Json -Compress)" }
+          if ($oldEntries.Count -ne 1 -or $oldEntries[0].DisplayVersion -ne '1.29.4') { throw "expected one 1.29.4 entry, found: $($oldEntries | ConvertTo-Json -Compress)" }
           $oldCode = $oldEntries[0].PSChildName
           $newMsi = (Get-ChildItem cand -Recurse -Filter '*_1.29.5_x64_en-US.msi' | Select-Object -First 1).FullName
           $p = Start-Process -FilePath msiexec.exe -ArgumentList '/i', "`"$newMsi`"", '/qn', '/norestart' -Wait -PassThru
@@ -206,7 +206,7 @@ jobs:
           $newCode = $newEntries[0].PSChildName
           if ($newCode -eq $oldCode) { throw 'the ProductCode did not change' }
           if (-not (Test-Path (Join-Path $data 'upgrade-marker-msi.txt'))) { throw 'user data marker lost by the MSI upgrade' }
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows MSI major upgrade 1.29.2 to 1.29.5`n- ProductCode $oldCode replaced by $newCode, one entry remains at 1.29.5`n- user data marker survived"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Windows MSI major upgrade 1.29.4 to 1.29.5`n- ProductCode $oldCode replaced by $newCode, one entry remains at 1.29.5`n- user data marker survived"
           $p = Start-Process -FilePath msiexec.exe -ArgumentList '/x', $newCode, '/qn', '/norestart' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "MSI uninstall exit code $($p.ExitCode)" }
 
@@ -225,11 +225,11 @@ jobs:
           path: cand
           run-id: 42950263925
           github-token: ${{ github.token }}
-      - name: Download the published v1.29.2 package
+      - name: Download the published v1.29.4 package
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download v1.29.2 --repo "$GITHUB_REPOSITORY" --pattern '*aarch64.dmg' --dir old
-      - name: Install v1.29.2, run it, upgrade to the candidate and verify identity and data
+        run: gh release download v1.29.4 --repo "$GITHUB_REPOSITORY" --pattern '*aarch64.dmg' --dir old
+      - name: Install v1.29.4, run it, upgrade to the candidate and verify identity and data
         run: |
           set -euo pipefail
           APP="/Applications/WorldScript Studio.app"
@@ -249,7 +249,7 @@ jobs:
           mkdir -p "$HOME/Library/Application Support/com.worldscript.studio"
           echo marker > "$HOME/Library/Application Support/com.worldscript.studio/upgrade-marker.txt"
           install_dmg "old/$(ls old | head -1)"
-          test "$(plist CFBundleShortVersionString)" = 1.29.2
+          test "$(plist CFBundleShortVersionString)" = 1.29.4
           test "$(plist CFBundleIdentifier)" = com.worldscript.studio
           old_state="$(smoke)"
           echo "old app after 20 s: $old_state"
@@ -264,22 +264,22 @@ jobs:
             done
           }
           idb_dump > "$RUNNER_TEMP/idb-before.txt"
-          echo "IndexedDB databases written by v1.29.2: $(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)"
+          echo "IndexedDB databases written by v1.29.4: $(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)"
           install_dmg "$(find cand -name '*_1.29.5_aarch64.dmg' -print -quit)"
           test "$(plist CFBundleShortVersionString)" = 1.29.5
           test "$(plist CFBundleIdentifier)" = com.worldscript.studio
           while IFS= read -r f; do test -e "$f" || { echo "::error::file lost by the upgrade: $f"; exit 1; }; done < "$RUNNER_TEMP/before-files.txt"
           new_state="$(smoke)"
           echo "new app after 20 s: $new_state"
-          if [ "$old_state" = alive ] && [ "$new_state" != alive ]; then echo "::error::the upgraded app did not stay running although v1.29.2 did"; exit 1; fi
+          if [ "$old_state" = alive ] && [ "$new_state" != alive ]; then echo "::error::the upgraded app did not stay running although v1.29.4 did"; exit 1; fi
           while IFS= read -r f; do test -e "$f" || { echo "::error::file lost after starting the upgraded app: $f"; exit 1; }; done < "$RUNNER_TEMP/before-files.txt"
           idb_dump > "$RUNNER_TEMP/idb-after.txt"
-          test "$(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)" -ge 1 || echo "::warning::v1.29.2 wrote no IndexedDB database within 20 s, so only file survival is evidenced"
+          test "$(grep -c '^== ' "$RUNNER_TEMP/idb-before.txt" || true)" -ge 1 || echo "::warning::v1.29.4 wrote no IndexedDB database within 20 s, so only file survival is evidenced"
           diff -u "$RUNNER_TEMP/idb-before.txt" "$RUNNER_TEMP/idb-after.txt" || { echo "::error::IndexedDB metadata changed across the upgrade and the first start of the new app"; exit 1; }
           echo "IndexedDB metadata identical before and after: $(grep -c '^== ' "$RUNNER_TEMP/idb-after.txt" || true) databases"
           codesign -dv "$APP" 2>&1 | head -4 || true
           {
-            echo "### macOS dmg upgrade 1.29.2 to 1.29.5"
+            echo "### macOS dmg upgrade 1.29.4 to 1.29.5"
             echo "- bundle identifier com.worldscript.studio, version 1.29.5 after replacing the app"
             echo "- old app $old_state after 20 s, new app $new_state"
             echo "- $(wc -l < "$RUNNER_TEMP/before-files.txt") user files recorded before the upgrade, all present after the upgrade and after starting the new app"
