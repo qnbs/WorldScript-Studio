@@ -77,6 +77,27 @@ export function classifyContainerPrecheck({ sha, runs, totalCount, jobsByRun }) 
   return { ok: true, reason: 'PASS', runId: run.id, url: run.html_url ?? null };
 }
 
+// QNBS-v3 (#1219): at tag time the build check of the merge can still be queued or running; waiting for it (bounded) keeps a correctly sequenced tag from failing on timing alone, and the same classifier still decides.
+/** True while there is no trusted run for the commit yet or its newest trusted run has not completed. */
+export function isPending(sha, runs) {
+  const run = latestTrustedRun(sha, runs);
+  return run === null || run.status !== 'completed';
+}
+
+/** `[--wait-seconds N] <sha>`; waitSeconds is NaN when the value is not a non-negative integer. */
+export function parseArgs(argv) {
+  const args = [...(argv ?? [])];
+  const flag = args.indexOf('--wait-seconds');
+  if (flag < 0) return { sha: args[0], waitSeconds: 0 };
+  const value = Number(args[flag + 1]);
+  args.splice(flag, 2);
+  const valid = Number.isSafeInteger(value) && value >= 0;
+  return { sha: args[0], waitSeconds: valid ? value : Number.NaN };
+}
+
+const POLL_SECONDS = 30;
+const sleep = (seconds) => new Promise((done) => setTimeout(done, seconds * 1000));
+
 function ghJson(path) {
   try {
     return JSON.parse(execFileSync('gh', ['api', path], { encoding: 'utf8' }));
@@ -85,25 +106,14 @@ function ghJson(path) {
   }
 }
 
-function main(sha) {
+function readRuns(sha) {
   const listed = ghJson(
     `repos/${REPOSITORY}/actions/workflows/docker-build-check.yml/runs?head_sha=${sha}&per_page=100`,
   );
-  const runs = listed?.workflow_runs ?? null;
-  // Only the newest trusted run decides, so only its jobs are fetched.
-  const latest = latestTrustedRun(sha, runs);
-  const jobsByRun = latest
-    ? {
-        [latest.id]:
-          ghJson(`repos/${REPOSITORY}/actions/runs/${latest.id}/jobs?per_page=100`)?.jobs ?? null,
-      }
-    : {};
-  const result = classifyContainerPrecheck({
-    sha,
-    runs,
-    totalCount: listed?.total_count ?? null,
-    jobsByRun,
-  });
+  return { runs: listed?.workflow_runs ?? null, totalCount: listed?.total_count ?? null };
+}
+
+function report(sha, result) {
   const where = result.url ? ` (${result.url})` : '';
   process.stdout.write(
     `container-precheck: ${result.ok ? 'PASS' : 'FAIL'} ${sha} — ${result.reason}${where}\n`,
@@ -111,4 +121,28 @@ function main(sha) {
   process.exitCode = result.ok ? 0 : 1;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main(process.argv[2]);
+async function main(argv) {
+  const { sha, waitSeconds } = parseArgs(argv);
+  if (Number.isNaN(waitSeconds)) {
+    report(sha, failure('--wait-seconds needs a non-negative integer'));
+    return;
+  }
+  const deadline = Date.now() + waitSeconds * 1000;
+  let state = readRuns(sha);
+  while (SHA.test(String(sha ?? '')) && isPending(sha, state.runs) && Date.now() < deadline) {
+    process.stdout.write(`container-precheck: waiting for the build check of ${sha}\n`);
+    await sleep(POLL_SECONDS);
+    state = readRuns(sha);
+  }
+  // Only the newest trusted run decides, so only its jobs are fetched.
+  const latest = latestTrustedRun(sha, state.runs);
+  const jobsByRun = latest
+    ? {
+        [latest.id]:
+          ghJson(`repos/${REPOSITORY}/actions/runs/${latest.id}/jobs?per_page=100`)?.jobs ?? null,
+      }
+    : {};
+  report(sha, classifyContainerPrecheck({ sha, ...state, jobsByRun }));
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) await main(process.argv.slice(2));

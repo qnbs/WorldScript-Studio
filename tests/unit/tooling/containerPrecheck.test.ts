@@ -4,8 +4,10 @@ import {
   BUILD_CHECK_JOB,
   BUILD_CHECK_WORKFLOW,
   classifyContainerPrecheck,
+  isPending,
   type PrecheckJob,
   type PrecheckRun,
+  parseArgs,
 } from '../../../scripts/release-container-precheck.mjs';
 
 const SHA = 'a'.repeat(40);
@@ -189,5 +191,45 @@ describe('release container precheck (#1223)', () => {
       runId: null,
       url: null,
     });
+  });
+});
+
+// #1219: at tag time the precheck waits (bounded) while the build check of the commit is not finished.
+describe('release container precheck wait (#1219)', () => {
+  it.each([
+    ['no run exists yet', [] as PrecheckRun[], true],
+    ['the run list is unreadable', null, true],
+    ['only a pull_request run exists', [run({ event: 'pull_request' })], true],
+    ['the newest trusted run is queued', [run({ status: 'queued', conclusion: null })], true],
+    [
+      'the newest trusted run is in progress',
+      [run({ status: 'in_progress', conclusion: null })],
+      true,
+    ],
+    ['the newest trusted run succeeded', [run()], false],
+    ['the newest trusted run failed', [run({ conclusion: 'failure' })], false],
+    [
+      'a newer rerun is still running after an older success',
+      [
+        run(),
+        run({ id: 2, status: 'in_progress', conclusion: null, created_at: '2026-11-11T11:00:00Z' }),
+      ],
+      true,
+    ],
+  ])('decides whether to keep waiting when %s', (_name, runs, pending) => {
+    expect(isPending(SHA, runs)).toBe(pending);
+  });
+
+  it.each([
+    [['abc'], { sha: 'abc', waitSeconds: 0 }],
+    [['--wait-seconds', '1200', 'abc'], { sha: 'abc', waitSeconds: 1200 }],
+    [['abc', '--wait-seconds', '0'], { sha: 'abc', waitSeconds: 0 }],
+  ])('parses %j', (argv, expected) => {
+    expect(parseArgs(argv)).toEqual(expected);
+  });
+
+  it.each([['-5'], ['1.5'], ['soon'], [undefined]])('rejects --wait-seconds %s', (value) => {
+    const argv = value === undefined ? ['abc', '--wait-seconds'] : ['--wait-seconds', value, 'abc'];
+    expect(Number.isNaN(parseArgs(argv).waitSeconds)).toBe(true);
   });
 });

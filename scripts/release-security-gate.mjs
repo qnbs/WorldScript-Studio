@@ -39,23 +39,39 @@ export const REQUIRED_PROOF_SIMULATION_CONDITIONS = Object.freeze([
   "inputs.simulated_tag_signature == 'verified'",
 ]);
 
+// QNBS-v3 (#1219): GHCR and Tauri publish only after the same exact-commit container build check, so one missing or failed build check stops both channels instead of leaving a partial release.
+export const CONTAINER_PRECHECK_JOB = 'container-precheck';
+export const REQUIRED_CONTAINER_PRECHECK_CONDITIONS = Object.freeze([
+  "needs.container-precheck.result == 'success'",
+  'needs.container-precheck.outputs.prechecked-sha == github.sha',
+]);
+export const CONTAINER_PRECHECK_RUN =
+  'node scripts/release-container-precheck.mjs --wait-seconds 1200 "$GITHUB_SHA"';
+const CONTAINER_PRECHECK_RECORD = 'echo "prechecked-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"';
+const PUBLISH_CONDITIONS_WITH_PRECHECK = Object.freeze([
+  ...REQUIRED_VERIFIED_TAG_PUBLISH_CONDITIONS,
+  ...REQUIRED_CONTAINER_PRECHECK_CONDITIONS,
+]);
+
 /** Workflow → the jobs that publish (or stand in for publishing) and the SHA their audit must check. */
 export const RELEASE_GATED_WORKFLOWS = Object.freeze({
   'tauri-build.yml': {
     gatedJobs: ['release'],
     expectedSha: GITHUB_SHA,
-    requiredEventConditions: REQUIRED_VERIFIED_TAG_PUBLISH_CONDITIONS,
-    requiredNeeds: ['verify-release-tag'],
+    requiredEventConditions: PUBLISH_CONDITIONS_WITH_PRECHECK,
+    requiredNeeds: ['verify-release-tag', CONTAINER_PRECHECK_JOB],
     verifyTagJob: true,
+    containerPrecheckJob: true,
     exactCheckoutRef: GITHUB_SHA,
     bundleJobs: ['bundle'],
   },
   'docker.yml': {
     gatedJobs: ['build-push'],
     expectedSha: GITHUB_SHA,
-    requiredEventConditions: REQUIRED_VERIFIED_TAG_PUBLISH_CONDITIONS,
-    requiredNeeds: ['verify-release-tag'],
+    requiredEventConditions: PUBLISH_CONDITIONS_WITH_PRECHECK,
+    requiredNeeds: ['verify-release-tag', CONTAINER_PRECHECK_JOB],
     verifyTagJob: true,
+    containerPrecheckJob: true,
     exactCheckoutRef: GITHUB_SHA,
   },
   'release-gate-proof.yml': {
@@ -350,6 +366,68 @@ function checkTagVerifierJob(job, fail) {
   checkStepsAlwaysEnforced(steps, fail);
 }
 
+const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const onlyKeys = (value, allowed) =>
+  value !== null &&
+  typeof value === 'object' &&
+  Object.keys(value).every((key) => allowed.includes(key));
+
+/** The three canonical steps of the container precheck, each with only its allowed keys. */
+const CONTAINER_PRECHECK_STEPS = [
+  (step) =>
+    onlyKeys(step, ['name', 'uses', 'with']) &&
+    usesOf(step) === CHECKOUT_PIN &&
+    sameJson(step.with, { ref: GITHUB_SHA, 'persist-credentials': false }),
+  (step) =>
+    onlyKeys(step, ['name', 'env', 'run']) &&
+    runOf(step) === CONTAINER_PRECHECK_RUN &&
+    sameJson(step.env, { GH_TOKEN: expression('github.token') }),
+  (step) =>
+    onlyKeys(step, ['name', 'id', 'run']) &&
+    step.id === 'result' &&
+    runOf(step) === CONTAINER_PRECHECK_RECORD,
+];
+
+/** [passes(job), message] for the read-only container precheck job that both publishing workflows share. */
+const CONTAINER_PRECHECK_RULES = [
+  [
+    (job) =>
+      onlyKeys(job, ['name', 'runs-on', 'timeout-minutes', 'permissions', 'outputs', 'steps']),
+    `job "${CONTAINER_PRECHECK_JOB}" must not set if, needs, env, continue-on-error, container or services`,
+  ],
+  [
+    (job) => sameJson(job.permissions, { contents: 'read', actions: 'read' }),
+    `job "${CONTAINER_PRECHECK_JOB}" must hold exactly permissions: { contents: read, actions: read }`,
+  ],
+  [
+    (job) =>
+      sameJson(job.outputs, {
+        'prechecked-sha': expression('steps.result.outputs.prechecked-sha'),
+      }),
+    `job "${CONTAINER_PRECHECK_JOB}" must expose only prechecked-sha from its result step`,
+  ],
+  [
+    (job) => {
+      const steps = asList(job.steps);
+      return (
+        steps.length === CONTAINER_PRECHECK_STEPS.length &&
+        CONTAINER_PRECHECK_STEPS.every((canonical, index) => canonical(steps[index]))
+      );
+    },
+    `job "${CONTAINER_PRECHECK_JOB}" must run exactly the pinned exact-commit checkout, "${CONTAINER_PRECHECK_RUN}" and the record step`,
+  ],
+];
+
+function checkContainerPrecheckJob(job, fail) {
+  if (!job) {
+    fail(`missing job "${CONTAINER_PRECHECK_JOB}" (#1219 release gate)`);
+    return;
+  }
+  for (const [passes, message] of CONTAINER_PRECHECK_RULES) {
+    if (!passes(job)) fail(message);
+  }
+}
+
 // QNBS-v3: a writer must act on the audited commit, not on a tag ref that could move after the audit.
 function checkGatedCheckouts(jobName, job, exactCheckoutRef, fail) {
   const checkouts = asList(job.steps).filter((step) => usesOf(step).startsWith(CHECKOUT));
@@ -424,6 +502,7 @@ export function checkReleaseSecurityWorkflow(fileName, source) {
   }
   checkAuditJob(jobs['security-audit'], spec.expectedSha, fail);
   if (spec.verifyTagJob) checkTagVerifierJob(jobs['verify-release-tag'], fail);
+  if (spec.containerPrecheckJob) checkContainerPrecheckJob(jobs[CONTAINER_PRECHECK_JOB], fail);
   for (const jobName of spec.gatedJobs) {
     checkGatedJob(jobName, jobs[jobName], fail, spec);
   }

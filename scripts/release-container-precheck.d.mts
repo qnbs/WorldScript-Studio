@@ -24,6 +24,10 @@ export interface PrecheckJob {
 
 export function latestTrustedRun(sha: string, runs: PrecheckRun[] | null): PrecheckRun | null;
 
+export function isPending(sha: string, runs: PrecheckRun[] | null): boolean;
+
+export function parseArgs(argv: readonly string[] | null): { sha: string | undefined; waitSeconds: number };
+
 export function classifyContainerPrecheck(input: {
   sha: string;
   runs: PrecheckRun[] | null;
