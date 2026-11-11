@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- release-candidate: v1.29.5 -->
+- **Container precheck:** `release-container-precheck.mjs` now fails unless the API's `total_count` equals the fetched build-check runs, so a newer failed run beyond the first page cannot leave an older success in charge. Before its build, the build check may run only checkout of the event commit, the Dockerfile context check and Buildx setup, without extra keys, so no other action can change the build context, `PATH` or environment that the build and the bundle check see (PR #1228).
 
 ## [1.29.5] — 2026-11-11
 
