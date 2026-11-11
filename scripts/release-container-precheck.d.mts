@@ -13,6 +13,7 @@ export interface PrecheckRun {
   status: string;
   conclusion: string | null;
   created_at: string;
+  run_started_at?: string;
   html_url?: string;
 }
 

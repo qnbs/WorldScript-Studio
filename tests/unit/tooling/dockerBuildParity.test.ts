@@ -137,6 +137,14 @@ const drift: Case[] = [
     },
     'must build, extract, check and push the image as consecutive steps',
   ],
+  // #1225 review: the check must build the event commit that the precheck credits.
+  [
+    'the build check checks out another ref',
+    (d) => {
+      inputs(named(checkSteps(d), 'Check out the exact commit'))['ref'] = 'main';
+    },
+    'build-check must check out the event commit',
+  ],
   // #1225 review: the push must not run after a failed check, and no other job may write.
   [
     'the push step runs even after a failed check',

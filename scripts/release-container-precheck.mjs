@@ -15,7 +15,9 @@ export const TRUSTED_EVENTS = Object.freeze(['push', 'workflow_dispatch']);
 const SHA = /^[0-9a-f]{40}$/;
 const failure = (reason) => ({ ok: false, reason, runId: null, url: null });
 
-const newestFirst = (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at);
+// A rerun keeps created_at but starts a new attempt, so the newest attempt decides.
+const attemptStart = (run) => Date.parse(run.run_started_at ?? run.created_at);
+const newestFirst = (a, b) => attemptStart(b) - attemptStart(a);
 
 // The runs API reports the bare workflow path; a `@refs/heads/main` suffix is accepted as the same workflow on main.
 const workflowPathOf = (run) => String(run.path ?? '').replace(/@refs\/heads\/main$/, '');

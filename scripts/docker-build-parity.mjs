@@ -127,7 +127,15 @@ function parityErrors(publish, check) {
       errors.push(`${prefix.slice(0, -1)} must be pinned to the same commit in both jobs`);
     }
   }
-  return errors;
+  return [...errors, ...checkoutErrors(check)];
+}
+
+// The build check must build the event commit that the precheck credits, so its checkout takes no ref or other inputs. The publish checkout is pinned to github.sha by release-security-gate.mjs.
+function checkoutErrors(check) {
+  const checkout = check.steps.find((step) => usesOf(step).startsWith(CHECKOUT));
+  return sameJson(checkout?.with, { 'persist-credentials': false })
+    ? []
+    : [`${CHECK_JOB} must check out the event commit (with: persist-credentials: false only)`];
 }
 
 function sameCheckBuildId(publish, check) {

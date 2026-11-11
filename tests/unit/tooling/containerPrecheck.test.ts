@@ -67,7 +67,7 @@ describe('release container precheck (#1223)', () => {
     // #1225 review: a pull_request run takes its workflow from the PR merge ref, so it never counts.
     [
       'only a pull_request run exists for the commit',
-      [run({ event: 'pull_request', head_branch: 'feature/no-op-build' })],
+      [run({ event: 'pull_request', head_branch: 'main' })],
       jobs('success'),
       NO_TRUSTED_RUN,
     ],
@@ -137,13 +137,29 @@ describe('release container precheck (#1223)', () => {
     expect(result).toEqual({ ok: true, reason: 'PASS', runId: 1, url: null });
   });
 
-  it('rejects a candidate that is not a full commit SHA', () => {
+  it('lets the newest attempt decide, so a failed rerun of an older run is not hidden', () => {
+    const runs = [
+      run({ conclusion: 'failure', run_started_at: '2026-11-11T12:00:00Z' }),
+      run({ id: 2, created_at: '2026-11-11T11:00:00Z', run_started_at: '2026-11-11T11:00:00Z' }),
+    ];
+
+    expect(classifyContainerPrecheck({ sha: SHA, runs, jobsByRun: jobs('success') }).reason).toBe(
+      'latest run 1 concluded failure',
+    );
+  });
+
+  it('rejects a candidate that is not a full commit SHA, even with a matching run', () => {
     const result = classifyContainerPrecheck({
       sha: 'v1.29.5',
-      runs: [run()],
+      runs: [run({ head_sha: 'v1.29.5' })],
       jobsByRun: jobs('success'),
     });
 
-    expect(result.ok).toBe(false);
+    expect(result).toEqual({
+      ok: false,
+      reason: 'the candidate is not a 40-hex commit SHA',
+      runId: null,
+      url: null,
+    });
   });
 });
