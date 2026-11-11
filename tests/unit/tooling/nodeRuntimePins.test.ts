@@ -3,14 +3,14 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { NODE_SECURITY_FLOORS } from '../../../scripts/node-security-floor.mjs';
+import { isVersionAtLeast } from '../../../scripts/pnpm-version-policy.mjs';
 
 interface Step {
   uses?: string;
   with?: Record<string, unknown>;
 }
 
-// 2026-11-11 security release of the 22.x line (#1245); raise it with the next one.
-const NODE_22_SECURITY_FLOOR = [22, 23, 5];
 // Two preludes keep their exact setup-node inputs and follow the runner toolcache:
 // - the merge-admission prelude: workflow-policy-check.mjs (MERGE_ADMISSION_PRELUDE) allows exactly node-version '22';
 // - the reviewer-governance trust workflow: a protected path of check-protected-transitions.mjs, changeable only through
@@ -68,22 +68,17 @@ describe('Node runtimes take the newest security patch of their major (#1245)', 
         dockerfile,
       );
     expect(from, 'FROM node:<x.y.z>-alpine…@sha256:… AS builder').not.toBeNull();
-    const version = (from ?? []).slice(1, 4).map(Number);
-    expect(String(version[0])).toBe(readFileSync('.nvmrc', 'utf8').trim());
-    const atLeastFloor =
-      version[1] !== NODE_22_SECURITY_FLOOR[1]
-        ? (version[1] ?? 0) > (NODE_22_SECURITY_FLOOR[1] ?? 0)
-        : (version[2] ?? 0) >= (NODE_22_SECURITY_FLOOR[2] ?? 0);
-    expect(
-      atLeastFloor,
-      `builder Node ${version.join('.')} below ${NODE_22_SECURITY_FLOOR.join('.')}`,
-    ).toBe(true);
+    const version = (from ?? []).slice(1, 4).join('.');
+    expect(version.split('.')[0]).toBe(readFileSync('.nvmrc', 'utf8').trim());
+    const floor = NODE_SECURITY_FLOORS[Number(version.split('.')[0])] ?? '';
+    expect(isVersionAtLeast(version, floor), `builder Node ${version} below ${floor}`).toBe(true);
     // The pull resolves the digest, not the tag, so the build itself must prove the digest is the tagged patch.
     const afterFrom = dockerfile.slice((from?.index ?? 0) + (from?.[0].length ?? 0));
     const assertion =
       /^RUN test "\$\(node -p 'process\.versions\.node'\)" = "(\d+\.\d+\.\d+)"$/m.exec(afterFrom);
     expect(assertion, 'RUN test "$(node -p …)" = "<x.y.z>" after the builder FROM').not.toBeNull();
-    expect(assertion?.[1]).toBe(version.join('.'));
-    expect(afterFrom.slice(0, assertion?.index ?? 0)).not.toMatch(/^(FROM|RUN) /m);
+    expect(assertion?.[1]).toBe(version);
+    // Nothing but comments may come between FROM and the assertion, so no ENV PATH or COPY can swap the node it checks.
+    expect(afterFrom.slice(0, assertion?.index ?? 0)).toMatch(/^(?:[ \t]*(?:#.*)?\n)*$/);
   });
 });
