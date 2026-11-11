@@ -113,7 +113,8 @@ jobs:
     if: >-
       ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') && needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha && needs.security-audit.result == 'success' && needs.security-audit.outputs.audited-sha == github.sha }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # QNBS-v3 (#1223): room for the pre-push check build; the push build reuses its cache.
+    timeout-minutes: 30
     # QNBS-v3: packages:write scoped to this job only — prevents privilege escalation in future jobs.
     permissions:
       contents: read
@@ -148,6 +149,35 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
+
+      # QNBS-v3 (#1223): build and check the exact image before the push, which reuses this builder's cache; docker-build-check.yml runs the same steps on every main push (docker-build-parity.mjs).
+      - name: Build the image for the pre-push check
+        id: image-check-build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: false
+          load: true
+          provenance: false
+          sbom: false
+          platforms: linux/amd64
+          cache-from: type=gha
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Extract the web bundle from the built image
+        env:
+          IMAGE_ID: ${{ steps.image-check-build.outputs.imageid }}
+        run: |
+          set -euo pipefail
+          test -n "$IMAGE_ID"
+          container="$(docker create "$IMAGE_ID")"
+          docker cp "$container:/usr/share/nginx/html" "$RUNNER_TEMP/image-html"
+          docker rm "$container" > /dev/null
+
+      - name: Check the DOMPurify build inside the image
+        run: |
+          set -euo pipefail
+          node scripts/check-image-bundle.mjs "$RUNNER_TEMP/image-html" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Build and push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0

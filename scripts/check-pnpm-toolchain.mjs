@@ -1,5 +1,5 @@
 import process from 'node:process';
-import { isVersionAtLeast } from './pnpm-version-policy.mjs';
+import { checkDockerfilePnpm, isVersionAtLeast } from './pnpm-version-policy.mjs';
 
 const projectPackage = JSON.parse(
   await (await import('node:fs/promises')).readFile('package.json', 'utf8'),
@@ -18,6 +18,27 @@ if (!expectedPnpmVersion) {
 if (projectPackage.engines?.pnpm !== expectedPnpmVersion) {
   console.error('[toolchain] engines.pnpm must exactly match packageManager.');
   process.exit(1);
+}
+
+const dockerfile = await (await import('node:fs/promises'))
+  .readFile('Dockerfile', 'utf8')
+  .catch(() => null);
+if (dockerfile !== null) {
+  const dockerPnpm = checkDockerfilePnpm(dockerfile, expectedPnpmVersion);
+  if (!dockerPnpm.ok) {
+    const problems = [
+      ...dockerPnpm.mismatched.map((pin) => `pins pnpm ${pin}`),
+      ...dockerPnpm.bypasses.map((line) => `installs pnpm outside packageManager (${line})`),
+      ...(dockerPnpm.corepackInstall ? [] : ['has no `RUN corepack install` step']),
+      ...(dockerPnpm.versionAssertion
+        ? []
+        : ['lacks the pnpm version assertion before `pnpm install`']),
+    ];
+    console.error(
+      `[toolchain] Dockerfile ${problems.join('; ')}; take pnpm ${expectedPnpmVersion} from packageManager via \`corepack install\`.`,
+    );
+    process.exit(1);
+  }
 }
 
 if (!isVersionAtLeast(expectedPnpmVersion, minimumSecurePnpmVersion)) {

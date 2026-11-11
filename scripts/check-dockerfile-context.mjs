@@ -11,7 +11,7 @@ const UNSUPPORTED_SOURCE = /[*?[\]$]|^[a-z]+:\/\//i;
 const isContentLine = (line) => line !== '' && !line.startsWith('#');
 
 // One logical instruction per string. Docker removes comment lines before it joins backslash continuations, so a comment never continues and a comment inside a continuation disappears.
-const logicalLines = (text) =>
+export const logicalLines = (text) =>
   text
     .split(/\r?\n/)
     .map((line) => line.trim())

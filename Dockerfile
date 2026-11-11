@@ -2,15 +2,18 @@
 # QNBS-v3: SHA-pinned to prevent supply-chain attacks (Scorecard Pinned-Dependencies).
 FROM node:22-alpine@sha256:757ec364de4d37cedf30871be2988927660834e656e9aa52aad9ac194814c30c AS builder
 
-# QNBS-v3: pnpm via corepack avoids a separate install layer and respects packageManager field.
-RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
+# QNBS-v3: Corepack takes pnpm from package.json#packageManager only; a second pin here drifted silently (#1223).
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
 
 WORKDIR /app
 
 # Install deps (cache layer — only invalidated when lock file changes)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN corepack install
 COPY packages/ ./packages/
-RUN pnpm install --frozen-lockfile
+# QNBS-v3 (#1225): the build fails unless the active pnpm is the packageManager pin, however pnpm got onto the PATH.
+RUN test "$(pnpm --version)" = "$(node -p "require('./package.json').packageManager.split('@')[1].split('+')[0]")" && pnpm install --frozen-lockfile
 
 # Copy source and build
 COPY . .

@@ -1,0 +1,82 @@
+# Non-publishing container build of the exact commit (#1223).
+# The publishing workflow (docker.yml) builds the image only for a verified v* tag, so a broken
+# Dockerfile stayed invisible from #1149 (2026-11-05) until the v1.29.4 tag. This workflow builds
+# the same Dockerfile without registry credentials on every pull request, on every push to main
+# (so every release candidate SHA has a build), and on manual dispatch for the pre-tag release
+# rehearsal. It never logs in and never pushes. It loads the image only into the runner's local
+# Docker to read the web bundle and check the DOMPurify version the image serves.
+# scripts/docker-build-parity.mjs keeps the build inputs and the check steps equal to docker.yml;
+# scripts/release-container-precheck.mjs requires a green run of this job for the exact commit
+# before a v* tag is pushed.
+
+name: Docker build check
+
+on:
+  # Every pull request: the image copies the whole build context (COPY . .), so any source file can change what it serves.
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# QNBS-v3: read-only token; this workflow has no registry login and no publish step by design.
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-build-check-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  build-check:
+    name: 🐳 Container build check (no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check every COPY/ADD source against the build context
+        run: node scripts/check-dockerfile-context.mjs
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Same action, inputs and platform as the publishing job (docker-build-parity.mjs). The cache
+      # is read-only here so a PR cannot seed the cache the release build reads.
+      - name: Build the image without pushing
+        id: image-check-build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: false
+          load: true
+          provenance: false
+          sbom: false
+          platforms: linux/amd64
+          cache-from: type=gha
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Extract the web bundle from the built image
+        env:
+          IMAGE_ID: ${{ steps.image-check-build.outputs.imageid }}
+        run: |
+          set -euo pipefail
+          test -n "$IMAGE_ID"
+          container="$(docker create "$IMAGE_ID")"
+          docker cp "$container:/usr/share/nginx/html" "$RUNNER_TEMP/image-html"
+          docker rm "$container" > /dev/null
+
+      - name: Check the DOMPurify build inside the image
+        run: |
+          set -euo pipefail
+          node scripts/check-image-bundle.mjs "$RUNNER_TEMP/image-html" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Record the built image
+        env:
+          IMAGE_ID: ${{ steps.image-check-build.outputs.imageid }}
+        run: echo "Built ${GITHUB_SHA} as image ${IMAGE_ID} without pushing (event ${GITHUB_EVENT_NAME})." >> "$GITHUB_STEP_SUMMARY"
