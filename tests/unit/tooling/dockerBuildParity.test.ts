@@ -134,7 +134,19 @@ const drift: Case[] = [
         push,
       );
     },
-    'before the push step',
+    'must build, extract, check and push the image as consecutive steps',
+  ],
+  // #1225 review: a step between the check and the push could change the context the push rebuilds.
+  [
+    'the publish job runs a step between the check and the push',
+    (d) => {
+      const steps = publishSteps(d);
+      steps.splice(steps.indexOf(named(steps, BUNDLE_CHECK)) + 1, 0, {
+        name: 'Touch the build context',
+        run: 'echo changed >> index.html',
+      });
+    },
+    'must build, extract, check and push the image as consecutive steps',
   ],
   [
     'the publish job drops the bundle check',
@@ -142,7 +154,7 @@ const drift: Case[] = [
       const steps = publishSteps(d);
       steps.splice(steps.indexOf(named(steps, BUNDLE_CHECK)), 1);
     },
-    'before the push step',
+    'must build, extract, check and push the image as consecutive steps',
   ],
   [
     'the publish check may fail without stopping the push',
@@ -189,7 +201,7 @@ const drift: Case[] = [
     'the publish job writes GITHUB_PATH before the check',
     (d) => {
       const steps = publishSteps(d);
-      steps.splice(steps.indexOf(named(steps, 'Extract the web bundle from the built image')), 0, {
+      steps.splice(steps.indexOf(named(steps, 'Build the image for the pre-push check')), 0, {
         name: 'Prepend a directory',
         run: 'echo /tmp/fake >> "$GITHUB_PATH"',
       });

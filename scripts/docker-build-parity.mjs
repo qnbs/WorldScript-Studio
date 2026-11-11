@@ -76,8 +76,9 @@ function locate(job) {
   };
 }
 
-const ascending = (indexes) =>
-  indexes.every((value, i) => value >= 0 && (i === 0 || value > indexes[i - 1]));
+// Directly adjacent steps: nothing may run between the check build, the extraction, the check and the push, so the push rebuilds exactly the context that was checked.
+const consecutive = (indexes) =>
+  indexes.every((value, i) => value >= 0 && (i === 0 || value === indexes[i - 1] + 1));
 
 const hasBuilds = (job, count, roles) =>
   job.builds.length === count && roles.every((role) => job[role] >= 0);
@@ -94,12 +95,12 @@ const SHAPE_RULES = [
   ],
   [
     (publish) =>
-      ascending([publish.checkBuild, publish.extract, publish.bundleCheck, publish.pushBuild]),
-    `${PUBLISH_JOB} must build, extract and check the image before the push step`,
+      consecutive([publish.checkBuild, publish.extract, publish.bundleCheck, publish.pushBuild]),
+    `${PUBLISH_JOB} must build, extract, check and push the image as consecutive steps`,
   ],
   [
-    (_publish, check) => ascending([check.checkBuild, check.extract, check.bundleCheck]),
-    `${CHECK_JOB} must build, extract and check the image in that order`,
+    (_publish, check) => consecutive([check.checkBuild, check.extract, check.bundleCheck]),
+    `${CHECK_JOB} must build, extract and check the image as consecutive steps`,
   ],
 ];
 
