@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
@@ -11,11 +11,9 @@ interface Step {
 
 // 2026-11-11 security release of the 22.x line (#1245); raise it with the next one.
 const NODE_22_SECURITY_FLOOR = [22, 23, 5];
-// The frozen trust-boundary preludes: workflow-policy-check.mjs pins their exact setup-node inputs, so they follow the runner toolcache.
-const TRUST_BOUNDARY_PRELUDES = new Set([
-  'pr-changelog-reference.yml',
-  'reviewer-governance-trust.yml',
-]);
+// The merge-admission prelude: workflow-policy-check.mjs (MERGE_ADMISSION_PRELUDE) allows exactly `node-version: '22'`
+// before admission, so it follows the runner toolcache. Every other setup-node must check for the latest patch.
+const MERGE_ADMISSION_WORKFLOW = 'pr-changelog-reference.yml';
 
 function setupNodeSteps(): Array<{ file: string; step: Step }> {
   const files = [
@@ -40,19 +38,15 @@ function setupNodeSteps(): Array<{ file: string; step: Step }> {
 }
 
 describe('Node runtimes take the newest security patch of their major (#1245)', () => {
-  it('make every setup-node outside the frozen trust-boundary preludes check for the latest patch', () => {
+  it('make every setup-node except the frozen merge-admission prelude check for the latest patch', () => {
     const steps = setupNodeSteps();
     expect(steps.length).toBeGreaterThanOrEqual(5);
-    const seen = new Set<string>();
+    const admission = steps.filter(({ file }) => basename(file) === MERGE_ADMISSION_WORKFLOW);
+    expect(admission.map(({ step }) => step.with)).toEqual([{ 'node-version': '22' }]);
     for (const { file, step } of steps) {
-      const name = file.split('/').pop() ?? file;
-      if (TRUST_BOUNDARY_PRELUDES.has(name)) {
-        seen.add(name);
-        continue;
-      }
+      if (basename(file) === MERGE_ADMISSION_WORKFLOW) continue;
       expect(step.with?.['check-latest'], file).toBe(true);
     }
-    expect(seen).toEqual(TRUST_BOUNDARY_PRELUDES);
   });
 
   it('pin the Docker builder to an exact, digest-pinned Node patch on the .nvmrc major', () => {
