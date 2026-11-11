@@ -1,3 +1,25 @@
+# Codecov is informational in this repository. The blocking coverage gate is the Vitest thresholds
+# (scripts/coverage-thresholds.json) in the quality job; required checks are listed in docs/CI.md.
+codecov:
+  notify:
+    # Exactly one coverage upload per commit (flag `unit`, quality job on Node 22).
+    after_n_builds: 1
+
+# Commit statuses instead of check runs (#1178); see docs/CI.md "Codecov integration".
+github_checks: false
+
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+comment:
+  after_n_builds: 1
+
 ignore:
   - "tests/**"
 
