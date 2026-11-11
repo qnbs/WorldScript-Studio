@@ -54,6 +54,10 @@ updates:
           - '@huggingface/transformers'
           - 'zod'
     ignore:
+      # Hold registered in config/dependency-holds.json (#1183): RTK 2.13.0 and 2.14.0 regress prototype-named entity IDs.
+      - dependency-name: '@reduxjs/toolkit'
+        versions:
+          - '>=2.13.0'
       - dependency-name: '@stryker-mutator/api'
         update-types:
           - 'version-update:semver-major'

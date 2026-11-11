@@ -1,0 +1,14 @@
+{
+  "$comment": "Dependency versions held back on purpose. Every entry must have a matching Dependabot ignore rule (tests/unit/tooling/dependencyHolds.test.ts). Lift a hold only with green evidence on its issue.",
+  "holds": [
+    {
+      "ecosystem": "npm",
+      "directory": "/",
+      "dependency": "@reduxjs/toolkit",
+      "versions": ">=2.13.0",
+      "pinned": "2.12.0",
+      "issue": 1183,
+      "reason": "RTK 2.13.0 and 2.14.0 regress prototype-named entity IDs: the entity adapter tests `key in state.entities` on a plain object, so __proto__ and constructor IDs are lost (#1183, probe 2026-11-11)."
+    }
+  ]
+}
