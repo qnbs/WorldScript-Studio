@@ -48,6 +48,9 @@ export const REQUIRED_CONTAINER_PRECHECK_CONDITIONS = Object.freeze([
 export const CONTAINER_PRECHECK_RUN =
   'node scripts/release-container-precheck.mjs --wait-seconds 1200 "$GITHUB_SHA"';
 const CONTAINER_PRECHECK_RECORD = 'echo "prechecked-sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"';
+// QNBS-v3 (#1219 review): the precheck runs tag code with an Actions token, so on a tag push it waits for the pinned verifier proof, exactly like the Tauri bundle job.
+export const CONTAINER_PRECHECK_CONDITION =
+  "always() && !cancelled() && ( github.event_name == 'workflow_dispatch' || ( needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha ) )";
 const PUBLISH_CONDITIONS_WITH_PRECHECK = Object.freeze([
   ...REQUIRED_VERIFIED_TAG_PUBLISH_CONDITIONS,
   ...REQUIRED_CONTAINER_PRECHECK_CONDITIONS,
@@ -392,8 +395,27 @@ const CONTAINER_PRECHECK_STEPS = [
 const CONTAINER_PRECHECK_RULES = [
   [
     (job) =>
-      onlyKeys(job, ['name', 'runs-on', 'timeout-minutes', 'permissions', 'outputs', 'steps']),
-    `job "${CONTAINER_PRECHECK_JOB}" must not set if, needs, env, continue-on-error, container or services`,
+      onlyKeys(job, [
+        'name',
+        'needs',
+        'if',
+        'runs-on',
+        'timeout-minutes',
+        'permissions',
+        'outputs',
+        'steps',
+      ]),
+    `job "${CONTAINER_PRECHECK_JOB}" must not set env, continue-on-error, container, services or other keys`,
+  ],
+  [
+    (job) =>
+      sameJson(asList(job.needs), ['verify-release-tag']) &&
+      normalizedCondition(String(job.if ?? '')) === CONTAINER_PRECHECK_CONDITION,
+    `job "${CONTAINER_PRECHECK_JOB}" must need verify-release-tag and run only on a dispatch or after the verifier proof: "${CONTAINER_PRECHECK_CONDITION}"`,
+  ],
+  [
+    (job) => job['runs-on'] === 'ubuntu-latest',
+    `job "${CONTAINER_PRECHECK_JOB}" must run on the GitHub-hosted ubuntu-latest runner`,
   ],
   [
     (job) => sameJson(job.permissions, { contents: 'read', actions: 'read' }),
@@ -477,6 +499,12 @@ function checkNoUngatedWriters(jobs, gatedJobs, fail) {
   }
 }
 
+// The verifier and container-precheck jobs that a workflow's publishers depend on.
+function checkGateJobs(jobs, spec, fail) {
+  if (spec.verifyTagJob) checkTagVerifierJob(jobs['verify-release-tag'], fail);
+  if (spec.containerPrecheckJob) checkContainerPrecheckJob(jobs[CONTAINER_PRECHECK_JOB], fail);
+}
+
 function parseWorkflow(source) {
   try {
     return { workflow: parse(source), error: null };
@@ -501,8 +529,7 @@ export function checkReleaseSecurityWorkflow(fileName, source) {
     fail('Release workflow must not define inherited environment variables');
   }
   checkAuditJob(jobs['security-audit'], spec.expectedSha, fail);
-  if (spec.verifyTagJob) checkTagVerifierJob(jobs['verify-release-tag'], fail);
-  if (spec.containerPrecheckJob) checkContainerPrecheckJob(jobs[CONTAINER_PRECHECK_JOB], fail);
+  checkGateJobs(jobs, spec, fail);
   for (const jobName of spec.gatedJobs) {
     checkGatedJob(jobName, jobs[jobName], fail, spec);
   }

@@ -368,6 +368,10 @@ jobs:
   container-precheck:
     name: 🐳 Container precheck (exact commit)
     # QNBS-v3 (#1219): GHCR and the desktop release both wait on this job, so a missing or failed no-push build check of the tagged commit stops both channels together instead of leaving a partial release.
+    # QNBS-v3 (#1219): like the bundle job, a tag push runs it only after the pinned verifier proved the tag; a manual dispatch runs it without that proof.
+    needs: [verify-release-tag]
+    if: >-
+      ${{ always() && !cancelled() && ( github.event_name == 'workflow_dispatch' || ( needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha ) ) }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:

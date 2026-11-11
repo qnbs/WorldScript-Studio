@@ -13,6 +13,7 @@ export const REQUIRED_PROOF_SIMULATION_CONDITIONS: readonly string[];
 export const CONTAINER_PRECHECK_JOB: string;
 export const REQUIRED_CONTAINER_PRECHECK_CONDITIONS: readonly string[];
 export const CONTAINER_PRECHECK_RUN: string;
+export const CONTAINER_PRECHECK_CONDITION: string;
 
 export const RELEASE_GATED_WORKFLOWS: Readonly<
   Record<

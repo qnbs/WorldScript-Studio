@@ -129,7 +129,9 @@ async function main(argv) {
   }
   const deadline = Date.now() + waitSeconds * 1000;
   let state = readRuns(sha);
-  while (SHA.test(String(sha ?? '')) && isPending(sha, state.runs) && Date.now() < deadline) {
+  const keepWaiting = () =>
+    SHA.test(String(sha ?? '')) && isPending(sha, state.runs) && Date.now() < deadline;
+  while (keepWaiting()) {
     process.stdout.write(`container-precheck: waiting for the build check of ${sha}\n`);
     await sleep(POLL_SECONDS);
     state = readRuns(sha);

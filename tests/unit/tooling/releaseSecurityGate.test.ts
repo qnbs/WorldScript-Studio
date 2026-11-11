@@ -190,10 +190,11 @@ describe('#911 release security gate: shipped workflows', () => {
     );
     expect(messages(DOCKER, noVerifierDependency)).toMatch(/must need "verify-release-tag"/);
 
+    // The publisher's own condition, not the precheck job's verifier clause.
     const noVerifierResult = mutate(
       source(DOCKER),
-      "needs.verify-release-tag.result == 'success' && ",
-      '',
+      "startsWith(github.ref, 'refs/tags/v') && needs.verify-release-tag.result == 'success' && ",
+      "startsWith(github.ref, 'refs/tags/v') && ",
     );
     expect(messages(DOCKER, noVerifierResult)).toMatch(
       /must require needs\.verify-release-tag\.result == 'success'/,
@@ -386,7 +387,29 @@ describe('#1219 both publishing channels wait on the container precheck', () => 
           TAURI,
           '    timeout-minutes: 25\n',
           '    timeout-minutes: 25\n    continue-on-error: true\n',
-          /job "container-precheck" must not set if, needs, env, continue-on-error/,
+          /job "container-precheck" must not set env, continue-on-error, container, services/,
+        ],
+        // #1234 review: the precheck runs tag code with an Actions token, so a tag push must prove the tag first.
+        [
+          'a precheck that does not wait for the tag verifier',
+          DOCKER,
+          '    needs: [verify-release-tag]\n    if: >-\n      ${{ always() && !cancelled() && ( github.event_name',
+          '    if: >-\n      ${{ always() && !cancelled() && ( github.event_name',
+          /job "container-precheck" must need verify-release-tag and run only on a dispatch or after the verifier proof/,
+        ],
+        [
+          'a precheck that also runs for an unverified tag',
+          TAURI,
+          "( github.event_name == 'workflow_dispatch' || ( needs.verify-release-tag.result == 'success' && needs.verify-release-tag.outputs.verified-tag-sha == github.sha ) ) }}\n    runs-on: ubuntu-latest\n    timeout-minutes: 25",
+          "( github.event_name == 'workflow_dispatch' || github.event_name == 'push' ) }}\n    runs-on: ubuntu-latest\n    timeout-minutes: 25",
+          /job "container-precheck" must need verify-release-tag and run only on a dispatch or after the verifier proof/,
+        ],
+        [
+          'a precheck on a self-hosted runner that could forge its output',
+          DOCKER,
+          '    runs-on: ubuntu-latest\n    timeout-minutes: 25\n',
+          '    runs-on: self-hosted\n    timeout-minutes: 25\n',
+          /job "container-precheck" must run on the GitHub-hosted ubuntu-latest runner/,
         ],
         [
           'a precheck that swallows a failure',
