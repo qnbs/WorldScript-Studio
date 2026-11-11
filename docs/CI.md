@@ -181,6 +181,14 @@ artifact upload already listed above).
 
 **Coverage.** Unchanged: `quality` (Node 22 only) uploads `coverage/lcov.info` under flag `unit`.
 
+**Statuses (#1178).** `codecov.yml` sets `github_checks: false`, so `codecov/patch` and
+`codecov/project` arrive as commit statuses, like `codecov/bundles`. Codecov used to create
+`codecov/patch` as a check run when the upload arrived and sometimes never completed it, so it showed
+"in progress" for hours although the commit's coverage was processed (#1220, #1224). Both statuses are
+`informational`: they report patch and project coverage but never fail. `notify.after_n_builds` and
+`comment.after_n_builds` are 1, matching the single coverage upload per commit. None of them is a
+required check; the blocking coverage gate is the Vitest thresholds in `quality`.
+
 **Test Analytics.** Every suite that already produces a Playwright/Vitest JUnit file uploads it via
 `codecov/codecov-action` with `report_type: test_results`, `disable_search: true`, and an explicit
 `files:` path — never the deprecated `codecov/test-results-action`. Each upload runs on

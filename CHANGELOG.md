@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- release-candidate: v1.29.5 -->
+- **Codecov:** `codecov/patch` and `codecov/project` are now posted as commit statuses instead of GitHub check runs, because Codecov opened the patch check run at upload time and sometimes never completed it, so it showed "in progress" for hours (#1220, #1224). Both are informational and never fail; the Vitest coverage thresholds remain the blocking gate (PR #1229).
 
 ## [1.29.5] — 2026-11-11
 
