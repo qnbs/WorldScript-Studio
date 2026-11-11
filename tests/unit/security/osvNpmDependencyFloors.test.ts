@@ -219,7 +219,7 @@ describe('OSV npm dependency floors', () => {
         .split('[[IgnoredVulns]]')
         .find((part) => part.includes(`id = "${rule.id}"`));
       expect(block, `${rule.id} needs its ignore entry`).toBeDefined();
-      expect(block).toMatch(/ignoreUntil = "2026-11-30T00:00:00Z"/);
+      expect(block).toMatch(/ignoreUntil = "2027-01-31T00:00:00Z"/);
 
       // Fail-closed: the waiver is advisory-wide for OSV, so the test pins what it was reviewed for.
       // A stale waiver (no affected copy left) or a new affected copy / parent must re-open it.
