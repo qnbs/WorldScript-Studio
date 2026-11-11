@@ -25,9 +25,18 @@ const aptSteps = Object.values(workflow.jobs)
   .flatMap((job) => job.steps ?? [])
   .filter((step) => /apt-get|apt-install\.sh/.test(String(step.run ?? '')));
 
-// Stand-ins for the runner commands; `timeout`, `sed` and `tee` stay real.
+// Stand-ins for the runner commands; `timeout`, `sed` and `tee` stay real. With FAKE_TIMEOUT_SECONDS the fake
+// sudo shortens the helper's `timeout --kill-after=N SECONDS` to that many seconds (kill grace 1 s), like a faster clock.
 const FAKES: Record<string, string> = {
-  sudo: '#!/bin/sh\nexec "$@"\n',
+  sudo: [
+    '#!/bin/sh',
+    'if [ "$1" = timeout ] && [ -n "$FAKE_TIMEOUT_SECONDS" ]; then',
+    '  shift 3',
+    '  exec timeout --kill-after=1 "$FAKE_TIMEOUT_SECONDS" "$@"',
+    'fi',
+    'exec "$@"',
+    '',
+  ].join('\n'),
   curl: [
     '#!/bin/sh',
     'for url; do :; done',
@@ -40,6 +49,8 @@ const FAKES: Record<string, string> = {
   'apt-get': [
     '#!/bin/sh',
     'echo "apt-get $*" >> "$FAKE_CALLS"',
+    'if [ "$FAKE_APT_HANG" = ignore-term ]; then trap "" TERM; fi',
+    'if [ -n "$FAKE_APT_HANG" ]; then sleep 30; fi',
     'case " $* " in *" update "*) exit "$FAKE_UPDATE_STATUS";; esac',
     '',
   ].join('\n'),
@@ -56,6 +67,7 @@ function runHelper(options: {
   unreachable?: string[];
   updateStatus?: number;
   legacySources?: boolean;
+  hang?: 'term' | 'ignore-term';
 }) {
   const root = mkdtempSync(join(tmpdir(), 'apt-install-'));
   roots.push(root);
@@ -90,6 +102,8 @@ function runHelper(options: {
       FAKE_CALLS: calls,
       FAKE_UNREACHABLE: (options.unreachable ?? []).join(' '),
       FAKE_UPDATE_STATUS: String(options.updateStatus ?? 0),
+      FAKE_APT_HANG: options.hang ?? '',
+      FAKE_TIMEOUT_SECONDS: options.hang ? '1' : '',
     },
   });
   const read = (file: string) => readFileSync(join(etc, file), 'utf8');
@@ -190,10 +204,16 @@ describe.skipIf(process.platform !== 'linux')('apt-install.sh on a simulated run
     expect(aptCalls(run.calls)).toHaveLength(1);
   });
 
-  it('reports a timed-out apt call as a timeout', () => {
-    const run = runHelper({ updateStatus: 124 });
+  it.each([
+    ['stops on TERM', 'term'],
+    ['ignores TERM until the kill grace ends', 'ignore-term'],
+  ] as const)('stops a hung apt call that %s and reports it as a timeout', (_label, hang) => {
+    const started = Date.now();
+    const run = runHelper({ hang });
+    expect(Date.now() - started).toBeLessThan(10_000);
     expect(run.status).toBe(1);
     expect(run.output).toContain('::error::apt-get update did not finish within 300s');
+    expect(aptCalls(run.calls)).toHaveLength(1);
   });
 
   it('refuses to run without packages', () => {
