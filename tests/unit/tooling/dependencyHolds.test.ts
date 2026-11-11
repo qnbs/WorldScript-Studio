@@ -30,6 +30,12 @@ const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
+const workspace = parse(readFileSync('pnpm-workspace.yaml', 'utf8')) as {
+  overrides?: Record<string, string>;
+};
+const lockfile = parse(readFileSync('pnpm-lock.yaml', 'utf8')) as {
+  packages?: Record<string, unknown>;
+};
 
 describe('dependency holds are enforced by configuration, not memory (#1183)', () => {
   it.each(holds.map((hold) => [hold.dependency, hold]))(
@@ -52,6 +58,20 @@ describe('dependency holds are enforced by configuration, not memory (#1183)', (
       const declared =
         pkg.dependencies?.[hold.dependency] ?? pkg.devDependencies?.[hold.dependency];
       expect(declared).toBe(hold.pinned);
+    },
+  );
+
+  // #1235 review: the workspace override and the lockfile decide what is installed, so both must agree with the hold, not only the manifest.
+  it.each(holds.filter((hold) => hold.ecosystem === 'npm').map((hold) => [hold.dependency, hold]))(
+    '%s resolves only to its pinned version through the workspace override and the lockfile',
+    (_name, hold) => {
+      expect(workspace.overrides?.[hold.dependency], 'pnpm-workspace.yaml override').toBe(
+        hold.pinned,
+      );
+      const resolved = Object.keys(lockfile.packages ?? {})
+        .filter((key) => key.startsWith(`${hold.dependency}@`))
+        .map((key) => key.slice(hold.dependency.length + 1));
+      expect(resolved, 'pnpm-lock.yaml resolutions').toEqual([hold.pinned]);
     },
   );
 
