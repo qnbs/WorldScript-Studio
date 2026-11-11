@@ -311,7 +311,27 @@ const drift: Case[] = [
     (d) => {
       inputs(named(publishSteps(d), SETUP_BUILDX))['driver-opts'] = 'image=moby/buildkit:master';
     },
-    'Buildx setup must take the same inputs in both jobs',
+    'Buildx setup must be identical in both jobs apart from its name',
+  ],
+  // #1228 review: a skipped setup leaves the publish build on another builder.
+  [
+    'the publish job skips its Buildx setup',
+    (d) => {
+      Object.assign(named(publishSteps(d), SETUP_BUILDX), { if: 'false' });
+    },
+    'Buildx setup must be identical in both jobs apart from its name',
+  ],
+  [
+    'the publish job sets up a second builder before its check build',
+    (d) => {
+      const steps = publishSteps(d);
+      steps.splice(steps.indexOf(named(steps, 'Build the image for the pre-push check')), 0, {
+        name: 'Set up another builder',
+        uses: named(steps, SETUP_BUILDX).uses ?? '',
+        with: { 'driver-opts': 'image=moby/buildkit:master' },
+      });
+    },
+    'each job must set up Buildx exactly once, before its check build',
   ],
   [
     'the build check drops the context check',

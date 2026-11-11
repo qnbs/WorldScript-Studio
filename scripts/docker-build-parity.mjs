@@ -130,14 +130,25 @@ function parityErrors(publish, check) {
   return [...errors, ...builderErrors(publish, check), ...checkoutErrors(check)];
 }
 
-// The builder is part of the build: Buildx setup must take the same inputs and environment in both jobs, so the check cannot pass on a different builder than the release uses.
+const setupIndexes = (job) =>
+  job.steps.flatMap((step, index) => (usesOf(step).startsWith(SETUP_BUILDX) ? [index] : []));
+const withoutName = (step) =>
+  Object.entries(step ?? {})
+    .filter(([key]) => key !== 'name')
+    .sort(([a], [b]) => a.localeCompare(b));
+
+// The builder is part of the build: each job sets up Buildx exactly once before its check build, and both setup steps are identical apart from their name (inputs, environment, if, continue-on-error), so the check cannot pass on a different builder than the release uses.
 function builderErrors(publish, check) {
-  const [publishSetup, checkSetup] = [publish, check].map((job) =>
-    job.steps.find((step) => usesOf(step).startsWith(SETUP_BUILDX)),
+  const jobs = [publish, check];
+  const setups = jobs.map(setupIndexes);
+  const once = setups.every(
+    (indexes, i) => indexes.length === 1 && indexes[0] < (jobs[i]?.checkBuild ?? -1),
   );
-  const same =
-    sameJson(publishSetup?.with, checkSetup?.with) && sameJson(publishSetup?.env, checkSetup?.env);
-  return same ? [] : ['Buildx setup must take the same inputs in both jobs'];
+  if (!once) return ['each job must set up Buildx exactly once, before its check build'];
+  const [publishSetup, checkSetup] = jobs.map((job, i) => job.steps[setups[i]?.[0] ?? -1]);
+  return sameJson(withoutName(publishSetup), withoutName(checkSetup))
+    ? []
+    : ['Buildx setup must be identical in both jobs apart from its name'];
 }
 
 // The build check must build the event commit that the precheck credits, so its checkout takes no ref or other inputs. The publish checkout is pinned to github.sha by release-security-gate.mjs.
