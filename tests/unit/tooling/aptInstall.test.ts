@@ -37,9 +37,14 @@ const workflowSteps = readdirSync(WORKFLOW_DIR)
     );
   });
 const script = readFileSync(SCRIPT, 'utf8');
-const aptSteps = workflowSteps.filter(({ step }) =>
-  /apt-get|apt-install\.sh/.test(String(step.run ?? '')),
-);
+// `apt` or `apt-get` in command position, not paths such as /var/cache/apt/archives.
+const APT_COMMAND = /(^|[\s;&|(])(sudo\s+)?apt(-get)?\s+[a-z]/m;
+// A step may only call the helper, on one line, with package names: nothing can run apt around it.
+const HELPER_CALL = /^bash scripts\/ci\/apt-install\.sh(?: [a-z0-9][a-z0-9.+-]*)+$/;
+const aptSteps = workflowSteps.filter(({ step }) => {
+  const run = String(step.run ?? '');
+  return APT_COMMAND.test(run) || run.includes('apt-install.sh');
+});
 
 // Stand-ins for the runner commands; `timeout`, `sed` and `tee` stay real. With FAKE_TIMEOUT_SECONDS the fake
 // sudo shortens the helper's `timeout --kill-after=N SECONDS` to that many seconds (kill grace 1 s), like a faster clock.
@@ -67,7 +72,7 @@ const FAKES: Record<string, string> = {
     'echo "apt-get $*" >> "$FAKE_CALLS"',
     'if [ "$FAKE_APT_HANG" = ignore-term ]; then trap "" TERM; fi',
     'if [ -n "$FAKE_APT_HANG" ]; then exec sleep 30; fi',
-    'case " $* " in *" update "*) exit "$FAKE_UPDATE_STATUS";; esac',
+    'case " $* " in *" update "*) printf "%s" "$FAKE_UPDATE_OUTPUT"; exit "$FAKE_UPDATE_STATUS";; esac',
     '',
   ].join('\n'),
 };
@@ -84,6 +89,7 @@ function runHelper(options: {
   updateStatus?: number;
   legacySources?: boolean;
   hang?: 'term' | 'ignore-term';
+  updateOutput?: string;
 }) {
   const root = mkdtempSync(join(tmpdir(), 'apt-install-'));
   roots.push(root);
@@ -121,6 +127,7 @@ function runHelper(options: {
       FAKE_CALLS: calls,
       FAKE_UNREACHABLE: (options.unreachable ?? []).join(' '),
       FAKE_UPDATE_STATUS: String(options.updateStatus ?? 0),
+      FAKE_UPDATE_OUTPUT: options.updateOutput ? `${options.updateOutput}\n` : '',
       FAKE_APT_HANG: options.hang ?? '',
       FAKE_TIMEOUT_SECONDS: options.hang ? '1' : '',
     },
@@ -147,9 +154,24 @@ describe('apt installs in the release workflow stay bounded', () => {
     expect(aptSteps.length).toBeGreaterThanOrEqual(4);
     for (const { file, step } of aptSteps) {
       const label = `${file}: ${step.name}`;
-      expect(step.run, label).toMatch(/^bash scripts\/ci\/apt-install\.sh \S/);
+      expect(String(step.run).trim(), label).toMatch(HELPER_CALL);
       expect(step['timeout-minutes'], label).toBeLessThanOrEqual(15);
     }
+  });
+
+  it('treat apt and apt-get in command position as apt steps and accept only the bare helper call', () => {
+    expect(APT_COMMAND.test('sudo apt install -y foo')).toBe(true);
+    expect(APT_COMMAND.test('set -e\nsudo apt-get update')).toBe(true);
+    expect(APT_COMMAND.test('sudo mkdir -p /var/cache/apt/archives/partial')).toBe(false);
+    expect(HELPER_CALL.test('bash scripts/ci/apt-install.sh libwebkit2gtk-4.1-dev patchelf')).toBe(
+      true,
+    );
+    expect(HELPER_CALL.test('bash scripts/ci/apt-install.sh foo\nsudo apt-get install bar')).toBe(
+      false,
+    );
+    expect(HELPER_CALL.test('bash scripts/ci/apt-install.sh foo && sudo apt-get install bar')).toBe(
+      false,
+    );
   });
 
   it('make a helper change run the ci.yml gates that use it', () => {
@@ -194,7 +216,7 @@ describe.skipIf(process.platform !== 'linux')('apt-install.sh on a simulated run
     expect(run.output).not.toContain('::warning::');
     expect(run.read('apt-mirrors.txt')).toContain(`${AZURE}/\tpriority:1`);
     expect(aptCalls(run.calls)).toEqual([
-      'apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update --error-on=any',
+      'apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update',
       'apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y libfoo-dev patchelf',
     ]);
   });
@@ -247,6 +269,27 @@ describe.skipIf(process.platform !== 'linux')('apt-install.sh on a simulated run
     expect(run.status).toBe(1);
     expect(run.output).toContain('::error::apt-get update did not finish within 300s');
     expect(aptCalls(run.calls)).toHaveLength(1);
+  });
+
+  it('stops before install when an Ubuntu index could not be fetched', () => {
+    const run = runHelper({
+      updateOutput:
+        "W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/jammy/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'",
+    });
+    expect(run.status).toBe(1);
+    expect(run.output).toContain('::error::apt-get update could not fetch an Ubuntu index');
+    expect(aptCalls(run.calls)).toHaveLength(1);
+  });
+
+  it('only warns when a non-Ubuntu source fails and installs from the current Ubuntu indexes', () => {
+    const run = runHelper({
+      updateOutput:
+        'W: Failed to fetch https://packages.microsoft.com/ubuntu/22.04/prod/dists/jammy/InRelease  Could not connect',
+    });
+    expect(run.status, run.output).toBe(0);
+    expect(run.output).toContain('::warning::apt-get update could not fetch a non-Ubuntu source');
+    expect(run.output).toContain('packages.microsoft.com');
+    expect(aptCalls(run.calls)).toHaveLength(2);
   });
 
   it('refuses to run without packages', () => {
