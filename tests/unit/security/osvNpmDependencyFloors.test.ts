@@ -32,6 +32,21 @@ function referencesResolvedVersion(reference: string, versions: string[]): boole
   return versions.some((version) => reference === version || reference.startsWith(`${version}(`));
 }
 
+// The expiry every OSV waiver was requalified for on 2026-11-11 (#1163, #1164).
+const WAIVER_EXPIRY = '2027-01-31T00:00:00Z';
+
+// Active `ignoreUntil` values of one [[IgnoredVulns]] block. OSV reads only uncommented keys, so a commented-out line must not satisfy the expiry check.
+function activeIgnoreUntil(block: string): string[] {
+  return block
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => !line.startsWith('#'))
+    .flatMap((line) => {
+      const value = /^ignoreUntil\s*=\s*"([^"]*)"\s*(?:#.*)?$/.exec(line)?.[1];
+      return value === undefined ? [] : [value];
+    });
+}
+
 const projectRoot = process.cwd();
 const packageManifest = JSON.parse(
   readFileSync(resolve(projectRoot, 'package.json'), 'utf8'),
@@ -219,7 +234,7 @@ describe('OSV npm dependency floors', () => {
         .split('[[IgnoredVulns]]')
         .find((part) => part.includes(`id = "${rule.id}"`));
       expect(block, `${rule.id} needs its ignore entry`).toBeDefined();
-      expect(block).toMatch(/ignoreUntil = "2027-01-31T00:00:00Z"/);
+      expect(activeIgnoreUntil(block ?? ''), `${rule.id} expiry`).toEqual([WAIVER_EXPIRY]);
 
       // Fail-closed: the waiver is advisory-wide for OSV, so the test pins what it was reviewed for.
       // A stale waiver (no affected copy left) or a new affected copy / parent must re-open it.
@@ -234,6 +249,26 @@ describe('OSV npm dependency floors', () => {
         ).toEqual(rule.reviewedParents[version]);
       }
     }
+  });
+
+  // #1233 review: every waiver, Rust ones included, carries exactly one active expiry.
+  it('gives every OSV waiver exactly one active expiry, the requalified date', () => {
+    const toml = readFileSync(resolve(projectRoot, 'src-tauri/osv-scanner.toml'), 'utf8');
+    const blocks = toml.split('[[IgnoredVulns]]').slice(1);
+    expect(blocks).toHaveLength(9);
+    for (const block of blocks) {
+      const id = /^id\s*=\s*"([^"]+)"/m.exec(block)?.[1];
+      expect(activeIgnoreUntil(block), `${id} expiry`).toEqual([WAIVER_EXPIRY]);
+    }
+  });
+
+  it('does not count a commented-out ignoreUntil as an active expiry', () => {
+    const commented = `\nid = "GHSA-test"\n# ignoreUntil = "${WAIVER_EXPIRY}"\nreason = "fixture"\n`;
+    expect(activeIgnoreUntil(commented)).toEqual([]);
+    expect(activeIgnoreUntil(`${commented}ignoreUntil = "${WAIVER_EXPIRY}" # reviewed\n`)).toEqual([
+      WAIVER_EXPIRY,
+    ]);
+    expect(activeIgnoreUntil(`${commented}ignoreUntil = 2027-01-31T00:00:00Z\n`)).toEqual([]);
   });
 
   it('keeps every waived package out of the production dependency graph', () => {
