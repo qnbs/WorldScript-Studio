@@ -1,6 +1,6 @@
 # Intel macOS (x86_64) Qualification — Status
 
-**Status:** Runner and native build qualified on `macos-26-intel` (2026-11-11). Not part of the release matrix.
+**Status:** Qualified on `macos-26-intel` (2026-11-11) and part of the release `bundle` matrix from v1.29.6 (#507). Updater signing is first exercised on the v1.29.6 tag.
 **Owner lane:** `tauri-intel-qualification.yml` (`workflow_dispatch` only).
 
 ## History
@@ -29,15 +29,13 @@ It is deliberately **not**:
 - wired into `latest.json` generation or any `darwin-x86_64` updater key;
 - able to mutate a GitHub Release. It has `permissions: contents: read` only, no signing secrets and no release-publication steps. `scripts/workflow-policy-check.mjs`'s publishing-boundary check confirms this, because the job is not on the `PUBLISHING_ALLOWLIST`.
 
-## What's still open before promoting Intel to the release matrix
+## Release integration (v1.29.6)
 
-1. **Soak/repeat testing.** `macos-13` was removed for _queue_ unavailability, not build failure. Repeated qualification runs must show that `macos-26-intel` also provisions reliably at release time.
-2. **A unique updater asset name.** Both macOS legs produce `WorldScript Studio.app.tar.gz` (+ `.sig`), and the release job refuses duplicate asset names. The Intel payload needs its own name before both can ship.
-3. **Guard and manifest.** `scripts/release-assets-guard.mjs` and `latest.json` know exactly `linux-x86_64`, `windows-x86_64` and `darwin-aarch64`. Promotion adds:
-   - a `darwin-x86_64` entry, including the signed-version check;
-   - the x64 DMG and the `x86_64-apple-darwin` notices and SBOM in the expected asset set.
-4. **Signing.** Dispatch builds never sign, so Intel updater signing is first exercised on a tag. That requires (2) first.
-5. **Product decision.** A second macOS runner type would gate every release and costs extra CI minutes. Whether that is worth it for the Intel-Mac user base is a product decision.
+- **Matrix:** `tauri-build.yml`'s `bundle` matrix has a `macos-26-intel` leg with `arch: x86_64`, next to `macos-latest` with `arch: arm64`. Both are checked with `lipo` and with a DMG verify and mount before upload.
+- **Asset names:** the Intel updater payload and its `.sig` are renamed to `WorldScript Studio_x64.app.tar.gz`, so they cannot collide with the Apple Silicon payload.
+- **Release guard:** `scripts/release-assets-guard.mjs` requires `WorldScript Studio_<version>_x64.dmg`, the Intel payload and its signature, and the `x86_64-apple-darwin` notices and SBOM. It writes and validates a `darwin-x86_64` `latest.json` entry, including the signed-version binding (#1215).
+- **Still to be proven on the first tag:** updater signing on Intel (dispatch builds never sign), and the published `darwin-x86_64` entry. Both macOS architectures must be verified before v1.29.6 is published.
+- **Not done:** Apple Developer ID signing and notarization, deferred by maintainer decision (#574).
 
 ## Tracking
 

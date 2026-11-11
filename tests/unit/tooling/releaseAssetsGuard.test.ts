@@ -20,11 +20,14 @@ const installers = [
   `WorldScript Studio_${version}_x64_en-US.msi`,
   `WorldScript Studio_${version}_aarch64.dmg`,
   'WorldScript Studio.app.tar.gz',
+  `WorldScript Studio_${version}_x64.dmg`,
+  'WorldScript Studio_x64.app.tar.gz',
 ] as const;
 const inventories = [
   'x86_64-unknown-linux-gnu',
   'x86_64-pc-windows-msvc',
   'aarch64-apple-darwin',
+  'x86_64-apple-darwin',
 ].flatMap((target) => [
   `worldscript-studio-${version}-${target}.cdx.json`,
   `worldscript-studio-${version}-${target}.third-party-notices.txt`,
@@ -36,6 +39,7 @@ const signed = [
   installers[3],
   installers[4],
   installers[6],
+  installers[8],
 ];
 const completeAssets = [...installers, ...signed.map((name) => `${name}.sig`), ...inventories];
 // A minisign signature file as the Tauri signer writes it, base64-encoded like the `.sig` sidecar.
@@ -70,15 +74,30 @@ function manifest() {
         signature: signatures[`${installers[6]}.sig`],
         url: `https://github.com/${repository}/releases/download/v${version}/${installers[6].replaceAll(' ', '.')}`,
       },
+      'darwin-x86_64': {
+        signature: signatures[`${installers[8]}.sig`],
+        url: `https://github.com/${repository}/releases/download/v${version}/${installers[8].replaceAll(' ', '.')}`,
+      },
     },
   };
 }
 
 describe('release asset completeness gate', () => {
-  it('accepts the complete Linux, Windows, and macOS ARM installer and notice matrix', () => {
+  it('accepts the complete Linux, Windows, macOS ARM and macOS Intel installer and notice matrix', () => {
     const result = validateReleaseAssetNames(completeAssets, version);
     expect(result.ok).toBe(true);
     expect(result.selected.macUpdater).toBe(installers[6]);
+    expect(result.selected.macIntelUpdater).toBe(installers[8]);
+    expect(result.selected.macIntelDmg).toBe(installers[7]);
+  });
+
+  it('rejects an Intel payload that kept the Apple Silicon name', () => {
+    const collided = completeAssets.filter((name) => !name.startsWith(installers[8]));
+    const result = validateReleaseAssetNames([...collided, `${installers[6]}`], version);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain(
+      'macIntelUpdater: expected exactly one matching asset, found 0',
+    );
   });
 
   it.each(completeAssets)('rejects a missing required asset: %s', (missing) => {
@@ -192,7 +211,7 @@ describe('signed updater manifest gate', () => {
     ).toBe(false);
     const extraPlatform = manifest();
     const unsupportedPlatforms = { ...extraPlatform.platforms } as Record<string, unknown>;
-    unsupportedPlatforms['darwin-x86_64'] = extraPlatform.platforms['darwin-aarch64'];
+    unsupportedPlatforms['linux-aarch64'] = extraPlatform.platforms['linux-x86_64'];
     expect(
       validateLatestManifest({
         manifest: { ...extraPlatform, platforms: unsupportedPlatforms },

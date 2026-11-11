@@ -55,7 +55,25 @@ describe('macOS bundles are checked for their native architecture', () => {
     expect(step?.run).toBe(release?.run);
   });
 
-  it('keep the Intel leg out of the release matrix until the release integration lands', () => {
-    expect(releaseLegs().map((leg) => leg.os)).not.toContain('macos-26-intel');
+  it('ship both macOS architectures from native release legs', () => {
+    const macos = releaseLegs()
+      .filter((leg) => leg.os.startsWith('macos'))
+      .map((leg) => [leg.os, leg.arch]);
+    expect(macos).toEqual([
+      ['macos-latest', 'arm64'],
+      ['macos-26-intel', 'x86_64'],
+    ]);
+  });
+
+  it('give the Intel updater payload its own name after the tag signature check and before upload', () => {
+    const names = stepNames(bundleJob());
+    const rename = names.indexOf('Name the Intel updater payload uniquely');
+    expect(rename).toBeGreaterThan(
+      names.indexOf('Cryptographically verify signed bundle artifacts'),
+    );
+    expect(rename).toBeLessThan(names.indexOf(VERIFY_STEP));
+    const step = bundleJob().steps?.[rename] ?? {};
+    expect(step.if).toBe("matrix.arch == 'x86_64'");
+    expect(step.run).toContain('"$dir/WorldScript Studio_x64.app.tar.gz.sig"');
   });
 });

@@ -216,16 +216,11 @@ jobs:
         include:
           - os: ubuntu-22.04
           - os: windows-latest
-          # QNBS-v3: macos-13 (the last Intel/x86_64 hosted runner) removed 2026-07-28 -- it never
-          # actually provisions a runner (job sits in "queued" indefinitely; timeout-minutes never
-          # applies since that only counts once a job starts, so 3 consecutive real runs each hung
-          # the full 24h GitHub Actions queue ceiling before auto-cancelling). GitHub has been
-          # retiring Intel-hosted macOS runners; macos-latest (Apple Silicon) is the only macOS
-          # bundle target until a working Intel option exists again. Native Intel-Mac builds are
-          # tracked as a re-opened follow-up, not silently dropped.
-          # QNBS-v3: arch is what the bundle check below enforces; native x86_64 builds qualify in tauri-intel-qualification.yml on macos-26-intel (#507).
+          # QNBS-v3: arch is what the bundle check below enforces; each macOS leg builds natively, Apple Silicon on macos-latest and Intel on macos-26-intel (#507).
           - os: macos-latest
             arch: arm64
+          - os: macos-26-intel
+            arch: x86_64
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -353,6 +348,24 @@ jobs:
               exit 1
               ;;
           esac
+
+      # QNBS-v3: both macOS legs build 'WorldScript Studio.app.tar.gz'; the Intel payload and its signature get their own name before upload, so the release job never sees a duplicate (#507).
+      - name: Name the Intel updater payload uniquely
+        if: matrix.arch == 'x86_64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir=src-tauri/target/release/bundle/macos
+          if [ -e "$dir/WorldScript Studio.app.tar.gz" ]; then
+            mv -- "$dir/WorldScript Studio.app.tar.gz" "$dir/WorldScript Studio_x64.app.tar.gz"
+            mv -- "$dir/WorldScript Studio.app.tar.gz.sig" "$dir/WorldScript Studio_x64.app.tar.gz.sig"
+            echo "renamed the Intel updater payload and its signature to WorldScript Studio_x64.app.tar.gz"
+          elif [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "::error::a tag build must produce the Intel updater payload"
+            exit 1
+          else
+            echo "no updater payload in this build (workflow_dispatch builds create none)"
+          fi
 
       # QNBS-v3: each macOS leg must build a native bundle of its declared arch, and its DMG must mount and contain that app (#507).
       - name: Verify the macOS bundle architecture and DMG
@@ -498,7 +511,7 @@ jobs:
           done < <(find downloaded -type f \( -name '*.third-party-notices.txt' -o -name '*.cdx.json' \) -print0)
           node scripts/release-assets-guard.mjs assets "$VERSION" release-assets
 
-      - name: Generate and validate all three signed updater manifest entries
+      - name: Generate and validate all four signed updater manifest entries
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"

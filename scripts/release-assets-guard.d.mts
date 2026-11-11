@@ -6,12 +6,16 @@ export type ReleaseAssetKind =
   | 'windowsMsi'
   | 'macDmg'
   | 'macUpdater'
+  | 'macIntelDmg'
+  | 'macIntelUpdater'
   | 'linuxSbom'
   | 'linuxNotices'
   | 'windowsSbom'
   | 'windowsNotices'
   | 'macSbom'
-  | 'macNotices';
+  | 'macNotices'
+  | 'macIntelSbom'
+  | 'macIntelNotices';
 
 export interface AssetValidationResult {
   ok: boolean;
