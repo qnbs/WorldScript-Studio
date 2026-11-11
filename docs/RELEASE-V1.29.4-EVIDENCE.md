@@ -5,9 +5,9 @@ annotated tag `v1.29.4` (tag object `5bc6dff16dc0476e4068c3552e24f579d903e0a3` â
 `baba33f12262e6503c094eb0097446d422742da0`) was pushed once on 2026-11-10T20:39:31Z. The Tauri run
 published the [GitHub Release](https://github.com/qnbs/WorldScript-Studio/releases/tag/v1.29.4) with
 the desktop installers and the updater. The Docker run failed at the image build on the stale
-`COPY patches/` line (#1223), so nothing was pushed and GHCR `latest`, `1.29` and `1.29.2` still serve
-1.29.2. By this ladder, `PUBLISHED` means every tag-triggered workflow succeeded, so 1.29.4 is a
-partial publication. The container image follows with 1.29.5 (`docs/RELEASE-V1.29.5-EVIDENCE.md`).
+`COPY patches/` line (#1223), so nothing was pushed: GHCR `latest` and `1.29` kept serving 1.29.2 until
+v1.29.5, and the `1.29.2` tag still serves it. By this ladder, `PUBLISHED` means every tag-triggered workflow succeeded, so 1.29.4 is a
+partial publication. The container image was published with 1.29.5 on 2026-11-11 (`docs/RELEASE-V1.29.5-EVIDENCE.md`).
 `v1.29.3` was tagged but never published (below).
 
 ## Result per channel
