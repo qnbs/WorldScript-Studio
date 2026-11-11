@@ -60,10 +60,11 @@ describe('Node runtimes take the newest security patch of their major (#1245)', 
     }
   });
 
-  it('pin the Docker builder to an exact, digest-pinned Node patch on the .nvmrc major', () => {
+  it('pin the Docker builder to an exact, digest-pinned Node patch on the .nvmrc major, and assert it at build time', () => {
+    const dockerfile = readFileSync('Dockerfile', 'utf8');
     const from =
-      /^FROM node:(\d+)\.(\d+)\.(\d+)-alpine[\d.]*@sha256:[0-9a-f]{64} AS builder$/m.exec(
-        readFileSync('Dockerfile', 'utf8'),
+      /^FROM node:(\d+)\.(\d+)\.(\d+)-alpine[\d.]*@sha256:[0-9a-f]{64} AS builder\n/m.exec(
+        dockerfile,
       );
     expect(from, 'FROM node:<x.y.z>-alpine…@sha256:… AS builder').not.toBeNull();
     const version = (from ?? []).slice(1, 4).map(Number);
@@ -76,5 +77,12 @@ describe('Node runtimes take the newest security patch of their major (#1245)', 
       atLeastFloor,
       `builder Node ${version.join('.')} below ${NODE_22_SECURITY_FLOOR.join('.')}`,
     ).toBe(true);
+    // The pull resolves the digest, not the tag, so the build itself must prove the digest is the tagged patch.
+    const afterFrom = dockerfile.slice((from?.index ?? 0) + (from?.[0].length ?? 0));
+    const assertion =
+      /^RUN test "\$\(node -p 'process\.versions\.node'\)" = "(\d+\.\d+\.\d+)"$/m.exec(afterFrom);
+    expect(assertion, 'RUN test "$(node -p …)" = "<x.y.z>" after the builder FROM').not.toBeNull();
+    expect(assertion?.[1]).toBe(version.join('.'));
+    expect(afterFrom.slice(0, assertion?.index ?? 0)).not.toMatch(/^(FROM|RUN) /m);
   });
 });

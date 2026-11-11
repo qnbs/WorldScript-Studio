@@ -1,6 +1,8 @@
 # ─── Stage 1: Build ───────────────────────────────────────────────────────────
 # QNBS-v3: SHA-pinned to prevent supply-chain attacks (Scorecard Pinned-Dependencies); exact Node patch at or above the security floor in tests/unit/tooling/nodeRuntimePins.test.ts (#1245).
 FROM node:22.23.5-alpine3.24@sha256:d6e6d1cae4ed0cda2dc336db1bbea6457c2b5d2a8bcd9ac1d80b909fe1c4f638 AS builder
+# QNBS-v3: the digest, not the tag, decides what runs; fail the build unless it is the tagged Node patch (#1245).
+RUN test "$(node -p 'process.versions.node')" = "22.23.5"
 
 # QNBS-v3: Corepack takes pnpm from package.json#packageManager only; a second pin here drifted silently (#1223).
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
