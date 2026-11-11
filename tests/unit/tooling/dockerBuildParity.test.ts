@@ -217,6 +217,23 @@ const drift: Case[] = [
     },
     'must not set if: or continue-on-error',
   ],
+  // #1228 review: a skipped build must fail parity in both jobs, not only a dropped or reordered one.
+  [
+    'the build check skips its image build',
+    (d) => {
+      Object.assign(named(checkSteps(d), CHECK_BUILD), { if: 'false' });
+    },
+    `build-check step "${CHECK_BUILD}" must not set if: or continue-on-error`,
+  ],
+  [
+    'the publish job skips its pre-push check build',
+    (d) => {
+      Object.assign(named(publishSteps(d), 'Build the image for the pre-push check'), {
+        if: "github.event_name != 'push'",
+      });
+    },
+    'build-push step "Build the image for the pre-push check" must not set if: or continue-on-error',
+  ],
   [
     'the extraction differs between the jobs',
     (d) => {
