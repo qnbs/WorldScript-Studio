@@ -27,8 +27,6 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: .nvmrc
-          # QNBS-v3: newest patch of the .nvmrc major, like .github/actions/setup (#1245); the policy checker validates this step's action, not its inputs.
-          check-latest: true
           cache: pnpm
       - name: Install trusted base dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile

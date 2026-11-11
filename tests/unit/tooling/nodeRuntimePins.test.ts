@@ -11,9 +11,15 @@ interface Step {
 
 // 2026-11-11 security release of the 22.x line (#1245); raise it with the next one.
 const NODE_22_SECURITY_FLOOR = [22, 23, 5];
-// The merge-admission prelude: workflow-policy-check.mjs (MERGE_ADMISSION_PRELUDE) allows exactly `node-version: '22'`
-// before admission, so it follows the runner toolcache. Every other setup-node must check for the latest patch.
-const MERGE_ADMISSION_WORKFLOW = 'pr-changelog-reference.yml';
+// Two preludes keep their exact setup-node inputs and follow the runner toolcache:
+// - the merge-admission prelude: workflow-policy-check.mjs (MERGE_ADMISSION_PRELUDE) allows exactly node-version '22';
+// - the reviewer-governance trust workflow: a protected path of check-protected-transitions.mjs, changeable only through
+//   an authorized transition in .github/governance/protected-transitions.json.
+// Every other setup-node must check for the latest patch.
+const FROZEN_PRELUDES: Record<string, Record<string, unknown>> = {
+  'pr-changelog-reference.yml': { 'node-version': '22' },
+  'reviewer-governance-trust.yml': { 'node-version-file': '.nvmrc', cache: 'pnpm' },
+};
 
 function setupNodeSteps(): Array<{ file: string; step: Step }> {
   const files = [
@@ -38,13 +44,18 @@ function setupNodeSteps(): Array<{ file: string; step: Step }> {
 }
 
 describe('Node runtimes take the newest security patch of their major (#1245)', () => {
-  it('make every setup-node except the frozen merge-admission prelude check for the latest patch', () => {
+  it('make every setup-node except the two frozen preludes check for the latest patch', () => {
     const steps = setupNodeSteps();
     expect(steps.length).toBeGreaterThanOrEqual(5);
-    const admission = steps.filter(({ file }) => basename(file) === MERGE_ADMISSION_WORKFLOW);
-    expect(admission.map(({ step }) => step.with)).toEqual([{ 'node-version': '22' }]);
+    for (const [workflow, inputs] of Object.entries(FROZEN_PRELUDES)) {
+      const frozen = steps.filter(({ file }) => basename(file) === workflow);
+      expect(
+        frozen.map(({ step }) => step.with),
+        workflow,
+      ).toEqual([inputs]);
+    }
     for (const { file, step } of steps) {
-      if (basename(file) === MERGE_ADMISSION_WORKFLOW) continue;
+      if (basename(file) in FROZEN_PRELUDES) continue;
       expect(step.with?.['check-latest'], file).toBe(true);
     }
   });
