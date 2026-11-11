@@ -29,12 +29,24 @@ const stepNames = (job: Job) => (job.steps ?? []).map((step) => step.name);
 
 // #507: a macOS bundle must be native to its declared arch, and its DMG must mount and contain that app.
 describe('macOS bundles are checked for their native architecture', () => {
-  it('declare an arch for every macOS release leg', () => {
+  it('declare the native arch of each macOS release leg', () => {
     const macos = releaseLegs().filter((leg) => leg.os.startsWith('macos'));
     expect(macos.length).toBeGreaterThanOrEqual(1);
+    const expected: Record<string, string> = {
+      'macos-latest': 'arm64',
+      'macos-26-intel': 'x86_64',
+    };
     for (const leg of macos) {
-      expect(['arm64', 'x86_64'], leg.os).toContain(leg.arch);
+      expect(leg.arch, leg.os).toBe(expected[leg.os]);
     }
+  });
+
+  it('embed the generated notices in the Intel qualification bundle like the release build', () => {
+    const build = workflow('tauri-intel-qualification.yml').jobs['qualify']?.steps?.find((step) =>
+      step.name?.startsWith('Build Tauri app'),
+    );
+    expect(build?.run).toContain('pnpm exec tauri build --config "$RESOURCES"');
+    expect(build?.run).toContain('"THIRD_PARTY_NOTICES.txt"');
   });
 
   it('check that arch on every macOS leg before the bundle is uploaded', () => {
