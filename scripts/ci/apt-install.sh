@@ -72,6 +72,18 @@ bounded_apt() {
   fi
 }
 
-# --error-on=any: apt-get update otherwise exits 0 after a failed index fetch, and install then runs on stale lists.
-bounded_apt "$UPDATE_SECONDS" update --error-on=any
+# apt-get update exits 0 after a failed index fetch. A failed Ubuntu index stops here instead of installing from stale lists;
+# a failed third-party list the image ships (packages.microsoft.com, for example) only warns, because the packages come from Ubuntu.
+UBUNTU_INDEX='mirror\+file:|ubuntu\.com/ubuntu|mirrors\.edge\.kernel\.org/ubuntu'
+UPDATE_LOG="$(mktemp)"
+trap 'rm -f "$UPDATE_LOG"' EXIT
+bounded_apt "$UPDATE_SECONDS" update 2>&1 | tee "$UPDATE_LOG"
+failed_fetches="$(grep -E '^[WE]: Failed to fetch ' "$UPDATE_LOG" || true)"
+if grep -qE "$UBUNTU_INDEX" <<< "$failed_fetches"; then
+  echo "::error::apt-get update could not fetch an Ubuntu index (mirror $MIRROR); stopping instead of installing from stale lists"
+  exit 1
+fi
+if [ -n "$failed_fetches" ]; then
+  echo "::warning::apt-get update could not fetch a non-Ubuntu source; continuing on the current Ubuntu indexes: $(head -n 1 <<< "$failed_fetches")"
+fi
 bounded_apt "$INSTALL_SECONDS" install -y "$@"
