@@ -63,6 +63,7 @@ const REVIEWED_SPDX_IDS = new Set([
 ]);
 
 const LICENSE_FILE_PATTERN = /^(?:licen[cs]e|copying|notice|unlicense)(?:[-._].*)?$/i;
+const NOTICE_FILE_PATTERN = /^notice(?:[-._].*)?$/i;
 
 const SCOPE_STATEMENT = [
   'Rust scope: crates linked into the desktop binary for this target (normal dependencies;',
@@ -342,6 +343,13 @@ export function compareComponents(a, b) {
   );
 }
 
+/** A NOTICE file carries attribution, not license terms, so a package that ships only a NOTICE still gets the canonical text. */
+function shipsOwnLicense(component) {
+  return component.texts.some(
+    ({ file }) => !NOTICE_FILE_PATTERN.test(posix.basename(file.replaceAll('\\', '/'))),
+  );
+}
+
 export function classifyComponents(components, readCanonical = readCanonicalText) {
   const unclassified = [];
   const review = [];
@@ -355,7 +363,7 @@ export function classifyComponents(components, readCanonical = readCanonicalText
     }
     const entry = `${id} (${component.license})`;
     if (!isAutoAccepted(component.license)) review.push(entry);
-    if (component.texts.length > 0) continue;
+    if (shipsOwnLicense(component)) continue;
     missingText.push(entry);
     if (canonicalLicenseTexts(component.license, readCanonical).length === 0) {
       withoutAnyText.push(entry);
@@ -391,7 +399,7 @@ function licenseTextLines(id, texts, firstSeen) {
 
 // A package without its own license file gets the canonical texts of its licenses and the copyright holders its metadata names.
 function fallbackLines(component, readCanonical) {
-  if (component.texts.length > 0) return { holders: [], texts: [] };
+  if (shipsOwnLicense(component)) return { holders: [], texts: [] };
   const authors = component.authors ?? [];
   return {
     holders:
@@ -429,7 +437,7 @@ export function renderNotices(components, context, readCanonical = readCanonical
     '',
     ...bulletList('Licenses flagged for human review', review),
     ...bulletList(
-      'Components whose package ships no license text (canonical SPDX text included below)',
+      'Components whose package ships no license file (canonical SPDX text included below where one is pinned)',
       missingText,
     ),
     ...bulletList(

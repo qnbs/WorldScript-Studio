@@ -373,6 +373,21 @@ describe('canonical license texts for packages without a license file (#575)', (
     expect(notices).toContain('Source code of the MPL-2.0 components is available');
   });
 
+  it('still adds the canonical text when the package ships only a NOTICE file', () => {
+    const noticeOnly = component({
+      name: 'notice-only',
+      license: 'Apache-2.0',
+      texts: [{ file: 'NOTICE', text: 'notice-only attribution' }],
+    });
+    expect(classifyComponents([noticeOnly], fakeCanonical).missingText).toEqual([
+      'npm:notice-only@1.0.0 (Apache-2.0)',
+    ]);
+    const notices = renderNotices([noticeOnly], context, fakeCanonical);
+    expect(notices).toContain('notice-only attribution');
+    expect(notices).toContain('canonical Apache text');
+    expect(notices).toContain('canonical SPDX text included below where one is pinned');
+  });
+
   it('lists a package whose license has no canonical text as without any license text', () => {
     const result = classifyComponents(
       [

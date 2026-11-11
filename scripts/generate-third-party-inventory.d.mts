@@ -65,6 +65,7 @@ export interface CargoMetadata {
     source: string | null;
     license?: string | null;
     license_file?: string | null;
+    authors?: string[] | null;
     homepage?: string | null;
     repository?: string | null;
     manifest_path: string;
