@@ -23,20 +23,26 @@ function verifyStep(job: Job | undefined): Step | undefined {
   return job?.steps?.find((step) => step.name === VERIFY_STEP);
 }
 
+const bundleJob = (): Job => workflow('tauri-build.yml').jobs['bundle'] ?? {};
+const releaseLegs = () => bundleJob().strategy?.matrix?.include ?? [];
+const stepNames = (job: Job) => (job.steps ?? []).map((step) => step.name);
+
 // #507: a macOS bundle must be native to its declared arch, and its DMG must mount and contain that app.
 describe('macOS bundles are checked for their native architecture', () => {
-  it('declare an arch for every macOS release leg and check it before upload', () => {
-    const bundle = workflow('tauri-build.yml').jobs['bundle'];
-    const legs = bundle?.strategy?.matrix?.include ?? [];
-    const macos = legs.filter((leg) => leg.os.startsWith('macos'));
+  it('declare an arch for every macOS release leg', () => {
+    const macos = releaseLegs().filter((leg) => leg.os.startsWith('macos'));
     expect(macos.length).toBeGreaterThanOrEqual(1);
     for (const leg of macos) {
       expect(['arm64', 'x86_64'], leg.os).toContain(leg.arch);
     }
-    const step = verifyStep(bundle);
-    expect(step?.if).toBe("contains(matrix.os, 'macos')");
-    expect(step?.env?.['EXPECTED_ARCH']).toMatch(/^\$\{\{ matrix\.arch \}\}$/);
-    const names = (bundle?.steps ?? []).map((s) => s.name);
+  });
+
+  it('check that arch on every macOS leg before the bundle is uploaded', () => {
+    const job = bundleJob();
+    const step = verifyStep(job) ?? {};
+    expect(step.if).toBe("contains(matrix.os, 'macos')");
+    expect(step.env?.['EXPECTED_ARCH']).toMatch(/^\$\{\{ matrix\.arch \}\}$/);
+    const names = stepNames(job);
     expect(names.indexOf(VERIFY_STEP)).toBeLessThan(names.indexOf('Upload bundle directory'));
   });
 
@@ -45,12 +51,11 @@ describe('macOS bundles are checked for their native architecture', () => {
     expect(qualify?.['runs-on']).toBe('macos-26-intel');
     const step = verifyStep(qualify);
     expect(step?.env?.['EXPECTED_ARCH']).toBe('x86_64');
-    const release = verifyStep(workflow('tauri-build.yml').jobs['bundle']);
+    const release = verifyStep(bundleJob());
     expect(step?.run).toBe(release?.run);
   });
 
   it('keep the Intel leg out of the release matrix until the release integration lands', () => {
-    const legs = workflow('tauri-build.yml').jobs['bundle']?.strategy?.matrix?.include ?? [];
-    expect(legs.map((leg) => leg.os)).not.toContain('macos-26-intel');
+    expect(releaseLegs().map((leg) => leg.os)).not.toContain('macos-26-intel');
   });
 });
