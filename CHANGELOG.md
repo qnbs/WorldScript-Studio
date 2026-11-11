@@ -7,12 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- release-candidate: v1.29.5 -->
+
+## [1.29.5] — 2026-11-11
+
+- **Release status:** 1.29.5 publishes the container image again. `v1.29.4` published the desktop installers and the updater on 2026-11-10, but its image build failed on a stale Dockerfile line, so `ghcr.io/qnbs/worldscript-studio:latest` and `:1.29` still serve 1.29.2, whose web bundle contains DOMPurify 3.4.16 (#1223, #1201). The desktop application is unchanged from 1.29.4; the changes below concern the container image and the release gates. The version is prepared in PR #1226.
+- **Container users updating from 1.29.2** also receive the changes of 1.29.3 and 1.29.4 (see their sections in `CHANGELOG.md`): Factory Reset and startup recovery limited to WorldScript's own browser data (#1196), a dedicated Transformers.js model cache (#1200), DOCX export 9.15.1, updated AI SDK providers and WebLLM runtime, and the DOMPurify 3.4.17 security update with its compatible npm dependency floors (#1149). The Tauri plugin and `rustix` updates of 1.29.3 concern the desktop application only, which already ships them since 1.29.4. Four npm and ten Rust advisories remain time-bounded accepted risks (#1163, #1164); this release does not claim they are fixed.
+
 - **Container build:** The Docker image build copied a `patches/` directory that PR #1149 had emptied, so the GHCR publish job of the real `v1.29.4` tag run failed at `COPY patches/ ./patches/` (nothing was pushed). The stale line is removed, and a test now checks that every build-context `COPY`/`ADD` source of the Dockerfile exists inside the build context and is not excluded by `.dockerignore` (stage copies with `--from` are out of scope and covered only by a real container build). The fix does not act retroactively: the tag `v1.29.4` is immutable and keeps the defect, and no container image was published for it (PR #1224).
 - **Container build gate:** Every pull request, every push to `main` and a manual dispatch now build the real image without publishing it (`docker-build-check.yml`: read-only token, no registry login, no push). The image is loaded only into the runner, and a check reads the web bundle it serves and fails unless that bundle contains DOMPurify in a single version at 3.4.17 or newer; the published GHCR 1.29.2 image fails this check (DOMPurify 3.4.16). The publishing job runs the same build and check before its push step and pushes from the same build cache, a unit test keeps the build inputs, action pins and check steps of both jobs identical, and `node scripts/release-container-precheck.mjs <sha>` passes before a `v*` tag only when that exact commit has a successful check build. The precheck counts only push and dispatch runs on `main`, whose workflow definition is the candidate's own. The Dockerfile now takes pnpm only from `packageManager` via `corepack install`, and the build fails unless the active pnpm equals that pin; its unused `pnpm@11.5.2` pin is removed and `toolchain:check` requires the assertion and rejects other common pnpm installers in the Dockerfile (PR #1225).
 
-<!-- release-candidate: v1.29.4 -->
-
 ## [1.29.4] — 2026-11-10
+
+_Desktop installers and updater published on 2026-11-10; the container image was not published (#1223) and ships with 1.29.5._
 
 - **Release status:** `v1.29.3` was tagged on 2026-11-10 but never published: the release-tag verifier could not pass for any annotated tag, so both publish workflows stopped at `Verify release tag` before building or publishing anything. Everything listed under 1.29.3 below ships in 1.29.4 together with the corrected verifier and its re-pin; the `v1.29.3` tag stays as an unpublished, immutable tag (#1201).
 
