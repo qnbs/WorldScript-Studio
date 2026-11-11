@@ -83,7 +83,9 @@ Rollback:
 
 - **Fix forward.** Clients never step back to an older version. To withdraw a bad release, publish a new, higher version with the fix.
 - **No re-signing.** Old releases are not re-signed with a version. Clients that enforce the binding simply never accept them.
-- **Clients from v1.29.5 and earlier** do not set the flag. They still reject a signed version that differs from the announced one, but they accept an unbound signature until they update.
+- **Older clients** do not set the flag, so they accept an unbound signature until they update. Beyond that, it depends on the updater plugin they ship:
+  - v1.29.2 to v1.29.5 (`tauri-plugin-updater` 2.12.0 and 2.14.1) still reject a signed version that differs from the announced one;
+  - v1.29.1 and earlier (2.11.0 and older) do not compare the signed version at all.
 - **OS-level code signing and notarization** are a separate trust layer, tracked in #574.
 
 See also [`docs/TAURI-CI.md`](TAURI-CI.md) for the release artifact pipeline and first-release checklist.
