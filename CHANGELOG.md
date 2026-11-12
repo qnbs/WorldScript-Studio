@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Release gate:** The tag-time bundle signature check now says why it fails. In the v1.29.6 tag run, the first Windows attempt stopped in this step after two seconds with exit code 1 and no message, because the bundle file search reported its error inside a command substitution, where it was swallowed; run with the unchanged release code, that path ends exactly like this. The search now stops the step itself with the file name, the number of matches and a list of the bundle files; an empty package is named; and any other failing command reports its line and command. The published v1.29.6 tag keeps its workflow; this applies from the next tag on (PR #1256).
 <!-- release-candidate: v1.29.6 -->
 
 ## [1.29.6] — 2026-11-12
