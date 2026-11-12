@@ -1,4 +1,5 @@
 import process from 'node:process';
+import { nodeBelowSecurityFloor } from './node-security-floor.mjs';
 import { checkDockerfilePnpm, isVersionAtLeast } from './pnpm-version-policy.mjs';
 
 const projectPackage = JSON.parse(
@@ -58,6 +59,15 @@ if (actualNodeMajor < minimumNodeMajor) {
     `[toolchain] Node ${minimumNodeMajor}+ is required; found ${process.versions.node}.`,
   );
   process.exit(1);
+}
+
+// Visible, not blocking: the engines range stays open (#1078), and CI cannot get a patch before actions/node-versions publishes it.
+const nodeSecurityFloor = nodeBelowSecurityFloor(process.versions.node);
+if (nodeSecurityFloor) {
+  const message = `Node ${process.versions.node} is below the ${nodeSecurityFloor} security release of its line (#1245); install the newest patch (setup-node check-latest takes it once actions/node-versions publishes it).`;
+  console.warn(
+    process.env.GITHUB_ACTIONS === 'true' ? `::warning::${message}` : `[toolchain] ${message}`,
+  );
 }
 
 const isDirectHook = process.argv.includes('--hook');
