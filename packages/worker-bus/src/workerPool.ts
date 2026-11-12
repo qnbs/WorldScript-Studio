@@ -259,6 +259,11 @@ export class WorkerPool {
 
   private respawn(): void {
     if (this.shutdownFlag || this.failure) return;
+    // A task may have filled the free slot on demand during the backoff; never exceed maxWorkers.
+    if (this.entries.length >= this.options.maxWorkers) {
+      this.notifyAvailable();
+      return;
+    }
     try {
       this.spawnWorker();
     } catch {

@@ -346,6 +346,25 @@ describe('WorkerPool', () => {
       }
     });
 
+    it('a delayed respawn never exceeds maxWorkers after a task filled the slot', async () => {
+      vi.useFakeTimers();
+      try {
+        const createWorker = vi.fn(() => new MockWorker() as unknown as Worker);
+        const pool = poolWith(createWorker);
+        let worker = await pool.acquire();
+        crash(worker); // immediate respawn
+        worker = await pool.acquire();
+        crash(worker); // respawn scheduled after 1 s
+        const filler = pool.tryAcquire(); // a task fills the free slot on demand meanwhile
+        expect(filler).toBeDefined();
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(pool.getHealth().totalWorkers).toBe(1);
+        await pool.terminateAll();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('a worker that finishes a task resets the crash count', async () => {
       vi.useFakeTimers();
       try {
