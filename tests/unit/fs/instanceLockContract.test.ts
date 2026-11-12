@@ -3,14 +3,18 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { APP_DATA_ADMISSION_CONTRACT_VERSION } from '../../../packages/desktop-contracts/src/types';
-import { PROJECT_LOCKS_DIR_NAME } from '../../../services/fs/fsCore';
+import { APP_DATA_WRITERS_LOCK_FILE, PROJECT_LOCKS_DIR_NAME } from '../../../services/fs/fsCore';
 
 // #831: the Rust reclaim must target exactly the files the TypeScript project lock creates.
 const rust = readFileSync('src-tauri/src/instance_lock.rs', 'utf8');
 const fsCore = readFileSync('services/fs/fsCore.ts', 'utf8');
 const command = readFileSync('src-tauri/src/commands/app_data_instance.rs', 'utf8');
 
-describe('app-data instance lock contract (#831)', () => {
+describe('app-data writers lock contract (#831)', () => {
+  it('uses the writers lock file Factory Reset keeps', () => {
+    expect(rust).toContain(`pub const WRITERS_LOCK_FILE: &str = "${APP_DATA_WRITERS_LOCK_FILE}";`);
+  });
+
   it('reclaims in the directory the project lock writes to', () => {
     expect(rust).toContain(`pub const PROJECT_LOCKS_DIR: &str = "${PROJECT_LOCKS_DIR_NAME}";`);
   });

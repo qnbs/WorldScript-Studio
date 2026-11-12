@@ -155,7 +155,7 @@ export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array)
 }
 
 // --- Cross-process project-file lock (#553) ---
-// QNBS-v3: writeTextFileAtomic's beforeReplace re-check narrows but does not eliminate the TOCTOU gap between two OS processes (two app instances) each racing their own read-check-rename cycle against the same project file — this lock closes that gap by serializing the whole cycle behind an OS-level exclusive-create sibling file. Deliberately has NO time-based or ownership-token stale-lock reclaim: every such scheme was proven unsound during review (an owner token still can't make removal conditional on content — the path can change between the re-read and the remove call — and a lock file exists, per plugin-fs semantics, before its content is written, so a reader can observe an empty/malformed live lock and misclassify it as abandoned) — a crashed writer's orphaned lock is instead removed at the next start, while the process holds the OS-level app-data instance lock and before it admits any writer (src-tauri/src/instance_lock.rs, #831); a lock stuck inside a still-running process stays unsavable until restart (the file itself is never corrupted by this). This also means the guarantee below is scoped to writers that participate in this exact convention — a non-cooperating external tool (e.g. a sync client) that writes project.json directly without ever creating <path>.lock is not, and cannot be, fenced by an application-level file alone.
+// QNBS-v3: writeTextFileAtomic's beforeReplace re-check narrows but does not eliminate the TOCTOU gap between two OS processes (two app instances) each racing their own read-check-rename cycle against the same project file — this lock closes that gap by serializing the whole cycle behind an OS-level exclusive-create sibling file. Deliberately has NO time-based or ownership-token stale-lock reclaim: every such scheme was proven unsound during review (an owner token still can't make removal conditional on content — the path can change between the re-read and the remove call — and a lock file exists, per plugin-fs semantics, before its content is written, so a reader can observe an empty/malformed live lock and misclassify it as abandoned) — a crashed writer's orphaned lock is instead removed at the next start, by the first process to join the app-data writers while no other writer holds the OS-level writers lock (src-tauri/src/instance_lock.rs, #831); a lock stuck inside a still-running process stays unsavable until restart (the file itself is never corrupted by this). This also means the guarantee below is scoped to writers that participate in this exact convention — a non-cooperating external tool (e.g. a sync client) that writes project.json directly without ever creating <path>.lock is not, and cannot be, fenced by an application-level file alone.
 
 export class ProjectFileLockedError extends Error {
   constructor(path: string) {
@@ -194,6 +194,9 @@ export class DesktopStorageAuthorityUnavailableError extends Error {
 }
 
 export const PROJECT_LOCKS_DIR_NAME = 'project-locks';
+
+// QNBS-v3 (#831): every writing process holds a shared OS lock on this app-data file for its lifetime (src-tauri/src/instance_lock.rs); Factory Reset must never delete it.
+export const APP_DATA_WRITERS_LOCK_FILE = 'writers.lock';
 
 function lockPathFor(path: string): string {
   return `${path}${LOCK_SUFFIX}`;
@@ -245,7 +248,7 @@ export const tryCreateExclusiveEmptyFile = tryCreateLock;
  * sibling lock file. Bounded retry only, never an unbounded wait, and never removes a lock it did
  * not itself create — see the module-level comment above for why every reclaim strategy considered
  * was unsound. A genuinely held lock (including one a crashed writer left, until the next start
- * reclaims it under the app-data instance lock, #831) surfaces as ProjectFileLockedError, which flows into the caller's existing retry-next-cycle error handling.
+ * reclaims it under the app-data writers lock, #831) surfaces as ProjectFileLockedError, which flows into the caller's existing retry-next-cycle error handling.
  */
 export async function withProjectFileLock<T>(
   apis: TauriApis,

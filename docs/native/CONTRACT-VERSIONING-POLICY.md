@@ -36,7 +36,9 @@ shadow path; the Core remains locally proven until this caller's Rust evidence i
 
 The `worldscript_app_data_admission` command (#831) returns
 `APP_DATA_ADMISSION_CONTRACT_VERSION = "1.0.0"` with `status`, `reclaimed` and an optional
-`detail`. The DesktopPlatform adapter rejects a mismatched version before reading any field and
-reports it, like any other failure, as `unavailable`, which reclaims nothing. The pure-std lock
-logic in `src-tauri/src/instance_lock.rs` has hosted proof on Linux, Windows and macOS through
+`detail`. Every writing process holds a shared OS lock on the app-data writers lock; `exclusive` and
+`shared` mean this process holds it and may write, `unavailable` means it does not, and desktop storage
+then refuses every access. The DesktopPlatform adapter rejects a mismatched version before reading
+any field and reports it, like any other failure, as `unavailable`. The pure-std lock logic in
+`src-tauri/src/instance_lock.rs` has hosted proof on Linux, Windows and macOS through
 `.github/workflows/instance-lock-platforms.yml`.

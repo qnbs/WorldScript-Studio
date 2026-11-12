@@ -55,10 +55,10 @@ export interface DesktopFilesystem {
 }
 
 /**
- * Outcome of the app-data instance admission (`worldscript_app_data_admission`, #831).
- * `exclusive`: this process holds the OS instance lock and removed `reclaimed` project locks a
- * crashed writer had left; `shared`: another live process holds it, nothing was removed;
- * `unavailable`: no lock could be taken, nothing was removed. `detail` is for logs only.
+ * Outcome of joining the app-data writers (`worldscript_app_data_admission`, #831). Every writing process holds a
+ * shared OS lock on the writers lock file. `exclusive`: no other writer was alive, so `reclaimed` project locks a
+ * crashed writer had left were removed; `shared`: another writer is alive, nothing was removed; both may write.
+ * `unavailable`: no writers lock is held, so this process must not write. `detail` is for logs only.
  */
 export const APP_DATA_ADMISSION_CONTRACT_VERSION = '1.0.0' as const;
 
@@ -78,7 +78,7 @@ export type AppDataAdmission = z.infer<typeof AppDataAdmissionSchema>;
 export interface DesktopPersistence {
   appDataDir(): Promise<string>;
   join(...parts: string[]): Promise<string>;
-  /** Takes the app-data instance lock once per process and reclaims orphaned project locks while it holds it (#831); never rejects. */
+  /** Joins the app-data writers once per process, reclaiming orphaned project locks when it is alone (#831); never rejects. */
   admitAppDataInstance(): Promise<AppDataAdmission>;
 }
 

@@ -157,7 +157,7 @@ pub fn run() {
                 .with_state_flags(tauri_plugin_window_state::StateFlags::all())
                 .build(),
         )
-        // QNBS-v3 (#831): the app-data instance lock lives in managed state for the whole process lifetime.
+        // QNBS-v3 (#831): the app-data writers lock lives in managed state for the whole process lifetime.
         .manage(commands::app_data_instance::AppDataInstance::default())
         .invoke_handler(tauri::generate_handler![
             pandoc::pandoc_markdown_to_epub,

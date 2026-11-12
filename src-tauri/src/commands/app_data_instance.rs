@@ -1,5 +1,5 @@
-//! `worldscript_app_data_admission` (#831): takes the app-data instance lock once per process and,
-//! while it is held, reclaims the project locks a crashed writer left (see `crate::instance_lock`).
+//! `worldscript_app_data_admission` (#831): joins the app-data writers once per process and, when no
+//! other writer is alive, reclaims the project locks a crashed writer left (see `crate::instance_lock`).
 //! The storage bootstrap calls it before it admits any writer. Later calls repeat the first outcome
 //! and never reclaim again, because by then this process may hold project locks of its own.
 
@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::Manager;
 
-use crate::instance_lock::{self, InstanceLock};
+use crate::instance_lock::{self, Joined, WriterLock};
 
 /// Wire contract version; equals `APP_DATA_ADMISSION_CONTRACT_VERSION` in `packages/desktop-contracts`.
 pub const APP_DATA_ADMISSION_CONTRACT_VERSION: &str = "1.0.0";
@@ -19,7 +19,8 @@ pub const APP_DATA_ADMISSION_CONTRACT_VERSION: &str = "1.0.0";
 #[serde(rename_all = "camelCase")]
 pub struct AppDataAdmission {
     pub contract_version: &'static str,
-    /// `exclusive`: this process holds the lock; `shared`: another process does; `unavailable`: no lock.
+    /// `exclusive`: no other writer was alive, orphans were reclaimed; `shared`: another writer is alive,
+    /// nothing was removed; both may write. `unavailable`: no writers lock held, so this process must not write.
     pub status: &'static str,
     /// Orphaned project locks the first call removed; 0 unless `exclusive`.
     pub reclaimed: usize,
@@ -41,7 +42,7 @@ impl AppDataAdmission {
 
 struct Admitted {
     /// Held until the process ends; dropping it would let another process in.
-    _lock: Option<InstanceLock>,
+    _lock: Option<WriterLock>,
     outcome: AppDataAdmission,
 }
 
@@ -71,22 +72,21 @@ impl AppDataInstance {
     }
 }
 
-fn admit(app_data: Result<PathBuf, String>) -> (Option<InstanceLock>, AppDataAdmission) {
+fn admit(app_data: Result<PathBuf, String>) -> (Option<WriterLock>, AppDataAdmission) {
     let dir = match app_data {
         Ok(dir) => dir,
         Err(detail) => return (None, AppDataAdmission::new("unavailable", 0, Some(detail))),
     };
-    match instance_lock::try_acquire(&dir) {
-        Ok(Some(lock)) => {
-            let outcome = match instance_lock::reclaim_orphaned_project_locks(&dir, &lock) {
-                Ok(reclaimed) => AppDataAdmission::new("exclusive", reclaimed, None),
-                Err(error) => {
-                    AppDataAdmission::new("exclusive", error.removed, Some(error.to_string()))
-                }
-            };
-            (Some(lock), outcome)
-        }
-        Ok(None) => (None, AppDataAdmission::new("shared", 0, None)),
+    match instance_lock::join_writers(&dir) {
+        Ok((lock, Joined::Alone(Ok(reclaimed)))) => (
+            Some(lock),
+            AppDataAdmission::new("exclusive", reclaimed, None),
+        ),
+        Ok((lock, Joined::Alone(Err(error)))) => (
+            Some(lock),
+            AppDataAdmission::new("exclusive", error.removed, Some(error.to_string())),
+        ),
+        Ok((lock, Joined::WithOthers)) => (Some(lock), AppDataAdmission::new("shared", 0, None)),
         Err(error) => (
             None,
             AppDataAdmission::new("unavailable", 0, Some(error.to_string())),
@@ -105,7 +105,7 @@ pub fn worldscript_app_data_admission(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::instance_lock::{try_acquire, PROJECT_LOCKS_DIR};
+    use crate::instance_lock::{join_writers, PROJECT_LOCKS_DIR};
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -143,7 +143,7 @@ mod tests {
         let dir = temp_app_data("shared");
         let locks = dir.join(PROJECT_LOCKS_DIR);
         fs::write(locks.join("live.lock"), b"").unwrap();
-        let other_process = try_acquire(&dir).unwrap().expect("other holder");
+        let other_process = join_writers(&dir).unwrap();
         let outcome = AppDataInstance::default().admit_once(|| Ok(dir.clone()));
         assert_eq!(outcome, AppDataAdmission::new("shared", 0, None));
         assert!(locks.join("live.lock").exists());

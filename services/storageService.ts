@@ -79,24 +79,29 @@ function canonicalRawOrThrow(result: CanonicalProjectRawResult, projectId: strin
 }
 export type ProjectAuthority = 'fs' | 'idb';
 
-// QNBS-v3 (#831): runs before the desktop backend admits its first writer; a crash-left project lock is removed only while this process holds the OS instance lock.
-async function admitDesktopAppData(): Promise<void> {
+// QNBS-v3 (#831): runs before the desktop backend admits its first writer; a crash-left project lock is removed only when no other writer is alive.
+/** Joins the writers of the app-data directory; returns why this process must not write, or null when it may. */
+async function admitDesktopAppData(): Promise<Error | null> {
+  let admission: Awaited<ReturnType<typeof desktopPlatform.persistence.admitAppDataInstance>>;
   try {
-    const admission = await desktopPlatform.persistence.admitAppDataInstance();
-    if (admission.reclaimed > 0) {
-      logger.warn('Removed project locks left by an earlier crash', {
-        reclaimed: admission.reclaimed,
-      });
-    }
-    if (admission.status !== 'exclusive' || admission.detail) {
-      logger.warn('Project locks left by a crash are not reclaimed in this session', {
-        status: admission.status,
-        detail: admission.detail,
-      });
-    }
+    admission = await desktopPlatform.persistence.admitAppDataInstance();
   } catch (error) {
-    logger.warn('Desktop app data admission failed; project locks are not reclaimed', error);
+    return error instanceof Error ? error : new Error(String(error));
   }
+  if (admission.reclaimed > 0) {
+    logger.warn('Removed project locks left by an earlier crash', {
+      reclaimed: admission.reclaimed,
+    });
+  }
+  if (admission.detail)
+    logger.warn('Desktop app data admission', {
+      status: admission.status,
+      detail: admission.detail,
+    });
+  // QNBS-v3 (#831): without the shared writers lock a later process could reclaim this one's live project locks, so it must not write.
+  return admission.status === 'unavailable'
+    ? new Error(`The app data writers lock is unavailable: ${admission.detail ?? 'unknown reason'}`)
+    : null;
 }
 
 class StorageManager {
@@ -121,7 +126,12 @@ class StorageManager {
         this.authorityFailure = new DesktopStorageAuthorityUnavailableError(error);
         return;
       }
-      await admitDesktopAppData();
+      const denied = await admitDesktopAppData();
+      if (denied) {
+        logger.error('Desktop project storage is unavailable without the writers lock:', denied);
+        this.authorityFailure = new DesktopStorageAuthorityUnavailableError(denied);
+        return;
+      }
       this.backend = fileSystemService;
       logger.debug('Using file system storage backend');
       // QNBS-v3 (#553 a8): legacy key cleanup is best-effort housekeeping once the filesystem is established — it never decides which store holds projects.

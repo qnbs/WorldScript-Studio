@@ -1,7 +1,8 @@
-# Hosted proof for #831. The app-data instance lock is an OS lock (flock on Linux and macOS, LockFileEx on
-# Windows) that the OS releases when its holder dies; reclaiming crash-left project locks is only safe because
-# of that. src-tauri/src/instance_lock.rs uses only std, so this compiles it on its own (no Tauri build) and runs
-# its tests on all three desktop platforms, including the test that kills a holder process and takes the lock.
+# Hosted proof for #831. Every writing process holds a shared OS lock on the app-data writers lock (flock on Linux
+# and macOS, LockFileEx on Windows), which the OS releases when the process dies; crash-left project locks are only
+# reclaimed under an exclusive lock, i.e. when no other writer is alive. src-tauri/src/instance_lock.rs uses only std,
+# so this compiles it on its own (no Tauri build) and runs its tests on all three desktop platforms, including the
+# test that kills a writer process and then reclaims its orphaned project lock.
 name: Instance lock platforms
 
 on:
@@ -24,7 +25,7 @@ concurrency:
 
 jobs:
   instance-lock:
-    name: 🔒 Instance lock (${{ matrix.os }})
+    name: 🔒 Writers lock (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
