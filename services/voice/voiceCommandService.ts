@@ -47,7 +47,13 @@ import { createWakeWordEngine } from './wakeWordEngine';
 export type GetStateFn = () => RootState;
 
 /** Config keys that decide which engines exist; changing one rebuilds the engines on the next start. */
-const ENGINE_CONFIG_KEYS = ['preferredSttEngine', 'preferredTtsEngine', 'enableVoiceWasm'] as const;
+const ENGINE_CONFIG_KEYS = [
+  'preferredSttEngine',
+  'preferredTtsEngine',
+  'enableVoiceWasm',
+  // QNBS-v3 (#1261): turning cloud fallback off must replace a Web Speech engine chosen under it.
+  'allowCloudFallback',
+] as const;
 
 export interface VoiceServiceConfig {
   preferredSttEngine: 'auto' | 'whisper' | 'webSpeech';

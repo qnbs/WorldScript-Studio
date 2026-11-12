@@ -188,6 +188,20 @@ describe('VoiceCommandService', () => {
       );
     });
 
+    // #1261: a Web Speech engine chosen because cloud fallback was allowed must not survive turning that off.
+    it('turning cloud fallback off rebuilds the engines at the next start', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      service.updateConfig({ preferredSttEngine: 'whisper', allowCloudFallback: true });
+      await service.initialize();
+      service.updateConfig({ allowCloudFallback: false });
+      await service.startDictation();
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+      expect(createSttEngine).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredEngine: 'whisper', allowCloudFallback: false }),
+      );
+    });
+
     it('an unrelated config change keeps the engines', async () => {
       const { createSttEngine } = await import('../../../../services/voice/sttEngine');
       service.setDispatch(vi.fn() as never, vi.fn() as never);
