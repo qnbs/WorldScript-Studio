@@ -24,6 +24,13 @@ export const fakeMic = (wav: string) => [
 ];
 
 export async function downloadRealSttModel(page: Page): Promise<void> {
+  // Mirror the app's voice logs and errors into the job log, so a dictation that never starts says why.
+  page.on('console', (message) => {
+    const text = message.text();
+    if (message.type() === 'error' || /voice|stt|whisper|vad|dictation/i.test(text)) {
+      console.log(`[browser:${message.type()}] ${text.slice(0, 400)}`);
+    }
+  });
   await setFeatureFlags(page, { enableVoiceSupport: true, enableVoiceWasm: true });
   await page.goto('/');
   await waitForSpaReady(page);
@@ -51,15 +58,11 @@ export async function dictateInto(page: Page): Promise<ReturnType<Page['getByTes
   const textarea = page.getByTestId('manuscript-editor-textarea').first();
   await expect(textarea).toBeVisible({ timeout: 20000 });
   await textarea.click();
-  // The panel's buttons carry aria-pressed; the editor's Web Speech mic button does not.
-  await page
-    .getByRole('button', { name: /dictation/i, pressed: false })
-    .first()
-    .click();
-  await expect(page.getByRole('button', { name: /dictation/i, pressed: true }).first()).toBeVisible(
-    {
-      timeout: 10000,
-    },
-  );
+  // The voice panel is the region "Voice Control"; the editor's own mic buttons use the Web Speech API instead.
+  const panel = page.getByRole('region', { name: 'Voice Control' });
+  await panel.getByRole('button', { name: /Start dictation/i }).click();
+  await expect(page.getByRole('status', { name: /Voice status/i })).not.toHaveText(/inactive/i, {
+    timeout: 30_000,
+  });
   return textarea;
 }
