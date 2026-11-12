@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Desktop saving after a crash:** A project whose save was interrupted by a crash or a forced quit could not be saved again, even after a restart: its lock file stayed in `project-locks/`, and every later save reported that another window was saving (#831). WorldScript now holds an operating-system lock on its app-data folder while it runs, which the system releases when the app ends or crashes. At startup, while it holds that lock and before any project is read or written, the app removes the lock files a crashed session left behind. If another WorldScript process holds the folder, nothing is removed and saving behaves as before. The lock logic is tested on Linux, Windows and macOS, including a test that kills a process holding the lock (PR #1270).
 - **OpenRouter:** A model catalog fetched with an API key is now kept only in memory and only for that exact key, so after a key change the new key always loads its own catalog; only the anonymous catalog is stored, still without any key material. The cloud AI policy is checked before a catalog is returned, cached or fetched (#1127) (PR #1259).
 - **LanguageTool:** Switching the LanguageTool server no longer brings back the previous server's matches for the same text: the result cache now includes the endpoint. A check that is still running when the server, the integration toggle or the AI mode changes is cancelled and its matches are dropped, and leaving the editor cancels it too. Applying a suggestion checks only that its flagged span still holds the flagged text, so a suggestion can still apply after nearby text changed while that span reads the same (#1126) (PR #1258).
 - **Local AI (WASM backend):** Whisper, Kokoro and the other Transformers.js pipelines load ONNX Runtime's WebAssembly from the app again. On import, Transformers.js pointed ONNX Runtime at `cdn.jsdelivr.net`, which the Content Security Policy blocks, so the real Whisper model download failed with "no available backend found" whenever that path was taken (#556). The app now drops that cross-origin path, and ONNX Runtime loads the same-origin WASM the build already ships from the exact onnxruntime-web that Transformers.js bundles. The CSP is unchanged and nothing falls back to a cloud service (PR #1257).
@@ -2779,7 +2780,6 @@ _Tagged `v1.29.3` on 2026-11-10 but never published; shipped as 1.29.4._
 
 - **Docs completion (language-expansion pass):** README i18n badge, language list, capability table and metrics line updated to **17 locales / 2716 keys**; Persian added to the RTL-Beta section; `AUDIT.md` follow-up chain + quality-gate entry for 2026-06-17.
 
-
 ## [1.23.1] — 2026-06-17
 
 ### Fixed
@@ -3040,7 +3040,6 @@ _Tagged `v1.29.3` on 2026-11-10 but never published; shipped as 1.29.4._
 
 - **E2E tests for new features:** `tests/e2e/commands.spec.ts` — palette open/close (Ctrl+K / Escape), "dashboard" text search surfaces nav command, Enter-to-navigate, fuzzy "wrt" match. `tests/e2e/collaboration.spec.ts` — security warning `[role=alert]` is visible pre-connection and non-empty. Both specs are CI-only (`test.skip(!isCI)`).
 
-
 ## [1.18.1] — 2026-05-27
 
 ### Fixed
@@ -3192,6 +3191,7 @@ _Tagged `v1.29.3` on 2026-11-10 but never published; shipped as 1.29.4._
 ### Added
 
 **DuckDB-WASM Analytics Layer (P0–P3):**
+
 - `workers/duckdbWorker.ts` — off-main-thread DuckDB-WASM (duckdb-eh bundle), OPFS persistence with in-memory fallback. Message protocol mirrors inference.worker.ts (messageId correlation, AbortController, OPFS_FALLBACK event).
 - `services/duckdb/duckdbClient.ts` — singleton proxy with AbortSignal support, in-flight cancellation, init retry (3×, exponential backoff), OPFS fallback handler.
 - `services/duckdb/duckdbSchema.ts` — schema v1: `projects`, `sections`, `writing_history`, `writing_sessions`, `characters`, `rag_chunks` (FLOAT[] vector), `cross_project_index`, `codex_entities`, `codex_mentions`, `readability_snapshots`. Analytics views: `v_daily_progress`, `v_weekly_progress`, `v_section_metrics`, `v_scene_overlap`, `v_character_cooccurrence`.
@@ -3202,6 +3202,7 @@ _Tagged `v1.29.3` on 2026-11-10 but never published; shipped as 1.29.4._
 - Feature flag `enableDuckDbAnalytics` in `featureFlagsSlice`.
 
 **Hybrid RAG — Wired End-to-End:**
+
 - `ragMode: 'lexical' | 'hybrid'` added to `AdvancedAiSettings` (default `'hybrid'`). Persisted to IDB via `dbService.ts` migration defaults.
 - Settings UI: RAG mode selector (Hybrid / Lexical) in Advanced AI → Local Search Index section.
 - Fix: Settings "Rebuild local search index" button now calls `rebuildHybridRagIndex` (was `rebuildLocalRagIndex` — lexical only). DuckDB dual-write enabled when `enableDuckDbAnalytics` flag is on.
@@ -3210,15 +3211,18 @@ _Tagged `v1.29.3` on 2026-11-10 but never published; shipped as 1.29.4._
 - i18n: 3 new `settings.advancedAi.ragMode*` keys + 5 `reference.reindex.*` keys across all 5 locales.
 
 **AI Provider Extensions:**
+
 - ONNX Runtime Web (Layer 2) and Transformers.js (Layer 3) selectable as primary providers in AI Settings.
 - Service-level dedup wrapper (`aiThunkUtils.ts`) prevents concurrent duplicate AI requests.
 - Per-project AI preset: project-scoped provider/model stored in `advancedAi.localBackendPreset`; harden dedup key; hash-based deep links (`#/board`, `#/preview`, `#/progress`, `#/project/{id}/scene/{id}`).
 - `WorkerBus` backpressure guard: `MAX_QUEUE_SIZE` = 32; critical tasks bypass; telemetry extended (`peakLatencyMs`, `errorRate`).
 
 **Collaboration:**
+
 - Y-WebRTC E2E encryption (`collaborationService.ts`): `encryptUpdate()`, `decryptUpdate()`, `deriveEncryptionKey()` (PBKDF2 600 000 iter, SHA-256, AES-256-GCM). Deterministic salt from projectId. `CollaborationPanel` status badge (green `E2E Key Derived` / amber `Room isolation only`).
 
 **Performance:**
+
 - `PlotCanvas.tsx`: pointer-move handler throttled via `requestAnimationFrame`; prevents 60 Hz Redux dispatch storm during canvas pan/zoom.
 
 ### Changed
@@ -3269,6 +3273,7 @@ _Tagged `v1.29.3` on 2026-11-10 but never published; shipped as 1.29.4._
 ### Added (v1.6 — Plot-Board v2 & Writer Experience Sprint)
 
 **Plot-Board v2** (Days 1–3 — the Killer Feature):
+
 - **Free-form canvas mode:** Scene cards positioned absolutely on a pannable/zoomable CSS-transform canvas; tap/drag updates `sceneBoardLayout` in Redux. Pan: pointer-capture on background; zoom: wheel + two-pointer pinch (0.25×–4×). Mini-map: 80×50 px fixed SVG overview in corner.
 - **SVG Connection Layer:** Cubic-bezier paths between scene cards rendered in `ConnectionLayer.tsx`; connection types: `cause-effect`, `parallel`, `subplot`, `temporal`, `character-arc`. Invisible 18 px thick hit-test `<path>` (`pointer-events: stroke`) with `role="button"` + `tabIndex` for keyboard access.
 - **Subplot System:** `SubplotPanel.tsx` — collapsible sidebar with color-swatch list, inline name edit, `<input type="color">` picker, filter toggle that dims unrelated scenes.
@@ -3283,12 +3288,14 @@ _Tagged `v1.29.3` on 2026-11-10 but never published; shipped as 1.29.4._
 - **Mobile canvas gestures:** Pinch-to-zoom, two-finger pan, long-press background → add scene at pointer position.
 
 **Real-Time Book Preview** (Day 4):
+
 - **`components/BookPreviewView.tsx` + `hooks/useBookPreviewView.ts` + `contexts/BookPreviewContext.ts`:** Scrollable book-style rendering of all manuscript sections as `<article>` elements. IntersectionObserver (threshold 0.3) drives an active TOC entry.
 - **Controls bar:** Font size (12–24 px), font family (system-ui / serif / monospace), word-count annotation toggle, fullscreen mode (`position: fixed inset-0 z-50`).
 - **Collapsible TOC sidebar:** Fixed-position; keyboard scroll via `scrollIntoView`; active section highlighted.
 - **Registered** as lazy-loaded view in `App.tsx` (`case 'preview'`) and `APP_SECTIONS` in `constants/sections.tsx`.
 
 **Reference Panel / Split-View** (Day 5):
+
 - **`components/manuscript/ReferencePanelView.tsx`:** 6-tab panel (`Characters | World | Notes | Binder | Comments | Revisions`) with `role="complementary"` + `aria-label`. Tab buttons use `role="tablist"` / `role="tab"` / `aria-selected` / `aria-controls`.
 - **Characters tab:** Mini-cards for scene's `characterIds[]` with avatar placeholder and backstory excerpt.
 - **World tab:** Linked location mini-description and geography excerpt.
@@ -3297,6 +3304,7 @@ _Tagged `v1.29.3` on 2026-11-10 but never published; shipped as 1.29.4._
 - **Comments & Revisions tabs:** Integrate `CommentsPanel` and `SceneRevisionPanel` (see Day 6).
 
 **Per-Scene Revision History + Threaded Comments** (Day 6):
+
 - **`services/sceneRevisionService.ts`:** IndexedDB `scene-revisions` store; `saveRevision()`, `listRevisions()` (newest-first, max 50 per scene), `deleteRevision()`. `_resetDbForTest()` exported for test isolation.
 - **`components/manuscript/SceneRevisionPanel.tsx`:** Word-level diff view using `services/wordDiff.ts`; two-step restore (confirm button); labeled snapshot save.
 - **`features/sceneComments/sceneCommentsSlice.ts`:** EntityAdapter for `SceneComment` with selectors `selectCommentsBySection`, `selectUnresolvedCount`, `selectUnresolvedCountBySection`. Actions: `addComment`, `resolveComment`, `unresolveComment`, `addReply`, `deleteComment`, `deleteCommentsForSection`.
@@ -3304,12 +3312,14 @@ _Tagged `v1.29.3` on 2026-11-10 but never published; shipped as 1.29.4._
 - **New types in `types.ts`:** `SceneRevision`, `SceneComment`, `CommentReply`.
 
 **Progress Tracker Dashboard** (Day 7):
+
 - **`features/progressTracker/progressTrackerSlice.ts`:** `startSession`, `endSession` (calculates `wordsWritten = current - start`, prevents negative delta), `setDailyGoal` (clamps ≥ 1), `setWeeklyGoal`, `syncStreak`. Exported pure function `computeStreak(history)`.
 - **`components/ProgressTrackerView.tsx` + `hooks/useProgressTrackerView.ts` + `contexts/ProgressTrackerContext.ts`:** 2-column dashboard (single-column mobile): circular SVG progress ring, live session timer (`role="timer"`), daily/weekly goal bars, 30-day SVG area velocity chart with gradient fill, 12-week GitHub-style heatmap (84 `<rect>` cells, 5 intensity shades).
 - **Registered** as lazy-loaded view (`case 'progress'`) in `App.tsx` and `APP_SECTIONS`.
 - **Session shortcut `Ctrl+Shift+S`** to start/stop writing sessions.
 
 **Mobile Polish** (Days 8–9):
+
 - **`hooks/useFoldableLayout.ts`:** Reads `env(fold-top)` / `env(fold-left)` CSS environment variables (W3C Device Posture API). Returns `{ isFolded, foldAxis: 'horizontal'|'vertical'|null, foldPosition }`. Applied in `App.tsx` as `data-fold-axis` on `<body>`.
 - **`services/deepLinkService.ts`:** URL hash routing (`#/project/{id}`, `#/project/{id}/scene/{sectionId}`, `#/board`, `#/preview`, `#/progress`). `parseHash()`, `pushHash()`, `readCurrentView()`.
 - **`hooks/useHaptics.ts` upgraded:** Named `HAPTIC_PATTERNS` library — `scene-drop`, `connection-made`, `streak-milestone`, `session-start`, `goal-achieved`, `error`. `HapticPattern` type exported.
