@@ -387,16 +387,7 @@ export const VoiceSettingsSection: FC = () => {
                 >
                   {t('settings.voice.downloadSttModel')}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDownloadModelType('tts');
-                    setDownloadModalOpen(true);
-                  }}
-                  className="rounded-md bg-[var(--sc-surface-raised)] border border-[var(--sc-border-subtle)] px-3 py-1.5 text-sm font-medium text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] focus-visible:outline-none"
-                >
-                  {t('settings.voice.downloadTtsModel')}
-                </button>
+                {/* QNBS-v3 (#556/#1264): no Kokoro download while Kokoro cannot run in this build; it would only end in an error. */}
               </div>
             </CardContent>
           )}

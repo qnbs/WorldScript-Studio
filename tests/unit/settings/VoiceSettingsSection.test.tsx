@@ -5,7 +5,7 @@
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -16,6 +16,7 @@ const { mockHandleSettingChange } = vi.hoisted(() => ({
 }));
 
 let mockVoiceEnabled = false;
+let mockEnableVoiceWasm = false;
 let mockSttEngine = 'auto';
 let mockTtsEngine = 'auto';
 
@@ -45,7 +46,7 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
     },
     // QNBS-v3: featureFlags needed since VoiceSettingsSection gates WASM section by enableVoiceWasm
     featureFlags: {
-      enableVoiceWasm: false,
+      enableVoiceWasm: mockEnableVoiceWasm,
     },
     handleSettingChange: mockHandleSettingChange,
     handleResetSettings: vi.fn(),
@@ -118,6 +119,7 @@ describe('VoiceSettingsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockVoiceEnabled = false;
+    mockEnableVoiceWasm = false;
     mockSttEngine = 'auto';
     mockTtsEngine = 'auto';
   });
@@ -227,5 +229,26 @@ describe('VoiceSettingsSection engine choice', () => {
     render(<VoiceSettingsSection />);
     expect(screen.getByLabelText('settings.voice.sttEngine')).toHaveValue('whisper');
     expect(screen.getByLabelText('settings.voice.ttsEngine')).toHaveValue('kokoro');
+  });
+});
+
+// #556/#1264: Kokoro cannot run in this build, so offering its download would only end in an (English) error.
+describe('VoiceSettingsSection local model downloads', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockVoiceEnabled = true;
+    mockEnableVoiceWasm = true;
+  });
+
+  afterEach(() => {
+    mockEnableVoiceWasm = false;
+  });
+
+  it('offers the Whisper download but not the Kokoro download', () => {
+    render(<VoiceSettingsSection />);
+    expect(
+      screen.getByRole('button', { name: 'settings.voice.downloadSttModel' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'settings.voice.downloadTtsModel' })).toBeNull();
   });
 });
