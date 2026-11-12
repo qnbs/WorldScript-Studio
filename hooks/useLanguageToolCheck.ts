@@ -6,7 +6,7 @@
  * (tested) service; this hook only wires Redux + settings + abort lifecycle.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectManuscript } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -51,6 +51,34 @@ export interface UseLanguageToolCheckReturn {
 /** Stable identity for a match within one result set (offset+rule is unique per check). */
 function matchKey(match: LanguageToolMatch): string {
   return `${match.offset}:${match.length}:${match.ruleId}`;
+}
+
+interface CheckResetState {
+  abortRef: { current: AbortController | null };
+  setMatches: (matches: LanguageToolMatch[]) => void;
+  setStatus: (status: LanguageToolUiStatus) => void;
+  baseUrl: string;
+  enabled: boolean;
+  settings: { aiMode?: string } | undefined;
+}
+
+// QNBS-v3 (#1126): `clear` also runs when the endpoint, enablement or AI mode changes and on unmount, so no stale check lands.
+function useCheckReset(state: CheckResetState): () => void {
+  const { abortRef, setMatches, setStatus, baseUrl, enabled, settings } = state;
+  const clear = useCallback(() => {
+    abortRef.current?.abort();
+    setMatches([]);
+    setStatus('idle');
+  }, [abortRef, setMatches, setStatus]);
+  const key = `${baseUrl}\u0000${String(enabled)}\u0000${settings?.aiMode ?? ''}`;
+  const keyRef = useRef(key);
+  useEffect(() => {
+    if (keyRef.current === key) return;
+    keyRef.current = key;
+    clear();
+  }, [key, clear]);
+  useEffect(() => clear, [clear]);
+  return clear;
 }
 
 export function useLanguageToolCheck(): UseLanguageToolCheckReturn {
@@ -154,11 +182,7 @@ export function useLanguageToolCheck(): UseLanguageToolCheckReturn {
     [dictionary, dispatch],
   );
 
-  const clear = useCallback(() => {
-    abortRef.current?.abort();
-    setMatches([]);
-    setStatus('idle');
-  }, []);
+  const clear = useCheckReset({ abortRef, setMatches, setStatus, baseUrl, enabled, settings });
 
   return {
     available,
