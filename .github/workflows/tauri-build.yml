@@ -362,11 +362,11 @@ jobs:
             mv -- "$dir/WorldScript Studio.app.tar.gz" "$dir/WorldScript Studio_x64.app.tar.gz"
             mv -- "$dir/WorldScript Studio.app.tar.gz.sig" "$dir/WorldScript Studio_x64.app.tar.gz.sig"
             echo "renamed the Intel updater payload and its signature to WorldScript Studio_x64.app.tar.gz"
-          elif [ "$GITHUB_REF_TYPE" = tag ]; then
-            echo "::error::a tag build must produce the Intel updater payload"
+          elif [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "::error::a tag push build must produce the Intel updater payload"
             exit 1
           else
-            echo "no updater payload in this build (workflow_dispatch builds create none)"
+            echo "no updater payload in this build (workflow_dispatch builds create none, also on a tag ref)"
           fi
 
       # QNBS-v3: each macOS leg must build a native bundle of its declared arch, and its DMG must mount and contain that app (#507).

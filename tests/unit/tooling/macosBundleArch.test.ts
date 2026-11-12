@@ -87,5 +87,7 @@ describe('macOS bundles are checked for their native architecture', () => {
     const step = bundleJob().steps?.[rename] ?? {};
     expect(step.if).toBe("matrix.arch == 'x86_64'");
     expect(step.run).toContain('"$dir/WorldScript Studio_x64.app.tar.gz.sig"');
+    // Only a tag push signs; a manual dispatch on a tag ref builds no payload and must not fail here.
+    expect(step.run).toContain('[ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]');
   });
 });
