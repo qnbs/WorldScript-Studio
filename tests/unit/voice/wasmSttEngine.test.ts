@@ -57,9 +57,22 @@ class FakeRecorder {
   }
 }
 
+// A 440 Hz tone at 0.1 amplitude (RMS 0.07) stands in for speech; zeros are a silent microphone.
+const tone = (ms: number) =>
+  Float32Array.from(
+    { length: (16 * ms) | 0 },
+    (_, i) => 0.1 * Math.sin((2 * Math.PI * 440 * i) / 16000),
+  );
+const withSilence = (sound: Float32Array, ms: number) => {
+  const window = new Float32Array(sound.length + 16 * ms);
+  window.set(sound);
+  return window;
+};
+let decodedWindow = tone(1000);
+
 const decodeAudioData = vi.fn(async (buffer: ArrayBuffer) => {
   if (!hasHeader(buffer)) throw new DOMException('Unable to decode audio data', 'EncodingError');
-  return { getChannelData: () => new Float32Array(1600) };
+  return { getChannelData: () => decodedWindow };
 });
 
 class FakeAudioContext {
@@ -87,6 +100,7 @@ beforeEach(() => {
   FakeRecorder.instances = [];
   FakeAudioContext.instances = [];
   decodeAudioData.mockClear();
+  decodedWindow = tone(1000);
   track.stop.mockClear();
   getUserMedia.mockReset().mockResolvedValue({ getTracks: () => [track] });
   whisper.mockReset().mockResolvedValue({ text: ' hello world' });
@@ -278,6 +292,36 @@ describe('WasmSttEngine on the dictation path (#556)', () => {
     await starting;
     expect(track.stop).toHaveBeenCalled();
     expect(FakeRecorder.instances).toHaveLength(0);
+  });
+});
+
+// Whisper writes "you" for a silent window: the real-runtime evidence run filled the editor with it.
+describe('WasmSttEngine silence gate (#556)', () => {
+  async function transcribeOneWindow(window: Float32Array) {
+    decodedWindow = window;
+    const onResult = vi.fn();
+    const engine = new WasmSttEngine();
+    await engine.start(onResult, vi.fn());
+    await vi.advanceTimersByTimeAsync(WINDOW_MS * 2);
+    await stopEngine(engine);
+    return onResult;
+  }
+
+  it('never runs Whisper on a silent microphone', async () => {
+    const onResult = await transcribeOneWindow(new Float32Array(16000));
+    expect(whisper).not.toHaveBeenCalled();
+    expect(onResult).not.toHaveBeenCalled();
+  });
+
+  it('skips a window whose only sound is shorter than 200 ms', async () => {
+    await transcribeOneWindow(withSilence(tone(100), 900));
+    expect(whisper).not.toHaveBeenCalled();
+  });
+
+  it('transcribes a window with 200 ms of speech', async () => {
+    const onResult = await transcribeOneWindow(withSilence(tone(200), 800));
+    expect(whisper).toHaveBeenCalled();
+    expect(onResult).toHaveBeenCalled();
   });
 });
 

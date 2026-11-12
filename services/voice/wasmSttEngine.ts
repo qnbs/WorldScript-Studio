@@ -14,6 +14,11 @@ const MODEL_ID = 'Xenova/whisper-tiny.en';
 const TRANSCRIPTION_INTERVAL_MS = 3_500;
 /** Upper bound for a recorder's final `stop` event, so stopping never hangs on a dead recorder. */
 const RECORDER_STOP_TIMEOUT_MS = 1_000;
+/** RMS level a 20 ms frame must exceed to count as voiced: the level the WebRTC VAD uses. */
+const SPEECH_RMS = 0.01;
+const FRAME_MS = 20;
+/** Voiced time a window needs before Whisper sees it; Whisper writes "you" for a silent window. */
+const MIN_SPEECH_MS = 200;
 
 // @huggingface/transformers types (imported via alias in vite.config.ts + tsconfig paths)
 type WhisperPipelineResult = { text?: string } | Array<{ text?: string }>;
@@ -71,6 +76,24 @@ function joinSamples(parts: Float32Array[]): Float32Array {
     offset += part.length;
   }
   return joined;
+}
+
+function frameRms(samples: Float32Array, start: number, length: number): number {
+  let sum = 0;
+  for (let i = start; i < start + length; i++) sum += samples[i]! * samples[i]!;
+  return Math.sqrt(sum / length);
+}
+
+/** True once the window holds MIN_SPEECH_MS of voiced frames. */
+function hasSpeech(samples: Float32Array, sampleRate: number): boolean {
+  const frame = Math.max(1, Math.round((sampleRate * FRAME_MS) / 1000));
+  const needed = Math.ceil(MIN_SPEECH_MS / FRAME_MS);
+  let voiced = 0;
+  for (let start = 0; start + frame <= samples.length; start += frame) {
+    if (frameRms(samples, start, frame) > SPEECH_RMS) voiced += 1;
+    if (voiced >= needed) return true;
+  }
+  return false;
 }
 
 export class WasmSttEngine implements SttEngine {
@@ -211,7 +234,8 @@ export class WasmSttEngine implements SttEngine {
     if (!this.whisperPipeline || this.pendingBlobs.length === 0 || this.isDisposed) return;
 
     const audioData = await this.decodeWindows(this.pendingBlobs.splice(0));
-    if (audioData.length === 0) return;
+    // QNBS-v3 (#556): a window without speech never reaches Whisper, which writes "you" for silence.
+    if (!hasSpeech(audioData, this.config.sampleRate)) return;
 
     try {
       const result = await this.whisperPipeline(audioData, {
