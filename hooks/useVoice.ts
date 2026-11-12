@@ -22,7 +22,11 @@ import {
 } from '../features/voice/voiceSlice';
 import { ecoModeService } from '../services/ai/ecoModeService';
 import { logger } from '../services/logger';
-import { sttEngineChoice, ttsEngineChoice } from '../services/voice/engineChoice';
+import {
+  sttEngineChoice,
+  sttEngineUnderEco,
+  ttsEngineChoice,
+} from '../services/voice/engineChoice';
 import type { VoiceServiceConfig } from '../services/voice/voiceCommandService';
 import { getVoiceService } from '../services/voice/voiceCommandService';
 
@@ -39,7 +43,7 @@ export const useVoice = () => {
     const eco = ecoModeService.isEcoMode();
     const config: Partial<VoiceServiceConfig> = {
       // Eco-mode forces lightweight WebSpeech fallback to save power
-      preferredSttEngine: eco ? 'webSpeech' : sttEngineChoice(voiceSettings.sttEngine),
+      preferredSttEngine: sttEngineUnderEco(sttEngineChoice(voiceSettings.sttEngine), eco),
       preferredTtsEngine: eco ? 'webSpeech' : ttsEngineChoice(voiceSettings.ttsEngine),
       feedbackLevel: voiceSettings.feedbackLevel,
       speechRate: voiceSettings.speechRate,
@@ -59,7 +63,7 @@ export const useVoice = () => {
     const svc = serviceRef.current;
     return ecoModeService.onEcoModeChange((isEco) => {
       svc.updateConfig({
-        preferredSttEngine: isEco ? 'webSpeech' : sttEngineChoice(voiceSettings.sttEngine),
+        preferredSttEngine: sttEngineUnderEco(sttEngineChoice(voiceSettings.sttEngine), isEco),
         preferredTtsEngine: isEco ? 'webSpeech' : ttsEngineChoice(voiceSettings.ttsEngine),
         enableVoiceWasm: enableVoiceWasm || isEco,
       });

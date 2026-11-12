@@ -25,6 +25,7 @@ import type { VoiceFeedbackLevel } from '../../types';
 // QNBS-v3: B5 — eco-mode forces lightweight WebSpeech backend when battery is low
 import { ecoModeService } from '../ai/ecoModeService';
 import { logger } from '../logger';
+import { sttEngineUnderEco } from './engineChoice';
 import { FeedbackService } from './feedbackService';
 import { HybridIntentEngine } from './intentEngine';
 import { createSttEngine } from './sttEngine';
@@ -77,8 +78,8 @@ export class VoiceCommandService {
 
   private coordinator: VoiceActivityCoordinator | null = null;
   private isInitialized = false;
-  /** Settles when the engines of a replaced engine choice are released; initialize() waits for it. */
-  private engineRelease: Promise<void> = Promise.resolve();
+  /** Set when the engine choice changes; the next start applies it before it uses any engine. */
+  private engineChoiceChanged = false;
   // QNBS-v3: C-P1 — single-flight guard against re-entrant startListening (rapid PTT / wake-word).
   private isStarting = false;
   private listeningTimer: ReturnType<typeof setTimeout> | null = null;
@@ -141,8 +142,9 @@ export class VoiceCommandService {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   async initialize(): Promise<boolean> {
-    await this.engineRelease;
     if (this.isInitialized) return true;
+    // A change from here on (even while the engines below are being built) is applied by the next start.
+    this.engineChoiceChanged = false;
 
     try {
       await this.intentEngine.initialize();
@@ -189,7 +191,7 @@ export class VoiceCommandService {
       // QNBS-v3: B5 — eco-mode overrides STT to lightweight WebSpeech to save power
       const eco = ecoModeService.isEcoMode();
       const engine = await createSttEngine({
-        preferredEngine: eco ? 'webSpeech' : this.config.preferredSttEngine,
+        preferredEngine: sttEngineUnderEco(this.config.preferredSttEngine, eco),
         enableVoiceWasm: this.config.enableVoiceWasm || eco,
         allowCloudFallback: this.config.allowCloudFallback,
       });
@@ -272,6 +274,7 @@ export class VoiceCommandService {
     if (this.isStarting || this.coordinator || this.listeningTimer) return;
     this.isStarting = true;
     try {
+      await this.applyEngineChoice();
       if (!this.isInitialized) {
         const ok = await this.initialize();
         if (!ok) {
@@ -334,6 +337,7 @@ export class VoiceCommandService {
   }
 
   async startDictation(): Promise<void> {
+    await this.applyEngineChoice();
     if (!this.isInitialized) {
       const ok = await this.initialize();
       if (!ok) throw new Error('Voice service could not be initialized');
@@ -525,16 +529,15 @@ export class VoiceCommandService {
     this.config = { ...this.config, ...config };
     this.feedbackService.setFeedbackLevel(this.config.feedbackLevel);
     this.feedbackService.setMuted(this.config.ttsMuted);
-    // QNBS-v3 (#1261): a changed engine choice takes effect; the next start builds the preferred engines instead of reusing the old ones.
-    if (engineChanged && this.isInitialized) {
-      this.isInitialized = false;
-      this.engineRelease = this.releaseEngines();
-    }
+    // QNBS-v3 (#1261): never torn down from here (a start may be using the engines); the next start applies the change itself.
+    if (engineChanged) this.engineChoiceChanged = true;
   }
 
-  /** Ends any session on the old engines, then disposes them; never rejects. */
-  private async releaseEngines(): Promise<void> {
+  /** Applies a changed engine choice inside a start, before it uses any engine: ends sessions, drops the old engines. */
+  private async applyEngineChoice(): Promise<void> {
+    if (!this.engineChoiceChanged || !this.isInitialized) return;
     const engines = [this.sttEngine, this.ttsEngine, this.vadEngine, this.wakeWordEngine];
+    this.isInitialized = false;
     try {
       await this.stopListening();
       await this.stopDictation();

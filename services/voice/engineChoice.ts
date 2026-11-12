@@ -17,6 +17,14 @@ export function sttEngineChoice(stored: unknown): VoiceSttEngine {
   return STT_ENGINES.find((engine) => engine === stored) ?? 'auto';
 }
 
+/**
+ * The STT engine to use while Eco Mode saves power: only `auto` becomes Web Speech. An explicit on-device choice stays
+ * on-device, because Web Speech can send the audio to the browser vendor (#1261).
+ */
+export function sttEngineUnderEco(choice: VoiceSttEngine, eco: boolean): VoiceSttEngine {
+  return eco && choice === 'auto' ? 'webSpeech' : choice;
+}
+
 /** The TTS engine a stored preference asks for: the legacy local choice means Kokoro, anything unknown means auto. */
 export function ttsEngineChoice(stored: unknown): VoiceTtsEngine {
   if (stored === LEGACY_LOCAL_CHOICE) return 'kokoro';

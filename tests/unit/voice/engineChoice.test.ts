@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { sttEngineChoice, ttsEngineChoice } from '../../../services/voice/engineChoice';
+import {
+  sttEngineChoice,
+  sttEngineUnderEco,
+  ttsEngineChoice,
+} from '../../../services/voice/engineChoice';
 
 // #1261/#556: the settings stored 'wasm' for "Local WASM model (offline)"; no engine has that id.
 describe('voice engine choice', () => {
@@ -26,5 +30,15 @@ describe('voice engine choice', () => {
   it('does not accept an engine id of the other kind', () => {
     expect(sttEngineChoice('kokoro')).toBe('auto');
     expect(ttsEngineChoice('whisper')).toBe('auto');
+  });
+});
+
+// #1261: Eco Mode may trade the local engine for Web Speech only when the user left the choice on auto.
+describe('voice engine choice under Eco Mode', () => {
+  it('keeps an explicit choice and turns only auto into Web Speech', () => {
+    expect(sttEngineUnderEco('whisper', true)).toBe('whisper');
+    expect(sttEngineUnderEco('webSpeech', true)).toBe('webSpeech');
+    expect(sttEngineUnderEco('auto', true)).toBe('webSpeech');
+    expect(sttEngineUnderEco('auto', false)).toBe('auto');
   });
 });
