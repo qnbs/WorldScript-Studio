@@ -61,3 +61,77 @@ jobs:
           name: tauri-driver-phase0-linux
           path: out/
           retention-days: 14
+
+  windows:
+    name: Phase 0b Windows (installed MSI)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          check-latest: true
+      - name: Download and verify the published v1.29.5 MSI
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download v1.29.5 --repo "$GITHUB_REPOSITORY" --pattern '*_x64_en-US.msi' --dir pkg
+          msi="$(ls pkg/*.msi)"
+          expected="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v1.29.5" --jq '.assets[] | select(.name | endswith("_x64_en-US.msi")) | .digest')"
+          actual="sha256:$(sha256sum "$msi" | cut -d' ' -f1)"
+          echo "release $expected | download $actual"
+          [ "$expected" = "$actual" ]
+          echo "MSI=$msi" >> "$GITHUB_ENV"
+      - name: Install the published MSI and locate the app
+        shell: pwsh
+        run: |
+          $msi = (Resolve-Path $env:MSI).Path
+          $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/l*v', 'msi-install.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content msi-install.log -Tail 60; exit $p.ExitCode }
+          $roots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, "$env:LOCALAPPDATA\Programs") | Where-Object { $_ -and (Test-Path $_) }
+          $dirs = foreach ($r in $roots) { Get-ChildItem $r -Directory -Filter '*WorldScript*' -ErrorAction SilentlyContinue }
+          $exes = $dirs | ForEach-Object { Get-ChildItem $_.FullName -Filter *.exe -Recurse } | Where-Object { $_.Name -notmatch 'uninst' }
+          $exes | ForEach-Object { Write-Output "found $($_.FullName) $($_.VersionInfo.ProductVersion)" }
+          if (@($exes).Count -ne 1) { Write-Error "expected exactly one installed app executable"; exit 1 }
+          "APP_EXE=$($exes[0].FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Fetch the msedgedriver that matches the installed WebView2 runtime
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $pv = (Get-ItemProperty -Path $key -Name pv -ErrorAction Stop).pv
+          Write-Output "WebView2 runtime $pv"
+          New-Item -ItemType Directory -Force -Path driver | Out-Null
+          Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/$pv/edgedriver_win64.zip" -OutFile driver\edgedriver.zip
+          Expand-Archive driver\edgedriver.zip -DestinationPath driver -Force
+          & driver\msedgedriver.exe --version
+          "EDGE_DRIVER=$((Resolve-Path driver\msedgedriver.exe).Path)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Install tauri-driver 2.1.0
+        run: cargo install tauri-driver --locked --version 2.1.0
+      - name: Attach a WebDriver session to the installed app
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          $driver = Start-Process tauri-driver -ArgumentList '--native-driver', "`"$env:EDGE_DRIVER`"" -RedirectStandardOutput out\tauri-driver.log -RedirectStandardError out\tauri-driver.err.log -PassThru
+          $ready = $false
+          for ($i = 0; $i -lt 30 -and -not $ready; $i++) {
+            try { Invoke-WebRequest -Uri http://127.0.0.1:4444/status -UseBasicParsing | Out-Null; $ready = $true } catch { Start-Sleep -Seconds 1 }
+          }
+          if (-not $ready) { Write-Error 'tauri-driver did not answer on port 4444'; exit 1 }
+          node scripts/evidence/webdriver-phase0.mjs "$env:APP_EXE" out
+          $code = $LASTEXITCODE
+          Stop-Process -Id $driver.Id -Force -ErrorAction SilentlyContinue
+          exit $code
+      - name: Upload Phase 0b evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tauri-driver-phase0-windows
+          path: |
+            out/
+            msi-install.log
+          retention-days: 14
