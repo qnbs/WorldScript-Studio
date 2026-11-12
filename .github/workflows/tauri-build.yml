@@ -318,9 +318,16 @@ jobs:
             # QNBS-v3: Tauri's published bundle names use dots for spaces; accept either exact basename while rejecting ambiguous duplicates.
             local dotted_name="${name// /.}"
             local -a matches=()
+            # The search writes to a file first, so a failing find stops the step instead of hiding in a process substitution.
+            local found="${RUNNER_TEMP:-/tmp}/bundle-search.$$"
+            if ! find src-tauri/target/release/bundle -type f \( -name "$name" -o -name "$dotted_name" \) -print0 > "$found"; then
+              echo "::error::the bundle directory search for $name failed"
+              exit 1
+            fi
             while IFS= read -r -d '' match; do
               matches+=("$match")
-            done < <(find src-tauri/target/release/bundle -type f \( -name "$name" -o -name "$dotted_name" \) -print0)
+            done < "$found"
+            rm -f "$found"
             if [ "${#matches[@]}" -ne 1 ]; then
               echo "::error::expected exactly one bundle asset named $name, found ${#matches[@]}"
               find src-tauri/target/release/bundle -type f | sed 's/^/  bundle file: /'

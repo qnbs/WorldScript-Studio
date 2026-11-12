@@ -30,7 +30,7 @@ function runStep(files: Record<string, string>, cargoExit = 0) {
   mkdirSync(bin);
   writeFileSync(
     join(bin, 'cargo'),
-    `#!/bin/sh\nfor last; do :; done\necho "$last" >> "${root}/cargo.log"\nexit ${cargoExit}\n`,
+    `#!/bin/sh\n# Logs the package and sidecar the verifier was given: the last two arguments.\nshift $(($# - 2))\necho "$1 | $2" >> "${root}/cargo.log"\nexit ${cargoExit}\n`,
   );
   chmodSync(join(bin, 'cargo'), 0o755);
   for (const [file, content] of Object.entries(files)) {
@@ -39,7 +39,7 @@ function runStep(files: Record<string, string>, cargoExit = 0) {
     writeFileSync(path, content);
   }
   try {
-    const result = spawnSync('/usr/bin/bash', ['--noprofile', '--norc', '-c', run], {
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-c', run], {
       cwd: root,
       env: { PATH: `${bin}:/usr/bin:/bin`, RUNNER_OS: 'Linux', GITHUB_REF_NAME: 'v9.9.9' },
       encoding: 'utf8',
@@ -61,11 +61,10 @@ describe('the bundle signature step reports every failure', () => {
   it('verifies each Linux package with its sidecar', () => {
     const result = runStep(filled(withSigs(LINUX)));
     expect(result.status, result.stdout).toBe(0);
-    expect(result.cargoCalls.map((sig) => sig.split('/').pop())).toEqual([
-      `${DEB}.sig`,
-      `${RPM}.sig`,
-      `${APPIMAGE}.sig`,
-    ]);
+    const bundle = 'src-tauri/target/release/bundle';
+    expect(result.cargoCalls).toEqual(
+      LINUX.map((file) => `${bundle}/${file} | ${bundle}/${file}.sig`),
+    );
   });
 
   it('names a missing package and lists the bundle files', () => {
@@ -86,6 +85,12 @@ describe('the bundle signature step reports every failure', () => {
     );
   });
 
+  it('stops when the bundle directory search itself fails', () => {
+    const result = runStep({});
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain(`::error::the bundle directory search for ${DEB} failed`);
+  });
+
   it('names an empty package and a missing sidecar', () => {
     const empty = runStep({ ...filled(withSigs(LINUX)), [`deb/${DEB}`]: '' });
     expect(empty.status).toBe(1);
@@ -100,8 +105,10 @@ describe('the bundle signature step reports every failure', () => {
   it('names the line and command when the verifier fails', () => {
     const result = runStep(filled(withSigs(LINUX)), 1);
     expect(result.status).not.toBe(0);
-    expect(result.stdout).toMatch(
-      /::error::bundle signature check failed at line \d+: cargo run --locked/,
+    const cargoLine = run.split('\n').findIndex((line) => line.includes('cargo run --locked')) + 1;
+    expect(cargoLine).toBeGreaterThan(0);
+    expect(result.stdout).toContain(
+      `::error::bundle signature check failed at line ${cargoLine}: cargo run --locked`,
     );
   });
 });
