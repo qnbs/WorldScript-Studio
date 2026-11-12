@@ -183,6 +183,61 @@ describe('VoiceCommandService', () => {
       expect(voiceSlice.setDictationActive).toHaveBeenLastCalledWith(false);
       expect(voiceSlice.setVoiceError).toHaveBeenLastCalledWith('model fetch failed');
     });
+
+    // #556 review: dictation and command listening share one STT engine; only one may run it.
+    function recordingEngine(order: string[], stop: () => Promise<void> = async () => {}) {
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      service['isInitialized'] = true;
+      service['sttEngine'] = {
+        id: 'whisper',
+        start: vi.fn(async () => {
+          order.push('start');
+        }),
+        stop: vi.fn(async () => {
+          order.push('stop');
+          await stop();
+        }),
+        dispose: vi.fn(),
+      } as never;
+    }
+
+    it('dictation ends command listening before it starts the engine', async () => {
+      const order: string[] = [];
+      recordingEngine(order);
+      service['coordinator'] = {
+        stop: vi.fn(async () => {
+          order.push('coordinator.stop');
+        }),
+      } as never;
+      await service.startDictation();
+      expect(order).toEqual(['coordinator.stop', 'start']);
+    });
+
+    it('listening ends a running dictation first', async () => {
+      const order: string[] = [];
+      recordingEngine(order);
+      await service.startDictation();
+      await service.startListening();
+      expect(order).toEqual(['start', 'stop', 'start']);
+      await service.stopListening();
+    });
+
+    it('stopDictation keeps dictation active until the engine has drained its last window', async () => {
+      const voiceSlice = await import('../../../../features/voice/voiceSlice');
+      let finishStop!: () => void;
+      const drained = new Promise<void>((resolve) => {
+        finishStop = resolve;
+      });
+      recordingEngine([], () => drained);
+      await service.startDictation();
+      vi.mocked(voiceSlice.setDictationActive).mockClear();
+      const stopping = service.stopDictation();
+      await Promise.resolve();
+      expect(voiceSlice.setDictationActive).not.toHaveBeenCalled();
+      finishStop();
+      await stopping;
+      expect(voiceSlice.setDictationActive).toHaveBeenCalledWith(false);
+    });
   });
 
   describe('stopListening', () => {

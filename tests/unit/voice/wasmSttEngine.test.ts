@@ -24,14 +24,21 @@ const hasHeader = (buffer: ArrayBuffer) =>
 
 class FakeRecorder {
   static instances: FakeRecorder[] = [];
-  static isTypeSupported = () => true;
+  static isTypeSupported: (type: string) => boolean = () => true;
+  static failNext = false;
+  readonly options: MediaRecorderOptions | undefined;
   state: 'inactive' | 'recording' = 'inactive';
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
   private chunks = 0;
   private slicer: ReturnType<typeof setInterval> | null = null;
 
-  constructor() {
+  constructor(_stream?: unknown, options?: MediaRecorderOptions) {
+    if (FakeRecorder.failNext) {
+      FakeRecorder.failNext = false;
+      throw new DOMException('Unsupported recorder', 'NotSupportedError');
+    }
+    this.options = options;
     FakeRecorder.instances.push(this);
   }
 
@@ -98,6 +105,8 @@ function deferred<T>() {
 beforeEach(() => {
   vi.useFakeTimers();
   FakeRecorder.instances = [];
+  FakeRecorder.isTypeSupported = () => true;
+  FakeRecorder.failNext = false;
   FakeAudioContext.instances = [];
   decodeAudioData.mockClear();
   decodedWindow = tone(1000);
@@ -350,6 +359,39 @@ describe('WasmSttEngine capture sessions (#556)', () => {
     await engine.dispose();
     expect(nextTrack.stop).toHaveBeenCalled();
   });
+});
+
+// Review findings on #1260 (second wave): a session that cannot be built must not leak the granted microphone.
+describe('WasmSttEngine session construction (#556)', () => {
+  it('a recorder that cannot be built releases the microphone and the audio context', async () => {
+    FakeRecorder.failNext = true;
+    const engine = new WasmSttEngine();
+    await expect(engine.start(vi.fn(), vi.fn())).rejects.toThrow('Unsupported recorder');
+    expect(track.stop).toHaveBeenCalled();
+    expect(FakeAudioContext.instances[0]?.close).toHaveBeenCalled();
+    await engine.start(vi.fn(), vi.fn());
+    expect(FakeRecorder.instances).toHaveLength(1);
+    await engine.dispose();
+  });
+
+  it.each([
+    [
+      'WebM with Opus',
+      (type: string) => type === 'audio/webm;codecs=opus',
+      { mimeType: 'audio/webm;codecs=opus' },
+    ],
+    ['only MP4', (type: string) => type === 'audio/mp4', { mimeType: 'audio/mp4' }],
+    ['none of the listed types', () => false, undefined],
+  ])(
+    'records a supported container when the browser supports %s',
+    async (_label, supports, expected) => {
+      FakeRecorder.isTypeSupported = supports;
+      const engine = new WasmSttEngine();
+      await engine.start(vi.fn(), vi.fn());
+      expect(FakeRecorder.instances[0]?.options).toEqual(expected);
+      await engine.dispose();
+    },
+  );
 });
 
 // Whisper writes "you" for a silent window: the real-runtime evidence run filled the editor with it.

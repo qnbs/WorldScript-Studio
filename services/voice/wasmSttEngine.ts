@@ -69,13 +69,17 @@ async function createWhisperPipeline(): Promise<WhisperPipeline> {
   })) as WhisperPipeline;
 }
 
+// QNBS-v3 (#556): record the first container the browser supports; with none of these, its own default (Safari records MP4).
+const RECORDING_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+
+function recorderOptions(): MediaRecorderOptions | undefined {
+  const mimeType = RECORDING_TYPES.find((type) => MediaRecorder.isTypeSupported(type));
+  return mimeType ? { mimeType } : undefined;
+}
+
 function startWindow(stream: MediaStream): RecordingWindow {
   const chunks: Blob[] = [];
-  const recorder = new MediaRecorder(stream, {
-    mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-      ? 'audio/webm;codecs=opus'
-      : 'audio/webm',
-  });
+  const recorder = new MediaRecorder(stream, recorderOptions());
   // The final chunk arrives after stop(); it belongs to this window whatever the engine does meanwhile.
   recorder.ondataavailable = (event: BlobEvent) => {
     if (event.data.size > 0) chunks.push(event.data);
@@ -198,9 +202,25 @@ export class WasmSttEngine implements SttEngine {
     await this.loadPipeline();
     if (attempt !== this.startAttempt) return; // stopped or disposed while the model loaded
 
-    let stream: MediaStream;
+    const stream = await this.openMicrophone();
+    if (attempt !== this.startAttempt) {
+      // Stopped while the browser granted the microphone: release it instead of recording.
+      releaseTracks(stream);
+      return;
+    }
+
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      this.session = this.openSession(stream, onResult, onError);
+    } catch (error) {
+      // QNBS-v3 (#556): a session that cannot be built must not leave the granted microphone running.
+      releaseTracks(stream);
+      throw error;
+    }
+  }
+
+  private async openMicrophone(): Promise<MediaStream> {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: this.config.sampleRate,
           channelCount: this.config.channelCount,
@@ -212,26 +232,33 @@ export class WasmSttEngine implements SttEngine {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`Microphone access denied: ${msg}`);
     }
-    if (attempt !== this.startAttempt) {
-      // Stopped while the browser granted the microphone: release it instead of recording.
-      releaseTracks(stream);
-      return;
-    }
+  }
 
-    const session: CaptureSession = {
-      stream,
-      audioContext: new AudioContext({ sampleRate: this.config.sampleRate }),
-      onResult,
-      onError,
-      disposals: this.disposals,
-      window: startWindow(stream),
-      timer: null,
-      rotation: Promise.resolve(),
-    };
-    session.timer = setInterval(() => {
-      session.rotation = this.rotateWindow(session);
-    }, TRANSCRIPTION_INTERVAL_MS);
-    this.session = session;
+  private openSession(
+    stream: MediaStream,
+    onResult: (result: SttResult) => void,
+    onError: (error: Error) => void,
+  ): CaptureSession {
+    const audioContext = new AudioContext({ sampleRate: this.config.sampleRate });
+    try {
+      const session: CaptureSession = {
+        stream,
+        audioContext,
+        onResult,
+        onError,
+        disposals: this.disposals,
+        window: startWindow(stream),
+        timer: null,
+        rotation: Promise.resolve(),
+      };
+      session.timer = setInterval(() => {
+        session.rotation = this.rotateWindow(session);
+      }, TRANSCRIPTION_INTERVAL_MS);
+      return session;
+    } catch (error) {
+      void audioContext.close();
+      throw error;
+    }
   }
 
   private async rotateWindow(session: CaptureSession): Promise<void> {

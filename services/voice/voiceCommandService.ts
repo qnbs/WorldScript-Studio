@@ -77,6 +77,8 @@ export class VoiceCommandService {
   // QNBS-v3: C-P1 — single-flight guard against re-entrant startListening (rapid PTT / wake-word).
   private isStarting = false;
   private listeningTimer: ReturnType<typeof setTimeout> | null = null;
+  // QNBS-v3 (#556): dictation and command listening share one STT engine; only one of them may run it at a time.
+  private isDictating = false;
   private eventListeners: VoiceEventListener[] = [];
 
   constructor(config: Partial<VoiceServiceConfig> = {}) {
@@ -275,6 +277,7 @@ export class VoiceCommandService {
       if (!this.sttEngine) {
         throw new Error('No STT engine available');
       }
+      await this.endDictationBeforeListening();
 
       this.d(setVoiceMode('listening'));
       this.d(setVoiceError(null));
@@ -327,11 +330,9 @@ export class VoiceCommandService {
   }
 
   async startDictation(): Promise<void> {
-    if (!this.isInitialized) {
-      const ok = await this.initialize();
-      if (!ok) throw new Error('Voice service could not be initialized');
-    }
-    if (!this.sttEngine) throw new Error('No STT engine available');
+    const engine = await this.dictationEngine();
+    if (this.isDictating) return;
+    await this.endListeningBeforeDictation();
 
     // QNBS-v3 (#556): each dictation starts from an empty transcript, so a restart never re-inserts the last session.
     this.d(setVoiceTranscript(''));
@@ -339,10 +340,30 @@ export class VoiceCommandService {
     this.d(setVoiceError(null));
 
     this.emit({ type: 'dictation-started', timestamp: Date.now() });
-    await this.startDictationEngine(this.sttEngine);
+    await this.startDictationEngine(engine);
+  }
+
+  private async dictationEngine(): Promise<SttEngine> {
+    if (!this.isInitialized) {
+      const ok = await this.initialize();
+      if (!ok) throw new Error('Voice service could not be initialized');
+    }
+    if (!this.sttEngine) throw new Error('No STT engine available');
+    return this.sttEngine;
+  }
+
+  /** Dictation takes the engine over from command listening; otherwise speech would keep going to commands. */
+  private async endListeningBeforeDictation(): Promise<void> {
+    if (this.coordinator || this.listeningTimer) await this.stopListening();
+  }
+
+  /** Listening takes the engine over from a running dictation instead of sharing its session. */
+  private async endDictationBeforeListening(): Promise<void> {
+    if (this.isDictating) await this.stopDictation();
   }
 
   private async startDictationEngine(engine: SttEngine): Promise<void> {
+    this.isDictating = true;
     try {
       await engine.start(
         (result) => this.handleDictationResult(result),
@@ -350,6 +371,7 @@ export class VoiceCommandService {
       );
     } catch (err) {
       // QNBS-v3 (#556): a failed start (e.g. the Whisper model cannot load offline) must not leave dictation shown as active.
+      this.isDictating = false;
       this.d(setDictationActive(false));
       this.d(setVoiceError(err instanceof Error ? err.message : 'Dictation could not start'));
       throw err;
@@ -377,11 +399,14 @@ export class VoiceCommandService {
   }
 
   async stopDictation(): Promise<void> {
-    this.d(setDictationActive(false));
-    if (this.sttEngine) {
-      await this.sttEngine.stop();
+    try {
+      // QNBS-v3 (#556): stop the engine first; its last window is transcribed while dictation is still active, so the editor gets it.
+      if (this.isDictating && this.sttEngine) await this.sttEngine.stop();
+    } finally {
+      this.isDictating = false;
+      this.d(setDictationActive(false));
+      this.emit({ type: 'dictation-stopped', timestamp: Date.now() });
     }
-    this.emit({ type: 'dictation-stopped', timestamp: Date.now() });
   }
 
   // ── Result Handlers ────────────────────────────────────────────────────────
@@ -533,6 +558,7 @@ export class VoiceCommandService {
 
   async dispose(): Promise<void> {
     await this.stopListening();
+    this.isDictating = false;
     this.cancelSpeech();
 
     // QNBS-v3: coordinator.dispose() handles its own engine teardown when active
