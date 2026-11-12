@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Local AI (WASM backend):** Whisper, Kokoro and the other Transformers.js pipelines load ONNX Runtime's WebAssembly from the app again. On import, Transformers.js pointed ONNX Runtime at `cdn.jsdelivr.net`, which the Content Security Policy blocks, so the real Whisper model download failed with "no available backend found" whenever that path was taken (#556). The app now drops that cross-origin path, and ONNX Runtime loads the same-origin WASM the build already ships from the exact onnxruntime-web that Transformers.js bundles. The CSP is unchanged and nothing falls back to a cloud service (PR #1257).
 <!-- release-candidate: v1.29.6 -->
 
 ## [1.29.6] — 2026-11-12
