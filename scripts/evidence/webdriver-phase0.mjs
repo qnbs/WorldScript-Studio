@@ -2,8 +2,13 @@
 // session can read the DOM and IndexedDB. Plain WebDriver HTTP, no client library.
 import { writeFileSync } from 'node:fs';
 
-const [application, outDir = '.'] = process.argv.slice(2);
-const base = 'http://127.0.0.1:4444';
+const [application, outDir = '.', port = '4444', mode = 'tauri'] = process.argv.slice(2);
+// The optional port and mode let the Windows diagnosis talk to msedgedriver directly, as tauri-driver does internally.
+const base = `http://127.0.0.1:${port}`;
+const capabilities =
+  mode === 'edge'
+    ? { browserName: 'webview2', 'ms:edgeOptions': { binary: application, webviewOptions: {} } }
+    : { 'tauri:options': { application } };
 
 async function call(method, path, body) {
   const response = await fetch(`${base}${path}`, {
@@ -17,14 +22,14 @@ async function call(method, path, body) {
   return json.value;
 }
 
-const report = { application, steps: [] };
+const report = { application, mode, steps: [] };
 const step = (name, value) => {
   report.steps.push({ name, value });
   console.log(`${name}: ${typeof value === 'string' ? value : JSON.stringify(value)}`);
 };
 
 const session = await call('POST', '/session', {
-  capabilities: { alwaysMatch: { 'tauri:options': { application } } },
+  capabilities: { alwaysMatch: capabilities },
 });
 const id = session.sessionId;
 step('session', { id, browserName: session.capabilities?.browserName ?? null });

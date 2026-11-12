@@ -124,8 +124,35 @@ jobs:
           if (-not $ready) { Write-Error 'tauri-driver did not answer on port 4444'; exit 1 }
           node scripts/evidence/webdriver-phase0.mjs "$env:APP_EXE" out
           $code = $LASTEXITCODE
+          Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'worldscript|msedgewebview2|msedgedriver|tauri-driver' } |
+            Select-Object ProcessId, Name, CommandLine | Format-List | Out-File out\processes-during-tauri-driver.txt -Width 4000
           Stop-Process -Id $driver.Id -Force -ErrorAction SilentlyContinue
-          exit $code
+          "TAURI_DRIVER_EXIT=$code" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          exit 0
+      - name: Diagnose the WebView2 automation path
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'worldscript|msedgewebview2|msedgedriver' } |
+            Select-Object ProcessId, Name, CommandLine | Format-List | Out-File out\processes-after-tauri-driver.txt -Width 4000
+          Get-Process worldscript-studio, msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-ChildItem $env:LOCALAPPDATA, $env:TEMP -Recurse -Filter DevToolsActivePort -ErrorAction SilentlyContinue |
+            ForEach-Object { "$($_.FullName) $($_.LastWriteTime)" } | Out-File out\devtoolsactiveport.txt
+          Get-ChildItem Env: | Where-Object { $_.Name -like 'WEBVIEW2*' } | Out-File out\webview2-env.txt
+          $edge = Start-Process $env:EDGE_DRIVER -ArgumentList '--port=4445', '--verbose', '--log-path=out\msedgedriver-direct.log' -PassThru
+          $ready = $false
+          for ($i = 0; $i -lt 30 -and -not $ready; $i++) {
+            try { Invoke-WebRequest -Uri http://127.0.0.1:4445/status -UseBasicParsing | Out-Null; $ready = $true } catch { Start-Sleep -Seconds 1 }
+          }
+          New-Item -ItemType Directory -Force -Path out\direct | Out-Null
+          node scripts/evidence/webdriver-phase0.mjs "$env:APP_EXE" out\direct 4445 edge
+          $direct = $LASTEXITCODE
+          Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'worldscript|msedgewebview2' } |
+            Select-Object ProcessId, Name, CommandLine | Format-List | Out-File out\processes-direct.txt -Width 4000
+          Stop-Process -Id $edge.Id -Force -ErrorAction SilentlyContinue
+          Write-Output "tauri-driver exit $env:TAURI_DRIVER_EXIT, direct msedgedriver exit $direct"
+          if ($env:TAURI_DRIVER_EXIT -ne '0' -and $direct -ne 0) { exit 1 }
       - name: Upload Phase 0b evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
