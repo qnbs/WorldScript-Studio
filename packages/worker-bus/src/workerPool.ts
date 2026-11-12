@@ -14,6 +14,14 @@ const log = createLogger('worker-bus:pool');
 /** Delay before the nth consecutive respawn (the first is immediate); past the list the pool gives up. */
 const RESPAWN_BACKOFF_MS = [0, 1_000, 4_000] as const;
 
+/** The pool's worker factory: `createWorker` when given, else a module worker of `workerScript`. */
+function workerFactory(poolId: string, options: WorkerPoolOptions): () => Worker {
+  const { createWorker, workerScript } = options;
+  if (createWorker) return createWorker;
+  if (!workerScript) throw new Error(`Worker pool ${poolId} needs createWorker or workerScript`);
+  return () => new Worker(new URL(workerScript, import.meta.url), { type: 'module' });
+}
+
 export interface PooledWorkerInstance extends PooledWorker {
   readonly worker: Worker;
   readonly channel: MessageChannel;
@@ -44,15 +52,14 @@ export class WorkerPool {
   private respawnTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly availabilityListeners = new Set<() => void>();
   private readonly acquireWaiters: AcquireWaiter[] = [];
+  private readonly makeWorker: () => Worker;
 
   constructor(
     public readonly poolId: string,
     public readonly capabilities: readonly WorkerCapability[],
     public readonly options: WorkerPoolOptions,
   ) {
-    if (!options.createWorker && !options.workerScript) {
-      throw new Error(`Worker pool ${poolId} needs createWorker or workerScript`);
-    }
+    this.makeWorker = workerFactory(poolId, options);
   }
 
   async acquire(signal?: AbortSignal): Promise<PooledWorkerInstance> {
@@ -156,18 +163,11 @@ export class WorkerPool {
     };
   }
 
-  private createWorker(): Worker {
-    if (this.options.createWorker) return this.options.createWorker();
-    return new Worker(new URL(this.options.workerScript ?? '', import.meta.url), {
-      type: 'module',
-    });
-  }
-
   private spawnWorker(): PooledWorkerInstance {
     const workerId = crypto.randomUUID();
     let worker: Worker;
     try {
-      worker = this.createWorker();
+      worker = this.makeWorker();
     } catch (error) {
       // QNBS-v3 (#1272): a worker that cannot even be constructed (e.g. a CSP-blocked script) counts as a crash.
       this.recordCrash(error instanceof Error ? error.message : String(error));
@@ -246,7 +246,10 @@ export class WorkerPool {
     this.terminateEntry(entry);
     if (this.shutdownFlag) return;
     const delay = crashed ? this.recordCrash('worker crashed') : 0;
-    if (this.failure) return;
+    if (!this.failure) this.scheduleRespawn(delay);
+  }
+
+  private scheduleRespawn(delay: number): void {
     if (delay === 0) {
       this.respawn();
       return;
@@ -267,7 +270,10 @@ export class WorkerPool {
     try {
       this.spawnWorker();
     } catch {
-      return; // spawnWorker recorded it; a failed pool has already rejected its waiters
+      // QNBS-v3 (#1272): spawnWorker counted the failed start; retry after its backoff so a waiting task is served (a failed pool already rejected it).
+      const delay = RESPAWN_BACKOFF_MS[this.consecutiveCrashes - 1];
+      if (delay !== undefined) this.scheduleRespawn(delay);
+      return;
     }
     this.notifyAvailable();
   }
