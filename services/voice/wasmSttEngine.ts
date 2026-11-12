@@ -78,6 +78,11 @@ function joinSamples(parts: Float32Array[]): Float32Array {
   return joined;
 }
 
+function transcriptOf(result: WhisperPipelineResult): string {
+  const first = Array.isArray(result) ? result[0] : result;
+  return first?.text?.trim() ?? '';
+}
+
 function frameRms(samples: Float32Array, start: number, length: number): number {
   let sum = 0;
   for (let i = start; i < start + length; i++) sum += samples[i]! * samples[i]!;
@@ -206,19 +211,27 @@ export class WasmSttEngine implements SttEngine {
     });
     // The final chunk arrives after stop() has cleared isRunning, so only the session decides.
     recorder.ondataavailable = (event: BlobEvent) => {
-      if (event.data.size > 0 && session === this.session && !this.isDisposed) {
-        this.pendingBlobs.push(event.data);
-      }
+      if (event.data.size > 0 && this.ownsChunk(session)) this.pendingBlobs.push(event.data);
     };
     recorder.start();
     return recorder;
   }
 
+  private ownsChunk(session: number): boolean {
+    return session === this.session && !this.isDisposed;
+  }
+
+  /** The microphone stream while this session is still recording, otherwise null. */
+  private liveStream(session: number): MediaStream | null {
+    return this.isRunning && session === this.session ? this.mediaStream : null;
+  }
+
   private async rotateWindow(session: number): Promise<void> {
     const finished = this.recorder;
-    if (!finished || !this.mediaStream || !this.isRunning || session !== this.session) return;
+    const stream = this.liveStream(session);
+    if (!finished || !stream) return;
     // Start the next window before stopping this one, so no audio falls between them.
-    this.recorder = this.startWindow(this.mediaStream, session);
+    this.recorder = this.startWindow(stream, session);
     await stopRecorder(finished);
     await this.queueTranscription();
   }
@@ -229,19 +242,23 @@ export class WasmSttEngine implements SttEngine {
     return this.transcription;
   }
 
+  // QNBS-v3: Check isDisposed (not isRunning) — stop() sets isRunning=false but still drains remaining blobs.
+  private hasPendingAudio(): boolean {
+    return !this.isDisposed && this.pendingBlobs.length > 0;
+  }
+
   private async drainAndTranscribe(): Promise<void> {
-    // QNBS-v3: Check isDisposed (not isRunning) — stop() sets isRunning=false but still drains remaining blobs.
-    if (!this.whisperPipeline || this.pendingBlobs.length === 0 || this.isDisposed) return;
+    const transcribe = this.whisperPipeline;
+    if (!transcribe || !this.hasPendingAudio()) return;
 
     const audioData = await this.decodeWindows(this.pendingBlobs.splice(0));
     // QNBS-v3 (#556): a window without speech never reaches Whisper, which writes "you" for silence.
     if (!hasSpeech(audioData, this.config.sampleRate)) return;
 
     try {
-      const result = await this.whisperPipeline(audioData, {
-        sampling_rate: this.config.sampleRate,
-      });
-      const text = (Array.isArray(result) ? result[0]?.text : result.text)?.trim() ?? '';
+      const text = transcriptOf(
+        await transcribe(audioData, { sampling_rate: this.config.sampleRate }),
+      );
       if (text) {
         this.onResultCallback?.({
           transcript: text,
