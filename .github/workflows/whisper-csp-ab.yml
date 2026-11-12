@@ -1,0 +1,75 @@
+# Evidence branch only (never merged), #556: real Whisper download + pipeline init against the PRODUCTION build and its
+# shipped CSP, A/B between main without the fix and PR #1257 with it. Same unchanged spec in both legs.
+name: Whisper CSP A/B (evidence)
+
+on:
+  push:
+    branches: [evidence/whisper-csp-ab-556]
+
+permissions:
+  contents: read
+
+jobs:
+  ab:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: main 40dbb95e (no fix)
+            ref: 40dbb95e2dc54c072bbdd1bdf49b064fea534a27
+          - label: PR 1257 edbfd98c (fix)
+            ref: edbfd98cd92fd3e8487ae1f296d41905cf36187c
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ matrix.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Production build (prebuild syncs the CSP into index.html)
+        run: pnpm run build
+      - name: Shipped CSP and ONNX Runtime assets in dist
+        run: |
+          grep -o '<meta http-equiv="Content-Security-Policy"[^>]*>' dist/index.html | grep -oE "(script|connect|worker)-src [^;]*" | sed 's/^/| /'
+          ls dist/assets | grep -E '^ort-wasm' | sed 's/^/| asset: /'
+          grep -l 'cdn.jsdelivr.net/npm/onnxruntime-web' dist/assets/*.js | sed 's/^/| CDN default still in library code: /' || true
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Real Whisper download + init against vite preview (unchanged spec)
+        id: whisper
+        continue-on-error: true
+        env:
+          CI: 'true'
+          RUN_DEEP_E2E: '1'
+          RUN_REAL_VOICE_E2E: '1'
+        run: |
+          cat > playwright.preview.config.ts <<'CFG'
+          import base from './playwright.config';
+          export default {
+            ...base,
+            webServer: {
+              ...(base.webServer as object),
+              command: 'pnpm exec vite preview --host 127.0.0.1 --port 3000 --strictPort',
+              url: 'http://127.0.0.1:3000/WorldScript-Studio/',
+              reuseExistingServer: false,
+            },
+          };
+          CFG
+          pnpm exec playwright test -c playwright.preview.config.ts tests/e2e/deep/voice/whisper-real.spec.ts --project=chromium --retries=0
+      - name: Record the outcome
+        if: always()
+        run: |
+          echo "| ${{ matrix.label }}: whisper outcome = ${{ steps.whisper.outcome }}"
+          f=$(find . -path ./node_modules -prune -o -name 'error-context.md' -print 2>/dev/null | head -1)
+          if [ -n "$f" ]; then grep -E 'alert:|Download failed' "$f" | sed 's/^/| /' | head -5; fi
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: whisper-csp-ab-${{ strategy.job-index }}
+          path: |
+            tests/e2e/html-report
+            test-results
+          retention-days: 14
