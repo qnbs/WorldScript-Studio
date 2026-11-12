@@ -3,9 +3,8 @@
  * VoiceControlPanel dictation → voiceCommandService (VAD coordinator → Whisper STT) → setVoiceTranscript → useVoiceDictation
  * → the manuscript textarea. Chromium plays a CI-generated WAV as the microphone (--use-file-for-fake-audio-capture).
  */
-import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 import {
   clickNavItem,
@@ -16,15 +15,15 @@ import {
 } from '../../helpers';
 
 // The evidence workflow writes these (untracked) before the run; locally the tests skip.
-const speechWav = resolve('.voice-fixtures/speech.wav');
-const silenceWav = resolve('.voice-fixtures/silence.wav');
-const fakeMic = (wav: string) => [
+export const speechWav = resolve('.voice-fixtures/speech.wav');
+export const silenceWav = resolve('.voice-fixtures/silence.wav');
+export const fakeMic = (wav: string) => [
   '--use-fake-ui-for-media-stream',
   '--use-fake-device-for-media-stream',
   `--use-file-for-fake-audio-capture=${wav}`,
 ];
 
-async function downloadRealSttModel(page: Page): Promise<void> {
+export async function downloadRealSttModel(page: Page): Promise<void> {
   await setFeatureFlags(page, { enableVoiceSupport: true, enableVoiceWasm: true });
   await page.goto('/');
   await waitForSpaReady(page);
@@ -47,7 +46,7 @@ async function downloadRealSttModel(page: Page): Promise<void> {
   await expect(dialog).toBeHidden({ timeout: 220_000 });
 }
 
-async function dictateInto(page: Page): Promise<ReturnType<Page['getByTestId']>> {
+export async function dictateInto(page: Page): Promise<ReturnType<Page['getByTestId']>> {
   await clickNavItem(page, /Manuscript/i);
   const textarea = page.getByTestId('manuscript-editor-textarea').first();
   await expect(textarea).toBeVisible({ timeout: 20000 });
@@ -64,29 +63,3 @@ async function dictateInto(page: Page): Promise<ReturnType<Page['getByTestId']>>
   );
   return textarea;
 }
-
-test.describe('Whisper real transcription (evidence, #556)', () => {
-  test.setTimeout(360_000);
-
-  test.describe('speech', () => {
-    test.use({ launchOptions: { args: fakeMic(speechWav) } });
-    test('transcribes generated speech into the manuscript', async ({ page }) => {
-      test.skip(!existsSync(speechWav), 'no generated speech WAV');
-      await downloadRealSttModel(page);
-      const textarea = await dictateInto(page);
-      await expect(textarea).toHaveValue(/hello|world|dictation|test/i, { timeout: 120_000 });
-    });
-  });
-
-  test.describe('silence (negative control)', () => {
-    test.use({ launchOptions: { args: fakeMic(silenceWav) } });
-    test('inserts nothing while the microphone is silent', async ({ page }) => {
-      test.skip(!existsSync(silenceWav), 'no generated silence WAV');
-      await downloadRealSttModel(page);
-      const textarea = await dictateInto(page);
-      const before = await textarea.inputValue();
-      await page.waitForTimeout(30_000);
-      expect(await textarea.inputValue()).toBe(before);
-    });
-  });
-});

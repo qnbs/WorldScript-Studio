@@ -37,7 +37,7 @@ jobs:
           CI: 'true'
           RUN_DEEP_E2E: '1'
           RUN_REAL_VOICE_E2E: '1'
-        run: pnpm exec playwright test tests/e2e/deep/voice/whisper-transcribe.spec.ts --project=chromium --retries=0
+        run: pnpm exec playwright test tests/e2e/deep/voice/whisper-transcribe-speech.spec.ts tests/e2e/deep/voice/whisper-transcribe-silence.spec.ts --project=chromium --retries=0
       - name: Record the outcome
         if: always()
         run: |
