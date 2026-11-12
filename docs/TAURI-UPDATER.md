@@ -61,6 +61,8 @@ Add the signing step to the Windows matrix leg in `.github/workflows/tauri-build
 
 ## Code signing (Windows / macOS)
 
+**Status: not available, deferred (#574, maintainer decision 2026-11-11).** No Apple Developer ID, notarization or Authenticode credentials exist, and their absence does not block a release. Updater signatures, signed tags, asset digests, notices and the SBOM stay required. Re-enable this section when the credentials verifiably exist or the policy changes.
+
 - **Windows**: Authenticode signing in CI (certificate in secrets) — configure via environment variables expected by your signing tool / Tauri bundler; document the exact variable names your certificate provider uses.
 - **macOS**: Apple Developer ID + `codesign` + notarization — typically requires `APPLE_*` secrets and is configured outside this repo's defaults.
 
@@ -78,6 +80,13 @@ What the release enforces:
 - `scripts/release-assets-guard.mjs` reads every updater signature the way the client does: the third line of the decoded signature, then its first tab-separated `version:` field.
 - The release fails before publishing unless each signature binds exactly the release version.
 - `src-tauri/tests/updater_config.rs` deserializes `plugins.updater` with the plugin's own `Config`, so a misspelt flag cannot ship silently.
+
+Installer-specific entries (#1248):
+
+- The client looks up `{os}-{arch}-{installer}` before `{os}-{arch}`, using the bundle type compiled into the installed binary.
+- `latest.json` therefore carries `linux-x86_64-deb`, `linux-x86_64-rpm` and `windows-x86_64-msi`, each pointing at that release's signed `.deb`, `.rpm` or `.msi`.
+- The generic `linux-x86_64` (AppImage), `windows-x86_64` (NSIS), `darwin-aarch64` and `darwin-x86_64` entries serve every other install.
+- Before v1.29.6 the per-installer entries were missing. `.deb` and `.rpm` installs were offered the AppImage, which their installer rejects, and MSI installs were offered the NSIS installer.
 
 Rollback:
 

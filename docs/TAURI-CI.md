@@ -43,7 +43,7 @@ Scope: Rust crates reachable from the desktop crate through normal dependency ed
 
 For a **`workflow_dispatch` on protected `main`**, the workflow also signs a deterministic throwaway payload with the configured updater secret, verifies it against the public key in `tauri.conf.json`, and proves tampered-payload and wrong-key signatures are rejected. This preflight publishes no assets. Manual matrix builds continue to disable updater bundle signing.
 
-On a **`v*` tag**, each matrix job cryptographically verifies every updater-signed target package against the public key in `tauri.conf.json` before uploading its bundle. After the annotated tag and exact-ref OSV gates pass, the `release` job requires every matrix installer, required sidecar signature, four per-target SBOMs and four notices files. It preserves separate bundle directories so duplicate basenames cannot be overwritten during collection, and generates and validates all four `latest.json` updater entries before any public release is created. GitHub first receives the complete set as a **draft**; the job reads the uploaded asset inventory and SHA-256 digests back and publishes the draft only when they exactly match the validated local files. It then reads back the published tag state and final inventory. Missing, extra, mislabeled, empty, mismatched, or cryptographically invalid assets fail closed and leave the release unpublished.
+On a **`v*` tag**, each matrix job cryptographically verifies every updater-signed target package against the public key in `tauri.conf.json` before uploading its bundle. After the annotated tag and exact-ref OSV gates pass, the `release` job requires every matrix installer, required sidecar signature, four per-target SBOMs and four notices files. It preserves separate bundle directories so duplicate basenames cannot be overwritten during collection, and generates and validates all seven `latest.json` updater entries (four platforms plus the `.deb`, `.rpm` and MSI installer entries, #1248) before any public release is created. GitHub first receives the complete set as a **draft**; the job reads the uploaded asset inventory and SHA-256 digests back and publishes the draft only when they exactly match the validated local files. It then reads back the published tag state and final inventory. Missing, extra, mislabeled, empty, mismatched, or cryptographically invalid assets fail closed and leave the release unpublished.
 
 This workflow is **independent** of the web PWA pipeline ([`docs/CI.md`](CI.md)); it does not gate GitHub Pages deploy.
 
@@ -136,7 +136,8 @@ Complete these steps once before pushing the first signed release tag:
    - tauri-bundle-macos-latest  → `_aarch64.dmg` + `WorldScript Studio.app.tar.gz` + .sig
    - tauri-bundle-macos-26-intel → `_x64.dmg` + `WorldScript Studio_x64.app.tar.gz` + .sig
    - latest.json  (auto-updater manifest with linux-x86_64, windows-x86_64, darwin-aarch64 and
-     darwin-x86_64 entries; the release guard requires all four)
+     darwin-x86_64 entries plus linux-x86_64-deb, linux-x86_64-rpm and windows-x86_64-msi; the
+     release guard requires all seven)
 
 5. Download the installer for your OS, install the app, open it.
 
@@ -192,7 +193,6 @@ See [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) for full secrets reference and p
 
 ## Follow-ups (not automated here)
 
-- macOS notarization requires `APPLE_*` secrets — see [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) § macOS code signing.
-- Windows Authenticode signing requires a CA-issued Authenticode certificate — track in [`TODO.md`](../TODO.md).
+- macOS notarization and Windows Authenticode are **deferred**: the credentials are unavailable, and this is not a release blocker (#574). See [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) § Code signing.
 - `tauri-intel-qualification.yml` remains a dispatch-only Intel lane for checks between releases; the release itself builds Intel in the `bundle` matrix. See `docs/native/INTEL-MACOS-QUALIFICATION.md`.
 ```
