@@ -282,3 +282,44 @@ describe('VoiceActivityCoordinator', () => {
     });
   });
 });
+
+// #556 review: a flush still draining must finish before stop() returns, so its command result never lands
+// after dictation has taken the STT engine over.
+describe('VoiceActivityCoordinator stop during a flush (#556)', () => {
+  it('stop() waits for a pending flush and does not restart STT', async () => {
+    let drain!: () => void;
+    const drained = new Promise<void>((resolve) => {
+      drain = resolve;
+    });
+    const vad = makeVad({
+      processChunk: vi
+        .fn()
+        .mockResolvedValueOnce({ startMs: 0, endMs: 20, isSpeech: true })
+        .mockResolvedValueOnce({ startMs: 20, endMs: 40, isSpeech: false })
+        .mockResolvedValue(null),
+    });
+    const stt = makeStt({ stop: vi.fn(() => drained) });
+    const coordinator = new VoiceActivityCoordinator(vad, stt);
+    await coordinator.start(vi.fn(), vi.fn());
+    const frame = new Float32Array(4096).fill(0.1);
+    const fire = () =>
+      (mockScriptProcessor.onaudioprocess as (e: unknown) => void)({
+        inputBuffer: { getChannelData: () => frame },
+      });
+    fire();
+    await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(1));
+    fire();
+    await vi.waitFor(() => expect(stt.stop).toHaveBeenCalledTimes(1));
+
+    let stopped = false;
+    const stopping = coordinator.stop().then(() => {
+      stopped = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+    drain();
+    await stopping;
+    expect(stt.start).toHaveBeenCalledTimes(1);
+  });
+});

@@ -1,7 +1,7 @@
 {
-  "total": 46,
+  "total": 39,
   "byRule": {
-    "lint/suspicious/noExplicitAny": 30,
+    "lint/suspicious/noExplicitAny": 23,
     "lint/correctness/useExhaustiveDependencies": 5,
     "lint/a11y/useSemanticElements": 5,
     "lint/security/noDangerouslySetInnerHtml": 2,
