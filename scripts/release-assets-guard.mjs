@@ -5,7 +5,7 @@ import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
-const PLATFORMS = ['linux-x86_64', 'windows-x86_64', 'darwin-aarch64'];
+const PLATFORMS = ['linux-x86_64', 'windows-x86_64', 'darwin-aarch64', 'darwin-x86_64'];
 const SIGNED_ASSET_KEYS = [
   'linuxDeb',
   'linuxRpm',
@@ -13,11 +13,13 @@ const SIGNED_ASSET_KEYS = [
   'windowsSetup',
   'windowsMsi',
   'macUpdater',
+  'macIntelUpdater',
 ];
 const PLATFORM_ASSETS = [
   ['linux-x86_64', 'linuxAppImage'],
   ['windows-x86_64', 'windowsSetup'],
   ['darwin-aarch64', 'macUpdater'],
+  ['darwin-x86_64', 'macIntelUpdater'],
 ];
 
 function releasePatterns(version) {
@@ -30,6 +32,9 @@ function releasePatterns(version) {
     windowsMsi: new RegExp(`^WorldScript[ .]Studio_${escaped}_x64_en-US\\.msi$`),
     macDmg: new RegExp(`^WorldScript[ .]Studio_${escaped}_aarch64\\.dmg$`),
     macUpdater: /^WorldScript[ .]Studio\.app\.tar\.gz$/,
+    // #507: the Intel leg renames its payload, which Tauri names like the Apple Silicon one, before upload.
+    macIntelDmg: new RegExp(`^WorldScript[ .]Studio_${escaped}_x64\\.dmg$`),
+    macIntelUpdater: /^WorldScript[ .]Studio_x64\.app\.tar\.gz$/,
     linuxSbom: new RegExp(`^worldscript-studio-${escaped}-x86_64-unknown-linux-gnu\\.cdx\\.json$`),
     linuxNotices: new RegExp(
       `^worldscript-studio-${escaped}-x86_64-unknown-linux-gnu\\.third-party-notices\\.txt$`,
@@ -41,6 +46,10 @@ function releasePatterns(version) {
     macSbom: new RegExp(`^worldscript-studio-${escaped}-aarch64-apple-darwin\\.cdx\\.json$`),
     macNotices: new RegExp(
       `^worldscript-studio-${escaped}-aarch64-apple-darwin\\.third-party-notices\\.txt$`,
+    ),
+    macIntelSbom: new RegExp(`^worldscript-studio-${escaped}-x86_64-apple-darwin\\.cdx\\.json$`),
+    macIntelNotices: new RegExp(
+      `^worldscript-studio-${escaped}-x86_64-apple-darwin\\.third-party-notices\\.txt$`,
     ),
   };
 }
@@ -336,6 +345,7 @@ function manifestForRelease(version, repository, selected, signatures) {
       'linux-x86_64': updater('linuxAppImage'),
       'windows-x86_64': updater('windowsSetup'),
       'darwin-aarch64': updater('macUpdater'),
+      'darwin-x86_64': updater('macIntelUpdater'),
     },
   };
 }
@@ -355,7 +365,7 @@ async function runGenerateMode(version, directory, repository) {
   });
   if (!result.ok) return report(result);
   await writeFile(join(directory, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  console.log('generated and validated latest.json for all three signed updater platforms');
+  console.log('generated and validated latest.json for all four signed updater platforms');
 }
 
 async function readManifest(directory) {
