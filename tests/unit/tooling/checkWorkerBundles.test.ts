@@ -51,12 +51,13 @@ describe('worker bundle guard (#1272)', () => {
     ]);
   });
 
-  it('runs in the CI build job right after the production build', () => {
-    const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
-    const build = ci.indexOf('run: pnpm run build');
-    const guard = ci.indexOf('run: node scripts/check-worker-bundles.mjs dist');
-    expect(build).toBeGreaterThan(-1);
-    expect(guard).toBeGreaterThan(build);
+  // postbuild runs after every `pnpm run build`: the CI build job, the Docker build and Tauri's beforeBuildCommand.
+  it('runs after every production build', () => {
+    const scripts = (
+      JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }
+    ).scripts;
+    expect(scripts['build']).toBe('vite build');
+    expect(scripts['postbuild']).toBe('node scripts/check-worker-bundles.mjs dist');
   });
 });
 
