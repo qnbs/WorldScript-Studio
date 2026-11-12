@@ -19,11 +19,10 @@ The desktop app ships with [`tauri-plugin-updater`](https://v2.tauri.app/plugin/
 2. **Set `plugins.updater.active` to `true`** after you publish signed update metadata (`latest.json`) with each release.
 
 3. **CI signing** — the Tauri workflow passes optional secrets (see [`.github/workflows/tauri-build.yml`](../.github/workflows/tauri-build.yml)):
-
    - `TAURI_SIGNING_PRIVATE_KEY` — private key material for signing bundles / updater artifacts.
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — password for the key file, if used.
 
-4. **Endpoints** — default endpoint points at the GitHub Releases static URL pattern for `latest.json`. Adjust if you host updates elsewhere (must be HTTPS in production).
+4. **Endpoints** — the only endpoint is the GitHub Releases URL `releases/latest/download/latest.json`. The release job generates that file with `scripts/release-assets-guard.mjs` and uploads it as a release asset. The former GitHub Pages mirror was never produced and answered 404, so it was removed (#1214). A second endpoint may be added only together with a release step that publishes a guard-validated manifest there. `tests/unit/tooling/updaterEndpoints.test.ts` and `src-tauri/tests/updater_config.rs` pin the list. Endpoints must use HTTPS.
 
 ## GitHub Secrets checklist
 
@@ -31,21 +30,21 @@ Set these in **Settings → Secrets and variables → Actions** before the first
 
 ### Required for all platforms
 
-| Secret | Value |
-|--------|-------|
-| `TAURI_SIGNING_PRIVATE_KEY` | Output of `pnpm exec tauri signer generate` — the private key string (starts with `untrusted comment:`) |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password used when generating the key, or empty string if none |
+| Secret                               | Value                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `TAURI_SIGNING_PRIVATE_KEY`          | Output of `pnpm exec tauri signer generate` — the private key string (starts with `untrusted comment:`) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password used when generating the key, or empty string if none                                          |
 
 ### macOS code signing & notarization
 
-| Secret | Value |
-|--------|-------|
-| `APPLE_CERTIFICATE` | Base64-encoded `.p12` Developer ID Application certificate |
-| `APPLE_CERTIFICATE_PASSWORD` | Password for the `.p12` file |
-| `APPLE_SIGNING_IDENTITY` | Certificate Common Name, e.g. `Developer ID Application: Acme Corp (TEAMID)` |
-| `APPLE_ID` | Apple ID email used for notarization |
-| `APPLE_PASSWORD` | App-specific password generated at appleid.apple.com |
-| `APPLE_TEAM_ID` | 10-character Apple team ID shown in the Developer portal |
+| Secret                       | Value                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `APPLE_CERTIFICATE`          | Base64-encoded `.p12` Developer ID Application certificate                   |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for the `.p12` file                                                 |
+| `APPLE_SIGNING_IDENTITY`     | Certificate Common Name, e.g. `Developer ID Application: Acme Corp (TEAMID)` |
+| `APPLE_ID`                   | Apple ID email used for notarization                                         |
+| `APPLE_PASSWORD`             | App-specific password generated at appleid.apple.com                         |
+| `APPLE_TEAM_ID`              | 10-character Apple team ID shown in the Developer portal                     |
 
 macOS signing is skipped automatically if `APPLE_CERTIFICATE` is not set (the workflow uses `if: env.APPLE_CERTIFICATE != ''`). Add the conditional to the workflow step when ready.
 
@@ -53,10 +52,10 @@ macOS signing is skipped automatically if `APPLE_CERTIFICATE` is not set (the wo
 
 Windows signing requires an Authenticode certificate from a CA (e.g. DigiCert, Sectigo). The exact secret names depend on the signing tool configured in the workflow. Common pattern with `signtool`:
 
-| Secret | Value |
-|--------|-------|
-| `WINDOWS_CERTIFICATE` | Base64-encoded `.pfx` certificate file |
-| `WINDOWS_CERTIFICATE_PASSWORD` | Password for the `.pfx` file |
+| Secret                         | Value                                  |
+| ------------------------------ | -------------------------------------- |
+| `WINDOWS_CERTIFICATE`          | Base64-encoded `.pfx` certificate file |
+| `WINDOWS_CERTIFICATE_PASSWORD` | Password for the `.pfx` file           |
 
 Add the signing step to the Windows matrix leg in `.github/workflows/tauri-build.yml` when you have a certificate.
 
@@ -64,5 +63,29 @@ Add the signing step to the Windows matrix leg in `.github/workflows/tauri-build
 
 - **Windows**: Authenticode signing in CI (certificate in secrets) — configure via environment variables expected by your signing tool / Tauri bundler; document the exact variable names your certificate provider uses.
 - **macOS**: Apple Developer ID + `codesign` + notarization — typically requires `APPLE_*` secrets and is configured outside this repo's defaults.
+
+## Version binding and rollback trust (#1215)
+
+What the client trusts:
+
+- **The signature, not the manifest.** `latest.json` is not signed. The client trusts a payload only if its minisign signature verifies against `plugins.updater.pubkey`.
+- **The signed version.** The Tauri signer writes the app version into the signature's trusted comment (`timestamp:…<TAB>file:…<TAB>version:1.29.5`). The global signature covers that comment.
+- **`requireSignedVersion: true`.** The client rejects a payload whose signature binds no version, or a version other than the one the manifest announces. Without the flag, an unbound signature would still pass. Every release up to v1.29.2 is signed without a version, so a manipulated manifest could otherwise announce a new version number and serve one of those older, validly signed packages.
+- **`allowDowngrades` stays off.** The client installs only a version newer than the running one.
+
+What the release enforces:
+
+- `scripts/release-assets-guard.mjs` reads every updater signature the way the client does: the third line of the decoded signature, then its first tab-separated `version:` field.
+- The release fails before publishing unless each signature binds exactly the release version.
+- `src-tauri/tests/updater_config.rs` deserializes `plugins.updater` with the plugin's own `Config`, so a misspelt flag cannot ship silently.
+
+Rollback:
+
+- **Fix forward.** Clients never step back to an older version. To withdraw a bad release, publish a new, higher version with the fix.
+- **No re-signing.** Old releases are not re-signed with a version. Clients that enforce the binding simply never accept them.
+- **Older clients** do not set the flag, so they accept an unbound signature until they update. Beyond that, it depends on the updater plugin they ship:
+  - v1.29.2 to v1.29.5 (`tauri-plugin-updater` 2.12.0 and 2.14.1) still reject a signed version that differs from the announced one;
+  - v1.29.1 and earlier (2.11.0 and older) do not compare the signed version at all.
+- **OS-level code signing and notarization** are a separate trust layer, tracked in #574.
 
 See also [`docs/TAURI-CI.md`](TAURI-CI.md) for the release artifact pipeline and first-release checklist.

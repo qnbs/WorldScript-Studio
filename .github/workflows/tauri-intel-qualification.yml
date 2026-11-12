@@ -15,8 +15,9 @@ concurrency:
 
 jobs:
   qualify:
-    name: Build qualification (macos-15-intel)
-    runs-on: macos-15-intel
+    name: Build qualification (macos-26-intel)
+    # QNBS-v3: macos-26-intel is GitHub's standard x64 macOS 26 label; it provisioned and built a native x86_64 bundle on 2026-11-11 (#507).
+    runs-on: macos-26-intel
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,9 +38,20 @@ jobs:
       - name: Install macOS dependencies (create-dmg)
         run: brew install create-dmg
 
+      # QNBS-v3: the x86_64-apple-darwin inventory must build like the release targets' do (#871), so promotion needs no new notices work.
+      - name: Generate third-party notices and SBOM
+        id: third_party
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/generate-third-party-inventory.mjs --out third-party
+          cat third-party/*.third-party-notices.txt | sed -n '/^Licenses flagged/,/^------/p' >> "$GITHUB_STEP_SUMMARY"
+
       # QNBS-v3: qualification-only, no updater secrets — disables updater artifacts, never publishes.
       - name: Build Tauri app (qualification, no updater artifacts)
         shell: bash
+        env:
+          NOTICES_FILE: ${{ steps.third_party.outputs.notices_file }}
         run: |
           set -euo pipefail
           if ! command -v jq &>/dev/null; then
@@ -48,15 +60,47 @@ jobs:
           fi
           jq '.bundle.createUpdaterArtifacts = false' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
           mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
-          echo "Building Tauri app for macos-15-intel (qualification only)..."
-          pnpm exec tauri build
+          # QNBS-v3: embed the notices exactly like the release build does, so the qualified bundle ships THIRD_PARTY_NOTICES.txt too.
+          test -s "third-party/${NOTICES_FILE}"
+          RESOURCES="$(jq -cn --arg src "../third-party/${NOTICES_FILE}" '{bundle: {resources: {($src): "THIRD_PARTY_NOTICES.txt"}}}')"
+          echo "Building Tauri app for macos-26-intel (qualification only)..."
+          pnpm exec tauri build --config "$RESOURCES"
           echo "Tauri build completed successfully"
+
+      # QNBS-v3: the qualification claim is a native x86_64 bundle whose DMG mounts and contains that app, checked like the release leg (#507).
+      - name: Verify the macOS bundle architecture and DMG
+        shell: bash
+        env:
+          EXPECTED_ARCH: x86_64
+        run: |
+          set -euo pipefail
+          bundle=src-tauri/target/release/bundle
+          app="$(find "$bundle/macos" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app" || { echo "::error::no .app in $bundle/macos"; exit 1; }
+          exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+          archs="$(lipo -archs "$app/Contents/MacOS/$exe")"
+          echo "app=$app executable=$exe archs=$archs expected=$EXPECTED_ARCH runner=$(uname -m)"
+          [ "$archs" = "$EXPECTED_ARCH" ] || { echo "::error::bundle is $archs, expected $EXPECTED_ARCH"; exit 1; }
+          dmg="$(find "$bundle/dmg" -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -n "$dmg" || { echo "::error::no .dmg in $bundle/dmg"; exit 1; }
+          echo "dmg=$(basename "$dmg")"
+          hdiutil verify "$dmg"
+          mnt="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
+          trap 'hdiutil detach "$mnt" >/dev/null || true' EXIT
+          mounted="$(find "$mnt" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$mounted" || { echo "::error::the DMG contains no .app"; exit 1; }
+          mounted_archs="$(lipo -archs "$mounted/Contents/MacOS/$exe")"
+          [ "$mounted_archs" = "$EXPECTED_ARCH" ] || { echo "::error::the DMG app is $mounted_archs, expected $EXPECTED_ARCH"; exit 1; }
+          echo "DMG mounts and contains a native $EXPECTED_ARCH app"
 
       # QNBS-v3: a missing bundle means the qualification claim itself is false — error, not warn.
       - name: Upload bundle directory (qualification evidence, not a release asset)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: tauri-bundle-macos-15-intel-qualification
-          path: src-tauri/target/release/bundle/
+          name: tauri-bundle-macos-26-intel-qualification
+          path: |
+            src-tauri/target/release/bundle/
+            third-party/
           if-no-files-found: error
           retention-days: 14

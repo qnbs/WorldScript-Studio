@@ -139,6 +139,8 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: .nvmrc
+          # QNBS-v3: newest patch of the .nvmrc major, like .github/actions/setup (#1245).
+          check-latest: true
       - name: Verify Tauri plugin Rust/npm version parity
         run: node scripts/check-tauri-plugin-versions.mjs
 
@@ -165,9 +167,9 @@ jobs:
           cache-all-crates: true
           prefix-key: "v1-updater-signing-probe"
       - name: Install Linux dependencies for the configured verifier example
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+        # QNBS-v3: bounded and mirror-tolerant; an unresolvable azure mirror once used up the whole 45-minute job timeout.
+        timeout-minutes: 15
+        run: bash scripts/ci/apt-install.sh libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - name: Verify exact main source and write a non-secret probe payload
         env:
           EXPECTED_SHA: ${{ github.sha }}
@@ -223,7 +225,9 @@ jobs:
           # retiring Intel-hosted macOS runners; macos-latest (Apple Silicon) is the only macOS
           # bundle target until a working Intel option exists again. Native Intel-Mac builds are
           # tracked as a re-opened follow-up, not silently dropped.
+          # QNBS-v3: arch is what the bundle check below enforces; native x86_64 builds qualify in tauri-intel-qualification.yml on macos-26-intel (#507).
           - os: macos-latest
+            arch: arm64
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -244,9 +248,9 @@ jobs:
 
       - name: Install Linux dependencies (WebKitGTK)
         if: contains(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+        # QNBS-v3: bounded and mirror-tolerant; an unresolvable azure mirror once used up the whole 45-minute job timeout.
+        timeout-minutes: 15
+        run: bash scripts/ci/apt-install.sh libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - name: Install macOS dependencies (create-dmg)
         if: contains(matrix.os, 'macos')
@@ -351,6 +355,34 @@ jobs:
               exit 1
               ;;
           esac
+
+      # QNBS-v3: each macOS leg must build a native bundle of its declared arch, and its DMG must mount and contain that app (#507).
+      - name: Verify the macOS bundle architecture and DMG
+        if: contains(matrix.os, 'macos')
+        shell: bash
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          bundle=src-tauri/target/release/bundle
+          app="$(find "$bundle/macos" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app" || { echo "::error::no .app in $bundle/macos"; exit 1; }
+          exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+          archs="$(lipo -archs "$app/Contents/MacOS/$exe")"
+          echo "app=$app executable=$exe archs=$archs expected=$EXPECTED_ARCH runner=$(uname -m)"
+          [ "$archs" = "$EXPECTED_ARCH" ] || { echo "::error::bundle is $archs, expected $EXPECTED_ARCH"; exit 1; }
+          dmg="$(find "$bundle/dmg" -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -n "$dmg" || { echo "::error::no .dmg in $bundle/dmg"; exit 1; }
+          echo "dmg=$(basename "$dmg")"
+          hdiutil verify "$dmg"
+          mnt="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
+          trap 'hdiutil detach "$mnt" >/dev/null || true' EXIT
+          mounted="$(find "$mnt" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$mounted" || { echo "::error::the DMG contains no .app"; exit 1; }
+          mounted_archs="$(lipo -archs "$mounted/Contents/MacOS/$exe")"
+          [ "$mounted_archs" = "$EXPECTED_ARCH" ] || { echo "::error::the DMG app is $mounted_archs, expected $EXPECTED_ARCH"; exit 1; }
+          echo "DMG mounts and contains a native $EXPECTED_ARCH app"
 
       - name: Upload bundle directory
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
