@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/TypeScript-tsgo_native_preview-3178C6?logo=typescript&logoColor=white" alt="TypeScript native preview (tsgo)">
   <img src="https://img.shields.io/badge/Desktop-Tauri_2-FFC131?logo=tauri&logoColor=black" alt="Tauri 2">
   <img src="https://img.shields.io/badge/i18n-19_locales_%2F_2963_keys-0EA5E9" alt="19 locales — 2963 keys">
-  <img src="https://img.shields.io/badge/Tests-8828%2B_%2F_668_files-22C55E" alt="8828+ tests / 668 files">
+  <img src="https://img.shields.io/badge/Tests-8830%2B_%2F_668_files-22C55E" alt="8830+ tests / 668 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github&label=CI" alt="CI status">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="MIT License">
@@ -766,12 +766,19 @@ The Tauri v2 shell adds:
 
 ### Release trust
 
-Tauri updater artifacts can use Minisign-compatible updater signatures when the repository signing secrets are configured.
+Desktop releases carry three verifiable integrity layers:
 
-That is **not the same as operating-system code signing**:
-- Windows Authenticode requires its own certificate/process;
-- macOS Developer ID signing/notarization requires Apple credentials;
-- updater integrity signatures do not make an unsigned installer OS-trusted.
+- **A signed Git tag** on protected `main`.
+- **A SHA-256 digest for every release asset**, shown on the GitHub release page. Compare it with `sha256sum <file>` (Linux), `shasum -a 256 <file>` (macOS) or `Get-FileHash <file>` (Windows).
+- **Minisign updater signatures** (`.sig`) bound to the release version, checked by the app before it installs an update and by the release workflow before it publishes.
+
+**The installers are not signed at operating-system level.** There is no Apple Developer ID signature or notarization and no Windows Authenticode signature. The credentials are not available, and the maintainer has deferred this (#574). As a result:
+
+- **macOS** blocks the first launch. After checking the download, allow it once under _System Settings → Privacy & Security → Open Anyway_.
+- **Windows** shows SmartScreen and an "unknown publisher" prompt. After checking the download, choose _More info → Run anyway_.
+- **Linux** packages have no OS publisher signature either; verify them with the digest above.
+
+Do not turn off Gatekeeper or SmartScreen globally. An updater `.sig` does not make an installer OS-signed.
 
 See:
 - [`docs/TAURI-CI.md`](docs/TAURI-CI.md)
@@ -807,7 +814,7 @@ The normal web PR pipeline is not the complete native release qualification surf
 | DOCX                 | `docx` + JSZip                                           | Word-compatible export                                         |
 | PWA                  | Service Worker + Web App Manifest                        | Offline shell/installability                                   |
 | i18n                 | Custom React i18n context                                | 2963 keys × 19 locales                                         |
-| Testing              | Vitest 5.x (8828+ tests / 668 files) + Playwright        | Unit/integration/E2E                                           |
+| Testing              | Vitest 5.x (8830+ tests / 668 files) + Playwright        | Unit/integration/E2E                                           |
 | Quality              | Biome + tsgo + CodeQL/security tooling                   | Static and CI gates                                            |
 | Desktop              | Tauri 2                                                  | Current native shell                                           |
 
@@ -884,7 +891,7 @@ WorldScript-Studio/
 ├── locales/                 # Source locale trees
 ├── public/                  # PWA assets, manifest, SW, runtime locale bundles
 ├── tests/
-│   ├── unit/                # Vitest unit tests (the 8828+ total also includes components/ and packages/*/tests; tests/e2e is excluded)
+│   ├── unit/                # Vitest unit tests (the 8830+ total also includes components/ and packages/*/tests; tests/e2e is excluded)
 │   └── e2e/                 # Playwright
 ├── docs/                    # Canonical product/engineering documentation + ADRs
 ├── src-tauri/               # Tauri v2 desktop shell / Rust
@@ -1029,7 +1036,7 @@ Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendo
 
 Current source-synchronized README metrics:
 
-- **8828+ unit tests** across **668 test files**
+- **8830+ unit tests** across **668 test files**
 - i18n: **2963 keys × 19 locales**
 
 CI remains authoritative for actual pass/fail and live coverage.

@@ -61,13 +61,22 @@ if (actualNodeMajor < minimumNodeMajor) {
   process.exit(1);
 }
 
-// Visible, not blocking: the engines range stays open (#1078), and CI cannot get a patch before actions/node-versions publishes it.
+// Visible, not blocking, except on a release tag: the engines range stays open (#1078) and CI cannot get a patch before
+// actions/node-versions publishes it, but a released artifact must never be built below its line's security release.
 const nodeSecurityFloor = nodeBelowSecurityFloor(process.versions.node);
 if (nodeSecurityFloor) {
   const message = `Node ${process.versions.node} is below the ${nodeSecurityFloor} security release of its line (#1245); install the newest patch (setup-node check-latest takes it once actions/node-versions publishes it).`;
-  console.warn(
-    process.env.GITHUB_ACTIONS === 'true' ? `::warning::${message}` : `[toolchain] ${message}`,
-  );
+  const onActions = process.env.GITHUB_ACTIONS === 'true';
+  // Only a tag push builds release artifacts; a manual dispatch on a tag ref builds unsigned test bundles.
+  if (
+    onActions &&
+    process.env.GITHUB_EVENT_NAME === 'push' &&
+    process.env.GITHUB_REF_TYPE === 'tag'
+  ) {
+    console.error(`::error::${message} A release tag build stops here.`);
+    process.exit(1);
+  }
+  console.warn(onActions ? `::warning::${message}` : `[toolchain] ${message}`);
 }
 
 const isDirectHook = process.argv.includes('--hook');
