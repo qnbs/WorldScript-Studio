@@ -67,12 +67,13 @@ const nodeSecurityFloor = nodeBelowSecurityFloor(process.versions.node);
 if (nodeSecurityFloor) {
   const message = `Node ${process.versions.node} is below the ${nodeSecurityFloor} security release of its line (#1245); install the newest patch (setup-node check-latest takes it once actions/node-versions publishes it).`;
   const onActions = process.env.GITHUB_ACTIONS === 'true';
-  // Only a tag push builds release artifacts; a manual dispatch on a tag ref builds unsigned test bundles.
-  if (
+  // Only a `v*` tag push builds release artifacts (tauri-build's release job requires refs/tags/v); other tags and a
+  // manual dispatch on a tag ref build none and only warn.
+  const releaseTagPush =
     onActions &&
     process.env.GITHUB_EVENT_NAME === 'push' &&
-    process.env.GITHUB_REF_TYPE === 'tag'
-  ) {
+    (process.env.GITHUB_REF ?? '').startsWith('refs/tags/v');
+  if (releaseTagPush) {
     console.error(`::error::${message} A release tag build stops here.`);
     process.exit(1);
   }
