@@ -141,7 +141,8 @@ describe('VoiceModelDownloadModal', () => {
 
   it('shows model description with correct size for TTS (Kokoro)', () => {
     render(<VoiceModelDownloadModal {...defaultProps} modelType="tts" />);
-    expect(screen.getByText(/Downloading.*Kokoro.*15 MB/)).toBeInTheDocument();
+    // #556: the real q8 file (model_quantized.onnx) measures 92.4 MB, not the 15 MB the dialog used to promise.
+    expect(screen.getByText(/Downloading.*Kokoro.*92 MB/)).toBeInTheDocument();
   });
 
   it('renders cancel button', () => {
