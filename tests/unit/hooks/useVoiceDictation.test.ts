@@ -134,4 +134,28 @@ describe('useVoiceDictation', () => {
     rerender();
     expect(setContent).toHaveBeenCalledWith('Text hello world');
   });
+
+  // #556: appendVoiceTranscript joins results with a space; the editor must not get a second one.
+  it('puts one space between two dictated results', () => {
+    const getContent = vi.fn().mockReturnValue('Text');
+    const setContent = vi.fn();
+    const { rerender } = renderInactive(getContent, setContent);
+    mockDictationActive = true;
+    mockTranscript = 'hello';
+    rerender();
+    getContent.mockReturnValue('Text hello');
+    mockTranscript = 'hello world';
+    rerender();
+    expect(setContent).toHaveBeenLastCalledWith('Text hello world');
+  });
+
+  it('ignores a result that only adds whitespace', () => {
+    const getContent = vi.fn().mockReturnValue('Text');
+    const setContent = vi.fn();
+    const { rerender } = renderInactive(getContent, setContent);
+    mockDictationActive = true;
+    mockTranscript = '   ';
+    rerender();
+    expect(setContent).not.toHaveBeenCalled();
+  });
 });
