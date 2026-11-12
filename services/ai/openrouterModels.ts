@@ -43,6 +43,8 @@ interface CacheEntry {
 
 // QNBS-v3 (#1127): a keyed catalog stays in memory for that exact key only; only the anonymous catalog is persisted.
 let authedCatalog: { apiKey: string; entry: CacheEntry } | null = null;
+// Bumped by clearOpenRouterModelCache(): a fetch started before a clear must not repopulate the cache.
+let catalogGeneration = 0;
 
 function isFresh(entry: CacheEntry): boolean {
   return Date.now() - entry.fetchedAt <= CACHE_TTL_MS;
@@ -125,11 +127,26 @@ function authedCatalogFor(apiKey: string): CacheEntry | null {
   return held && isFresh(held) ? held : null;
 }
 
+// QNBS-v3 (#1127): a keyed catalog persisted by an earlier version is never read again, so it is removed from storage.
+function purgeLegacyAuthedCatalog(): void {
+  if (!isBrowser()) return;
+  try {
+    const raw = window.localStorage.getItem(CACHE_KEY);
+    if (raw && (JSON.parse(raw) as { authed?: unknown }).authed === true) {
+      window.localStorage.removeItem(CACHE_KEY);
+    }
+  } catch {
+    // An unreadable entry is ignored by readCache() and replaced on the next anonymous write.
+  }
+}
+
 function cachedCatalog(key: string): CacheEntry | null {
+  purgeLegacyAuthedCatalog();
   return key ? authedCatalogFor(key) : readCache(false);
 }
 
-function rememberCatalog(key: string, models: OpenRouterModel[]): void {
+function rememberCatalog(key: string, models: OpenRouterModel[], generation: number): void {
+  if (generation !== catalogGeneration) return;
   if (key) {
     authedCatalog = { apiKey: key, entry: { fetchedAt: Date.now(), models, authed: true } };
   } else {
@@ -153,6 +170,7 @@ export async function fetchOpenRouterModels(
   // QNBS-v3 (#1127): the cloud AI policy is checked before any catalog is returned, cached or fetched.
   await assertCloudAiAllowed('openrouter');
   const cached = cachedCatalog(key);
+  const generation = catalogGeneration;
   if (cached) {
     logger.debug('OpenRouter model cache hit');
     return cached.models;
@@ -177,7 +195,7 @@ export async function fetchOpenRouterModels(
     .filter((m): m is OpenRouterModel => m !== null)
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  rememberCatalog(key, models);
+  rememberCatalog(key, models, generation);
   return models;
 }
 
@@ -235,6 +253,7 @@ export async function validateOpenRouterKey(
 /** QNBS-v3: Clear the local model cache (e.g. after key change). */
 export function clearOpenRouterModelCache(): void {
   authedCatalog = null;
+  catalogGeneration += 1;
   if (!isBrowser()) return;
   try {
     window.localStorage.removeItem(CACHE_KEY);
