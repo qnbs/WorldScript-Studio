@@ -12,6 +12,9 @@ import type { TtsEngine, TtsUtterance } from './voiceTypes';
 type TtsPipelineResult = { audio: Float32Array; sampling_rate: number };
 type TtsPipeline = (text: string, opts: Record<string, unknown>) => Promise<TtsPipelineResult>;
 
+/** False until a loader for Kokoro's model type ships; the settings show the Kokoro option disabled meanwhile. */
+export const KOKORO_AVAILABLE = false;
+
 /** Why Kokoro cannot run in this build; logged on fallback and returned by the TTS model download. */
 export const KOKORO_UNAVAILABLE_REASON =
   'Kokoro TTS is not available in this version: its model type (style_text_to_speech_2) needs a phonemizer and model loader that this build does not include.';
@@ -28,7 +31,7 @@ export class KokoroTtsEngine implements TtsEngine {
 
   // QNBS-v3 (#556): truthful availability; every real-runtime evidence run failed with "Unsupported model type style_text_to_speech_2".
   isAvailable(): Promise<boolean> {
-    return Promise.resolve(false);
+    return Promise.resolve(KOKORO_AVAILABLE);
   }
 
   async initialize(): Promise<void> {

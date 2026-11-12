@@ -45,6 +45,9 @@ import { createWakeWordEngine } from './wakeWordEngine';
 
 export type GetStateFn = () => RootState;
 
+/** Config keys that decide which engines exist; changing one rebuilds the engines on the next start. */
+const ENGINE_CONFIG_KEYS = ['preferredSttEngine', 'preferredTtsEngine', 'enableVoiceWasm'] as const;
+
 export interface VoiceServiceConfig {
   preferredSttEngine: 'auto' | 'whisper' | 'webSpeech';
   preferredTtsEngine: 'auto' | 'kokoro' | 'piper' | 'webSpeech';
@@ -74,6 +77,8 @@ export class VoiceCommandService {
 
   private coordinator: VoiceActivityCoordinator | null = null;
   private isInitialized = false;
+  /** Settles when the engines of a replaced engine choice are released; initialize() waits for it. */
+  private engineRelease: Promise<void> = Promise.resolve();
   // QNBS-v3: C-P1 — single-flight guard against re-entrant startListening (rapid PTT / wake-word).
   private isStarting = false;
   private listeningTimer: ReturnType<typeof setTimeout> | null = null;
@@ -136,6 +141,7 @@ export class VoiceCommandService {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   async initialize(): Promise<boolean> {
+    await this.engineRelease;
     if (this.isInitialized) return true;
 
     try {
@@ -512,9 +518,30 @@ export class VoiceCommandService {
   // ── Configuration ──────────────────────────────────────────────────────────
 
   updateConfig(config: Partial<VoiceServiceConfig>): void {
+    const engineChanged = ENGINE_CONFIG_KEYS.some(
+      (key) => key in config && config[key] !== this.config[key],
+    );
     this.config = { ...this.config, ...config };
     this.feedbackService.setFeedbackLevel(this.config.feedbackLevel);
     this.feedbackService.setMuted(this.config.ttsMuted);
+    // QNBS-v3 (#1261): a changed engine choice takes effect; the next start builds the preferred engines instead of reusing the old ones.
+    if (engineChanged && this.isInitialized) {
+      this.isInitialized = false;
+      this.engineRelease = this.releaseEngines();
+    }
+  }
+
+  /** Ends any session on the old engines, then disposes them; never rejects. */
+  private async releaseEngines(): Promise<void> {
+    const engines = [this.sttEngine, this.ttsEngine, this.vadEngine, this.wakeWordEngine];
+    try {
+      await this.stopListening();
+      await this.stopDictation();
+      this.cancelSpeech();
+      await Promise.all(engines.map((engine) => engine?.dispose()));
+    } catch (error) {
+      logger.warn('Releasing the previous voice engines failed', error);
+    }
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────────

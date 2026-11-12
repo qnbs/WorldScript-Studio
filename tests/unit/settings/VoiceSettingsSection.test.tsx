@@ -207,20 +207,28 @@ describe('VoiceSettingsSection engine choice', () => {
     mockTtsEngine = 'auto';
   });
 
-  it.each([
-    ['sttEngine', 'whisper'],
-    ['ttsEngine', 'kokoro'],
-  ])('the local option of %s stores %s', async (field, engineId) => {
+  it('the local speech-recognition option stores whisper', async () => {
     const user = userEvent.setup();
     render(<VoiceSettingsSection />);
     await user.selectOptions(
-      screen.getByLabelText(`settings.voice.${field}`),
+      screen.getByLabelText('settings.voice.sttEngine'),
       'settings.voice.engine.wasm',
     );
     expect(mockHandleSettingChange).toHaveBeenLastCalledWith(
       'voice',
-      expect.objectContaining({ [field]: engineId }),
+      expect.objectContaining({ sttEngine: 'whisper' }),
     );
+  });
+
+  // Kokoro cannot run in this build: its option is visible but cannot be picked, instead of silently becoming Web Speech.
+  it('shows the local text-to-speech option as kokoro, disabled while Kokoro cannot run', () => {
+    render(<VoiceSettingsSection />);
+    const ttsOptions = Array.from(
+      (screen.getByLabelText('settings.voice.ttsEngine') as HTMLSelectElement).options,
+    );
+    const kokoro = ttsOptions.find((candidate) => candidate.value === 'kokoro');
+    expect(kokoro?.textContent).toBe('settings.voice.engine.wasm');
+    expect(kokoro?.disabled).toBe(true);
   });
 
   it('a stored legacy wasm choice still shows as the local option', () => {

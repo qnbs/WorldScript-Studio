@@ -9,6 +9,7 @@ import { useAppDispatch } from '../../app/hooks';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { sttEngineChoice, ttsEngineChoice } from '../../services/voice/engineChoice';
+import { KOKORO_AVAILABLE } from '../../services/voice/kokoroTtsEngine';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Select } from '../ui/Select';
 import { VoiceModelDownloadModal } from '../voice/VoiceModelDownloadModal';
@@ -16,11 +17,16 @@ import { MaturityBadge } from './MaturityBadge';
 import { ToggleSwitch } from './SettingsShared';
 
 // QNBS-v3 (#1261/#556): each select stores a real engine id; the shared 'wasm' matched no engine and fell back to Web Speech.
-function engineOptions(t: (key: string) => string, localEngine: 'whisper' | 'kokoro') {
+function engineOptions(
+  t: (key: string) => string,
+  localEngine: 'whisper' | 'kokoro',
+  localAvailable = true,
+) {
   return [
     { value: 'auto', label: t('settings.voice.engine.auto') },
     { value: 'webSpeech', label: t('settings.voice.engine.webSpeech') },
-    { value: localEngine, label: t('settings.voice.engine.wasm') },
+    // A local engine that cannot run in this build stays visible for a stored choice but cannot be picked.
+    { value: localEngine, label: t('settings.voice.engine.wasm'), disabled: !localAvailable },
   ];
 }
 
@@ -259,7 +265,7 @@ export const VoiceSettingsSection: FC = () => {
                 id={ttsEngineId}
                 value={ttsEngineChoice(voice.ttsEngine)}
                 onChange={(v) => patchVoice({ ttsEngine: ttsEngineChoice(v) })}
-                options={engineOptions(t, 'kokoro')}
+                options={engineOptions(t, 'kokoro', KOKORO_AVAILABLE)}
                 ariaLabel={t('settings.voice.ttsEngine')}
               />
             </div>

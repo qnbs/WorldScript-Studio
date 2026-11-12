@@ -156,6 +156,30 @@ describe('VoiceCommandService', () => {
     });
   });
 
+  // #1261: after initialization a changed engine choice used to be ignored until reload.
+  describe('engine choice changes', () => {
+    it('a changed engine choice takes effect on the next start', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      await service.initialize();
+      const oldEngine = await vi.mocked(createSttEngine).mock.results[0]?.value;
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      await service.initialize();
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+      expect(createSttEngine).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredEngine: 'whisper' }),
+      );
+      expect(oldEngine.dispose).toHaveBeenCalled();
+    });
+
+    it('an unrelated config change keeps the engines', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      await service.initialize();
+      service.updateConfig({ speechRate: 1.2 });
+      await service.initialize();
+      expect(createSttEngine).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('startDictation', () => {
     it('throws error when not initialized and init fails', async () => {
       const failingService = new VoiceCommandService();
