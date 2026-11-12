@@ -1,4 +1,5 @@
 mod commands;
+mod instance_lock;
 mod lora;
 mod pandoc;
 
@@ -156,6 +157,8 @@ pub fn run() {
                 .with_state_flags(tauri_plugin_window_state::StateFlags::all())
                 .build(),
         )
+        // QNBS-v3 (#831): the app-data instance lock lives in managed state for the whole process lifetime.
+        .manage(commands::app_data_instance::AppDataInstance::default())
         .invoke_handler(tauri::generate_handler![
             pandoc::pandoc_markdown_to_epub,
             lora::train_lora,
@@ -167,6 +170,7 @@ pub fn run() {
             commands::task_supervisor::worldscript_task_supervisor_ping,
             commands::task_supervisor::worldscript_task_supervisor_submit,
             commands::project_core::worldscript_project_validate,
+            commands::app_data_instance::worldscript_app_data_admission,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

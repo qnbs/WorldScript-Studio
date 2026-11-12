@@ -1,0 +1,47 @@
+# Hosted proof for #831. The app-data instance lock is an OS lock (flock on Linux and macOS, LockFileEx on
+# Windows) that the OS releases when its holder dies; reclaiming crash-left project locks is only safe because
+# of that. src-tauri/src/instance_lock.rs uses only std, so this compiles it on its own (no Tauri build) and runs
+# its tests on all three desktop platforms, including the test that kills a holder process and takes the lock.
+name: Instance lock platforms
+
+on:
+  pull_request:
+    paths:
+      - 'src-tauri/src/instance_lock.rs'
+      - '.github/workflows/instance-lock-platforms.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src-tauri/src/instance_lock.rs'
+      - '.github/workflows/instance-lock-platforms.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: instance-lock-platforms-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  instance-lock:
+    name: 🔒 Instance lock (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compile and run the instance-lock tests (std only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --version
+          ext=""
+          if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
+          bin="${RUNNER_TEMP}/instance_lock_tests${ext}"
+          rustc --edition 2021 --test src-tauri/src/instance_lock.rs -o "$bin"
+          "$bin" --test-threads=1
