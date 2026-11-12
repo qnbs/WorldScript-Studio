@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ConsentRequiredError,
   createSttEngine,
+  LOCAL_STT_UNAVAILABLE_MESSAGE,
   WebSpeechSttEngine,
 } from '../../../services/voice/sttEngine';
 import type { SttResult } from '../../../services/voice/voiceTypes';
@@ -171,8 +172,15 @@ describe('createSttEngine', () => {
     expect(engine.id).toBe('webSpeech');
   });
 
-  it('falls back when preferred engine is unavailable', async () => {
-    const engine = await createSttEngine({ preferredEngine: 'whisper' });
+  // #1261: an explicit on-device choice used to fall back silently to Web Speech, which sends audio to the browser vendor.
+  it('refuses to turn an explicit on-device choice into cloud recognition', async () => {
+    await expect(createSttEngine({ preferredEngine: 'whisper' })).rejects.toThrow(
+      LOCAL_STT_UNAVAILABLE_MESSAGE,
+    );
+  });
+
+  it('falls back to Web Speech only when cloud fallback is allowed', async () => {
+    const engine = await createSttEngine({ preferredEngine: 'whisper', allowCloudFallback: true });
     expect(engine.id).toBe('webSpeech');
   });
 });

@@ -171,7 +171,7 @@ export const VoiceSettingsSection: FC = () => {
                 id={sttEngineId}
                 value={sttEngineChoice(voice.sttEngine)}
                 onChange={(v) => patchVoice({ sttEngine: sttEngineChoice(v) })}
-                options={engineOptions(t, 'whisper')}
+                options={engineOptions(t, 'whisper', featureFlags.enableVoiceWasm)}
                 ariaLabel={t('settings.voice.sttEngine')}
               />
               {/* QNBS-v3: consent clarity — spell out the cloud-vs-on-device privacy tradeoff per engine

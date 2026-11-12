@@ -200,6 +200,10 @@ describe('VoiceSettingsSection', () => {
 
 // #1261/#556: "Local WASM model (offline)" stored 'wasm', which no engine has; STT then fell back to Web Speech (cloud).
 describe('VoiceSettingsSection engine choice', () => {
+  afterEach(() => {
+    mockEnableVoiceWasm = false;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockVoiceEnabled = true;
@@ -208,6 +212,7 @@ describe('VoiceSettingsSection engine choice', () => {
   });
 
   it('the local speech-recognition option stores whisper', async () => {
+    mockEnableVoiceWasm = true;
     const user = userEvent.setup();
     render(<VoiceSettingsSection />);
     await user.selectOptions(
@@ -221,6 +226,22 @@ describe('VoiceSettingsSection engine choice', () => {
   });
 
   // Kokoro cannot run in this build: its option is visible but cannot be picked, instead of silently becoming Web Speech.
+  // #1261: without the local-model flag the factory excludes Whisper, so the offline choice could not be honoured.
+  it.each([
+    [false, true],
+    [true, false],
+  ])(
+    'with the local-model flag %s, the local speech-recognition option is disabled: %s',
+    (flag, disabled) => {
+      mockEnableVoiceWasm = flag;
+      render(<VoiceSettingsSection />);
+      const options = Array.from(
+        (screen.getByLabelText('settings.voice.sttEngine') as HTMLSelectElement).options,
+      );
+      expect(options.find((option) => option.value === 'whisper')?.disabled).toBe(disabled);
+    },
+  );
+
   it('shows the local text-to-speech option as kokoro, disabled while Kokoro cannot run', () => {
     render(<VoiceSettingsSection />);
     const ttsOptions = Array.from(

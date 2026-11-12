@@ -191,6 +191,7 @@ export class VoiceCommandService {
       const engine = await createSttEngine({
         preferredEngine: eco ? 'webSpeech' : this.config.preferredSttEngine,
         enableVoiceWasm: this.config.enableVoiceWasm || eco,
+        allowCloudFallback: this.config.allowCloudFallback,
       });
       this.d(setActiveSttEngine(engine.id));
       this.d(setSttStatus('ready'));

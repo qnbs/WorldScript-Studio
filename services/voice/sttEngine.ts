@@ -144,6 +144,45 @@ export interface SttEngineFactoryOptions {
   webSpeechConsentGranted?: boolean;
   /** When true, tries WasmSttEngine (Whisper) before falling back to Web Speech API. */
   enableVoiceWasm?: boolean;
+  /** settings.voice.allowCloudSttFallback: an explicit on-device choice may fall back to cloud recognition only when true. */
+  allowCloudFallback?: boolean;
+}
+
+/** Thrown instead of silently switching an explicit on-device choice to cloud recognition (#1261). */
+export const LOCAL_STT_UNAVAILABLE_MESSAGE =
+  'Local speech recognition is not available, and cloud fallback is turned off.';
+
+// QNBS-v3: Dynamically import WasmSttEngine — keeps Whisper/ONNX out of main bundle.
+async function loadWasmSttEngine(config: AudioStreamConfig | undefined): Promise<SttEngine | null> {
+  try {
+    const { WasmSttEngine } = await import('./wasmSttEngine');
+    return new WasmSttEngine(config);
+  } catch (err) {
+    logger.warn('[createSttEngine] WasmSttEngine load failed, falling back:', err);
+    return null;
+  }
+}
+
+/** The explicitly preferred engine, or null to try the fallbacks. */
+async function explicitSttEngine(
+  engines: SttEngine[],
+  preferredEngine: VoiceSttEngine,
+  allowCloudFallback: boolean,
+): Promise<SttEngine | null> {
+  const preferred = engines.find((e) => e.id === preferredEngine);
+  if (preferred && (await preferred.isAvailable())) return preferred;
+  logger.warn(`Preferred STT engine ${preferredEngine} unavailable, trying fallbacks`);
+  // QNBS-v3 (#1261): the user chose on-device recognition; never send that audio to a cloud engine unless they allowed it.
+  if (preferredEngine === 'whisper' && !allowCloudFallback)
+    throw new Error(LOCAL_STT_UNAVAILABLE_MESSAGE);
+  return null;
+}
+
+async function firstAvailable(engines: SttEngine[]): Promise<SttEngine | null> {
+  for (const engine of engines) {
+    if (await engine.isAvailable()) return engine;
+  }
+  return null;
 }
 
 export async function createSttEngine(options: SttEngineFactoryOptions = {}): Promise<SttEngine> {
@@ -154,41 +193,20 @@ export async function createSttEngine(options: SttEngineFactoryOptions = {}): Pr
     return harness.stt;
   }
 
-  const {
-    preferredEngine = 'auto',
-    webSpeechConsentGranted = false,
-    enableVoiceWasm = false,
-  } = options;
-
+  const preferredEngine = options.preferredEngine ?? 'auto';
   const engines: SttEngine[] = [];
-
-  // QNBS-v3: Dynamically import WasmSttEngine — keeps Whisper/ONNX out of main bundle.
-  if (enableVoiceWasm && (preferredEngine === 'whisper' || preferredEngine === 'auto')) {
-    try {
-      const { WasmSttEngine } = await import('./wasmSttEngine');
-      engines.push(new WasmSttEngine(options.config));
-    } catch (err) {
-      logger.warn('[createSttEngine] WasmSttEngine load failed, falling back:', err);
-    }
+  if (options.enableVoiceWasm && preferredEngine !== 'webSpeech') {
+    const wasm = await loadWasmSttEngine(options.config);
+    if (wasm) engines.push(wasm);
   }
+  engines.push(new WebSpeechSttEngine(options.webSpeechConsentGranted === true));
 
-  engines.push(new WebSpeechSttEngine(webSpeechConsentGranted));
-
-  if (preferredEngine !== 'auto') {
-    const preferred = engines.find((e) => e.id === preferredEngine);
-    if (preferred && (await preferred.isAvailable())) {
-      logger.info(`STT engine selected: ${preferred.name}`);
-      return preferred;
-    }
-    logger.warn(`Preferred STT engine ${preferredEngine} unavailable, trying fallbacks`);
-  }
-
-  for (const engine of engines) {
-    if (await engine.isAvailable()) {
-      logger.info(`STT engine selected: ${engine.name}`);
-      return engine;
-    }
-  }
-
-  throw new Error('No STT engine available');
+  const selected =
+    (preferredEngine === 'auto'
+      ? null
+      : await explicitSttEngine(engines, preferredEngine, options.allowCloudFallback === true)) ??
+    (await firstAvailable(engines));
+  if (!selected) throw new Error('No STT engine available');
+  logger.info(`STT engine selected: ${selected.name}`);
+  return selected;
 }
