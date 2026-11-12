@@ -41,6 +41,13 @@ interface CacheEntry {
   authed?: boolean | undefined;
 }
 
+// QNBS-v3 (#1127): a keyed catalog stays in memory for that exact key only; only the anonymous catalog is persisted.
+let authedCatalog: { apiKey: string; entry: CacheEntry } | null = null;
+
+function isFresh(entry: CacheEntry): boolean {
+  return Date.now() - entry.fetchedAt <= CACHE_TTL_MS;
+}
+
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && window.localStorage !== undefined;
 }
@@ -113,28 +120,45 @@ function normalizeModel(raw: unknown): OpenRouterModel | null {
   };
 }
 
-/** QNBS-v3: Fetch the OpenRouter model catalog. Uses a 1h localStorage cache. */
+function authedCatalogFor(apiKey: string): CacheEntry | null {
+  const held = authedCatalog?.apiKey === apiKey ? authedCatalog.entry : null;
+  return held && isFresh(held) ? held : null;
+}
+
+function cachedCatalog(key: string): CacheEntry | null {
+  return key ? authedCatalogFor(key) : readCache(false);
+}
+
+function rememberCatalog(key: string, models: OpenRouterModel[]): void {
+  if (key) {
+    authedCatalog = { apiKey: key, entry: { fetchedAt: Date.now(), models, authed: true } };
+  } else {
+    writeCache(models, false);
+  }
+}
+
+function catalogHeaders(key: string): Record<string, string> {
+  return key
+    ? { Accept: 'application/json', Authorization: `Bearer ${key}` }
+    : { Accept: 'application/json' };
+}
+
+/** QNBS-v3: Fetch the OpenRouter model catalog. Anonymous: 1h localStorage cache; with a key: in memory for that key only. */
 export async function fetchOpenRouterModels(
   apiKey?: string | undefined,
 ): Promise<OpenRouterModel[]> {
   // QNBS-v3: Bucket the cache by credential scope (anonymous vs. authenticated) so an anonymously
   // fetched catalog is never served to an authenticated request — without persisting any key data.
-  const authed = Boolean(apiKey?.trim());
-  const cached = readCache(authed);
+  const key = apiKey?.trim() ?? '';
+  // QNBS-v3 (#1127): the cloud AI policy is checked before any catalog is returned, cached or fetched.
+  await assertCloudAiAllowed('openrouter');
+  const cached = cachedCatalog(key);
   if (cached) {
     logger.debug('OpenRouter model cache hit');
     return cached.models;
   }
 
-  // QNBS-v3: Enforce the cloud AI policy before any outbound OpenRouter request.
-  await assertCloudAiAllowed('openrouter');
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-  };
-  if (apiKey?.trim()) {
-    headers['Authorization'] = `Bearer ${apiKey.trim()}`;
-  }
+  const headers = catalogHeaders(key);
 
   const res = await fetch(MODELS_URL, {
     method: 'GET',
@@ -153,7 +177,7 @@ export async function fetchOpenRouterModels(
     .filter((m): m is OpenRouterModel => m !== null)
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  writeCache(models, authed);
+  rememberCatalog(key, models);
   return models;
 }
 
@@ -210,6 +234,7 @@ export async function validateOpenRouterKey(
 
 /** QNBS-v3: Clear the local model cache (e.g. after key change). */
 export function clearOpenRouterModelCache(): void {
+  authedCatalog = null;
   if (!isBrowser()) return;
   try {
     window.localStorage.removeItem(CACHE_KEY);

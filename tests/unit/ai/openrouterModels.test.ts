@@ -29,6 +29,7 @@ describe('openrouterModels', () => {
     vi.useFakeTimers();
     vi.setSystemTime(FIXED_NOW);
     localStorage.clear();
+    clearOpenRouterModelCache();
     vi.clearAllMocks();
     mockAssertCloudAiAllowed.mockResolvedValue(undefined);
     global.fetch = vi.fn();
@@ -101,6 +102,43 @@ describe('openrouterModels', () => {
       const models = await fetchOpenRouterModels('sk-or-v1-secret-key');
       expect(global.fetch).toHaveBeenCalled();
       expect(models).toEqual([{ id: 'authed/model' }]);
+    });
+
+    // #1127: a keyed catalog is bound to that exact key in memory and never persisted.
+    it('serves a keyed catalog only to the same key and never persists it', async () => {
+      const catalog = (id: string) =>
+        ({ ok: true, status: 200, json: async () => ({ data: [{ id }] }) }) as unknown as Response;
+      const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+      fetchMock
+        .mockResolvedValueOnce(catalog('key-a/model'))
+        .mockResolvedValueOnce(catalog('key-b/model'));
+
+      expect(await fetchOpenRouterModels('sk-or-v1-key-a')).toEqual([{ id: 'key-a/model' }]);
+      expect(await fetchOpenRouterModels('sk-or-v1-key-a')).toEqual([{ id: 'key-a/model' }]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(await fetchOpenRouterModels('sk-or-v1-key-b')).toEqual([{ id: 'key-b/model' }]);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(localStorage.getItem(CACHE_KEY)).toBeNull();
+
+      clearOpenRouterModelCache();
+      fetchMock.mockResolvedValueOnce(catalog('key-b/model'));
+      await fetchOpenRouterModels('sk-or-v1-key-b');
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('checks the cloud AI policy before serving a cached catalog', async () => {
+      localStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          fetchedAt: FIXED_NOW,
+          authed: false,
+          models: [{ id: 'anon/model:free' }],
+        }),
+      );
+      mockAssertCloudAiAllowed.mockRejectedValue(new Error('blocked'));
+
+      await expect(fetchOpenRouterModels()).rejects.toThrow('blocked');
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('preserves the authed flag across a cache round-trip (OR-6 regression)', () => {
