@@ -36,7 +36,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/generate-third-party-inventory.mjs --out third-party
+          # The checkout is the tag commit, not this branch's head; give the generator the SHA the tag run saw.
+          GITHUB_SHA=40dbb95e2dc54c072bbdd1bdf49b064fea534a27 node scripts/generate-third-party-inventory.mjs --out third-party
       - name: Build Tauri app (release script, dispatch branch, no signing key)
         shell: bash
         env:
@@ -47,7 +48,7 @@ jobs:
           mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
           test -s "third-party/${NOTICES_FILE}"
           RESOURCES="$(jq -cn --arg src "../third-party/${NOTICES_FILE}" '{bundle: {resources: {($src): "THIRD_PARTY_NOTICES.txt"}}}')"
-          pnpm exec tauri build --config "$RESOURCES"
+          GITHUB_SHA=40dbb95e2dc54c072bbdd1bdf49b064fea534a27 pnpm exec tauri build --config "$RESOURCES"
       - name: Run the tag's verify step unchanged, with its output made visible
         shell: bash
         run: |
