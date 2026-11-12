@@ -358,10 +358,19 @@ jobs:
         run: |
           set -euo pipefail
           dir=src-tauri/target/release/bundle/macos
-          if [ -e "$dir/WorldScript Studio.app.tar.gz" ]; then
-            mv -- "$dir/WorldScript Studio.app.tar.gz" "$dir/WorldScript Studio_x64.app.tar.gz"
-            mv -- "$dir/WorldScript Studio.app.tar.gz.sig" "$dir/WorldScript Studio_x64.app.tar.gz.sig"
-            echo "renamed the Intel updater payload and its signature to WorldScript Studio_x64.app.tar.gz"
+          # Accept the spaced and the dotted basename, as find_bundle_asset does; both at once is ambiguous.
+          found=()
+          for base in 'WorldScript Studio' 'WorldScript.Studio'; do
+            if [ -e "$dir/$base.app.tar.gz" ]; then found+=("$base"); fi
+          done
+          if [ "${#found[@]}" -gt 1 ]; then
+            echo "::error::both the spaced and the dotted Intel updater payload exist; refusing to pick one"
+            exit 1
+          elif [ "${#found[@]}" -eq 1 ]; then
+            base="${found[0]}"
+            mv -- "$dir/$base.app.tar.gz" "$dir/${base}_x64.app.tar.gz"
+            mv -- "$dir/$base.app.tar.gz.sig" "$dir/${base}_x64.app.tar.gz.sig"
+            echo "renamed the Intel updater payload and its signature to ${base}_x64.app.tar.gz"
           elif [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
             echo "::error::a tag push build must produce the Intel updater payload"
             exit 1

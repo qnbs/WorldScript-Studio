@@ -43,7 +43,7 @@ Scope: Rust crates reachable from the desktop crate through normal dependency ed
 
 For a **`workflow_dispatch` on protected `main`**, the workflow also signs a deterministic throwaway payload with the configured updater secret, verifies it against the public key in `tauri.conf.json`, and proves tampered-payload and wrong-key signatures are rejected. This preflight publishes no assets. Manual matrix builds continue to disable updater bundle signing.
 
-On a **`v*` tag**, each matrix job cryptographically verifies every updater-signed target package against the public key in `tauri.conf.json` before uploading its bundle. After the annotated tag and exact-ref OSV gates pass, the `release` job requires every matrix installer, required sidecar signature, three per-target SBOMs and three notices files. It preserves separate bundle directories so duplicate basenames cannot be overwritten during collection, and generates and validates all three `latest.json` updater entries before any public release is created. GitHub first receives the complete set as a **draft**; the job reads the uploaded asset inventory and SHA-256 digests back and publishes the draft only when they exactly match the validated local files. It then reads back the published tag state and final inventory. Missing, extra, mislabeled, empty, mismatched, or cryptographically invalid assets fail closed and leave the release unpublished.
+On a **`v*` tag**, each matrix job cryptographically verifies every updater-signed target package against the public key in `tauri.conf.json` before uploading its bundle. After the annotated tag and exact-ref OSV gates pass, the `release` job requires every matrix installer, required sidecar signature, four per-target SBOMs and four notices files. It preserves separate bundle directories so duplicate basenames cannot be overwritten during collection, and generates and validates all four `latest.json` updater entries before any public release is created. GitHub first receives the complete set as a **draft**; the job reads the uploaded asset inventory and SHA-256 digests back and publishes the draft only when they exactly match the validated local files. It then reads back the published tag state and final inventory. Missing, extra, mislabeled, empty, mismatched, or cryptographically invalid assets fail closed and leave the release unpublished.
 
 This workflow is **independent** of the web PWA pipeline ([`docs/CI.md`](CI.md)); it does not gate GitHub Pages deploy.
 
@@ -125,7 +125,7 @@ Complete these steps once before pushing the first signed release tag:
    - TAURI_SIGNING_PRIVATE_KEY_PASSWORD  (key password or empty string)
 
 3. Push a v*.* tag  (e.g. git tag v1.6.0 && git push --tags)
-   → All 3 matrix jobs build and sign bundles
+   → All 4 matrix jobs build and sign bundles
    → security-audit runs the exact-ref OSV audit of the tagged commit (#911)
    → release job uploads installers + latest.json to GitHub Release, only if
      security-audit succeeded for that same SHA (otherwise it never runs)

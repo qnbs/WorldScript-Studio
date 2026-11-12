@@ -1,5 +1,8 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
@@ -86,8 +89,53 @@ describe('macOS bundles are checked for their native architecture', () => {
     expect(rename).toBeLessThan(names.indexOf(VERIFY_STEP));
     const step = bundleJob().steps?.[rename] ?? {};
     expect(step.if).toBe("matrix.arch == 'x86_64'");
-    expect(step.run).toContain('"$dir/WorldScript Studio_x64.app.tar.gz.sig"');
-    // Only a tag push signs; a manual dispatch on a tag ref builds no payload and must not fail here.
-    expect(step.run).toContain('[ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]');
+  });
+});
+
+const TAG_PUSH = { GITHUB_EVENT_NAME: 'push', GITHUB_REF_TYPE: 'tag' };
+const TAG_DISPATCH = { GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF_TYPE: 'tag' };
+const pair = (base: string) => [`${base}.app.tar.gz`, `${base}.app.tar.gz.sig`];
+
+// Runs the shipped rename step in a scratch bundle directory and returns its exit status and the files left.
+function runRename(files: string[], env: Record<string, string>) {
+  const run = bundleJob().steps?.find(
+    (s) => s.name === 'Name the Intel updater payload uniquely',
+  )?.run;
+  const root = mkdtempSync(join(tmpdir(), 'intel-rename-'));
+  const dir = join(root, 'src-tauri/target/release/bundle/macos');
+  mkdirSync(dir, { recursive: true });
+  for (const file of files) writeFileSync(join(dir, file), 'payload');
+  try {
+    const result = spawnSync('bash', ['-c', String(run)], {
+      cwd: root,
+      env: { PATH: process.env['PATH'] ?? '', ...env },
+      encoding: 'utf8',
+    });
+    return { status: result.status, files: readdirSync(dir).sort() };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('the Intel updater payload rename (#507)', () => {
+  it.each(['WorldScript Studio', 'WorldScript.Studio'])(
+    'renames the %s payload and its signature',
+    (base) => {
+      expect(runRename(pair(base), TAG_PUSH)).toEqual({ status: 0, files: pair(`${base}_x64`) });
+    },
+  );
+
+  it('refuses to pick between a spaced and a dotted payload', () => {
+    const files = [...pair('WorldScript Studio'), ...pair('WorldScript.Studio')].sort();
+    expect(runRename(files, TAG_PUSH)).toEqual({ status: 1, files });
+  });
+
+  it('fails when the payload has no signature sidecar', () => {
+    expect(runRename(['WorldScript Studio.app.tar.gz'], TAG_PUSH).status).not.toBe(0);
+  });
+
+  it('fails a tag push without a payload but lets a dispatch on a tag ref pass', () => {
+    expect(runRename([], TAG_PUSH).status).toBe(1);
+    expect(runRename([], TAG_DISPATCH)).toEqual({ status: 0, files: [] });
   });
 });
