@@ -5,6 +5,7 @@ import type { LanguageToolMatch } from '../../services/languageToolService';
 const mocks = vi.hoisted(() => ({
   language: 'en',
   enabled: true,
+  baseUrl: 'http://localhost:8010',
   dictionary: [] as string[],
   manuscript: [{ id: 'sec1', content: 'She go home.' }] as Array<{ id: string; content: string }>,
   dispatch: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock('../../app/hooks', () => ({
       settings: {
         integrations: {
           languageToolEnabled: mocks.enabled,
-          languageToolBaseUrl: 'http://localhost:8010',
+          languageToolBaseUrl: mocks.baseUrl,
         },
         advancedEditor: { customDictionary: mocks.dictionary },
         privacy: { localStorageOnly: true },
@@ -60,10 +61,17 @@ function ltMatch(over: Partial<LanguageToolMatch> = {}): LanguageToolMatch {
   };
 }
 
+function checkSignal(): AbortSignal {
+  const options = mocks.checkText.mock.calls.at(-1)?.[2] as { signal?: AbortSignal } | undefined;
+  if (!options?.signal) throw new Error('checkText was not called with an abort signal');
+  return options.signal;
+}
+
 describe('useLanguageToolCheck', () => {
   beforeEach(() => {
     mocks.language = 'en';
     mocks.enabled = true;
+    mocks.baseUrl = 'http://localhost:8010';
     mocks.dictionary = [];
     mocks.manuscript = [{ id: 'sec1', content: 'She go home.' }];
     mocks.dispatch.mockReset();
@@ -122,6 +130,55 @@ describe('useLanguageToolCheck', () => {
       await result.current.check('sec1');
     });
     expect(result.current.status).toBe('error');
+  });
+
+  // #1126: a check that started against one endpoint must not land after the endpoint changed.
+  it('drops a running check when the endpoint changes', async () => {
+    let resolveCheck: (value: { matches: LanguageToolMatch[]; status: string }) => void = () => {};
+    mocks.checkText.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCheck = resolve;
+      }),
+    );
+    const { result, rerender } = renderHook(() => useLanguageToolCheck());
+    let pending: Promise<void> = Promise.resolve();
+    act(() => {
+      pending = result.current.check('sec1');
+    });
+    const signal = checkSignal();
+    mocks.baseUrl = 'https://languagetool.example.org';
+    rerender();
+    expect(signal.aborted).toBe(true);
+    await act(async () => {
+      resolveCheck({ matches: [ltMatch()], status: 'ok' });
+      await pending;
+    });
+    expect(result.current.matches).toEqual([]);
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('drops a running check when the app language changes', () => {
+    mocks.checkText.mockReturnValueOnce(new Promise(() => {}));
+    const { result, rerender } = renderHook(() => useLanguageToolCheck());
+    act(() => {
+      void result.current.check('sec1');
+    });
+    const signal = checkSignal();
+    mocks.language = 'de';
+    rerender();
+    expect(signal.aborted).toBe(true);
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('cancels a running check on unmount', () => {
+    mocks.checkText.mockReturnValueOnce(new Promise(() => {}));
+    const { result, unmount } = renderHook(() => useLanguageToolCheck());
+    act(() => {
+      void result.current.check('sec1');
+    });
+    const signal = checkSignal();
+    unmount();
+    expect(signal.aborted).toBe(true);
   });
 
   it('stores matches on a successful check', async () => {
