@@ -18,6 +18,7 @@ import {
   checkText,
   type LanguageToolMatch,
 } from '../services/languageToolService';
+import type { Settings } from '../types';
 import { useTranslation } from './useTranslation';
 
 export type LanguageToolUiStatus =
@@ -57,20 +58,25 @@ interface CheckResetState {
   abortRef: { current: AbortController | null };
   setMatches: (matches: LanguageToolMatch[]) => void;
   setStatus: (status: LanguageToolUiStatus) => void;
-  baseUrl: string;
-  enabled: boolean;
-  settings: { aiMode?: string } | undefined;
+  settings: Partial<Pick<Settings, 'aiMode' | 'integrations'>> | undefined;
+  ltCode: string | null;
 }
 
-// QNBS-v3 (#1126): `clear` also runs when the endpoint, enablement or AI mode changes and on unmount, so no stale check lands.
+// QNBS-v3 (#1126): `clear` also runs when the endpoint, enablement, AI mode or check language changes and on unmount, so no stale check lands.
 function useCheckReset(state: CheckResetState): () => void {
-  const { abortRef, setMatches, setStatus, baseUrl, enabled, settings } = state;
+  const { abortRef, setMatches, setStatus, settings, ltCode } = state;
   const clear = useCallback(() => {
     abortRef.current?.abort();
     setMatches([]);
     setStatus('idle');
   }, [abortRef, setMatches, setStatus]);
-  const key = `${baseUrl}\u0000${String(enabled)}\u0000${settings?.aiMode ?? ''}`;
+  const integrations = settings?.integrations;
+  const key = [
+    integrations?.languageToolBaseUrl ?? '',
+    String(integrations?.languageToolEnabled ?? false),
+    settings?.aiMode ?? '',
+    ltCode ?? '',
+  ].join('\u0000');
   const keyRef = useRef(key);
   useEffect(() => {
     if (keyRef.current === key) return;
@@ -182,7 +188,7 @@ export function useLanguageToolCheck(): UseLanguageToolCheckReturn {
     [dictionary, dispatch],
   );
 
-  const clear = useCheckReset({ abortRef, setMatches, setStatus, baseUrl, enabled, settings });
+  const clear = useCheckReset({ abortRef, setMatches, setStatus, settings, ltCode });
 
   return {
     available,

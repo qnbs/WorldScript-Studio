@@ -157,6 +157,19 @@ describe('useLanguageToolCheck', () => {
     expect(result.current.status).toBe('idle');
   });
 
+  it('drops a running check when the app language changes', () => {
+    mocks.checkText.mockReturnValueOnce(new Promise(() => {}));
+    const { result, rerender } = renderHook(() => useLanguageToolCheck());
+    act(() => {
+      void result.current.check('sec1');
+    });
+    const signal = checkSignal();
+    mocks.language = 'de';
+    rerender();
+    expect(signal.aborted).toBe(true);
+    expect(result.current.status).toBe('idle');
+  });
+
   it('cancels a running check on unmount', () => {
     mocks.checkText.mockReturnValueOnce(new Promise(() => {}));
     const { result, unmount } = renderHook(() => useLanguageToolCheck());
