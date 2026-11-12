@@ -38,26 +38,37 @@ jobs:
           set -euo pipefail
           # The checkout is the tag commit, not this branch's head; give the generator the SHA the tag run saw.
           GITHUB_SHA=40dbb95e2dc54c072bbdd1bdf49b064fea534a27 node scripts/generate-third-party-inventory.mjs --out third-party
-      - name: Build Tauri app (release script, dispatch branch, no signing key)
+      # Signed like the tag build (createUpdaterArtifacts stays true, Tauri writes the .sig sidecars itself), but with a
+      # throwaway key generated here: the production key is never used, so verification against the shipped pubkey must fail visibly.
+      - name: Generate a throwaway updater key (not the release key)
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec tauri signer generate --ci -p "" -w "$RUNNER_TEMP/throwaway.key" > /dev/null
+          test -s "$RUNNER_TEMP/throwaway.key"
+      - name: Build Tauri app (release build script, signed with the throwaway key)
         shell: bash
         env:
           NOTICES_FILE: ${{ steps.third_party.outputs.notices_file }}
         run: |
           set -euo pipefail
-          jq '.bundle.createUpdaterArtifacts = false' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
-          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+          export TAURI_SIGNING_PRIVATE_KEY="$(cat "$RUNNER_TEMP/throwaway.key")"
+          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+          jq -e '.bundle.createUpdaterArtifacts == true' src-tauri/tauri.conf.json
           test -s "third-party/${NOTICES_FILE}"
           RESOURCES="$(jq -cn --arg src "../third-party/${NOTICES_FILE}" '{bundle: {resources: {($src): "THIRD_PARTY_NOTICES.txt"}}}')"
           GITHUB_SHA=40dbb95e2dc54c072bbdd1bdf49b064fea534a27 pnpm exec tauri build --config "$RESOURCES"
-      - name: Run the tag's verify step unchanged, with its output made visible
+      - name: Run the tag's verify step unchanged, traced and timed
         shell: bash
         run: |
           set -uo pipefail
           node -e "const {parse}=require('yaml');const fs=require('fs');const s=parse(fs.readFileSync('.github/workflows/tauri-build.yml','utf8')).jobs.bundle.steps.find(x=>x.name==='Cryptographically verify signed bundle artifacts');fs.writeFileSync('verify-step.sh',s.run)"
           git hash-object verify-step.sh | sed 's/^/| verify-step.sh blob /'
-          rc=0; GITHUB_REF_NAME=v1.29.6 bash --noprofile --norc -e -o pipefail verify-step.sh > verify-out.txt 2>&1 || rc=$?
-          echo "| verify step exit code: $rc"
-          sed 's/^/| /' verify-out.txt
+          start=$(date +%s.%N); rc=0
+          GITHUB_REF_NAME=v1.29.6 bash --noprofile --norc -e -o pipefail -x verify-step.sh > verify-out.txt 2>&1 || rc=$?
+          end=$(date +%s.%N)
+          echo "| verify step exit code: $rc, seconds: $(echo "$end - $start" | bc 2>/dev/null || echo "$start $end")"
+          grep -v '^\s*Compiling ' verify-out.txt | tail -60 | sed 's/^/| /'
       - name: Diagnose the bundle file search
         if: always()
         shell: bash
@@ -78,4 +89,5 @@ jobs:
           path: |
             verify-step.sh
             verify-out.txt
+            src-tauri/target/release/bundle/**/*.sig
           retention-days: 14
