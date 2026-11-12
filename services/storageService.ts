@@ -33,6 +33,7 @@ export {
 
 // Import existing services
 import { dbService } from './dbService';
+import { desktopPlatform } from './desktopPlatform';
 import { fileSystemService } from './fileSystemService';
 import { DesktopStorageAuthorityUnavailableError, StaleProjectWriterError } from './fs/fsCore';
 import { ProjectLoadError } from './fs/projectFsStore';
@@ -78,6 +79,26 @@ function canonicalRawOrThrow(result: CanonicalProjectRawResult, projectId: strin
 }
 export type ProjectAuthority = 'fs' | 'idb';
 
+// QNBS-v3 (#831): runs before the desktop backend admits its first writer; a crash-left project lock is removed only while this process holds the OS instance lock.
+async function admitDesktopAppData(): Promise<void> {
+  try {
+    const admission = await desktopPlatform.persistence.admitAppDataInstance();
+    if (admission.reclaimed > 0) {
+      logger.warn('Removed project locks left by an earlier crash', {
+        reclaimed: admission.reclaimed,
+      });
+    }
+    if (admission.status !== 'exclusive' || admission.detail) {
+      logger.warn('Project locks left by a crash are not reclaimed in this session', {
+        status: admission.status,
+        detail: admission.detail,
+      });
+    }
+  } catch (error) {
+    logger.warn('Desktop app data admission failed; project locks are not reclaimed', error);
+  }
+}
+
 class StorageManager {
   private backend: StorageBackend;
   private authorityFailure: DesktopStorageAuthorityUnavailableError | null = null;
@@ -100,6 +121,7 @@ class StorageManager {
         this.authorityFailure = new DesktopStorageAuthorityUnavailableError(error);
         return;
       }
+      await admitDesktopAppData();
       this.backend = fileSystemService;
       logger.debug('Using file system storage backend');
       // QNBS-v3 (#553 a8): legacy key cleanup is best-effort housekeeping once the filesystem is established — it never decides which store holds projects.

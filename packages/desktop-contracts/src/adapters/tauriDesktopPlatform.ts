@@ -25,7 +25,13 @@ import type {
   LoraTrainingProgressEvent,
   LoraTrainRequest,
 } from '../types';
-import { PROJECT_VALIDATE_CONTRACT_VERSION, ProjectValidationResultSchema } from '../types';
+import {
+  APP_DATA_ADMISSION_CONTRACT_VERSION,
+  type AppDataAdmission,
+  AppDataAdmissionSchema,
+  PROJECT_VALIDATE_CONTRACT_VERSION,
+  ProjectValidationResultSchema,
+} from '../types';
 
 function warnNativeAdapter(message: string, context: unknown): void {
   // QNBS-v3: sanitize adapter context before console delivery so raw native errors never bypass the diagnostics boundary.
@@ -165,6 +171,31 @@ const persistence: DesktopPersistence = {
   join: async (...parts) => {
     const { join } = await import('@tauri-apps/api/path');
     return join(...parts);
+  },
+  // QNBS-v3 (#831): never rejects; a missing command or a malformed answer reads as 'unavailable', which reclaims nothing.
+  admitAppDataInstance: async (): Promise<AppDataAdmission> => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const raw = await invoke('worldscript_app_data_admission');
+      // Reject a mismatched native contract before trusting any field (docs/native/CONTRACT-VERSIONING-POLICY.md).
+      const version =
+        typeof raw === 'object' && raw !== null
+          ? (raw as Record<string, unknown>)['contractVersion']
+          : undefined;
+      if (version !== APP_DATA_ADMISSION_CONTRACT_VERSION) {
+        return {
+          status: 'unavailable',
+          reclaimed: 0,
+          detail: 'unsupported admission contract version',
+        };
+      }
+      const parsed = AppDataAdmissionSchema.safeParse(raw);
+      if (parsed.success) return parsed.data;
+      return { status: 'unavailable', reclaimed: 0, detail: 'invalid admission contract' };
+    } catch (error) {
+      const errorClass = error instanceof Error ? error.name : typeof error;
+      return { status: 'unavailable', reclaimed: 0, detail: `admission failed: ${errorClass}` };
+    }
   },
 };
 
