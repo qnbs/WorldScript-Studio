@@ -165,6 +165,24 @@ describe('VoiceCommandService', () => {
         'Voice service could not be initialized',
       );
     });
+
+    // #556: a failed start (the Whisper model cannot load offline) left dictation shown as active, with no error.
+    it('rolls back dictation and reports the error when the engine fails to start', async () => {
+      const voiceSlice = await import('../../../../features/voice/voiceSlice');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      service['isInitialized'] = true;
+      service['sttEngine'] = {
+        id: 'whisper',
+        start: vi.fn().mockRejectedValue(new Error('model fetch failed')),
+        stop: vi.fn(),
+        dispose: vi.fn(),
+      } as never;
+
+      await expect(service.startDictation()).rejects.toThrow('model fetch failed');
+      expect(voiceSlice.setVoiceTranscript).toHaveBeenCalledWith('');
+      expect(voiceSlice.setDictationActive).toHaveBeenLastCalledWith(false);
+      expect(voiceSlice.setVoiceError).toHaveBeenLastCalledWith('model fetch failed');
+    });
   });
 
   describe('stopListening', () => {

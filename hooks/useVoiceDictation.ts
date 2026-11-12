@@ -17,7 +17,8 @@ export const useVoiceDictation = (
 
   useEffect(() => {
     if (!dictationActive) {
-      lastTranscriptRef.current = '';
+      // QNBS-v3 (#556): baseline on what is already there, so only text dictated in the next session is inserted.
+      lastTranscriptRef.current = transcript;
       return;
     }
 

@@ -333,15 +333,27 @@ export class VoiceCommandService {
     }
     if (!this.sttEngine) throw new Error('No STT engine available');
 
+    // QNBS-v3 (#556): each dictation starts from an empty transcript, so a restart never re-inserts the last session.
+    this.d(setVoiceTranscript(''));
     this.d(setDictationActive(true));
     this.d(setVoiceError(null));
 
     this.emit({ type: 'dictation-started', timestamp: Date.now() });
+    await this.startDictationEngine(this.sttEngine);
+  }
 
-    await this.sttEngine.start(
-      (result) => this.handleDictationResult(result),
-      (error) => this.handleSttError(error),
-    );
+  private async startDictationEngine(engine: SttEngine): Promise<void> {
+    try {
+      await engine.start(
+        (result) => this.handleDictationResult(result),
+        (error) => this.handleSttError(error),
+      );
+    } catch (err) {
+      // QNBS-v3 (#556): a failed start (e.g. the Whisper model cannot load offline) must not leave dictation shown as active.
+      this.d(setDictationActive(false));
+      this.d(setVoiceError(err instanceof Error ? err.message : 'Dictation could not start'));
+      throw err;
+    }
   }
 
   async stopListening(): Promise<void> {
