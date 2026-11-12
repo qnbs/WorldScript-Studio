@@ -19,6 +19,10 @@ const SPEECH_RMS = 0.01;
 const FRAME_MS = 20;
 /** Voiced time a window needs before Whisper sees it; Whisper writes "you" for a silent window. */
 const MIN_SPEECH_MS = 200;
+/** Windows waiting for Whisper at most (~14 s of audio); beyond that a window is skipped and reported. */
+const MAX_QUEUED_WINDOWS = 4;
+const BACKLOG_MESSAGE =
+  'Local speech recognition is falling behind; a 3.5-second stretch of audio was skipped.';
 
 // @huggingface/transformers types (imported via alias in vite.config.ts + tsconfig paths)
 type WhisperPipelineResult = { text?: string } | Array<{ text?: string }>;
@@ -112,13 +116,21 @@ function releaseTracks(stream: MediaStream): void {
 
 /** Decodes one window's recording; decodeAudioData resamples it to the 16 kHz the context runs at. */
 async function decodeWindow(ctx: AudioContext, chunks: Blob[]): Promise<Float32Array> {
+  const recording = new Blob(chunks, { type: chunks[0]?.type ?? 'audio/webm' });
+  const decoded = await ctx.decodeAudioData(await recording.arrayBuffer());
+  return decoded.getChannelData(0);
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+/** Runs a consumer callback; a throwing consumer must not break the transcription queue. */
+function deliver(callback: () => void): void {
   try {
-    const recording = new Blob(chunks, { type: chunks[0]?.type ?? 'audio/webm' });
-    const decoded = await ctx.decodeAudioData(await recording.arrayBuffer());
-    return decoded.getChannelData(0);
-  } catch (err) {
-    logger.warn('[WasmSttEngine] Audio decode error:', err);
-    return new Float32Array(0);
+    callback();
+  } catch (error) {
+    logger.warn('[WasmSttEngine] A result callback threw:', error);
   }
 }
 
@@ -155,6 +167,7 @@ export class WasmSttEngine implements SttEngine {
   private pipelineLoad: Promise<WhisperPipeline> | null = null;
   private session: CaptureSession | null = null;
   private transcription: Promise<void> = Promise.resolve();
+  private queuedWindows = 0;
   /** Bumped by start(), stop() and dispose(): a start() overtaken by a stop never opens the mic. */
   private startAttempt = 0;
   private disposals = 0;
@@ -264,15 +277,38 @@ export class WasmSttEngine implements SttEngine {
   private async rotateWindow(session: CaptureSession): Promise<void> {
     const finished = session.window;
     if (!finished || this.session !== session) return;
-    // Start the next window before stopping this one, so no audio falls between them.
-    session.window = startWindow(session.stream);
+    let next: RecordingWindow;
+    try {
+      // Start the next window before stopping this one, so no audio falls between them.
+      next = startWindow(session.stream);
+    } catch (error) {
+      // QNBS-v3 (#556): the next window cannot be recorded; end the session, keep what was recorded, and say why.
+      this.session = null;
+      clearSessionTimer(session);
+      session.window = null;
+      await this.closeSession(session, finished, Promise.resolve());
+      if (this.isLive(session)) deliver(() => session.onError(toError(error)));
+      return;
+    }
+    session.window = next;
     await stopRecorder(finished.recorder);
     await this.queueTranscription(session, finished.chunks);
   }
 
   /** Each window is its own job and transcriptions run one after another, so results arrive in recording order. */
   private queueTranscription(session: CaptureSession, chunks: Blob[]): Promise<void> {
-    this.transcription = this.transcription.then(() => this.transcribeWindow(session, chunks));
+    if (this.queuedWindows >= MAX_QUEUED_WINDOWS) {
+      // QNBS-v3 (#556): a bounded backlog; a skipped window is reported instead of letting the queue and the stop latency grow.
+      if (this.isLive(session)) deliver(() => session.onError(new Error(BACKLOG_MESSAGE)));
+      return this.transcription;
+    }
+    this.queuedWindows += 1;
+    this.transcription = this.transcription
+      .then(() => this.transcribeWindow(session, chunks))
+      .catch((error: unknown) => logger.warn('[WasmSttEngine] Transcription failed:', error))
+      .finally(() => {
+        this.queuedWindows -= 1;
+      });
     return this.transcription;
   }
 
@@ -287,7 +323,15 @@ export class WasmSttEngine implements SttEngine {
   private async transcribeWindow(session: CaptureSession, chunks: Blob[]): Promise<void> {
     const transcribe = this.whisperPipeline;
     if (!transcribe || !this.hasWork(session, chunks)) return;
-    const audioData = await decodeWindow(session.audioContext, chunks);
+    let audioData: Float32Array;
+    try {
+      audioData = await decodeWindow(session.audioContext, chunks);
+    } catch (error) {
+      // QNBS-v3 (#556): a window that cannot be decoded is reported, not dropped without a word.
+      logger.warn('[WasmSttEngine] Audio decode error:', error);
+      if (this.isLive(session)) deliver(() => session.onError(toError(error)));
+      return;
+    }
     // QNBS-v3 (#556): a window without speech never reaches Whisper, which writes "you" for silence.
     if (hasSpeech(audioData, this.config.sampleRate))
       await this.infer(session, transcribe, audioData);
@@ -303,12 +347,13 @@ export class WasmSttEngine implements SttEngine {
       text = transcriptOf(await transcribe(audioData, { sampling_rate: this.config.sampleRate }));
     } catch (err) {
       logger.warn('[WasmSttEngine] Whisper inference error:', err);
-      if (this.isLive(session))
-        session.onError(err instanceof Error ? err : new Error(String(err)));
+      if (this.isLive(session)) deliver(() => session.onError(toError(err)));
       return;
     }
     if (text && this.isLive(session)) {
-      session.onResult({ transcript: text, isFinal: true, confidence: 0.9, language: 'en' });
+      deliver(() =>
+        session.onResult({ transcript: text, isFinal: true, confidence: 0.9, language: 'en' }),
+      );
     }
   }
 
@@ -320,12 +365,24 @@ export class WasmSttEngine implements SttEngine {
     clearSessionTimer(session);
     const last = session.window;
     session.window = null;
-    // QNBS-v3 (#556): capture ends before any inference wait; the last, partial window is still transcribed.
-    if (last) await stopRecorder(last.recorder);
-    releaseTracks(session.stream);
-    await session.rotation;
-    await (last ? this.queueTranscription(session, last.chunks) : this.transcription);
-    void session.audioContext.close();
+    await this.closeSession(session, last, session.rotation);
+  }
+
+  /** Ends capture first, then transcribes the last window and closes the audio context, whatever fails. */
+  private async closeSession(
+    session: CaptureSession,
+    last: RecordingWindow | null,
+    rotation: Promise<void>,
+  ): Promise<void> {
+    try {
+      // QNBS-v3 (#556): capture ends before any inference wait; the last, partial window is still transcribed.
+      if (last) await stopRecorder(last.recorder);
+      releaseTracks(session.stream);
+      await rotation;
+      await (last ? this.queueTranscription(session, last.chunks) : this.transcription);
+    } finally {
+      void session.audioContext.close();
+    }
   }
 
   async dispose(): Promise<void> {

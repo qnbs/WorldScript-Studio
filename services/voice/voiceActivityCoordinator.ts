@@ -30,6 +30,8 @@ export class VoiceActivityCoordinator {
   private lastVadSpeechState = false;
   // QNBS-v3: guard prevents overlapping flush cycles (stop + restart) on Whisper WASM
   private isFlushing = false;
+  // QNBS-v3 (#556): stop() waits for this, so a flush result arrives before another consumer takes the STT engine.
+  private flushing: Promise<void> = Promise.resolve();
   // QNBS-v3: engines are initialized once per coordinator lifetime, not per start() call
   private isEngineInitialized = false;
 
@@ -65,6 +67,7 @@ export class VoiceActivityCoordinator {
   async stop(): Promise<void> {
     this.running = false;
     this.teardownAudioCapture();
+    await this.flushing;
     if (this.isSttActive) {
       try {
         await this.stt.stop();
@@ -213,7 +216,7 @@ export class VoiceActivityCoordinator {
     this.isSttActive = false;
     this.resetBufferState();
 
-    this.stt
+    this.flushing = this.stt
       .stop()
       .catch((err) => {
         log.warn('stt.stop() failed during flush', { err });

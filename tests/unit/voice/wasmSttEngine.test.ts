@@ -394,6 +394,68 @@ describe('WasmSttEngine session construction (#556)', () => {
   );
 });
 
+// Review findings on #1260 (third wave): no failure may stall the queue, leak capture or drop audio without a word.
+describe('WasmSttEngine failure handling (#556)', () => {
+  it('reports a window that cannot be decoded instead of dropping it silently', async () => {
+    decodeAudioData.mockRejectedValueOnce(new Error('Unable to decode audio data'));
+    const onResult = vi.fn();
+    const onError = vi.fn();
+    const engine = new WasmSttEngine();
+    await engine.start(onResult, onError);
+    await stopEngine(engine);
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Unable to decode audio data' }),
+    );
+    expect(onResult).not.toHaveBeenCalled();
+  });
+
+  it('a throwing result callback blocks neither later windows nor the stop', async () => {
+    const onResult = vi.fn().mockImplementationOnce(() => {
+      throw new Error('consumer bug');
+    });
+    const engine = new WasmSttEngine();
+    await engine.start(onResult, vi.fn());
+    await vi.advanceTimersByTimeAsync(WINDOW_MS * 2 + 300);
+    await stopEngine(engine);
+    expect(onResult).toHaveBeenCalledTimes(3);
+    expect(FakeAudioContext.instances[0]?.close).toHaveBeenCalled();
+  });
+
+  it('bounds the backlog behind a stalled inference and reports the skipped windows', async () => {
+    const stalled = deferred<unknown>();
+    whisper.mockReturnValueOnce(stalled.promise);
+    const onError = vi.fn();
+    const engine = new WasmSttEngine();
+    await engine.start(vi.fn(), onError);
+    await vi.advanceTimersByTimeAsync(WINDOW_MS * 6 + 300);
+    const skipped = onError.mock.calls.filter(([error]) => /falling behind/.test(String(error)));
+    expect(skipped.length).toBeGreaterThanOrEqual(2);
+    expect(whisper).toHaveBeenCalledTimes(1);
+    stalled.resolve({ text: ' first' });
+    await stopEngine(engine);
+  });
+
+  it('a recorder failure while rotating ends the session, keeps the finished window and says why', async () => {
+    const onResult = vi.fn();
+    const onError = vi.fn();
+    const engine = new WasmSttEngine();
+    await engine.start(onResult, onError);
+    FakeRecorder.failNext = true;
+    await vi.advanceTimersByTimeAsync(WINDOW_MS);
+    await vi.waitFor(() =>
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('Unsupported recorder') }),
+      ),
+    );
+    expect(onResult).toHaveBeenCalledTimes(1);
+    expect(track.stop).toHaveBeenCalled();
+    expect(FakeAudioContext.instances[0]?.close).toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(WINDOW_MS * 2);
+    expect(FakeRecorder.instances).toHaveLength(1);
+    await expect(engine.stop()).resolves.toBeUndefined();
+  });
+});
+
 // Whisper writes "you" for a silent window: the real-runtime evidence run filled the editor with it.
 describe('WasmSttEngine silence gate (#556)', () => {
   async function transcribeOneWindow(window: Float32Array) {
