@@ -83,6 +83,22 @@ describe('languageToolService.checkText', () => {
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
+  // #1126: a result from one LanguageTool server is never served for another; a trailing slash is the same server.
+  it('keys the cache by endpoint', async () => {
+    const text = 'Endpoint-scoped cache sentence for issue 1126.';
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation(
+        async () => new Response(JSON.stringify({ matches: [] }), { status: 200 }),
+      );
+    await checkText(text, 'en-US', { baseUrl: BASE, fetchImpl });
+    await checkText(text, 'en-US', { baseUrl: 'https://languagetool.example.org', fetchImpl });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(String(fetchImpl.mock.calls[1]?.[0])).toBe('https://languagetool.example.org/v2/check');
+    await checkText(text, 'en-US', { baseUrl: `${BASE}/`, fetchImpl });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it('filters spelling matches that are in the user dictionary', async () => {
     const text = 'Gandalf walked on.';
     const fetchImpl = vi
