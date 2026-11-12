@@ -27,6 +27,26 @@ type WhisperPipeline = (
   opts: Record<string, unknown>,
 ) => Promise<WhisperPipelineResult>;
 
+/** One recording: a timesliced recorder writes the WebM header into its first chunk only, so each window is its own. */
+interface RecordingWindow {
+  readonly recorder: MediaRecorder;
+  readonly chunks: Blob[];
+}
+
+/** Everything one start() acquires; stop() and dispose() release exactly the session they took. */
+interface CaptureSession {
+  readonly stream: MediaStream;
+  readonly audioContext: AudioContext;
+  readonly onResult: (result: SttResult) => void;
+  readonly onError: (error: Error) => void;
+  /** The engine's dispose count when the session started; a later dispose silences its results. */
+  readonly disposals: number;
+  window: RecordingWindow | null;
+  timer: ReturnType<typeof setInterval> | null;
+  /** The latest window rotation; stop() waits for it so the windows stay in recording order. */
+  rotation: Promise<void>;
+}
+
 async function createWhisperPipeline(): Promise<WhisperPipeline> {
   // QNBS-v3: Keep the shared Transformers.js proxy lazy so voice setup does not load its model chunk early.
   const { pipeline, env } = await import('../../packages/ai-core/src/vendor-transformers');
@@ -49,6 +69,21 @@ async function createWhisperPipeline(): Promise<WhisperPipeline> {
   })) as WhisperPipeline;
 }
 
+function startWindow(stream: MediaStream): RecordingWindow {
+  const chunks: Blob[] = [];
+  const recorder = new MediaRecorder(stream, {
+    mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : 'audio/webm',
+  });
+  // The final chunk arrives after stop(); it belongs to this window whatever the engine does meanwhile.
+  recorder.ondataavailable = (event: BlobEvent) => {
+    if (event.data.size > 0) chunks.push(event.data);
+  };
+  recorder.start();
+  return { recorder, chunks };
+}
+
 /** Stops a recorder and resolves after its final `dataavailable`, which the spec fires before `stop`. */
 function stopRecorder(recorder: MediaRecorder): Promise<void> {
   if (recorder.state === 'inactive') return Promise.resolve();
@@ -67,15 +102,20 @@ function stopRecorder(recorder: MediaRecorder): Promise<void> {
   });
 }
 
-function joinSamples(parts: Float32Array[]): Float32Array {
-  if (parts.length === 1) return parts[0]!;
-  const joined = new Float32Array(parts.reduce((sum, part) => sum + part.length, 0));
-  let offset = 0;
-  for (const part of parts) {
-    joined.set(part, offset);
-    offset += part.length;
+function releaseTracks(stream: MediaStream): void {
+  for (const track of stream.getTracks()) track.stop();
+}
+
+/** Decodes one window's recording; decodeAudioData resamples it to the 16 kHz the context runs at. */
+async function decodeWindow(ctx: AudioContext, chunks: Blob[]): Promise<Float32Array> {
+  try {
+    const recording = new Blob(chunks, { type: chunks[0]?.type ?? 'audio/webm' });
+    const decoded = await ctx.decodeAudioData(await recording.arrayBuffer());
+    return decoded.getChannelData(0);
+  } catch (err) {
+    logger.warn('[WasmSttEngine] Audio decode error:', err);
+    return new Float32Array(0);
   }
-  return joined;
 }
 
 function transcriptOf(result: WhisperPipelineResult): string {
@@ -109,22 +149,11 @@ export class WasmSttEngine implements SttEngine {
 
   private whisperPipeline: WhisperPipeline | null = null;
   private pipelineLoad: Promise<WhisperPipeline> | null = null;
-  private audioContext: AudioContext | null = null;
-  private mediaStream: MediaStream | null = null;
-  private recorder: MediaRecorder | null = null;
-  private pendingBlobs: Blob[] = [];
-  private windowTimer: ReturnType<typeof setInterval> | null = null;
-  private rotation: Promise<void> = Promise.resolve();
+  private session: CaptureSession | null = null;
   private transcription: Promise<void> = Promise.resolve();
-  /** Bumped by every start(), so a late chunk from an earlier session is never transcribed. */
-  private session = 0;
   /** Bumped by start(), stop() and dispose(): a start() overtaken by a stop never opens the mic. */
   private startAttempt = 0;
-  private onResultCallback: ((result: SttResult) => void) | null = null;
-  private onErrorCallback: ((error: Error) => void) | null = null;
-  private isRunning = false;
-  // QNBS-v3: Separate disposed flag — isRunning is set false during stop() but we still want to drain.
-  private isDisposed = false;
+  private disposals = 0;
   private readonly config: AudioStreamConfig;
 
   constructor(config: AudioStreamConfig = DEFAULT_AUDIO_CONFIG) {
@@ -162,6 +191,8 @@ export class WasmSttEngine implements SttEngine {
     onResult: (result: SttResult) => void,
     onError: (error: Error) => void,
   ): Promise<void> {
+    // QNBS-v3 (#556): one session at a time; a second start would leave the first microphone stream open.
+    if (this.session) return;
     const attempt = ++this.startAttempt;
     // QNBS-v3 (#556): dictation never calls initialize(); load here, so a failed load rejects before the mic opens.
     await this.loadPipeline();
@@ -183,163 +214,118 @@ export class WasmSttEngine implements SttEngine {
     }
     if (attempt !== this.startAttempt) {
       // Stopped while the browser granted the microphone: release it instead of recording.
-      for (const track of stream.getTracks()) track.stop();
+      releaseTracks(stream);
       return;
     }
 
-    this.session += 1;
-    const session = this.session;
-    this.onResultCallback = onResult;
-    this.onErrorCallback = onError;
-    this.pendingBlobs = [];
-    this.isRunning = true;
-    this.isDisposed = false;
-    this.mediaStream = stream;
-    this.audioContext = new AudioContext({ sampleRate: this.config.sampleRate });
-    this.recorder = this.startWindow(stream, session);
-    this.windowTimer = setInterval(() => {
-      this.rotation = this.rotateWindow(session);
-    }, TRANSCRIPTION_INTERVAL_MS);
-  }
-
-  // QNBS-v3 (#556): one recording per window; a timesliced recorder puts the WebM header in its first chunk only.
-  private startWindow(stream: MediaStream, session: number): MediaRecorder {
-    const recorder = new MediaRecorder(stream, {
-      mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm',
-    });
-    // The final chunk arrives after stop() has cleared isRunning, so only the session decides.
-    recorder.ondataavailable = (event: BlobEvent) => {
-      if (event.data.size > 0 && this.ownsChunk(session)) this.pendingBlobs.push(event.data);
+    const session: CaptureSession = {
+      stream,
+      audioContext: new AudioContext({ sampleRate: this.config.sampleRate }),
+      onResult,
+      onError,
+      disposals: this.disposals,
+      window: startWindow(stream),
+      timer: null,
+      rotation: Promise.resolve(),
     };
-    recorder.start();
-    return recorder;
+    session.timer = setInterval(() => {
+      session.rotation = this.rotateWindow(session);
+    }, TRANSCRIPTION_INTERVAL_MS);
+    this.session = session;
   }
 
-  private ownsChunk(session: number): boolean {
-    return session === this.session && !this.isDisposed;
-  }
-
-  /** The microphone stream while this session is still recording, otherwise null. */
-  private liveStream(session: number): MediaStream | null {
-    return this.isRunning && session === this.session ? this.mediaStream : null;
-  }
-
-  private async rotateWindow(session: number): Promise<void> {
-    const finished = this.recorder;
-    const stream = this.liveStream(session);
-    if (!finished || !stream) return;
+  private async rotateWindow(session: CaptureSession): Promise<void> {
+    const finished = session.window;
+    if (!finished || this.session !== session) return;
     // Start the next window before stopping this one, so no audio falls between them.
-    this.recorder = this.startWindow(stream, session);
-    await stopRecorder(finished);
-    await this.queueTranscription();
+    session.window = startWindow(session.stream);
+    await stopRecorder(finished.recorder);
+    await this.queueTranscription(session, finished.chunks);
   }
 
-  /** Transcriptions run one after another, so results arrive in recording order. */
-  private queueTranscription(): Promise<void> {
-    this.transcription = this.transcription.then(() => this.drainAndTranscribe());
+  /** Each window is its own job and transcriptions run one after another, so results arrive in recording order. */
+  private queueTranscription(session: CaptureSession, chunks: Blob[]): Promise<void> {
+    this.transcription = this.transcription.then(() => this.transcribeWindow(session, chunks));
     return this.transcription;
   }
 
-  // QNBS-v3: Check isDisposed (not isRunning) — stop() sets isRunning=false but still drains remaining blobs.
-  private hasPendingAudio(): boolean {
-    return !this.isDisposed && this.pendingBlobs.length > 0;
+  private isLive(session: CaptureSession): boolean {
+    return session.disposals === this.disposals;
   }
 
-  private async drainAndTranscribe(): Promise<void> {
+  private hasWork(session: CaptureSession, chunks: Blob[]): boolean {
+    return chunks.length > 0 && this.isLive(session);
+  }
+
+  private async transcribeWindow(session: CaptureSession, chunks: Blob[]): Promise<void> {
     const transcribe = this.whisperPipeline;
-    if (!transcribe || !this.hasPendingAudio()) return;
-
-    const audioData = await this.decodeWindows(this.pendingBlobs.splice(0));
+    if (!transcribe || !this.hasWork(session, chunks)) return;
+    const audioData = await decodeWindow(session.audioContext, chunks);
     // QNBS-v3 (#556): a window without speech never reaches Whisper, which writes "you" for silence.
-    if (!hasSpeech(audioData, this.config.sampleRate)) return;
+    if (hasSpeech(audioData, this.config.sampleRate))
+      await this.infer(session, transcribe, audioData);
+  }
 
+  private async infer(
+    session: CaptureSession,
+    transcribe: WhisperPipeline,
+    audioData: Float32Array,
+  ): Promise<void> {
+    let text: string;
     try {
-      const text = transcriptOf(
-        await transcribe(audioData, { sampling_rate: this.config.sampleRate }),
-      );
-      if (text) {
-        this.onResultCallback?.({
-          transcript: text,
-          isFinal: true,
-          confidence: 0.9,
-          language: 'en',
-        });
-      }
+      text = transcriptOf(await transcribe(audioData, { sampling_rate: this.config.sampleRate }));
     } catch (err) {
       logger.warn('[WasmSttEngine] Whisper inference error:', err);
-      this.onErrorCallback?.(err instanceof Error ? err : new Error(String(err)));
+      if (this.isLive(session))
+        session.onError(err instanceof Error ? err : new Error(String(err)));
+      return;
     }
-  }
-
-  /** Each blob is one complete recording: decode them one by one and join the samples. */
-  private async decodeWindows(blobs: Blob[]): Promise<Float32Array> {
-    const ctx = this.audioContext;
-    if (!ctx) return new Float32Array(0);
-    const parts: Float32Array[] = [];
-    for (const blob of blobs) {
-      try {
-        // Whisper expects mono 16 kHz; decodeAudioData resamples to the context rate (16 kHz).
-        const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
-        parts.push(decoded.getChannelData(0));
-      } catch (err) {
-        logger.warn('[WasmSttEngine] Audio decode error:', err);
-      }
+    if (text && this.isLive(session)) {
+      session.onResult({ transcript: text, isFinal: true, confidence: 0.9, language: 'en' });
     }
-    return parts.length === 0 ? new Float32Array(0) : joinSamples(parts);
   }
 
   async stop(): Promise<void> {
     this.startAttempt += 1;
-    this.isRunning = false;
-    this.clearWindowTimer();
-    await this.rotation;
-    const recorder = this.recorder;
-    this.recorder = null;
-    // QNBS-v3 (#556): keep the last, partial window; an utterance shorter than one window was lost here.
-    if (recorder) await stopRecorder(recorder);
-    await this.queueTranscription();
-    this.cleanupAudio();
+    const session = this.session;
+    this.session = null;
+    if (!session) return;
+    clearSessionTimer(session);
+    const last = session.window;
+    session.window = null;
+    // QNBS-v3 (#556): capture ends before any inference wait; the last, partial window is still transcribed.
+    if (last) await stopRecorder(last.recorder);
+    releaseTracks(session.stream);
+    await session.rotation;
+    await (last ? this.queueTranscription(session, last.chunks) : this.transcription);
+    void session.audioContext.close();
   }
 
   async dispose(): Promise<void> {
     this.startAttempt += 1;
-    this.isRunning = false;
-    this.isDisposed = true;
-    this.clearWindowTimer();
-    const recorder = this.recorder;
-    this.recorder = null;
+    this.disposals += 1;
+    const session = this.session;
+    this.session = null;
+    if (!session) return;
+    clearSessionTimer(session);
+    const recorder = session.window?.recorder;
+    session.window = null;
     if (recorder && recorder.state !== 'inactive') {
       try {
         recorder.stop();
       } catch {
-        // Already stopped; nothing left to drain after dispose.
+        // Already stopped; nothing is transcribed after dispose.
       }
     }
-    this.cleanupAudio();
-    this.onResultCallback = null;
-    this.onErrorCallback = null;
+    releaseTracks(session.stream);
+    void session.audioContext.close();
     // QNBS-v3: Pipeline kept alive across sessions — 40 MB re-download is too expensive to repeat.
   }
+}
 
-  private clearWindowTimer(): void {
-    if (this.windowTimer !== null) {
-      clearInterval(this.windowTimer);
-      this.windowTimer = null;
-    }
-  }
-
-  private cleanupAudio(): void {
-    if (this.mediaStream) {
-      for (const track of this.mediaStream.getTracks()) track.stop();
-      this.mediaStream = null;
-    }
-    if (this.audioContext) {
-      void this.audioContext.close();
-      this.audioContext = null;
-    }
-    this.recorder = null;
-    this.pendingBlobs = [];
+function clearSessionTimer(session: CaptureSession): void {
+  if (session.timer !== null) {
+    clearInterval(session.timer);
+    session.timer = null;
   }
 }

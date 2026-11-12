@@ -295,6 +295,63 @@ describe('WasmSttEngine on the dictation path (#556)', () => {
   });
 });
 
+// Review findings on #1260: capture ends at stop, every window stays its own job, and sessions never share resources.
+describe('WasmSttEngine capture sessions (#556)', () => {
+  it('stop() releases the microphone before a slow inference finishes', async () => {
+    const slow = deferred<unknown>();
+    whisper.mockReturnValueOnce(slow.promise);
+    const engine = new WasmSttEngine();
+    await engine.start(vi.fn(), vi.fn());
+    await vi.advanceTimersByTimeAsync(WINDOW_MS + 100);
+    await vi.waitFor(() => expect(whisper).toHaveBeenCalledTimes(1));
+    const stopping = engine.stop();
+    await vi.waitFor(() => expect(track.stop).toHaveBeenCalled());
+    expect(FakeRecorder.instances.every((recorder) => recorder.state === 'inactive')).toBe(true);
+    slow.resolve({ text: ' first' });
+    await stopping;
+  });
+
+  it('a window that waited behind a slow inference is transcribed on its own', async () => {
+    const slow = deferred<unknown>();
+    whisper.mockReturnValueOnce(slow.promise);
+    const engine = new WasmSttEngine();
+    await engine.start(vi.fn(), vi.fn());
+    await vi.advanceTimersByTimeAsync(WINDOW_MS * 3 + 300);
+    slow.resolve({ text: ' first' });
+    await stopEngine(engine);
+    // Three full windows and the final partial one, each as its own Whisper input.
+    expect(whisper).toHaveBeenCalledTimes(4);
+    for (const [audio] of whisper.mock.calls) expect(audio).toHaveLength(decodedWindow.length);
+  });
+
+  it('a second start while a session runs opens no second microphone', async () => {
+    const engine = new WasmSttEngine();
+    await engine.start(vi.fn(), vi.fn());
+    await engine.start(vi.fn(), vi.fn());
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    await engine.dispose();
+    expect(track.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('a start during a pending stop keeps its own microphone and recorder', async () => {
+    const slow = deferred<unknown>();
+    whisper.mockReturnValueOnce(slow.promise);
+    const engine = new WasmSttEngine();
+    await engine.start(vi.fn(), vi.fn());
+    await vi.advanceTimersByTimeAsync(WINDOW_MS + 100);
+    const stopping = engine.stop();
+    const nextTrack = { stop: vi.fn() };
+    getUserMedia.mockResolvedValueOnce({ getTracks: () => [nextTrack] });
+    await engine.start(vi.fn(), vi.fn());
+    slow.resolve({ text: ' first' });
+    await stopping;
+    expect(nextTrack.stop).not.toHaveBeenCalled();
+    expect(FakeRecorder.instances[FakeRecorder.instances.length - 1]?.state).toBe('recording');
+    await engine.dispose();
+    expect(nextTrack.stop).toHaveBeenCalled();
+  });
+});
+
 // Whisper writes "you" for a silent window: the real-runtime evidence run filled the editor with it.
 describe('WasmSttEngine silence gate (#556)', () => {
   async function transcribeOneWindow(window: Float32Array) {
