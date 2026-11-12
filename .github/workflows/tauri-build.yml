@@ -307,43 +307,55 @@ jobs:
         if: ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          # QNBS-v3: every failure names its line and command; the v1.29.6 tag run's first Windows attempt stopped here with no message at all.
+          trap 'echo "::error::bundle signature check failed at line $LINENO: $BASH_COMMAND"' ERR
           VERSION="${GITHUB_REF_NAME#v}"
 
+          # Sets BUNDLE_ASSET. Called directly, never inside $(...), so its error reaches the log and stops the step.
           find_bundle_asset() {
             local name="$1"
             # QNBS-v3: Tauri's published bundle names use dots for spaces; accept either exact basename while rejecting ambiguous duplicates.
             local dotted_name="${name// /.}"
             local -a matches=()
+            # The search writes to a file first, so a failing find stops the step instead of hiding in a process substitution.
+            local found="${RUNNER_TEMP:-/tmp}/bundle-search.$$"
+            if ! find src-tauri/target/release/bundle -type f \( -name "$name" -o -name "$dotted_name" \) -print0 > "$found"; then
+              echo "::error::the bundle directory search for $name failed"
+              exit 1
+            fi
             while IFS= read -r -d '' match; do
               matches+=("$match")
-            done < <(find src-tauri/target/release/bundle -type f \( -name "$name" -o -name "$dotted_name" \) -print0)
+            done < "$found"
+            rm -f "$found"
             if [ "${#matches[@]}" -ne 1 ]; then
               echo "::error::expected exactly one bundle asset named $name, found ${#matches[@]}"
-              return 1
+              find src-tauri/target/release/bundle -type f | sed 's/^/  bundle file: /'
+              exit 1
             fi
-            printf '%s' "${matches[0]}"
+            BUNDLE_ASSET="${matches[0]}"
           }
 
           verify_bundle_signature() {
-            local artifact="$1"
-            test -s "$artifact"
+            find_bundle_asset "$1"
+            local artifact="$BUNDLE_ASSET"
+            test -s "$artifact" || { echo "::error::bundle asset is empty: ${artifact##*/}"; exit 1; }
             test -s "$artifact.sig" || { echo "::error::missing signature sidecar for ${artifact##*/}"; exit 1; }
             cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify-updater-artifact -- "$artifact" "$artifact.sig"
           }
 
           case "$RUNNER_OS" in
             Linux)
-              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_amd64.deb")"
-              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio-${VERSION}-1.x86_64.rpm")"
-              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_amd64.AppImage")"
+              verify_bundle_signature "WorldScript Studio_${VERSION}_amd64.deb"
+              verify_bundle_signature "WorldScript Studio-${VERSION}-1.x86_64.rpm"
+              verify_bundle_signature "WorldScript Studio_${VERSION}_amd64.AppImage"
               ;;
             Windows)
-              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_x64-setup.exe")"
-              verify_bundle_signature "$(find_bundle_asset "WorldScript Studio_${VERSION}_x64_en-US.msi")"
+              verify_bundle_signature "WorldScript Studio_${VERSION}_x64-setup.exe"
+              verify_bundle_signature "WorldScript Studio_${VERSION}_x64_en-US.msi"
               ;;
             macOS)
-              verify_bundle_signature "$(find_bundle_asset 'WorldScript Studio.app.tar.gz')"
+              verify_bundle_signature 'WorldScript Studio.app.tar.gz'
               ;;
             *)
               echo "::error::unsupported runner OS for updater signature verification: $RUNNER_OS"
