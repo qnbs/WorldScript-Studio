@@ -489,8 +489,11 @@ jobs:
             echo "::error::Release notes claim #332 or #341 closure"
             exit 1
           fi
-          if grep -Eiq '(macOS|Mac)[^\n]*(Intel|x86_64)[^\n]*(supported|available|provided|published|built)|Intel[^\n]*(macOS|Mac)[^\n]*(supported|available|provided|published|built)' release-notes.md; then
-            echo "::error::Release notes claim unsupported Intel macOS support"
+          # QNBS-v3: Intel macOS ships since #507, so the notes may say so; OS code signing is deferred (#574), so every line naming notarization, Developer ID or Authenticode must cite #574.
+          signing_lines="$(grep -Ei 'notari[sz]|developer[- ]id|authenticode' release-notes.md | grep -Fv '#574' || true)"
+          if [ -n "$signing_lines" ]; then
+            echo "::error::Release notes mention notarization, Developer ID or Authenticode without citing the deferral #574"
+            printf '%s\n' "$signing_lines"
             exit 1
           fi
 
