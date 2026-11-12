@@ -77,6 +77,13 @@ export class VoiceCommandService {
   // QNBS-v3: C-P1 — single-flight guard against re-entrant startListening (rapid PTT / wake-word).
   private isStarting = false;
   private listeningTimer: ReturnType<typeof setTimeout> | null = null;
+  // QNBS-v3 (#556): dictation and command listening share one STT engine; only one of them may run it at a time.
+  private isDictating = false;
+  /** Bumped by every dictation stop: a dictation start that is still preparing then never starts the engine. */
+  private dictationClaim = 0;
+  private dictationStop: Promise<void> | null = null;
+  /** Settles when a command-listening start finishes, so a dictation start can take over only afterwards. */
+  private listeningStart: Promise<void> | null = null;
   private eventListeners: VoiceEventListener[] = [];
 
   constructor(config: Partial<VoiceServiceConfig> = {}) {
@@ -264,6 +271,10 @@ export class VoiceCommandService {
     //          stream / orphan a coordinator. Ignore while starting or already listening.
     if (this.isStarting || this.coordinator || this.listeningTimer) return;
     this.isStarting = true;
+    let settleStart!: () => void;
+    this.listeningStart = new Promise<void>((resolve) => {
+      settleStart = resolve;
+    });
     try {
       if (!this.isInitialized) {
         const ok = await this.initialize();
@@ -275,6 +286,7 @@ export class VoiceCommandService {
       if (!this.sttEngine) {
         throw new Error('No STT engine available');
       }
+      await this.endDictationBeforeListening();
 
       this.d(setVoiceMode('listening'));
       this.d(setVoiceError(null));
@@ -301,7 +313,7 @@ export class VoiceCommandService {
 
       // Auto-stop after timeout
       this.listeningTimer = setTimeout(() => {
-        this.stopListening();
+        void this.stopCommandListening();
       }, this.config.listeningTimeoutSeconds * 1000);
     } catch (err) {
       // QNBS-v3: CodeAnt — roll back the 'listening' mode if startup fails after we set it, so the
@@ -323,28 +335,75 @@ export class VoiceCommandService {
       throw err;
     } finally {
       this.isStarting = false;
+      this.listeningStart = null;
+      settleStart();
     }
   }
 
   async startDictation(): Promise<void> {
+    await this.dictationStop;
+    // QNBS-v3 (#556): claimed before any await, so a second start cannot pass this check while the first prepares.
+    if (this.isDictating) return;
+    this.isDictating = true;
+    const claim = ++this.dictationClaim;
+    try {
+      const engine = await this.dictationEngine();
+      await this.endListeningBeforeDictation();
+      if (claim !== this.dictationClaim) return; // stopped while preparing
+      // QNBS-v3 (#556): each dictation starts from an empty transcript, so a restart never re-inserts the last session.
+      this.d(setVoiceTranscript(''));
+      this.d(setDictationActive(true));
+      this.d(setVoiceError(null));
+      this.emit({ type: 'dictation-started', timestamp: Date.now() });
+      await this.startDictationEngine(engine);
+    } catch (err) {
+      if (claim === this.dictationClaim) this.isDictating = false;
+      throw err;
+    }
+  }
+
+  private async dictationEngine(): Promise<SttEngine> {
     if (!this.isInitialized) {
       const ok = await this.initialize();
       if (!ok) throw new Error('Voice service could not be initialized');
     }
     if (!this.sttEngine) throw new Error('No STT engine available');
+    return this.sttEngine;
+  }
 
-    this.d(setDictationActive(true));
-    this.d(setVoiceError(null));
+  /** Dictation takes the engine over from command listening; otherwise speech would keep going to commands. */
+  private async endListeningBeforeDictation(): Promise<void> {
+    await this.listeningStart;
+    if (this.coordinator || this.listeningTimer) await this.stopCommandListening();
+  }
 
-    this.emit({ type: 'dictation-started', timestamp: Date.now() });
+  /** Listening takes the engine over from a running dictation instead of sharing its session. */
+  private async endDictationBeforeListening(): Promise<void> {
+    if (this.isDictating || this.dictationStop) await this.stopDictation();
+  }
 
-    await this.sttEngine.start(
-      (result) => this.handleDictationResult(result),
-      (error) => this.handleSttError(error),
-    );
+  private async startDictationEngine(engine: SttEngine): Promise<void> {
+    try {
+      await engine.start(
+        (result) => this.handleDictationResult(result),
+        (error) => this.handleSttError(error),
+      );
+    } catch (err) {
+      // QNBS-v3 (#556): a failed start (e.g. the Whisper model cannot load offline) must not leave dictation shown as active.
+      this.isDictating = false;
+      this.d(setDictationActive(false));
+      this.d(setVoiceError(err instanceof Error ? err.message : 'Dictation could not start'));
+      throw err;
+    }
   }
 
   async stopListening(): Promise<void> {
+    // QNBS-v3 (#556): the Voice Control microphone button also stops dictation through here; route it so the dictation guard clears.
+    if (this.isDictating) return this.stopDictation();
+    await this.stopCommandListening();
+  }
+
+  private async stopCommandListening(): Promise<void> {
     if (this.listeningTimer) {
       clearTimeout(this.listeningTimer);
       this.listeningTimer = null;
@@ -364,12 +423,24 @@ export class VoiceCommandService {
     this.emit({ type: 'listening-stopped', timestamp: Date.now() });
   }
 
-  async stopDictation(): Promise<void> {
-    this.d(setDictationActive(false));
-    if (this.sttEngine) {
-      await this.sttEngine.stop();
+  stopDictation(): Promise<void> {
+    this.dictationClaim += 1;
+    // QNBS-v3 (#556): a second stop shares the first one's drain instead of finishing before its last window arrives.
+    this.dictationStop ??= this.drainDictation().finally(() => {
+      this.dictationStop = null;
+    });
+    return this.dictationStop;
+  }
+
+  private async drainDictation(): Promise<void> {
+    try {
+      // QNBS-v3 (#556): stop the engine first; its last window is transcribed while dictation is still active, so the editor gets it.
+      if (this.isDictating && this.sttEngine) await this.sttEngine.stop();
+    } finally {
+      this.isDictating = false;
+      this.d(setDictationActive(false));
+      this.emit({ type: 'dictation-stopped', timestamp: Date.now() });
     }
-    this.emit({ type: 'dictation-stopped', timestamp: Date.now() });
   }
 
   // ── Result Handlers ────────────────────────────────────────────────────────
@@ -521,6 +592,7 @@ export class VoiceCommandService {
 
   async dispose(): Promise<void> {
     await this.stopListening();
+    this.isDictating = false;
     this.cancelSpeech();
 
     // QNBS-v3: coordinator.dispose() handles its own engine teardown when active

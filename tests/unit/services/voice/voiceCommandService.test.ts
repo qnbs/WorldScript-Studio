@@ -165,6 +165,160 @@ describe('VoiceCommandService', () => {
         'Voice service could not be initialized',
       );
     });
+
+    // #556: a failed start (the Whisper model cannot load offline) left dictation shown as active, with no error.
+    it('rolls back dictation and reports the error when the engine fails to start', async () => {
+      const voiceSlice = await import('../../../../features/voice/voiceSlice');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      service['isInitialized'] = true;
+      service['sttEngine'] = {
+        id: 'whisper',
+        start: vi.fn().mockRejectedValue(new Error('model fetch failed')),
+        stop: vi.fn(),
+        dispose: vi.fn(),
+      } as never;
+
+      await expect(service.startDictation()).rejects.toThrow('model fetch failed');
+      expect(voiceSlice.setVoiceTranscript).toHaveBeenCalledWith('');
+      expect(voiceSlice.setDictationActive).toHaveBeenLastCalledWith(false);
+      expect(voiceSlice.setVoiceError).toHaveBeenLastCalledWith('model fetch failed');
+    });
+
+    // #556 review: dictation and command listening share one STT engine; only one may run it.
+    function recordingEngine(order: string[], stop: () => Promise<void> = async () => {}) {
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      service['isInitialized'] = true;
+      service['sttEngine'] = {
+        id: 'whisper',
+        start: vi.fn(async () => {
+          order.push('start');
+        }),
+        stop: vi.fn(async () => {
+          order.push('stop');
+          await stop();
+        }),
+        dispose: vi.fn(),
+      } as never;
+    }
+
+    it('dictation ends command listening before it starts the engine', async () => {
+      const order: string[] = [];
+      recordingEngine(order);
+      service['coordinator'] = {
+        stop: vi.fn(async () => {
+          order.push('coordinator.stop');
+        }),
+      } as never;
+      await service.startDictation();
+      expect(order).toEqual(['coordinator.stop', 'start']);
+    });
+
+    it('listening ends a running dictation first', async () => {
+      const order: string[] = [];
+      recordingEngine(order);
+      await service.startDictation();
+      await service.startListening();
+      expect(order).toEqual(['start', 'stop', 'start']);
+      await service.stopListening();
+    });
+
+    it('stopping dictation through stopListening lets dictation start again', async () => {
+      const order: string[] = [];
+      recordingEngine(order);
+      await service.startDictation();
+      await service.stopListening();
+      await service.startDictation();
+      expect(order).toEqual(['start', 'stop', 'start']);
+    });
+
+    it('two concurrent dictation starts start the engine once', async () => {
+      const order: string[] = [];
+      recordingEngine(order);
+      await Promise.all([service.startDictation(), service.startDictation()]);
+      expect(order).toEqual(['start']);
+    });
+
+    it('a dictation start waits for an in-flight listening start, then takes the engine over', async () => {
+      const order: string[] = [];
+      let finishListening!: () => void;
+      const listening = new Promise<void>((resolve) => {
+        finishListening = resolve;
+      });
+      let starts = 0;
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      service['isInitialized'] = true;
+      service['sttEngine'] = {
+        id: 'webSpeech',
+        start: vi.fn(async () => {
+          starts += 1;
+          order.push(starts === 1 ? 'listen.start' : 'dictation.start');
+          if (starts === 1) await listening;
+        }),
+        stop: vi.fn(async () => {
+          order.push('stop');
+        }),
+        dispose: vi.fn(),
+      } as never;
+      const listen = service.startListening();
+      const dictate = service.startDictation();
+      await Promise.resolve();
+      finishListening();
+      await Promise.all([listen, dictate]);
+      expect(order).toEqual(['listen.start', 'stop', 'dictation.start']);
+      await service.stopListening();
+    });
+
+    it('a second stopDictation waits for the drain of the first', async () => {
+      const voiceSlice = await import('../../../../features/voice/voiceSlice');
+      let finishDrain!: () => void;
+      const drained = new Promise<void>((resolve) => {
+        finishDrain = resolve;
+      });
+      let stops = 0;
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      service['isInitialized'] = true;
+      // Like the Whisper engine: only the first stop has a session to drain.
+      service['sttEngine'] = {
+        id: 'whisper',
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn(async () => {
+          stops += 1;
+          if (stops === 1) await drained;
+        }),
+        dispose: vi.fn(),
+      } as never;
+      await service.startDictation();
+      vi.mocked(voiceSlice.setDictationActive).mockClear();
+      const first = service.stopDictation();
+      let secondDone = false;
+      const second = service.stopDictation().then(() => {
+        secondDone = true;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(secondDone).toBe(false);
+      expect(voiceSlice.setDictationActive).not.toHaveBeenCalled();
+      finishDrain();
+      await Promise.all([first, second]);
+      expect(voiceSlice.setDictationActive).toHaveBeenCalledTimes(1);
+    });
+
+    it('stopDictation keeps dictation active until the engine has drained its last window', async () => {
+      const voiceSlice = await import('../../../../features/voice/voiceSlice');
+      let finishStop!: () => void;
+      const drained = new Promise<void>((resolve) => {
+        finishStop = resolve;
+      });
+      recordingEngine([], () => drained);
+      await service.startDictation();
+      vi.mocked(voiceSlice.setDictationActive).mockClear();
+      const stopping = service.stopDictation();
+      await Promise.resolve();
+      expect(voiceSlice.setDictationActive).not.toHaveBeenCalled();
+      finishStop();
+      await stopping;
+      expect(voiceSlice.setDictationActive).toHaveBeenCalledWith(false);
+    });
   });
 
   describe('stopListening', () => {

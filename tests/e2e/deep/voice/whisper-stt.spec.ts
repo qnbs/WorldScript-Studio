@@ -6,6 +6,7 @@
  *   - Model download modal: progress → ready, cancel mid-flight, error → retry (simulated download).
  *   - STT → intent → command dispatch → UI navigation (injected mock STT engine).
  *   - Multiple consecutive commands; stop-listening mid-session stability.
+ *   - Dictation → manuscript editor (UI handoff, independent of real Whisper inference).
  *
  * The real VAD→Whisper audio bridge is covered by unit tests (voiceActivityCoordinator.test.ts)
  * and the nightly real-inference suite (whisper-real.spec.ts). This suite is deterministic and
@@ -214,5 +215,38 @@ test.describe('Voice STT → command dispatch (mocked engine)', () => {
 
     // App shell remains responsive (no unhandled error / blank screen).
     await expect(page.locator('#sidebar')).toBeVisible({ timeout: 5000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dictation → manuscript editor (mocked engine, no audio)
+// ---------------------------------------------------------------------------
+
+// #556: proves the UI handoff on its own. The Voice Control panel's dictation runs the STT engine directly
+// (not the VAD coordinator), and useVoiceDictation appends each result to the focused manuscript text.
+test.describe('Voice dictation → manuscript editor (mocked engine)', () => {
+  test.beforeEach(async ({ page }) => {
+    test.skip(!isCI, 'CI-only deep E2E suite');
+    await setFeatureFlags(page, { enableVoiceSupport: true, enableVoiceWasm: false });
+  });
+
+  test('a dictated transcript is appended to the manuscript text', async ({ page }) => {
+    await installVoiceSttMock(page, { transcripts: ['once upon a time'] });
+    await page.goto('/');
+    await waitForSpaReady(page);
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+    await openVoiceSettingsAndEnable(page);
+
+    await clickNavItem(page, /Manuscript/i);
+    const textarea = page.getByTestId('manuscript-editor-textarea').first();
+    await expect(textarea).toBeVisible({ timeout: 20000 });
+    await textarea.fill('Draft');
+    await page
+      .getByRole('region', { name: 'Voice Control' })
+      .getByRole('button', { name: /Start dictation/i })
+      .click();
+
+    await expect(textarea).toHaveValue('Draft once upon a time', { timeout: 15000 });
   });
 });
