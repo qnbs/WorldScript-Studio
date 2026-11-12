@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Evidence branch only (never merged):** a throwaway workflow that reproduces the v1.29.6 Windows verify-step failure of tag run 43168295696 with the unchanged release code.
 <!-- release-candidate: v1.29.6 -->
 
 ## [1.29.6] — 2026-11-12
