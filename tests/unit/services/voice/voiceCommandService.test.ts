@@ -202,6 +202,16 @@ describe('VoiceCommandService', () => {
       );
     });
 
+    it('concurrent starts after an engine change build the new engines once', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      await service.initialize();
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      await Promise.all([service.startListening(), service.startDictation()]);
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+      await service.stopListening();
+    });
+
     it('an unrelated config change keeps the engines', async () => {
       const { createSttEngine } = await import('../../../../services/voice/sttEngine');
       service.setDispatch(vi.fn() as never, vi.fn() as never);
@@ -222,8 +232,9 @@ describe('VoiceCommandService', () => {
       try {
         service.updateConfig({ preferredSttEngine: choice });
         await service.initialize();
+        // ...and Eco Mode never turns the local-model opt-in on (the service is built with it off).
         expect(createSttEngine).toHaveBeenLastCalledWith(
-          expect.objectContaining({ preferredEngine: built }),
+          expect.objectContaining({ preferredEngine: built, enableVoiceWasm: false }),
         );
       } finally {
         vi.mocked(ecoModeService.isEcoMode).mockReturnValue(false);

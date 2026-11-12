@@ -86,6 +86,7 @@ export class VoiceCommandService {
   private isInitialized = false;
   /** Set when the engine choice changes; the next start applies it before it uses any engine. */
   private engineChoiceChanged = false;
+  private engineSetup: Promise<boolean> | null = null;
   // QNBS-v3: C-P1 — single-flight guard against re-entrant startListening (rapid PTT / wake-word).
   private isStarting = false;
   private listeningTimer: ReturnType<typeof setTimeout> | null = null;
@@ -147,6 +148,19 @@ export class VoiceCommandService {
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
+  /**
+   * The one engine-setup operation every start goes through: applies a changed engine choice, then initializes.
+   * QNBS-v3 (#1261): concurrent starts share it, so engines are never built twice or released while another start builds them.
+   */
+  private ensureEngines(): Promise<boolean> {
+    this.engineSetup ??= this.applyEngineChoice()
+      .then(() => this.initialize())
+      .finally(() => {
+        this.engineSetup = null;
+      });
+    return this.engineSetup;
+  }
+
   async initialize(): Promise<boolean> {
     if (this.isInitialized) return true;
     // A change from here on (even while the engines below are being built) is applied by the next start.
@@ -198,7 +212,8 @@ export class VoiceCommandService {
       const eco = ecoModeService.isEcoMode();
       const engine = await createSttEngine({
         preferredEngine: sttEngineUnderEco(this.config.preferredSttEngine, eco),
-        enableVoiceWasm: this.config.enableVoiceWasm || eco,
+        // QNBS-v3 (#1261): Eco Mode never turns the local-model opt-in on; it only lowers an auto choice to Web Speech.
+        enableVoiceWasm: this.config.enableVoiceWasm,
         allowCloudFallback: this.config.allowCloudFallback,
       });
       this.d(setActiveSttEngine(engine.id));
@@ -280,12 +295,8 @@ export class VoiceCommandService {
     if (this.isStarting || this.coordinator || this.listeningTimer) return;
     this.isStarting = true;
     try {
-      await this.applyEngineChoice();
-      if (!this.isInitialized) {
-        const ok = await this.initialize();
-        if (!ok) {
-          throw new Error('Voice service could not be initialized');
-        }
+      if (!(await this.ensureEngines())) {
+        throw new Error('Voice service could not be initialized');
       }
 
       if (!this.sttEngine) {
@@ -343,11 +354,7 @@ export class VoiceCommandService {
   }
 
   async startDictation(): Promise<void> {
-    await this.applyEngineChoice();
-    if (!this.isInitialized) {
-      const ok = await this.initialize();
-      if (!ok) throw new Error('Voice service could not be initialized');
-    }
+    if (!(await this.ensureEngines())) throw new Error('Voice service could not be initialized');
     if (!this.sttEngine) throw new Error('No STT engine available');
 
     this.d(setDictationActive(true));

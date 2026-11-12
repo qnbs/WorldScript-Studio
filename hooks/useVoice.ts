@@ -53,7 +53,8 @@ export const useVoice = () => {
       wakeWordPhrase: voiceSettings.wakeWordPhrase,
       ttsMuted: voiceSettings.ttsMuted,
       dictationAutoPunctuation: voiceSettings.dictationAutoPunctuation,
-      enableVoiceWasm: enableVoiceWasm || eco,
+      // QNBS-v3 (#1261): Eco Mode never turns the local-model opt-in on; it only lowers an auto choice to Web Speech.
+      enableVoiceWasm,
     };
     svc.updateConfig(config);
   }, [voiceSettings, enableVoiceWasm]);
@@ -65,7 +66,7 @@ export const useVoice = () => {
       svc.updateConfig({
         preferredSttEngine: sttEngineUnderEco(sttEngineChoice(voiceSettings.sttEngine), isEco),
         preferredTtsEngine: isEco ? 'webSpeech' : ttsEngineChoice(voiceSettings.ttsEngine),
-        enableVoiceWasm: enableVoiceWasm || isEco,
+        enableVoiceWasm,
       });
     });
   }, [voiceSettings, enableVoiceWasm]);
