@@ -651,6 +651,10 @@ jobs:
         env:
           NODE_ENV: production
 
+      # QNBS-v3 (#1272): the build must never ship a worker as raw TypeScript, neither as a .ts asset nor as a data:video/mp2t URL.
+      - name: Check worker bundles
+        run: node scripts/check-worker-bundles.mjs dist
+
       # QNBS-v3: caches the apt .deb archives `--with-deps` fetches (fonts, libx11, etc.) — shared
       # key across every `playwright install --with-deps` call site in this workflow, since they all
       # install the same system packages on the same runner image. actions/cache/save on a fresh
