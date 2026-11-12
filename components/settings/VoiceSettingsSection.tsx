@@ -8,11 +8,21 @@ import { useId, useState } from 'react';
 import { useAppDispatch } from '../../app/hooks';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { settingsActions } from '../../features/settings/settingsSlice';
+import { sttEngineChoice, ttsEngineChoice } from '../../services/voice/engineChoice';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Select } from '../ui/Select';
 import { VoiceModelDownloadModal } from '../voice/VoiceModelDownloadModal';
 import { MaturityBadge } from './MaturityBadge';
 import { ToggleSwitch } from './SettingsShared';
+
+// QNBS-v3 (#1261/#556): each select stores a real engine id; the shared 'wasm' matched no engine and fell back to Web Speech.
+function engineOptions(t: (key: string) => string, localEngine: 'whisper' | 'kokoro') {
+  return [
+    { value: 'auto', label: t('settings.voice.engine.auto') },
+    { value: 'webSpeech', label: t('settings.voice.engine.webSpeech') },
+    { value: localEngine, label: t('settings.voice.engine.wasm') },
+  ];
+}
 
 export const VoiceSettingsSection: FC = () => {
   const { t, settings, handleSettingChange, featureFlags } = useSettingsViewContext();
@@ -33,12 +43,6 @@ export const VoiceSettingsSection: FC = () => {
   const patchVoice = (partial: Partial<typeof voice>) => {
     handleSettingChange('voice', { ...voice, ...partial });
   };
-
-  const engineOptions = [
-    { value: 'auto', label: t('settings.voice.engine.auto') },
-    { value: 'webSpeech', label: t('settings.voice.engine.webSpeech') },
-    { value: 'wasm', label: t('settings.voice.engine.wasm') },
-  ];
 
   return (
     <div className="space-y-6">
@@ -159,9 +163,9 @@ export const VoiceSettingsSection: FC = () => {
               </label>
               <Select
                 id={sttEngineId}
-                value={voice.sttEngine}
-                onChange={(v) => patchVoice({ sttEngine: v as typeof voice.sttEngine })}
-                options={engineOptions}
+                value={sttEngineChoice(voice.sttEngine)}
+                onChange={(v) => patchVoice({ sttEngine: sttEngineChoice(v) })}
+                options={engineOptions(t, 'whisper')}
                 ariaLabel={t('settings.voice.sttEngine')}
               />
               {/* QNBS-v3: consent clarity — spell out the cloud-vs-on-device privacy tradeoff per engine
@@ -253,9 +257,9 @@ export const VoiceSettingsSection: FC = () => {
               </label>
               <Select
                 id={ttsEngineId}
-                value={voice.ttsEngine}
-                onChange={(v) => patchVoice({ ttsEngine: v as typeof voice.ttsEngine })}
-                options={engineOptions}
+                value={ttsEngineChoice(voice.ttsEngine)}
+                onChange={(v) => patchVoice({ ttsEngine: ttsEngineChoice(v) })}
+                options={engineOptions(t, 'kokoro')}
                 ariaLabel={t('settings.voice.ttsEngine')}
               />
             </div>

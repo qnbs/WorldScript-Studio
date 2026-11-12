@@ -256,6 +256,21 @@ describe('useVoice', () => {
     expect(mockUpdateConfig).toHaveBeenCalled();
   });
 
+  // #1261/#556: a stored legacy 'wasm' reaches the service as the local engine, not as an id no factory knows.
+  it('passes a stored legacy wasm choice to the service as whisper and kokoro', () => {
+    mockVoiceSettings.sttEngine = 'wasm';
+    mockVoiceSettings.ttsEngine = 'wasm';
+    try {
+      renderHook(() => useVoice());
+      expect(mockUpdateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ preferredSttEngine: 'whisper', preferredTtsEngine: 'kokoro' }),
+      );
+    } finally {
+      mockVoiceSettings.sttEngine = 'webSpeech';
+      mockVoiceSettings.ttsEngine = 'webSpeech';
+    }
+  });
+
   it('calls setDispatch on mount', () => {
     renderHook(() => useVoice());
     expect(mockSetDispatch).toHaveBeenCalled();

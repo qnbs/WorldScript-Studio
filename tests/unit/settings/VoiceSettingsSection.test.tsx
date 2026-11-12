@@ -16,6 +16,8 @@ const { mockHandleSettingChange } = vi.hoisted(() => ({
 }));
 
 let mockVoiceEnabled = false;
+let mockSttEngine = 'auto';
+let mockTtsEngine = 'auto';
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => ({
@@ -32,8 +34,8 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
         // QNBS-v3: add all fields accessed by VoiceSettingsSection to avoid toFixed/undefined errors
         speechRate: 1.0,
         speechVolume: 0.8,
-        sttEngine: 'auto',
-        ttsEngine: 'auto',
+        sttEngine: mockSttEngine,
+        ttsEngine: mockTtsEngine,
         wakeWordPhrase: 'hey story',
         wasmModelsReady: false,
         webSpeechConsentGranted: false,
@@ -116,6 +118,8 @@ describe('VoiceSettingsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockVoiceEnabled = false;
+    mockSttEngine = 'auto';
+    mockTtsEngine = 'auto';
   });
 
   it('renders the voice settings heading', () => {
@@ -189,5 +193,39 @@ describe('VoiceSettingsSection', () => {
       'voice',
       expect.objectContaining({ activationMode: 'pushToTalk' }),
     );
+  });
+});
+
+// #1261/#556: "Local WASM model (offline)" stored 'wasm', which no engine has; STT then fell back to Web Speech (cloud).
+describe('VoiceSettingsSection engine choice', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockVoiceEnabled = true;
+    mockSttEngine = 'auto';
+    mockTtsEngine = 'auto';
+  });
+
+  it.each([
+    ['sttEngine', 'whisper'],
+    ['ttsEngine', 'kokoro'],
+  ])('the local option of %s stores %s', async (field, engineId) => {
+    const user = userEvent.setup();
+    render(<VoiceSettingsSection />);
+    await user.selectOptions(
+      screen.getByLabelText(`settings.voice.${field}`),
+      'settings.voice.engine.wasm',
+    );
+    expect(mockHandleSettingChange).toHaveBeenLastCalledWith(
+      'voice',
+      expect.objectContaining({ [field]: engineId }),
+    );
+  });
+
+  it('a stored legacy wasm choice still shows as the local option', () => {
+    mockSttEngine = 'wasm';
+    mockTtsEngine = 'wasm';
+    render(<VoiceSettingsSection />);
+    expect(screen.getByLabelText('settings.voice.sttEngine')).toHaveValue('whisper');
+    expect(screen.getByLabelText('settings.voice.ttsEngine')).toHaveValue('kokoro');
   });
 });
