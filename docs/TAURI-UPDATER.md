@@ -81,6 +81,13 @@ What the release enforces:
 - The release fails before publishing unless each signature binds exactly the release version.
 - `src-tauri/tests/updater_config.rs` deserializes `plugins.updater` with the plugin's own `Config`, so a misspelt flag cannot ship silently.
 
+Installer-specific entries (#1248):
+
+- The client looks up `{os}-{arch}-{installer}` before `{os}-{arch}`, using the bundle type compiled into the installed binary.
+- `latest.json` therefore carries `linux-x86_64-deb`, `linux-x86_64-rpm` and `windows-x86_64-msi`, each pointing at that release's signed `.deb`, `.rpm` or `.msi`.
+- The generic `linux-x86_64` (AppImage), `windows-x86_64` (NSIS), `darwin-aarch64` and `darwin-x86_64` entries serve every other install.
+- Before v1.29.6 the per-installer entries were missing. `.deb` and `.rpm` installs were offered the AppImage, which their installer rejects, and MSI installs were offered the NSIS installer.
+
 Rollback:
 
 - **Fix forward.** Clients never step back to an older version. To withdraw a bad release, publish a new, higher version with the fix.

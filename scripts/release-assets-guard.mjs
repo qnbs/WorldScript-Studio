@@ -5,7 +5,17 @@ import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
-const PLATFORMS = ['linux-x86_64', 'windows-x86_64', 'darwin-aarch64', 'darwin-x86_64'];
+// #1248: the plugin looks up `{os}-{arch}-{installer}` before `{os}-{arch}`, so .deb, .rpm and MSI installs need their own
+// entries; the generic ones stay for AppImage, NSIS and macOS clients and for clients that do not know the bundle type.
+const PLATFORMS = [
+  'linux-x86_64',
+  'linux-x86_64-deb',
+  'linux-x86_64-rpm',
+  'windows-x86_64',
+  'windows-x86_64-msi',
+  'darwin-aarch64',
+  'darwin-x86_64',
+];
 const SIGNED_ASSET_KEYS = [
   'linuxDeb',
   'linuxRpm',
@@ -20,6 +30,9 @@ const PLATFORM_ASSETS = [
   ['windows-x86_64', 'windowsSetup'],
   ['darwin-aarch64', 'macUpdater'],
   ['darwin-x86_64', 'macIntelUpdater'],
+  ['linux-x86_64-deb', 'linuxDeb'],
+  ['linux-x86_64-rpm', 'linuxRpm'],
+  ['windows-x86_64-msi', 'windowsMsi'],
 ];
 
 function releasePatterns(version) {
@@ -346,6 +359,9 @@ function manifestForRelease(version, repository, selected, signatures) {
       'windows-x86_64': updater('windowsSetup'),
       'darwin-aarch64': updater('macUpdater'),
       'darwin-x86_64': updater('macIntelUpdater'),
+      'linux-x86_64-deb': updater('linuxDeb'),
+      'linux-x86_64-rpm': updater('linuxRpm'),
+      'windows-x86_64-msi': updater('windowsMsi'),
     },
   };
 }
@@ -365,7 +381,9 @@ async function runGenerateMode(version, directory, repository) {
   });
   if (!result.ok) return report(result);
   await writeFile(join(directory, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  console.log('generated and validated latest.json for all four signed updater platforms');
+  console.log(
+    `generated and validated latest.json for all ${PLATFORMS.length} signed updater entries`,
+  );
 }
 
 async function readManifest(directory) {
