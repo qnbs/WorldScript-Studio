@@ -1,0 +1,55 @@
+# Evidence branch only (never merged), #556: real Whisper transcription with a CI-generated speech WAV as the microphone,
+# plus a silence WAV as the negative control. Both run the unchanged app path (VoiceControlPanel dictation → Whisper).
+name: Whisper transcription evidence
+
+on:
+  push:
+    branches: [evidence/whisper-transcribe-556]
+
+permissions:
+  contents: read
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install espeak-ng
+        timeout-minutes: 15
+        run: bash scripts/ci/apt-install.sh espeak-ng
+      - name: Generate the speech and silence WAV files
+        run: |
+          set -euo pipefail
+          mkdir -p .voice-fixtures
+          espeak-ng -v en-us -s 130 -w .voice-fixtures/speech.wav "Hello world. This is a dictation test. Hello world."
+          python3 -c "import wave,sys; w=wave.open(sys.argv[1],'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(b'\x00\x00'*16000*4); w.close()" .voice-fixtures/silence.wav
+          ls -l .voice-fixtures
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Real transcription (speech + silence)
+        id: transcribe
+        continue-on-error: true
+        env:
+          CI: 'true'
+          RUN_DEEP_E2E: '1'
+          RUN_REAL_VOICE_E2E: '1'
+        run: pnpm exec playwright test tests/e2e/deep/voice/whisper-transcribe.spec.ts --project=chromium --retries=0
+      - name: Record the outcome
+        if: always()
+        run: |
+          echo "| transcription step outcome = ${{ steps.transcribe.outcome }}"
+          f=$(find . -path ./node_modules -prune -o -name 'error-context.md' -print 2>/dev/null | head -2)
+          for x in $f; do grep -E 'textbox|alert|Error|Expected|Received' "$x" | head -8 | sed 's/^/| /'; done
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: whisper-transcribe-evidence
+          path: |
+            tests/e2e/html-report
+            test-results
+          retention-days: 14
