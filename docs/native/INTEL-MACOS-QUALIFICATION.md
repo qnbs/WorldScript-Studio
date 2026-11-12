@@ -34,7 +34,7 @@ It is deliberately **not**:
 - **Matrix:** `tauri-build.yml`'s `bundle` matrix has a `macos-26-intel` leg with `arch: x86_64`, next to `macos-latest` with `arch: arm64`. Both are checked with `lipo` and with a DMG verify and mount before upload.
 - **Asset names:** the Intel updater payload and its `.sig` are renamed to `WorldScript Studio_x64.app.tar.gz`, so they cannot collide with the Apple Silicon payload.
 - **Release guard:** `scripts/release-assets-guard.mjs` requires `WorldScript Studio_<version>_x64.dmg`, the Intel payload and its signature, and the `x86_64-apple-darwin` notices and SBOM. It writes and validates a `darwin-x86_64` `latest.json` entry, including the signed-version binding (#1215).
-- **Still to be proven on the first tag:** updater signing on Intel (dispatch builds never sign), and the published `darwin-x86_64` entry. Both macOS architectures must be verified before v1.29.6 is published.
+- **Still to be proven on the first tag:** updater signing on Intel (dispatch builds never sign), and the `darwin-x86_64` entry in the draft `latest.json`. Both macOS architectures must be verified in the draft before v1.29.6 is published. Read back the published `darwin-x86_64` entry after publication.
 - **Not done:** Apple Developer ID signing and notarization, deferred by maintainer decision (#574).
 
 ## Tracking
