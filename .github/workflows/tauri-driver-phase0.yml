@@ -112,6 +112,17 @@ jobs:
           "EDGE_DRIVER=$((Resolve-Path driver\msedgedriver.exe).Path)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Install tauri-driver 2.1.0
         run: cargo install tauri-driver --locked --version 2.1.0
+      # Phase 0b finding: wry always sets AdditionalBrowserArguments, and the WebView2 process never got msedgedriver's
+      # --remote-debugging-port. The WebView2 policy override is runner configuration only; the installed app is unchanged.
+      - name: Let WebView2 accept the driver's remote-debugging port for this app only
+        shell: pwsh
+        run: |
+          foreach ($hive in 'HKLM:', 'HKCU:') {
+            $k = "$hive\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments"
+            New-Item -Path $k -Force | Out-Null
+            New-ItemProperty -Path $k -Name 'worldscript-studio.exe' -Value '--remote-debugging-port=0' -PropertyType String -Force | Out-Null
+            Get-ItemProperty -Path $k | Select-Object 'worldscript-studio.exe' | Format-List
+          }
       - name: Attach a WebDriver session to the installed app
         shell: pwsh
         run: |
