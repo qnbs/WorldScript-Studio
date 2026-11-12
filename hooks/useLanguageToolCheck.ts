@@ -6,7 +6,7 @@
  * (tested) service; this hook only wires Redux + settings + abort lifecycle.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { selectManuscript } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -18,6 +18,7 @@ import {
   checkText,
   type LanguageToolMatch,
 } from '../services/languageToolService';
+import type { Settings } from '../types';
 import { useTranslation } from './useTranslation';
 
 export type LanguageToolUiStatus =
@@ -51,6 +52,39 @@ export interface UseLanguageToolCheckReturn {
 /** Stable identity for a match within one result set (offset+rule is unique per check). */
 function matchKey(match: LanguageToolMatch): string {
   return `${match.offset}:${match.length}:${match.ruleId}`;
+}
+
+interface CheckResetState {
+  abortRef: { current: AbortController | null };
+  setMatches: (matches: LanguageToolMatch[]) => void;
+  setStatus: (status: LanguageToolUiStatus) => void;
+  settings: Partial<Pick<Settings, 'aiMode' | 'integrations'>> | undefined;
+  ltCode: string | null;
+}
+
+// QNBS-v3 (#1126): `clear` also runs when the endpoint, enablement, AI mode or check language changes and on unmount, so no stale check lands.
+function useCheckReset(state: CheckResetState): () => void {
+  const { abortRef, setMatches, setStatus, settings, ltCode } = state;
+  const clear = useCallback(() => {
+    abortRef.current?.abort();
+    setMatches([]);
+    setStatus('idle');
+  }, [abortRef, setMatches, setStatus]);
+  const integrations = settings?.integrations;
+  const key = [
+    integrations?.languageToolBaseUrl ?? '',
+    String(integrations?.languageToolEnabled ?? false),
+    settings?.aiMode ?? '',
+    ltCode ?? '',
+  ].join('\u0000');
+  const keyRef = useRef(key);
+  useEffect(() => {
+    if (keyRef.current === key) return;
+    keyRef.current = key;
+    clear();
+  }, [key, clear]);
+  useEffect(() => clear, [clear]);
+  return clear;
 }
 
 export function useLanguageToolCheck(): UseLanguageToolCheckReturn {
@@ -154,11 +188,7 @@ export function useLanguageToolCheck(): UseLanguageToolCheckReturn {
     [dictionary, dispatch],
   );
 
-  const clear = useCallback(() => {
-    abortRef.current?.abort();
-    setMatches([]);
-    setStatus('idle');
-  }, []);
+  const clear = useCheckReset({ abortRef, setMatches, setStatus, settings, ltCode });
 
   return {
     available,
