@@ -218,16 +218,11 @@ jobs:
         include:
           - os: ubuntu-22.04
           - os: windows-latest
-          # QNBS-v3: macos-13 (the last Intel/x86_64 hosted runner) removed 2026-07-28 -- it never
-          # actually provisions a runner (job sits in "queued" indefinitely; timeout-minutes never
-          # applies since that only counts once a job starts, so 3 consecutive real runs each hung
-          # the full 24h GitHub Actions queue ceiling before auto-cancelling). GitHub has been
-          # retiring Intel-hosted macOS runners; macos-latest (Apple Silicon) is the only macOS
-          # bundle target until a working Intel option exists again. Native Intel-Mac builds are
-          # tracked as a re-opened follow-up, not silently dropped.
-          # QNBS-v3: arch is what the bundle check below enforces; native x86_64 builds qualify in tauri-intel-qualification.yml on macos-26-intel (#507).
+          # QNBS-v3: arch is what the bundle check below enforces; each macOS leg builds natively, Apple Silicon on macos-latest and Intel on macos-26-intel (#507).
           - os: macos-latest
             arch: arm64
+          - os: macos-26-intel
+            arch: x86_64
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -356,6 +351,33 @@ jobs:
               ;;
           esac
 
+      # QNBS-v3: both macOS legs build 'WorldScript Studio.app.tar.gz'; the Intel payload and its signature get their own name before upload, so the release job never sees a duplicate (#507).
+      - name: Name the Intel updater payload uniquely
+        if: matrix.arch == 'x86_64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir=src-tauri/target/release/bundle/macos
+          # Accept the spaced and the dotted basename, as find_bundle_asset does; both at once is ambiguous.
+          found=()
+          for base in 'WorldScript Studio' 'WorldScript.Studio'; do
+            if [ -e "$dir/$base.app.tar.gz" ]; then found+=("$base"); fi
+          done
+          if [ "${#found[@]}" -gt 1 ]; then
+            echo "::error::both the spaced and the dotted Intel updater payload exist; refusing to pick one"
+            exit 1
+          elif [ "${#found[@]}" -eq 1 ]; then
+            base="${found[0]}"
+            mv -- "$dir/$base.app.tar.gz" "$dir/${base}_x64.app.tar.gz"
+            mv -- "$dir/$base.app.tar.gz.sig" "$dir/${base}_x64.app.tar.gz.sig"
+            echo "renamed the Intel updater payload and its signature to ${base}_x64.app.tar.gz"
+          elif [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "::error::a tag push build must produce the Intel updater payload"
+            exit 1
+          else
+            echo "no updater payload in this build (workflow_dispatch builds create none, also on a tag ref)"
+          fi
+
       # QNBS-v3: each macOS leg must build a native bundle of its declared arch, and its DMG must mount and contain that app (#507).
       - name: Verify the macOS bundle architecture and DMG
         if: contains(matrix.os, 'macos')
@@ -467,8 +489,11 @@ jobs:
             echo "::error::Release notes claim #332 or #341 closure"
             exit 1
           fi
-          if grep -Eiq '(macOS|Mac)[^\n]*(Intel|x86_64)[^\n]*(supported|available|provided|published|built)|Intel[^\n]*(macOS|Mac)[^\n]*(supported|available|provided|published|built)' release-notes.md; then
-            echo "::error::Release notes claim unsupported Intel macOS support"
+          # QNBS-v3: Intel macOS ships since #507, so the notes may say so; OS code signing is deferred (#574), so every line naming notarization, Developer ID or Authenticode must cite #574.
+          signing_lines="$(grep -Ei 'notari[sz]|developer[- ]id|authenticode' release-notes.md | grep -Fv '#574' || true)"
+          if [ -n "$signing_lines" ]; then
+            echo "::error::Release notes mention notarization, Developer ID or Authenticode without citing the deferral #574"
+            printf '%s\n' "$signing_lines"
             exit 1
           fi
 
@@ -500,7 +525,7 @@ jobs:
           done < <(find downloaded -type f \( -name '*.third-party-notices.txt' -o -name '*.cdx.json' \) -print0)
           node scripts/release-assets-guard.mjs assets "$VERSION" release-assets
 
-      - name: Generate and validate all three signed updater manifest entries
+      - name: Generate and validate all four signed updater manifest entries
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
