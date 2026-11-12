@@ -1,8 +1,7 @@
 /**
- * KokoroTtsEngine — local text-to-speech via @huggingface/transformers v3 (Kokoro-82M, ONNX).
- * QNBS-v3: Phase 3 — high-quality local TTS; gated behind enableVoiceWasm flag.
- *          Kokoro TTS is supported by transformers.js v3.3+ via the text-to-speech pipeline.
- * Falls back to Web Speech API if model load fails.
+ * KokoroTtsEngine — local text-to-speech with Kokoro-82M (ONNX); gated behind the enableVoiceWasm flag.
+ * Not available in this build: the bundled Transformers.js text-to-speech pipeline rejects Kokoro's model type
+ * (style_text_to_speech_2), and Kokoro also needs a phonemizer the app does not ship. The factory then uses the system voice.
  */
 
 import type { VoiceTtsEngine } from '../../types';
@@ -12,6 +11,10 @@ import type { TtsEngine, TtsUtterance } from './voiceTypes';
 // @huggingface/transformers types — Kokoro text-to-speech returns { audio, sampling_rate }
 type TtsPipelineResult = { audio: Float32Array; sampling_rate: number };
 type TtsPipeline = (text: string, opts: Record<string, unknown>) => Promise<TtsPipelineResult>;
+
+/** Why Kokoro cannot run in this build; logged on fallback and returned by the TTS model download. */
+export const KOKORO_UNAVAILABLE_REASON =
+  'Kokoro TTS is not available in this version: its model type (style_text_to_speech_2) needs a phonemizer and model loader that this build does not include.';
 
 export class KokoroTtsEngine implements TtsEngine {
   readonly id: VoiceTtsEngine = 'kokoro';
@@ -23,15 +26,9 @@ export class KokoroTtsEngine implements TtsEngine {
   private currentSource: AudioBufferSourceNode | null = null;
   private resolveCurrent: (() => void) | null = null;
 
-  async isAvailable(): Promise<boolean> {
-    if (typeof WebAssembly === 'undefined') return false;
-    if (typeof AudioContext === 'undefined') return false;
-    try {
-      const { pipeline } = await import('../../packages/ai-core/src/vendor-transformers');
-      return typeof pipeline === 'function';
-    } catch {
-      return false;
-    }
+  // QNBS-v3 (#556): truthful availability; every real-runtime evidence run failed with "Unsupported model type style_text_to_speech_2".
+  isAvailable(): Promise<boolean> {
+    return Promise.resolve(false);
   }
 
   async initialize(): Promise<void> {

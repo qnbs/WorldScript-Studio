@@ -553,7 +553,7 @@ export class VoiceCommandService {
   // ── Voice WASM Model Download ───────────────────────────────────────────────
 
   /**
-   * QNBS-v3: P1-2 — Download WASM voice models (Whisper STT + Kokoro TTS).
+   * QNBS-v3: P1-2 — Download the WASM voice model (Whisper STT; Kokoro TTS rejects with its unavailability reason).
    * Called from VoiceModelDownloadModal when enableVoiceWasm is toggled.
    */
   // QNBS-v3: P1-2 / CodeAnt P2-3 — signal allows VoiceModelDownloadModal cancel to abort mid-download
@@ -567,7 +567,16 @@ export class VoiceCommandService {
       return;
     }
 
-    const modelId = modelType === 'stt' ? 'Xenova/whisper-tiny.en' : 'onnxruntime-community/kokoro';
+    // QNBS-v3 (#556): never fetch a TTS model Kokoro cannot load; the old id 'onnxruntime-community/kokoro' returns HTTP 401.
+    if (modelType === 'tts') {
+      const { KOKORO_UNAVAILABLE_REASON } = await import('./kokoroTtsEngine');
+      this.d(
+        settingsActions.setVoiceSettings({ voiceWasmDownloadError: KOKORO_UNAVAILABLE_REASON }),
+      );
+      throw new Error(KOKORO_UNAVAILABLE_REASON);
+    }
+
+    const modelId = 'Xenova/whisper-tiny.en';
 
     // QNBS-v3: Trigger model download via transformers pipeline warm-up.
     // This forces the model to be fetched and cached in browser storage.
@@ -597,7 +606,7 @@ export class VoiceCommandService {
       );
 
       // Create pipeline to trigger model download
-      const task = modelType === 'stt' ? 'automatic-speech-recognition' : 'text-to-speech';
+      const task = 'automatic-speech-recognition';
       const createPipeline = pipeline as (
         task: string,
         model: string,
