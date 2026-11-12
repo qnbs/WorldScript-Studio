@@ -19,6 +19,8 @@ describe('hasRemoteWasmPath (#556)', () => {
     ['a CDN prefix string', CDN, true],
     ['another origin', { wasm: 'https://example.com/ort.wasm' }, true],
     ['an unparsable absolute URL', 'https://', true],
+    ['a scheme-relative URL on another host', { wasm: '//cdn.jsdelivr.net/ort.wasm' }, true],
+    ['a same-origin scheme-relative URL', { wasm: '//qnbs.github.io/assets/ort.wasm' }, false],
     ['a same-origin absolute URL', { wasm: `${ORIGIN}/WorldScript-Studio/assets/ort.wasm` }, false],
     ['a root-relative path', { wasm: '/WorldScript-Studio/assets/ort.wasm' }, false],
     ['a blob URL', { mjs: `blob:${ORIGIN}/0b5c`, wasm: '/assets/ort.wasm' }, false],
@@ -29,6 +31,7 @@ describe('hasRemoteWasmPath (#556)', () => {
 
   it('treats an absolute URL as remote when the page origin is unknown', () => {
     expect(hasRemoteWasmPath(transformersDefault(), undefined)).toBe(true);
+    expect(hasRemoteWasmPath({ wasm: '//qnbs.github.io/assets/ort.wasm' }, undefined)).toBe(true);
   });
 });
 

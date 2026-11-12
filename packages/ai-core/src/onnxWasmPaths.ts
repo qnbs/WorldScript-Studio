@@ -6,10 +6,13 @@
 type WasmPaths = string | { mjs?: string | URL; wasm?: string | URL } | undefined;
 
 function isRemote(value: string, origin: string | undefined): boolean {
-  if (!/^[a-z][a-z0-9+.-]*:/i.test(value)) return false;
+  // A scheme-relative `//host/path` names a host just like an absolute URL; resolve it against the page.
+  const schemeRelative = value.startsWith('//');
+  if (!schemeRelative && !/^[a-z][a-z0-9+.-]*:/i.test(value)) return false;
+  if (schemeRelative && origin === undefined) return true;
   let url: URL;
   try {
-    url = new URL(value);
+    url = schemeRelative ? new URL(value, origin) : new URL(value);
   } catch {
     return true;
   }
