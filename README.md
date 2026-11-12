@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/TypeScript-tsgo_native_preview-3178C6?logo=typescript&logoColor=white" alt="TypeScript native preview (tsgo)">
   <img src="https://img.shields.io/badge/Desktop-Tauri_2-FFC131?logo=tauri&logoColor=black" alt="Tauri 2">
   <img src="https://img.shields.io/badge/i18n-19_locales_%2F_2963_keys-0EA5E9" alt="19 locales — 2963 keys">
-  <img src="https://img.shields.io/badge/Tests-8862%2B_%2F_671_files-22C55E" alt="8862+ tests / 671 files">
+  <img src="https://img.shields.io/badge/Tests-8872%2B_%2F_672_files-22C55E" alt="8872+ tests / 672 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github&label=CI" alt="CI status">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="MIT License">
@@ -106,6 +106,7 @@ WorldScript has no user accounts, by design: there is nothing to sign up for and
 AI is integrated throughout the product, but the central object is still the **project**: manuscript sections, characters, worlds, plot structure, comments, snapshots, research, goals, export settings, and related metadata.
 
 The application is intended to remain useful when:
+
 - no API key is configured;
 - no cloud provider is reachable;
 - local AI has not been downloaded;
@@ -114,12 +115,14 @@ The application is intended to remain useful when:
 ### Privacy-oriented without pretending the network does not exist
 
 By design, WorldScript has:
+
 - no user accounts;
 - no server-side manuscript storage;
 - no central project database;
 - no mandatory cloud AI.
 
 When you choose a networked feature, that boundary is made explicit:
+
 - cloud AI sends the prompt/context required for that request to the selected provider;
 - browser-native AI downloads model assets before local inference is possible;
 - collaboration uses signaling infrastructure to establish peer connections;
@@ -129,6 +132,7 @@ When you choose a networked feature, that boundary is made explicit:
 ### One workspace from idea to export
 
 The product spans:
+
 - ideation and templates;
 - outlining and scene planning;
 - characters and worldbuilding;
@@ -147,6 +151,7 @@ The product spans:
 ## Welcome Portal and project bootstrap
 
 The Welcome Portal is the first-run/project-entry surface. It can:
+
 - open a blank project;
 - load the demo project;
 - direct the user to templates and guided workflows;
@@ -158,6 +163,7 @@ Project imports, resets, and snapshot restores are treated as real project-incar
 ## Dashboard
 
 The Dashboard provides a project-level overview with local calculations for:
+
 - current word counts and goals;
 - writing momentum and streaks;
 - pace/deadline projections;
@@ -171,6 +177,7 @@ These calculations do not require a cloud AI call.
 ## Manuscript editor
 
 The Manuscript view is the primary writing surface:
+
 - chapter/section navigation;
 - editor + surrounding project context;
 - `@character` and `#world` linking/highlighting;
@@ -186,6 +193,7 @@ LanguageTool is **off by default** and should be treated as a network boundary u
 ## Writer / AI Writing Studio
 
 The Writer surface exposes focused AI-assisted writing operations such as:
+
 - continue writing;
 - improve/rewrite;
 - tone transformation;
@@ -216,6 +224,7 @@ Three visual planning modes coexist:
 | **Timeline** | Timeline/Gantt-style story sequencing                   |
 
 Additional planning layers include:
+
 - scene connections;
 - subplot filtering;
 - tension-curve visualization;
@@ -226,6 +235,7 @@ Additional planning layers include:
 ## Scenario workspace
 
 The **Scenario** view is a renderer-neutral, read-only projection of the canonical project model. It summarizes:
+
 - characters;
 - worlds;
 - outline entries;
@@ -238,6 +248,7 @@ It intentionally does **not** become a competing source of project truth.
 ## Characters
 
 Character dossiers support:
+
 - identity and descriptive fields;
 - backstory and motivations;
 - relationships and arcs;
@@ -250,6 +261,7 @@ Character dossiers support:
 ## Worlds
 
 Worldbuilding surfaces support:
+
 - history/lore;
 - geography;
 - locations;
@@ -277,6 +289,7 @@ A dedicated inventory can track props, artifacts, vehicles, documents, weapons, 
 ## Mind Maps
 
 Enhanced mind maps provide an SVG planning canvas with:
+
 - multiple node shapes;
 - entity links;
 - multi-map management;
@@ -289,6 +302,7 @@ The Research Binder keeps reference material adjacent to the manuscript and proj
 ## Book Preview
 
 The Preview view renders the manuscript as continuous formatted prose with:
+
 - a navigable table of contents;
 - display/font controls;
 - full-screen reading;
@@ -297,6 +311,7 @@ The Preview view renders the manuscript as continuous formatted prose with:
 ## Progress Tracker
 
 The Progress view includes:
+
 - daily/weekly goals;
 - writing-session timer;
 - streaks;
@@ -304,12 +319,12 @@ The Progress view includes:
 - activity heatmap;
 - writing-history-driven summaries.
 
-
 ## Voice and dictation
 
 Voice support is an **explicit opt-in capability** because microphone access is a privacy and permission boundary.
 
 Current voice layers include:
+
 - browser speech capabilities where available;
 - optional local WASM/ONNX voice components behind a separate opt-in;
 - voice commands/dictation only after the corresponding feature is enabled and permissions are granted.
@@ -321,6 +336,7 @@ Voice should not be interpreted as a mandatory part of the writing workflow: the
 ## Cross-project search
 
 Cross-project search uses a lightweight local index for fast discovery:
+
 - the persistent index stores project metadata rather than full manuscript plaintext;
 - deeper excerpts require loading the project on demand;
 - indexing is updated as projects are saved.
@@ -364,6 +380,7 @@ The current `FeatureFlagsState` contains the following feature authorities:
 | `enableBrowserOllama`       |   ❌    | Advanced browser→Ollama opt-in; requires user-managed CORS/origin configuration                              |
 
 Two earlier flags were intentionally retired:
+
 - cross-project search is permanent core behavior;
 - the previous Cloud Sync toggle was removed because WorldScript has no central cloud sync service.
 
@@ -378,6 +395,7 @@ WorldScript supports several execution families rather than one mandatory AI bac
 ### BYOK cloud providers
 
 Current provider integrations include:
+
 - Google Gemini;
 - OpenAI;
 - Anthropic Claude;
@@ -389,6 +407,7 @@ Provider model catalogs evolve faster than a README should. **The runtime Settin
 ### Local-server providers
 
 The desktop application can talk to local OpenAI-compatible/server-style runtimes, including:
+
 - Ollama;
 - LM Studio;
 - vLLM-compatible endpoints.
@@ -396,6 +415,7 @@ The desktop application can talk to local OpenAI-compatible/server-style runtime
 Desktop traffic uses the native Tauri HTTP transport for admitted endpoints.
 
 Direct browser→Ollama is a separate advanced feature:
+
 - off by default;
 - no automatic localhost probing while off;
 - requires the user to configure the local server's CORS/origin policy if enabled;
@@ -404,6 +424,7 @@ Direct browser→Ollama is a separate advanced feature:
 ### Browser-native inference
 
 The local browser stack includes:
+
 1. **WebLLM / WebGPU**
 2. **ONNX Runtime Web / WASM**
 3. **Transformers.js / WebGPU or WASM**
@@ -440,6 +461,7 @@ Claude has a different browser trust boundary from other providers:
 On edge hosts, the BYOK key, prompt, and response transit the WorldScript relay process. The **application relay code is designed not to persist or intentionally log those payloads**, but hosting/network infrastructure can still process connection metadata according to the host's own policies.
 
 See:
+
 - [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md)
 - [`docs/adr/0016-native-grok-and-claude-providers.md`](docs/adr/0016-native-grok-and-claude-providers.md)
 
@@ -448,6 +470,7 @@ See:
 ProForge is an optional eight-stage Human-in-the-Loop editorial pipeline.
 
 Important boundary:
+
 - pipeline orchestration, review state, and author approval are client-side;
 - the model calls used by pipeline agents still follow the configured AI provider/routing policy;
 - it is therefore inaccurate to describe ProForge as inherently "no-cloud" unless Local/Eco mode or a local provider is actually selected.
@@ -455,6 +478,7 @@ Important boundary:
 ## Global Copilot
 
 The Global Copilot is opt-in and can:
+
 - operate as a floating dialog or docked sidebar;
 - render structured Markdown safely;
 - surface local heuristic insights;
@@ -489,6 +513,7 @@ A guarantee in one row must never be generalized to another. For the detailed th
 ## No accounts and no manuscript backend
 
 By design, WorldScript Studio has:
+
 - no user accounts and no account registration;
 - no central manuscript hosting;
 - no WorldScript cloud project database;
@@ -543,6 +568,7 @@ API-key storage is distinct from project-data encryption.
 Provider keys are persisted through the local IndexedDB key store using a random, non-extractable AES-GCM key mechanism. They are not intended to be stored in normal project files.
 
 When a provider is used:
+
 - the key must be sent to that provider's API endpoint;
 - on Vercel/Cloudflare web builds, Claude's key additionally transits WorldScript's same-origin relay;
 - keys should never be placed in public source, repository config, or client-host environment variables as a replacement for BYOK.
@@ -550,6 +576,7 @@ When a provider is used:
 ## Encrypted library backup
 
 Settings → Data supports an encrypted library backup:
+
 - ZIP archive;
 - `META.json`;
 - encrypted `vault.bin`;
@@ -562,6 +589,7 @@ This protects the exported vault payload, but users still need to protect the ar
 DuckDB-WASM is a local analytics sidecar backed by OPFS.
 
 Current privacy model:
+
 - most persisted fields are local metadata;
 - literal manuscript prose in `codex_mentions.excerpt` is cell-level encrypted when IDB encryption is active;
 - other bounded metadata columns remain plaintext in DuckDB;
@@ -577,6 +605,7 @@ AI/provider hosts are treated as network-only rather than cached as normal appli
 ## Content Security Policy
 
 Deployment surfaces share a generated CSP origin policy, with host-specific delivery differences:
+
 - Vercel, Cloudflare Pages, Docker/nginx: response header + meta CSP;
 - GitHub Pages: meta CSP only because the host cannot inject arbitrary response headers;
 - Tauri: bundled CSP.
@@ -596,6 +625,7 @@ Deployment surfaces share a generated CSP origin policy, with host-specific deli
 - the PWA app shell can continue offline after caching.
 
 It does **not** mean:
+
 - every feature is available offline;
 - every persistence surface is encrypted;
 - model weights are bundled with the app;
@@ -622,6 +652,7 @@ WorldScript's Export Publishing Suite supports multiple output paths.
 - paste/copy workflows for tools such as Notion and Google Docs
 
 Export can selectively include:
+
 - project title/logline;
 - characters;
 - worlds;
@@ -635,6 +666,7 @@ AI-generated synopsis is optional and follows the configured AI routing/privacy 
 ## Project interchange
 
 Project-level import/export is separate from manuscript publishing:
+
 - project JSON/import paths;
 - desktop file associations for native project formats;
 - encrypted whole-library backup.
@@ -648,6 +680,7 @@ Do not confuse a manuscript export with a complete recoverable library backup.
 WorldScript supports real-time peer collaboration using Yjs and a maintained `collab-transport` vendor fork.
 
 Security characteristics:
+
 - production collaboration requires a password-derived room key;
 - Yjs sync and awareness payloads over RTCDataChannel are encrypted with AES-256-GCM;
 - PBKDF2-SHA-256 uses 600,000 iterations;
@@ -687,6 +720,7 @@ Shipped UI locales with **2963 i18n keys** across **19 locales**:
 - Korean (`ko`)
 
 Key parity is enforced by CI, but **translation quality is tiered**:
+
 - Production: de/en/es/fr/it
 - Near-production: ja/zh/pt/el
 - Beta/RTL Beta: remaining locales
@@ -704,6 +738,7 @@ Canvas/geometry-heavy visual planning surfaces can intentionally retain LTR coor
 ## Accessibility
 
 The project is **WCAG 2.2 AA–oriented**, with:
+
 - semantic/ARIA patterns;
 - keyboard navigation;
 - focus management;
@@ -743,6 +778,7 @@ This table is intentionally capability-oriented. It does not imply that every op
 ## PWA
 
 The web app ships:
+
 - Web App Manifest;
 - Service Worker;
 - offline shell/fallback;
@@ -756,6 +792,7 @@ Browser storage is **origin-specific**. GitHub Pages, Vercel, localhost, and ano
 ## Tauri desktop
 
 The Tauri v2 shell adds:
+
 - native application bundles;
 - native menu integration;
 - window-state restore;
@@ -781,6 +818,7 @@ Desktop releases carry three verifiable integrity layers:
 Do not turn off Gatekeeper or SmartScreen globally. An updater `.sig` does not make an installer OS-signed.
 
 See:
+
 - [`docs/TAURI-CI.md`](docs/TAURI-CI.md)
 - [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md)
 
@@ -814,7 +852,7 @@ The normal web PR pipeline is not the complete native release qualification surf
 | DOCX                 | `docx` + JSZip                                           | Word-compatible export                                         |
 | PWA                  | Service Worker + Web App Manifest                        | Offline shell/installability                                   |
 | i18n                 | Custom React i18n context                                | 2963 keys × 19 locales                                         |
-| Testing              | Vitest 5.x (8862+ tests / 671 files) + Playwright        | Unit/integration/E2E                                           |
+| Testing              | Vitest 5.x (8872+ tests / 672 files) + Playwright        | Unit/integration/E2E                                           |
 | Quality              | Biome + tsgo + CodeQL/security tooling                   | Static and CI gates                                            |
 | Desktop              | Tauri 2                                                  | Current native shell                                           |
 
@@ -849,6 +887,7 @@ The normal web PR pipeline is not the complete native release qualification surf
 The application distinguishes a logical project from a specific in-memory **project incarnation**. A generation counter is used alongside project identity so a reset/import/restore that reuses the same nominal ID can still invalidate stale asynchronous results.
 
 That invariant is important for AI and persistence:
+
 > asynchronous work that started for an old project incarnation must not silently mutate a newer active incarnation.
 
 ---
@@ -891,7 +930,7 @@ WorldScript-Studio/
 ├── locales/                 # Source locale trees
 ├── public/                  # PWA assets, manifest, SW, runtime locale bundles
 ├── tests/
-│   ├── unit/                # Vitest unit tests (the 8862+ total also includes components/ and packages/*/tests; tests/e2e is excluded)
+│   ├── unit/                # Vitest unit tests (the 8872+ total also includes components/ and packages/*/tests; tests/e2e is excluded)
 │   └── e2e/                 # Playwright
 ├── docs/                    # Canonical product/engineering documentation + ADRs
 ├── src-tauri/               # Tauri v2 desktop shell / Rust
@@ -933,6 +972,7 @@ pnpm run hooks:install
 Why not `pnpm install`?
 
 The repository intentionally uses `scripts/dependency-state.mjs reconcile` so dependency state is:
+
 - frozen-lockfile consistent;
 - verified;
 - fingerprinted for the repo's guardrails;
@@ -1001,6 +1041,7 @@ Use additional focused commands only when relevant to the change.
 ## Heavy suites
 
 Full:
+
 - coverage;
 - Playwright E2E;
 - deep E2E;
@@ -1014,6 +1055,7 @@ are primarily CI-owned in this repository and can be inappropriate on low-resour
 ## Quality gates
 
 The main CI includes layers for:
+
 - workflow/policy validation;
 - dependency/security auditing;
 - lint/typecheck/i18n;
@@ -1036,7 +1078,7 @@ Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendo
 
 Current source-synchronized README metrics:
 
-- **8862+ unit tests** across **671 test files**
+- **8872+ unit tests** across **672 test files**
 - i18n: **2963 keys × 19 locales**
 
 CI remains authoritative for actual pass/fail and live coverage.
@@ -1056,6 +1098,7 @@ pnpm run build
 ```
 
 Base path:
+
 ```text
 /WorldScript-Studio/
 ```
@@ -1071,6 +1114,7 @@ pnpm run build:edge
 ```
 
 Output:
+
 ```text
 dist
 ```
@@ -1080,6 +1124,7 @@ Vercel is also one of the hosts capable of serving the Claude same-origin proxy.
 ## Cloudflare Pages
 
 Also uses the edge/root build:
+
 ```bash
 node scripts/dependency-state.mjs reconcile
 pnpm run build:edge
@@ -1154,6 +1199,7 @@ GitHub Pages, Vercel, Cloudflare Pages, Docker/nginx, and Tauri have different h
 The roadmap is intentionally separated from shipped-product claims.
 
 Current strategic direction includes:
+
 - further AI provider/model/routing qualification;
 - deeper feature-flag E2E and production-bundle coverage;
 - local AI / voice hardening;
@@ -1168,6 +1214,7 @@ Current strategic direction includes:
 React/PWA remains the first-class current web product. Tauri is the current desktop shell. Qt/GPUI planning documents must not be read as evidence that those renderers are already implemented.
 
 See:
+
 - [`ROADMAP.md`](ROADMAP.md)
 - [`TODO.md`](TODO.md)
 - [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md)
@@ -1181,6 +1228,7 @@ See:
 Contributions are welcome.
 
 Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), which documents:
+
 - dependency reconciliation;
 - hooks;
 - branching/commit conventions;
@@ -1201,6 +1249,7 @@ pnpm run dev
 ```
 
 Before pushing:
+
 ```bash
 pnpm run ci:prepush
 ```
@@ -1218,12 +1267,14 @@ Use GitHub Private Vulnerability Reporting:
 https://github.com/qnbs/WorldScript-Studio/security/advisories/new
 
 The repository security policy defines:
+
 - reporting channel;
 - disclosure/embargo expectations;
 - threat-model references;
 - current security scope.
 
 See:
+
 - [`.github/SECURITY.md`](.github/SECURITY.md)
 - [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md)
 
@@ -1306,6 +1357,7 @@ WorldScript Studio is licensed under the **MIT License**. See [`LICENSE`](LICENS
 The software is provided **"AS IS"**, without warranty, under the terms of that license.
 
 WorldScript Studio is creative-writing software. AI-generated or heuristic output can be incomplete, incorrect, biased, or unsuitable for a specific purpose. Users remain responsible for:
+
 - their manuscript and published content;
 - provider/API terms and costs;
 - copyright and licensing obligations;
