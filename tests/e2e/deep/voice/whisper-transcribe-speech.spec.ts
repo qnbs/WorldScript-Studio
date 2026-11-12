@@ -11,4 +11,7 @@ test('transcribes generated speech into the manuscript', async ({ page }) => {
   await downloadRealSttModel(page);
   const textarea = await dictateInto(page);
   await expect(textarea).toHaveValue(/hello|world|dictation|test/i, { timeout: 120_000 });
+  // The speech is synthetic (espeak-ng), so the evidence log may record exactly what Whisper wrote.
+  await page.waitForTimeout(8_000);
+  console.log(`[evidence] transcript: ${JSON.stringify(await textarea.inputValue())}`);
 });
