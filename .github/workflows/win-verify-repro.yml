@@ -1,0 +1,80 @@
+# Evidence branch only (never merged): reproduce the v1.29.6 tag failure of "Cryptographically verify signed bundle
+# artifacts" on Windows (job 131015409409, run 43168295696) with the unchanged release code at 40dbb95e. No signing key.
+name: Windows verify-step reproduction (evidence)
+
+on:
+  push:
+    branches: [evidence/win-verify-repro-1296]
+
+permissions:
+  contents: read
+
+jobs:
+  # Same job id as the release workflow, so rust-cache computes the same key (v1-bundle-Windows_NT-x64-...).
+  bundle:
+    name: Reproduce on windows-latest
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 40dbb95e2dc54c072bbdd1bdf49b064fea534a27
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2
+        with:
+          workspaces: src-tauri
+          cache-all-crates: true
+          prefix-key: "v1"
+      - name: Bundle directory right after the cache restore
+        shell: bash
+        run: |
+          if [ -d src-tauri/target/release/bundle ]; then find src-tauri/target/release/bundle -type f | sed 's/^/| /'; else echo "| no bundle directory after restore"; fi
+      - name: Generate third-party notices and SBOM
+        id: third_party
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/generate-third-party-inventory.mjs --out third-party
+      - name: Build Tauri app (release script, dispatch branch, no signing key)
+        shell: bash
+        env:
+          NOTICES_FILE: ${{ steps.third_party.outputs.notices_file }}
+        run: |
+          set -euo pipefail
+          jq '.bundle.createUpdaterArtifacts = false' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
+          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+          test -s "third-party/${NOTICES_FILE}"
+          RESOURCES="$(jq -cn --arg src "../third-party/${NOTICES_FILE}" '{bundle: {resources: {($src): "THIRD_PARTY_NOTICES.txt"}}}')"
+          pnpm exec tauri build --config "$RESOURCES"
+      - name: Run the tag's verify step unchanged, with its output made visible
+        shell: bash
+        run: |
+          set -uo pipefail
+          node -e "const {parse}=require('yaml');const fs=require('fs');const s=parse(fs.readFileSync('.github/workflows/tauri-build.yml','utf8')).jobs.bundle.steps.find(x=>x.name==='Cryptographically verify signed bundle artifacts');fs.writeFileSync('verify-step.sh',s.run)"
+          git hash-object verify-step.sh | sed 's/^/| verify-step.sh blob /'
+          rc=0; GITHUB_REF_NAME=v1.29.6 bash --noprofile --norc -e -o pipefail verify-step.sh > verify-out.txt 2>&1 || rc=$?
+          echo "| verify step exit code: $rc"
+          sed 's/^/| /' verify-out.txt
+      - name: Diagnose the bundle file search
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "| bash: $BASH_VERSION"; type -a find | sed 's/^/| /'; find --version 2>&1 | head -1 | sed 's/^/| /'
+          echo "| all files under src-tauri/target/release/bundle:"; find src-tauri/target/release/bundle -type f -printf '%p %s\n' 2>&1 | sed 's/^/|   /'
+          sed -n '/^find_bundle_asset() {/,/^}/p' verify-step.sh > fba.sh
+          for n in "WorldScript Studio_1.29.6_x64-setup.exe" "WorldScript Studio_1.29.6_x64_en-US.msi"; do
+            out="$(bash --noprofile --norc -c 'set -euo pipefail; source fba.sh; find_bundle_asset "$1"' _ "$n")"; rc=$?
+            echo "| find_bundle_asset '$n' -> rc=$rc stdout=[$out]"
+          done
+      - name: Upload reproduction evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: win-verify-repro
+          path: |
+            verify-step.sh
+            verify-out.txt
+          retention-days: 14
