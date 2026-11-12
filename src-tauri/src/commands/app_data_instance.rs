@@ -142,8 +142,9 @@ mod tests {
     fn another_holder_makes_the_admission_shared_and_removes_nothing() {
         let dir = temp_app_data("shared");
         let locks = dir.join(PROJECT_LOCKS_DIR);
-        fs::write(locks.join("live.lock"), b"").unwrap();
+        // The other writer joins first; the project lock below is one it took afterwards and still holds.
         let other_process = join_writers(&dir).unwrap();
+        fs::write(locks.join("live.lock"), b"").unwrap();
         let outcome = AppDataInstance::default().admit_once(|| Ok(dir.clone()));
         assert_eq!(outcome, AppDataAdmission::new("shared", 0, None));
         assert!(locks.join("live.lock").exists());
