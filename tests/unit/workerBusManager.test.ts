@@ -200,7 +200,7 @@ describe('workerBusManager', () => {
       expect(mockRegisterPool).toHaveBeenCalledWith(
         'duckdb',
         expect.arrayContaining(['db.duckdb']),
-        expect.objectContaining({ workerScript: expect.stringContaining('duckdb.worker') }),
+        expect.objectContaining({ createWorker: expect.any(Function) }),
       );
     });
 
@@ -269,7 +269,7 @@ describe('workerBusManager', () => {
         expect.arrayContaining(['inference.text', 'inference.embed']),
         expect.objectContaining({
           maxWorkers: 2,
-          workerScript: expect.stringContaining('inference.worker'),
+          createWorker: expect.any(Function),
         }),
       );
     });

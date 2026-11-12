@@ -278,4 +278,107 @@ describe('WorkerPool', () => {
     expect(pool.getHealth().totalWorkers).toBe(1);
     await pool.terminateAll();
   });
+
+  // #1272: production shipped every worker as raw TypeScript; each start failed and the pool respawned at once, forever.
+  describe('worker creation and bounded respawn (#1272)', () => {
+    function poolWith(createWorker: () => Worker) {
+      return new WorkerPool('test-pool', ['inference.text'], {
+        maxWorkers: 1,
+        minWorkers: 1,
+        idleTimeoutMs: 120_000,
+        createWorker,
+        capabilities: ['inference.text'],
+        labels: {},
+      });
+    }
+    const crash = (worker: { worker: Worker }) =>
+      (worker.worker as unknown as MockWorker).dispatchEvent(
+        new ErrorEvent('error', { message: 'boom' }),
+      );
+
+    it('builds workers through the createWorker factory', async () => {
+      const createWorker = vi.fn(() => new MockWorker() as unknown as Worker);
+      const pool = poolWith(createWorker);
+      await pool.acquire();
+      expect(createWorker).toHaveBeenCalledTimes(1);
+      await pool.terminateAll();
+    });
+
+    it('needs a factory or a script', () => {
+      expect(
+        () =>
+          new WorkerPool('bare', [], {
+            maxWorkers: 1,
+            minWorkers: 0,
+            idleTimeoutMs: 1,
+            capabilities: [],
+            labels: {},
+          }),
+      ).toThrow('needs createWorker or workerScript');
+    });
+
+    it('backs off between respawns and stops after repeated crashes', async () => {
+      vi.useFakeTimers();
+      try {
+        const createWorker = vi.fn(() => new MockWorker() as unknown as Worker);
+        const pool = poolWith(createWorker);
+        let worker = await pool.acquire();
+        crash(worker); // 1st crash: immediate respawn
+        expect(createWorker).toHaveBeenCalledTimes(2);
+        worker = await pool.acquire();
+        crash(worker); // 2nd crash: respawn after 1 s
+        expect(createWorker).toHaveBeenCalledTimes(2);
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(createWorker).toHaveBeenCalledTimes(3);
+        worker = await pool.acquire();
+        crash(worker); // 3rd crash: respawn after 4 s
+        await vi.advanceTimersByTimeAsync(4_000);
+        expect(createWorker).toHaveBeenCalledTimes(4);
+        worker = await pool.acquire();
+        crash(worker); // 4th crash: the pool gives up
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(createWorker).toHaveBeenCalledTimes(4);
+        await expect(pool.acquire()).rejects.toThrow('stopped after 4 consecutive worker crashes');
+        expect(pool.tryAcquire()).toBeUndefined();
+        await pool.terminateAll();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a worker that finishes a task resets the crash count', async () => {
+      vi.useFakeTimers();
+      try {
+        const createWorker = vi.fn(() => new MockWorker() as unknown as Worker);
+        const pool = poolWith(createWorker);
+        for (let round = 0; round < 6; round += 1) {
+          const worker = await pool.acquire();
+          pool.release(worker); // a finished task proves the script starts
+          const again = await pool.acquire();
+          crash(again);
+          await vi.advanceTimersByTimeAsync(5_000);
+        }
+        await expect(pool.acquire()).resolves.toBeDefined();
+        await pool.terminateAll();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a worker that cannot even be constructed fails the pool instead of looping', async () => {
+      const createWorker = vi.fn(() => {
+        throw new DOMException('Refused by the Content Security Policy', 'SecurityError');
+      });
+      const pool = poolWith(createWorker);
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        expect(() => pool.tryAcquire()).toThrow('Content Security Policy');
+      }
+      // The fourth failed construction fails the pool; after that nothing is constructed any more.
+      expect(() => pool.tryAcquire()).toThrow('stopped after 4 consecutive worker crashes');
+      expect(pool.tryAcquire()).toBeUndefined();
+      await expect(pool.acquire()).rejects.toThrow('stopped after 4 consecutive worker crashes');
+      expect(createWorker).toHaveBeenCalledTimes(4);
+      await pool.terminateAll();
+    });
+  });
 });

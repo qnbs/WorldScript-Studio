@@ -19,6 +19,17 @@ export function getWorkerBus(): WorkerBus | null {
   return _bus;
 }
 
+// QNBS-v3 (#1272): each URL sits literally inside new Worker(...), the only shape Vite bundles; a standalone new URL shipped raw TypeScript.
+const createDuckDbWorker = () =>
+  new Worker(new URL('../workers/v2/duckdb.worker.ts', import.meta.url), { type: 'module' });
+const createInferenceWorker = () =>
+  new Worker(new URL('../workers/v2/inference.worker.ts', import.meta.url), { type: 'module' });
+// QNBS-v3: P1-1 — dedicated WebLLM (WebGPU) worker; its own pool keeps @mlc-ai/web-llm out of the transformers.js worker bundle.
+const createWebllmWorker = () =>
+  new Worker(new URL('../workers/v2/webllm.worker.ts', import.meta.url), { type: 'module' });
+const createPluginWorker = () =>
+  new Worker(new URL('../workers/plugin.worker.ts', import.meta.url), { type: 'module' });
+
 /** Returns the LegacyWorkerBusAdapter for old ai-core callers, or null if not initialized. */
 export function getLegacyAdapter(): LegacyWorkerBusAdapter | null {
   return _adapter;
@@ -54,7 +65,7 @@ async function duckDbPoolOptions() {
     maxWorkers: 1,
     minWorkers: 0,
     idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
-    workerScript: new URL('../workers/v2/duckdb.worker.ts', import.meta.url).href,
+    createWorker: createDuckDbWorker,
     capabilities: ['db.duckdb'] as const,
     labels: { pool: 'duckdb', version: 'v2' },
   };
@@ -78,7 +89,7 @@ async function inferencePoolOptions() {
     maxWorkers,
     minWorkers: MIN_WORKERS,
     idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
-    workerScript: new URL('../workers/v2/inference.worker.ts', import.meta.url).href,
+    createWorker: createInferenceWorker,
     capabilities: ['inference.text', 'inference.embed'] as const,
     labels: { pool: 'inference', version: 'v2' },
   };
@@ -133,10 +144,6 @@ async function doInitWorkerBus(): Promise<void> {
 
     const registry = new WorkerRegistry();
 
-    // QNBS-v3: P1-1 — dedicated WebLLM (WebGPU) worker. Separate pool keeps @mlc-ai/web-llm out
-    //          of the transformers.js worker bundle and isolates the GPU lifecycle.
-    const webllmUrl = new URL('../workers/v2/webllm.worker.ts', import.meta.url).href;
-
     const inferenceOptions = await inferencePoolOptions();
     registry.register({
       poolId: 'inference',
@@ -160,14 +167,13 @@ async function doInitWorkerBus(): Promise<void> {
         maxWorkers: 1,
         minWorkers: 0,
         idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
-        workerScript: webllmUrl,
+        createWorker: createWebllmWorker,
         capabilities: ['inference.webllm'],
         labels: { pool: 'webllm', version: 'v2' },
       },
     });
 
     // QNBS-v3: Plugin worker pool — isolated execution for sandboxed plugins (P0-2).
-    const pluginUrl = new URL('../workers/plugin.worker.ts', import.meta.url).href;
     registry.register({
       poolId: 'plugin',
       capabilities: ['plugin.execute'],
@@ -175,7 +181,7 @@ async function doInitWorkerBus(): Promise<void> {
         maxWorkers: 1,
         minWorkers: 0,
         idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
-        workerScript: pluginUrl,
+        createWorker: createPluginWorker,
         capabilities: ['plugin.execute'],
         labels: { pool: 'plugin', version: 'v1' },
       },

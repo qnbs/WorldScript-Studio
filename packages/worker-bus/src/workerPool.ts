@@ -11,6 +11,9 @@ import type { PooledWorker, WorkerCapability, WorkerPoolOptions } from './types'
 
 const log = createLogger('worker-bus:pool');
 
+/** Delay before the nth consecutive respawn (the first is immediate); past the list the pool gives up. */
+const RESPAWN_BACKOFF_MS = [0, 1_000, 4_000] as const;
+
 export interface PooledWorkerInstance extends PooledWorker {
   readonly worker: Worker;
   readonly channel: MessageChannel;
@@ -34,8 +37,11 @@ interface AcquireWaiter {
 
 export class WorkerPool {
   private entries: PoolEntry[] = [];
-  private readonly workerScript: string;
   private shutdownFlag = false;
+  /** Worker starts that crashed without ever answering a ping or finishing a task. */
+  private consecutiveCrashes = 0;
+  private failure: Error | null = null;
+  private respawnTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly availabilityListeners = new Set<() => void>();
   private readonly acquireWaiters: AcquireWaiter[] = [];
 
@@ -44,14 +50,15 @@ export class WorkerPool {
     public readonly capabilities: readonly WorkerCapability[],
     public readonly options: WorkerPoolOptions,
   ) {
-    this.workerScript = options.workerScript;
+    if (!options.createWorker && !options.workerScript) {
+      throw new Error(`Worker pool ${poolId} needs createWorker or workerScript`);
+    }
   }
 
   async acquire(signal?: AbortSignal): Promise<PooledWorkerInstance> {
     const worker = this.tryAcquire();
     if (worker) return worker;
-    if (this.shutdownFlag) throw new Error('Pool is shutting down');
-    if (signal?.aborted) throw new Error('Aborted');
+    this.assertCanWait(signal);
 
     return new Promise((resolve, reject) => {
       const waiterId = Symbol('worker-pool-waiter');
@@ -64,8 +71,14 @@ export class WorkerPool {
     });
   }
 
+  private assertCanWait(signal?: AbortSignal): void {
+    if (this.failure) throw this.failure;
+    if (this.shutdownFlag) throw new Error('Pool is shutting down');
+    if (signal?.aborted) throw new Error('Aborted');
+  }
+
   tryAcquire(): PooledWorkerInstance | undefined {
-    if (this.shutdownFlag) return undefined;
+    if (this.shutdownFlag || this.failure) return undefined;
     const idle = this.entries.find((entry) => entry.instance.state === 'idle');
     if (idle) {
       this.setBusy(idle.instance.workerId);
@@ -91,6 +104,8 @@ export class WorkerPool {
       return;
     }
     this.setIdle(worker.workerId);
+    // A worker that finished a task proves the script starts; earlier crashes no longer count.
+    this.consecutiveCrashes = 0;
     entry.idleTimer = setTimeout(() => {
       if (this.entries.length > this.options.minWorkers) {
         this.terminateEntry(entry);
@@ -101,6 +116,8 @@ export class WorkerPool {
 
   async terminateAll(): Promise<void> {
     this.shutdownFlag = true;
+    if (this.respawnTimer) clearTimeout(this.respawnTimer);
+    this.respawnTimer = null;
     for (const waiter of this.acquireWaiters.splice(0)) {
       waiter.signal?.removeEventListener('abort', waiter.onAbort);
       waiter.reject(new Error('Pool is shutting down'));
@@ -122,7 +139,7 @@ export class WorkerPool {
     if (!entry) return;
     log.warn(`Worker ${workerId} force-terminated after exceeding its task timeout`);
     this.setCrashed(workerId);
-    this.restartWorker(entry);
+    this.restartWorker(entry, false);
   }
 
   getHealth(): {
@@ -139,11 +156,23 @@ export class WorkerPool {
     };
   }
 
-  private spawnWorker(): PooledWorkerInstance {
-    const workerId = crypto.randomUUID();
-    const worker = new Worker(new URL(this.workerScript, import.meta.url), {
+  private createWorker(): Worker {
+    if (this.options.createWorker) return this.options.createWorker();
+    return new Worker(new URL(this.options.workerScript ?? '', import.meta.url), {
       type: 'module',
     });
+  }
+
+  private spawnWorker(): PooledWorkerInstance {
+    const workerId = crypto.randomUUID();
+    let worker: Worker;
+    try {
+      worker = this.createWorker();
+    } catch (error) {
+      // QNBS-v3 (#1272): a worker that cannot even be constructed (e.g. a CSP-blocked script) counts as a crash.
+      this.recordCrash(error instanceof Error ? error.message : String(error));
+      throw this.failure ?? error;
+    }
     const channel = new MessageChannel();
 
     const instance: PooledWorkerInstance = {
@@ -197,6 +226,7 @@ export class WorkerPool {
       const pongHandler = (event: MessageEvent) => {
         if (event.data?.kind === 'PONG' && event.data?.taskId === pingId) {
           clearTimeout(entry.pongTimer ?? undefined);
+          this.consecutiveCrashes = 0;
           entry.instance.port.removeEventListener('message', pongHandler);
         }
       };
@@ -211,12 +241,47 @@ export class WorkerPool {
     entry.pongTimer = null;
   }
 
-  private restartWorker(entry: PoolEntry): void {
+  // QNBS-v3 (#1272): bounded respawn; a script that never starts no longer loops as fast as the browser can fail it.
+  private restartWorker(entry: PoolEntry, crashed = true): void {
     this.terminateEntry(entry);
-    if (!this.shutdownFlag) {
-      this.spawnWorker();
-      this.notifyAvailable();
+    if (this.shutdownFlag) return;
+    const delay = crashed ? this.recordCrash('worker crashed') : 0;
+    if (this.failure) return;
+    if (delay === 0) {
+      this.respawn();
+      return;
     }
+    this.respawnTimer ??= setTimeout(() => {
+      this.respawnTimer = null;
+      this.respawn();
+    }, delay);
+  }
+
+  private respawn(): void {
+    if (this.shutdownFlag || this.failure) return;
+    try {
+      this.spawnWorker();
+    } catch {
+      return; // spawnWorker recorded it; a failed pool has already rejected its waiters
+    }
+    this.notifyAvailable();
+  }
+
+  /** Counts a crash and returns the respawn delay, or fails the pool once the backoff list is used up. */
+  private recordCrash(reason: string): number {
+    this.consecutiveCrashes += 1;
+    const delay = RESPAWN_BACKOFF_MS[this.consecutiveCrashes - 1];
+    if (delay !== undefined) return delay;
+    this.failure = new Error(
+      `Worker pool ${this.poolId} stopped after ${this.consecutiveCrashes} consecutive worker crashes: ${reason}`,
+    );
+    log.error(this.failure.message);
+    for (const waiter of this.acquireWaiters.splice(0)) {
+      waiter.signal?.removeEventListener('abort', waiter.onAbort);
+      waiter.reject(this.failure);
+    }
+    for (const listener of this.availabilityListeners) listener();
+    return 0;
   }
 
   private terminateEntry(entry: PoolEntry): void {

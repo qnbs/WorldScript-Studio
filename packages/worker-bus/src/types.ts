@@ -187,7 +187,14 @@ export interface WorkerPoolOptions {
   readonly maxWorkers: number;
   readonly minWorkers: number;
   readonly idleTimeoutMs: number;
-  readonly workerScript: string;
+  /**
+   * Builds one worker. Pass `() => new Worker(new URL('./x.worker.ts', import.meta.url), { type: 'module' })`
+   * with the URL literally inside `new Worker(...)`: only that shape makes Vite bundle the worker for production;
+   * a standalone `new URL(...)` of a .ts file ships the raw TypeScript as an asset (#1272).
+   */
+  readonly createWorker?: () => Worker;
+  /** Script URL for a pool without `createWorker` (tests, prebuilt .js workers). */
+  readonly workerScript?: string;
   readonly capabilities: readonly WorkerCapability[];
   readonly labels: Record<string, string>;
 }
