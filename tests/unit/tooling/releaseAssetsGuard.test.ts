@@ -156,7 +156,7 @@ describe('signed updater manifest gate', () => {
       signatures,
     });
 
-  it('requires all three exact release platforms and sidecar-matching signatures', () => {
+  it('requires every exact release platform and installer entry with sidecar-matching signatures', () => {
     expect(valid().ok).toBe(true);
     const missingPlatform = manifest();
     const partialPlatforms = { ...missingPlatform.platforms } as Record<string, unknown>;
@@ -346,8 +346,11 @@ describe('per-installer updater entries (#1248)', () => {
   it('applies the signed-version check to the per-installer entries too', () => {
     const otherVersion = boundSignature(installers[1], '1.29.2');
     const changed = manifest();
-    (changed.platforms as Record<string, { signature: string }>)['linux-x86_64-rpm'].signature =
-      otherVersion;
+    const rpmEntry = (changed.platforms as Record<string, { signature: string } | undefined>)[
+      'linux-x86_64-rpm'
+    ];
+    expect(rpmEntry).toBeDefined();
+    if (rpmEntry) rpmEntry.signature = otherVersion;
     const result = validateLatestManifest({
       manifest: changed,
       version,
