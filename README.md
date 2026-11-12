@@ -766,12 +766,19 @@ The Tauri v2 shell adds:
 
 ### Release trust
 
-Tauri updater artifacts can use Minisign-compatible updater signatures when the repository signing secrets are configured.
+Desktop releases carry three verifiable integrity layers:
 
-That is **not the same as operating-system code signing**:
-- Windows Authenticode requires its own certificate/process;
-- macOS Developer ID signing/notarization requires Apple credentials;
-- updater integrity signatures do not make an unsigned installer OS-trusted.
+- **A signed Git tag** on protected `main`.
+- **A SHA-256 digest for every release asset**, shown on the GitHub release page. Compare it with `sha256sum <file>` (Linux), `shasum -a 256 <file>` (macOS) or `Get-FileHash <file>` (Windows).
+- **Minisign updater signatures** (`.sig`) bound to the release version, checked by the app before it installs an update and by the release workflow before it publishes.
+
+**The installers are not signed at operating-system level.** There is no Apple Developer ID signature or notarization and no Windows Authenticode signature. The credentials are not available, and the maintainer has deferred this (#574). As a result:
+
+- **macOS** blocks the first launch. After checking the download, allow it once under _System Settings → Privacy & Security → Open Anyway_.
+- **Windows** shows SmartScreen and an "unknown publisher" prompt. After checking the download, choose _More info → Run anyway_.
+- **Linux** packages have no OS publisher signature either; verify them with the digest above.
+
+Do not turn off Gatekeeper or SmartScreen globally. An updater `.sig` does not make an installer OS-signed.
 
 See:
 - [`docs/TAURI-CI.md`](docs/TAURI-CI.md)
