@@ -214,6 +214,22 @@ describe('VoiceCommandService', () => {
       await service.stopListening();
     });
 
+    it('a failing release of the old engines is logged and the start still builds the new ones', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      const { logger } = await import('../../../../services/logger');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      await service.initialize();
+      const engine = await vi.mocked(createSttEngine).mock.results[0]?.value;
+      vi.mocked(engine.dispose).mockRejectedValueOnce(new Error('dispose failed'));
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      await service.startDictation();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Releasing the previous voice engines failed',
+        expect.objectContaining({ message: 'dispose failed' }),
+      );
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+    });
+
     it('an unrelated config change keeps the engines', async () => {
       const { createSttEngine } = await import('../../../../services/voice/sttEngine');
       service.setDispatch(vi.fn() as never, vi.fn() as never);

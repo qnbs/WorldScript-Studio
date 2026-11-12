@@ -225,6 +225,19 @@ describe('VoiceSettingsSection engine choice', () => {
     );
   });
 
+  it('a text-to-speech choice is stored as its engine id', async () => {
+    const user = userEvent.setup();
+    render(<VoiceSettingsSection />);
+    await user.selectOptions(
+      screen.getByLabelText('settings.voice.ttsEngine'),
+      'settings.voice.engine.webSpeech',
+    );
+    expect(mockHandleSettingChange).toHaveBeenLastCalledWith(
+      'voice',
+      expect.objectContaining({ ttsEngine: 'webSpeech' }),
+    );
+  });
+
   // Kokoro cannot run in this build: its option is visible but cannot be picked, instead of silently becoming Web Speech.
   // #1261: without the local-model flag the factory excludes Whisper, so the offline choice could not be honoured.
   it.each([
