@@ -7,7 +7,7 @@ Workflow: [`.github/workflows/tauri-build.yml`](../.github/workflows/tauri-build
 ## Triggers
 
 - **Manual:** Actions → “Tauri desktop build” → Run workflow
-- **Tags:** pushing `v*` (e.g. `v1.2.0`) starts a build on Ubuntu, Windows, and macOS (Apple Silicon) in parallel.
+- **Tags:** pushing `v*` (e.g. `v1.2.0`) starts a build on Ubuntu, Windows, macOS Apple Silicon and macOS Intel in parallel.
 
 ### Build matrix
 
@@ -16,28 +16,15 @@ Workflow: [`.github/workflows/tauri-build.yml`](../.github/workflows/tauri-build
 | `ubuntu-22.04`   | x86_64 (AppImage / deb / rpm)            | `linux-x86_64`       |
 | `windows-latest` | x86_64 (NSIS `-setup.exe`, MSI fallback) | `windows-x86_64`     |
 | `macos-latest`   | **aarch64** (Apple Silicon)              | `darwin-aarch64`     |
+| `macos-26-intel` | **x86_64** (Intel)                       | `darwin-x86_64`      |
 
-**Native Intel-Mac (x86_64) builds are not in the production release matrix.** `macos-13` (the last
-GitHub-hosted Intel runner using that label) was removed from the matrix on 2026-07-28: 3 consecutive
-tagged-release runs each had the `macos-13` job sit in GitHub's runner queue indefinitely (never
-reaching `in_progress`, so the job's own `timeout-minutes: 45` never applied) until GitHub's ~24h
-queue ceiling auto-cancelled it — and because the `release` job's `needs: [bundle]` only resolves
-once every matrix leg reaches a terminal state, this blocked the entire release for 24h even though
-Ubuntu/Windows/macOS-ARM all finished in ~12 minutes. This was a GitHub-hosted-runner availability
-issue (Intel macOS images were being phased out), not a bug in this repo's build logic.
+**Intel Macs (x86_64) are built natively on `macos-26-intel` (#507, from v1.29.6).**
 
-**Update (empirically re-verified):** GitHub's replacement label `macos-15-intel` (introduced
-2025-09-18, available through August 2027) does schedule and run successfully on this org's plan — a
-throwaway `workflow_dispatch` probe completed in full. A separate, qualification-only workflow,
-[`tauri-intel-qualification.yml`](../.github/workflows/tauri-intel-qualification.yml), builds the
-app on `macos-15-intel` to confirm the toolchain still works there; it is deliberately **not** wired
-into the production release matrix or `latest.json` — one successful build proves the runner label
-works, not that it's ready for regular release qualification (soak testing, artifact size/behavior
-parity with the ARM build, and a decision on ongoing maintenance cost are still open). Promoting it
-into the release matrix is tracked separately — see `docs/native/INTEL-MACOS-QUALIFICATION.md` and
-the Follow-ups section below. The `latest.json` generator already tolerates a missing arch (per-arch
-warning, hard-fail only if _no_ arch signs), so re-adding Intel to the release matrix needs no other
-changes once that decision is made.
+- **History:** `macos-13`, the last Intel runner under that label, left the matrix on 2026-07-28. Its jobs sat in GitHub's queue and never started, and because `release` waits for every bundle leg, that blocked the whole release for about 24 hours. `macos-15-intel` later provisioned, but pnpm 11 had no darwin-x64 binary.
+- **Now:** `macos-26-intel` is GitHub's standard x64 macOS 26 label, and pnpm 12.13.0 ships a darwin-x64 binary. Dispatch 43107697907 built a native x86_64 bundle there.
+- **Asset names:** Tauri names the macOS updater payload `WorldScript Studio.app.tar.gz` on both architectures, so the Intel leg renames its payload and `.sig` to `WorldScript Studio_x64.app.tar.gz` before upload. The Apple Silicon names stay unchanged.
+- **Release guard:** `scripts/release-assets-guard.mjs` requires the x64 DMG, the Intel updater payload and its signature, and the `x86_64-apple-darwin` notices and SBOM. It writes `darwin-x86_64` into `latest.json` with the same signed-version check as the other platforms.
+- **Release dependency:** the release needs both macOS legs. Every macOS leg checks its native architecture with `lipo` and verifies, mounts and inspects its DMG before upload. The installers are not notarized or Developer-ID-signed (#574).
 
 ## Outputs
 
@@ -56,7 +43,7 @@ Scope: Rust crates reachable from the desktop crate through normal dependency ed
 
 For a **`workflow_dispatch` on protected `main`**, the workflow also signs a deterministic throwaway payload with the configured updater secret, verifies it against the public key in `tauri.conf.json`, and proves tampered-payload and wrong-key signatures are rejected. This preflight publishes no assets. Manual matrix builds continue to disable updater bundle signing.
 
-On a **`v*` tag**, each matrix job cryptographically verifies every updater-signed target package against the public key in `tauri.conf.json` before uploading its bundle. After the annotated tag and exact-ref OSV gates pass, the `release` job requires every matrix installer, required sidecar signature, three per-target SBOMs and three notices files. It preserves separate bundle directories so duplicate basenames cannot be overwritten during collection, and generates and validates all three `latest.json` updater entries before any public release is created. GitHub first receives the complete set as a **draft**; the job reads the uploaded asset inventory and SHA-256 digests back and publishes the draft only when they exactly match the validated local files. It then reads back the published tag state and final inventory. Missing, extra, mislabeled, empty, mismatched, or cryptographically invalid assets fail closed and leave the release unpublished.
+On a **`v*` tag**, each matrix job cryptographically verifies every updater-signed target package against the public key in `tauri.conf.json` before uploading its bundle. After the annotated tag and exact-ref OSV gates pass, the `release` job requires every matrix installer, required sidecar signature, four per-target SBOMs and four notices files. It preserves separate bundle directories so duplicate basenames cannot be overwritten during collection, and generates and validates all four `latest.json` updater entries before any public release is created. GitHub first receives the complete set as a **draft**; the job reads the uploaded asset inventory and SHA-256 digests back and publishes the draft only when they exactly match the validated local files. It then reads back the published tag state and final inventory. Missing, extra, mislabeled, empty, mismatched, or cryptographically invalid assets fail closed and leave the release unpublished.
 
 This workflow is **independent** of the web PWA pipeline ([`docs/CI.md`](CI.md)); it does not gate GitHub Pages deploy.
 
@@ -138,7 +125,7 @@ Complete these steps once before pushing the first signed release tag:
    - TAURI_SIGNING_PRIVATE_KEY_PASSWORD  (key password or empty string)
 
 3. Push a v*.* tag  (e.g. git tag v1.6.0 && git push --tags)
-   → All 3 matrix jobs build and sign bundles
+   → All 4 matrix jobs build and sign bundles
    → security-audit runs the exact-ref OSV audit of the tagged commit (#911)
    → release job uploads installers + latest.json to GitHub Release, only if
      security-audit succeeded for that same SHA (otherwise it never runs)
@@ -146,9 +133,10 @@ Complete these steps once before pushing the first signed release tag:
 4. Verify release-assets in the GitHub Release:
    - tauri-bundle-ubuntu-22.04  → .deb, .AppImage + .sig files
    - tauri-bundle-windows-latest → .msi/.exe + .sig files
-   - tauri-bundle-macos-latest  → .dmg + .app.tar.gz (aarch64) + .sig files
-   - latest.json  (auto-updater manifest with linux/windows/darwin-aarch64 entries — no
-     darwin-x86_64; Intel Mac builds are deferred, see the Build matrix section above)
+   - tauri-bundle-macos-latest  → `_aarch64.dmg` + `WorldScript Studio.app.tar.gz` + .sig
+   - tauri-bundle-macos-26-intel → `_x64.dmg` + `WorldScript Studio_x64.app.tar.gz` + .sig
+   - latest.json  (auto-updater manifest with linux-x86_64, windows-x86_64, darwin-aarch64 and
+     darwin-x86_64 entries; the release guard requires all four)
 
 5. Download the installer for your OS, install the app, open it.
 
@@ -206,5 +194,5 @@ See [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) for full secrets reference and p
 
 - macOS notarization requires `APPLE_*` secrets — see [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) § macOS code signing.
 - Windows Authenticode signing requires a CA-issued Authenticode certificate — track in [`TODO.md`](../TODO.md).
-- Promoting `tauri-intel-qualification.yml`'s `macos-15-intel` build into the production release matrix requires extending the release guard's enumerated installer and updater-key matrix, its signed-manifest validation, and the platform-specific release tests before adding a real `darwin-x86_64` `latest.json` entry; ongoing soak testing is also required. See `docs/native/INTEL-MACOS-QUALIFICATION.md` for current status and the tracking issue.
+- `tauri-intel-qualification.yml` remains a dispatch-only Intel lane for checks between releases; the release itself builds Intel in the `bundle` matrix. See `docs/native/INTEL-MACOS-QUALIFICATION.md`.
 ```

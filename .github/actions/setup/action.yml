@@ -31,6 +31,8 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         node-version-file: ${{ inputs.node-version == '' && inputs.node-version-file || '' }}
+        # QNBS-v3: newest patch of the requested major from actions/node-versions, not the runner image's toolcache, which lagged a security release on 2026-11-11 (#1245).
+        check-latest: true
         cache: pnpm
 
     - name: Assert toolchain

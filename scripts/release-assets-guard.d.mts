@@ -6,12 +6,16 @@ export type ReleaseAssetKind =
   | 'windowsMsi'
   | 'macDmg'
   | 'macUpdater'
+  | 'macIntelDmg'
+  | 'macIntelUpdater'
   | 'linuxSbom'
   | 'linuxNotices'
   | 'windowsSbom'
   | 'windowsNotices'
   | 'macSbom'
-  | 'macNotices';
+  | 'macNotices'
+  | 'macIntelSbom'
+  | 'macIntelNotices';
 
 export interface AssetValidationResult {
   ok: boolean;
@@ -35,6 +39,9 @@ export function validateReleaseAssetNames(
   assetNames: readonly string[],
   version: string,
 ): AssetValidationResult;
+
+/** The version an updater signature's trusted comment binds, or null when it binds none (#1215). */
+export function signedUpdaterVersion(signature: unknown): string | null;
 
 export function validateLatestManifest(input: {
   manifest: unknown;

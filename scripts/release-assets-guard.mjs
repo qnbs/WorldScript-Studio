@@ -5,7 +5,7 @@ import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
-const PLATFORMS = ['linux-x86_64', 'windows-x86_64', 'darwin-aarch64'];
+const PLATFORMS = ['linux-x86_64', 'windows-x86_64', 'darwin-aarch64', 'darwin-x86_64'];
 const SIGNED_ASSET_KEYS = [
   'linuxDeb',
   'linuxRpm',
@@ -13,11 +13,13 @@ const SIGNED_ASSET_KEYS = [
   'windowsSetup',
   'windowsMsi',
   'macUpdater',
+  'macIntelUpdater',
 ];
 const PLATFORM_ASSETS = [
   ['linux-x86_64', 'linuxAppImage'],
   ['windows-x86_64', 'windowsSetup'],
   ['darwin-aarch64', 'macUpdater'],
+  ['darwin-x86_64', 'macIntelUpdater'],
 ];
 
 function releasePatterns(version) {
@@ -30,6 +32,9 @@ function releasePatterns(version) {
     windowsMsi: new RegExp(`^WorldScript[ .]Studio_${escaped}_x64_en-US\\.msi$`),
     macDmg: new RegExp(`^WorldScript[ .]Studio_${escaped}_aarch64\\.dmg$`),
     macUpdater: /^WorldScript[ .]Studio\.app\.tar\.gz$/,
+    // #507: the Intel leg renames its payload, which Tauri names like the Apple Silicon one, before upload.
+    macIntelDmg: new RegExp(`^WorldScript[ .]Studio_${escaped}_x64\\.dmg$`),
+    macIntelUpdater: /^WorldScript[ .]Studio_x64\.app\.tar\.gz$/,
     linuxSbom: new RegExp(`^worldscript-studio-${escaped}-x86_64-unknown-linux-gnu\\.cdx\\.json$`),
     linuxNotices: new RegExp(
       `^worldscript-studio-${escaped}-x86_64-unknown-linux-gnu\\.third-party-notices\\.txt$`,
@@ -41,6 +46,10 @@ function releasePatterns(version) {
     macSbom: new RegExp(`^worldscript-studio-${escaped}-aarch64-apple-darwin\\.cdx\\.json$`),
     macNotices: new RegExp(
       `^worldscript-studio-${escaped}-aarch64-apple-darwin\\.third-party-notices\\.txt$`,
+    ),
+    macIntelSbom: new RegExp(`^worldscript-studio-${escaped}-x86_64-apple-darwin\\.cdx\\.json$`),
+    macIntelNotices: new RegExp(
+      `^worldscript-studio-${escaped}-x86_64-apple-darwin\\.third-party-notices\\.txt$`,
     ),
   };
 }
@@ -108,6 +117,39 @@ function validBase64(value) {
   return Buffer.from(value, 'base64').toString('base64') === value;
 }
 
+const TRUSTED_COMMENT_PREFIX = 'trusted comment: ';
+
+/**
+ * The version an updater signature binds, read the way the shipped client reads it (#1215):
+ * minisign-verify 0.3.0 takes the third line of the decoded signature as the trusted comment
+ * (`trusted comment: ` prefix, lines split like Rust `str::lines`), and tauri-plugin-updater 2.14.1
+ * takes the first tab-separated `version:` field. Returns null when the signature binds none.
+ */
+export function signedUpdaterVersion(signature) {
+  if (!validBase64(signature)) return null;
+  const lines = Buffer.from(signature, 'base64')
+    .toString('utf8')
+    .split('\n')
+    .map((line) => line.replace(/\r$/, ''));
+  const trusted = lines[2];
+  if (!trusted?.startsWith(TRUSTED_COMMENT_PREFIX)) return null;
+  const field = trusted
+    .slice(TRUSTED_COMMENT_PREFIX.length)
+    .split('\t')
+    .find((part) => part.startsWith('version:'));
+  return field === undefined ? null : field.slice('version:'.length);
+}
+
+// Clients with requireSignedVersion reject a payload whose signature binds no or another version.
+function validateSignedVersion(platform, signature, version, errors) {
+  const signed = signedUpdaterVersion(signature);
+  if (signed === null || signed.replace(/^v+/, '') !== version) {
+    errors.push(
+      `${platform} signature does not bind version ${version} (signed: ${signed ?? 'none'})`,
+    );
+  }
+}
+
 function validRepositoryName(repository) {
   if (typeof repository !== 'string') return false;
   const parts = repository.split('/');
@@ -165,6 +207,7 @@ function validatePlatformEntry({ platforms, platform, assetKey, context, errors 
   if (!sidecar || entry.signature !== sidecar) {
     errors.push(`${platform} signature does not match the published updater sidecar`);
   }
+  validateSignedVersion(platform, entry.signature, context.version, errors);
 }
 
 function validatePlatformEntries(platforms, context, errors) {
@@ -302,6 +345,7 @@ function manifestForRelease(version, repository, selected, signatures) {
       'linux-x86_64': updater('linuxAppImage'),
       'windows-x86_64': updater('windowsSetup'),
       'darwin-aarch64': updater('macUpdater'),
+      'darwin-x86_64': updater('macIntelUpdater'),
     },
   };
 }
@@ -321,7 +365,7 @@ async function runGenerateMode(version, directory, repository) {
   });
   if (!result.ok) return report(result);
   await writeFile(join(directory, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  console.log('generated and validated latest.json for all three signed updater platforms');
+  console.log('generated and validated latest.json for all four signed updater platforms');
 }
 
 async function readManifest(directory) {
