@@ -40,6 +40,7 @@ jobs:
 
       # QNBS-v3: the x86_64-apple-darwin inventory must build like the release targets' do (#871), so promotion needs no new notices work.
       - name: Generate third-party notices and SBOM
+        id: third_party
         shell: bash
         run: |
           set -euo pipefail
@@ -49,6 +50,8 @@ jobs:
       # QNBS-v3: qualification-only, no updater secrets — disables updater artifacts, never publishes.
       - name: Build Tauri app (qualification, no updater artifacts)
         shell: bash
+        env:
+          NOTICES_FILE: ${{ steps.third_party.outputs.notices_file }}
         run: |
           set -euo pipefail
           if ! command -v jq &>/dev/null; then
@@ -57,8 +60,11 @@ jobs:
           fi
           jq '.bundle.createUpdaterArtifacts = false' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
           mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+          # QNBS-v3: embed the notices exactly like the release build does, so the qualified bundle ships THIRD_PARTY_NOTICES.txt too.
+          test -s "third-party/${NOTICES_FILE}"
+          RESOURCES="$(jq -cn --arg src "../third-party/${NOTICES_FILE}" '{bundle: {resources: {($src): "THIRD_PARTY_NOTICES.txt"}}}')"
           echo "Building Tauri app for macos-26-intel (qualification only)..."
-          pnpm exec tauri build
+          pnpm exec tauri build --config "$RESOURCES"
           echo "Tauri build completed successfully"
 
       # QNBS-v3: the qualification claim is a native x86_64 bundle whose DMG mounts and contains that app, checked like the release leg (#507).
