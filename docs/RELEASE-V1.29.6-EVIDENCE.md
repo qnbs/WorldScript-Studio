@@ -1,7 +1,10 @@
 # v1.29.6 release evidence
 
-**Status: PREPARED — version-preparation PR #1254.** Nothing is tagged or published. The tag
-`v1.29.6` is created only after a GO/NO-GO report and separate maintainer authorization (#1250).
+**Status: in preparation (version-preparation PR #1254 open).** `PREPARED` is reached only when #1254 is merged and the
+resulting-main gates pass; its merge commit is the release candidate. Gate results for that exact SHA are collected on
+#1250 and written into this record by the post-release truth PR, as for v1.29.5 (#1227), because any later change to
+this file would change the candidate. Nothing is tagged or published. The tag `v1.29.6` is created only after a
+GO/NO-GO report and separate maintainer authorization (#1250).
 
 ## Why 1.29.6
 
