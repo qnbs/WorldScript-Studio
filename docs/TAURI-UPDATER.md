@@ -61,6 +61,8 @@ Add the signing step to the Windows matrix leg in `.github/workflows/tauri-build
 
 ## Code signing (Windows / macOS)
 
+**Status: not available, deferred (#574, maintainer decision 2026-11-11).** No Apple Developer ID, notarization or Authenticode credentials exist, and their absence does not block a release. Updater signatures, signed tags, asset digests, notices and the SBOM stay required. Re-enable this section when the credentials verifiably exist or the policy changes.
+
 - **Windows**: Authenticode signing in CI (certificate in secrets) — configure via environment variables expected by your signing tool / Tauri bundler; document the exact variable names your certificate provider uses.
 - **macOS**: Apple Developer ID + `codesign` + notarization — typically requires `APPLE_*` secrets and is configured outside this repo's defaults.
 
