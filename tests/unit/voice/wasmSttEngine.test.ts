@@ -68,7 +68,7 @@ const withSilence = (sound: Float32Array, ms: number) => {
   window.set(sound);
   return window;
 };
-let decodedWindow = tone(1000);
+let decodedWindow: Float32Array = tone(1000);
 
 const decodeAudioData = vi.fn(async (buffer: ArrayBuffer) => {
   if (!hasHeader(buffer)) throw new DOMException('Unable to decode audio data', 'EncodingError');
