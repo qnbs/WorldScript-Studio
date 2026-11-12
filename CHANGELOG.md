@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Release gate:** The tag-time bundle signature check now says why it fails. In the v1.29.6 tag run, the first Windows attempt stopped in this step after two seconds with exit code 1 and no message; its cause is unknown, and the unchanged re-run passed. The step could fail like that: its bundle file search reported errors inside a command substitution, where they were swallowed, and run with the unchanged release code that path ends exactly so. The search now stops the step itself with the file name, the number of matches and a list of the bundle files, and a failing search stops it too; an empty package is named; and any other failing command reports its line and command. The published v1.29.6 tag keeps its workflow; this applies from the next tag on (PR #1256).
 - **Release records:** The v1.29.6 evidence record is now `VERIFIED`: signed tag, the three tag runs (the Windows bundle job was re-run once, unchanged, after a silent verify-step failure that two reproductions with the unchanged release code could not repeat), 25 release assets, all seven `latest.json` entries checked against the shipped updater key and bound to `version:1.29.6`, both macOS payloads read back as native arm64 and x86_64, and the published GHCR image with DOMPurify 3.4.17. The README release badge shows v1.29.6 (PR #1255).
 
 ## [1.29.6] — 2026-11-12
