@@ -1,0 +1,63 @@
+# Evidence branch only (#1217 Phase 0), never merged: does tauri-driver attach to the installed v1.29.5 release?
+name: tauri-driver Phase 0 (evidence)
+
+on:
+  # workflow_dispatch needs the file on the default branch; this evidence branch runs on its own pushes instead.
+  push:
+    branches: [evidence/tauri-driver-phase0-1217]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Phase 0 Linux (installed .deb)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          check-latest: true
+      - name: Download and verify the published v1.29.5 .deb
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download v1.29.5 --repo "$GITHUB_REPOSITORY" --pattern '*_amd64.deb' --dir pkg
+          deb="$(ls pkg/*.deb)"
+          expected="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v1.29.5" --jq '.assets[] | select(.name | endswith("_amd64.deb")) | .digest')"
+          actual="sha256:$(sha256sum "$deb" | cut -d' ' -f1)"
+          echo "release $expected | download $actual"
+          [ "$expected" = "$actual" ]
+          echo "DEB=$deb" >> "$GITHUB_ENV"
+      - name: Install WebKitWebDriver, Xvfb and the app's runtime dependencies
+        timeout-minutes: 15
+        run: bash scripts/ci/apt-install.sh webkit2gtk-driver xvfb libayatana-appindicator3-1 libwebkit2gtk-4.1-0 libgtk-3-0
+      - name: Install the published .deb
+        run: |
+          set -euo pipefail
+          sudo dpkg -i "$DEB"
+          dpkg -s world-script-studio | grep -E '^(Package|Version|Status):'
+          command -v WebKitWebDriver
+      - name: Install tauri-driver 2.1.0
+        run: cargo install tauri-driver --locked --version 2.1.0
+      - name: Attach a WebDriver session to the installed app
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+          export DISPLAY=:99
+          tauri-driver --native-driver "$(command -v WebKitWebDriver)" > out/tauri-driver.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4444/status >/dev/null 2>&1 && break; sleep 1; done
+          node scripts/evidence/webdriver-phase0.mjs /usr/bin/worldscript-studio out
+      - name: Upload Phase 0 evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tauri-driver-phase0-linux
+          path: out/
+          retention-days: 14
