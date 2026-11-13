@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { logger } from '../services/logger';
+import { ensureWebSpeechConsent } from '../services/voice/webSpeechConsent';
 import type { ISpeechRecognition } from '../types';
 
 const LANG_PREFERENCES = ['de-DE', 'de-AT', 'en-US', 'en-GB'];
@@ -116,7 +117,10 @@ export const useSpeechRecognition = () => {
     };
   }, [clearMicTimeout]);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
+    if (!recognitionRef.current || isListeningRef.current) return;
+    // QNBS-v3 (#1261): Web Speech sends the audio to the browser vendor; no start without the stored consent.
+    if (!(await ensureWebSpeechConsent())) return;
     if (recognitionRef.current && !isListeningRef.current) {
       setTranscript('');
       setMicError(null);
@@ -150,7 +154,7 @@ export const useSpeechRecognition = () => {
     if (isListeningRef.current) {
       stopListening();
     } else {
-      startListening();
+      void startListening();
     }
   }, [startListening, stopListening]);
 

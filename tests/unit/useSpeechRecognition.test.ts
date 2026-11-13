@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { appStoreRef } from '../../app/storeRef';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
+import { registerWebSpeechConsentPrompt } from '../../services/voice/webSpeechConsent';
 
 beforeEach(() => {
   // jsdom has no SpeechRecognition — ensure it's absent
@@ -54,30 +56,109 @@ describe('useSpeechRecognition (no browser API available)', () => {
   });
 });
 
+/** Installs a SpeechRecognition stand-in and returns how often recognition was started. */
+function installSpeechRecognition() {
+  const started = { count: 0 };
+  function speechRecognitionConstructor(this: Record<string, unknown>) {
+    this['continuous'] = false;
+    this['interimResults'] = false;
+    this['lang'] = '';
+    this['onresult'] = null;
+    this['onend'] = null;
+    this['onerror'] = null;
+    this['start'] = () => {
+      started.count += 1;
+    };
+    this['stop'] = vi.fn();
+  }
+  (window as { SpeechRecognition?: unknown }).SpeechRecognition = speechRecognitionConstructor;
+  return started;
+}
+
+/** A store reference that holds only the Web Speech consent; `grant` flips it like the dialog does. */
+function consentStore(granted: boolean) {
+  const voice = { webSpeechConsentGranted: granted };
+  appStoreRef.current = {
+    getState: () => ({ settings: { voice } }),
+    dispatch: vi.fn(),
+  } as unknown as typeof appStoreRef.current;
+  return {
+    grant: () => {
+      voice.webSpeechConsentGranted = true;
+    },
+  };
+}
+
+type ConsentStore = ReturnType<typeof consentStore>;
+type Prompt = ((store: ConsentStore) => Promise<boolean>) | undefined;
+
 describe('useSpeechRecognition (with mocked SpeechRecognition)', () => {
-  it('startListening sets isListening to true', () => {
-    const started = { called: false };
-    function speechRecognitionConstructor(this: Record<string, unknown>) {
-      this['continuous'] = false;
-      this['interimResults'] = false;
-      this['lang'] = '';
-      this['onresult'] = null;
-      this['onend'] = null;
-      this['onerror'] = null;
-      this['start'] = () => {
-        started.called = true;
-      };
-      this['stop'] = vi.fn();
-    }
-    (window as { SpeechRecognition?: unknown }).SpeechRecognition = speechRecognitionConstructor;
+  let unregister: (() => void) | null = null;
+  afterEach(() => {
+    unregister?.();
+    unregister = null;
+    appStoreRef.current = null;
+  });
 
+  /** Renders the hook with the stored consent and the consent dialog given, starts it, and reports the outcome. */
+  async function start(granted: boolean, prompt: Prompt, via: 'start' | 'toggle' = 'start') {
+    const started = installSpeechRecognition();
+    const store = consentStore(granted);
+    const ask = vi.fn(async () => (prompt ? prompt(store) : false));
+    if (prompt) unregister = registerWebSpeechConsentPrompt(ask);
     const { result } = renderHook(() => useSpeechRecognition());
-
-    act(() => {
-      result.current.startListening();
+    await act(async () => {
+      if (via === 'toggle') result.current.toggleListening();
+      else await result.current.startListening();
     });
+    return {
+      started: started.count,
+      listening: result.current.isListening,
+      asked: ask.mock.calls.length,
+    };
+  }
 
-    expect(started.called).toBe(true);
-    expect(result.current.isListening).toBe(true);
+  const grantInDialog: Prompt = async (store) => {
+    store.grant();
+    return true;
+  };
+
+  // #1261: the editor mic started Web Speech, which sends audio to the browser vendor, without any consent check.
+  it.each([
+    ['a stored consent starts at once', true, undefined, { started: 1, listening: true, asked: 0 }],
+    [
+      'without consent and no dialog nothing starts',
+      false,
+      undefined,
+      { started: 0, listening: false, asked: 0 },
+    ],
+    [
+      'a declined dialog starts nothing',
+      false,
+      async () => false,
+      { started: 0, listening: false, asked: 1 },
+    ],
+    [
+      'granting consent in the dialog starts recognition',
+      false,
+      grantInDialog,
+      { started: 1, listening: true, asked: 1 },
+    ],
+    [
+      'a yes that was not stored starts nothing',
+      false,
+      async () => true,
+      { started: 0, listening: false, asked: 1 },
+    ],
+  ] as const)('%s', async (_name, granted, prompt, expected) => {
+    expect(await start(granted, prompt)).toEqual(expected);
+  });
+
+  it('the mic toggle asks for consent the same way', async () => {
+    expect(await start(false, async () => false, 'toggle')).toEqual({
+      started: 0,
+      listening: false,
+      asked: 1,
+    });
   });
 });
