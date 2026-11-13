@@ -469,6 +469,27 @@ describe('WorkerPool', () => {
       }
     });
 
+    it('a late pong from a worker that already crashed resets nothing', async () => {
+      vi.useFakeTimers();
+      try {
+        const createWorker = vi.fn(newMockWorker);
+        const pool = poolWith(createWorker);
+        crash(await pool.acquire()); // 1st crash: immediate respawn
+        const pinged = await pool.acquire();
+        await vi.advanceTimersByTimeAsync(WORKER_PING_INTERVAL_MS);
+        crash(pinged); // 2nd crash: respawn after 1 s
+        pong(pinged); // its pong was still queued when it crashed
+        const port = pinged.port as unknown as { removeEventListener: Mock };
+        expect(port.removeEventListener).toHaveBeenCalledWith('message', expect.any(Function));
+        await vi.advanceTimersByTimeAsync(1_000);
+        crash(await pool.acquire()); // 3rd crash: still a 4 s backoff, not an immediate respawn
+        expect(createWorker).toHaveBeenCalledTimes(3);
+        await pool.terminateAll();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('a respawn that cannot construct its worker retries after the backoff and serves the waiting task', async () => {
       vi.useFakeTimers();
       try {

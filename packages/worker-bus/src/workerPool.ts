@@ -33,6 +33,8 @@ interface PoolEntry {
   idleTimer: ReturnType<typeof setTimeout> | null;
   pingTimer: ReturnType<typeof setTimeout> | null;
   pongTimer: ReturnType<typeof setTimeout> | null;
+  /** Waits for the PONG of the latest ping; removed with the health check. */
+  pongHandler: ((event: MessageEvent) => void) | null;
 }
 
 interface AcquireWaiter {
@@ -195,7 +197,13 @@ export class WorkerPool {
     // QNBS-v3: Transfer port2 to worker for dedicated bidirectional channel
     worker.postMessage({ kind: 'INIT_PORT', port: channel.port2 }, [channel.port2]);
 
-    const entry: PoolEntry = { instance, idleTimer: null, pingTimer: null, pongTimer: null };
+    const entry: PoolEntry = {
+      instance,
+      idleTimer: null,
+      pingTimer: null,
+      pongTimer: null,
+      pongHandler: null,
+    };
     this.entries.push(entry);
 
     // Health check
@@ -215,6 +223,7 @@ export class WorkerPool {
   private startHealthCheck(entry: PoolEntry): void {
     entry.pingTimer = setInterval(() => {
       if (entry.instance.state === 'crashed') return;
+      this.stopWaitingForPong(entry);
       const pingId = crypto.randomUUID();
       entry.instance.port.postMessage(createPingMessage(pingId));
       entry.pongTimer = setTimeout(() => {
@@ -224,21 +233,27 @@ export class WorkerPool {
       }, WORKER_PONG_TIMEOUT_MS);
 
       const pongHandler = (event: MessageEvent) => {
-        if (event.data?.kind === 'PONG' && event.data?.taskId === pingId) {
-          clearTimeout(entry.pongTimer ?? undefined);
-          this.consecutiveCrashes = 0;
-          entry.instance.port.removeEventListener('message', pongHandler);
-        }
+        if (event.data?.kind !== 'PONG' || event.data?.taskId !== pingId) return;
+        this.stopWaitingForPong(entry);
+        // QNBS-v3 (#1272): only a pool member's pong proves its script starts; a late pong from a crashed worker resets nothing.
+        if (this.entries.includes(entry)) this.consecutiveCrashes = 0;
       };
+      entry.pongHandler = pongHandler;
       entry.instance.port.addEventListener('message', pongHandler);
     }, WORKER_PING_INTERVAL_MS);
   }
 
+  private stopWaitingForPong(entry: PoolEntry): void {
+    if (entry.pongTimer) clearTimeout(entry.pongTimer);
+    entry.pongTimer = null;
+    if (entry.pongHandler) entry.instance.port.removeEventListener('message', entry.pongHandler);
+    entry.pongHandler = null;
+  }
+
   private clearHealthCheck(entry: PoolEntry): void {
     if (entry.pingTimer) clearInterval(entry.pingTimer);
-    if (entry.pongTimer) clearTimeout(entry.pongTimer);
     entry.pingTimer = null;
-    entry.pongTimer = null;
+    this.stopWaitingForPong(entry);
   }
 
   // QNBS-v3 (#1272): bounded respawn; a script that never starts no longer loops as fast as the browser can fail it.
