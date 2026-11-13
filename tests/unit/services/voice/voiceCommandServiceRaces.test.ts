@@ -474,6 +474,47 @@ describe('VoiceCommandService engine setup races (#1265)', () => {
     expect(fresh.dispose).not.toHaveBeenCalled();
   });
 
+  // CodeAnt on c531f3b7: dispose() cleared isDictating after its teardown, over a dictation started meanwhile.
+  it('a dictation started while a dispose ends the old session keeps its state, so its stop stops the engine', async () => {
+    storeConsent(true);
+    const old = buildsNext(sttEngine());
+    await service.startListening();
+    const stopped = holdNext(old.stop);
+    const disposing = service.dispose();
+    const fresh = buildsNext(sttEngine());
+    const dictating = service.startDictation(); // waits for the dispose's teardown of the old session
+    stopped();
+    await Promise.all([disposing, dictating]);
+
+    await service.stopDictation();
+
+    expect(fresh.start).toHaveBeenCalledTimes(1);
+    expect(fresh.stop).toHaveBeenCalledTimes(1);
+  });
+
+  // CodeAnt on c531f3b7: the setup set isInitialized after adopting its engines, so a dispose in between was undone.
+  it('a dispose right after a setup adopted its engines is not undone when that setup resumes', async () => {
+    storeConsent(true);
+    const adopted = buildsNext(sttEngine());
+    const internals = service as unknown as {
+      feedbackService: { setTtsEngine: ReturnType<typeof vi.fn> };
+    };
+    let disposing: Promise<void> = Promise.resolve();
+    internals.feedbackService.setTtsEngine.mockImplementationOnce(() =>
+      queueMicrotask(() => {
+        disposing = service.dispose();
+      }),
+    );
+    await service.initialize();
+    await disposing;
+
+    const fresh = buildsNext(sttEngine());
+    await service.startDictation();
+
+    expect(adopted.start).not.toHaveBeenCalled();
+    expect(fresh.start).toHaveBeenCalledTimes(1);
+  });
+
   // #1265, deferred from #1279: a start the user had stopped reported ConsentRequiredError once they declined.
   it.each(['listening', 'dictation'] as const)(
     '%s: a start stopped while the consent dialog is open ends quietly when the user then declines',

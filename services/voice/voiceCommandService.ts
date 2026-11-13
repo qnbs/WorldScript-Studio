@@ -233,10 +233,6 @@ export class VoiceCommandService {
         this.initWakeWord(write),
       ]);
       if (!(await this.adoptEngines(lifecycle, engines))) return false;
-      // QNBS-v3 (#1261): sessions exist only from here on; a local-only switch ends a running Web Speech session, dispose() unsubscribes.
-      this.webSpeechWatch ??= onWebSpeechBlocked(() => this.endWebSpeechSession());
-
-      this.isInitialized = true;
       logger.info('Voice Command Service initialized successfully');
       return true;
     } catch (err) {
@@ -257,6 +253,10 @@ export class VoiceCommandService {
       return false;
     }
     [this.sttEngine, this.ttsEngine, this.vadEngine, this.wakeWordEngine] = engines;
+    // QNBS-v3 (#1265): set with the engines, before any await, so a dispose right after adoption is never undone.
+    this.isInitialized = true;
+    // QNBS-v3 (#1261): sessions exist only from here on; a local-only switch ends a running Web Speech session, dispose() unsubscribes.
+    this.webSpeechWatch ??= onWebSpeechBlocked(() => this.endWebSpeechSession());
     if (engines[1]) this.feedbackService.setTtsEngine(engines[1]);
     return true;
   }
@@ -819,9 +819,11 @@ export class VoiceCommandService {
     ];
     this.webSpeechWatch?.();
     this.webSpeechWatch = null;
-    await this.stopListening();
+    const stopping = this.stopListening();
+    // QNBS-v3 (#1265): cleared before the first await, so a dictation started during this dispose keeps its own state.
     this.isDictating = false;
     this.cancelSpeech();
+    await stopping;
     await this.releaseDisposed(coordinator, engines);
     this.eventListeners = [];
   }
