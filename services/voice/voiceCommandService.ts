@@ -47,6 +47,8 @@ import { ensureWebSpeechConsent } from './webSpeechConsent';
 
 export type GetStateFn = () => RootState;
 
+type BuiltEngines = [SttEngine | null, TtsEngine | null, VadEngine | null, WakeWordEngine | null];
+
 /** Config keys that decide which engines exist; changing one rebuilds the engines on the next start. */
 const ENGINE_CONFIG_KEYS = [
   'preferredSttEngine',
@@ -102,6 +104,8 @@ export class VoiceCommandService {
   private listeningClaim = 0;
   /** Why the last engine setup built no STT engine, so every start reports it instead of a generic message (#1261). */
   private sttUnavailable: string | null = null;
+  /** Bumped by dispose(): an engine setup still running then releases what it built instead of publishing it. */
+  private lifecycle = 0;
   private eventListeners: VoiceEventListener[] = [];
 
   constructor(config: Partial<VoiceServiceConfig> = {}) {
@@ -177,6 +181,7 @@ export class VoiceCommandService {
     if (this.isInitialized) return true;
     // A change from here on (even while the engines below are being built) is applied by the next start.
     this.engineChoiceChanged = false;
+    const lifecycle = this.lifecycle;
 
     try {
       await this.intentEngine.initialize();
@@ -191,21 +196,13 @@ export class VoiceCommandService {
       this.d(setMicrophonePermission('granted'));
 
       // Initialize engines in parallel
-      const [stt, tts, vad, wake] = await Promise.all([
+      const engines: BuiltEngines = await Promise.all([
         this.initStt(),
         this.initTts(),
         this.initVad(),
         this.initWakeWord(),
       ]);
-
-      this.sttEngine = stt;
-      this.ttsEngine = tts;
-      this.vadEngine = vad;
-      this.wakeWordEngine = wake;
-
-      if (tts) {
-        this.feedbackService.setTtsEngine(tts);
-      }
+      if (!(await this.adoptEngines(lifecycle, engines))) return false;
 
       this.isInitialized = true;
       logger.info('Voice Command Service initialized successfully');
@@ -215,6 +212,18 @@ export class VoiceCommandService {
       this.d(setVoiceError(err instanceof Error ? err.message : 'Voice initialization failed'));
       return false;
     }
+  }
+
+  /** Publishes freshly built engines; after a dispose that came in while they were built, releases them instead. */
+  private async adoptEngines(lifecycle: number, engines: BuiltEngines): Promise<boolean> {
+    // QNBS-v3 (#1261): the disposed service owns none of these, so publishing them would leak them and revive the service.
+    if (lifecycle !== this.lifecycle) {
+      await Promise.all(engines.map((engine) => engine?.dispose()));
+      return false;
+    }
+    [this.sttEngine, this.ttsEngine, this.vadEngine, this.wakeWordEngine] = engines;
+    if (engines[1]) this.feedbackService.setTtsEngine(engines[1]);
+    return true;
   }
 
   private async initStt(): Promise<SttEngine | null> {
@@ -317,7 +326,7 @@ export class VoiceCommandService {
     });
     try {
       const stt = await this.prepareListening(claim);
-      if (!stt) return; // stopped or released while it was preparing
+      if (!stt || claim !== this.listeningClaim) return; // stopped or released while it was preparing
 
       this.d(setVoiceMode('listening'));
       this.d(setVoiceError(null));
@@ -325,12 +334,14 @@ export class VoiceCommandService {
 
       this.emit({ type: 'listening-started', timestamp: Date.now() });
 
+      let capture: { stop(): Promise<void> } = stt;
       // QNBS-v3: Route through VoiceActivityCoordinator when Whisper WASM is active —
       // feeds PCM frames to the VAD and triggers STT on detected speech boundaries.
       if (this.config.enableVoiceWasm && stt.id === 'whisper' && this.vadEngine) {
         // QNBS-v3: C-P1 — the single-flight guard above already guarantees no active coordinator,
         //          so no pre-dispose is needed here (it would be unreachable dead code).
         this.coordinator = new VoiceActivityCoordinator(this.vadEngine, stt);
+        capture = this.coordinator;
         await this.coordinator.start(
           (result) => this.handleSttResult(result),
           (error) => this.handleSttError(error),
@@ -342,8 +353,11 @@ export class VoiceCommandService {
         );
       }
 
-      // A stop while the engine started must not leave a timer behind, which would block the next start.
-      if (claim !== this.listeningClaim) return;
+      // A stop while the engine started may have run before it was running: end it here, and leave no timer behind.
+      if (claim !== this.listeningClaim) {
+        await capture.stop();
+        return;
+      }
       // Auto-stop after timeout
       this.listeningTimer = setTimeout(() => {
         void this.stopCommandListening();
@@ -398,17 +412,19 @@ export class VoiceCommandService {
 
   private async dictationEngine(claim: number): Promise<SttEngine | null> {
     // QNBS-v3 (#1261): the shared engine setup applies a changed engine choice before dictation uses an engine.
-    if (!(await this.ensureEngines())) throw new Error('Voice service could not be initialized');
-    // A dictation stopped during the setup never asks for consent.
-    return claim === this.dictationClaim ? this.admitStt() : null;
+    const ready = await this.ensureEngines();
+    if (claim !== this.dictationClaim) return null; // stopped or released during the setup: never ask for consent
+    if (!ready) throw new Error('Voice service could not be initialized');
+    return this.admitStt();
   }
 
   /** The engine a listening start may use, or null when a stop or release came in while it was preparing. */
   private async prepareListening(claim: number): Promise<SttEngine | null> {
     // A running dictation ends before the engine setup may replace the engines it uses.
     await this.endDictationBeforeListening();
-    if (!(await this.ensureEngines())) throw new Error('Voice service could not be initialized');
-    if (claim !== this.listeningClaim) return null; // stopped during the setup: never ask for consent
+    const ready = await this.ensureEngines();
+    if (claim !== this.listeningClaim) return null; // stopped or released during the setup: never ask for consent
+    if (!ready) throw new Error('Voice service could not be initialized');
     const stt = await this.admitStt();
     return claim === this.listeningClaim ? stt : null;
   }
@@ -685,6 +701,7 @@ export class VoiceCommandService {
   // ── Cleanup ────────────────────────────────────────────────────────────────
 
   async dispose(): Promise<void> {
+    this.lifecycle += 1;
     await this.stopListening();
     this.isDictating = false;
     this.cancelSpeech();

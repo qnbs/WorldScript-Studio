@@ -916,6 +916,50 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     },
   );
 
+  it('a stop right after the listening start finished preparing still ends it without the engine', async () => {
+    storeConsent(true);
+    const engine = buildsNext(sttEngine());
+    const internals = service as unknown as {
+      prepareListening: (claim: number) => Promise<unknown>;
+    };
+    const prepare = internals.prepareListening.bind(service);
+    // The stop lands in the gap between the preparation's last check and the start's continuation.
+    vi.spyOn(internals, 'prepareListening').mockImplementationOnce(async (claim) => {
+      const stt = await prepare(claim);
+      await service.stopListening();
+      return stt;
+    });
+
+    await service.startListening();
+
+    expect(engine.start).not.toHaveBeenCalled();
+  });
+
+  it('a dispose while the engines are built releases them instead of publishing them', async () => {
+    storeConsent(true);
+    const stale = sttEngine();
+    let build: () => void = () => {};
+    vi.mocked(createSttEngine).mockReturnValueOnce(
+      new Promise((resolve) => {
+        build = () => resolve(stale);
+      }) as never,
+    );
+
+    const run = service.startListening();
+    await vi.waitFor(() => expect(createSttEngine).toHaveBeenCalled());
+    await service.dispose();
+    build();
+    await run;
+    expect(stale.dispose).toHaveBeenCalled();
+    expect(stale.start).not.toHaveBeenCalled();
+
+    // The disposed service builds fresh engines at its next start instead of reusing the released ones.
+    const fresh = buildsNext(sttEngine());
+    await service.startListening();
+    expect(fresh.start).toHaveBeenCalledTimes(1);
+    expect(stale.start).not.toHaveBeenCalled();
+  });
+
   it('a stop while a listening start waits for dictation to end cancels that listening start', async () => {
     storeConsent(true);
     const engine = buildsNext(sttEngine());
@@ -951,6 +995,8 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     await service.stopListening();
     started();
     await first;
+    // The stop ran before the engine was running, so the start ends what it began.
+    expect(engine.stop).toHaveBeenCalledTimes(2);
     await service.startListening();
 
     expect(engine.start).toHaveBeenCalledTimes(2);

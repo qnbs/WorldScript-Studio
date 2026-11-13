@@ -366,4 +366,23 @@ describe('VoiceActivityCoordinator stop during start (#1261)', () => {
     expect(mockTrack.stop).toHaveBeenCalled();
     expect(mockAudioCtxInstance.createScriptProcessor).not.toHaveBeenCalled();
   });
+
+  it('a stop right after the microphone opened releases the stream the start then receives', async () => {
+    const coordinator = new VoiceActivityCoordinator(makeVad(), makeStt());
+    const internals = coordinator as unknown as {
+      openCapture: (generation: number) => Promise<MediaStream | null>;
+    };
+    const open = internals.openCapture.bind(coordinator);
+    // The stop lands after openCapture() returned and before start() takes the stream over.
+    vi.spyOn(internals, 'openCapture').mockImplementationOnce(async (generation) => {
+      const stream = await open(generation);
+      await coordinator.stop();
+      return stream;
+    });
+
+    await coordinator.start(vi.fn(), vi.fn());
+
+    expect(mockTrack.stop).toHaveBeenCalled();
+    expect(mockAudioCtxInstance.createScriptProcessor).not.toHaveBeenCalled();
+  });
 });
