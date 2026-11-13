@@ -914,6 +914,26 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     },
   );
 
+  it('a stop while a listening start waits for dictation to end cancels that listening start', async () => {
+    storeConsent(true);
+    const engine = buildsNext(sttEngine());
+    await service.startDictation();
+    let drained: () => void = () => {};
+    engine.stop.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        drained = resolve;
+      }),
+    );
+
+    const listening = service.startListening(); // takes the engine over: ends the dictation first
+    await vi.waitFor(() => expect(engine.stop).toHaveBeenCalled());
+    const stopping = service.stopListening();
+    drained();
+    await Promise.all([listening, stopping]);
+
+    expect(engine.start).toHaveBeenCalledTimes(1); // the dictation only
+  });
+
   it('a stop while the engine starts leaves nothing behind that blocks the next listening start', async () => {
     storeConsent(true);
     const engine = buildsNext(sttEngine());

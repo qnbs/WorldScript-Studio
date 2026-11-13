@@ -462,7 +462,11 @@ export class VoiceCommandService {
 
   async stopListening(): Promise<void> {
     // QNBS-v3 (#556): the Voice Control microphone button also stops dictation through here; route it so the dictation guard clears.
-    if (this.isDictating) return this.stopDictation();
+    if (this.isDictating) {
+      // A listening start that is still waiting for this dictation to end is cancelled by the same stop (#1261).
+      this.listeningClaim += 1;
+      return this.stopDictation();
+    }
     await this.stopCommandListening();
   }
 
