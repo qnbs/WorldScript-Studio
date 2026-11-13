@@ -120,6 +120,20 @@ function stubMicrophone() {
   });
 }
 
+/** Keeps the next call of `fn` pending until the returned release runs. */
+function holdNext(fn: ReturnType<typeof vi.fn>): () => void {
+  let release: () => void = () => {};
+  fn.mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+  );
+  return () => release();
+}
+
+/** Lets pending promise callbacks run. */
+const settledTick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 /** A store reference that holds only the Web Speech consent; returns the voice settings so a test can change it. */
 function storeConsent(granted: boolean) {
   const voice = { webSpeechConsentGranted: granted };
@@ -1075,6 +1089,50 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     expect(stale.start).not.toHaveBeenCalled();
   });
 
+  // CodeRabbit on ae7c4269: a direct-STT teardown clears the timer before its engine stop drains.
+  it('a listening start waits for a draining command teardown; a stop meanwhile cancels it', async () => {
+    storeConsent(true);
+    const engine = buildsNext(sttEngine());
+    await service.startListening();
+    const drained = holdNext(engine.stop);
+
+    const stopping = service.stopListening();
+    const second = service.startListening();
+    await settledTick();
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    const stoppingAgain = service.stopListening();
+    drained();
+    await Promise.all([stopping, second, stoppingAgain]);
+
+    expect(engine.start).toHaveBeenCalledTimes(1);
+  });
+
+  // CodeRabbit on ae7c4269: dispose() lets a fresh setup finish before a voided one settles.
+  it('a failing release of a voided setup is not reported against the fresh session', async () => {
+    storeConsent(true);
+    const stale = sttEngine();
+    stale.dispose.mockRejectedValue(new Error('dispose failed'));
+    let build: () => void = () => {};
+    vi.mocked(createSttEngine).mockReturnValueOnce(
+      new Promise((resolve) => {
+        build = () => resolve(stale);
+      }) as never,
+    );
+    const first = service.startDictation();
+    await vi.waitFor(() => expect(createSttEngine).toHaveBeenCalled());
+    await service.dispose();
+    const fresh = buildsNext(sttEngine());
+    const second = service.startDictation();
+    await vi.waitFor(() => expect(fresh.start).toHaveBeenCalled());
+    vi.mocked(setVoiceError).mockClear();
+
+    build();
+    await Promise.all([first, second]);
+
+    expect(stale.dispose).toHaveBeenCalled();
+    expect(setVoiceError).not.toHaveBeenCalledWith('dispose failed');
+  });
+
   it('a stop while a listening start waits for dictation to end cancels that listening start', async () => {
     storeConsent(true);
     const engine = buildsNext(sttEngine());
@@ -1098,12 +1156,7 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
   it('a stop while the engine starts leaves nothing behind that blocks the next listening start', async () => {
     storeConsent(true);
     const engine = buildsNext(sttEngine());
-    let started: () => void = () => {};
-    engine.start.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        started = resolve;
-      }),
-    );
+    const started = holdNext(engine.start);
 
     const first = service.startListening();
     await vi.waitFor(() => expect(engine.start).toHaveBeenCalled());

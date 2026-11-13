@@ -74,10 +74,12 @@ export class VoiceActivityCoordinator {
   async stop(): Promise<void> {
     this.generation += 1;
     this.running = false;
+    // Taken before the await: a restart that completes while the drain settles must still be stopped below.
+    const pendingRestart = this.restarting;
     this.teardownAudioCapture();
     await this.draining;
     // A pending restart is cancelled here: stopping the engine turns its start into a no-op, so the engine is free.
-    if (this.isSttActive || this.restarting) {
+    if (this.isSttActive || pendingRestart) {
       try {
         await this.stt.stop();
       } catch (err) {

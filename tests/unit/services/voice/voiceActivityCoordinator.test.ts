@@ -389,9 +389,14 @@ describe('VoiceActivityCoordinator stop during start (#1261)', () => {
 
 // #1265: stop() waited for the whole flush chain, including a restart that can sit on a microphone prompt.
 describe('VoiceActivityCoordinator stop during a restart (#1265)', () => {
-  it.each([false, true])(
-    'stop() cancels a pending restart and the late restart leaves the engine alone (another session started: %s)',
-    async (anotherSession) => {
+  it.each([
+    ['the late restart finishes after it', false, false],
+    ['another session takes the engine over first', false, true],
+    // The restart's completion is queued before stop() resumes from its await on the drain.
+    ['the restart finishes right as stop() begins', true, false],
+  ] as const)(
+    'stop() cancels a pending restart and the engine is left alone afterwards: %s',
+    async (_case, finishFirst, anotherSession) => {
       let finishRestart!: () => void;
       const vad = makeVad({
         processChunk: vi
@@ -418,6 +423,7 @@ describe('VoiceActivityCoordinator stop during a restart (#1265)', () => {
       fire(); // silence: drain, then a restart that waits
       await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(2));
 
+      if (finishFirst) finishRestart();
       await coordinator.stop(); // must not wait for the pending restart, but stops the engine itself
       expect(stt.stop).toHaveBeenCalledTimes(2); // the drain, then the cancel of the pending restart
 

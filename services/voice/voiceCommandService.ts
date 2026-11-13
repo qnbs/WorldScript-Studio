@@ -236,7 +236,9 @@ export class VoiceCommandService {
       return true;
     } catch (err) {
       logger.error('Voice initialization failed:', err);
-      this.d(setVoiceError(err instanceof Error ? err.message : 'Voice initialization failed'));
+      // QNBS-v3 (#1265): a setup a dispose voided must not report against the session that replaced it.
+      if (lifecycle === this.lifecycle)
+        this.d(setVoiceError(err instanceof Error ? err.message : 'Voice initialization failed'));
       return false;
     }
   }
@@ -245,7 +247,8 @@ export class VoiceCommandService {
   private async adoptEngines(lifecycle: number, engines: BuiltEngines): Promise<boolean> {
     // QNBS-v3 (#1261): the disposed service owns none of these, so publishing them would leak them and revive the service.
     if (lifecycle !== this.lifecycle) {
-      await Promise.all(engines.map((engine) => engine?.dispose()));
+      // A voided setup's cleanup failure belongs to no session, so it is only logged (#1265).
+      await this.disposeAll(engines, 'Releasing engines from a voided setup failed');
       return false;
     }
     [this.sttEngine, this.ttsEngine, this.vadEngine, this.wakeWordEngine] = engines;
@@ -451,6 +454,8 @@ export class VoiceCommandService {
   private async prepareListening(claim: number): Promise<SttEngine | null> {
     // A running dictation ends before the engine setup may replace the engines it uses.
     await this.endDictationBeforeListening();
+    // QNBS-v3 (#1265): a direct-STT teardown may still be draining; a start in that window would open a session no stop ends.
+    await this.commandStop;
     const ready = await this.ensureEngines();
     if (claim !== this.listeningClaim) return null; // stopped or released during the setup: never ask for consent
     if (!ready) throw new Error('Voice service could not be initialized');
@@ -491,6 +496,8 @@ export class VoiceCommandService {
   private async endListeningBeforeDictation(): Promise<void> {
     await this.listeningStart;
     if (this.coordinator || this.listeningTimer) await this.stopCommandListening();
+    // A direct-STT teardown may still be draining; dictation must not open a session during it (#1265).
+    await this.commandStop;
   }
 
   /** Listening takes the engine over from a running dictation instead of sharing its session. */
@@ -763,10 +770,17 @@ export class VoiceCommandService {
     } catch (error) {
       logger.warn('Cancelling speech before an engine change failed', error);
     }
+    await this.disposeAll(engines, 'Releasing the previous voice engines failed');
+  }
+
+  /** Disposes every given engine; one failure neither stops the others nor the caller, it is logged. */
+  private async disposeAll(
+    engines: readonly ({ dispose(): Promise<void> } | null)[],
+    failure: string,
+  ): Promise<void> {
     const released = await Promise.allSettled(engines.map((engine) => engine?.dispose()));
     for (const result of released) {
-      if (result.status === 'rejected')
-        logger.warn('Releasing the previous voice engines failed', result.reason);
+      if (result.status === 'rejected') logger.warn(failure, result.reason);
     }
   }
 
