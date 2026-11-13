@@ -130,6 +130,7 @@ vi.mock('../../../services/logger', () => ({
 // ---------------------------------------------------------------------------
 
 import { useVoice } from '../../../hooks/useVoice';
+import { setActiveAiMode } from '../../../services/ai/aiModeService';
 import { ecoModeService } from '../../../services/ai/ecoModeService';
 
 // ---------------------------------------------------------------------------
@@ -273,6 +274,28 @@ describe('useVoice', () => {
   });
 
   // #1261: Eco Mode lowers only an `auto` recognition choice to Web Speech; an explicit on-device choice stays on-device.
+  // #1261: the AI mode is no voice setting; without its own subscription the lowered Web Speech choice stayed.
+  it('a switch to a local-only AI mode under Eco Mode moves an auto choice back off Web Speech', () => {
+    mockVoiceSettings.sttEngine = 'auto';
+    ecoModeService.setEcoModeExplicit(true);
+    try {
+      renderHook(() => useVoice());
+      expect(mockUpdateConfig).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredSttEngine: 'webSpeech' }),
+      );
+
+      act(() => setActiveAiMode('local'));
+
+      expect(mockUpdateConfig).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredSttEngine: 'auto' }),
+      );
+    } finally {
+      setActiveAiMode('hybrid');
+      ecoModeService.clearExplicitEcoMode();
+      mockVoiceSettings.sttEngine = 'webSpeech';
+    }
+  });
+
   it('under Eco Mode an auto recognition choice and the speech output use Web Speech', () => {
     mockVoiceSettings.sttEngine = 'auto';
     mockVoiceSettings.ttsEngine = 'kokoro';

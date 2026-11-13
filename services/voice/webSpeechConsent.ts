@@ -1,5 +1,32 @@
 // QNBS-v3 (#1261): the browser's Web Speech recognition sends the audio to the browser vendor, so every start needs the stored consent.
 import { appStoreRef } from '../../app/storeRef';
+import { getActiveAiMode, subscribeAiMode } from '../ai/aiModeService';
+
+/** Why a start that needs Web Speech is refused while the AI mode is local-only. */
+export const WEB_SPEECH_LOCAL_ONLY_MESSAGE =
+  'Web Speech recognition is blocked while the AI mode is local-only. Use the local Whisper model, or switch the AI mode.';
+
+/**
+ * Whether the AI mode is local-only (local or eco, the single cloud authority, #818). QNBS-v3 (#1261): the maintainer
+ * decided that local-only outranks a stored consent, so Web Speech is blocked there outright.
+ */
+export function isWebSpeechBlocked(): boolean {
+  // Fail closed: the in-memory mode follows the stored setting asynchronously (listener middleware), so either counts.
+  return (
+    isLocalOnly(getActiveAiMode()) || isLocalOnly(appStoreRef.current?.getState().settings?.aiMode)
+  );
+}
+
+function isLocalOnly(mode: string | undefined): boolean {
+  return mode === 'local' || mode === 'eco';
+}
+
+/** Calls `listener` whenever the AI mode turns local-only, so a running Web Speech session can end at once. */
+export function onWebSpeechBlocked(listener: () => void): () => void {
+  return subscribeAiMode(() => {
+    if (isWebSpeechBlocked()) listener();
+  });
+}
 
 /** Asks the user for Web Speech consent; resolves true only when they granted it. */
 export type WebSpeechConsentPrompt = () => Promise<boolean>;
@@ -20,13 +47,15 @@ export function registerWebSpeechConsentPrompt(prompt: WebSpeechConsentPrompt): 
 }
 
 /**
- * Resolves true when Web Speech may start: consent is already stored, or the registered prompt asked
- * and the user granted it. Without a prompt nothing can ask, so it resolves false. Only the stored
- * consent counts, so the answer is read back from the settings after the prompt.
+ * Resolves true when Web Speech may start: the AI mode is not local-only, and consent is already stored or the
+ * registered prompt asked and the user granted it. Local-only never asks. Without a prompt nothing can ask, so it
+ * resolves false. Only the stored consent counts, so the answer is read back from the settings after the prompt.
  */
 export async function ensureWebSpeechConsent(): Promise<boolean> {
+  if (isWebSpeechBlocked()) return false;
   if (hasWebSpeechConsent()) return true;
   if (!registeredPrompt) return false;
   const granted = await registeredPrompt();
-  return granted && hasWebSpeechConsent();
+  // The AI mode may have turned local-only while the dialog was open.
+  return granted && hasWebSpeechConsent() && !isWebSpeechBlocked();
 }

@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { appStoreRef } from '../app/storeRef';
+import { statusActions } from '../features/status/statusSlice';
 import { logger } from '../services/logger';
-import { ensureWebSpeechConsent } from '../services/voice/webSpeechConsent';
+import {
+  ensureWebSpeechConsent,
+  isWebSpeechBlocked,
+  onWebSpeechBlocked,
+  WEB_SPEECH_LOCAL_ONLY_MESSAGE,
+} from '../services/voice/webSpeechConsent';
 import type { ISpeechRecognition } from '../types';
 
 const LANG_PREFERENCES = ['de-DE', 'de-AT', 'en-US', 'en-GB'];
@@ -124,6 +131,15 @@ export const useSpeechRecognition = () => {
   const startListening = useCallback(async () => {
     const recognition = recognitionRef.current;
     if (!recognition || isListeningRef.current) return;
+    // QNBS-v3 (#1261): a local-only AI mode blocks Web Speech outright, whatever consent is stored; tell the user why.
+    if (isWebSpeechBlocked()) {
+      setMicError(WEB_SPEECH_LOCAL_ONLY_MESSAGE);
+      // The editor microphones do not render micError; the toast tells the user why nothing starts.
+      appStoreRef.current?.dispatch(
+        statusActions.addNotification({ type: 'info', title: WEB_SPEECH_LOCAL_ONLY_MESSAGE }),
+      );
+      return;
+    }
     const request = ++startRequestRef.current;
     // QNBS-v3 (#1261): Web Speech sends the audio to the browser vendor; no start without the stored consent.
     if (!(await ensureWebSpeechConsent())) return;
@@ -134,6 +150,8 @@ export const useSpeechRecognition = () => {
       setMicError(null);
       try {
         recognition.start();
+        // QNBS-v3 (#1261): set at once, not by the effect, so a stop (e.g. a local-only switch) right after the start sees it.
+        isListeningRef.current = true;
         setIsListening(true);
 
         timeoutRef.current = setTimeout(() => {
@@ -155,9 +173,13 @@ export const useSpeechRecognition = () => {
     startRequestRef.current += 1; // a start still waiting for the consent dialog never begins capture
     if (recognitionRef.current && isListeningRef.current) {
       recognitionRef.current.stop();
+      isListeningRef.current = false;
       setIsListening(false);
     }
   }, [clearMicTimeout]);
+
+  // QNBS-v3 (#1261): a switch to a local-only AI mode ends a running Web Speech recognition at once.
+  useEffect(() => onWebSpeechBlocked(stopListening), [stopListening]);
 
   const toggleListening = useCallback(() => {
     if (isListeningRef.current) {

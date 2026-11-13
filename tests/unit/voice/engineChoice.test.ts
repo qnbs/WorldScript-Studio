@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { setActiveAiMode } from '../../../services/ai/aiModeService';
 import {
   sttEngineChoice,
   sttEngineUnderEco,
@@ -40,6 +41,16 @@ describe('voice engine choice', () => {
 
 // #1261: Eco Mode may trade the local engine for Web Speech only when the user left the choice on auto.
 describe('voice engine choice under Eco Mode', () => {
+  // A local-only AI mode blocks Web Speech, so Eco Mode must not lower auto to it (auto can still pick Whisper).
+  it.each(['local', 'eco'] as const)('in the %s AI mode auto stays auto', (mode) => {
+    setActiveAiMode(mode);
+    try {
+      expect(sttEngineUnderEco('auto', true)).toBe('auto');
+    } finally {
+      setActiveAiMode('hybrid');
+    }
+  });
+
   it('keeps an explicit choice and turns only auto into Web Speech', () => {
     expect(sttEngineUnderEco('whisper', true)).toBe('whisper');
     expect(sttEngineUnderEco('webSpeech', true)).toBe('webSpeech');

@@ -45,7 +45,12 @@ import type {
 } from './voiceTypes';
 import { RecoverableSttError } from './voiceTypes';
 import { createWakeWordEngine } from './wakeWordEngine';
-import { ensureWebSpeechConsent } from './webSpeechConsent';
+import {
+  ensureWebSpeechConsent,
+  isWebSpeechBlocked,
+  onWebSpeechBlocked,
+  WEB_SPEECH_LOCAL_ONLY_MESSAGE,
+} from './webSpeechConsent';
 
 export type GetStateFn = () => RootState;
 
@@ -110,6 +115,8 @@ export class VoiceCommandService {
   private sttUnavailable: string | null = null;
   /** Bumped by dispose(): an engine setup still running then releases what it built instead of publishing it. */
   private lifecycle = 0;
+  /** Unsubscribes from local-only switches; held from the first engine setup until dispose(). */
+  private webSpeechWatch: (() => void) | null = null;
   private eventListeners: VoiceEventListener[] = [];
 
   constructor(config: Partial<VoiceServiceConfig> = {}) {
@@ -132,6 +139,15 @@ export class VoiceCommandService {
     this.feedbackService = new FeedbackService();
     this.feedbackService.setFeedbackLevel(this.config.feedbackLevel);
     this.feedbackService.setMuted(this.config.ttsMuted);
+  }
+
+  /** Ends a running or starting session on an engine that is not declared local; a local engine keeps running. */
+  private endWebSpeechSession(): void {
+    const engine = this.sttEngine;
+    if (!engine || engine.isLocal === true) return;
+    // A running session (listening or dictation), or a start still in its setup or consent dialog.
+    const running = this.isDictating || this.listeningTimer !== null;
+    if (running || this.isStarting) void this.stopListening();
   }
 
   // ── Eventing ───────────────────────────────────────────────────────────────
@@ -212,6 +228,8 @@ export class VoiceCommandService {
         this.initWakeWord(),
       ]);
       if (!(await this.adoptEngines(lifecycle, engines))) return false;
+      // QNBS-v3 (#1261): sessions exist only from here on; a local-only switch ends a running Web Speech session, dispose() unsubscribes.
+      this.webSpeechWatch ??= onWebSpeechBlocked(() => this.endWebSpeechSession());
 
       this.isInitialized = true;
       logger.info('Voice Command Service initialized successfully');
@@ -452,8 +470,15 @@ export class VoiceCommandService {
     // QNBS-v3 (#1261): fail closed, only an engine that declares itself local starts without the stored Web Speech consent.
     if (engine.isLocal !== true && !(await ensureWebSpeechConsent()))
       // QNBS-v3 (#1265): a start the user already stopped while the dialog was open ends quietly instead of failing.
-      return isCurrent() ? this.refuseStart(new ConsentRequiredError()) : null;
+      return isCurrent() ? this.refuseStart(this.webSpeechRefusal()) : null;
     return engine;
+  }
+
+  /** Why Web Speech may not start: a local-only AI mode outranks any stored consent; otherwise consent is missing. */
+  private webSpeechRefusal(): Error {
+    return isWebSpeechBlocked()
+      ? new Error(WEB_SPEECH_LOCAL_ONLY_MESSAGE)
+      : new ConsentRequiredError();
   }
 
   /** Reports why a start cannot use an engine (listening and dictation alike), then fails that start. */
@@ -751,6 +776,8 @@ export class VoiceCommandService {
     this.lifecycle += 1;
     // A start after this builds fresh engines instead of joining a setup this dispose voided (#1265).
     this.engineSetup = null;
+    this.webSpeechWatch?.();
+    this.webSpeechWatch = null;
     await this.stopListening();
     this.isDictating = false;
     this.cancelSpeech();

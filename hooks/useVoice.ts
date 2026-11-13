@@ -20,6 +20,7 @@ import {
   selectVoiceProcessing,
   selectVoiceTranscript,
 } from '../features/voice/voiceSlice';
+import { subscribeAiMode } from '../services/ai/aiModeService';
 import { ecoModeService } from '../services/ai/ecoModeService';
 import { logger } from '../services/logger';
 import {
@@ -27,8 +28,37 @@ import {
   sttEngineUnderEco,
   ttsEngineChoice,
 } from '../services/voice/engineChoice';
-import type { VoiceServiceConfig } from '../services/voice/voiceCommandService';
+import type {
+  VoiceCommandService,
+  VoiceServiceConfig,
+} from '../services/voice/voiceCommandService';
 import { getVoiceService } from '../services/voice/voiceCommandService';
+import type { VoiceSettings } from '../types';
+
+/**
+ * Re-applies the engine choice whenever Eco Mode or the AI mode changes. QNBS-v3 (#1261): a local-only AI mode
+ * blocks Web Speech, so a mode switch changes what Eco Mode may lower an `auto` choice to.
+ */
+function useEcoEngineChoice(
+  service: VoiceCommandService,
+  voiceSettings: VoiceSettings,
+  enableVoiceWasm: boolean,
+): void {
+  useEffect(() => {
+    const reapply = (isEco: boolean) =>
+      service.updateConfig({
+        preferredSttEngine: sttEngineUnderEco(sttEngineChoice(voiceSettings.sttEngine), isEco),
+        preferredTtsEngine: isEco ? 'webSpeech' : ttsEngineChoice(voiceSettings.ttsEngine),
+        enableVoiceWasm,
+      });
+    const offEco = ecoModeService.onEcoModeChange(reapply);
+    const offAiMode = subscribeAiMode(() => reapply(ecoModeService.isEcoMode()));
+    return () => {
+      offEco();
+      offAiMode();
+    };
+  }, [service, voiceSettings, enableVoiceWasm]);
+}
 
 export const useVoice = () => {
   const dispatch = useAppDispatch();
@@ -60,16 +90,7 @@ export const useVoice = () => {
   }, [voiceSettings, enableVoiceWasm]);
 
   // QNBS-v3: B5 — subscribe to eco-mode changes and immediately re-apply config.
-  useEffect(() => {
-    const svc = serviceRef.current;
-    return ecoModeService.onEcoModeChange((isEco) => {
-      svc.updateConfig({
-        preferredSttEngine: sttEngineUnderEco(sttEngineChoice(voiceSettings.sttEngine), isEco),
-        preferredTtsEngine: isEco ? 'webSpeech' : ttsEngineChoice(voiceSettings.ttsEngine),
-        enableVoiceWasm,
-      });
-    });
-  }, [voiceSettings, enableVoiceWasm]);
+  useEcoEngineChoice(serviceRef.current, voiceSettings, enableVoiceWasm);
 
   // Provide dispatch and getState to service once
   useEffect(() => {

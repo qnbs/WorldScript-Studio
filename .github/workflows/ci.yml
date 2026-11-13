@@ -538,7 +538,8 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          toolchain: stable
+          # Temporary pin (#1274, maintainer decision 2026-11-13): Rust 1.100's build-directory layout breaks feature_isolation_compile_test; back to stable once its Cargo-JSON harness lands.
+          toolchain: '1.99.1'
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
@@ -580,7 +581,8 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          toolchain: stable
+          # Temporary pin (#1274): the same crates and tests as the Core Rust Gate; back to stable with it.
+          toolchain: '1.99.1'
           components: clippy
       # QNBS-v3: deliberately uncached — security evidence must not restore artifacts another run wrote (zizmor cache-poisoning).
       - name: Install Secret Service build/runtime dependencies (Linux)
