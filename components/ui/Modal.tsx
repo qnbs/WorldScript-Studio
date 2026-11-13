@@ -23,6 +23,8 @@ interface ModalProps {
    * Defaults to 'dialog'.
    */
   variant?: 'dialog' | 'alertdialog';
+  /** Renders above other full-screen overlays (the command palette), for prompts those overlays can open. */
+  elevated?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -33,6 +35,7 @@ export const Modal: React.FC<ModalProps> = ({
   size = 'default',
   isDismissible = true,
   variant = 'dialog',
+  elevated = false,
 }) => {
   const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -72,7 +75,9 @@ export const Modal: React.FC<ModalProps> = ({
 
   // QNBS-v3: Dialog-Rolle nur auf dem Panel; Backdrop bleibt presentation-only (klarere SR-Hierarchie).
   return (
-    <div className="fixed inset-0 z-50 flex items-center sm:items-center justify-center p-0 sm:p-4 pointer-events-none animate-modal-backdrop">
+    <div
+      className={`fixed inset-0 ${elevated ? 'z-[110]' : 'z-50'} flex items-center sm:items-center justify-center p-0 sm:p-4 pointer-events-none animate-modal-backdrop`}
+    >
       {/* QNBS-v3: non-dismissible modals hide backdrop from keyboard and AT — it announces
           as "Close" but does nothing, which is misleading for screen reader users. */}
       <button
