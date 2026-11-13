@@ -11,7 +11,13 @@ export const WEB_SPEECH_LOCAL_ONLY_MESSAGE =
  * decided that local-only outranks a stored consent, so Web Speech is blocked there outright.
  */
 export function isWebSpeechBlocked(): boolean {
-  const mode = getActiveAiMode();
+  // Fail closed: the in-memory mode follows the stored setting asynchronously (listener middleware), so either counts.
+  return (
+    isLocalOnly(getActiveAiMode()) || isLocalOnly(appStoreRef.current?.getState().settings?.aiMode)
+  );
+}
+
+function isLocalOnly(mode: string | undefined): boolean {
   return mode === 'local' || mode === 'eco';
 }
 

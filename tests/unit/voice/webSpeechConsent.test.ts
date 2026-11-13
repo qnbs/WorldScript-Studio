@@ -8,11 +8,13 @@ import {
   registerWebSpeechConsentPrompt,
 } from '../../../services/voice/webSpeechConsent';
 
-/** A store reference that holds only the Web Speech consent; returns the voice settings so a test can change it. */
-function storeConsent(granted: boolean) {
+/** A store reference with the Web Speech consent and, optionally, the stored AI mode; returns the settings to change. */
+function storeConsent(granted: boolean, aiMode?: string) {
   const voice = { webSpeechConsentGranted: granted };
+  const settings: { voice: typeof voice; aiMode?: string } = { voice };
+  if (aiMode) settings.aiMode = aiMode;
   appStoreRef.current = {
-    getState: () => ({ settings: { voice } }),
+    getState: () => ({ settings }),
     dispatch: vi.fn(),
   } as unknown as typeof appStoreRef.current;
   return voice;
@@ -27,20 +29,6 @@ describe('Web Speech consent in a local-only AI mode', () => {
     setActiveAiMode('hybrid');
     appStoreRef.current = null;
   });
-
-  it.each(['local', 'eco'] as const)(
-    'the %s mode blocks Web Speech despite a stored consent and never asks',
-    async (mode) => {
-      storeConsent(true);
-      const ask = vi.fn(async () => true);
-      unregister = registerWebSpeechConsentPrompt(ask);
-      setActiveAiMode(mode);
-
-      expect(isWebSpeechBlocked()).toBe(true);
-      await expect(ensureWebSpeechConsent()).resolves.toBe(false);
-      expect(ask).not.toHaveBeenCalled();
-    },
-  );
 
   it.each(['hybrid', 'cloud'] as const)(
     'the %s mode keeps the consent rule: a stored consent allows Web Speech',
@@ -68,6 +56,25 @@ describe('Web Speech consent in a local-only AI mode', () => {
       off();
     }
   });
+
+  // The in-memory mode follows the stored one through async listener middleware, so a stored mode alone must block too.
+  it.each(
+    (['in-memory', 'stored'] as const).flatMap((source) =>
+      (['local', 'eco'] as const).map((mode) => ({ source, mode })),
+    ),
+  )(
+    'a $source $mode mode blocks Web Speech despite a stored consent and never asks',
+    async ({ source, mode }) => {
+      storeConsent(true, source === 'stored' ? mode : undefined);
+      if (source === 'in-memory') setActiveAiMode(mode);
+      const ask = vi.fn(async () => true);
+      unregister = registerWebSpeechConsentPrompt(ask);
+
+      expect(isWebSpeechBlocked()).toBe(true);
+      await expect(ensureWebSpeechConsent()).resolves.toBe(false);
+      expect(ask).not.toHaveBeenCalled();
+    },
+  );
 
   it('a switch to a local-only mode while the dialog is open refuses the grant', async () => {
     const voice = storeConsent(false);
