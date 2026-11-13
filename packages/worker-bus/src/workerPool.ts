@@ -94,7 +94,8 @@ export class WorkerPool {
       this.clearIdleTimer(idle.instance);
       return idle.instance;
     }
-    if (this.entries.length >= this.options.maxWorkers) return undefined;
+    // QNBS-v3 (#1272): a start during a pending respawn backoff would skip the delay; waiters are served by the respawn.
+    if (this.respawnTimer || this.entries.length >= this.options.maxWorkers) return undefined;
     const worker = this.spawnWorker();
     this.setBusy(worker.workerId);
     return worker;
@@ -113,8 +114,7 @@ export class WorkerPool {
       return;
     }
     this.setIdle(worker.workerId);
-    // A worker that finished a task proves the script starts; earlier crashes no longer count.
-    this.consecutiveCrashes = 0;
+    this.markHealthy();
     entry.idleTimer = setTimeout(() => {
       if (this.entries.length > this.options.minWorkers) {
         this.terminateEntry(entry);
@@ -236,7 +236,7 @@ export class WorkerPool {
         if (event.data?.kind !== 'PONG' || event.data?.taskId !== pingId) return;
         this.stopWaitingForPong(entry);
         // QNBS-v3 (#1272): only a pool member's pong proves its script starts; a late pong from a crashed worker resets nothing.
-        if (this.entries.includes(entry)) this.consecutiveCrashes = 0;
+        if (this.entries.includes(entry)) this.markHealthy();
       };
       entry.pongHandler = pongHandler;
       entry.instance.port.addEventListener('message', pongHandler);
@@ -269,10 +269,18 @@ export class WorkerPool {
       this.respawn();
       return;
     }
-    this.respawnTimer ??= setTimeout(() => {
+    // A later crash asks for a longer backoff; the replacement waits for that one, not an earlier shorter one.
+    if (this.respawnTimer) clearTimeout(this.respawnTimer);
+    this.respawnTimer = setTimeout(() => {
       this.respawnTimer = null;
       this.respawn();
     }, delay);
+  }
+
+  /** A live member finished a task or answered a ping: the script starts, so earlier crashes and a pool failure no longer count. */
+  private markHealthy(): void {
+    this.consecutiveCrashes = 0;
+    this.failure = null;
   }
 
   private respawn(): void {

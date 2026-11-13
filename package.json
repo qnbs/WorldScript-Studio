@@ -85,6 +85,7 @@
     "build:edge": "node scripts/build-edge.mjs",
     "prebuild:pages": "node scripts/sync-sw-version.mjs && node scripts/copy-duckdb-assets.mjs && node scripts/copy-third-party-licenses.mjs",
     "build:pages": "vite build",
+    "postbuild:pages": "node scripts/check-worker-bundles.mjs dist",
     "build:turbo": "turbo run build",
     "preview": "vite preview",
     "typecheck": "tsgo --project tsconfig.tsgo.json --noEmit --checkers 4",

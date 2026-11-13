@@ -282,9 +282,9 @@ describe('WorkerPool', () => {
 
   // #1272: production shipped every worker as raw TypeScript; each start failed and the pool respawned at once, forever.
   describe('worker creation and bounded respawn (#1272)', () => {
-    function poolWith(createWorker: () => Worker) {
+    function poolWith(createWorker: () => Worker, maxWorkers = 1) {
       return new WorkerPool('test-pool', ['inference.text'], {
-        maxWorkers: 1,
+        maxWorkers,
         minWorkers: 1,
         idleTimeoutMs: 120_000,
         createWorker,
@@ -347,18 +347,19 @@ describe('WorkerPool', () => {
       }
     });
 
-    it('a delayed respawn never exceeds maxWorkers after a task filled the slot', async () => {
+    it('an acquisition during a respawn backoff waits for the respawn instead of starting a worker', async () => {
       vi.useFakeTimers();
       try {
         const createWorker = vi.fn(() => new MockWorker() as unknown as Worker);
         const pool = poolWith(createWorker);
-        let worker = await pool.acquire();
-        crash(worker); // immediate respawn
-        worker = await pool.acquire();
-        crash(worker); // respawn scheduled after 1 s
-        const filler = pool.tryAcquire(); // a task fills the free slot on demand meanwhile
-        expect(filler).toBeDefined();
+        crash(await pool.acquire()); // immediate respawn
+        crash(await pool.acquire()); // respawn scheduled after 1 s
+        const waiting = pool.acquire(); // must not start a worker before the backoff ends
+        expect(pool.tryAcquire()).toBeUndefined();
+        expect(createWorker).toHaveBeenCalledTimes(2);
         await vi.advanceTimersByTimeAsync(1_000);
+        expect(createWorker).toHaveBeenCalledTimes(3);
+        await expect(waiting).resolves.toMatchObject({ state: 'busy' });
         expect(pool.getHealth().totalWorkers).toBe(1);
         await pool.terminateAll();
       } finally {
@@ -542,15 +543,56 @@ describe('WorkerPool', () => {
     it('a respawn that falls due after the pool gave up starts nothing', async () => {
       vi.useFakeTimers();
       try {
-        const createWorker = vi.fn(newMockWorker);
-        const pool = poolWith(createWorker);
-        crash(await pool.acquire()); // 1st crash: immediate respawn
-        crash(await pool.acquire()); // 2nd crash: respawn due in 1 s
-        crash(await pool.acquire()); // tasks start workers on demand meanwhile; 3rd crash keeps that respawn
-        crash(await pool.acquire()); // 4th crash: the pool gives up
-        await vi.advanceTimersByTimeAsync(1_000);
+        const createWorker = vi.fn(() => new MockWorker() as unknown as Worker);
+        const pool = poolWith(createWorker, 3);
+        const [a, b, c] = [await pool.acquire(), await pool.acquire(), await pool.acquire()];
+        crash(a); // 1st crash: immediate respawn
+        crash(b); // 2nd crash: respawn due in 1 s
+        crash(c); // 3rd crash: the respawn now waits 4 s
+        crash(await pool.acquire()); // 4th crash (the respawned worker): the pool gives up
+        await vi.advanceTimersByTimeAsync(5_000);
         expect(createWorker).toHaveBeenCalledTimes(4);
         await expect(pool.acquire()).rejects.toThrow('stopped after 4 consecutive worker crashes');
+        await pool.terminateAll();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a later crash with a longer backoff replaces the pending respawn', async () => {
+      vi.useFakeTimers();
+      try {
+        const createWorker = vi.fn(() => new MockWorker() as unknown as Worker);
+        const pool = poolWith(createWorker, 3);
+        const [a, b, c] = [await pool.acquire(), await pool.acquire(), await pool.acquire()];
+        crash(a); // 1st crash: immediate respawn
+        crash(b); // 2nd crash: respawn due in 1 s
+        crash(c); // 3rd crash: 4 s from now
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(createWorker).toHaveBeenCalledTimes(4); // the 1 s respawn no longer fires
+        await vi.advanceTimersByTimeAsync(3_000);
+        expect(createWorker).toHaveBeenCalledTimes(5);
+        await pool.terminateAll();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a member that finishes a task brings a failed pool back', async () => {
+      vi.useFakeTimers();
+      try {
+        const createWorker = vi.fn(() => new MockWorker() as unknown as Worker);
+        const pool = poolWith(createWorker, 2);
+        const healthy = await pool.acquire(); // stays busy while its sibling keeps crashing
+        crash(await pool.acquire()); // 1st crash: immediate respawn
+        crash(await pool.acquire()); // 2nd crash: respawn after 1 s
+        await vi.advanceTimersByTimeAsync(1_000);
+        crash(await pool.acquire()); // 3rd crash: respawn after 4 s
+        await vi.advanceTimersByTimeAsync(4_000);
+        crash(await pool.acquire()); // 4th crash: the pool gives up
+        await expect(pool.acquire()).rejects.toThrow('stopped after 4 consecutive worker crashes');
+        pool.release(healthy); // a finished task proves a live member
+        await expect(pool.acquire()).resolves.toMatchObject({ workerId: healthy.workerId });
         await pool.terminateAll();
       } finally {
         vi.useRealTimers();

@@ -51,13 +51,16 @@ describe('worker bundle guard (#1272)', () => {
     ]);
   });
 
-  // postbuild runs after every `pnpm run build`: the CI build job, the Docker build and Tauri's beforeBuildCommand.
+  // postbuild runs after every `pnpm run build` (the CI build job, the Docker build, Tauri's beforeBuildCommand); postbuild:pages after build:pages.
   it('runs after every production build', () => {
     const scripts = (
       JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }
     ).scripts;
     expect(scripts['build']).toBe('vite build');
     expect(scripts['postbuild']).toBe('node scripts/check-worker-bundles.mjs dist');
+    // build:pages is also a direct vite build, so it carries its own post hook.
+    expect(scripts['build:pages']).toBe('vite build');
+    expect(scripts['postbuild:pages']).toBe('node scripts/check-worker-bundles.mjs dist');
   });
 });
 
