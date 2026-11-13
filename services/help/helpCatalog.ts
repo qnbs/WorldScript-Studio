@@ -1,3 +1,5 @@
+import { DUCKDB_ANALYTICS_AVAILABLE } from '../duckdb/duckdbAvailability';
+
 /** Source of truth for Help Center structure (article bodies live in locale `help` module). */
 
 export type HelpArticleDef = {
@@ -320,7 +322,10 @@ export const HELP_CATALOG: HelpCategoryDef[] = [
       { titleKey: 'help.docs.dataModel.title', contentKey: 'help.docs.dataModel.content' },
       { titleKey: 'help.docs.featureFlags.title', contentKey: 'help.docs.featureFlags.content' },
       { titleKey: 'help.docs.ragPipeline.title', contentKey: 'help.docs.ragPipeline.content' },
-      { titleKey: 'help.docs.duckdb.title', contentKey: 'help.docs.duckdb.content' },
+      // QNBS-v3 (#716): the article describes DuckDB's OPFS persistence, which a build without DuckDB analytics does not have.
+      ...(DUCKDB_ANALYTICS_AVAILABLE
+        ? [{ titleKey: 'help.docs.duckdb.title', contentKey: 'help.docs.duckdb.content' }]
+        : []),
       { titleKey: 'help.docs.lazyLoading.title', contentKey: 'help.docs.lazyLoading.content' },
       { titleKey: 'help.docs.pwaDesktop.title', contentKey: 'help.docs.pwaDesktop.content' },
       {

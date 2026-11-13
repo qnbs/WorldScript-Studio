@@ -7,6 +7,7 @@ import {
   DUCKDB_UNAVAILABLE_REASON,
 } from '../../services/duckdb/duckdbAvailability';
 import { duckdbClient } from '../../services/duckdb/duckdbClient';
+import { HELP_CATALOG } from '../../services/help/helpCatalog';
 
 const { mockEnsureDuckDbPool } = vi.hoisted(() => ({ mockEnsureDuckDbPool: vi.fn() }));
 vi.mock('../../services/workerBusManager', () => ({
@@ -37,6 +38,14 @@ describe('DuckDB analytics in this build (#716)', () => {
       expect(mockEnsureDuckDbPool).not.toHaveBeenCalled();
     },
   );
+
+  it('the help leaves out the article that promises OPFS persistence', () => {
+    const contentKeys = HELP_CATALOG.flatMap((category) =>
+      category.articles.map((a) => a.contentKey),
+    );
+    expect(contentKeys).not.toContain('help.docs.duckdb.content');
+    expect(contentKeys).toContain('help.docs.ragPipeline.content');
+  });
 
   it('reads a stored flag as off, so nothing boots DuckDB or persists analytics', () => {
     const state = {
