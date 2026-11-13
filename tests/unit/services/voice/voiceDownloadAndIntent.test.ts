@@ -205,13 +205,16 @@ describe('downloadVoiceModels', () => {
     );
   });
 
-  it('tts download uses kokoro model id', async () => {
+  // #556: the old TTS id 'onnxruntime-community/kokoro' does not exist (HTTP 401), and Kokoro cannot load in this build.
+  it('tts download rejects with the Kokoro reason and fetches nothing', async () => {
     const { service } = makeService();
-    await service.downloadVoiceModels('tts');
-    expect(mockPipeline).toHaveBeenCalledWith(
-      'text-to-speech',
-      'onnxruntime-community/kokoro',
-      expect.anything(),
+    await expect(service.downloadVoiceModels('tts')).rejects.toThrow(/style_text_to_speech_2/);
+    expect(mockPipeline).not.toHaveBeenCalled();
+    expect(mockSetVoiceSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ voiceWasmDownloadError: expect.stringMatching(/not available/) }),
+    );
+    expect(mockSetVoiceSettings).not.toHaveBeenCalledWith(
+      expect.objectContaining({ wasmModelsReady: true }),
     );
   });
 });

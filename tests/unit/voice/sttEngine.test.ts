@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ConsentRequiredError,
   createSttEngine,
+  LOCAL_STT_UNAVAILABLE_MESSAGE,
   WebSpeechSttEngine,
 } from '../../../services/voice/sttEngine';
 import type { SttResult } from '../../../services/voice/voiceTypes';
@@ -171,8 +172,54 @@ describe('createSttEngine', () => {
     expect(engine.id).toBe('webSpeech');
   });
 
-  it('falls back when preferred engine is unavailable', async () => {
-    const engine = await createSttEngine({ preferredEngine: 'whisper' });
+  // #1261: an explicit on-device choice used to fall back silently to Web Speech, which sends audio to the browser vendor.
+  it('refuses to turn an explicit on-device choice into cloud recognition', async () => {
+    await expect(createSttEngine({ preferredEngine: 'whisper' })).rejects.toThrow(
+      LOCAL_STT_UNAVAILABLE_MESSAGE,
+    );
+  });
+
+  it('falls back to Web Speech only when cloud fallback is allowed', async () => {
+    const engine = await createSttEngine({ preferredEngine: 'whisper', allowCloudFallback: true });
     expect(engine.id).toBe('webSpeech');
+  });
+
+  describe('with the local-model engine enabled', () => {
+    const wasmModule = '../../../services/voice/wasmSttEngine';
+    afterEach(() => {
+      vi.doUnmock(wasmModule);
+      vi.resetModules();
+    });
+
+    it('uses the on-device engine when it loads and is available', async () => {
+      vi.doMock(wasmModule, () => ({
+        WasmSttEngine: class {
+          readonly id = 'whisper';
+          readonly name = 'Whisper (local)';
+          isAvailable() {
+            return Promise.resolve(true);
+          }
+        },
+      }));
+      const engine = await createSttEngine({ preferredEngine: 'whisper', enableVoiceWasm: true });
+      expect(engine.id).toBe('whisper');
+    });
+
+    it('falls back to Web Speech for an auto choice when the on-device engine cannot load', async () => {
+      vi.doMock(wasmModule, () => ({
+        WasmSttEngine: class {
+          constructor() {
+            throw new Error('ONNX runtime unavailable');
+          }
+        },
+      }));
+      const engine = await createSttEngine({ enableVoiceWasm: true });
+      expect(engine.id).toBe('webSpeech');
+    });
+  });
+
+  it('reports that no engine is available when the browser has no speech recognition', async () => {
+    vi.stubGlobal('window', {});
+    await expect(createSttEngine()).rejects.toThrow('No STT engine available');
   });
 });

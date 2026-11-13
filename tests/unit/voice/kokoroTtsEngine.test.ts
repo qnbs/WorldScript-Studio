@@ -12,7 +12,10 @@ vi.mock('../../../services/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { KokoroTtsEngine } from '../../../services/voice/kokoroTtsEngine';
+import {
+  KOKORO_UNAVAILABLE_REASON,
+  KokoroTtsEngine,
+} from '../../../services/voice/kokoroTtsEngine';
 import type { TtsUtterance } from '../../../services/voice/voiceTypes';
 
 // ── Minimal Web Audio stubs ──────────────────────────────────────────────────
@@ -53,13 +56,15 @@ afterEach(() => {
 });
 
 describe('KokoroTtsEngine', () => {
-  it('isAvailable() true when WebAssembly + AudioContext + pipeline are present', async () => {
-    expect(await new KokoroTtsEngine().isAvailable()).toBe(true);
+  // #556: every real-runtime run failed with "Unsupported model type style_text_to_speech_2"; the engine must say so.
+  it('reports itself unavailable even with WebAssembly, AudioContext and a pipeline present', async () => {
+    expect(await new KokoroTtsEngine().isAvailable()).toBe(false);
+    expect(mockPipelineFactory).not.toHaveBeenCalled();
   });
 
-  it('isAvailable() false when AudioContext is unavailable', async () => {
-    vi.stubGlobal('AudioContext', undefined);
-    expect(await new KokoroTtsEngine().isAvailable()).toBe(false);
+  it('names the reason it is unavailable', () => {
+    expect(KOKORO_UNAVAILABLE_REASON).toMatch(/not available in this version/);
+    expect(KOKORO_UNAVAILABLE_REASON).toContain('style_text_to_speech_2');
   });
 
   it('initialize() loads the onnx-community Kokoro model with dtype q8', async () => {
@@ -92,11 +97,6 @@ describe('KokoroTtsEngine', () => {
     const engine = new KokoroTtsEngine();
     expect(engine.id).toBe('kokoro');
     expect(engine.isLocal).toBe(true);
-  });
-
-  it('isAvailable() false when WebAssembly is unavailable', async () => {
-    vi.stubGlobal('WebAssembly', undefined);
-    expect(await new KokoroTtsEngine().isAvailable()).toBe(false);
   });
 
   it('cancel() is a no-op when nothing is playing', () => {

@@ -25,6 +25,7 @@ import type { VoiceFeedbackLevel } from '../../types';
 // QNBS-v3: B5 — eco-mode forces lightweight WebSpeech backend when battery is low
 import { ecoModeService } from '../ai/ecoModeService';
 import { logger } from '../logger';
+import { sttEngineUnderEco } from './engineChoice';
 import { FeedbackService } from './feedbackService';
 import { HybridIntentEngine } from './intentEngine';
 import { createSttEngine } from './sttEngine';
@@ -44,6 +45,15 @@ import type {
 import { createWakeWordEngine } from './wakeWordEngine';
 
 export type GetStateFn = () => RootState;
+
+/** Config keys that decide which engines exist; changing one rebuilds the engines on the next start. */
+const ENGINE_CONFIG_KEYS = [
+  'preferredSttEngine',
+  'preferredTtsEngine',
+  'enableVoiceWasm',
+  // QNBS-v3 (#1261): turning cloud fallback off must replace a Web Speech engine chosen under it.
+  'allowCloudFallback',
+] as const;
 
 export interface VoiceServiceConfig {
   preferredSttEngine: 'auto' | 'whisper' | 'webSpeech';
@@ -74,6 +84,9 @@ export class VoiceCommandService {
 
   private coordinator: VoiceActivityCoordinator | null = null;
   private isInitialized = false;
+  /** Set when the engine choice changes; the next start applies it before it uses any engine. */
+  private engineChoiceChanged = false;
+  private engineSetup: Promise<boolean> | null = null;
   // QNBS-v3: C-P1 — single-flight guard against re-entrant startListening (rapid PTT / wake-word).
   private isStarting = false;
   private listeningTimer: ReturnType<typeof setTimeout> | null = null;
@@ -142,8 +155,23 @@ export class VoiceCommandService {
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
+  /**
+   * The one engine-setup operation every start goes through: applies a changed engine choice, then initializes.
+   * QNBS-v3 (#1261): concurrent starts share it, so engines are never built twice or released while another start builds them.
+   */
+  private ensureEngines(): Promise<boolean> {
+    this.engineSetup ??= this.applyEngineChoice()
+      .then(() => this.initialize())
+      .finally(() => {
+        this.engineSetup = null;
+      });
+    return this.engineSetup;
+  }
+
   async initialize(): Promise<boolean> {
     if (this.isInitialized) return true;
+    // A change from here on (even while the engines below are being built) is applied by the next start.
+    this.engineChoiceChanged = false;
 
     try {
       await this.intentEngine.initialize();
@@ -190,8 +218,10 @@ export class VoiceCommandService {
       // QNBS-v3: B5 — eco-mode overrides STT to lightweight WebSpeech to save power
       const eco = ecoModeService.isEcoMode();
       const engine = await createSttEngine({
-        preferredEngine: eco ? 'webSpeech' : this.config.preferredSttEngine,
-        enableVoiceWasm: this.config.enableVoiceWasm || eco,
+        preferredEngine: sttEngineUnderEco(this.config.preferredSttEngine, eco),
+        // QNBS-v3 (#1261): Eco Mode never turns the local-model opt-in on; it only lowers an auto choice to Web Speech.
+        enableVoiceWasm: this.config.enableVoiceWasm,
+        allowCloudFallback: this.config.allowCloudFallback,
       });
       this.d(setActiveSttEngine(engine.id));
       this.d(setSttStatus('ready'));
@@ -276,17 +306,15 @@ export class VoiceCommandService {
       settleStart = resolve;
     });
     try {
-      if (!this.isInitialized) {
-        const ok = await this.initialize();
-        if (!ok) {
-          throw new Error('Voice service could not be initialized');
-        }
+      // A running dictation ends before the engine setup may replace the engines it uses.
+      await this.endDictationBeforeListening();
+      if (!(await this.ensureEngines())) {
+        throw new Error('Voice service could not be initialized');
       }
 
       if (!this.sttEngine) {
         throw new Error('No STT engine available');
       }
-      await this.endDictationBeforeListening();
 
       this.d(setVoiceMode('listening'));
       this.d(setVoiceError(null));
@@ -347,8 +375,9 @@ export class VoiceCommandService {
     this.isDictating = true;
     const claim = ++this.dictationClaim;
     try {
-      const engine = await this.dictationEngine();
+      // Command listening ends first, so the engine setup never replaces engines a running session uses.
       await this.endListeningBeforeDictation();
+      const engine = await this.dictationEngine();
       if (claim !== this.dictationClaim) return; // stopped while preparing
       // QNBS-v3 (#556): each dictation starts from an empty transcript, so a restart never re-inserts the last session.
       this.d(setVoiceTranscript(''));
@@ -363,10 +392,8 @@ export class VoiceCommandService {
   }
 
   private async dictationEngine(): Promise<SttEngine> {
-    if (!this.isInitialized) {
-      const ok = await this.initialize();
-      if (!ok) throw new Error('Voice service could not be initialized');
-    }
+    // QNBS-v3 (#1261): the shared engine setup applies a changed engine choice before dictation uses an engine.
+    if (!(await this.ensureEngines())) throw new Error('Voice service could not be initialized');
     if (!this.sttEngine) throw new Error('No STT engine available');
     return this.sttEngine;
   }
@@ -583,9 +610,30 @@ export class VoiceCommandService {
   // ── Configuration ──────────────────────────────────────────────────────────
 
   updateConfig(config: Partial<VoiceServiceConfig>): void {
+    const engineChanged = ENGINE_CONFIG_KEYS.some(
+      (key) => key in config && config[key] !== this.config[key],
+    );
     this.config = { ...this.config, ...config };
     this.feedbackService.setFeedbackLevel(this.config.feedbackLevel);
     this.feedbackService.setMuted(this.config.ttsMuted);
+    // QNBS-v3 (#1261): never torn down from here (a start may be using the engines); the next start applies the change itself.
+    if (engineChanged) this.engineChoiceChanged = true;
+  }
+
+  /** Applies a changed engine choice inside a start, before it uses any engine: ends sessions, drops the old engines. */
+  private async applyEngineChoice(): Promise<void> {
+    if (!this.engineChoiceChanged || !this.isInitialized) return;
+    const engines = [this.sttEngine, this.ttsEngine, this.vadEngine, this.wakeWordEngine];
+    this.isInitialized = false;
+    try {
+      // Ends command listening and waits for a draining dictation; never stops the start that is calling this.
+      await this.stopCommandListening();
+      await this.dictationStop;
+      this.cancelSpeech();
+      await Promise.all(engines.map((engine) => engine?.dispose()));
+    } catch (error) {
+      logger.warn('Releasing the previous voice engines failed', error);
+    }
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
@@ -625,7 +673,7 @@ export class VoiceCommandService {
   // ── Voice WASM Model Download ───────────────────────────────────────────────
 
   /**
-   * QNBS-v3: P1-2 — Download WASM voice models (Whisper STT + Kokoro TTS).
+   * QNBS-v3: P1-2 — Download the WASM voice model (Whisper STT; Kokoro TTS rejects with its unavailability reason).
    * Called from VoiceModelDownloadModal when enableVoiceWasm is toggled.
    */
   // QNBS-v3: P1-2 / CodeAnt P2-3 — signal allows VoiceModelDownloadModal cancel to abort mid-download
@@ -639,7 +687,16 @@ export class VoiceCommandService {
       return;
     }
 
-    const modelId = modelType === 'stt' ? 'Xenova/whisper-tiny.en' : 'onnxruntime-community/kokoro';
+    // QNBS-v3 (#556): never fetch a TTS model Kokoro cannot load; the old id 'onnxruntime-community/kokoro' returns HTTP 401.
+    if (modelType === 'tts') {
+      const { KOKORO_UNAVAILABLE_REASON } = await import('./kokoroTtsEngine');
+      this.d(
+        settingsActions.setVoiceSettings({ voiceWasmDownloadError: KOKORO_UNAVAILABLE_REASON }),
+      );
+      throw new Error(KOKORO_UNAVAILABLE_REASON);
+    }
+
+    const modelId = 'Xenova/whisper-tiny.en';
 
     // QNBS-v3: Trigger model download via transformers pipeline warm-up.
     // This forces the model to be fetched and cached in browser storage.
@@ -669,7 +726,7 @@ export class VoiceCommandService {
       );
 
       // Create pipeline to trigger model download
-      const task = modelType === 'stt' ? 'automatic-speech-recognition' : 'text-to-speech';
+      const task = 'automatic-speech-recognition';
       const createPipeline = pipeline as (
         task: string,
         model: string,

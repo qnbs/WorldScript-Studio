@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mock dependencies
 vi.mock('../../../../services/ai/ecoModeService', () => ({
   ecoModeService: {
-    isEcoMode: () => false,
+    isEcoMode: vi.fn(() => false),
   },
 }));
 
@@ -153,6 +153,110 @@ describe('VoiceCommandService', () => {
         'Voice service could not be initialized',
       );
       failingService.initialize = originalInitialize;
+    });
+  });
+
+  // #1261: after initialization a changed engine choice used to be ignored until reload.
+  describe('engine choice changes', () => {
+    // Engines are never torn down from updateConfig() (a start may be using them); the next start applies the change.
+    it('a changed engine choice is applied by the next start, not from outside', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      await service.initialize();
+      const engine = await vi.mocked(createSttEngine).mock.results[0]?.value;
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      // Let any background teardown run: there must be none.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(engine.dispose).not.toHaveBeenCalled();
+      await service.startDictation();
+      expect(engine.dispose).toHaveBeenCalled();
+      // Applying the change must not cancel the dictation start that applied it.
+      expect(engine.start).toHaveBeenCalled();
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+      expect(createSttEngine).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredEngine: 'whisper' }),
+      );
+    });
+
+    it('a change while the engines are being built is applied by the next start', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      const initializing = service.initialize();
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      await initializing;
+      await service.startDictation();
+      expect(createSttEngine).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredEngine: 'whisper' }),
+      );
+    });
+
+    // #1261: a Web Speech engine chosen because cloud fallback was allowed must not survive turning that off.
+    it('turning cloud fallback off rebuilds the engines at the next start', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      service.updateConfig({ preferredSttEngine: 'whisper', allowCloudFallback: true });
+      await service.initialize();
+      service.updateConfig({ allowCloudFallback: false });
+      await service.startDictation();
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+      expect(createSttEngine).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredEngine: 'whisper', allowCloudFallback: false }),
+      );
+    });
+
+    it('concurrent starts after an engine change build the new engines once', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      await service.initialize();
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      await Promise.all([service.startListening(), service.startDictation()]);
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+      await service.stopListening();
+    });
+
+    it('a failing release of the old engines is logged and the start still builds the new ones', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      const { logger } = await import('../../../../services/logger');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      await service.initialize();
+      const engine = await vi.mocked(createSttEngine).mock.results[0]?.value;
+      vi.mocked(engine.dispose).mockRejectedValueOnce(new Error('dispose failed'));
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      await service.startDictation();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Releasing the previous voice engines failed',
+        expect.objectContaining({ message: 'dispose failed' }),
+      );
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+    });
+
+    it('an unrelated config change keeps the engines', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      await service.initialize();
+      service.updateConfig({ speechRate: 1.2 });
+      await service.startDictation();
+      expect(createSttEngine).toHaveBeenCalledTimes(1);
+    });
+
+    // #1261: Eco Mode switched even an explicit on-device choice to Web Speech, which can send audio off-device.
+    it.each([
+      ['whisper', 'whisper'],
+      ['auto', 'webSpeech'],
+    ] as const)('under Eco Mode a %s choice builds %s', async (choice, built) => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      const { ecoModeService } = await import('../../../../services/ai/ecoModeService');
+      vi.mocked(ecoModeService.isEcoMode).mockReturnValue(true);
+      try {
+        service.updateConfig({ preferredSttEngine: choice });
+        await service.initialize();
+        // ...and Eco Mode never turns the local-model opt-in on (the service is built with it off).
+        expect(createSttEngine).toHaveBeenLastCalledWith(
+          expect.objectContaining({ preferredEngine: built, enableVoiceWasm: false }),
+        );
+      } finally {
+        vi.mocked(ecoModeService.isEcoMode).mockReturnValue(false);
+      }
     });
   });
 
