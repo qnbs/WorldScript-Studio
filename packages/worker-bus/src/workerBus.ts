@@ -436,10 +436,22 @@ export class WorkerBus {
     onProgress: () => void,
   ): Promise<TaskResult<TResult>> {
     const startedAt = Date.now();
+    let answered = false;
     try {
-      return await this.waitForWorkerResult<TResult>(task, token, worker, startedAt, onProgress);
+      return await this.waitForWorkerResult<TResult>(
+        task,
+        token,
+        worker,
+        startedAt,
+        onProgress,
+        () => {
+          answered = true;
+        },
+      );
     } finally {
       if (!attempt.timedOut) pool.release(worker);
+      // QNBS-v3 (#1278): only a RESULT proves the worker runs; a cancelled task that got no answer resets no crash count.
+      if (answered) pool.markWorkerHealthy(worker.workerId);
     }
   }
 
@@ -449,6 +461,7 @@ export class WorkerBus {
     worker: PooledWorkerInstance,
     startedAt: number,
     onProgress: () => void,
+    onAnswer: () => void = () => {},
   ): Promise<TaskResult<TResult>> {
     const queueTimeMs = Math.round(startedAt - task.createdAt);
     const port = worker.port;
@@ -502,6 +515,7 @@ export class WorkerBus {
             timestamp: Date.now(),
           });
         } else if (message.kind === 'RESULT') {
+          onAnswer();
           finish(
             this.workerMessageToResult<TResult>(task, worker, message, startedAt, queueTimeMs),
           );
