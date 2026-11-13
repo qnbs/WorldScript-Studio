@@ -12,10 +12,13 @@ import {
 
 const cli = fileURLToPath(new URL('../../../scripts/vercel-retention/cli.mjs', import.meta.url));
 
-test('the operator contract matches .nvmrc without narrowing application engines or CI', () => {
+test('the operator contract matches .nvmrc and stays inside the application engines range', () => {
   assert.equal(readFileSync(new URL('../../../.nvmrc', import.meta.url), 'utf8').trim(), '22');
   const pkg = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'));
-  assert.equal(pkg.engines.node, '>=22.19.0');
+  // The range keeps its 22.19.0 floor and an upper bound above the operator major; nodeRuntimePins.test.ts owns the bound.
+  const range = pkg.engines.node.match(/^>=22\.19\.0(?: <(\d+))?$/);
+  assert.ok(range, `unexpected engines.node ${pkg.engines.node}`);
+  assert.ok(range[1] === undefined || Number(range[1]) > 22);
   for (const version of ['22.19.0', '22.19.1', '22.23.3', '22.100.0'])
     assert.doesNotThrow(() => assertRuntime(version));
   for (const version of [
