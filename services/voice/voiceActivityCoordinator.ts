@@ -249,17 +249,25 @@ export class VoiceActivityCoordinator {
         // Restart STT for the next utterance only after stop() has fully resolved
         const generation = this.generation;
         this.restarting = true;
-        return this.stt.start(onResult, onError).then(() => this.afterRestart(generation));
-      })
-      .catch((err) => {
-        this.isFlushing = false;
-        this.restarting = false;
-        log.error(
-          'stt.start() failed after flush',
-          err instanceof Error ? err : new Error(String(err)),
+        return this.stt.start(onResult, onError).then(
+          () => this.afterRestart(generation),
+          (err: unknown) => this.restartFailed(generation, err, onError),
         );
-        onError(err instanceof Error ? err : new Error(String(err)));
-      });
+      })
+      // An engine whose start() throws synchronously lands here instead of becoming an unhandled rejection.
+      .catch((err: unknown) => this.restartFailed(this.generation, err, onError));
+  }
+
+  /** A restart whose start failed; once a stop cancelled it, the engine may serve another session, so stay quiet (#1265). */
+  private restartFailed(generation: number, err: unknown, onError: (error: Error) => void): void {
+    this.restarting = false;
+    const error = err instanceof Error ? err : new Error(String(err));
+    if (generation !== this.generation) {
+      log.warn('A cancelled restart failed after its stop', { err: error.message });
+      return;
+    }
+    log.error('stt.start() failed after flush', error);
+    onError(error);
   }
 
   /**

@@ -429,3 +429,49 @@ describe('VoiceActivityCoordinator stop during a restart (#1265)', () => {
     },
   );
 });
+
+// #1265: once stop() cancelled a pending restart, a newer session may own the engine; the old start's failure is not its error.
+describe('VoiceActivityCoordinator failed restart (#1265)', () => {
+  it.each([
+    ['after a stop cancelled it', true, 0],
+    ['while the coordinator still runs', false, 1],
+  ] as const)(
+    'a restart that fails %s (stopped first: %s) reports the error %i times',
+    async (_when, stopFirst, reported) => {
+      let failRestart: (error: Error) => void = () => {};
+      const vad = makeVad({
+        processChunk: vi
+          .fn()
+          .mockResolvedValueOnce({ startMs: 0, endMs: 20, isSpeech: true })
+          .mockResolvedValueOnce({ startMs: 20, endMs: 40, isSpeech: false })
+          .mockResolvedValue(null),
+      });
+      const stt = makeStt({
+        start: vi
+          .fn()
+          .mockResolvedValueOnce(undefined)
+          .mockImplementationOnce(
+            () => new Promise<void>((_resolve, reject) => (failRestart = reject)),
+          ),
+      });
+      const onError = vi.fn();
+      const coordinator = new VoiceActivityCoordinator(vad, stt);
+      await coordinator.start(vi.fn(), onError);
+      const frame = new Float32Array(4096).fill(0.1);
+      const fire = () =>
+        (mockScriptProcessor.onaudioprocess as (e: unknown) => void)({
+          inputBuffer: { getChannelData: () => frame },
+        });
+      fire();
+      await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(1));
+      fire(); // silence: drain, then a restart that will fail
+      await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(2));
+
+      if (stopFirst) await coordinator.stop();
+      failRestart(new Error('microphone request failed'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(onError).toHaveBeenCalledTimes(reported);
+    },
+  );
+});
