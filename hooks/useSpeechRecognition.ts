@@ -25,6 +25,8 @@ export const useSpeechRecognition = () => {
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isListeningRef = useRef(false);
+  /** Bumped by every start request and every stop; a start resumes after the consent dialog only while it is the latest. */
+  const startRequestRef = useRef(0);
 
   useEffect(() => {
     isListeningRef.current = isListening;
@@ -122,14 +124,16 @@ export const useSpeechRecognition = () => {
   const startListening = useCallback(async () => {
     const recognition = recognitionRef.current;
     if (!recognition || isListeningRef.current) return;
+    const request = ++startRequestRef.current;
     // QNBS-v3 (#1261): Web Speech sends the audio to the browser vendor; no start without the stored consent.
     if (!(await ensureWebSpeechConsent())) return;
-    // The control may have unmounted, or remounted with a new instance, while the consent dialog was open.
-    if (recognitionRef.current === recognition && !isListeningRef.current) {
+    // The control may have unmounted, remounted with a new instance, or been stopped while the consent dialog was open.
+    const current = recognitionRef.current === recognition && startRequestRef.current === request;
+    if (current && !isListeningRef.current) {
       setTranscript('');
       setMicError(null);
       try {
-        recognitionRef.current.start();
+        recognition.start();
         setIsListening(true);
 
         timeoutRef.current = setTimeout(() => {
@@ -148,6 +152,7 @@ export const useSpeechRecognition = () => {
 
   const stopListening = useCallback(() => {
     clearMicTimeout();
+    startRequestRef.current += 1; // a start still waiting for the consent dialog never begins capture
     if (recognitionRef.current && isListeningRef.current) {
       recognitionRef.current.stop();
       setIsListening(false);
