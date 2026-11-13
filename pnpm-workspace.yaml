@@ -81,7 +81,7 @@ overrides:
   protobufjs: ">=8.6.6"
   axios: ">=1.20.0" # 12 advisories on 1.19.0 incl. GHSA-542g-h47m-68v8 (fixed 1.20.0); dev-only via wait-on
   follow-redirects: ">=1.16.2 <2"
-  basic-ftp: ">=6.2.1" # GHSA-c475-qrg2-pj4r (fixed 6.2.1); dev-only via @lhci/cli / lighthouse -> proxy-agent -> get-uri
+  basic-ftp: ">=6.2.4" # GHSA-c475-qrg2-pj4r (fixed 6.2.1) + GHSA-5pm8-86m8-9m6r (MLSD parser DoS, fixed 6.2.4); dev-only via @lhci/cli / lighthouse -> proxy-agent -> get-uri
   fast-uri: ">=3.1.9 <4"
   ip-address: ">=10.7.4 <11"
   ws: ">=8.21.0"
