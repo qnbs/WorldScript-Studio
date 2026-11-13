@@ -206,9 +206,9 @@ export class VoiceCommandService {
   }
 
   async initialize(lifecycle = this.lifecycle): Promise<boolean> {
-    if (this.isInitialized) return true;
-    // QNBS-v3 (#1265): a setup a dispose voided builds nothing and leaves the engine-choice flag to the setup that replaced it.
+    // QNBS-v3 (#1265): a setup a dispose voided is never ready, builds nothing and leaves the engine-choice flag alone.
     if (lifecycle !== this.lifecycle) return false;
+    if (this.isInitialized) return true;
     // A change from here on (even while the engines below are being built) is applied by the next start.
     this.engineChoiceChanged = false;
 
@@ -808,27 +808,36 @@ export class VoiceCommandService {
     this.lifecycle += 1;
     // A start after this builds fresh engines instead of joining a setup this dispose voided (#1265).
     this.engineSetup = null;
+    // QNBS-v3 (#1265): set before the first await, so a start during this dispose builds fresh engines, never these.
+    this.isInitialized = false;
+    const coordinator = this.coordinator;
+    const engines: BuiltEngines = [
+      this.sttEngine,
+      this.ttsEngine,
+      this.vadEngine,
+      this.wakeWordEngine,
+    ];
     this.webSpeechWatch?.();
     this.webSpeechWatch = null;
     await this.stopListening();
     this.isDictating = false;
     this.cancelSpeech();
-
-    // QNBS-v3: coordinator.dispose() handles its own engine teardown when active
-    if (this.coordinator) {
-      await this.coordinator.dispose();
-      this.coordinator = null;
-    } else {
-      await Promise.all([
-        this.sttEngine?.dispose(),
-        this.ttsEngine?.dispose(),
-        this.vadEngine?.dispose(),
-        this.wakeWordEngine?.dispose(),
-      ]);
-    }
-
-    this.isInitialized = false;
+    await this.releaseDisposed(coordinator, engines);
     this.eventListeners = [];
+  }
+
+  /** Releases what a dispose took over; engines a start built meanwhile belong to that start and stay. */
+  private async releaseDisposed(
+    coordinator: VoiceActivityCoordinator | null,
+    engines: BuiltEngines,
+  ): Promise<void> {
+    // QNBS-v3: coordinator.dispose() handles its own engine teardown when active
+    if (coordinator && this.coordinator === coordinator) {
+      await coordinator.dispose();
+      this.coordinator = null;
+      return;
+    }
+    await Promise.all(engines.map((engine) => engine?.dispose()));
   }
 
   // ── Onboarding ─────────────────────────────────────────────────────────────

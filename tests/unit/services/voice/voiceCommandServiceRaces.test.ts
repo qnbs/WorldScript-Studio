@@ -455,6 +455,25 @@ describe('VoiceCommandService engine setup races (#1265)', () => {
     expect(stale.dispose).toHaveBeenCalled();
   });
 
+  // CodeAnt on be0849a9: a start while a dispose was still releasing reused the engines it released.
+  it('a dictation started while a dispose releases the engines builds fresh ones, which the dispose leaves alone', async () => {
+    storeConsent(true);
+    const old = buildsNext(sttEngine());
+    await service.initialize();
+    const released = holdNext(old.dispose);
+    const disposing = service.dispose();
+    await vi.waitFor(() => expect(old.dispose).toHaveBeenCalled());
+
+    const fresh = buildsNext(sttEngine());
+    await service.startDictation();
+    released();
+    await disposing;
+
+    expect(old.start).not.toHaveBeenCalled();
+    expect(fresh.start).toHaveBeenCalledTimes(1);
+    expect(fresh.dispose).not.toHaveBeenCalled();
+  });
+
   // #1265, deferred from #1279: a start the user had stopped reported ConsentRequiredError once they declined.
   it.each(['listening', 'dictation'] as const)(
     '%s: a start stopped while the consent dialog is open ends quietly when the user then declines',
