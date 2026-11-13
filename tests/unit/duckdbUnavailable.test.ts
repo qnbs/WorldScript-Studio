@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isAnalyticsPersistenceAllowed } from '../../app/analyticsGate';
 import type { RootState } from '../../app/store';
 import { selectEnableDuckDbAnalytics } from '../../features/featureFlags/featureFlagsSlice';
+import { recordInferenceTelemetry, setTelemetryEnabled } from '../../services/ai/telemetryService';
 import { queryRagSimilarity } from '../../services/duckdb/duckdbAnalytics';
 import {
   DUCKDB_ANALYTICS_AVAILABLE,
@@ -81,6 +82,24 @@ describe('DuckDB analytics in this build (#716)', () => {
 
     expect(queryRagSimilarity).not.toHaveBeenCalled();
     expect(chunks.map((chunk) => chunk.text)).toContain('The hero arrived at dawn.');
+  });
+
+  // App.tsx enables telemetry from the stored flag; telemetry belongs to DuckDB analytics, so it stays off here.
+  it('collects no AI telemetry, even when the app enables it', async () => {
+    window.localStorage.removeItem('worldscript-ai-telemetry');
+    const exec = vi.spyOn(duckdbClient, 'exec');
+    setTelemetryEnabled(true);
+    await recordInferenceTelemetry({
+      taskType: 'text-gen-short',
+      backend: 'onnx-wasm',
+      modelId: 'm',
+      latencyMs: 1,
+      success: true,
+      timestamp: 0,
+    });
+    expect(exec).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem('worldscript-ai-telemetry')).toBeNull();
+    exec.mockRestore();
   });
 
   it('reads a stored flag as off, so nothing boots DuckDB or persists analytics', () => {
