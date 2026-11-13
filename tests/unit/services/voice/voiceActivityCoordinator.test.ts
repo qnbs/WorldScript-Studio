@@ -489,4 +489,57 @@ describe('VoiceActivityCoordinator failed restart (#1265)', () => {
       expect(onError).toHaveBeenCalledTimes(reported);
     },
   );
+
+  // CodeRabbit on 36522c36: a cancelled restart that settled late cleared the flag of a newer restart, so stop() skipped it.
+  it.each(['finishes', 'fails'] as const)(
+    'a cancelled restart that %s after a newer restart began leaves that restart to the next stop()',
+    async (settling) => {
+      let settleOld: () => void = () => {};
+      const vad = makeVad({
+        processChunk: vi
+          .fn()
+          .mockResolvedValueOnce({ startMs: 0, endMs: 20, isSpeech: true })
+          .mockResolvedValueOnce({ startMs: 20, endMs: 40, isSpeech: false })
+          .mockResolvedValueOnce({ startMs: 40, endMs: 60, isSpeech: true })
+          .mockResolvedValueOnce({ startMs: 60, endMs: 80, isSpeech: false })
+          .mockResolvedValue(null),
+      });
+      const oldRestart = () =>
+        new Promise<void>((resolve, reject) => {
+          settleOld = () => (settling === 'finishes' ? resolve() : reject(new Error('late')));
+        });
+      const stt = makeStt({
+        start: vi
+          .fn()
+          .mockResolvedValueOnce(undefined)
+          .mockImplementationOnce(oldRestart) // restart A, e.g. waiting on a microphone prompt
+          .mockResolvedValueOnce(undefined)
+          .mockImplementationOnce(() => new Promise<void>(() => {})), // restart B, pending at the last stop
+      });
+      const coordinator = new VoiceActivityCoordinator(vad, stt);
+      const frame = new Float32Array(4096).fill(0.1);
+      const fire = () =>
+        (mockScriptProcessor.onaudioprocess as (e: unknown) => void)({
+          inputBuffer: { getChannelData: () => frame },
+        });
+      const utterance = async (starts: number) => {
+        fire();
+        await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(starts));
+        fire(); // silence: drain, then a restart that waits
+        await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(starts + 1));
+      };
+      await coordinator.start(vi.fn(), vi.fn());
+      await utterance(1);
+      await coordinator.stop(); // cancels restart A
+      await coordinator.start(vi.fn(), vi.fn());
+      await utterance(3);
+      settleOld();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const stops = vi.mocked(stt.stop).mock.calls.length;
+
+      await coordinator.stop();
+
+      expect(stt.stop).toHaveBeenCalledTimes(stops + 1); // restart B is cancelled as well
+    },
+  );
 });

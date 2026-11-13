@@ -104,6 +104,7 @@ import { appStoreRef } from '../../../../app/storeRef';
 import {
   setActiveSttEngine,
   setActiveTtsEngine,
+  setMicrophonePermission,
   setSttStatus,
   setTtsStatus,
   setVadStatus,
@@ -1144,29 +1145,38 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     expect(setVoiceError).not.toHaveBeenCalledWith('dispose failed');
   });
 
-  // CodeRabbit on 4723a2d9: the engine builds of a voided setup still wrote their status over the fresh session's.
-  it.each(['succeed', 'fail'] as const)(
-    'engine builds of a voided setup that %s late leave the status of the fresh session alone',
-    async (outcome) => {
+  // CodeRabbit on 4723a2d9 and 36522c36: the late steps of a voided setup still wrote their state over the fresh session's.
+  it.each([
+    ['microphone answer', 'succeed'],
+    ['microphone answer', 'fail'],
+    ['engine builds', 'succeed'],
+    ['engine builds', 'fail'],
+  ] as const)(
+    'late %s of a voided setup (%s) leave the state of the fresh session alone',
+    async (step, outcome) => {
       storeConsent(true);
-      const stale = sttEngine();
-      const builds = [createSttEngine, createTtsEngine, createVadEngine, createWakeWordEngine];
-      const settles = builds.map((create) => {
+      const microphone = step === 'microphone answer';
+      const held = microphone
+        ? [navigator.mediaDevices.getUserMedia]
+        : [createSttEngine, createTtsEngine, createVadEngine, createWakeWordEngine];
+      const late = microphone ? { getTracks: () => [] } : sttEngine();
+      const settles = held.map((create) => {
         let settle: () => void = () => {};
         vi.mocked(create).mockReturnValueOnce(
           new Promise((resolve, reject) => {
-            settle = () => (outcome === 'succeed' ? resolve(stale) : reject(new Error('late')));
+            settle = () => (outcome === 'succeed' ? resolve(late) : reject(new Error('late')));
           }) as never,
         );
         return () => settle();
       });
       const first = service.startDictation();
-      await vi.waitFor(() => expect(createWakeWordEngine).toHaveBeenCalled());
+      await vi.waitFor(() => expect(held.at(-1)).toHaveBeenCalled());
       await service.dispose();
       const fresh = buildsNext(sttEngine());
       const second = service.startDictation();
       await vi.waitFor(() => expect(fresh.start).toHaveBeenCalled());
       const writes = [
+        setMicrophonePermission,
         setSttStatus,
         setActiveSttEngine,
         setTtsStatus,

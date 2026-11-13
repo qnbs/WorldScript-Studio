@@ -212,18 +212,18 @@ export class VoiceCommandService {
 
     try {
       await this.intentEngine.initialize();
+      const write = this.writesFor(lifecycle);
 
       // Request microphone permission early
       const permission = await this.requestMicrophonePermission();
       if (permission !== 'granted') {
         logger.warn('Microphone permission not granted');
-        this.d(setMicrophonePermission(permission));
+        write(() => this.d(setMicrophonePermission(permission)));
         return false;
       }
-      this.d(setMicrophonePermission('granted'));
+      write(() => this.d(setMicrophonePermission('granted')));
 
       // Initialize engines in parallel
-      const write = this.writesFor(lifecycle);
       const engines: BuiltEngines = await Promise.all([
         this.initStt(write),
         this.initTts(write),

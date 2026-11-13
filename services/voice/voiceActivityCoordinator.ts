@@ -261,26 +261,30 @@ export class VoiceActivityCoordinator {
       .catch((err: unknown) => log.warn('Handling a failed restart threw', { err }));
   }
 
-  /** A restart whose start failed; once a stop cancelled it, the engine may serve another session, so stay quiet (#1265). */
+  /**
+   * A restart whose start failed. Once a stop cancelled it, the engine may serve another session, so it stays quiet,
+   * and it leaves `restarting` alone: that stop already cleared it, and it may now mark a newer restart (#1265).
+   */
   private restartFailed(generation: number, err: unknown, onError: (error: Error) => void): void {
-    this.restarting = false;
     const error = err instanceof Error ? err : new Error(String(err));
     if (generation !== this.generation) {
       log.warn('A cancelled restart failed after its stop', { err: error.message });
       return;
     }
+    this.restarting = false;
     log.error('stt.start() failed after flush', error);
     onError(error);
   }
 
   /**
-   * A restart that finished. When a stop came in meanwhile, that stop already stopped the engine and cancelled this
-   * start, and the engine may already serve another session, so it is left alone (#1265).
+   * A restart that finished. When a stop came in meanwhile, that stop already stopped the engine, cancelled this start
+   * and cleared `restarting`, which may now mark a newer restart; the engine may serve another session, so all of it
+   * is left alone (#1265).
    */
   private afterRestart(generation: number): void {
+    if (generation !== this.generation) return;
     this.restarting = false;
-    if (generation !== this.generation || !this.running) return;
-    this.isSttActive = true;
+    if (this.running) this.isSttActive = true;
   }
 
   private resetBufferState(): void {
