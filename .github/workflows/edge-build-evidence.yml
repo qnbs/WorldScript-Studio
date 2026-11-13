@@ -1,7 +1,7 @@
 # Evidence branch only (never merged), #1272: the Vercel edge build of be27bfbe failed the worker-bundle guard
-# (assets/duckdbMigration-*.js inlines TypeScript as data:video/mp2t) while a fresh runner build of the same commit
-# passes. Vercel restores the build cache of the previous deployment. This job builds the previous commit first and
-# then be27bfbe in the same workspace (node_modules and caches kept), to test whether a stale cache causes it.
+# (assets/duckdbMigration-*.js inlines TypeScript as data:video/mp2t). A fresh runner build and a cached sequence on
+# Node 22 both pass. Vercel built with Node 26.x (engines ">=22.19.0" picks the newest major). This builds the edge
+# target of be27bfbe on Node 22, 24 and 26 and reports the chunk and any inlined source.
 name: Edge build evidence (#1272)
 
 on:
@@ -12,35 +12,27 @@ permissions:
   contents: read
 
 jobs:
-  cached-sequence:
+  node-versions:
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24', '26']
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
-      - name: Keep the report script outside the checkout
-        run: cp scripts/evidence/inline-report.mjs "$RUNNER_TEMP/inline-report.mjs"
-      - name: Previous deployment commit (5414de13)
-        run: git checkout --force 5414de13b61a41e212dfb11918e0a01336b167d4
       - uses: ./.github/actions/setup
-      - name: Edge build of 5414de13 (fills the caches)
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Edge build
+        id: build
         continue-on-error: true
-        run: pnpm run build:edge
-      - name: Caches present after the first build
-        run: ls -la node_modules/.vite node_modules/.cache 2>/dev/null | head -20 || true
-      - name: Switch to be27bfbe, keeping node_modules and caches
-        run: git checkout --force be27bfbe1c2eeb3fa67ad4dd56dec12475c1015a && git log -1 --format='%h %s'
-      - name: Reinstall like Vercel (frozen lockfile)
-        run: node scripts/dependency-state.mjs reconcile
-      - name: Edge build of be27bfbe with the caches of the previous build
-        id: second
-        continue-on-error: true
-        run: pnpm run build:edge
+        run: node --version && pnpm run build:edge
       - name: Report
         if: always()
         run: |
-          echo "second build outcome: ${{ steps.second.outcome }}"
+          echo "node=${{ matrix.node }} build outcome: ${{ steps.build.outcome }}"
           ls -la dist/assets | grep -E "duckdbMigration|workerBusManager" || true
-          node "$RUNNER_TEMP/inline-report.mjs" dist
+          node scripts/evidence/inline-report.mjs dist
