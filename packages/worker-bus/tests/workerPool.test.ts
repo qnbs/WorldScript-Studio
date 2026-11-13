@@ -2,6 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vite
 import { WORKER_PING_INTERVAL_MS } from '../src/constants';
 import { WorkerPool } from '../src/workerPool';
 
+// The real logger batches into IndexedDB on a timer; under fake timers that timer would count as the pool's own.
+vi.mock('../../../services/logger', () => ({
+  createLogger: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    withContext: vi.fn(),
+  }),
+}));
+
 class MockWorker extends EventTarget {
   terminated = false;
   postMessage = vi.fn();
@@ -340,7 +351,8 @@ describe('WorkerPool', () => {
         await vi.advanceTimersByTimeAsync(60_000);
         expect(createWorker).toHaveBeenCalledTimes(4);
         await expect(pool.acquire()).rejects.toThrow('stopped after 4 consecutive worker crashes');
-        expect(pool.tryAcquire()).toBeUndefined();
+        // The WorkerBus reads undefined as "busy, wait"; a failed pool throws, so queued tasks get its error.
+        expect(() => pool.tryAcquire()).toThrow('stopped after 4 consecutive worker crashes');
         await pool.terminateAll();
       } finally {
         vi.useRealTimers();
@@ -386,20 +398,29 @@ describe('WorkerPool', () => {
       }
     });
 
-    it('a worker that cannot even be constructed fails the pool instead of looping', async () => {
-      const createWorker = vi.fn(() => {
-        throw new DOMException('Refused by the Content Security Policy', 'SecurityError');
-      });
-      const pool = poolWith(createWorker);
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        expect(() => pool.tryAcquire()).toThrow('Content Security Policy');
+    it('a worker that cannot even be constructed backs off and then fails the pool instead of looping', async () => {
+      vi.useFakeTimers();
+      try {
+        const createWorker = vi.fn((): Worker => {
+          throw new DOMException('Refused by the Content Security Policy', 'SecurityError');
+        });
+        const pool = poolWith(createWorker);
+        expect(() => pool.tryAcquire()).toThrow('Content Security Policy'); // 1st failure: no delay
+        expect(() => pool.tryAcquire()).toThrow('Content Security Policy'); // 2nd: starts a 1 s backoff
+        expect(pool.tryAcquire()).toBeUndefined(); // on-demand starts wait for that backoff
+        expect(createWorker).toHaveBeenCalledTimes(2);
+        await vi.advanceTimersByTimeAsync(1_000); // the 3rd attempt fails: 4 s backoff
+        expect(createWorker).toHaveBeenCalledTimes(3);
+        await vi.advanceTimersByTimeAsync(4_000); // the 4th attempt fails: the pool gives up
+        expect(createWorker).toHaveBeenCalledTimes(4);
+        expect(() => pool.tryAcquire()).toThrow('stopped after 4 consecutive worker crashes');
+        await expect(pool.acquire()).rejects.toThrow('stopped after 4 consecutive worker crashes');
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(createWorker).toHaveBeenCalledTimes(4);
+        await pool.terminateAll();
+      } finally {
+        vi.useRealTimers();
       }
-      // The fourth failed construction fails the pool; after that nothing is constructed any more.
-      expect(() => pool.tryAcquire()).toThrow('stopped after 4 consecutive worker crashes');
-      expect(pool.tryAcquire()).toBeUndefined();
-      await expect(pool.acquire()).rejects.toThrow('stopped after 4 consecutive worker crashes');
-      expect(createWorker).toHaveBeenCalledTimes(4);
-      await pool.terminateAll();
     });
 
     const newMockWorker = () => new MockWorker() as unknown as Worker;

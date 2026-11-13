@@ -87,7 +87,9 @@ export class WorkerPool {
   }
 
   tryAcquire(): PooledWorkerInstance | undefined {
-    if (this.shutdownFlag || this.failure) return undefined;
+    if (this.shutdownFlag) return undefined;
+    // QNBS-v3 (#1272): the WorkerBus treats undefined as "busy, wait"; a failed pool throws, so queued tasks get its error.
+    if (this.failure) throw this.failure;
     const idle = this.entries.find((entry) => entry.instance.state === 'idle');
     if (idle) {
       this.setBusy(idle.instance.workerId);
@@ -171,8 +173,9 @@ export class WorkerPool {
     try {
       worker = this.makeWorker();
     } catch (error) {
-      // QNBS-v3 (#1272): a worker that cannot even be constructed (e.g. a CSP-blocked script) counts as a crash.
-      this.recordCrash(error instanceof Error ? error.message : String(error));
+      // QNBS-v3 (#1272): a worker that cannot even be constructed (e.g. a CSP-blocked script) counts as a crash and starts the backoff, so on-demand starts wait.
+      const delay = this.recordCrash(error instanceof Error ? error.message : String(error));
+      if (!this.failure && delay > 0) this.scheduleRespawn(delay);
       throw this.failure ?? error;
     }
     const channel = new MessageChannel();
@@ -285,7 +288,7 @@ export class WorkerPool {
 
   private respawn(): void {
     if (this.shutdownFlag || this.failure) return;
-    // A task may have filled the free slot on demand during the backoff; never exceed maxWorkers.
+    // Another start (e.g. the replacement of a timed-out worker) may have filled the free slot meanwhile; never exceed maxWorkers.
     if (this.entries.length >= this.options.maxWorkers) {
       this.notifyAvailable();
       return;
@@ -293,9 +296,8 @@ export class WorkerPool {
     try {
       this.spawnWorker();
     } catch {
-      // QNBS-v3 (#1272): spawnWorker counted the failed start; retry after its backoff so a waiting task is served (a failed pool already rejected it).
-      const delay = RESPAWN_BACKOFF_MS[this.consecutiveCrashes - 1];
-      if (delay !== undefined) this.scheduleRespawn(delay);
+      // QNBS-v3 (#1272): spawnWorker counted the failed start and started its backoff; after a first failure (no delay) retry at once, so a waiting task is served.
+      if (!this.failure && !this.respawnTimer) this.scheduleRespawn(0);
       return;
     }
     this.notifyAvailable();
