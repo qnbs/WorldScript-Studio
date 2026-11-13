@@ -24,8 +24,10 @@ import { ToggleSwitch } from './SettingsShared';
 // passphrase setup flow would lock users out. Its dedicated UI lives in Settings → Privacy
 // (PrivacySection.tsx). Everything else in the catalog is user-toggleable here (21 flags).
 // QNBS-v3 (#716): DuckDB analytics are off in a build without them; a toggle that changes nothing would not be truthful.
+const HIDDEN_FLAGS: ReadonlySet<keyof FeatureFlagsState> = new Set(['enableIdbAtRestEncryption']);
+
 function isHiddenFlag(flagKey: keyof FeatureFlagsState): boolean {
-  if (flagKey === 'enableIdbAtRestEncryption') return true;
+  if (HIDDEN_FLAGS.has(flagKey)) return true;
   return flagKey === 'enableDuckDbAnalytics' && !DUCKDB_ANALYTICS_AVAILABLE;
 }
 
