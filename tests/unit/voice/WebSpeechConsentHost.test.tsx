@@ -47,6 +47,16 @@ describe('WebSpeechConsentHost', () => {
     expect(screen.queryByText('settings.voice.privacy.consentTitle')).toBeNull();
   });
 
+  it('opens above the command palette, whose microphone can ask for consent', async () => {
+    renderHost();
+    act(() => {
+      void ensureWebSpeechConsent();
+    });
+    const title = await screen.findByText('settings.voice.privacy.consentTitle');
+    // components/CommandPalette.tsx renders its full-screen layer at z-[100].
+    expect(title.closest('.fixed')?.className).toContain('z-[110]');
+  });
+
   it('declining refuses the start and keeps the stored engine choice', async () => {
     const { store } = renderHost();
     act(() => {

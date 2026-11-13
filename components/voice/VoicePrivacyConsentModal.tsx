@@ -40,6 +40,8 @@ export default function VoicePrivacyConsentModal({
       onClose={handleDecline}
       title={t('settings.voice.privacy.consentTitle')}
       aria-describedby="voice-consent-body"
+      // QNBS-v3 (#1261): the command palette's mic opens this dialog while the palette (z-[100]) stays open.
+      elevated
     >
       <div className="flex flex-col gap-4">
         <p

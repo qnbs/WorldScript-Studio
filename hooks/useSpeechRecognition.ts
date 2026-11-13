@@ -114,14 +114,18 @@ export const useSpeechRecognition = () => {
     return () => {
       clearMicTimeout();
       recognitionRef.current?.stop();
+      // A start still waiting for consent belongs to this instance; clearing it keeps that start from capturing later.
+      recognitionRef.current = null;
     };
   }, [clearMicTimeout]);
 
   const startListening = useCallback(async () => {
-    if (!recognitionRef.current || isListeningRef.current) return;
+    const recognition = recognitionRef.current;
+    if (!recognition || isListeningRef.current) return;
     // QNBS-v3 (#1261): Web Speech sends the audio to the browser vendor; no start without the stored consent.
     if (!(await ensureWebSpeechConsent())) return;
-    if (recognitionRef.current && !isListeningRef.current) {
+    // The control may have unmounted, or remounted with a new instance, while the consent dialog was open.
+    if (recognitionRef.current === recognition && !isListeningRef.current) {
       setTranscript('');
       setMicError(null);
       try {

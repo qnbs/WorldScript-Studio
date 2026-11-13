@@ -154,6 +154,27 @@ describe('useSpeechRecognition (with mocked SpeechRecognition)', () => {
     expect(await start(granted, prompt)).toEqual(expected);
   });
 
+  it('a start still waiting for consent when the control unmounts never starts recognition', async () => {
+    const started = installSpeechRecognition();
+    const store = consentStore(false);
+    let answer: (granted: boolean) => void = () => {};
+    unregister = registerWebSpeechConsentPrompt(
+      () => new Promise<boolean>((resolve) => (answer = resolve)),
+    );
+    const { result, unmount } = renderHook(() => useSpeechRecognition());
+    let pending: Promise<void> = Promise.resolve();
+    act(() => {
+      pending = result.current.startListening();
+    });
+    unmount(); // the dictation control goes away while the consent dialog is open
+    store.grant();
+    answer(true);
+    await act(async () => {
+      await pending;
+    });
+    expect(started.count).toBe(0);
+  });
+
   it('the mic toggle asks for consent the same way', async () => {
     expect(await start(false, async () => false, 'toggle')).toEqual({
       started: 0,
