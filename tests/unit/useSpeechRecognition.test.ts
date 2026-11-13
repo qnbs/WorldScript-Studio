@@ -2,7 +2,11 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { appStoreRef } from '../../app/storeRef';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
-import { registerWebSpeechConsentPrompt } from '../../services/voice/webSpeechConsent';
+import { setActiveAiMode } from '../../services/ai/aiModeService';
+import {
+  registerWebSpeechConsentPrompt,
+  WEB_SPEECH_LOCAL_ONLY_MESSAGE,
+} from '../../services/voice/webSpeechConsent';
 
 beforeEach(() => {
   // jsdom has no SpeechRecognition — ensure it's absent
@@ -58,7 +62,7 @@ describe('useSpeechRecognition (no browser API available)', () => {
 
 /** Installs a SpeechRecognition stand-in and returns how often recognition was started. */
 function installSpeechRecognition() {
-  const started = { count: 0 };
+  const started = { count: 0, stops: 0 };
   function speechRecognitionConstructor(this: Record<string, unknown>) {
     this['continuous'] = false;
     this['interimResults'] = false;
@@ -69,7 +73,9 @@ function installSpeechRecognition() {
     this['start'] = () => {
       started.count += 1;
     };
-    this['stop'] = vi.fn();
+    this['stop'] = vi.fn(() => {
+      started.stops += 1;
+    });
   }
   (window as { SpeechRecognition?: unknown }).SpeechRecognition = speechRecognitionConstructor;
   return started;
@@ -180,6 +186,81 @@ describe('useSpeechRecognition (with mocked SpeechRecognition)', () => {
       expect(result.current.isListening).toBe(false);
     },
   );
+
+  // #1261, maintainer decision of 2026-11-13: a local-only AI mode outranks the stored consent at every editor
+  // microphone (dictation button, text fields, command palette), whether it starts or toggles.
+  it.each(['start', 'toggle'] as const)(
+    'in a local-only AI mode the mic never starts Web Speech (%s)',
+    async (via) => {
+      setActiveAiMode('local');
+      try {
+        expect(await start(true, grantInDialog, via)).toEqual({
+          started: 0,
+          listening: false,
+          asked: 0,
+        });
+      } finally {
+        setActiveAiMode('hybrid');
+      }
+    },
+  );
+
+  it('in a local-only AI mode the mic says why it stays off', async () => {
+    installSpeechRecognition();
+    consentStore(true);
+    setActiveAiMode('eco');
+    try {
+      const { result } = renderHook(() => useSpeechRecognition());
+      await act(async () => {
+        await result.current.startListening();
+      });
+      expect(result.current.micError).toBe(WEB_SPEECH_LOCAL_ONLY_MESSAGE);
+      // The editor microphones do not render micError, so the reason also goes out as a toast.
+      expect(appStoreRef.current?.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'status/addNotification',
+          payload: expect.objectContaining({ title: WEB_SPEECH_LOCAL_ONLY_MESSAGE }),
+        }),
+      );
+    } finally {
+      setActiveAiMode('hybrid');
+    }
+  });
+
+  // The listening flag used to follow only through an effect, so a stop right after the start missed the capture.
+  it('a switch to a local-only AI mode right after the start stops the recognition', async () => {
+    const started = installSpeechRecognition();
+    consentStore(true);
+    try {
+      const { result } = renderHook(() => useSpeechRecognition());
+      await act(async () => {
+        await result.current.startListening();
+        setActiveAiMode('eco'); // before React runs the listening effect
+      });
+      expect(started.count).toBe(1);
+      expect(started.stops).toBe(1);
+    } finally {
+      setActiveAiMode('hybrid');
+    }
+  });
+
+  it('a switch to a local-only AI mode stops a running recognition', async () => {
+    installSpeechRecognition();
+    consentStore(true);
+    try {
+      const { result } = renderHook(() => useSpeechRecognition());
+      await act(async () => {
+        await result.current.startListening();
+      });
+      expect(result.current.isListening).toBe(true);
+
+      act(() => setActiveAiMode('local'));
+
+      expect(result.current.isListening).toBe(false);
+    } finally {
+      setActiveAiMode('hybrid');
+    }
+  });
 
   it('the mic toggle asks for consent the same way', async () => {
     expect(await start(false, async () => false, 'toggle')).toEqual({

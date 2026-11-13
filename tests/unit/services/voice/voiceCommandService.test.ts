@@ -101,9 +101,13 @@ vi.mock('@huggingface/transformers', () => ({
 
 import { appStoreRef } from '../../../../app/storeRef';
 import { setVoiceError } from '../../../../features/voice/voiceSlice';
+import { setActiveAiMode } from '../../../../services/ai/aiModeService';
 import { ConsentRequiredError, createSttEngine } from '../../../../services/voice/sttEngine';
 import { VoiceCommandService } from '../../../../services/voice/voiceCommandService';
-import { registerWebSpeechConsentPrompt } from '../../../../services/voice/webSpeechConsent';
+import {
+  registerWebSpeechConsentPrompt,
+  WEB_SPEECH_LOCAL_ONLY_MESSAGE,
+} from '../../../../services/voice/webSpeechConsent';
 
 /** initialize() asks for the microphone; each case gets its own stub instead of relying on one an earlier case left. */
 function stubMicrophone() {
@@ -715,8 +719,88 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     await service.dispose();
     unregister();
     unregister = () => {};
+    setActiveAiMode('hybrid');
     appStoreRef.current = null;
   });
+
+  // #1261, maintainer decision of 2026-11-13: a local-only AI mode outranks a stored consent. The Voice Control panel,
+  // the header microphone and push-to-talk start through startListening; dictation through startDictation.
+  it.each(
+    (['listening', 'dictation'] as const).flatMap((kind) =>
+      (['local', 'eco'] as const).map((mode) => ({ kind, mode })),
+    ),
+  )(
+    '$kind in the $mode AI mode never starts Web Speech, even with a stored consent',
+    async ({ kind, mode }) => {
+      const voice = storeConsent(true);
+      const engine = buildsNext(sttEngine());
+      const ask = dialog(voice, true);
+      setActiveAiMode(mode);
+
+      await expect(start(service, kind)).rejects.toThrow(WEB_SPEECH_LOCAL_ONLY_MESSAGE);
+
+      expect(engine.start).not.toHaveBeenCalled();
+      expect(ask).not.toHaveBeenCalled();
+      expect(setVoiceError).toHaveBeenCalledWith(WEB_SPEECH_LOCAL_ONLY_MESSAGE);
+    },
+  );
+
+  // A running session must end too: local-only blocks Web Speech completely, not just new starts.
+  it.each(['listening', 'dictation'] as const)(
+    'a switch to a local-only AI mode ends a running Web Speech %s session',
+    async (kind) => {
+      storeConsent(true);
+      const engine = buildsNext(sttEngine());
+      await start(service, kind);
+      expect(engine.start).toHaveBeenCalledTimes(1);
+
+      setActiveAiMode('eco');
+
+      await vi.waitFor(() => expect(engine.stop).toHaveBeenCalled());
+    },
+  );
+
+  it('dispose releases its subscription to AI-mode switches', async () => {
+    storeConsent(true);
+    buildsNext(sttEngine());
+    await service.initialize();
+    const end = vi.spyOn(
+      service as unknown as { endWebSpeechSession: () => void },
+      'endWebSpeechSession',
+    );
+    setActiveAiMode('eco');
+    expect(end).toHaveBeenCalledTimes(1);
+
+    await service.dispose();
+    setActiveAiMode('hybrid');
+    setActiveAiMode('local');
+
+    expect(end).toHaveBeenCalledTimes(1);
+  });
+
+  it('a switch to a local-only AI mode keeps a local engine running', async () => {
+    storeConsent(false);
+    const engine = buildsNext(sttEngine(true));
+    await service.startDictation();
+
+    setActiveAiMode('local');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(engine.stop).not.toHaveBeenCalled();
+  });
+
+  it.each(['listening', 'dictation'] as const)(
+    '%s in a local-only AI mode still starts the local engine',
+    async (kind) => {
+      storeConsent(false);
+      const engine = buildsNext(sttEngine(true));
+      setActiveAiMode('local');
+
+      await start(service, kind);
+
+      expect(engine.start).toHaveBeenCalledTimes(1);
+    },
+  );
 
   /** An STT engine stand-in; Web Speech declares itself not local. */
   function sttEngine(isLocal = false) {
