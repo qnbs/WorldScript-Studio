@@ -34,6 +34,8 @@ export class VoiceActivityCoordinator {
   private flushing: Promise<void> = Promise.resolve();
   // QNBS-v3: engines are initialized once per coordinator lifetime, not per start() call
   private isEngineInitialized = false;
+  // QNBS-v3 (#1261): bumped by stop(), so a start it overtook never keeps a microphone stream nobody will release.
+  private generation = 0;
 
   constructor(
     private readonly vad: VadEngine,
@@ -48,14 +50,9 @@ export class VoiceActivityCoordinator {
     if (this.running) return;
     this.running = true;
     try {
-      // Initialize engines once — WasmSttEngine keeps the 40 MB Whisper pipeline
-      // alive across sessions; re-calling initialize() would cause memory churn.
-      if (!this.isEngineInitialized) {
-        await this.vad.initialize();
-        await this.stt.initialize();
-        this.isEngineInitialized = true;
-      }
-      this.mediaStream = await this.setupAudioCapture();
+      const stream = await this.openCapture(this.generation);
+      if (!stream) return; // a stop overtook this start
+      this.mediaStream = stream;
       this.startFramePump(onResult, onError);
     } catch (err) {
       this.running = false;
@@ -65,6 +62,7 @@ export class VoiceActivityCoordinator {
   }
 
   async stop(): Promise<void> {
+    this.generation += 1;
     this.running = false;
     this.teardownAudioCapture();
     await this.flushing;
@@ -94,6 +92,23 @@ export class VoiceActivityCoordinator {
     } catch (err) {
       log.warn('stt.dispose() failed', { err });
     }
+  }
+
+  /** Loads the engines once and opens the microphone; null when a stop came in meanwhile (a stream it got is released). */
+  private async openCapture(generation: number): Promise<MediaStream | null> {
+    // Initialize engines once — WasmSttEngine keeps the 40 MB Whisper pipeline
+    // alive across sessions; re-calling initialize() would cause memory churn.
+    if (!this.isEngineInitialized) {
+      await this.vad.initialize();
+      await this.stt.initialize();
+      this.isEngineInitialized = true;
+    }
+    if (generation !== this.generation) return null; // stopped while the engines loaded: never open the microphone
+    const stream = await this.setupAudioCapture();
+    if (generation === this.generation) return stream;
+    // Stopped while the microphone opened: release the stream at once instead of capturing for nobody.
+    for (const track of stream.getTracks()) track.stop();
+    return null;
   }
 
   private async setupAudioCapture(): Promise<MediaStream> {

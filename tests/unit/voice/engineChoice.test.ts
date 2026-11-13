@@ -15,9 +15,14 @@ describe('voice engine choice', () => {
   it('keeps every real engine id as stored', () => {
     for (const id of ['auto', 'whisper', 'webSpeech'] as const)
       expect(sttEngineChoice(id)).toBe(id);
-    for (const id of ['auto', 'kokoro', 'piper', 'webSpeech'] as const) {
+    for (const id of ['auto', 'kokoro', 'webSpeech'] as const) {
       expect(ttsEngineChoice(id)).toBe(id);
     }
+  });
+
+  // Piper has no engine and no settings option; kept as stored, the engine select showed an empty label.
+  it('reads piper, which this build cannot run, as auto', () => {
+    expect(ttsEngineChoice('piper')).toBe('auto');
   });
 
   it('reads an unknown or missing value as auto, never as a cloud engine', () => {

@@ -855,17 +855,19 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     const held = new Promise<void>((resolve) => {
       resume = resolve;
     });
+    const voice = storeConsent(false);
     if (during === 'engine setup') {
-      storeConsent(true);
+      // No consent is stored and the dialog would grant: a start stopped here must not even ask.
+      const ask = dialog(voice, true);
       vi.mocked(createSttEngine).mockReturnValueOnce(held.then(() => engine) as never);
-      return { resume, reached: () => expect(createSttEngine).toHaveBeenCalled() };
+      return { resume, ask, asks: 0, reached: () => expect(createSttEngine).toHaveBeenCalled() };
     }
     const ask = dialog(
-      storeConsent(false),
+      voice,
       held.then(() => true),
     );
     buildsNext(engine);
-    return { resume, reached: () => expect(ask).toHaveBeenCalled() };
+    return { resume, ask, asks: 1, reached: () => expect(ask).toHaveBeenCalled() };
   }
 
   const stops = {
@@ -892,6 +894,44 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
 
       await run;
       expect(engine.start).not.toHaveBeenCalled();
+      expect(pause.ask).toHaveBeenCalledTimes(pause.asks);
     },
   );
+
+  // #1261: the setup's own reason (e.g. Whisper off and no cloud fallback) used to become "No STT engine available".
+  it.each(['listening', 'dictation'] as const)(
+    '%s reports why the engine setup built no STT engine, at every start',
+    async (kind) => {
+      storeConsent(false);
+      const why = 'Local speech recognition is not available, and cloud fallback is turned off.';
+      vi.mocked(createSttEngine).mockRejectedValueOnce(new Error(why));
+
+      await expect(start(service, kind)).rejects.toThrow(why);
+      await expect(start(service, kind)).rejects.toThrow(why);
+
+      expect(createSttEngine).toHaveBeenCalledTimes(1);
+      expect(setVoiceError).toHaveBeenCalledWith(why);
+    },
+  );
+
+  it('a stop while the engine starts leaves nothing behind that blocks the next listening start', async () => {
+    storeConsent(true);
+    const engine = buildsNext(sttEngine());
+    let started: () => void = () => {};
+    engine.start.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        started = resolve;
+      }),
+    );
+
+    const first = service.startListening();
+    await vi.waitFor(() => expect(engine.start).toHaveBeenCalled());
+    await service.stopListening();
+    started();
+    await first;
+    await service.startListening();
+
+    expect(engine.start).toHaveBeenCalledTimes(2);
+    await service.stopListening();
+  });
 });

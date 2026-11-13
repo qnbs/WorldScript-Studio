@@ -100,6 +100,8 @@ export class VoiceCommandService {
   private listeningStart: Promise<void> | null = null;
   /** Bumped by every command-listening stop: a start still building engines or waiting for consent then never starts the engine. */
   private listeningClaim = 0;
+  /** Why the last engine setup built no STT engine, so every start reports it instead of a generic message (#1261). */
+  private sttUnavailable: string | null = null;
   private eventListeners: VoiceEventListener[] = [];
 
   constructor(config: Partial<VoiceServiceConfig> = {}) {
@@ -228,10 +230,13 @@ export class VoiceCommandService {
       });
       this.d(setActiveSttEngine(engine.id));
       this.d(setSttStatus('ready'));
+      this.sttUnavailable = null;
       return engine;
     } catch (err) {
       logger.warn('STT initialization failed:', err);
       this.d(setSttStatus('error'));
+      // e.g. LOCAL_STT_UNAVAILABLE_MESSAGE: a local-only choice with Whisper off says why, and how to recover.
+      this.sttUnavailable = err instanceof Error ? err.message : null;
       return null;
     }
   }
@@ -311,11 +316,8 @@ export class VoiceCommandService {
       settleStart = resolve;
     });
     try {
-      // A running dictation ends before the engine setup may replace the engines it uses.
-      await this.endDictationBeforeListening();
-      if (!(await this.ensureEngines())) throw new Error('Voice service could not be initialized');
-      const stt = await this.admitStt();
-      if (claim !== this.listeningClaim) return; // stopped or released while it was preparing
+      const stt = await this.prepareListening(claim);
+      if (!stt) return; // stopped or released while it was preparing
 
       this.d(setVoiceMode('listening'));
       this.d(setVoiceError(null));
@@ -340,6 +342,8 @@ export class VoiceCommandService {
         );
       }
 
+      // A stop while the engine started must not leave a timer behind, which would block the next start.
+      if (claim !== this.listeningClaim) return;
       // Auto-stop after timeout
       this.listeningTimer = setTimeout(() => {
         void this.stopCommandListening();
@@ -378,8 +382,8 @@ export class VoiceCommandService {
     try {
       // Command listening ends first, so the engine setup never replaces engines a running session uses.
       await this.endListeningBeforeDictation();
-      const engine = await this.dictationEngine();
-      if (claim !== this.dictationClaim) return; // stopped while preparing
+      const engine = await this.dictationEngine(claim);
+      if (!engine || claim !== this.dictationClaim) return; // stopped while preparing
       // QNBS-v3 (#556): each dictation starts from an empty transcript, so a restart never re-inserts the last session.
       this.d(setVoiceTranscript(''));
       this.d(setDictationActive(true));
@@ -392,10 +396,21 @@ export class VoiceCommandService {
     }
   }
 
-  private async dictationEngine(): Promise<SttEngine> {
+  private async dictationEngine(claim: number): Promise<SttEngine | null> {
     // QNBS-v3 (#1261): the shared engine setup applies a changed engine choice before dictation uses an engine.
     if (!(await this.ensureEngines())) throw new Error('Voice service could not be initialized');
-    return this.admitStt();
+    // A dictation stopped during the setup never asks for consent.
+    return claim === this.dictationClaim ? this.admitStt() : null;
+  }
+
+  /** The engine a listening start may use, or null when a stop or release came in while it was preparing. */
+  private async prepareListening(claim: number): Promise<SttEngine | null> {
+    // A running dictation ends before the engine setup may replace the engines it uses.
+    await this.endDictationBeforeListening();
+    if (!(await this.ensureEngines())) throw new Error('Voice service could not be initialized');
+    if (claim !== this.listeningClaim) return null; // stopped during the setup: never ask for consent
+    const stt = await this.admitStt();
+    return claim === this.listeningClaim ? stt : null;
   }
 
   /**
@@ -405,14 +420,18 @@ export class VoiceCommandService {
    */
   private async admitStt(): Promise<SttEngine> {
     const engine = this.sttEngine;
-    if (!engine) throw new Error('No STT engine available');
+    if (!engine)
+      return this.refuseStart(new Error(this.sttUnavailable ?? 'No STT engine available'));
     // QNBS-v3 (#1261): fail closed, only an engine that declares itself local starts without the stored Web Speech consent.
-    if (engine.isLocal !== true && !(await ensureWebSpeechConsent())) {
-      const refused = new ConsentRequiredError();
-      this.d(setVoiceError(refused.message));
-      throw refused;
-    }
+    if (engine.isLocal !== true && !(await ensureWebSpeechConsent()))
+      return this.refuseStart(new ConsentRequiredError());
     return engine;
+  }
+
+  /** Reports why a start cannot use an engine (listening and dictation alike), then fails that start. */
+  private refuseStart(reason: Error): never {
+    this.d(setVoiceError(reason.message));
+    throw reason;
   }
 
   /** Dictation takes the engine over from command listening; otherwise speech would keep going to commands. */

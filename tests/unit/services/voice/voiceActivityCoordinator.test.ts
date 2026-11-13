@@ -323,3 +323,47 @@ describe('VoiceActivityCoordinator stop during a flush (#556)', () => {
     expect(stt.start).toHaveBeenCalledTimes(1);
   });
 });
+
+// #1261: the service forgets a coordinator it stopped, so a start that a stop overtook must not keep the microphone.
+describe('VoiceActivityCoordinator stop during start (#1261)', () => {
+  it('a stop while the engines load never opens the microphone', async () => {
+    let loaded: () => void = () => {};
+    const stt = makeStt({
+      initialize: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            loaded = resolve;
+          }),
+      ),
+    });
+    const coordinator = new VoiceActivityCoordinator(makeVad(), stt);
+
+    const starting = coordinator.start(vi.fn(), vi.fn());
+    await vi.waitFor(() => expect(stt.initialize).toHaveBeenCalled());
+    await coordinator.stop();
+    loaded();
+    await starting;
+
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+    expect(mockAudioCtxInstance.createScriptProcessor).not.toHaveBeenCalled();
+  });
+
+  it('a stop while the microphone opens releases the stream at once', async () => {
+    let opened: (stream: unknown) => void = () => {};
+    vi.mocked(navigator.mediaDevices.getUserMedia).mockReturnValueOnce(
+      new Promise((resolve) => {
+        opened = resolve;
+      }) as never,
+    );
+    const coordinator = new VoiceActivityCoordinator(makeVad(), makeStt());
+
+    const starting = coordinator.start(vi.fn(), vi.fn());
+    await vi.waitFor(() => expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled());
+    await coordinator.stop();
+    opened(mockStream);
+    await starting;
+
+    expect(mockTrack.stop).toHaveBeenCalled();
+    expect(mockAudioCtxInstance.createScriptProcessor).not.toHaveBeenCalled();
+  });
+});

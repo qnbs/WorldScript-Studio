@@ -9,7 +9,8 @@ import type { VoiceSttEngine, VoiceTtsEngine } from '../../types';
 
 const LEGACY_LOCAL_CHOICE = 'wasm';
 const STT_ENGINES: readonly VoiceSttEngine[] = ['auto', 'whisper', 'webSpeech'];
-const TTS_ENGINES: readonly VoiceTtsEngine[] = ['auto', 'kokoro', 'piper', 'webSpeech'];
+// Piper has no engine in this build and no settings option, so a stored 'piper' reads as auto like any unknown value.
+const TTS_ENGINES: readonly VoiceTtsEngine[] = ['auto', 'kokoro', 'webSpeech'];
 
 /** The STT engine a stored preference asks for: the legacy local choice means Whisper, anything unknown means auto. */
 export function sttEngineChoice(stored: unknown): VoiceSttEngine {
