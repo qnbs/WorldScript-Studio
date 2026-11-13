@@ -438,13 +438,22 @@ describe('VoiceActivityCoordinator stop during a restart (#1265)', () => {
 
 // #1265: once stop() cancelled a pending restart, a newer session may own the engine; the old start's failure is not its error.
 describe('VoiceActivityCoordinator failed restart (#1265)', () => {
+  // CodeAnt on 56c25efb: a synchronous throw was handled with the generation current when the catch ran, after a stop.
   it.each([
-    ['after a stop cancelled it', true, 0],
-    ['while the coordinator still runs', false, 1],
+    ['after a stop cancelled it', 'reject', true, 0],
+    ['while the coordinator still runs', 'reject', false, 1],
+    ['with a stop queued before its error is handled', 'throw', true, 0],
+    ['while the coordinator still runs', 'throw', false, 1],
   ] as const)(
-    'a restart that fails %s (stopped first: %s) reports the error %i times',
-    async (_when, stopFirst, reported) => {
+    'a restart that fails %s (start: %s, stopped first: %s) reports the error %i times',
+    async (_when, failure, stopFirst, reported) => {
       let failRestart: (error: Error) => void = () => {};
+      let coordinator: VoiceActivityCoordinator | null = null;
+      const throwing = () => {
+        if (stopFirst) queueMicrotask(() => void coordinator?.stop());
+        throw new Error('microphone request failed');
+      };
+      const rejecting = () => new Promise<void>((_resolve, reject) => (failRestart = reject));
       const vad = makeVad({
         processChunk: vi
           .fn()
@@ -456,12 +465,10 @@ describe('VoiceActivityCoordinator failed restart (#1265)', () => {
         start: vi
           .fn()
           .mockResolvedValueOnce(undefined)
-          .mockImplementationOnce(
-            () => new Promise<void>((_resolve, reject) => (failRestart = reject)),
-          ),
+          .mockImplementationOnce(failure === 'throw' ? throwing : rejecting),
       });
       const onError = vi.fn();
-      const coordinator = new VoiceActivityCoordinator(vad, stt);
+      coordinator = new VoiceActivityCoordinator(vad, stt);
       await coordinator.start(vi.fn(), onError);
       const frame = new Float32Array(4096).fill(0.1);
       const fire = () =>
@@ -473,8 +480,10 @@ describe('VoiceActivityCoordinator failed restart (#1265)', () => {
       fire(); // silence: drain, then a restart that will fail
       await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(2));
 
-      if (stopFirst) await coordinator.stop();
-      failRestart(new Error('microphone request failed'));
+      if (failure === 'reject') {
+        if (stopFirst) await coordinator.stop();
+        failRestart(new Error('microphone request failed'));
+      }
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(onError).toHaveBeenCalledTimes(reported);

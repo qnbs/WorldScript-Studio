@@ -251,13 +251,14 @@ export class VoiceActivityCoordinator {
         // Restart STT for the next utterance only after stop() has fully resolved
         const generation = this.generation;
         this.restarting = true;
-        return this.stt.start(onResult, onError).then(
+        // A start() that throws synchronously rejects this promise, so its failure keeps the restart's generation too.
+        return new Promise<void>((resolve) => resolve(this.stt.start(onResult, onError))).then(
           () => this.afterRestart(generation),
           (err: unknown) => this.restartFailed(generation, err, onError),
         );
       })
-      // An engine whose start() throws synchronously lands here instead of becoming an unhandled rejection.
-      .catch((err: unknown) => this.restartFailed(this.generation, err, onError));
+      // Only a throwing error callback lands here; it is logged instead of becoming an unhandled rejection.
+      .catch((err: unknown) => log.warn('Handling a failed restart threw', { err }));
   }
 
   /** A restart whose start failed; once a stop cancelled it, the engine may serve another session, so stay quiet (#1265). */
