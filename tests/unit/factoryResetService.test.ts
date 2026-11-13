@@ -32,6 +32,7 @@ vi.mock('../../services/fs/fsCore', () => ({
   retryFs: (fn: () => Promise<unknown>) => fn(),
   // QNBS-v3 (#553): the real, exported name — not a test-local restatement — so this suite exercises the same constant clearTauriAppData actually imports, never silently drifting from it.
   PROJECT_LOCKS_DIR_NAME: 'project-locks',
+  APP_DATA_WRITERS_LOCK_FILE: 'writers.lock',
 }));
 // QNBS-v3: the gate's own registry/generation behavior is covered directly by idbResetGate.test.ts — this suite only verifies factoryResetService calls begin/end at the right points.
 vi.mock('../../services/storage/idbResetGate', () => ({
@@ -669,6 +670,31 @@ describe('wipeAllAppData', () => {
 
       expect(removeMock).not.toHaveBeenCalled();
       expect(reloadMock).toHaveBeenCalledTimes(1);
+    });
+
+    // #831: deleting the writers lock would let a new process lock a fresh file and reclaim live project locks.
+    it('clears every AppData entry except the writers lock', async () => {
+      const removeMock = vi.fn().mockResolvedValue(undefined);
+      mockLoadTauriApis.mockResolvedValue({
+        appDataDir: vi.fn().mockResolvedValue('/app/data'),
+        exists: vi.fn((path: string) => Promise.resolve(path === '/app/data')),
+        readDir: vi
+          .fn()
+          .mockResolvedValue([
+            { name: 'projects' },
+            { name: 'writers.lock' },
+            { name: 'keys.bin' },
+          ]),
+        join: vi.fn((base: string, name: string) => Promise.resolve(`${base}/${name}`)),
+        remove: removeMock,
+      });
+
+      await runWipe();
+
+      expect(removeMock).toHaveBeenCalledWith('/app/data/projects', { recursive: true });
+      expect(removeMock).toHaveBeenCalledWith('/app/data/keys.bin', { recursive: true });
+      expect(removeMock).not.toHaveBeenCalledWith('/app/data/writers.lock', expect.anything());
+      expect(removeMock).toHaveBeenCalledTimes(2);
     });
 
     it('fails closed when AppData enumeration contains an unnamed entry', async () => {

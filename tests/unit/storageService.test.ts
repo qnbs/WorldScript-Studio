@@ -176,6 +176,12 @@ describe('storageService (IndexedDB backend in browser)', () => {
   it('keeps API keys on IndexedDB when the desktop filesystem backend is active', async () => {
     (window as { __TAURI__?: unknown }).__TAURI__ = {};
     vi.resetModules();
+    // #831: a healthy desktop start holds the app-data writers lock before any storage access.
+    vi.doMock('../../services/desktopPlatform', () => ({
+      desktopPlatform: {
+        persistence: { admitAppDataInstance: async () => ({ status: 'exclusive', reclaimed: 0 }) },
+      },
+    }));
     // QNBS-v3: Desktop project storage must not redirect API keys to filesystem persistence.
     const desktopStorage = (await import('../../services/storageService')).storageService;
 
@@ -186,6 +192,7 @@ describe('storageService (IndexedDB backend in browser)', () => {
     expect(mockDb.saveApiKey).toHaveBeenCalledWith('openai', 'desktop-key');
     expect(mockDb.getApiKey).toHaveBeenCalledWith('openai');
     expect(mockDb.clearApiKey).toHaveBeenCalledWith('openai');
+    vi.doUnmock('../../services/desktopPlatform');
     delete (window as { __TAURI__?: unknown }).__TAURI__;
   });
 

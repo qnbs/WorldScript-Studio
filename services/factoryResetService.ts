@@ -214,6 +214,7 @@ async function deleteDesktopAppDataEntries(
   retryFs: <T>(fn: () => Promise<T>) => Promise<T>,
   appDataPath: string,
   onDeletionStarted: () => void,
+  keep: string,
 ): Promise<void> {
   if (!(await apis.exists(appDataPath))) return;
   // QNBS-v3: validate the full capability-scoped child list before removing any app-data entry.
@@ -230,6 +231,8 @@ async function deleteDesktopAppDataEntries(
     if (typeof name !== 'string') {
       throw new Error('Desktop app data enumeration returned an unsafe child name');
     }
+    // QNBS-v3 (#831): the writers lock outlives every writer; deleting it would let a new process lock a fresh file and reclaim live project locks.
+    if (name === keep) continue;
     const childPath = await apis.join(appDataPath, name);
     onDeletionStarted();
     await retryFs(() => apis.remove(childPath, { recursive: true }));
@@ -239,11 +242,18 @@ async function deleteDesktopAppDataEntries(
 async function clearTauriAppData(onDeletionStarted: () => void): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
-    const { loadTauriApis, retryFs, PROJECT_LOCKS_DIR_NAME } = await import('./fs/fsCore');
+    const { loadTauriApis, retryFs, PROJECT_LOCKS_DIR_NAME, APP_DATA_WRITERS_LOCK_FILE } =
+      await import('./fs/fsCore');
     const apis = await loadTauriApis();
     const appDataPath = await apis.appDataDir();
     await assertNoActiveProjectLock(apis, retryFs, PROJECT_LOCKS_DIR_NAME, appDataPath);
-    await deleteDesktopAppDataEntries(apis, retryFs, appDataPath, onDeletionStarted);
+    await deleteDesktopAppDataEntries(
+      apis,
+      retryFs,
+      appDataPath,
+      onDeletionStarted,
+      APP_DATA_WRITERS_LOCK_FILE,
+    );
   } catch (error) {
     logger.error('Failed to clear Tauri app data during factory reset', {
       errorName: error instanceof Error ? error.name : 'unknown',

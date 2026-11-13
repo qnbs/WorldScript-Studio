@@ -214,6 +214,49 @@ describe('tauriDesktopPlatform', () => {
       await expect(tauriDesktopPlatform.persistence.join('a', 'b')).resolves.toBe('a/b');
     });
 
+    // #831: the storage bootstrap relies on this never rejecting; anything but a valid answer reclaims nothing.
+    it('admitAppDataInstance returns the validated native admission', async () => {
+      h.invoke.mockResolvedValueOnce({
+        contractVersion: '1.0.0',
+        status: 'exclusive',
+        reclaimed: 2,
+      });
+      await expect(tauriDesktopPlatform.persistence.admitAppDataInstance()).resolves.toEqual({
+        status: 'exclusive',
+        reclaimed: 2,
+      });
+      expect(h.invoke).toHaveBeenLastCalledWith('worldscript_app_data_admission');
+    });
+
+    it('admitAppDataInstance reads a malformed or failed admission as unavailable', async () => {
+      h.invoke.mockResolvedValueOnce({
+        contractVersion: '2.0.0',
+        status: 'exclusive',
+        reclaimed: 2,
+      });
+      await expect(tauriDesktopPlatform.persistence.admitAppDataInstance()).resolves.toEqual({
+        status: 'unavailable',
+        reclaimed: 0,
+        detail: 'unsupported admission contract version',
+      });
+      h.invoke.mockResolvedValueOnce({
+        contractVersion: '1.0.0',
+        status: 'exclusive',
+        reclaimed: -1,
+      });
+      await expect(tauriDesktopPlatform.persistence.admitAppDataInstance()).resolves.toEqual({
+        status: 'unavailable',
+        reclaimed: 0,
+        detail: 'invalid admission contract',
+      });
+      h.invoke.mockRejectedValueOnce(new TypeError('command not found'));
+      await expect(tauriDesktopPlatform.persistence.admitAppDataInstance()).resolves.toEqual({
+        status: 'unavailable',
+        reclaimed: 0,
+        detail: 'admission failed: TypeError',
+      });
+    });
+
     it('dialogs return the picked path or null', async () => {
       await expect(tauriDesktopPlatform.dialogs.openFilePicker()).resolves.toBe('/picked/file.txt');
       h.dialogOpen.mockResolvedValueOnce(null);

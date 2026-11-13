@@ -54,10 +54,32 @@ export interface DesktopFilesystem {
   rename(oldPath: string, newPath: string): Promise<void>;
 }
 
+/**
+ * Outcome of joining the app-data writers (`worldscript_app_data_admission`, #831). Every writing process holds a
+ * shared OS lock on the writers lock file. `exclusive`: no other writer was alive, so `reclaimed` project locks a
+ * crashed writer had left were removed; `shared`: another writer is alive, nothing was removed; both may write.
+ * `unavailable`: no writers lock is held, so this process must not write. `detail` is for logs only.
+ */
+export const APP_DATA_ADMISSION_CONTRACT_VERSION = '1.0.0' as const;
+
+export const AppDataAdmissionSchema = z
+  .object({
+    contractVersion: z.literal(APP_DATA_ADMISSION_CONTRACT_VERSION),
+    status: z.enum(['exclusive', 'shared', 'unavailable']),
+    reclaimed: z.number().int().nonnegative(),
+    detail: z.string().optional(),
+  })
+  .transform(({ status, reclaimed, detail }) =>
+    detail === undefined ? { status, reclaimed } : { status, reclaimed, detail },
+  );
+export type AppDataAdmission = z.infer<typeof AppDataAdmissionSchema>;
+
 /** Path resolution — kept semantically separate from raw fs ops per roadmap §7.4.1's persistence framing. */
 export interface DesktopPersistence {
   appDataDir(): Promise<string>;
   join(...parts: string[]): Promise<string>;
+  /** Joins the app-data writers once per process, reclaiming orphaned project locks when it is alone (#831); never rejects. */
+  admitAppDataInstance(): Promise<AppDataAdmission>;
 }
 
 // --- dialogs ------------------------------------------------------------------------------------

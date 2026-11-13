@@ -226,7 +226,7 @@ describe('withProjectFileLock', () => {
       'done',
     );
     expect(mockLoggerWarn).toHaveBeenCalledWith(
-      'Failed to release project file lock; it will block saves until removed',
+      'Failed to release project file lock; it blocks saves of this project until restart',
       expect.objectContaining({ path: '/data/project.json.lock', error: 'EPERM' }),
     );
   });
