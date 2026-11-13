@@ -12,10 +12,13 @@ export const EDGE_PREP_SCRIPTS = [
   'copy-third-party-licenses.mjs',
 ];
 
+/** Runs after every production build (npm `postbuild`, and the edge build below): no worker may ship as raw TypeScript. */
+export const WORKER_BUNDLE_GUARD = 'check-worker-bundles.mjs';
+
 /**
- * The edge build: every preparation step, then `vite build`. A failed step (nonzero status or a
- * signal) stops before vite and returns a nonzero exit code. `spawn` is node:child_process
- * `spawnSync`, injected so tests can run the sequence without building.
+ * The edge build: every preparation step, then `vite build`, then the worker-bundle guard on `dist`.
+ * A failed step (nonzero status or a signal) stops the sequence and returns a nonzero exit code.
+ * `spawn` is node:child_process `spawnSync`, injected so tests can run the sequence without building.
  */
 export function runEdgeBuild({ spawn, scriptsDir, env, log = console.error }) {
   for (const script of EDGE_PREP_SCRIPTS) {
@@ -29,5 +32,11 @@ export function runEdgeBuild({ spawn, scriptsDir, env, log = console.error }) {
     stdio: 'inherit',
     env: { ...env, NODE_ENV: 'production' },
   });
-  return vite.status ?? 1;
+  if (vite.status !== 0) return vite.status ?? 1;
+  // QNBS-v3 (#1272): calling vite directly skips npm's postbuild, so the edge artifact gets the same worker-bundle guard here.
+  const guard = spawn(process.execPath, [join(scriptsDir, WORKER_BUNDLE_GUARD), 'dist'], {
+    stdio: 'inherit',
+  });
+  if (guard.status !== 0) log(`[build-edge] ${WORKER_BUNDLE_GUARD} failed`);
+  return guard.status ?? 1;
 }
