@@ -29,7 +29,7 @@
 use std::fmt;
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 /// File in the app-data directory every writer holds a shared lock on; equals
@@ -124,37 +124,42 @@ fn take_shared(file: &File) -> io::Result<()> {
     }
 }
 
+/// The `project-locks` directory to reclaim from, `None` when it does not exist. A `project-locks`
+/// that is not a real directory (a symlink or junction to elsewhere, or a file) is an error and is
+/// never read: `read_dir` would follow the link and delete lock files outside the app data.
+fn real_locks_dir(app_data: &Path) -> io::Result<Option<PathBuf>> {
+    let dir = app_data.join(PROJECT_LOCKS_DIR);
+    match fs::symlink_metadata(&dir) {
+        Ok(metadata) if metadata.file_type().is_dir() => Ok(Some(dir)),
+        Ok(_) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "project-locks is not a real directory; nothing was reclaimed",
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// Whether a `project-locks` entry is a regular `*.lock` file; symlinks and subdirectories are not.
+fn is_project_lock_file(entry: &fs::DirEntry) -> io::Result<bool> {
+    let is_lock_name = entry
+        .file_name()
+        .to_string_lossy()
+        .ends_with(PROJECT_LOCK_SUFFIX);
+    Ok(is_lock_name && entry.file_type()?.is_file())
+}
+
 /// Removes every regular `*.lock` file directly inside `project-locks/`; only called under the
 /// exclusive lock. Subdirectories, symlinks and other files stay, and the first failure stops it.
-/// A `project-locks` that is not a real directory (a symlink or junction to elsewhere, or a file) is
-/// never read: `read_dir` would follow the link and delete lock files outside the app data.
 fn reclaim_orphaned_project_locks(app_data: &Path) -> Result<usize, ReclaimError> {
     let mut removed = 0;
     let fail = |removed, source| ReclaimError { removed, source };
-    let locks_dir = app_data.join(PROJECT_LOCKS_DIR);
-    match fs::symlink_metadata(&locks_dir) {
-        Ok(metadata) if metadata.file_type().is_dir() => {}
-        Ok(_) => {
-            return Err(fail(
-                0,
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "project-locks is not a real directory; nothing was reclaimed",
-                ),
-            ))
-        }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(0),
-        Err(error) => return Err(fail(0, error)),
-    }
-    let entries = fs::read_dir(&locks_dir).map_err(|error| fail(0, error))?;
-    for entry in entries {
+    let Some(locks_dir) = real_locks_dir(app_data).map_err(|error| fail(0, error))? else {
+        return Ok(0);
+    };
+    for entry in fs::read_dir(&locks_dir).map_err(|error| fail(0, error))? {
         let entry = entry.map_err(|error| fail(removed, error))?;
-        let is_lock_name = entry
-            .file_name()
-            .to_string_lossy()
-            .ends_with(PROJECT_LOCK_SUFFIX);
-        let file_type = entry.file_type().map_err(|error| fail(removed, error))?;
-        if is_lock_name && file_type.is_file() {
+        if is_project_lock_file(&entry).map_err(|error| fail(removed, error))? {
             fs::remove_file(entry.path()).map_err(|error| fail(removed, error))?;
             removed += 1;
         }
