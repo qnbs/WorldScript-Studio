@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { mockPipelineFactory } = vi.hoisted(() => ({ mockPipelineFactory: vi.fn() }));
+vi.mock('@huggingface/transformers', () => ({
+  pipeline: mockPipelineFactory,
+  env: { backends: { onnx: { wasm: { proxy: true } } } },
+}));
+
 import { createTtsEngine, WebSpeechTtsEngine } from '../../../services/voice/ttsEngine';
 
 describe('WebSpeechTtsEngine', () => {
@@ -132,5 +139,17 @@ describe('createTtsEngine', () => {
   it('falls back when preferred engine is unavailable', async () => {
     const engine = await createTtsEngine({ preferredEngine: 'kokoro' });
     expect(engine.id).toBe('webSpeech');
+  });
+
+  // #556: the real runtime rejects Kokoro's model type, so an explicit Kokoro choice must not even try to load it.
+  it('an explicit Kokoro choice with local voice on uses the system voice and loads no model', async () => {
+    vi.stubGlobal('AudioContext', class {});
+    mockPipelineFactory.mockReset();
+    mockPipelineFactory.mockRejectedValue(
+      new Error('Unsupported model type "style_text_to_speech_2"'),
+    );
+    const engine = await createTtsEngine({ preferredEngine: 'kokoro', enableVoiceWasm: true });
+    expect(engine.id).toBe('webSpeech');
+    expect(mockPipelineFactory).not.toHaveBeenCalled();
   });
 });

@@ -22,6 +22,11 @@ import {
 } from '../features/voice/voiceSlice';
 import { ecoModeService } from '../services/ai/ecoModeService';
 import { logger } from '../services/logger';
+import {
+  sttEngineChoice,
+  sttEngineUnderEco,
+  ttsEngineChoice,
+} from '../services/voice/engineChoice';
 import type { VoiceServiceConfig } from '../services/voice/voiceCommandService';
 import { getVoiceService } from '../services/voice/voiceCommandService';
 
@@ -38,8 +43,8 @@ export const useVoice = () => {
     const eco = ecoModeService.isEcoMode();
     const config: Partial<VoiceServiceConfig> = {
       // Eco-mode forces lightweight WebSpeech fallback to save power
-      preferredSttEngine: eco ? 'webSpeech' : voiceSettings.sttEngine,
-      preferredTtsEngine: eco ? 'webSpeech' : voiceSettings.ttsEngine,
+      preferredSttEngine: sttEngineUnderEco(sttEngineChoice(voiceSettings.sttEngine), eco),
+      preferredTtsEngine: eco ? 'webSpeech' : ttsEngineChoice(voiceSettings.ttsEngine),
       feedbackLevel: voiceSettings.feedbackLevel,
       speechRate: voiceSettings.speechRate,
       speechVolume: voiceSettings.speechVolume,
@@ -48,7 +53,8 @@ export const useVoice = () => {
       wakeWordPhrase: voiceSettings.wakeWordPhrase,
       ttsMuted: voiceSettings.ttsMuted,
       dictationAutoPunctuation: voiceSettings.dictationAutoPunctuation,
-      enableVoiceWasm: enableVoiceWasm || eco,
+      // QNBS-v3 (#1261): Eco Mode never turns the local-model opt-in on; it only lowers an auto choice to Web Speech.
+      enableVoiceWasm,
     };
     svc.updateConfig(config);
   }, [voiceSettings, enableVoiceWasm]);
@@ -58,9 +64,9 @@ export const useVoice = () => {
     const svc = serviceRef.current;
     return ecoModeService.onEcoModeChange((isEco) => {
       svc.updateConfig({
-        preferredSttEngine: isEco ? 'webSpeech' : voiceSettings.sttEngine,
-        preferredTtsEngine: isEco ? 'webSpeech' : voiceSettings.ttsEngine,
-        enableVoiceWasm: enableVoiceWasm || isEco,
+        preferredSttEngine: sttEngineUnderEco(sttEngineChoice(voiceSettings.sttEngine), isEco),
+        preferredTtsEngine: isEco ? 'webSpeech' : ttsEngineChoice(voiceSettings.ttsEngine),
+        enableVoiceWasm,
       });
     });
   }, [voiceSettings, enableVoiceWasm]);
