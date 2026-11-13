@@ -19,9 +19,28 @@ const isOffline = (): boolean => typeof navigator !== 'undefined' && navigator.o
 let _mode: AiMode = 'hybrid';
 let _localModelsReady = false;
 
-/** Called from listenerMiddleware on setAiMode / setSettings. */
+const aiModeListeners = new Set<(mode: AiMode) => void>();
+
+/** Called from listenerMiddleware on setAiMode / setSettings. Notifies subscribers when the mode really changes. */
 export const setActiveAiMode = (mode: AiMode): void => {
+  const changed = _mode !== mode;
   _mode = mode;
+  if (!changed) return;
+  for (const listener of aiModeListeners) {
+    try {
+      listener(mode);
+    } catch {
+      // A failing subscriber must not stop the mode switch or the other subscribers.
+    }
+  }
+};
+
+/** Subscribes to AI execution mode changes; returns the unsubscribe function. */
+export const subscribeAiMode = (listener: (mode: AiMode) => void): (() => void) => {
+  aiModeListeners.add(listener);
+  return () => {
+    aiModeListeners.delete(listener);
+  };
 };
 
 /** Returns the current active AI execution mode. */

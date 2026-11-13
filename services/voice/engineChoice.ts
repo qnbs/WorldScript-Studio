@@ -6,6 +6,7 @@
  */
 
 import type { VoiceSttEngine, VoiceTtsEngine } from '../../types';
+import { isWebSpeechBlocked } from './webSpeechConsent';
 
 const LEGACY_LOCAL_CHOICE = 'wasm';
 const STT_ENGINES: readonly VoiceSttEngine[] = ['auto', 'whisper', 'webSpeech'];
@@ -20,10 +21,11 @@ export function sttEngineChoice(stored: unknown): VoiceSttEngine {
 
 /**
  * The STT engine to use while Eco Mode saves power: only `auto` becomes Web Speech. An explicit on-device choice stays
- * on-device, because Web Speech can send the audio to the browser vendor (#1261).
+ * on-device, because Web Speech can send the audio to the browser vendor (#1261). A local-only AI mode blocks Web
+ * Speech, so there `auto` stays `auto` and can still pick the local engine.
  */
 export function sttEngineUnderEco(choice: VoiceSttEngine, eco: boolean): VoiceSttEngine {
-  return eco && choice === 'auto' ? 'webSpeech' : choice;
+  return eco && choice === 'auto' && !isWebSpeechBlocked() ? 'webSpeech' : choice;
 }
 
 /** The TTS engine a stored preference asks for: the legacy local choice means Kokoro, anything unknown means auto. */
