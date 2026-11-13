@@ -745,6 +745,32 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     },
   );
 
+  // A running session must end too: local-only blocks Web Speech completely, not just new starts.
+  it.each(['listening', 'dictation'] as const)(
+    'a switch to a local-only AI mode ends a running Web Speech %s session',
+    async (kind) => {
+      storeConsent(true);
+      const engine = buildsNext(sttEngine());
+      await start(service, kind);
+      expect(engine.start).toHaveBeenCalledTimes(1);
+
+      setActiveAiMode('eco');
+
+      await vi.waitFor(() => expect(engine.stop).toHaveBeenCalled());
+    },
+  );
+
+  it('a switch to a local-only AI mode keeps a local engine running', async () => {
+    storeConsent(false);
+    const engine = buildsNext(sttEngine(true));
+    await service.startDictation();
+
+    setActiveAiMode('local');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(engine.stop).not.toHaveBeenCalled();
+  });
+
   it.each(['listening', 'dictation'] as const)(
     '%s in a local-only AI mode still starts the local engine',
     async (kind) => {

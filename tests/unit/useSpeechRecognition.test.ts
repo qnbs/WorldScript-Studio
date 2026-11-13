@@ -213,6 +213,31 @@ describe('useSpeechRecognition (with mocked SpeechRecognition)', () => {
         await result.current.startListening();
       });
       expect(result.current.micError).toBe(WEB_SPEECH_LOCAL_ONLY_MESSAGE);
+      // The editor microphones do not render micError, so the reason also goes out as a toast.
+      expect(appStoreRef.current?.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'status/addNotification',
+          payload: expect.objectContaining({ title: WEB_SPEECH_LOCAL_ONLY_MESSAGE }),
+        }),
+      );
+    } finally {
+      setActiveAiMode('hybrid');
+    }
+  });
+
+  it('a switch to a local-only AI mode stops a running recognition', async () => {
+    installSpeechRecognition();
+    consentStore(true);
+    try {
+      const { result } = renderHook(() => useSpeechRecognition());
+      await act(async () => {
+        await result.current.startListening();
+      });
+      expect(result.current.isListening).toBe(true);
+
+      act(() => setActiveAiMode('local'));
+
+      expect(result.current.isListening).toBe(false);
     } finally {
       setActiveAiMode('hybrid');
     }

@@ -1,6 +1,6 @@
 // QNBS-v3 (#1261): the browser's Web Speech recognition sends the audio to the browser vendor, so every start needs the stored consent.
 import { appStoreRef } from '../../app/storeRef';
-import { getActiveAiMode } from '../ai/aiModeService';
+import { getActiveAiMode, subscribeAiMode } from '../ai/aiModeService';
 
 /** Why a start that needs Web Speech is refused while the AI mode is local-only. */
 export const WEB_SPEECH_LOCAL_ONLY_MESSAGE =
@@ -13,6 +13,13 @@ export const WEB_SPEECH_LOCAL_ONLY_MESSAGE =
 export function isWebSpeechBlocked(): boolean {
   const mode = getActiveAiMode();
   return mode === 'local' || mode === 'eco';
+}
+
+/** Calls `listener` whenever the AI mode turns local-only, so a running Web Speech session can end at once. */
+export function onWebSpeechBlocked(listener: () => void): () => void {
+  return subscribeAiMode(() => {
+    if (isWebSpeechBlocked()) listener();
+  });
 }
 
 /** Asks the user for Web Speech consent; resolves true only when they granted it. */

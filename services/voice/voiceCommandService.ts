@@ -46,6 +46,7 @@ import { createWakeWordEngine } from './wakeWordEngine';
 import {
   ensureWebSpeechConsent,
   isWebSpeechBlocked,
+  onWebSpeechBlocked,
   WEB_SPEECH_LOCAL_ONLY_MESSAGE,
 } from './webSpeechConsent';
 
@@ -132,6 +133,17 @@ export class VoiceCommandService {
     this.feedbackService = new FeedbackService();
     this.feedbackService.setFeedbackLevel(this.config.feedbackLevel);
     this.feedbackService.setMuted(this.config.ttsMuted);
+    // QNBS-v3 (#1261): local-only outranks consent, so a switch to it ends a running Web Speech session at once.
+    onWebSpeechBlocked(() => this.endWebSpeechSession());
+  }
+
+  /** Ends a running or starting session on an engine that is not declared local; a local engine keeps running. */
+  private endWebSpeechSession(): void {
+    const engine = this.sttEngine;
+    if (!engine || engine.isLocal === true) return;
+    // A running session (listening or dictation), or a start still in its setup or consent dialog.
+    const running = this.isDictating || this.listeningTimer !== null;
+    if (running || this.isStarting) void this.stopListening();
   }
 
   // ── Eventing ───────────────────────────────────────────────────────────────

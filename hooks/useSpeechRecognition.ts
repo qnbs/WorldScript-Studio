@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { appStoreRef } from '../app/storeRef';
+import { statusActions } from '../features/status/statusSlice';
 import { logger } from '../services/logger';
 import {
   ensureWebSpeechConsent,
   isWebSpeechBlocked,
+  onWebSpeechBlocked,
   WEB_SPEECH_LOCAL_ONLY_MESSAGE,
 } from '../services/voice/webSpeechConsent';
 import type { ISpeechRecognition } from '../types';
@@ -131,6 +134,10 @@ export const useSpeechRecognition = () => {
     // QNBS-v3 (#1261): a local-only AI mode blocks Web Speech outright, whatever consent is stored; tell the user why.
     if (isWebSpeechBlocked()) {
       setMicError(WEB_SPEECH_LOCAL_ONLY_MESSAGE);
+      // The editor microphones do not render micError; the toast tells the user why nothing starts.
+      appStoreRef.current?.dispatch(
+        statusActions.addNotification({ type: 'info', title: WEB_SPEECH_LOCAL_ONLY_MESSAGE }),
+      );
       return;
     }
     const request = ++startRequestRef.current;
@@ -167,6 +174,9 @@ export const useSpeechRecognition = () => {
       setIsListening(false);
     }
   }, [clearMicTimeout]);
+
+  // QNBS-v3 (#1261): a switch to a local-only AI mode ends a running Web Speech recognition at once.
+  useEffect(() => onWebSpeechBlocked(stopListening), [stopListening]);
 
   const toggleListening = useCallback(() => {
     if (isListeningRef.current) {

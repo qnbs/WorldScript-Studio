@@ -4,6 +4,7 @@ import { setActiveAiMode } from '../../../services/ai/aiModeService';
 import {
   ensureWebSpeechConsent,
   isWebSpeechBlocked,
+  onWebSpeechBlocked,
   registerWebSpeechConsentPrompt,
 } from '../../../services/voice/webSpeechConsent';
 
@@ -51,6 +52,22 @@ describe('Web Speech consent in a local-only AI mode', () => {
       await expect(ensureWebSpeechConsent()).resolves.toBe(true);
     },
   );
+
+  it('tells subscribers when the mode turns local-only, once per real change', () => {
+    const blocked = vi.fn();
+    const off = onWebSpeechBlocked(blocked);
+    try {
+      setActiveAiMode('cloud');
+      expect(blocked).not.toHaveBeenCalled();
+      setActiveAiMode('eco');
+      setActiveAiMode('eco');
+      expect(blocked).toHaveBeenCalledTimes(1);
+      setActiveAiMode('local');
+      expect(blocked).toHaveBeenCalledTimes(2);
+    } finally {
+      off();
+    }
+  });
 
   it('a switch to a local-only mode while the dialog is open refuses the grant', async () => {
     const voice = storeConsent(false);
