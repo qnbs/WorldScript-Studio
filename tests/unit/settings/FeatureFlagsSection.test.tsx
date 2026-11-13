@@ -7,6 +7,15 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Most cases cover the DuckDB-enabled build; one case switches to this build's #716 state (off).
+const duckDb = vi.hoisted(() => ({ available: true }));
+vi.mock('../../../services/duckdb/duckdbAvailability', () => ({
+  get DUCKDB_ANALYTICS_AVAILABLE() {
+    return duckDb.available;
+  },
+  DUCKDB_UNAVAILABLE_REASON: 'unavailable',
+}));
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
@@ -117,6 +126,20 @@ describe('FeatureFlagsSection', () => {
   it('renders DuckDB analytics toggle', () => {
     render(<FeatureFlagsSection />);
     expect(screen.getByText('settings.featureFlags.enableDuckDbAnalytics')).toBeInTheDocument();
+  });
+
+  // #716: this build has no DuckDB analytics, so its toggle would change nothing; the section hides it.
+  it('hides the DuckDB analytics toggle in a build without DuckDB analytics', () => {
+    duckDb.available = false;
+    try {
+      render(<FeatureFlagsSection />);
+      expect(
+        screen.queryByText('settings.featureFlags.enableDuckDbAnalytics'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('settings.featureFlags.enableProForge')).toBeInTheDocument();
+    } finally {
+      duckDb.available = true;
+    }
   });
 
   it('renders ProForge toggle', () => {

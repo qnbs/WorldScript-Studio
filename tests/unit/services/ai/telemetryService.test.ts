@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// This suite covers the DuckDB-enabled behaviour; the #716 build switch (off) is tested in duckdbUnavailable.test.ts.
+vi.mock('../../../../services/duckdb/duckdbAvailability', () => ({
+  DUCKDB_ANALYTICS_AVAILABLE: true,
+  DUCKDB_UNAVAILABLE_REASON: 'unavailable',
+}));
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockExec = vi.fn().mockResolvedValue({ rows: [] });
+const mockExec = vi.fn().mockResolvedValue({ ok: true });
 const mockQuery = vi.fn().mockResolvedValue({ rows: [] });
 
 vi.mock('../../../../services/duckdb/duckdbClient', () => ({
@@ -53,8 +59,8 @@ describe('telemetryService', () => {
       delete localStorageData[k];
     });
     // Reset table-ensured state by re-importing (vi.resetModules not needed because mock resets)
-    mockExec.mockResolvedValue({ rows: [] });
-    mockQuery.mockResolvedValue({ rows: [] });
+    mockExec.mockResolvedValue({ ok: true });
+    mockQuery.mockResolvedValue({ ok: true, rows: [] });
     // QNBS-v3: enable telemetry in tests so writes are exercised; production default is false
     setTelemetryEnabled(true);
   });
@@ -77,6 +83,21 @@ describe('telemetryService', () => {
         SAMPLE_ENTRY.latencyMs,
         SAMPLE_ENTRY.success,
       ]);
+    });
+
+    // duckdbClient answers a refused statement with ok: false; that must reach the fallback, not drop the entry.
+    it('falls back to localStorage when DuckDB refuses the write, and retries the table next time', async () => {
+      await clearTelemetry(); // the table must be created again, so the refusal hits CREATE TABLE
+      mockExec.mockClear();
+      mockExec.mockResolvedValueOnce({ ok: false, error: 'refused' });
+      setTelemetryEnabled(true);
+      await recordInferenceTelemetry(SAMPLE_ENTRY);
+      expect(mockExec.mock.calls[0]?.[0]).toMatch(/CREATE TABLE/);
+      expect(JSON.parse(localStorageData['worldscript-ai-telemetry'] ?? '[]')).toHaveLength(1);
+
+      mockExec.mockClear();
+      await recordInferenceTelemetry(SAMPLE_ENTRY);
+      expect(mockExec.mock.calls[0]?.[0]).toMatch(/CREATE TABLE/);
     });
 
     it('falls back to localStorage when DuckDB throws', async () => {

@@ -11,6 +11,7 @@ import {
   type FeatureFlagsState,
 } from '../../features/featureFlags/featureFlagsSlice';
 import { resolveFlagAvailability } from '../../features/featureFlags/flagDependencies';
+import { DUCKDB_ANALYTICS_AVAILABLE } from '../../services/duckdb/duckdbAvailability';
 import { isTauriRuntime } from '../../services/tauriRuntime';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
@@ -22,7 +23,13 @@ import { ToggleSwitch } from './SettingsShared';
 // QNBS-v3: enableIdbAtRestEncryption is intentionally NOT shown here — toggling it without the
 // passphrase setup flow would lock users out. Its dedicated UI lives in Settings → Privacy
 // (PrivacySection.tsx). Everything else in the catalog is user-toggleable here (21 flags).
+// QNBS-v3 (#716): DuckDB analytics are off in a build without them; a toggle that changes nothing would not be truthful.
 const HIDDEN_FLAGS: ReadonlySet<keyof FeatureFlagsState> = new Set(['enableIdbAtRestEncryption']);
+
+function isHiddenFlag(flagKey: keyof FeatureFlagsState): boolean {
+  if (HIDDEN_FLAGS.has(flagKey)) return true;
+  return flagKey === 'enableDuckDbAnalytics' && !DUCKDB_ANALYTICS_AVAILABLE;
+}
 
 /**
  * All experimental feature flags, grouped by catalog tier, with maturity/risk badges and
@@ -39,7 +46,7 @@ export const FeatureFlagsSection: FC = () => {
 
   // QNBS-v3: catalog grouped by tier, preserving FEATURE_TIER_ORDER, excluding hidden flags.
   const groups = useMemo(() => {
-    const visible = FEATURE_CATALOG.filter((e) => !HIDDEN_FLAGS.has(e.flagKey));
+    const visible = FEATURE_CATALOG.filter((e) => !isHiddenFlag(e.flagKey));
     return FEATURE_TIER_ORDER.map((tier) => ({
       tier,
       entries: visible.filter((e) => e.tier === tier),
@@ -72,7 +79,7 @@ export const FeatureFlagsSection: FC = () => {
     // ProForge discoverability toast fires on enable. Hidden flags (IDB at-rest encryption) are
     // driven by the passphrase flow and are intentionally left untouched here.
     for (const entry of FEATURE_CATALOG) {
-      if (HIDDEN_FLAGS.has(entry.flagKey)) continue;
+      if (isHiddenFlag(entry.flagKey)) continue;
       const target = defaultFeatureFlagsState[entry.flagKey];
       if (featureFlags[entry.flagKey] !== target) {
         handleSettingChange(entry.flagKey, target);

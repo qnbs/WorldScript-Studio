@@ -1,6 +1,13 @@
 import { configureStore, type Reducer } from '@reduxjs/toolkit';
 import undoable from 'redux-undo';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// This suite covers the DuckDB-enabled behaviour; the #716 build switch (off) is tested in duckdbUnavailable.test.ts.
+vi.mock('../../services/duckdb/duckdbAvailability', () => ({
+  DUCKDB_ANALYTICS_AVAILABLE: true,
+  DUCKDB_UNAVAILABLE_REASON: 'unavailable',
+}));
+
 import { listenerMiddleware } from '../../app/listenerMiddleware';
 import type { RootState } from '../../app/store';
 import { useTransientUiStore } from '../../app/transientUiStore';

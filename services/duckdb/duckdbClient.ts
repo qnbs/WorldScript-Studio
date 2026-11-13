@@ -6,6 +6,7 @@
 //          need no changes — only the transport underneath swapped.
 
 import { ensureDuckDbPool, getWorkerBus } from '../workerBusManager';
+import { DUCKDB_ANALYTICS_AVAILABLE, DUCKDB_UNAVAILABLE_REASON } from './duckdbAvailability';
 
 export type DuckDbRequestType = 'INIT' | 'QUERY' | 'EXEC' | 'SHUTDOWN';
 
@@ -121,25 +122,45 @@ async function send(
   }
 }
 
+/**
+ * The public entry for every DuckDB call. QNBS-v3 (#716): disabled in this build — refuse before the pool exists,
+ * so no worker starts and OPFS is never touched.
+ */
+function request(
+  type: DuckDbRequestType,
+  sql?: string,
+  params?: readonly unknown[],
+  signal?: AbortSignal,
+): Promise<DuckDbResponse> {
+  if (!DUCKDB_ANALYTICS_AVAILABLE) {
+    return Promise.resolve({
+      messageId: generateMessageId(),
+      ok: false,
+      error: DUCKDB_UNAVAILABLE_REASON,
+    });
+  }
+  return send(type, sql, params, signal);
+}
+
 export const duckdbClient = {
   /** Boot DuckDB, create OPFS or in-memory DB, apply DDL. */
   init(signal?: AbortSignal): Promise<DuckDbResponse> {
-    return send('INIT', undefined, undefined, signal);
+    return request('INIT', undefined, undefined, signal);
   },
 
   /** Run a SELECT — returns rows. */
   query(sql: string, params?: readonly unknown[], signal?: AbortSignal): Promise<DuckDbResponse> {
-    return send('QUERY', sql, params, signal);
+    return request('QUERY', sql, params, signal);
   },
 
   /** Run a DDL / DML statement — no rows returned. */
   exec(sql: string, params?: readonly unknown[], signal?: AbortSignal): Promise<DuckDbResponse> {
-    return send('EXEC', sql, params, signal);
+    return request('EXEC', sql, params, signal);
   },
 
   /** Gracefully terminate the worker. */
   shutdown(signal?: AbortSignal): Promise<DuckDbResponse> {
-    return send('SHUTDOWN', undefined, undefined, signal);
+    return request('SHUTDOWN', undefined, undefined, signal);
   },
 
   /**

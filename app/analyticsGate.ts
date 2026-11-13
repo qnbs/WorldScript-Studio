@@ -1,3 +1,4 @@
+import { DUCKDB_ANALYTICS_AVAILABLE } from '../services/duckdb/duckdbAvailability';
 import type { RootState } from './store';
 import { appStoreRef } from './storeRef';
 
@@ -10,8 +11,11 @@ import { appStoreRef } from './storeRef';
 // (AiSections, ReferencePanelView) — must route its persistence decision through this function so the
 // opt-out is enforced uniformly.
 export function isAnalyticsPersistenceAllowed(state: RootState): boolean {
+  // QNBS-v3 (#716): a build without DuckDB analytics never persists analytics, whatever the stored flag says.
   return (
-    Boolean(state.featureFlags?.enableDuckDbAnalytics) && state.settings.privacy.analyticsEnabled
+    DUCKDB_ANALYTICS_AVAILABLE &&
+    Boolean(state.featureFlags?.enableDuckDbAnalytics) &&
+    state.settings.privacy.analyticsEnabled
   );
 }
 
