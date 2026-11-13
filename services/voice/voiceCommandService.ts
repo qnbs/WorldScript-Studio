@@ -207,6 +207,8 @@ export class VoiceCommandService {
 
   async initialize(lifecycle = this.lifecycle): Promise<boolean> {
     if (this.isInitialized) return true;
+    // QNBS-v3 (#1265): a setup a dispose voided builds nothing and leaves the engine-choice flag to the setup that replaced it.
+    if (lifecycle !== this.lifecycle) return false;
     // A change from here on (even while the engines below are being built) is applied by the next start.
     this.engineChoiceChanged = false;
 
