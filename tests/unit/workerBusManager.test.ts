@@ -4,48 +4,61 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // QNBS-v3: vi.hoisted ensures these references are available inside the vi.mock factory
 //          which is hoisted before all imports.
-const { mockShutdown, mockRegisterPool, mockHasPool, mockInstall, MockWorkBus, MockRegistry } =
-  vi.hoisted(() => {
-    const mockShutdown = vi.fn().mockResolvedValue(undefined);
-    const mockRegisterPool = vi.fn();
-    // QNBS-v3: [Defaults to true (pool present) so existing tests that don't care about
-    //          re-registration behavior are unaffected; the dedicated ensureDuckDbPool tests
-    //          override this per-case.]
-    const mockHasPool = vi.fn(() => true);
-    const mockInstall = vi.fn();
+const {
+  mockShutdown,
+  mockRegisterPool,
+  mockHasPool,
+  mockInstall,
+  mockRegister,
+  MockWorkBus,
+  MockRegistry,
+} = vi.hoisted(() => {
+  const mockShutdown = vi.fn().mockResolvedValue(undefined);
+  const mockRegisterPool = vi.fn();
+  // QNBS-v3: [Defaults to true (pool present) so tests that ignore re-registration are unaffected; ensureDuckDbPool tests override it.]
+  const mockHasPool = vi.fn(() => true);
+  const mockInstall = vi.fn();
 
-    // QNBS-v3: Regular function (not arrow) so new MockWorkBus() works as a constructor.
-    //          Bracket notation required — noPropertyAccessFromIndexSignature is enabled.
-    const MockWorkBus = vi.fn(function (this: Record<string, unknown>) {
-      this['shutdown'] = mockShutdown;
-      this['registerPool'] = mockRegisterPool;
-      this['hasPool'] = mockHasPool;
-      this['enqueue'] = vi.fn();
-      this['cancel'] = vi.fn(() => true);
-      this['getTelemetry'] = vi.fn(() => ({
-        queueDepth: { critical: 0, high: 0, normal: 0, low: 0 },
-        activeWorkers: 0,
-        idleWorkers: 0,
-        processedTasks: 0,
-        failedTasks: 0,
-        deadLetterCount: 0,
-        avgQueueTimeMs: 0,
-        avgExecutionMs: 0,
-        peakLatencyMs: 0,
-        errorRate: 0,
-        circuitBreakerStates: {},
-        lastSuccessAt: null,
-      }));
-      this['subscribe'] = vi.fn();
-    });
-
-    const MockRegistry = vi.fn(function (this: Record<string, unknown>) {
-      this['register'] = vi.fn();
-      this['install'] = mockInstall;
-    });
-
-    return { mockShutdown, mockRegisterPool, mockHasPool, mockInstall, MockWorkBus, MockRegistry };
+  // QNBS-v3: Regular function (not arrow) so new MockWorkBus() works as a constructor; bracket notation for noPropertyAccessFromIndexSignature.
+  const MockWorkBus = vi.fn(function (this: Record<string, unknown>) {
+    this['shutdown'] = mockShutdown;
+    this['registerPool'] = mockRegisterPool;
+    this['hasPool'] = mockHasPool;
+    this['enqueue'] = vi.fn();
+    this['cancel'] = vi.fn(() => true);
+    this['getTelemetry'] = vi.fn(() => ({
+      queueDepth: { critical: 0, high: 0, normal: 0, low: 0 },
+      activeWorkers: 0,
+      idleWorkers: 0,
+      processedTasks: 0,
+      failedTasks: 0,
+      deadLetterCount: 0,
+      avgQueueTimeMs: 0,
+      avgExecutionMs: 0,
+      peakLatencyMs: 0,
+      errorRate: 0,
+      circuitBreakerStates: {},
+      lastSuccessAt: null,
+    }));
+    this['subscribe'] = vi.fn();
   });
+
+  const mockRegister = vi.fn();
+  const MockRegistry = vi.fn(function (this: Record<string, unknown>) {
+    this['register'] = mockRegister;
+    this['install'] = mockInstall;
+  });
+
+  return {
+    mockShutdown,
+    mockRegisterPool,
+    mockHasPool,
+    mockInstall,
+    mockRegister,
+    MockWorkBus,
+    MockRegistry,
+  };
+});
 
 vi.mock('@domain/worker-bus', () => ({
   WorkerBus: MockWorkBus,
@@ -89,6 +102,7 @@ describe('workerBusManager', () => {
     mockHasPool.mockClear();
     mockHasPool.mockReturnValue(true);
     mockInstall.mockClear();
+    mockRegister.mockClear();
     mockLogError.mockClear();
   });
 
@@ -116,6 +130,46 @@ describe('workerBusManager', () => {
     expect(mockInstall).toHaveBeenCalledOnce();
     expect(getWorkerBus()).not.toBeNull();
     expect(isWorkerBusReady()).toBe(true);
+  });
+
+  // #1272: production shipped every worker as raw TypeScript. Vite's worker plugin marks a URL it bundles as a
+  // worker entry (`?worker_file`), so this pins that each pool starts its own script in the bundled shape.
+  it('each pool factory starts its own worker script as a Vite-bundled module worker', async () => {
+    const started: Array<{ path: string; viteWorkerEntry: boolean; type: string | undefined }> = [];
+    vi.stubGlobal(
+      'Worker',
+      class {
+        constructor(url: URL | string, options?: WorkerOptions) {
+          const parsed = new URL(String(url));
+          started.push({
+            path: parsed.pathname,
+            viteWorkerEntry: parsed.searchParams.has('worker_file'),
+            type: options?.type,
+          });
+        }
+      },
+    );
+    try {
+      const { initWorkerBus } = await import('../../services/workerBusManager');
+      await initWorkerBus();
+      const factories = new Map<string, () => unknown>(
+        mockRegister.mock.calls.map(([entry]) => [entry.poolId, entry.options.createWorker]),
+      );
+      const scripts = {
+        inference: '/workers/v2/inference.worker.ts',
+        duckdb: '/workers/v2/duckdb.worker.ts',
+        webllm: '/workers/v2/webllm.worker.ts',
+        plugin: '/workers/plugin.worker.ts',
+      };
+      for (const [pool, script] of Object.entries(scripts)) {
+        started.length = 0;
+        factories.get(pool)?.();
+        expect(started, pool).toEqual([{ path: script, viteWorkerEntry: true, type: 'module' }]);
+      }
+      expect([...factories.keys()].sort()).toEqual(Object.keys(scripts).sort());
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('initWorkerBus is idempotent — second call is a no-op', async () => {
@@ -200,7 +254,7 @@ describe('workerBusManager', () => {
       expect(mockRegisterPool).toHaveBeenCalledWith(
         'duckdb',
         expect.arrayContaining(['db.duckdb']),
-        expect.objectContaining({ workerScript: expect.stringContaining('duckdb.worker') }),
+        expect.objectContaining({ createWorker: expect.any(Function) }),
       );
     });
 
@@ -269,7 +323,7 @@ describe('workerBusManager', () => {
         expect.arrayContaining(['inference.text', 'inference.embed']),
         expect.objectContaining({
           maxWorkers: 2,
-          workerScript: expect.stringContaining('inference.worker'),
+          createWorker: expect.any(Function),
         }),
       );
     });
