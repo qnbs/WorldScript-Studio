@@ -12,6 +12,7 @@ import {
 } from './ai/computeShaderFactory';
 import { embedText } from './ai/localEmbeddingService';
 import { duckdbRagWrite, queryRagSimilarity } from './duckdb/duckdbAnalytics';
+import { DUCKDB_ANALYTICS_AVAILABLE } from './duckdb/duckdbAvailability';
 import {
   hashEmbedText,
   type LocalRagChunkRecord,
@@ -285,7 +286,7 @@ export async function retrieveContext(
 ): Promise<RagChunk[]> {
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   // DuckDB path: vector similarity via list_dot_product; text fetched from IDB after ranking.
-  if (useDuckDb && queryEmbedding) {
+  if (ranksInDuckDb(useDuckDb, queryEmbedding)) {
     return retrieveContextViaDuckDb(projectId, topK, queryEmbedding, signal);
   }
 
@@ -383,6 +384,17 @@ export async function retrieveContext(
 // ---------------------------------------------------------------------------
 // DuckDB retrieval path (P2)
 // ---------------------------------------------------------------------------
+
+/**
+ * Whether a retrieval ranks in DuckDB: asked for, with a query embedding, in a build that has DuckDB analytics.
+ * QNBS-v3 (#716): callers pass the stored flag, so a build without DuckDB analytics must rank from the IDB index.
+ */
+function ranksInDuckDb(
+  useDuckDb: boolean,
+  queryEmbedding: Float32Array | undefined,
+): queryEmbedding is Float32Array {
+  return useDuckDb && queryEmbedding !== undefined && DUCKDB_ANALYTICS_AVAILABLE;
+}
 
 // QNBS-v3: Ranking from DuckDB list_dot_product; text resolved from IDB map to avoid BLOB decryption.
 async function retrieveContextViaDuckDb(
