@@ -4,6 +4,7 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandPalette } from '../../components/CommandPalette';
 import { useCommandPalette } from '../../hooks/useCommandPalette';
+import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { getLocalAiSuggestions } from '../../services/commands/aiSuggestions';
 import { buildPaletteCommandModels } from '../../services/commands/commandBuilder';
 import type { PaletteCommandModel } from '../../services/commands/commandTypes';
@@ -354,5 +355,36 @@ describe('CommandPalette', () => {
     expect(ids.filter((id) => id === 'cmd-1').length).toBe(1);
     vi.mocked(loadPalettePreferences).mockReturnValue({ pinnedIds: [], recentIds: [] });
     vi.mocked(getLocalAiSuggestions).mockReturnValue([]);
+  });
+
+  // #1261: a mic start waiting for the Web Speech consent dialog has not reported listening yet; closing must stop it too.
+  it('closing the palette stops the mic even before it reports listening', () => {
+    const speech = vi.mocked(useSpeechRecognition);
+    const original = speech.getMockImplementation();
+    const stopListening = vi.fn();
+    speech.mockReturnValue({
+      isListening: false,
+      transcript: '',
+      toggleListening: vi.fn(),
+      stopListening,
+      setTranscript: vi.fn(),
+    } as unknown as ReturnType<typeof useSpeechRecognition>);
+    try {
+      const { rerender } = renderHook(
+        (isOpen: boolean) =>
+          useCommandPalette({
+            isOpen,
+            onClose: mockOnClose,
+            onNavigate: mockOnNavigate,
+            currentView: 'dashboard',
+          }),
+        { initialProps: true },
+      );
+      expect(stopListening).not.toHaveBeenCalled();
+      rerender(false);
+      expect(stopListening).toHaveBeenCalledTimes(1);
+    } finally {
+      if (original) speech.mockImplementation(original);
+    }
   });
 });
