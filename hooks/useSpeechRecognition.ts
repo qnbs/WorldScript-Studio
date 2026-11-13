@@ -6,9 +6,9 @@ import {
   ensureWebSpeechConsent,
   isWebSpeechBlocked,
   onWebSpeechBlocked,
-  WEB_SPEECH_LOCAL_ONLY_MESSAGE,
 } from '../services/voice/webSpeechConsent';
 import type { ISpeechRecognition } from '../types';
+import { useTranslation } from './useTranslation';
 
 const LANG_PREFERENCES = ['de-DE', 'de-AT', 'en-US', 'en-GB'];
 const MIC_TIMEOUT_MS = 8000; // 8 Sekunden ohne Ergebnis → Timeout
@@ -26,6 +26,7 @@ const sanitizeSpeechTranscript = (text: string): string =>
   stripControlChars(text).replace(/\s+/g, ' ').trim().slice(0, 1024);
 
 export const useSpeechRecognition = () => {
+  const { t } = useTranslation();
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [micError, setMicError] = useState<string | null>(null);
@@ -133,11 +134,11 @@ export const useSpeechRecognition = () => {
     if (!recognition || isListeningRef.current) return;
     // QNBS-v3 (#1261): a local-only AI mode blocks Web Speech outright, whatever consent is stored; tell the user why.
     if (isWebSpeechBlocked()) {
-      setMicError(WEB_SPEECH_LOCAL_ONLY_MESSAGE);
+      // QNBS-v3 (#1282): the refusal follows the user's language.
+      const reason = t('voice.error.webSpeechLocalOnly');
+      setMicError(reason);
       // The editor microphones do not render micError; the toast tells the user why nothing starts.
-      appStoreRef.current?.dispatch(
-        statusActions.addNotification({ type: 'info', title: WEB_SPEECH_LOCAL_ONLY_MESSAGE }),
-      );
+      appStoreRef.current?.dispatch(statusActions.addNotification({ type: 'info', title: reason }));
       return;
     }
     const request = ++startRequestRef.current;
@@ -166,7 +167,7 @@ export const useSpeechRecognition = () => {
         setMicError('Speech recognition could not be started.');
       }
     }
-  }, []);
+  }, [t]);
 
   const stopListening = useCallback(() => {
     clearMicTimeout();

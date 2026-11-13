@@ -1,5 +1,19 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// #1282: the hook translates its refusals; `i18n.language` picks the locale the mocked translator reads.
+const { i18n } = vi.hoisted(() => ({ i18n: { language: 'en' } }));
+vi.mock('../../hooks/useTranslation', async () => {
+  const { readFileSync } = await import('node:fs');
+  const load = (locale: string) =>
+    JSON.parse(readFileSync(`${process.cwd()}/locales/${locale}/common.json`, 'utf8')) as Record<
+      string,
+      string
+    >;
+  const strings: Record<string, Record<string, string>> = { en: load('en'), de: load('de') };
+  return { useTranslation: () => ({ t: (key: string) => strings[i18n.language]?.[key] ?? key }) };
+});
+
 import { appStoreRef } from '../../app/storeRef';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { setActiveAiMode } from '../../services/ai/aiModeService';
@@ -228,6 +242,23 @@ describe('useSpeechRecognition (with mocked SpeechRecognition)', () => {
   });
 
   // The listening flag used to follow only through an effect, so a stop right after the start missed the capture.
+  it('in a local-only AI mode the mic explains itself in the user language', async () => {
+    installSpeechRecognition();
+    consentStore(true);
+    setActiveAiMode('local');
+    i18n.language = 'de';
+    try {
+      const { result } = renderHook(() => useSpeechRecognition());
+      await act(async () => {
+        await result.current.startListening();
+      });
+      expect(result.current.micError).toMatch(/^Die Web-Speech-Erkennung ist gesperrt/);
+    } finally {
+      i18n.language = 'en';
+      setActiveAiMode('hybrid');
+    }
+  });
+
   it('a switch to a local-only AI mode right after the start stops the recognition', async () => {
     const started = installSpeechRecognition();
     consentStore(true);

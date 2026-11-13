@@ -5,10 +5,13 @@
 
 import { useCallback, useEffect } from 'react';
 import { audioNavigator } from '../services/voice/audioNavigator';
+import { localizeVoiceError } from '../services/voice/voiceErrorMessages';
+import { useTranslation } from './useTranslation';
 import { useVoice } from './useVoice';
 
 export const useVoiceAccessibility = () => {
   const { mode, transcript, error, enabled } = useVoice();
+  const { t } = useTranslation();
 
   // Announce voice mode changes to screen readers
   useEffect(() => {
@@ -41,8 +44,12 @@ export const useVoiceAccessibility = () => {
   // Announce errors assertively
   useEffect(() => {
     if (!enabled || !error) return;
-    audioNavigator.announce(`Voice error: ${error}`, 'assertive');
-  }, [error, enabled]);
+    // QNBS-v3 (#1282): the prefix and a known service error follow the user's language.
+    audioNavigator.announce(
+      t('voice.error.announce', { message: localizeVoiceError(error, t) }),
+      'assertive',
+    );
+  }, [error, enabled, t]);
 
   // Announce final transcript
   useEffect(() => {
