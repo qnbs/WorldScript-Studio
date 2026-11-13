@@ -43,6 +43,22 @@ function setupNodeSteps(): Array<{ file: string; step: Step }> {
   });
 }
 
+// #1277: Vercel builds with the newest major engines.node allows and ignores its 24.x project setting; with an open
+// range it built production with Node 26, outside the tested matrix.
+describe('engines.node stays inside the tested Node majors', () => {
+  it('bounds the range one major above the highest Quality Gate major', () => {
+    const range = (
+      JSON.parse(readFileSync('package.json', 'utf8')) as { engines: { node: string } }
+    ).engines.node;
+    const matrix =
+      readFileSync('.github/workflows/ci.yml', 'utf8').match(/node-version: \[([^\]]+)\]/)?.[1] ??
+      '';
+    const majors = [...matrix.matchAll(/'(\d+)'/g)].map((match) => Number(match[1]));
+    expect(majors.length).toBeGreaterThan(0);
+    expect(range).toBe(`>=22.19.0 <${Math.max(...majors) + 1}`);
+  });
+});
+
 describe('Node runtimes take the newest security patch of their major (#1245)', () => {
   it('make every setup-node except the two frozen preludes check for the latest patch', () => {
     const steps = setupNodeSteps();

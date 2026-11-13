@@ -55,6 +55,7 @@ under the exit criteria documented below — each phase runs independently of th
 coverage ratchet remains informational.
 
 **Post-merge doc update workflow:**
+
 1. Push the commit → CI starts automatically.
 2. `gh run watch $(gh run list --limit 1 --json databaseId -q '.[0].databaseId')` — stream the live run.
 3. When `quality` job completes, read the coverage summary from the CI logs or Codecov badge.
@@ -79,7 +80,7 @@ coverage ratchet remains informational.
 
 ### Node.js runtimes and security patches (#1245)
 
-`.nvmrc` names only the major (**22**), and `engines.node` stays `>=22.19.0` (#1078). Where each runtime is installed decides how it gets a security patch:
+`.nvmrc` names only the major (**22**), and `engines.node` is `>=22.19.0 <25`: the upper bound is the highest Quality Gate major plus one, because Vercel builds with the newest major the range allows and ignores its project setting when `engines` is set (with the open range it built with Node 26, #1277). `tests/unit/tooling/nodeRuntimePins.test.ts` keeps the bound and the matrix together. Where each runtime is installed decides how it gets a security patch:
 
 | Runtime                                                                                                  | Major                                      | How it gets the newest security patch                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------------------------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
