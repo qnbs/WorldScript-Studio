@@ -704,7 +704,9 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     service.setDispatch(vi.fn() as never, vi.fn() as never);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // A successful listening start arms the 8-second auto-stop timer; dispose clears it so no case outlives itself.
+    await service.dispose();
     unregister();
     unregister = () => {};
     appStoreRef.current = null;
