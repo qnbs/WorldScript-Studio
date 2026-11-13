@@ -105,6 +105,15 @@ import { ConsentRequiredError, createSttEngine } from '../../../../services/voic
 import { VoiceCommandService } from '../../../../services/voice/voiceCommandService';
 import { registerWebSpeechConsentPrompt } from '../../../../services/voice/webSpeechConsent';
 
+/** initialize() asks for the microphone; each case gets its own stub instead of relying on one an earlier case left. */
+function stubMicrophone() {
+  Object.defineProperty(global.navigator, 'mediaDevices', {
+    value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }) },
+    writable: true,
+    configurable: true,
+  });
+}
+
 /** A store reference that holds only the Web Speech consent; returns the voice settings so a test can change it. */
 function storeConsent(granted: boolean) {
   const voice = { webSpeechConsentGranted: granted };
@@ -120,6 +129,7 @@ describe('VoiceCommandService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    stubMicrophone();
     // The default engine mock declares no isLocal, so it counts as a cloud engine and needs the stored consent.
     storeConsent(true);
     service = new VoiceCommandService({ enableVoiceWasm: false });
@@ -695,11 +705,7 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    Object.defineProperty(global.navigator, 'mediaDevices', {
-      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }) },
-      writable: true,
-      configurable: true,
-    });
+    stubMicrophone();
     service = new VoiceCommandService({ enableVoiceWasm: false });
     service.setDispatch(vi.fn() as never, vi.fn() as never);
   });
@@ -957,6 +963,29 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     const fresh = buildsNext(sttEngine());
     await service.startListening();
     expect(fresh.start).toHaveBeenCalledTimes(1);
+    expect(stale.start).not.toHaveBeenCalled();
+  });
+
+  it('a dispose while a changed engine choice is applied releases the engines built after it', async () => {
+    storeConsent(true);
+    const old = buildsNext(sttEngine());
+    await service.initialize();
+    let released: () => void = () => {};
+    old.dispose.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        released = resolve;
+      }),
+    );
+    service.updateConfig({ preferredSttEngine: 'whisper' });
+    const stale = buildsNext(sttEngine());
+
+    const run = service.startListening();
+    await vi.waitFor(() => expect(old.dispose).toHaveBeenCalled());
+    await service.dispose();
+    released();
+    await run;
+
+    expect(stale.dispose).toHaveBeenCalled();
     expect(stale.start).not.toHaveBeenCalled();
   });
 

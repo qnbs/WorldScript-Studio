@@ -169,19 +169,20 @@ export class VoiceCommandService {
    * QNBS-v3 (#1261): concurrent starts share it, so engines are never built twice or released while another start builds them.
    */
   private ensureEngines(): Promise<boolean> {
+    // Taken before the engine-choice change, so a dispose during that change also voids the engines built after it.
+    const lifecycle = this.lifecycle;
     this.engineSetup ??= this.applyEngineChoice()
-      .then(() => this.initialize())
+      .then(() => this.initialize(lifecycle))
       .finally(() => {
         this.engineSetup = null;
       });
     return this.engineSetup;
   }
 
-  async initialize(): Promise<boolean> {
+  async initialize(lifecycle = this.lifecycle): Promise<boolean> {
     if (this.isInitialized) return true;
     // A change from here on (even while the engines below are being built) is applied by the next start.
     this.engineChoiceChanged = false;
-    const lifecycle = this.lifecycle;
 
     try {
       await this.intentEngine.initialize();
