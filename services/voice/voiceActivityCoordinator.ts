@@ -16,6 +16,11 @@ const MIN_SPEECH_CHUNKS = 1;
 /** Max buffered duration in ms before forcing an STT flush to avoid unbounded memory use. */
 const MAX_BUFFER_MS = 15_000;
 
+/** Stops every track of a stream nobody will own, so the microphone is released at once. */
+function releaseStream(stream: MediaStream): void {
+  for (const track of stream.getTracks()) track.stop();
+}
+
 export class VoiceActivityCoordinator {
   private audioContext: AudioContext | null = null;
   private mediaStream: MediaStream | null = null;
@@ -34,6 +39,8 @@ export class VoiceActivityCoordinator {
   private flushing: Promise<void> = Promise.resolve();
   // QNBS-v3: engines are initialized once per coordinator lifetime, not per start() call
   private isEngineInitialized = false;
+  // QNBS-v3 (#1261): bumped by stop(), so a start it overtook never keeps a microphone stream nobody will release.
+  private generation = 0;
 
   constructor(
     private readonly vad: VadEngine,
@@ -47,15 +54,13 @@ export class VoiceActivityCoordinator {
     // QNBS-v3: guard prevents double-start which would open a second mic stream without closing the first
     if (this.running) return;
     this.running = true;
+    const generation = this.generation;
     try {
-      // Initialize engines once — WasmSttEngine keeps the 40 MB Whisper pipeline
-      // alive across sessions; re-calling initialize() would cause memory churn.
-      if (!this.isEngineInitialized) {
-        await this.vad.initialize();
-        await this.stt.initialize();
-        this.isEngineInitialized = true;
-      }
-      this.mediaStream = await this.setupAudioCapture();
+      const stream = await this.openCapture(generation);
+      if (!stream) return; // stopped while the engines loaded: the microphone never opened
+      // Checked after the last await: a stop that came in meanwhile found no stream to release.
+      if (generation !== this.generation) return releaseStream(stream);
+      this.mediaStream = stream;
       this.startFramePump(onResult, onError);
     } catch (err) {
       this.running = false;
@@ -65,6 +70,7 @@ export class VoiceActivityCoordinator {
   }
 
   async stop(): Promise<void> {
+    this.generation += 1;
     this.running = false;
     this.teardownAudioCapture();
     await this.flushing;
@@ -94,6 +100,19 @@ export class VoiceActivityCoordinator {
     } catch (err) {
       log.warn('stt.dispose() failed', { err });
     }
+  }
+
+  /** Loads the engines once and opens the microphone; null when a stop came in before the microphone was asked for. */
+  private async openCapture(generation: number): Promise<MediaStream | null> {
+    // Initialize engines once — WasmSttEngine keeps the 40 MB Whisper pipeline
+    // alive across sessions; re-calling initialize() would cause memory churn.
+    if (!this.isEngineInitialized) {
+      await this.vad.initialize();
+      await this.stt.initialize();
+      this.isEngineInitialized = true;
+    }
+    if (generation !== this.generation) return null;
+    return this.setupAudioCapture();
   }
 
   private async setupAudioCapture(): Promise<MediaStream> {

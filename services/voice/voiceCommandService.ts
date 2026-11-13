@@ -25,9 +25,10 @@ import type { VoiceFeedbackLevel } from '../../types';
 // QNBS-v3: B5 — eco-mode forces lightweight WebSpeech backend when battery is low
 import { ecoModeService } from '../ai/ecoModeService';
 import { logger } from '../logger';
+import { sttEngineUnderEco } from './engineChoice';
 import { FeedbackService } from './feedbackService';
 import { HybridIntentEngine } from './intentEngine';
-import { createSttEngine } from './sttEngine';
+import { ConsentRequiredError, createSttEngine } from './sttEngine';
 import { createTtsEngine } from './ttsEngine';
 import { createVadEngine } from './vadEngine';
 import { VoiceActivityCoordinator } from './voiceActivityCoordinator';
@@ -42,8 +43,20 @@ import type {
   WakeWordEngine,
 } from './voiceTypes';
 import { createWakeWordEngine } from './wakeWordEngine';
+import { ensureWebSpeechConsent } from './webSpeechConsent';
 
 export type GetStateFn = () => RootState;
+
+type BuiltEngines = [SttEngine | null, TtsEngine | null, VadEngine | null, WakeWordEngine | null];
+
+/** Config keys that decide which engines exist; changing one rebuilds the engines on the next start. */
+const ENGINE_CONFIG_KEYS = [
+  'preferredSttEngine',
+  'preferredTtsEngine',
+  'enableVoiceWasm',
+  // QNBS-v3 (#1261): turning cloud fallback off must replace a Web Speech engine chosen under it.
+  'allowCloudFallback',
+] as const;
 
 export interface VoiceServiceConfig {
   preferredSttEngine: 'auto' | 'whisper' | 'webSpeech';
@@ -74,6 +87,9 @@ export class VoiceCommandService {
 
   private coordinator: VoiceActivityCoordinator | null = null;
   private isInitialized = false;
+  /** Set when the engine choice changes; the next start applies it before it uses any engine. */
+  private engineChoiceChanged = false;
+  private engineSetup: Promise<boolean> | null = null;
   // QNBS-v3: C-P1 — single-flight guard against re-entrant startListening (rapid PTT / wake-word).
   private isStarting = false;
   private listeningTimer: ReturnType<typeof setTimeout> | null = null;
@@ -84,6 +100,12 @@ export class VoiceCommandService {
   private dictationStop: Promise<void> | null = null;
   /** Settles when a command-listening start finishes, so a dictation start can take over only afterwards. */
   private listeningStart: Promise<void> | null = null;
+  /** Bumped by every command-listening stop: a start still building engines or waiting for consent then never starts the engine. */
+  private listeningClaim = 0;
+  /** Why the last engine setup built no STT engine, so every start reports it instead of a generic message (#1261). */
+  private sttUnavailable: string | null = null;
+  /** Bumped by dispose(): an engine setup still running then releases what it built instead of publishing it. */
+  private lifecycle = 0;
   private eventListeners: VoiceEventListener[] = [];
 
   constructor(config: Partial<VoiceServiceConfig> = {}) {
@@ -142,8 +164,25 @@ export class VoiceCommandService {
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
-  async initialize(): Promise<boolean> {
+  /**
+   * The one engine-setup operation every start goes through: applies a changed engine choice, then initializes.
+   * QNBS-v3 (#1261): concurrent starts share it, so engines are never built twice or released while another start builds them.
+   */
+  private ensureEngines(): Promise<boolean> {
+    // Taken before the engine-choice change, so a dispose during that change also voids the engines built after it.
+    const lifecycle = this.lifecycle;
+    this.engineSetup ??= this.applyEngineChoice()
+      .then(() => this.initialize(lifecycle))
+      .finally(() => {
+        this.engineSetup = null;
+      });
+    return this.engineSetup;
+  }
+
+  async initialize(lifecycle = this.lifecycle): Promise<boolean> {
     if (this.isInitialized) return true;
+    // A change from here on (even while the engines below are being built) is applied by the next start.
+    this.engineChoiceChanged = false;
 
     try {
       await this.intentEngine.initialize();
@@ -158,21 +197,13 @@ export class VoiceCommandService {
       this.d(setMicrophonePermission('granted'));
 
       // Initialize engines in parallel
-      const [stt, tts, vad, wake] = await Promise.all([
+      const engines: BuiltEngines = await Promise.all([
         this.initStt(),
         this.initTts(),
         this.initVad(),
         this.initWakeWord(),
       ]);
-
-      this.sttEngine = stt;
-      this.ttsEngine = tts;
-      this.vadEngine = vad;
-      this.wakeWordEngine = wake;
-
-      if (tts) {
-        this.feedbackService.setTtsEngine(tts);
-      }
+      if (!(await this.adoptEngines(lifecycle, engines))) return false;
 
       this.isInitialized = true;
       logger.info('Voice Command Service initialized successfully');
@@ -184,21 +215,38 @@ export class VoiceCommandService {
     }
   }
 
+  /** Publishes freshly built engines; after a dispose that came in while they were built, releases them instead. */
+  private async adoptEngines(lifecycle: number, engines: BuiltEngines): Promise<boolean> {
+    // QNBS-v3 (#1261): the disposed service owns none of these, so publishing them would leak them and revive the service.
+    if (lifecycle !== this.lifecycle) {
+      await Promise.all(engines.map((engine) => engine?.dispose()));
+      return false;
+    }
+    [this.sttEngine, this.ttsEngine, this.vadEngine, this.wakeWordEngine] = engines;
+    if (engines[1]) this.feedbackService.setTtsEngine(engines[1]);
+    return true;
+  }
+
   private async initStt(): Promise<SttEngine | null> {
     try {
       this.d(setSttStatus('loading'));
       // QNBS-v3: B5 — eco-mode overrides STT to lightweight WebSpeech to save power
       const eco = ecoModeService.isEcoMode();
       const engine = await createSttEngine({
-        preferredEngine: eco ? 'webSpeech' : this.config.preferredSttEngine,
-        enableVoiceWasm: this.config.enableVoiceWasm || eco,
+        preferredEngine: sttEngineUnderEco(this.config.preferredSttEngine, eco),
+        // QNBS-v3 (#1261): Eco Mode never turns the local-model opt-in on; it only lowers an auto choice to Web Speech.
+        enableVoiceWasm: this.config.enableVoiceWasm,
+        allowCloudFallback: this.config.allowCloudFallback,
       });
       this.d(setActiveSttEngine(engine.id));
       this.d(setSttStatus('ready'));
+      this.sttUnavailable = null;
       return engine;
     } catch (err) {
       logger.warn('STT initialization failed:', err);
       this.d(setSttStatus('error'));
+      // e.g. LOCAL_STT_UNAVAILABLE_MESSAGE: a local-only choice with Whisper off says why, and how to recover.
+      this.sttUnavailable = err instanceof Error ? err.message : null;
       return null;
     }
   }
@@ -271,22 +319,15 @@ export class VoiceCommandService {
     //          stream / orphan a coordinator. Ignore while starting or already listening.
     if (this.isStarting || this.coordinator || this.listeningTimer) return;
     this.isStarting = true;
+    // QNBS-v3 (#1261): taken before any await, so a stop or release during the engine setup or the consent dialog ends this start.
+    const claim = this.listeningClaim;
     let settleStart!: () => void;
     this.listeningStart = new Promise<void>((resolve) => {
       settleStart = resolve;
     });
     try {
-      if (!this.isInitialized) {
-        const ok = await this.initialize();
-        if (!ok) {
-          throw new Error('Voice service could not be initialized');
-        }
-      }
-
-      if (!this.sttEngine) {
-        throw new Error('No STT engine available');
-      }
-      await this.endDictationBeforeListening();
+      const stt = await this.prepareListening(claim);
+      if (!stt || claim !== this.listeningClaim) return; // stopped or released while it was preparing
 
       this.d(setVoiceMode('listening'));
       this.d(setVoiceError(null));
@@ -294,23 +335,30 @@ export class VoiceCommandService {
 
       this.emit({ type: 'listening-started', timestamp: Date.now() });
 
+      let capture: { stop(): Promise<void> } = stt;
       // QNBS-v3: Route through VoiceActivityCoordinator when Whisper WASM is active —
       // feeds PCM frames to the VAD and triggers STT on detected speech boundaries.
-      if (this.config.enableVoiceWasm && this.sttEngine.id === 'whisper' && this.vadEngine) {
+      if (this.config.enableVoiceWasm && stt.id === 'whisper' && this.vadEngine) {
         // QNBS-v3: C-P1 — the single-flight guard above already guarantees no active coordinator,
         //          so no pre-dispose is needed here (it would be unreachable dead code).
-        this.coordinator = new VoiceActivityCoordinator(this.vadEngine, this.sttEngine);
+        this.coordinator = new VoiceActivityCoordinator(this.vadEngine, stt);
+        capture = this.coordinator;
         await this.coordinator.start(
           (result) => this.handleSttResult(result),
           (error) => this.handleSttError(error),
         );
       } else {
-        await this.sttEngine.start(
+        await stt.start(
           (result) => this.handleSttResult(result),
           (error) => this.handleSttError(error),
         );
       }
 
+      // A stop while the engine started may have run before it was running: end it here, and leave no timer behind.
+      if (claim !== this.listeningClaim) {
+        await capture.stop();
+        return;
+      }
       // Auto-stop after timeout
       this.listeningTimer = setTimeout(() => {
         void this.stopCommandListening();
@@ -347,9 +395,10 @@ export class VoiceCommandService {
     this.isDictating = true;
     const claim = ++this.dictationClaim;
     try {
-      const engine = await this.dictationEngine();
+      // Command listening ends first, so the engine setup never replaces engines a running session uses.
       await this.endListeningBeforeDictation();
-      if (claim !== this.dictationClaim) return; // stopped while preparing
+      const engine = await this.dictationEngine(claim);
+      if (!engine || claim !== this.dictationClaim) return; // stopped while preparing
       // QNBS-v3 (#556): each dictation starts from an empty transcript, so a restart never re-inserts the last session.
       this.d(setVoiceTranscript(''));
       this.d(setDictationActive(true));
@@ -362,13 +411,44 @@ export class VoiceCommandService {
     }
   }
 
-  private async dictationEngine(): Promise<SttEngine> {
-    if (!this.isInitialized) {
-      const ok = await this.initialize();
-      if (!ok) throw new Error('Voice service could not be initialized');
-    }
-    if (!this.sttEngine) throw new Error('No STT engine available');
-    return this.sttEngine;
+  private async dictationEngine(claim: number): Promise<SttEngine | null> {
+    // QNBS-v3 (#1261): the shared engine setup applies a changed engine choice before dictation uses an engine.
+    const ready = await this.ensureEngines();
+    if (claim !== this.dictationClaim) return null; // stopped or released during the setup: never ask for consent
+    if (!ready) throw new Error('Voice service could not be initialized');
+    return this.admitStt();
+  }
+
+  /** The engine a listening start may use, or null when a stop or release came in while it was preparing. */
+  private async prepareListening(claim: number): Promise<SttEngine | null> {
+    // A running dictation ends before the engine setup may replace the engines it uses.
+    await this.endDictationBeforeListening();
+    const ready = await this.ensureEngines();
+    if (claim !== this.listeningClaim) return null; // stopped or released during the setup: never ask for consent
+    if (!ready) throw new Error('Voice service could not be initialized');
+    const stt = await this.admitStt();
+    return claim === this.listeningClaim ? stt : null;
+  }
+
+  /**
+   * The engine a start may use. An engine not declared local sends the audio off-device, so it starts only with the
+   * stored consent, read right before the start; the consent dialog asks when none is stored. A stop or release while
+   * the dialog is open bumps the caller's claim, so that start then ends without the engine.
+   */
+  private async admitStt(): Promise<SttEngine> {
+    const engine = this.sttEngine;
+    if (!engine)
+      return this.refuseStart(new Error(this.sttUnavailable ?? 'No STT engine available'));
+    // QNBS-v3 (#1261): fail closed, only an engine that declares itself local starts without the stored Web Speech consent.
+    if (engine.isLocal !== true && !(await ensureWebSpeechConsent()))
+      return this.refuseStart(new ConsentRequiredError());
+    return engine;
+  }
+
+  /** Reports why a start cannot use an engine (listening and dictation alike), then fails that start. */
+  private refuseStart(reason: Error): never {
+    this.d(setVoiceError(reason.message));
+    throw reason;
   }
 
   /** Dictation takes the engine over from command listening; otherwise speech would keep going to commands. */
@@ -399,11 +479,21 @@ export class VoiceCommandService {
 
   async stopListening(): Promise<void> {
     // QNBS-v3 (#556): the Voice Control microphone button also stops dictation through here; route it so the dictation guard clears.
-    if (this.isDictating) return this.stopDictation();
+    if (this.isDictating) {
+      // A listening start that is still waiting for this dictation to end is cancelled by the same stop (#1261).
+      this.listeningClaim += 1;
+      return this.stopDictation();
+    }
     await this.stopCommandListening();
   }
 
   private async stopCommandListening(): Promise<void> {
+    this.listeningClaim += 1;
+    await this.endCommandListening();
+  }
+
+  /** Ends a running command-listening session; unlike a stop it leaves a start that is still preparing alone. */
+  private async endCommandListening(): Promise<void> {
     if (this.listeningTimer) {
       clearTimeout(this.listeningTimer);
       this.listeningTimer = null;
@@ -583,14 +673,36 @@ export class VoiceCommandService {
   // ── Configuration ──────────────────────────────────────────────────────────
 
   updateConfig(config: Partial<VoiceServiceConfig>): void {
+    const engineChanged = ENGINE_CONFIG_KEYS.some(
+      (key) => key in config && config[key] !== this.config[key],
+    );
     this.config = { ...this.config, ...config };
     this.feedbackService.setFeedbackLevel(this.config.feedbackLevel);
     this.feedbackService.setMuted(this.config.ttsMuted);
+    // QNBS-v3 (#1261): never torn down from here (a start may be using the engines); the next start applies the change itself.
+    if (engineChanged) this.engineChoiceChanged = true;
+  }
+
+  /** Applies a changed engine choice inside a start, before it uses any engine: ends sessions, drops the old engines. */
+  private async applyEngineChoice(): Promise<void> {
+    if (!this.engineChoiceChanged || !this.isInitialized) return;
+    const engines = [this.sttEngine, this.ttsEngine, this.vadEngine, this.wakeWordEngine];
+    this.isInitialized = false;
+    try {
+      // Ends command listening and waits for a draining dictation; never stops the start that is calling this.
+      await this.endCommandListening();
+      await this.dictationStop;
+      this.cancelSpeech();
+      await Promise.all(engines.map((engine) => engine?.dispose()));
+    } catch (error) {
+      logger.warn('Releasing the previous voice engines failed', error);
+    }
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
 
   async dispose(): Promise<void> {
+    this.lifecycle += 1;
     await this.stopListening();
     this.isDictating = false;
     this.cancelSpeech();
@@ -625,7 +737,7 @@ export class VoiceCommandService {
   // ── Voice WASM Model Download ───────────────────────────────────────────────
 
   /**
-   * QNBS-v3: P1-2 — Download WASM voice models (Whisper STT + Kokoro TTS).
+   * QNBS-v3: P1-2 — Download the WASM voice model (Whisper STT; Kokoro TTS rejects with its unavailability reason).
    * Called from VoiceModelDownloadModal when enableVoiceWasm is toggled.
    */
   // QNBS-v3: P1-2 / CodeAnt P2-3 — signal allows VoiceModelDownloadModal cancel to abort mid-download
@@ -639,7 +751,16 @@ export class VoiceCommandService {
       return;
     }
 
-    const modelId = modelType === 'stt' ? 'Xenova/whisper-tiny.en' : 'onnxruntime-community/kokoro';
+    // QNBS-v3 (#556): never fetch a TTS model Kokoro cannot load; the old id 'onnxruntime-community/kokoro' returns HTTP 401.
+    if (modelType === 'tts') {
+      const { KOKORO_UNAVAILABLE_REASON } = await import('./kokoroTtsEngine');
+      this.d(
+        settingsActions.setVoiceSettings({ voiceWasmDownloadError: KOKORO_UNAVAILABLE_REASON }),
+      );
+      throw new Error(KOKORO_UNAVAILABLE_REASON);
+    }
+
+    const modelId = 'Xenova/whisper-tiny.en';
 
     // QNBS-v3: Trigger model download via transformers pipeline warm-up.
     // This forces the model to be fetched and cached in browser storage.
@@ -669,7 +790,7 @@ export class VoiceCommandService {
       );
 
       // Create pipeline to trigger model download
-      const task = modelType === 'stt' ? 'automatic-speech-recognition' : 'text-to-speech';
+      const task = 'automatic-speech-recognition';
       const createPipeline = pipeline as (
         task: string,
         model: string,

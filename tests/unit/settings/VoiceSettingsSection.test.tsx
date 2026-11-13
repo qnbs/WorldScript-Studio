@@ -5,7 +5,7 @@
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -16,6 +16,9 @@ const { mockHandleSettingChange } = vi.hoisted(() => ({
 }));
 
 let mockVoiceEnabled = false;
+let mockEnableVoiceWasm = false;
+let mockSttEngine = 'auto';
+let mockTtsEngine = 'auto';
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => ({
@@ -32,8 +35,8 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
         // QNBS-v3: add all fields accessed by VoiceSettingsSection to avoid toFixed/undefined errors
         speechRate: 1.0,
         speechVolume: 0.8,
-        sttEngine: 'auto',
-        ttsEngine: 'auto',
+        sttEngine: mockSttEngine,
+        ttsEngine: mockTtsEngine,
         wakeWordPhrase: 'hey story',
         wasmModelsReady: false,
         webSpeechConsentGranted: false,
@@ -43,7 +46,7 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
     },
     // QNBS-v3: featureFlags needed since VoiceSettingsSection gates WASM section by enableVoiceWasm
     featureFlags: {
-      enableVoiceWasm: false,
+      enableVoiceWasm: mockEnableVoiceWasm,
     },
     handleSettingChange: mockHandleSettingChange,
     handleResetSettings: vi.fn(),
@@ -116,6 +119,9 @@ describe('VoiceSettingsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockVoiceEnabled = false;
+    mockEnableVoiceWasm = false;
+    mockSttEngine = 'auto';
+    mockTtsEngine = 'auto';
   });
 
   it('renders the voice settings heading', () => {
@@ -189,5 +195,102 @@ describe('VoiceSettingsSection', () => {
       'voice',
       expect.objectContaining({ activationMode: 'pushToTalk' }),
     );
+  });
+});
+
+// #1261/#556: "Local WASM model (offline)" stored 'wasm', which no engine has; STT then fell back to Web Speech (cloud).
+describe('VoiceSettingsSection engine choice', () => {
+  afterEach(() => {
+    mockEnableVoiceWasm = false;
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockVoiceEnabled = true;
+    mockSttEngine = 'auto';
+    mockTtsEngine = 'auto';
+  });
+
+  it('the local speech-recognition option stores whisper', async () => {
+    mockEnableVoiceWasm = true;
+    const user = userEvent.setup();
+    render(<VoiceSettingsSection />);
+    await user.selectOptions(
+      screen.getByLabelText('settings.voice.sttEngine'),
+      'settings.voice.engine.wasm',
+    );
+    expect(mockHandleSettingChange).toHaveBeenLastCalledWith(
+      'voice',
+      expect.objectContaining({ sttEngine: 'whisper' }),
+    );
+  });
+
+  it('a text-to-speech choice is stored as its engine id', async () => {
+    const user = userEvent.setup();
+    render(<VoiceSettingsSection />);
+    await user.selectOptions(
+      screen.getByLabelText('settings.voice.ttsEngine'),
+      'settings.voice.engine.webSpeech',
+    );
+    expect(mockHandleSettingChange).toHaveBeenLastCalledWith(
+      'voice',
+      expect.objectContaining({ ttsEngine: 'webSpeech' }),
+    );
+  });
+
+  // Kokoro cannot run in this build: its option is visible but cannot be picked, instead of silently becoming Web Speech.
+  // #1261: without the local-model flag the factory excludes Whisper, so the offline choice could not be honoured.
+  it.each([
+    [false, true],
+    [true, false],
+  ])(
+    'with the local-model flag %s, the local speech-recognition option is disabled: %s',
+    (flag, disabled) => {
+      mockEnableVoiceWasm = flag;
+      render(<VoiceSettingsSection />);
+      const options = Array.from(
+        (screen.getByLabelText('settings.voice.sttEngine') as HTMLSelectElement).options,
+      );
+      expect(options.find((option) => option.value === 'whisper')?.disabled).toBe(disabled);
+    },
+  );
+
+  it('shows the local text-to-speech option as kokoro, disabled while Kokoro cannot run', () => {
+    render(<VoiceSettingsSection />);
+    const ttsOptions = Array.from(
+      (screen.getByLabelText('settings.voice.ttsEngine') as HTMLSelectElement).options,
+    );
+    const kokoro = ttsOptions.find((candidate) => candidate.value === 'kokoro');
+    expect(kokoro?.textContent).toBe('settings.voice.engine.wasm');
+    expect(kokoro?.disabled).toBe(true);
+  });
+
+  it('a stored legacy wasm choice still shows as the local option', () => {
+    mockSttEngine = 'wasm';
+    mockTtsEngine = 'wasm';
+    render(<VoiceSettingsSection />);
+    expect(screen.getByLabelText('settings.voice.sttEngine')).toHaveValue('whisper');
+    expect(screen.getByLabelText('settings.voice.ttsEngine')).toHaveValue('kokoro');
+  });
+});
+
+// #556/#1264: Kokoro cannot run in this build, so offering its download would only end in an (English) error.
+describe('VoiceSettingsSection local model downloads', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockVoiceEnabled = true;
+    mockEnableVoiceWasm = true;
+  });
+
+  afterEach(() => {
+    mockEnableVoiceWasm = false;
+  });
+
+  it('offers the Whisper download but not the Kokoro download', () => {
+    render(<VoiceSettingsSection />);
+    expect(
+      screen.getByRole('button', { name: 'settings.voice.downloadSttModel' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'settings.voice.downloadTtsModel' })).toBeNull();
   });
 });

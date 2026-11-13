@@ -110,13 +110,14 @@ export async function createTtsEngine(options: TtsEngineFactoryOptions = {}): Pr
   // QNBS-v3: Try Kokoro first when WASM voice is enabled and preference is auto/kokoro.
   if (enableVoiceWasm && (preferredEngine === 'auto' || preferredEngine === 'kokoro')) {
     try {
-      const { KokoroTtsEngine } = await import('./kokoroTtsEngine');
+      const { KokoroTtsEngine, KOKORO_UNAVAILABLE_REASON } = await import('./kokoroTtsEngine');
       const kokoro = new KokoroTtsEngine();
       if (await kokoro.isAvailable()) {
         await kokoro.initialize();
         logger.info(`TTS engine selected: ${kokoro.name}`);
         return kokoro;
       }
+      logger.info(`[createTtsEngine] ${KOKORO_UNAVAILABLE_REASON}`);
     } catch (err) {
       logger.warn('[createTtsEngine] Kokoro unavailable, falling back:', err);
     }

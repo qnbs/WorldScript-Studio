@@ -21,7 +21,8 @@ interface VoiceModelDownloadModalProps {
 // Model sizes in MB for progress estimation
 const MODEL_SIZES = {
   whisper: 42,
-  kokoro: 15,
+  // Measured: onnx-community/Kokoro-82M-v1.0-ONNX model_quantized.onnx (q8) is 92.4 MB.
+  kokoro: 92,
 } as const;
 
 export const VoiceModelDownloadModal = React.memo(function VoiceModelDownloadModal({

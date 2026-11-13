@@ -130,6 +130,7 @@ vi.mock('../../../services/logger', () => ({
 // ---------------------------------------------------------------------------
 
 import { useVoice } from '../../../hooks/useVoice';
+import { ecoModeService } from '../../../services/ai/ecoModeService';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -254,6 +255,61 @@ describe('useVoice', () => {
   it('calls updateConfig on mount with voice settings', () => {
     renderHook(() => useVoice());
     expect(mockUpdateConfig).toHaveBeenCalled();
+  });
+
+  // #1261/#556: a stored legacy 'wasm' reaches the service as the local engine, not as an id no factory knows.
+  it('passes a stored legacy wasm choice to the service as whisper and kokoro', () => {
+    mockVoiceSettings.sttEngine = 'wasm';
+    mockVoiceSettings.ttsEngine = 'wasm';
+    try {
+      renderHook(() => useVoice());
+      expect(mockUpdateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ preferredSttEngine: 'whisper', preferredTtsEngine: 'kokoro' }),
+      );
+    } finally {
+      mockVoiceSettings.sttEngine = 'webSpeech';
+      mockVoiceSettings.ttsEngine = 'webSpeech';
+    }
+  });
+
+  // #1261: Eco Mode lowers only an `auto` recognition choice to Web Speech; an explicit on-device choice stays on-device.
+  it('under Eco Mode an auto recognition choice and the speech output use Web Speech', () => {
+    mockVoiceSettings.sttEngine = 'auto';
+    mockVoiceSettings.ttsEngine = 'kokoro';
+    ecoModeService.setEcoModeExplicit(true);
+    try {
+      renderHook(() => useVoice());
+      expect(mockUpdateConfig).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          preferredSttEngine: 'webSpeech',
+          preferredTtsEngine: 'webSpeech',
+        }),
+      );
+    } finally {
+      ecoModeService.clearExplicitEcoMode();
+      mockVoiceSettings.sttEngine = 'webSpeech';
+      mockVoiceSettings.ttsEngine = 'webSpeech';
+    }
+  });
+
+  it('re-applies the engines when Eco Mode turns on and off, keeping an explicit on-device choice', () => {
+    mockVoiceSettings.sttEngine = 'whisper';
+    mockVoiceSettings.ttsEngine = 'kokoro';
+    try {
+      renderHook(() => useVoice());
+      act(() => ecoModeService.setEcoModeExplicit(true));
+      expect(mockUpdateConfig).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredSttEngine: 'whisper', preferredTtsEngine: 'webSpeech' }),
+      );
+      act(() => ecoModeService.clearExplicitEcoMode());
+      expect(mockUpdateConfig).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredSttEngine: 'whisper', preferredTtsEngine: 'kokoro' }),
+      );
+    } finally {
+      ecoModeService.clearExplicitEcoMode();
+      mockVoiceSettings.sttEngine = 'webSpeech';
+      mockVoiceSettings.ttsEngine = 'webSpeech';
+    }
   });
 
   it('calls setDispatch on mount', () => {

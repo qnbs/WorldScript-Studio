@@ -3,12 +3,12 @@
  * QNBS-v3: P1 tests for uncovered code paths.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies
 vi.mock('../../../../services/ai/ecoModeService', () => ({
   ecoModeService: {
-    isEcoMode: () => false,
+    isEcoMode: vi.fn(() => false),
   },
 }));
 
@@ -32,7 +32,11 @@ vi.mock('../../../../services/voice/intentEngine', () => ({
   },
 }));
 
-vi.mock('../../../../services/voice/sttEngine', () => ({
+vi.mock('../../../../services/voice/sttEngine', async (importOriginal) => ({
+  // The gate throws the real refusal, so its message is the one users see.
+  ConsentRequiredError: (
+    await importOriginal<typeof import('../../../../services/voice/sttEngine')>()
+  ).ConsentRequiredError,
   createSttEngine: vi.fn().mockResolvedValue({
     id: 'webspeech',
     start: vi.fn().mockResolvedValue(undefined),
@@ -95,14 +99,44 @@ vi.mock('@huggingface/transformers', () => ({
   env: { backends: { onnx: { wasm: {} } } },
 }));
 
+import { appStoreRef } from '../../../../app/storeRef';
+import { setVoiceError } from '../../../../features/voice/voiceSlice';
+import { ConsentRequiredError, createSttEngine } from '../../../../services/voice/sttEngine';
 import { VoiceCommandService } from '../../../../services/voice/voiceCommandService';
+import { registerWebSpeechConsentPrompt } from '../../../../services/voice/webSpeechConsent';
+
+/** initialize() asks for the microphone; each case gets its own stub instead of relying on one an earlier case left. */
+function stubMicrophone() {
+  Object.defineProperty(global.navigator, 'mediaDevices', {
+    value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }) },
+    writable: true,
+    configurable: true,
+  });
+}
+
+/** A store reference that holds only the Web Speech consent; returns the voice settings so a test can change it. */
+function storeConsent(granted: boolean) {
+  const voice = { webSpeechConsentGranted: granted };
+  appStoreRef.current = {
+    getState: () => ({ settings: { voice } }),
+    dispatch: vi.fn(),
+  } as unknown as typeof appStoreRef.current;
+  return voice;
+}
 
 describe('VoiceCommandService', () => {
   let service: VoiceCommandService;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    stubMicrophone();
+    // The default engine mock declares no isLocal, so it counts as a cloud engine and needs the stored consent.
+    storeConsent(true);
     service = new VoiceCommandService({ enableVoiceWasm: false });
+  });
+
+  afterEach(() => {
+    appStoreRef.current = null;
   });
 
   describe('addEventListener', () => {
@@ -153,6 +187,110 @@ describe('VoiceCommandService', () => {
         'Voice service could not be initialized',
       );
       failingService.initialize = originalInitialize;
+    });
+  });
+
+  // #1261: after initialization a changed engine choice used to be ignored until reload.
+  describe('engine choice changes', () => {
+    // Engines are never torn down from updateConfig() (a start may be using them); the next start applies the change.
+    it('a changed engine choice is applied by the next start, not from outside', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      await service.initialize();
+      const engine = await vi.mocked(createSttEngine).mock.results[0]?.value;
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      // Let any background teardown run: there must be none.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(engine.dispose).not.toHaveBeenCalled();
+      await service.startDictation();
+      expect(engine.dispose).toHaveBeenCalled();
+      // Applying the change must not cancel the dictation start that applied it.
+      expect(engine.start).toHaveBeenCalled();
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+      expect(createSttEngine).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredEngine: 'whisper' }),
+      );
+    });
+
+    it('a change while the engines are being built is applied by the next start', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      const initializing = service.initialize();
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      await initializing;
+      await service.startDictation();
+      expect(createSttEngine).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredEngine: 'whisper' }),
+      );
+    });
+
+    // #1261: a Web Speech engine chosen because cloud fallback was allowed must not survive turning that off.
+    it('turning cloud fallback off rebuilds the engines at the next start', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      service.updateConfig({ preferredSttEngine: 'whisper', allowCloudFallback: true });
+      await service.initialize();
+      service.updateConfig({ allowCloudFallback: false });
+      await service.startDictation();
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+      expect(createSttEngine).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preferredEngine: 'whisper', allowCloudFallback: false }),
+      );
+    });
+
+    it('concurrent starts after an engine change build the new engines once', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      await service.initialize();
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      await Promise.all([service.startListening(), service.startDictation()]);
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+      await service.stopListening();
+    });
+
+    it('a failing release of the old engines is logged and the start still builds the new ones', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      const { logger } = await import('../../../../services/logger');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      await service.initialize();
+      const engine = await vi.mocked(createSttEngine).mock.results[0]?.value;
+      vi.mocked(engine.dispose).mockRejectedValueOnce(new Error('dispose failed'));
+      service.updateConfig({ preferredSttEngine: 'whisper' });
+      await service.startDictation();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Releasing the previous voice engines failed',
+        expect.objectContaining({ message: 'dispose failed' }),
+      );
+      expect(createSttEngine).toHaveBeenCalledTimes(2);
+    });
+
+    it('an unrelated config change keeps the engines', async () => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      service.setDispatch(vi.fn() as never, vi.fn() as never);
+      await service.initialize();
+      service.updateConfig({ speechRate: 1.2 });
+      await service.startDictation();
+      expect(createSttEngine).toHaveBeenCalledTimes(1);
+    });
+
+    // #1261: Eco Mode switched even an explicit on-device choice to Web Speech, which can send audio off-device.
+    it.each([
+      ['whisper', 'whisper'],
+      ['auto', 'webSpeech'],
+    ] as const)('under Eco Mode a %s choice builds %s', async (choice, built) => {
+      const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+      const { ecoModeService } = await import('../../../../services/ai/ecoModeService');
+      vi.mocked(ecoModeService.isEcoMode).mockReturnValue(true);
+      try {
+        service.updateConfig({ preferredSttEngine: choice });
+        await service.initialize();
+        // ...and Eco Mode never turns the local-model opt-in on (the service is built with it off).
+        expect(createSttEngine).toHaveBeenLastCalledWith(
+          expect.objectContaining({ preferredEngine: built, enableVoiceWasm: false }),
+        );
+      } finally {
+        vi.mocked(ecoModeService.isEcoMode).mockReturnValue(false);
+      }
     });
   });
 
@@ -553,5 +691,344 @@ describe('VoiceCommandService', () => {
       expect(errorCall?.payload).toHaveProperty('wasmModelDownloadTotalBytes');
       expect(errorCall?.payload['wasmModelDownloadTotalBytes']).toBeUndefined();
     });
+  });
+});
+
+// #1261: the Voice Control panel started Web Speech, which sends audio to the browser vendor, without the stored consent.
+describe('VoiceCommandService Web Speech consent (#1261)', () => {
+  type Kind = 'listening' | 'dictation';
+  const start = (service: VoiceCommandService, kind: Kind) =>
+    kind === 'listening' ? service.startListening() : service.startDictation();
+  const refused = { name: 'ConsentRequiredError' };
+  let service: VoiceCommandService;
+  let unregister = () => {};
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stubMicrophone();
+    service = new VoiceCommandService({ enableVoiceWasm: false });
+    service.setDispatch(vi.fn() as never, vi.fn() as never);
+  });
+
+  afterEach(async () => {
+    // A successful listening start arms the 8-second auto-stop timer; dispose clears it so no case outlives itself.
+    await service.dispose();
+    unregister();
+    unregister = () => {};
+    appStoreRef.current = null;
+  });
+
+  /** An STT engine stand-in; Web Speech declares itself not local. */
+  function sttEngine(isLocal = false) {
+    return {
+      id: isLocal ? 'whisper' : 'webSpeech',
+      name: isLocal ? 'Whisper' : 'Web Speech API',
+      isLocal,
+      isAvailable: vi.fn().mockResolvedValue(true),
+      initialize: vi.fn().mockResolvedValue(undefined),
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  /** Makes `engine` the next one the service builds. */
+  function buildsNext(engine: ReturnType<typeof sttEngine>) {
+    vi.mocked(createSttEngine).mockResolvedValueOnce(engine as never);
+    return engine;
+  }
+
+  /** A consent dialog that answers `answer`; a grant stores the consent, as VoicePrivacyConsentModal does. Null mounts none. */
+  function dialog(
+    voice: { webSpeechConsentGranted: boolean },
+    answer: boolean | Promise<boolean> | null,
+  ) {
+    const ask = vi.fn(async () => {
+      const granted = await answer;
+      if (granted) voice.webSpeechConsentGranted = true;
+      return granted === true;
+    });
+    if (answer !== null) unregister = registerWebSpeechConsentPrompt(ask);
+    return ask;
+  }
+
+  // Only a cloud start without stored consent asks; `outcome` is how the start settles.
+  const cases = [
+    {
+      when: 'no consent is stored and no dialog can ask',
+      stored: false,
+      answer: null,
+      isLocal: false,
+      asks: 0,
+      starts: 0,
+    },
+    {
+      when: 'the consent dialog is declined',
+      stored: false,
+      answer: false,
+      isLocal: false,
+      asks: 1,
+      starts: 0,
+    },
+    {
+      when: 'the consent dialog is granted',
+      stored: false,
+      answer: true,
+      isLocal: false,
+      asks: 1,
+      starts: 1,
+    },
+    {
+      when: 'the consent is stored',
+      stored: true,
+      answer: false,
+      isLocal: false,
+      asks: 0,
+      starts: 1,
+    },
+    {
+      when: 'the engine is local',
+      stored: false,
+      answer: false,
+      isLocal: true,
+      asks: 0,
+      starts: 1,
+    },
+  ] as const;
+  it.each(
+    (['listening', 'dictation'] as const).flatMap((kind) => cases.map((c) => ({ kind, ...c }))),
+  )(
+    '$kind starts the engine only with consent: $when',
+    async ({ kind, stored, answer, isLocal, asks, starts }) => {
+      const voice = storeConsent(stored);
+      const engine = buildsNext(sttEngine(isLocal));
+      const ask = dialog(voice, answer);
+
+      const outcome = await start(service, kind).then(
+        () => 'started',
+        (error: Error) => error.name,
+      );
+
+      expect(outcome).toBe(starts ? 'started' : 'ConsentRequiredError');
+      expect(engine.start).toHaveBeenCalledTimes(starts);
+      expect(ask).toHaveBeenCalledTimes(asks);
+      const reported = vi
+        .mocked(setVoiceError)
+        .mock.calls.some(([message]) => message === new ConsentRequiredError().message);
+      expect(reported).toBe(!starts);
+    },
+  );
+
+  it.each(['listening', 'dictation'] as const)(
+    '%s: a consent revoked while the engines are built stops the start that waited for them',
+    async (kind) => {
+      const voice = storeConsent(true);
+      const engine = sttEngine();
+      let build: (built: unknown) => void = () => {};
+      vi.mocked(createSttEngine).mockReturnValueOnce(
+        new Promise((resolve) => {
+          build = resolve;
+        }) as never,
+      );
+
+      const run = start(service, kind);
+      await vi.waitFor(() => expect(createSttEngine).toHaveBeenCalled());
+      voice.webSpeechConsentGranted = false;
+      build(engine);
+
+      await expect(run).rejects.toMatchObject(refused);
+      expect(engine.start).not.toHaveBeenCalled();
+    },
+  );
+
+  it('a revoked consent refuses the next start on the engine built under it', async () => {
+    const voice = storeConsent(true);
+    const engine = buildsNext(sttEngine());
+    await service.startDictation();
+    await service.stopDictation();
+
+    voice.webSpeechConsentGranted = false;
+    await expect(service.startListening()).rejects.toMatchObject(refused);
+
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(createSttEngine).toHaveBeenCalledTimes(1);
+  });
+
+  /** Holds the next start in its engine setup or in the consent dialog until `resume()`, which lets it go on with consent. */
+  function pauseIn(
+    during: 'engine setup' | 'consent dialog',
+    engine: ReturnType<typeof sttEngine>,
+  ) {
+    let resume: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const voice = storeConsent(false);
+    if (during === 'engine setup') {
+      // No consent is stored and the dialog would grant: a start stopped here must not even ask.
+      const ask = dialog(voice, true);
+      vi.mocked(createSttEngine).mockReturnValueOnce(held.then(() => engine) as never);
+      return { resume, ask, asks: 0, reached: () => expect(createSttEngine).toHaveBeenCalled() };
+    }
+    const ask = dialog(
+      voice,
+      held.then(() => true),
+    );
+    buildsNext(engine);
+    return { resume, ask, asks: 1, reached: () => expect(ask).toHaveBeenCalled() };
+  }
+
+  const stops = {
+    stop: (s: VoiceCommandService, kind: Kind) =>
+      kind === 'listening' ? s.stopListening() : s.stopDictation(),
+    dispose: (s: VoiceCommandService) => s.dispose(),
+  };
+  it.each(
+    (['listening', 'dictation'] as const).flatMap((kind) =>
+      (['stop', 'dispose'] as const).flatMap((end) =>
+        (['engine setup', 'consent dialog'] as const).map((during) => ({ kind, end, during })),
+      ),
+    ),
+  )(
+    '$kind: a $end during the $during ends the start without the engine',
+    async ({ kind, end, during }) => {
+      const engine = sttEngine();
+      const pause = pauseIn(during, engine);
+
+      const run = start(service, kind);
+      await vi.waitFor(pause.reached);
+      await stops[end](service, kind);
+      pause.resume();
+
+      await run;
+      expect(engine.start).not.toHaveBeenCalled();
+      expect(pause.ask).toHaveBeenCalledTimes(pause.asks);
+    },
+  );
+
+  // #1261: the setup's own reason (e.g. Whisper off and no cloud fallback) used to become "No STT engine available".
+  it.each(['listening', 'dictation'] as const)(
+    '%s reports why the engine setup built no STT engine, at every start',
+    async (kind) => {
+      storeConsent(false);
+      const why = 'Local speech recognition is not available, and cloud fallback is turned off.';
+      vi.mocked(createSttEngine).mockRejectedValueOnce(new Error(why));
+
+      await expect(start(service, kind)).rejects.toThrow(why);
+      await expect(start(service, kind)).rejects.toThrow(why);
+
+      expect(createSttEngine).toHaveBeenCalledTimes(1);
+      expect(setVoiceError).toHaveBeenCalledWith(why);
+    },
+  );
+
+  it('a stop right after the listening start finished preparing still ends it without the engine', async () => {
+    storeConsent(true);
+    const engine = buildsNext(sttEngine());
+    const internals = service as unknown as {
+      prepareListening: (claim: number) => Promise<unknown>;
+    };
+    const prepare = internals.prepareListening.bind(service);
+    // The stop lands in the gap between the preparation's last check and the start's continuation.
+    vi.spyOn(internals, 'prepareListening').mockImplementationOnce(async (claim) => {
+      const stt = await prepare(claim);
+      await service.stopListening();
+      return stt;
+    });
+
+    await service.startListening();
+
+    expect(engine.start).not.toHaveBeenCalled();
+  });
+
+  it('a dispose while the engines are built releases them instead of publishing them', async () => {
+    storeConsent(true);
+    const stale = sttEngine();
+    let build: () => void = () => {};
+    vi.mocked(createSttEngine).mockReturnValueOnce(
+      new Promise((resolve) => {
+        build = () => resolve(stale);
+      }) as never,
+    );
+
+    const run = service.startListening();
+    await vi.waitFor(() => expect(createSttEngine).toHaveBeenCalled());
+    await service.dispose();
+    build();
+    await run;
+    expect(stale.dispose).toHaveBeenCalled();
+    expect(stale.start).not.toHaveBeenCalled();
+
+    // The disposed service builds fresh engines at its next start instead of reusing the released ones.
+    const fresh = buildsNext(sttEngine());
+    await service.startListening();
+    expect(fresh.start).toHaveBeenCalledTimes(1);
+    expect(stale.start).not.toHaveBeenCalled();
+  });
+
+  it('a dispose while a changed engine choice is applied releases the engines built after it', async () => {
+    storeConsent(true);
+    const old = buildsNext(sttEngine());
+    await service.initialize();
+    let released: () => void = () => {};
+    old.dispose.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        released = resolve;
+      }),
+    );
+    service.updateConfig({ preferredSttEngine: 'whisper' });
+    const stale = buildsNext(sttEngine());
+
+    const run = service.startListening();
+    await vi.waitFor(() => expect(old.dispose).toHaveBeenCalled());
+    await service.dispose();
+    released();
+    await run;
+
+    expect(stale.dispose).toHaveBeenCalled();
+    expect(stale.start).not.toHaveBeenCalled();
+  });
+
+  it('a stop while a listening start waits for dictation to end cancels that listening start', async () => {
+    storeConsent(true);
+    const engine = buildsNext(sttEngine());
+    await service.startDictation();
+    let drained: () => void = () => {};
+    engine.stop.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        drained = resolve;
+      }),
+    );
+
+    const listening = service.startListening(); // takes the engine over: ends the dictation first
+    await vi.waitFor(() => expect(engine.stop).toHaveBeenCalled());
+    const stopping = service.stopListening();
+    drained();
+    await Promise.all([listening, stopping]);
+
+    expect(engine.start).toHaveBeenCalledTimes(1); // the dictation only
+  });
+
+  it('a stop while the engine starts leaves nothing behind that blocks the next listening start', async () => {
+    storeConsent(true);
+    const engine = buildsNext(sttEngine());
+    let started: () => void = () => {};
+    engine.start.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        started = resolve;
+      }),
+    );
+
+    const first = service.startListening();
+    await vi.waitFor(() => expect(engine.start).toHaveBeenCalled());
+    await service.stopListening();
+    started();
+    await first;
+    // The stop ran before the engine was running, so the start ends what it began.
+    expect(engine.stop).toHaveBeenCalledTimes(2);
+    await service.startListening();
+
+    expect(engine.start).toHaveBeenCalledTimes(2);
+    await service.stopListening();
   });
 });
