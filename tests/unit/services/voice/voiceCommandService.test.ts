@@ -659,3 +659,67 @@ describe('VoiceCommandService', () => {
     });
   });
 });
+
+// #1261: the Voice Control panel started Web Speech, which sends audio to the browser vendor, without the stored consent.
+describe('VoiceCommandService Web Speech consent (#1261)', () => {
+  let service: VoiceCommandService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = new VoiceCommandService({ enableVoiceWasm: false });
+    service.setDispatch(vi.fn() as never, vi.fn() as never);
+  });
+
+  function webSpeechEngine(consented: boolean) {
+    const refused = Object.assign(new Error('Web Speech needs consent'), {
+      name: 'ConsentRequiredError',
+    });
+    return {
+      id: 'webSpeech',
+      name: 'Web Speech API',
+      isLocal: false,
+      isAvailable: vi.fn().mockResolvedValue(true),
+      initialize: consented
+        ? vi.fn().mockResolvedValue(undefined)
+        : vi.fn().mockRejectedValue(refused),
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  it('never starts a Web Speech engine without the stored consent', async () => {
+    const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+    const { setVoiceError } = await import('../../../../features/voice/voiceSlice');
+    const engine = webSpeechEngine(false);
+    vi.mocked(createSttEngine).mockResolvedValueOnce(engine as never);
+
+    await expect(service.startDictation()).rejects.toThrow();
+
+    expect(createSttEngine).toHaveBeenLastCalledWith(
+      expect.objectContaining({ webSpeechConsentGranted: false }),
+    );
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(setVoiceError).toHaveBeenCalledWith('Web Speech needs consent');
+  });
+
+  it('uses Web Speech once consent is stored, and a revoked consent stops later starts', async () => {
+    const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+    const granted = webSpeechEngine(true);
+    vi.mocked(createSttEngine).mockResolvedValueOnce(granted as never);
+    service.updateConfig({ webSpeechConsentGranted: true });
+    await service.startDictation();
+    expect(granted.start).toHaveBeenCalled();
+    await service.stopDictation();
+
+    const revoked = webSpeechEngine(false);
+    vi.mocked(createSttEngine).mockResolvedValueOnce(revoked as never);
+    service.updateConfig({ webSpeechConsentGranted: false }); // rebuilds the engines at the next start
+    await expect(service.startDictation()).rejects.toThrow();
+
+    expect(createSttEngine).toHaveBeenLastCalledWith(
+      expect.objectContaining({ webSpeechConsentGranted: false }),
+    );
+    expect(revoked.start).not.toHaveBeenCalled();
+  });
+});

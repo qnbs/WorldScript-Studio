@@ -29,6 +29,30 @@ import {
 } from '../services/voice/engineChoice';
 import type { VoiceServiceConfig } from '../services/voice/voiceCommandService';
 import { getVoiceService } from '../services/voice/voiceCommandService';
+import type { VoiceSettings } from '../types';
+
+/** The voice service config the stored settings ask for; Eco Mode only lowers an `auto` choice to Web Speech (#1261). */
+function serviceConfigFor(
+  voiceSettings: VoiceSettings,
+  enableVoiceWasm: boolean,
+  eco: boolean,
+): Partial<VoiceServiceConfig> {
+  return {
+    preferredSttEngine: sttEngineUnderEco(sttEngineChoice(voiceSettings.sttEngine), eco),
+    preferredTtsEngine: eco ? 'webSpeech' : ttsEngineChoice(voiceSettings.ttsEngine),
+    feedbackLevel: voiceSettings.feedbackLevel,
+    speechRate: voiceSettings.speechRate,
+    speechVolume: voiceSettings.speechVolume,
+    allowCloudFallback: voiceSettings.allowCloudSttFallback,
+    listeningTimeoutSeconds: voiceSettings.listeningTimeoutSeconds,
+    wakeWordPhrase: voiceSettings.wakeWordPhrase,
+    ttsMuted: voiceSettings.ttsMuted,
+    dictationAutoPunctuation: voiceSettings.dictationAutoPunctuation,
+    // QNBS-v3 (#1261): Eco Mode never turns the local-model opt-in on, and Web Speech needs the stored consent.
+    enableVoiceWasm,
+    webSpeechConsentGranted: voiceSettings.webSpeechConsentGranted === true,
+  };
+}
 
 export const useVoice = () => {
   const dispatch = useAppDispatch();
@@ -39,24 +63,9 @@ export const useVoice = () => {
   // Sync service config with Redux settings whenever they change.
   // QNBS-v3: B5 — eco-mode overrides engine selection when battery is low.
   useEffect(() => {
-    const svc = serviceRef.current;
-    const eco = ecoModeService.isEcoMode();
-    const config: Partial<VoiceServiceConfig> = {
-      // Eco-mode forces lightweight WebSpeech fallback to save power
-      preferredSttEngine: sttEngineUnderEco(sttEngineChoice(voiceSettings.sttEngine), eco),
-      preferredTtsEngine: eco ? 'webSpeech' : ttsEngineChoice(voiceSettings.ttsEngine),
-      feedbackLevel: voiceSettings.feedbackLevel,
-      speechRate: voiceSettings.speechRate,
-      speechVolume: voiceSettings.speechVolume,
-      allowCloudFallback: voiceSettings.allowCloudSttFallback,
-      listeningTimeoutSeconds: voiceSettings.listeningTimeoutSeconds,
-      wakeWordPhrase: voiceSettings.wakeWordPhrase,
-      ttsMuted: voiceSettings.ttsMuted,
-      dictationAutoPunctuation: voiceSettings.dictationAutoPunctuation,
-      // QNBS-v3 (#1261): Eco Mode never turns the local-model opt-in on; it only lowers an auto choice to Web Speech.
-      enableVoiceWasm,
-    };
-    svc.updateConfig(config);
+    serviceRef.current.updateConfig(
+      serviceConfigFor(voiceSettings, enableVoiceWasm, ecoModeService.isEcoMode()),
+    );
   }, [voiceSettings, enableVoiceWasm]);
 
   // QNBS-v3: B5 — subscribe to eco-mode changes and immediately re-apply config.

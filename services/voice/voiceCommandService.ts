@@ -53,6 +53,8 @@ const ENGINE_CONFIG_KEYS = [
   'enableVoiceWasm',
   // QNBS-v3 (#1261): turning cloud fallback off must replace a Web Speech engine chosen under it.
   'allowCloudFallback',
+  // QNBS-v3 (#1261): a revoked consent must not keep a Web Speech engine built while it was granted.
+  'webSpeechConsentGranted',
 ] as const;
 
 export interface VoiceServiceConfig {
@@ -68,6 +70,8 @@ export interface VoiceServiceConfig {
   dictationAutoPunctuation: boolean;
   /** When true, prefers WasmSttEngine (Whisper) + SileroVadEngine over Web Speech API. */
   enableVoiceWasm: boolean;
+  /** The stored GDPR consent for Web Speech, which sends the audio to the browser vendor (#1261). */
+  webSpeechConsentGranted: boolean;
 }
 
 export class VoiceCommandService {
@@ -112,6 +116,7 @@ export class VoiceCommandService {
       ttsMuted: false,
       dictationAutoPunctuation: true,
       enableVoiceWasm: false,
+      webSpeechConsentGranted: false,
       ...config,
     };
 
@@ -222,13 +227,18 @@ export class VoiceCommandService {
         // QNBS-v3 (#1261): Eco Mode never turns the local-model opt-in on; it only lowers an auto choice to Web Speech.
         enableVoiceWasm: this.config.enableVoiceWasm,
         allowCloudFallback: this.config.allowCloudFallback,
+        webSpeechConsentGranted: this.config.webSpeechConsentGranted,
       });
+      // QNBS-v3 (#1261): a cloud engine checks the stored consent before it is used (ConsentRequiredError); a local one is not touched.
+      if (engine.isLocal === false) await engine.initialize();
       this.d(setActiveSttEngine(engine.id));
       this.d(setSttStatus('ready'));
       return engine;
     } catch (err) {
       logger.warn('STT initialization failed:', err);
       this.d(setSttStatus('error'));
+      if (err instanceof Error && err.name === 'ConsentRequiredError')
+        this.d(setVoiceError(err.message));
       return null;
     }
   }

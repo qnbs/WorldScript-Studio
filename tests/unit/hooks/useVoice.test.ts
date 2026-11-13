@@ -312,6 +312,14 @@ describe('useVoice', () => {
     }
   });
 
+  // #1261: the stored Web Speech consent reaches the voice service, which refuses Web Speech without it.
+  it('passes the stored Web Speech consent to the service, false unless granted', () => {
+    renderHook(() => useVoice());
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ webSpeechConsentGranted: false }),
+    );
+  });
+
   it('calls setDispatch on mount', () => {
     renderHook(() => useVoice());
     expect(mockSetDispatch).toHaveBeenCalled();
