@@ -32,6 +32,11 @@ describe('webDesktopPlatform', () => {
   it('persistence: join concatenates, appDataDir has no web equivalent and throws', async () => {
     await expect(webDesktopPlatform.persistence.join('a', 'b', 'c')).resolves.toBe('a/b/c');
     await expect(webDesktopPlatform.persistence.appDataDir()).rejects.toThrow(/unavailable/);
+    // #831: no app-data directory on the web, so nothing is admitted or reclaimed.
+    await expect(webDesktopPlatform.persistence.admitAppDataInstance()).resolves.toMatchObject({
+      status: 'unavailable',
+      reclaimed: 0,
+    });
   });
 
   it('dialogs resolve null (no native picker on the web)', async () => {

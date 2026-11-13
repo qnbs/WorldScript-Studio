@@ -33,6 +33,7 @@ export {
 
 // Import existing services
 import { dbService } from './dbService';
+import { desktopPlatform } from './desktopPlatform';
 import { fileSystemService } from './fileSystemService';
 import { DesktopStorageAuthorityUnavailableError, StaleProjectWriterError } from './fs/fsCore';
 import { ProjectLoadError } from './fs/projectFsStore';
@@ -78,6 +79,31 @@ function canonicalRawOrThrow(result: CanonicalProjectRawResult, projectId: strin
 }
 export type ProjectAuthority = 'fs' | 'idb';
 
+// QNBS-v3 (#831): runs before the desktop backend admits its first writer; a crash-left project lock is removed only when no other writer is alive.
+/** Joins the writers of the app-data directory; returns why this process must not write, or null when it may. */
+async function admitDesktopAppData(): Promise<Error | null> {
+  let admission: Awaited<ReturnType<typeof desktopPlatform.persistence.admitAppDataInstance>>;
+  try {
+    admission = await desktopPlatform.persistence.admitAppDataInstance();
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+  if (admission.reclaimed > 0) {
+    logger.warn('Removed project locks left by an earlier crash', {
+      reclaimed: admission.reclaimed,
+    });
+  }
+  if (admission.detail)
+    logger.warn('Desktop app data admission', {
+      status: admission.status,
+      detail: admission.detail,
+    });
+  // QNBS-v3 (#831): without the shared writers lock a later process could reclaim this one's live project locks, so it must not write.
+  return admission.status === 'unavailable'
+    ? new Error(`The app data writers lock is unavailable: ${admission.detail ?? 'unknown reason'}`)
+    : null;
+}
+
 class StorageManager {
   private backend: StorageBackend;
   private authorityFailure: DesktopStorageAuthorityUnavailableError | null = null;
@@ -98,6 +124,12 @@ class StorageManager {
       } catch (error) {
         logger.error('Desktop project storage could not be opened:', error);
         this.authorityFailure = new DesktopStorageAuthorityUnavailableError(error);
+        return;
+      }
+      const denied = await admitDesktopAppData();
+      if (denied) {
+        logger.error('Desktop project storage is unavailable without the writers lock:', denied);
+        this.authorityFailure = new DesktopStorageAuthorityUnavailableError(denied);
         return;
       }
       this.backend = fileSystemService;

@@ -3,5 +3,6 @@
 //!          native-compute surface isolated from the flat top-level command files
 //!          (lora.rs / pandoc.rs) so the supervisor can grow its own task registry.
 
+pub mod app_data_instance;
 pub mod project_core;
 pub mod task_supervisor;

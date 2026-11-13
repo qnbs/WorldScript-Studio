@@ -26,6 +26,12 @@ async function loadStorageService(options: {
   vi.doMock('../../services/tauriRuntime', () => ({ isTauriRuntime: () => options.tauri }));
   vi.doMock('../../services/fileSystemService', () => ({ fileSystemService: fs }));
   vi.doMock('../../services/dbService', () => ({ dbService: db }));
+  // #831: a healthy desktop start holds the writers lock; storageServiceInstanceAdmission.test.ts covers the other outcomes.
+  vi.doMock('../../services/desktopPlatform', () => ({
+    desktopPlatform: {
+      persistence: { admitAppDataInstance: async () => ({ status: 'exclusive', reclaimed: 0 }) },
+    },
+  }));
   const { storageService } = await import('../../services/storageService');
   const { DesktopStorageAuthorityUnavailableError } = await import('../../services/fs/fsCore');
   return { storageService, fs, db, DesktopStorageAuthorityUnavailableError };
@@ -35,6 +41,7 @@ afterEach(() => {
   vi.doUnmock('../../services/tauriRuntime');
   vi.doUnmock('../../services/fileSystemService');
   vi.doUnmock('../../services/dbService');
+  vi.doUnmock('../../services/desktopPlatform');
 });
 
 describe('desktop storage authority (#553 a8)', () => {
