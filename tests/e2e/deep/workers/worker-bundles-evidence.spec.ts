@@ -3,6 +3,7 @@
  * JavaScript file, and nothing may loop. The workflow also runs this against a build whose #1273 files are set back to
  * main, as a negative control that must fail.
  */
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 
 import { clickNavItem, ensureBlankProject, selectEnglish, waitForSpaReady } from '../../helpers';
@@ -18,14 +19,22 @@ test('production build: every worker loads as bundled JavaScript and nothing loo
 }) => {
   const workers: string[] = [];
   const workerScripts: { path: string; status: number; type: string }[] = [];
-  const failures: string[] = [];
-  const duckdbLines: string[] = [];
+  // Counted, not stored: the pre-fix build floods the console (#1272 measured 139,648 errors in about three minutes).
+  const failureSamples = new Set<string>();
+  const duckdbLines = new Set<string>();
+  let failureCount = 0;
   let consoleErrors = 0;
+  const noteFailure = (text: string) => {
+    failureCount += 1;
+    if (failureSamples.size < 5) failureSamples.add(text.slice(0, 240));
+  };
 
-  page.on('worker', (worker) => workers.push(worker.url().slice(0, 160)));
+  page.on('worker', (worker) => {
+    if (workers.length < 50) workers.push(worker.url().slice(0, 160));
+  });
   page.on('response', (response) => {
     const path = new URL(response.url()).pathname;
-    if (/\/assets\/worker-[^/]+$|\.ts$/.test(path)) {
+    if (workerScripts.length < 50 && /\/assets\/worker-[^/]+$|\.ts$/.test(path)) {
       workerScripts.push({
         path,
         status: response.status(),
@@ -36,32 +45,41 @@ test('production build: every worker loads as bundled JavaScript and nothing loo
   page.on('console', (message) => {
     const text = message.text();
     if (message.type() === 'error') consoleErrors += 1;
-    if (WORKER_FAILURE.test(text)) failures.push(text.slice(0, 240));
-    if (DUCKDB.test(text)) duckdbLines.push(`[${message.type()}] ${text.slice(0, 200)}`);
+    if (WORKER_FAILURE.test(text)) noteFailure(text);
+    if (DUCKDB.test(text) && duckdbLines.size < 20) {
+      duckdbLines.add(`[${message.type()}] ${text.slice(0, 200)}`);
+    }
   });
   page.on('pageerror', (error) => {
-    if (WORKER_FAILURE.test(String(error))) failures.push(String(error).slice(0, 240));
+    if (WORKER_FAILURE.test(String(error))) noteFailure(String(error));
   });
 
-  await page.goto('/');
-  await waitForSpaReady(page);
-  await selectEnglish(page);
-  await ensureBlankProject(page);
-  await clickNavItem(page, /Manuscript/i);
-  const textarea = page.getByTestId('manuscript-editor-textarea').first();
-  await expect(textarea).toBeVisible({ timeout: 20_000 });
-  await textarea.fill('A line written for the production worker evidence.');
-  // Long enough for autosave and the DuckDB dual-write (with its retries and respawn backoff) to run.
-  await page.waitForTimeout(25_000);
+  const summary = () => ({
+    workersStarted: workers.length,
+    workers: workers.slice(0, 12),
+    workerScripts: workerScripts.slice(0, 12),
+    consoleErrors,
+    workerFailures: failureCount,
+    failureSamples: [...failureSamples],
+    duckdbLines: [...duckdbLines],
+  });
+  try {
+    await page.goto('/');
+    await waitForSpaReady(page);
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+    await clickNavItem(page, /Manuscript/i);
+    const textarea = page.getByTestId('manuscript-editor-textarea').first();
+    await expect(textarea).toBeVisible({ timeout: 20_000 });
+    await textarea.fill('A line written for the production worker evidence.');
+    // Long enough for autosave and the DuckDB dual-write (with its retries and respawn backoff) to run.
+    await page.waitForTimeout(25_000);
+  } finally {
+    mkdirSync('test-results', { recursive: true });
+    writeFileSync('test-results/worker-evidence-summary.json', JSON.stringify(summary(), null, 2));
+  }
 
-  console.log(`[evidence] workers started (${workers.length}): ${JSON.stringify(workers)}`);
-  console.log(`[evidence] worker scripts fetched: ${JSON.stringify(workerScripts)}`);
-  console.log(`[evidence] console errors: ${consoleErrors}; worker failures: ${failures.length}`);
-  for (const line of [...new Set(failures)].slice(0, 8)) console.log(`[evidence] failure: ${line}`);
-  for (const line of [...new Set(duckdbLines)].slice(0, 20))
-    console.log(`[evidence] duckdb: ${line}`);
-
-  expect(failures, 'worker failure messages').toEqual([]);
+  expect(failureCount, 'worker failure messages').toBe(0);
   expect(workers.length, 'at least one worker started').toBeGreaterThan(0);
   expect(workerScripts.length, 'worker scripts fetched over HTTP').toBeGreaterThan(0);
   for (const script of workerScripts) {

@@ -40,7 +40,10 @@ jobs:
         env:
           CI: 'true'
           RUN_DEEP_E2E: '1'
-        run: pnpm exec playwright test -c playwright.worker-evidence.config.ts tests/e2e/deep/workers/worker-bundles-evidence.spec.ts --project=chromium --retries=0 --reporter=list
+        run: pnpm exec playwright test -c playwright.worker-evidence.config.ts tests/e2e/deep/workers/worker-bundles-evidence.spec.ts --project=chromium --retries=0 --reporter=line
+      - name: Evidence summary
+        if: always()
+        run: cat test-results/worker-evidence-summary.json || echo "no summary written"
       - name: Expected outcome
         env:
           VARIANT: ${{ matrix.variant }}
