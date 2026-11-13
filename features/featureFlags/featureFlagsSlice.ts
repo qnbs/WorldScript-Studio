@@ -1,4 +1,5 @@
 import { createSlice, type Middleware, type PayloadAction } from '@reduxjs/toolkit';
+import { DUCKDB_ANALYTICS_AVAILABLE } from '../../services/duckdb/duckdbAvailability';
 import { loadFeatureFlags, saveFeatureFlags } from './featureFlagsStorage';
 
 export interface FeatureFlagsState {
@@ -208,8 +209,9 @@ export const selectEnableProjectHealthScore = (state: { featureFlags: FeatureFla
   state.featureFlags.enableProjectHealthScore;
 export const selectEnableAppHealthPanel = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableAppHealthPanel;
+// QNBS-v3 (#716): a build without DuckDB analytics reads the flag as off, whatever is stored.
 export const selectEnableDuckDbAnalytics = (state: { featureFlags: FeatureFlagsState }) =>
-  state.featureFlags.enableDuckDbAnalytics;
+  DUCKDB_ANALYTICS_AVAILABLE && state.featureFlags.enableDuckDbAnalytics;
 export const selectEnableObjectsGroups = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableObjectsGroups;
 export const selectEnableMindMaps = (state: { featureFlags: FeatureFlagsState }) =>

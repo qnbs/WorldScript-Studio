@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// This suite covers the DuckDB-enabled behaviour; the #716 build switch (off) is tested in duckdbUnavailable.test.ts.
+vi.mock('../../services/duckdb/duckdbAvailability', () => ({
+  DUCKDB_ANALYTICS_AVAILABLE: true,
+  DUCKDB_UNAVAILABLE_REASON: 'unavailable',
+}));
+
 import type { FeatureFlagsState } from '../../features/featureFlags/featureFlagsSlice';
 import featureFlagsReducer, {
   featureFlagsActions,

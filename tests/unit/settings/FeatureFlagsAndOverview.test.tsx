@@ -7,6 +7,12 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// This suite covers the DuckDB-enabled behaviour; the #716 build switch (off) is tested in duckdbUnavailable.test.ts.
+vi.mock('../../../services/duckdb/duckdbAvailability', () => ({
+  DUCKDB_ANALYTICS_AVAILABLE: true,
+  DUCKDB_UNAVAILABLE_REASON: 'unavailable',
+}));
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------

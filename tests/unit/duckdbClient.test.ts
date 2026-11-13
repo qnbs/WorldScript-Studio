@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// This suite covers the DuckDB-enabled behaviour; the #716 build switch (off) is tested in duckdbUnavailable.test.ts.
+vi.mock('../../services/duckdb/duckdbAvailability', () => ({
+  DUCKDB_ANALYTICS_AVAILABLE: true,
+  DUCKDB_UNAVAILABLE_REASON: 'unavailable',
+}));
+
 // QNBS-v3: duckdbClient now routes through WorkerBus v2 (workers/v2/duckdb.worker.ts) instead of
 //          spawning a raw Worker directly — mock services/workerBusManager's ensureDuckDbPool()/
 //          getWorkerBus() instead of the global Worker constructor.
