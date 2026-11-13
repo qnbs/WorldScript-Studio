@@ -101,11 +101,22 @@ vi.mock('@huggingface/transformers', () => ({
 }));
 
 import { appStoreRef } from '../../../../app/storeRef';
-import { setVoiceError } from '../../../../features/voice/voiceSlice';
+import {
+  setActiveSttEngine,
+  setActiveTtsEngine,
+  setSttStatus,
+  setTtsStatus,
+  setVadStatus,
+  setVoiceError,
+  setWakeWordStatus,
+} from '../../../../features/voice/voiceSlice';
 import { setActiveAiMode } from '../../../../services/ai/aiModeService';
 import { ConsentRequiredError, createSttEngine } from '../../../../services/voice/sttEngine';
+import { createTtsEngine } from '../../../../services/voice/ttsEngine';
+import { createVadEngine } from '../../../../services/voice/vadEngine';
 import { VoiceCommandService } from '../../../../services/voice/voiceCommandService';
 import { RecoverableSttError } from '../../../../services/voice/voiceTypes';
+import { createWakeWordEngine } from '../../../../services/voice/wakeWordEngine';
 import {
   registerWebSpeechConsentPrompt,
   WEB_SPEECH_LOCAL_ONLY_MESSAGE,
@@ -1132,6 +1143,45 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     expect(stale.dispose).toHaveBeenCalled();
     expect(setVoiceError).not.toHaveBeenCalledWith('dispose failed');
   });
+
+  // CodeRabbit on 4723a2d9: the engine builds of a voided setup still wrote their status over the fresh session's.
+  it.each(['succeed', 'fail'] as const)(
+    'engine builds of a voided setup that %s late leave the status of the fresh session alone',
+    async (outcome) => {
+      storeConsent(true);
+      const stale = sttEngine();
+      const builds = [createSttEngine, createTtsEngine, createVadEngine, createWakeWordEngine];
+      const settles = builds.map((create) => {
+        let settle: () => void = () => {};
+        vi.mocked(create).mockReturnValueOnce(
+          new Promise((resolve, reject) => {
+            settle = () => (outcome === 'succeed' ? resolve(stale) : reject(new Error('late')));
+          }) as never,
+        );
+        return () => settle();
+      });
+      const first = service.startDictation();
+      await vi.waitFor(() => expect(createWakeWordEngine).toHaveBeenCalled());
+      await service.dispose();
+      const fresh = buildsNext(sttEngine());
+      const second = service.startDictation();
+      await vi.waitFor(() => expect(fresh.start).toHaveBeenCalled());
+      const writes = [
+        setSttStatus,
+        setActiveSttEngine,
+        setTtsStatus,
+        setActiveTtsEngine,
+        setVadStatus,
+        setWakeWordStatus,
+      ];
+      for (const write of writes) vi.mocked(write).mockClear();
+
+      for (const settle of settles) settle();
+      await Promise.all([first, second]);
+
+      for (const write of writes) expect(write).not.toHaveBeenCalled();
+    },
+  );
 
   it('a stop while a listening start waits for dictation to end cancels that listening start', async () => {
     storeConsent(true);

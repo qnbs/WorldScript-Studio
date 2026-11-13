@@ -55,6 +55,8 @@ import {
 export type GetStateFn = () => RootState;
 
 type BuiltEngines = [SttEngine | null, TtsEngine | null, VadEngine | null, WakeWordEngine | null];
+/** Applies one store write of an engine setup, or drops it once a dispose voided that setup (#1265). */
+type SetupWrite = (write: () => void) => void;
 
 /** Config keys that decide which engines exist; changing one rebuilds the engines on the next start. */
 const ENGINE_CONFIG_KEYS = [
@@ -221,11 +223,12 @@ export class VoiceCommandService {
       this.d(setMicrophonePermission('granted'));
 
       // Initialize engines in parallel
+      const write = this.writesFor(lifecycle);
       const engines: BuiltEngines = await Promise.all([
-        this.initStt(),
-        this.initTts(),
-        this.initVad(),
-        this.initWakeWord(),
+        this.initStt(write),
+        this.initTts(write),
+        this.initVad(write),
+        this.initWakeWord(write),
       ]);
       if (!(await this.adoptEngines(lifecycle, engines))) return false;
       // QNBS-v3 (#1261): sessions exist only from here on; a local-only switch ends a running Web Speech session, dispose() unsubscribes.
@@ -256,9 +259,16 @@ export class VoiceCommandService {
     return true;
   }
 
-  private async initStt(): Promise<SttEngine | null> {
+  /** The store writes of one setup: a voided setup must not overwrite the status of the session that replaced it (#1265). */
+  private writesFor(lifecycle: number): SetupWrite {
+    return (write) => {
+      if (lifecycle === this.lifecycle) write();
+    };
+  }
+
+  private async initStt(write: SetupWrite): Promise<SttEngine | null> {
     try {
-      this.d(setSttStatus('loading'));
+      write(() => this.d(setSttStatus('loading')));
       // QNBS-v3: B5 — eco-mode overrides STT to lightweight WebSpeech to save power
       const eco = ecoModeService.isEcoMode();
       const engine = await createSttEngine({
@@ -267,60 +277,66 @@ export class VoiceCommandService {
         enableVoiceWasm: this.config.enableVoiceWasm,
         allowCloudFallback: this.config.allowCloudFallback,
       });
-      this.d(setActiveSttEngine(engine.id));
-      this.d(setSttStatus('ready'));
-      this.sttUnavailable = null;
+      write(() => {
+        this.d(setActiveSttEngine(engine.id));
+        this.d(setSttStatus('ready'));
+        this.sttUnavailable = null;
+      });
       return engine;
     } catch (err) {
       logger.warn('STT initialization failed:', err);
-      this.d(setSttStatus('error'));
-      // e.g. LOCAL_STT_UNAVAILABLE_MESSAGE: a local-only choice with Whisper off says why, and how to recover.
-      this.sttUnavailable = err instanceof Error ? err.message : null;
+      write(() => {
+        this.d(setSttStatus('error'));
+        // e.g. LOCAL_STT_UNAVAILABLE_MESSAGE: a local-only choice with Whisper off says why, and how to recover.
+        this.sttUnavailable = err instanceof Error ? err.message : null;
+      });
       return null;
     }
   }
 
-  private async initTts(): Promise<TtsEngine | null> {
+  private async initTts(write: SetupWrite): Promise<TtsEngine | null> {
     try {
-      this.d(setTtsStatus('loading'));
+      write(() => this.d(setTtsStatus('loading')));
       // QNBS-v3: B5 — eco-mode overrides TTS to WebSpeech to avoid heavy Kokoro/Piper models
       const eco = ecoModeService.isEcoMode();
       const engine = await createTtsEngine({
         preferredEngine: eco ? 'webSpeech' : this.config.preferredTtsEngine,
         enableVoiceWasm: this.config.enableVoiceWasm,
       });
-      this.d(setActiveTtsEngine(engine.id));
-      this.d(setTtsStatus('ready'));
+      write(() => {
+        this.d(setActiveTtsEngine(engine.id));
+        this.d(setTtsStatus('ready'));
+      });
       return engine;
     } catch (err) {
       logger.warn('TTS initialization failed:', err);
-      this.d(setTtsStatus('error'));
+      write(() => this.d(setTtsStatus('error')));
       return null;
     }
   }
 
-  private async initVad(): Promise<VadEngine | null> {
+  private async initVad(write: SetupWrite): Promise<VadEngine | null> {
     try {
-      this.d(setVadStatus('loading'));
+      write(() => this.d(setVadStatus('loading')));
       const engine = await createVadEngine(this.config.enableVoiceWasm);
-      this.d(setVadStatus('ready'));
+      write(() => this.d(setVadStatus('ready')));
       return engine;
     } catch (err) {
       logger.warn('VAD initialization failed:', err);
-      this.d(setVadStatus('error'));
+      write(() => this.d(setVadStatus('error')));
       return null;
     }
   }
 
-  private async initWakeWord(): Promise<WakeWordEngine | null> {
+  private async initWakeWord(write: SetupWrite): Promise<WakeWordEngine | null> {
     try {
-      this.d(setWakeWordStatus('loading'));
+      write(() => this.d(setWakeWordStatus('loading')));
       const engine = await createWakeWordEngine(this.config.wakeWordPhrase);
-      this.d(setWakeWordStatus('ready'));
+      write(() => this.d(setWakeWordStatus('ready')));
       return engine;
     } catch (err) {
       logger.warn('Wake-word initialization failed:', err);
-      this.d(setWakeWordStatus('error'));
+      write(() => this.d(setWakeWordStatus('error')));
       return null;
     }
   }
