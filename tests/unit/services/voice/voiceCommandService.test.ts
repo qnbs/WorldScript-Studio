@@ -846,28 +846,49 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     expect(createSttEngine).toHaveBeenCalledTimes(1);
   });
 
+  /** Holds the next start in its engine setup or in the consent dialog until `resume()`, which lets it go on with consent. */
+  function pauseIn(
+    during: 'engine setup' | 'consent dialog',
+    engine: ReturnType<typeof sttEngine>,
+  ) {
+    let resume: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    if (during === 'engine setup') {
+      storeConsent(true);
+      vi.mocked(createSttEngine).mockReturnValueOnce(held.then(() => engine) as never);
+      return { resume, reached: () => expect(createSttEngine).toHaveBeenCalled() };
+    }
+    const ask = dialog(
+      storeConsent(false),
+      held.then(() => true),
+    );
+    buildsNext(engine);
+    return { resume, reached: () => expect(ask).toHaveBeenCalled() };
+  }
+
+  const stops = {
+    stop: (s: VoiceCommandService, kind: Kind) =>
+      kind === 'listening' ? s.stopListening() : s.stopDictation(),
+    dispose: (s: VoiceCommandService) => s.dispose(),
+  };
   it.each(
     (['listening', 'dictation'] as const).flatMap((kind) =>
-      (['stop', 'dispose'] as const).map((end) => ({ kind, end })),
+      (['stop', 'dispose'] as const).flatMap((end) =>
+        (['engine setup', 'consent dialog'] as const).map((during) => ({ kind, end, during })),
+      ),
     ),
   )(
-    '$kind: a $end while the consent dialog is open ends the start without the engine',
-    async ({ kind, end }) => {
-      const voice = storeConsent(false);
-      const engine = buildsNext(sttEngine());
-      let answer: (granted: boolean) => void = () => {};
-      const ask = dialog(
-        voice,
-        new Promise<boolean>((resolve) => {
-          answer = resolve;
-        }),
-      );
+    '$kind: a $end during the $during ends the start without the engine',
+    async ({ kind, end, during }) => {
+      const engine = sttEngine();
+      const pause = pauseIn(during, engine);
 
       const run = start(service, kind);
-      await vi.waitFor(() => expect(ask).toHaveBeenCalled());
-      if (end === 'dispose') await service.dispose();
-      else await (kind === 'listening' ? service.stopListening() : service.stopDictation());
-      answer(true);
+      await vi.waitFor(pause.reached);
+      await stops[end](service, kind);
+      pause.resume();
 
       await run;
       expect(engine.start).not.toHaveBeenCalled();

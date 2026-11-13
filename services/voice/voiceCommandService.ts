@@ -98,7 +98,7 @@ export class VoiceCommandService {
   private dictationStop: Promise<void> | null = null;
   /** Settles when a command-listening start finishes, so a dictation start can take over only afterwards. */
   private listeningStart: Promise<void> | null = null;
-  /** Bumped by every command-listening stop: a start still waiting for the consent dialog then never starts the engine. */
+  /** Bumped by every command-listening stop: a start still building engines or waiting for consent then never starts the engine. */
   private listeningClaim = 0;
   private eventListeners: VoiceEventListener[] = [];
 
@@ -304,6 +304,8 @@ export class VoiceCommandService {
     //          stream / orphan a coordinator. Ignore while starting or already listening.
     if (this.isStarting || this.coordinator || this.listeningTimer) return;
     this.isStarting = true;
+    // QNBS-v3 (#1261): taken before any await, so a stop or release during the engine setup or the consent dialog ends this start.
+    const claim = this.listeningClaim;
     let settleStart!: () => void;
     this.listeningStart = new Promise<void>((resolve) => {
       settleStart = resolve;
@@ -312,9 +314,8 @@ export class VoiceCommandService {
       // A running dictation ends before the engine setup may replace the engines it uses.
       await this.endDictationBeforeListening();
       if (!(await this.ensureEngines())) throw new Error('Voice service could not be initialized');
-      const claim = this.listeningClaim;
       const stt = await this.admitStt();
-      if (claim !== this.listeningClaim) return; // stopped while the consent dialog was open
+      if (claim !== this.listeningClaim) return; // stopped or released while it was preparing
 
       this.d(setVoiceMode('listening'));
       this.d(setVoiceError(null));
@@ -448,6 +449,11 @@ export class VoiceCommandService {
 
   private async stopCommandListening(): Promise<void> {
     this.listeningClaim += 1;
+    await this.endCommandListening();
+  }
+
+  /** Ends a running command-listening session; unlike a stop it leaves a start that is still preparing alone. */
+  private async endCommandListening(): Promise<void> {
     if (this.listeningTimer) {
       clearTimeout(this.listeningTimer);
       this.listeningTimer = null;
@@ -644,7 +650,7 @@ export class VoiceCommandService {
     this.isInitialized = false;
     try {
       // Ends command listening and waits for a draining dictation; never stops the start that is calling this.
-      await this.stopCommandListening();
+      await this.endCommandListening();
       await this.dictationStop;
       this.cancelSpeech();
       await Promise.all(engines.map((engine) => engine?.dispose()));
