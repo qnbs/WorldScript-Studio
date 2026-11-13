@@ -204,7 +204,7 @@ export class VoiceActivityCoordinator {
           this.bufferedDurationMs += chunk.durationMs;
 
           // Activate STT after MIN_SPEECH_CHUNKS of confirmed speech-start events
-          if (!this.isSttActive && this.speechChunkCount >= MIN_SPEECH_CHUNKS) {
+          if (this.mayStartStt()) {
             this.isSttActive = true;
             this.stt.start(onResult, onError).catch((err) => {
               log.error(
@@ -230,6 +230,12 @@ export class VoiceActivityCoordinator {
       .catch((err) => {
         log.warn('VAD processChunk error', { err });
       });
+  }
+
+  /** A new utterance may start STT; never during a drain or a pending restart, which already owns the next start (#1265). */
+  private mayStartStt(): boolean {
+    if (this.isSttActive || this.restarting) return false;
+    return !this.isFlushing && this.speechChunkCount >= MIN_SPEECH_CHUNKS;
   }
 
   private flushStt(onResult: (result: SttResult) => void, onError: (error: Error) => void): void {

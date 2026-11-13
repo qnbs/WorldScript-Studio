@@ -542,4 +542,47 @@ describe('VoiceActivityCoordinator failed restart (#1265)', () => {
       expect(stt.stop).toHaveBeenCalledTimes(stops + 1); // restart B is cancelled as well
     },
   );
+
+  // CodeRabbit on cf80f07f: a speech frame during a drain or a pending restart started the engine a second time.
+  it.each(['drain', 'pending restart'] as const)(
+    'a speech frame during a %s does not start the engine a second time',
+    async (phase) => {
+      let release: () => void = () => {};
+      const held = () => new Promise<void>((resolve) => (release = resolve));
+      const vad = makeVad({
+        processChunk: vi
+          .fn()
+          .mockResolvedValueOnce({ startMs: 0, endMs: 20, isSpeech: true })
+          .mockResolvedValueOnce({ startMs: 20, endMs: 40, isSpeech: false })
+          .mockResolvedValueOnce({ startMs: 40, endMs: 60, isSpeech: true })
+          .mockResolvedValue(null),
+      });
+      const stt =
+        phase === 'drain'
+          ? makeStt({ stop: vi.fn().mockImplementationOnce(held).mockResolvedValue(undefined) })
+          : makeStt({
+              start: vi.fn().mockResolvedValueOnce(undefined).mockImplementationOnce(held),
+            });
+      const starts = phase === 'drain' ? 1 : 2; // the drain holds the restart back; a pending restart is a start
+      const coordinator = new VoiceActivityCoordinator(vad, stt);
+      await coordinator.start(vi.fn(), vi.fn());
+      const frame = new Float32Array(4096).fill(0.1);
+      const fire = () =>
+        (mockScriptProcessor.onaudioprocess as (e: unknown) => void)({
+          inputBuffer: { getChannelData: () => frame },
+        });
+      fire();
+      await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(1));
+      fire(); // silence: a drain, then a restart
+      await vi.waitFor(() => expect(stt.stop).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(starts));
+
+      fire(); // speech while the drain or the restart is still pending
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(stt.start).toHaveBeenCalledTimes(starts);
+      release();
+      await coordinator.stop();
+    },
+  );
 });

@@ -566,8 +566,11 @@ describe('VoiceCommandService dictation races (#1265)', () => {
     vi.mocked(engine.stop).mockImplementationOnce(
       () => new Promise<void>((resolve) => (release = resolve)),
     );
-    const first = service.stopListening();
-    const second = service.stopListening();
+    const done: string[] = [];
+    const first = service.stopListening().then(() => done.push('first'));
+    const second = service.stopListening().then(() => done.push('second'));
+    await settledTick();
+    expect(done).toEqual([]); // CodeRabbit on cf80f07f: both stops wait for the one teardown
     release();
     await Promise.all([first, second]);
     expect(engine.stop).toHaveBeenCalledTimes(1);
