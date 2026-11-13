@@ -4,6 +4,7 @@
  *          Strictly local — NO data leaves the device. Gated by enableDuckDbAnalytics flag.
  */
 
+import { DUCKDB_ANALYTICS_AVAILABLE } from '../duckdb/duckdbAvailability';
 import { duckdbClient } from '../duckdb/duckdbClient';
 import { logger as log } from '../logger';
 
@@ -14,7 +15,8 @@ let _telemetryEnabled = false;
 
 /** Called by App.tsx and the featureFlags listener to keep telemetry in sync with the flag. */
 export function setTelemetryEnabled(enabled: boolean): void {
-  _telemetryEnabled = enabled;
+  // QNBS-v3 (#716): telemetry belongs to DuckDB analytics, so a build without them never collects it.
+  _telemetryEnabled = enabled && DUCKDB_ANALYTICS_AVAILABLE;
 }
 
 const TELEMETRY_STORAGE_KEY = 'worldscript-ai-telemetry';
@@ -47,15 +49,21 @@ export interface InferenceTelemetryEntry {
 
 let tableEnsured = false;
 
+/** duckdbClient answers a refused or failed statement with ok: false instead of throwing; the fallback needs a throw. */
+async function execOrThrow(sql: string, params?: readonly unknown[]): Promise<void> {
+  const resp = await duckdbClient.exec(sql, params);
+  if (!resp.ok) throw new Error(resp.error ?? 'DuckDB exec failed');
+}
+
 async function ensureTable(): Promise<void> {
   if (tableEnsured) return;
-  await duckdbClient.exec(CREATE_TABLE_SQL);
+  await execOrThrow(CREATE_TABLE_SQL);
   tableEnsured = true;
 }
 
 async function writeToDuckDb(entry: InferenceTelemetryEntry): Promise<void> {
   await ensureTable();
-  await duckdbClient.exec(
+  await execOrThrow(
     `INSERT INTO ai_telemetry (task_type, backend, model_id, latency_ms, success)
      VALUES (?, ?, ?, ?, ?)`,
     [entry.taskType, entry.backend, entry.modelId, entry.latencyMs, entry.success],
