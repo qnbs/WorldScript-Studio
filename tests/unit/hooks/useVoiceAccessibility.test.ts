@@ -33,6 +33,24 @@ let mockTranscript = '';
 let mockError: string | null = null;
 let mockEnabled = true;
 
+// #1282: announcements follow the user's language; `language` picks the locale the mocked translator reads.
+const { i18n } = vi.hoisted(() => ({ i18n: { language: 'en' } }));
+vi.mock('../../../hooks/useTranslation', async () => {
+  const { readFileSync } = await import('node:fs');
+  const load = (locale: string) =>
+    JSON.parse(readFileSync(`${process.cwd()}/locales/${locale}/common.json`, 'utf8')) as Record<
+      string,
+      string
+    >;
+  const strings: Record<string, Record<string, string>> = { en: load('en'), de: load('de') };
+  const t = (key: string, params: Record<string, string> = {}) =>
+    (strings[i18n.language]?.[key] ?? key).replace(
+      /\{\{(\w+)\}\}/g,
+      (_, name: string) => params[name] ?? '',
+    );
+  return { useTranslation: () => ({ t }) };
+});
+
 vi.mock('../../../hooks/useVoice', () => ({
   useVoice: () => ({
     mode: mockMode,
@@ -118,6 +136,21 @@ describe('useVoiceAccessibility', () => {
         'Voice error: Microphone permission denied',
         'assertive',
       );
+    });
+
+    it('announces a known service error in the user language', async () => {
+      const { LOCAL_STT_UNAVAILABLE_MESSAGE } = await import('../../../services/voice/sttEngine');
+      i18n.language = 'de';
+      mockError = LOCAL_STT_UNAVAILABLE_MESSAGE;
+      try {
+        renderHook(() => useVoiceAccessibility());
+        expect(mockAnnounce).toHaveBeenCalledWith(
+          'Sprachfehler: Die lokale Spracherkennung ist nicht verfügbar, und der Cloud-Fallback ist ausgeschaltet.',
+          'assertive',
+        );
+      } finally {
+        i18n.language = 'en';
+      }
     });
 
     it('does not announce error when disabled', () => {

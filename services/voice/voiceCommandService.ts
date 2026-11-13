@@ -52,6 +52,11 @@ import {
 
 export type GetStateFn = () => RootState;
 
+/** Why a start fails when the engine setup did not finish; the presentation translates it (#1282). */
+export const VOICE_INIT_FAILED_MESSAGE = 'Voice service could not be initialized';
+/** Why a start fails when no STT engine could be built and the setup gave no reason (#1282). */
+export const NO_STT_ENGINE_MESSAGE = 'No STT engine available';
+
 type BuiltEngines = [SttEngine | null, TtsEngine | null, VadEngine | null, WakeWordEngine | null];
 
 /** Config keys that decide which engines exist; changing one rebuilds the engines on the next start. */
@@ -433,7 +438,7 @@ export class VoiceCommandService {
     // QNBS-v3 (#1261): the shared engine setup applies a changed engine choice before dictation uses an engine.
     const ready = await this.ensureEngines();
     if (claim !== this.dictationClaim) return null; // stopped or released during the setup: never ask for consent
-    if (!ready) throw new Error('Voice service could not be initialized');
+    if (!ready) throw new Error(VOICE_INIT_FAILED_MESSAGE);
     return this.admitStt();
   }
 
@@ -443,7 +448,7 @@ export class VoiceCommandService {
     await this.endDictationBeforeListening();
     const ready = await this.ensureEngines();
     if (claim !== this.listeningClaim) return null; // stopped or released during the setup: never ask for consent
-    if (!ready) throw new Error('Voice service could not be initialized');
+    if (!ready) throw new Error(VOICE_INIT_FAILED_MESSAGE);
     const stt = await this.admitStt();
     return claim === this.listeningClaim ? stt : null;
   }
@@ -455,8 +460,7 @@ export class VoiceCommandService {
    */
   private async admitStt(): Promise<SttEngine> {
     const engine = this.sttEngine;
-    if (!engine)
-      return this.refuseStart(new Error(this.sttUnavailable ?? 'No STT engine available'));
+    if (!engine) return this.refuseStart(new Error(this.sttUnavailable ?? NO_STT_ENGINE_MESSAGE));
     // QNBS-v3 (#1261): fail closed, only an engine that declares itself local starts without the stored Web Speech consent.
     if (engine.isLocal !== true && !(await ensureWebSpeechConsent()))
       return this.refuseStart(
