@@ -44,6 +44,7 @@ import { ViewErrorBoundary } from './components/ui/ViewErrorBoundary';
 import { VersionControlPanel } from './components/VersionControlPanel';
 import { VoiceControlPanel } from './components/voice/VoiceControlPanel';
 import { VoiceIndicator } from './components/voice/VoiceIndicator';
+import { WebSpeechConsentHost } from './components/voice/WebSpeechConsentHost';
 import { AppContext } from './contexts/AppContext';
 import { CommandExecutorProvider } from './contexts/CommandExecutorContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
@@ -843,6 +844,10 @@ const AppWrapper: FC<AppProps> = (props) => (
   <I18nProvider>
     <LiveRegionProvider>
       <App {...props} />
+      {/* QNBS-v3 (#1261): the editor mic needs no voice flag, so the Web Speech consent dialog is always mounted. */}
+      <ErrorBoundary onReset={() => {}}>
+        <WebSpeechConsentHost />
+      </ErrorBoundary>
     </LiveRegionProvider>
   </I18nProvider>
 );

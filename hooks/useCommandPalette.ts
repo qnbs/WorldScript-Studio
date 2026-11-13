@@ -174,9 +174,10 @@ export function useCommandPalette({
 
   // QNBS-v3: stop the mic when the palette closes — separated from the reset effect above so a mic
   // toggle while open doesn't trigger a query/selection reset.
+  // QNBS-v3 (#1261): also when it is not listening yet; a start waiting for the consent dialog is cancelled by the stop.
   useEffect(() => {
-    if (!isOpen && isListening) stopListening();
-  }, [isOpen, isListening, stopListening]);
+    if (!isOpen) stopListening();
+  }, [isOpen, stopListening]);
 
   // QNBS-v3: `pinTick` + `isOpen` are invalidation ticks, not memo inputs — `pinTick` reloads prefs
   // after pin/unpin writes; `isOpen` reloads them on each open so recents recorded by

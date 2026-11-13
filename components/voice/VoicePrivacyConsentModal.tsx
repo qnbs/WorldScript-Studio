@@ -12,7 +12,8 @@ import { Modal } from '../ui/Modal';
 
 interface VoicePrivacyConsentModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  /** Called after the answer is stored: true when the user granted consent. */
+  onClose: (granted: boolean) => void;
 }
 
 export default function VoicePrivacyConsentModal({
@@ -24,14 +25,13 @@ export default function VoicePrivacyConsentModal({
 
   const handleAcknowledge = useCallback(() => {
     dispatch(settingsActions.setVoiceSettings({ webSpeechConsentGranted: true }));
-    onClose();
+    onClose(true);
   }, [dispatch, onClose]);
 
+  // QNBS-v3 (#1261): declining only records the answer; the stored engine choice stays as the user set it.
   const handleDecline = useCallback(() => {
-    dispatch(
-      settingsActions.setVoiceSettings({ webSpeechConsentGranted: false, sttEngine: 'auto' }),
-    );
-    onClose();
+    dispatch(settingsActions.setVoiceSettings({ webSpeechConsentGranted: false }));
+    onClose(false);
   }, [dispatch, onClose]);
 
   return (
@@ -40,6 +40,8 @@ export default function VoicePrivacyConsentModal({
       onClose={handleDecline}
       title={t('settings.voice.privacy.consentTitle')}
       aria-describedby="voice-consent-body"
+      // QNBS-v3 (#1261): the command palette's mic opens this dialog while the palette (z-[100]) stays open.
+      elevated
     >
       <div className="flex flex-col gap-4">
         <p
