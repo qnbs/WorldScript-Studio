@@ -28,7 +28,7 @@ import { logger } from '../logger';
 import { sttEngineUnderEco } from './engineChoice';
 import { FeedbackService } from './feedbackService';
 import { HybridIntentEngine } from './intentEngine';
-import { createSttEngine } from './sttEngine';
+import { ConsentRequiredError, createSttEngine } from './sttEngine';
 import { createTtsEngine } from './ttsEngine';
 import { createVadEngine } from './vadEngine';
 import { VoiceActivityCoordinator } from './voiceActivityCoordinator';
@@ -43,6 +43,7 @@ import type {
   WakeWordEngine,
 } from './voiceTypes';
 import { createWakeWordEngine } from './wakeWordEngine';
+import { ensureWebSpeechConsent } from './webSpeechConsent';
 
 export type GetStateFn = () => RootState;
 
@@ -53,8 +54,6 @@ const ENGINE_CONFIG_KEYS = [
   'enableVoiceWasm',
   // QNBS-v3 (#1261): turning cloud fallback off must replace a Web Speech engine chosen under it.
   'allowCloudFallback',
-  // QNBS-v3 (#1261): a revoked consent must not keep a Web Speech engine built while it was granted.
-  'webSpeechConsentGranted',
 ] as const;
 
 export interface VoiceServiceConfig {
@@ -70,8 +69,6 @@ export interface VoiceServiceConfig {
   dictationAutoPunctuation: boolean;
   /** When true, prefers WasmSttEngine (Whisper) + SileroVadEngine over Web Speech API. */
   enableVoiceWasm: boolean;
-  /** The stored GDPR consent for Web Speech, which sends the audio to the browser vendor (#1261). */
-  webSpeechConsentGranted: boolean;
 }
 
 export class VoiceCommandService {
@@ -101,6 +98,8 @@ export class VoiceCommandService {
   private dictationStop: Promise<void> | null = null;
   /** Settles when a command-listening start finishes, so a dictation start can take over only afterwards. */
   private listeningStart: Promise<void> | null = null;
+  /** Bumped by every command-listening stop: a start still waiting for the consent dialog then never starts the engine. */
+  private listeningClaim = 0;
   private eventListeners: VoiceEventListener[] = [];
 
   constructor(config: Partial<VoiceServiceConfig> = {}) {
@@ -116,7 +115,6 @@ export class VoiceCommandService {
       ttsMuted: false,
       dictationAutoPunctuation: true,
       enableVoiceWasm: false,
-      webSpeechConsentGranted: false,
       ...config,
     };
 
@@ -227,18 +225,13 @@ export class VoiceCommandService {
         // QNBS-v3 (#1261): Eco Mode never turns the local-model opt-in on; it only lowers an auto choice to Web Speech.
         enableVoiceWasm: this.config.enableVoiceWasm,
         allowCloudFallback: this.config.allowCloudFallback,
-        webSpeechConsentGranted: this.config.webSpeechConsentGranted,
       });
-      // QNBS-v3 (#1261): a cloud engine checks the stored consent before it is used (ConsentRequiredError); a local one is not touched.
-      if (engine.isLocal === false) await engine.initialize();
       this.d(setActiveSttEngine(engine.id));
       this.d(setSttStatus('ready'));
       return engine;
     } catch (err) {
       logger.warn('STT initialization failed:', err);
       this.d(setSttStatus('error'));
-      if (err instanceof Error && err.name === 'ConsentRequiredError')
-        this.d(setVoiceError(err.message));
       return null;
     }
   }
@@ -318,13 +311,10 @@ export class VoiceCommandService {
     try {
       // A running dictation ends before the engine setup may replace the engines it uses.
       await this.endDictationBeforeListening();
-      if (!(await this.ensureEngines())) {
-        throw new Error('Voice service could not be initialized');
-      }
-
-      if (!this.sttEngine) {
-        throw new Error('No STT engine available');
-      }
+      if (!(await this.ensureEngines())) throw new Error('Voice service could not be initialized');
+      const claim = this.listeningClaim;
+      const stt = await this.admitStt();
+      if (claim !== this.listeningClaim) return; // stopped while the consent dialog was open
 
       this.d(setVoiceMode('listening'));
       this.d(setVoiceError(null));
@@ -334,16 +324,16 @@ export class VoiceCommandService {
 
       // QNBS-v3: Route through VoiceActivityCoordinator when Whisper WASM is active —
       // feeds PCM frames to the VAD and triggers STT on detected speech boundaries.
-      if (this.config.enableVoiceWasm && this.sttEngine.id === 'whisper' && this.vadEngine) {
+      if (this.config.enableVoiceWasm && stt.id === 'whisper' && this.vadEngine) {
         // QNBS-v3: C-P1 — the single-flight guard above already guarantees no active coordinator,
         //          so no pre-dispose is needed here (it would be unreachable dead code).
-        this.coordinator = new VoiceActivityCoordinator(this.vadEngine, this.sttEngine);
+        this.coordinator = new VoiceActivityCoordinator(this.vadEngine, stt);
         await this.coordinator.start(
           (result) => this.handleSttResult(result),
           (error) => this.handleSttError(error),
         );
       } else {
-        await this.sttEngine.start(
+        await stt.start(
           (result) => this.handleSttResult(result),
           (error) => this.handleSttError(error),
         );
@@ -404,8 +394,24 @@ export class VoiceCommandService {
   private async dictationEngine(): Promise<SttEngine> {
     // QNBS-v3 (#1261): the shared engine setup applies a changed engine choice before dictation uses an engine.
     if (!(await this.ensureEngines())) throw new Error('Voice service could not be initialized');
-    if (!this.sttEngine) throw new Error('No STT engine available');
-    return this.sttEngine;
+    return this.admitStt();
+  }
+
+  /**
+   * The engine a start may use. An engine not declared local sends the audio off-device, so it starts only with the
+   * stored consent, read right before the start; the consent dialog asks when none is stored. A stop or release while
+   * the dialog is open bumps the caller's claim, so that start then ends without the engine.
+   */
+  private async admitStt(): Promise<SttEngine> {
+    const engine = this.sttEngine;
+    if (!engine) throw new Error('No STT engine available');
+    // QNBS-v3 (#1261): fail closed, only an engine that declares itself local starts without the stored Web Speech consent.
+    if (engine.isLocal !== true && !(await ensureWebSpeechConsent())) {
+      const refused = new ConsentRequiredError();
+      this.d(setVoiceError(refused.message));
+      throw refused;
+    }
+    return engine;
   }
 
   /** Dictation takes the engine over from command listening; otherwise speech would keep going to commands. */
@@ -441,6 +447,7 @@ export class VoiceCommandService {
   }
 
   private async stopCommandListening(): Promise<void> {
+    this.listeningClaim += 1;
     if (this.listeningTimer) {
       clearTimeout(this.listeningTimer);
       this.listeningTimer = null;

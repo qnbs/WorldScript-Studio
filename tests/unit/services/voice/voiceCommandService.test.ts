@@ -3,7 +3,7 @@
  * QNBS-v3: P1 tests for uncovered code paths.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies
 vi.mock('../../../../services/ai/ecoModeService', () => ({
@@ -32,7 +32,11 @@ vi.mock('../../../../services/voice/intentEngine', () => ({
   },
 }));
 
-vi.mock('../../../../services/voice/sttEngine', () => ({
+vi.mock('../../../../services/voice/sttEngine', async (importOriginal) => ({
+  // The gate throws the real refusal, so its message is the one users see.
+  ConsentRequiredError: (
+    await importOriginal<typeof import('../../../../services/voice/sttEngine')>()
+  ).ConsentRequiredError,
   createSttEngine: vi.fn().mockResolvedValue({
     id: 'webspeech',
     start: vi.fn().mockResolvedValue(undefined),
@@ -95,14 +99,34 @@ vi.mock('@huggingface/transformers', () => ({
   env: { backends: { onnx: { wasm: {} } } },
 }));
 
+import { appStoreRef } from '../../../../app/storeRef';
+import { setVoiceError } from '../../../../features/voice/voiceSlice';
+import { ConsentRequiredError, createSttEngine } from '../../../../services/voice/sttEngine';
 import { VoiceCommandService } from '../../../../services/voice/voiceCommandService';
+import { registerWebSpeechConsentPrompt } from '../../../../services/voice/webSpeechConsent';
+
+/** A store reference that holds only the Web Speech consent; returns the voice settings so a test can change it. */
+function storeConsent(granted: boolean) {
+  const voice = { webSpeechConsentGranted: granted };
+  appStoreRef.current = {
+    getState: () => ({ settings: { voice } }),
+    dispatch: vi.fn(),
+  } as unknown as typeof appStoreRef.current;
+  return voice;
+}
 
 describe('VoiceCommandService', () => {
   let service: VoiceCommandService;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // The default engine mock declares no isLocal, so it counts as a cloud engine and needs the stored consent.
+    storeConsent(true);
     service = new VoiceCommandService({ enableVoiceWasm: false });
+  });
+
+  afterEach(() => {
+    appStoreRef.current = null;
   });
 
   describe('addEventListener', () => {
@@ -662,64 +686,191 @@ describe('VoiceCommandService', () => {
 
 // #1261: the Voice Control panel started Web Speech, which sends audio to the browser vendor, without the stored consent.
 describe('VoiceCommandService Web Speech consent (#1261)', () => {
+  type Kind = 'listening' | 'dictation';
+  const start = (service: VoiceCommandService, kind: Kind) =>
+    kind === 'listening' ? service.startListening() : service.startDictation();
+  const refused = { name: 'ConsentRequiredError' };
   let service: VoiceCommandService;
+  let unregister = () => {};
 
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(global.navigator, 'mediaDevices', {
+      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }) },
+      writable: true,
+      configurable: true,
+    });
     service = new VoiceCommandService({ enableVoiceWasm: false });
     service.setDispatch(vi.fn() as never, vi.fn() as never);
   });
 
-  function webSpeechEngine(consented: boolean) {
-    const refused = Object.assign(new Error('Web Speech needs consent'), {
-      name: 'ConsentRequiredError',
-    });
+  afterEach(() => {
+    unregister();
+    unregister = () => {};
+    appStoreRef.current = null;
+  });
+
+  /** An STT engine stand-in; Web Speech declares itself not local. */
+  function sttEngine(isLocal = false) {
     return {
-      id: 'webSpeech',
-      name: 'Web Speech API',
-      isLocal: false,
+      id: isLocal ? 'whisper' : 'webSpeech',
+      name: isLocal ? 'Whisper' : 'Web Speech API',
+      isLocal,
       isAvailable: vi.fn().mockResolvedValue(true),
-      initialize: consented
-        ? vi.fn().mockResolvedValue(undefined)
-        : vi.fn().mockRejectedValue(refused),
+      initialize: vi.fn().mockResolvedValue(undefined),
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       dispose: vi.fn().mockResolvedValue(undefined),
     };
   }
 
-  it('never starts a Web Speech engine without the stored consent', async () => {
-    const { createSttEngine } = await import('../../../../services/voice/sttEngine');
-    const { setVoiceError } = await import('../../../../features/voice/voiceSlice');
-    const engine = webSpeechEngine(false);
+  /** Makes `engine` the next one the service builds. */
+  function buildsNext(engine: ReturnType<typeof sttEngine>) {
     vi.mocked(createSttEngine).mockResolvedValueOnce(engine as never);
+    return engine;
+  }
 
-    await expect(service.startDictation()).rejects.toThrow();
+  /** A consent dialog that answers `answer`; a grant stores the consent, as VoicePrivacyConsentModal does. Null mounts none. */
+  function dialog(
+    voice: { webSpeechConsentGranted: boolean },
+    answer: boolean | Promise<boolean> | null,
+  ) {
+    const ask = vi.fn(async () => {
+      const granted = await answer;
+      if (granted) voice.webSpeechConsentGranted = true;
+      return granted === true;
+    });
+    if (answer !== null) unregister = registerWebSpeechConsentPrompt(ask);
+    return ask;
+  }
 
-    expect(createSttEngine).toHaveBeenLastCalledWith(
-      expect.objectContaining({ webSpeechConsentGranted: false }),
-    );
-    expect(engine.start).not.toHaveBeenCalled();
-    expect(setVoiceError).toHaveBeenCalledWith('Web Speech needs consent');
-  });
+  // Only a cloud start without stored consent asks; `outcome` is how the start settles.
+  const cases = [
+    {
+      when: 'no consent is stored and no dialog can ask',
+      stored: false,
+      answer: null,
+      isLocal: false,
+      asks: 0,
+      starts: 0,
+    },
+    {
+      when: 'the consent dialog is declined',
+      stored: false,
+      answer: false,
+      isLocal: false,
+      asks: 1,
+      starts: 0,
+    },
+    {
+      when: 'the consent dialog is granted',
+      stored: false,
+      answer: true,
+      isLocal: false,
+      asks: 1,
+      starts: 1,
+    },
+    {
+      when: 'the consent is stored',
+      stored: true,
+      answer: false,
+      isLocal: false,
+      asks: 0,
+      starts: 1,
+    },
+    {
+      when: 'the engine is local',
+      stored: false,
+      answer: false,
+      isLocal: true,
+      asks: 0,
+      starts: 1,
+    },
+  ] as const;
+  it.each(
+    (['listening', 'dictation'] as const).flatMap((kind) => cases.map((c) => ({ kind, ...c }))),
+  )(
+    '$kind starts the engine only with consent: $when',
+    async ({ kind, stored, answer, isLocal, asks, starts }) => {
+      const voice = storeConsent(stored);
+      const engine = buildsNext(sttEngine(isLocal));
+      const ask = dialog(voice, answer);
 
-  it('uses Web Speech once consent is stored, and a revoked consent stops later starts', async () => {
-    const { createSttEngine } = await import('../../../../services/voice/sttEngine');
-    const granted = webSpeechEngine(true);
-    vi.mocked(createSttEngine).mockResolvedValueOnce(granted as never);
-    service.updateConfig({ webSpeechConsentGranted: true });
+      const outcome = await start(service, kind).then(
+        () => 'started',
+        (error: Error) => error.name,
+      );
+
+      expect(outcome).toBe(starts ? 'started' : 'ConsentRequiredError');
+      expect(engine.start).toHaveBeenCalledTimes(starts);
+      expect(ask).toHaveBeenCalledTimes(asks);
+      const reported = vi
+        .mocked(setVoiceError)
+        .mock.calls.some(([message]) => message === new ConsentRequiredError().message);
+      expect(reported).toBe(!starts);
+    },
+  );
+
+  it.each(['listening', 'dictation'] as const)(
+    '%s: a consent revoked while the engines are built stops the start that waited for them',
+    async (kind) => {
+      const voice = storeConsent(true);
+      const engine = sttEngine();
+      let build: (built: unknown) => void = () => {};
+      vi.mocked(createSttEngine).mockReturnValueOnce(
+        new Promise((resolve) => {
+          build = resolve;
+        }) as never,
+      );
+
+      const run = start(service, kind);
+      await vi.waitFor(() => expect(createSttEngine).toHaveBeenCalled());
+      voice.webSpeechConsentGranted = false;
+      build(engine);
+
+      await expect(run).rejects.toMatchObject(refused);
+      expect(engine.start).not.toHaveBeenCalled();
+    },
+  );
+
+  it('a revoked consent refuses the next start on the engine built under it', async () => {
+    const voice = storeConsent(true);
+    const engine = buildsNext(sttEngine());
     await service.startDictation();
-    expect(granted.start).toHaveBeenCalled();
     await service.stopDictation();
 
-    const revoked = webSpeechEngine(false);
-    vi.mocked(createSttEngine).mockResolvedValueOnce(revoked as never);
-    service.updateConfig({ webSpeechConsentGranted: false }); // rebuilds the engines at the next start
-    await expect(service.startDictation()).rejects.toThrow();
+    voice.webSpeechConsentGranted = false;
+    await expect(service.startListening()).rejects.toMatchObject(refused);
 
-    expect(createSttEngine).toHaveBeenLastCalledWith(
-      expect.objectContaining({ webSpeechConsentGranted: false }),
-    );
-    expect(revoked.start).not.toHaveBeenCalled();
+    expect(engine.start).toHaveBeenCalledTimes(1);
+    expect(createSttEngine).toHaveBeenCalledTimes(1);
   });
+
+  it.each(
+    (['listening', 'dictation'] as const).flatMap((kind) =>
+      (['stop', 'dispose'] as const).map((end) => ({ kind, end })),
+    ),
+  )(
+    '$kind: a $end while the consent dialog is open ends the start without the engine',
+    async ({ kind, end }) => {
+      const voice = storeConsent(false);
+      const engine = buildsNext(sttEngine());
+      let answer: (granted: boolean) => void = () => {};
+      const ask = dialog(
+        voice,
+        new Promise<boolean>((resolve) => {
+          answer = resolve;
+        }),
+      );
+
+      const run = start(service, kind);
+      await vi.waitFor(() => expect(ask).toHaveBeenCalled());
+      if (end === 'dispose') await service.dispose();
+      else await (kind === 'listening' ? service.stopListening() : service.stopDictation());
+      answer(true);
+
+      await run;
+      expect(engine.start).not.toHaveBeenCalled();
+    },
+  );
 });
