@@ -1,0 +1,48 @@
+# Hosted proof for #831. Every writing process holds a shared OS lock on the app-data writers lock (flock on Linux
+# and macOS, LockFileEx on Windows), which the OS releases when the process dies; crash-left project locks are only
+# reclaimed under an exclusive lock, i.e. when no other writer is alive. src-tauri/src/instance_lock.rs uses only std,
+# so this compiles it on its own (no Tauri build) and runs its tests on all three desktop platforms, including the
+# test that kills a writer process and then reclaims its orphaned project lock.
+name: Instance lock platforms
+
+on:
+  pull_request:
+    paths:
+      - 'src-tauri/src/instance_lock.rs'
+      - '.github/workflows/instance-lock-platforms.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src-tauri/src/instance_lock.rs'
+      - '.github/workflows/instance-lock-platforms.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: instance-lock-platforms-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  instance-lock:
+    name: 🔒 Writers lock (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compile and run the instance-lock tests (std only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --version
+          ext=""
+          if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
+          bin="${RUNNER_TEMP}/instance_lock_tests${ext}"
+          rustc --edition 2021 --test src-tauri/src/instance_lock.rs -o "$bin"
+          "$bin" --test-threads=1

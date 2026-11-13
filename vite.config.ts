@@ -76,6 +76,8 @@ export default defineConfig({
           '**/*.wasm',
           // QNBS-v3 (F-09): self-hosted duckdb-wasm *.worker.js (scripts/copy-duckdb-assets.mjs) matches the **/*.js allowlist above unlike the already-excluded *.wasm — exclude explicitly, same feature-flag-gated reasoning as vendor-duckdb*.
           '**/duckdb/**',
+          // QNBS-v3 (#1272): worker bundles load on demand (DuckDB, inference, WebLLM, plugins); precaching them would add megabytes to every install.
+          '**/worker-*',
         ],
       },
       // Manifest bereits in public/manifest.json eingebunden
@@ -125,6 +127,17 @@ export default defineConfig({
         __dirname,
         './packages/desktop-contracts/src/index.ts',
       ),
+    },
+  },
+
+  // QNBS-v3 (#1272): WorkerBus workers are real bundles now; ES output allows their dynamic imports, and the worker- prefix keeps them out of the PWA precache below.
+  worker: {
+    format: 'es',
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/worker-[name]-[hash].js',
+        chunkFileNames: 'assets/worker-chunk-[name]-[hash].js',
+      },
     },
   },
 

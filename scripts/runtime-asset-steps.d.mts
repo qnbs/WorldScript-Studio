@@ -1,4 +1,5 @@
 export const EDGE_PREP_SCRIPTS: readonly string[];
+export const WORKER_BUNDLE_GUARD: string;
 
 export interface EdgeBuildSpawnResult {
   status: number | null;

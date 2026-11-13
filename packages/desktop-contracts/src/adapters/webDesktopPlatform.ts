@@ -41,6 +41,12 @@ const filesystem: DesktopFilesystem = {
 const persistence: DesktopPersistence = {
   appDataDir: async () => filesystemUnavailable(),
   join: async (...parts) => parts.join('/'),
+  // QNBS-v3 (#831): the web build keeps projects in IndexedDB; there is no app-data directory to admit.
+  admitAppDataInstance: async () => ({
+    status: 'unavailable',
+    reclaimed: 0,
+    detail: 'no desktop app data',
+  }),
 };
 
 const dialogs: DesktopDialogs = {

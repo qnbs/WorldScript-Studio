@@ -4,6 +4,7 @@ export { tauriDesktopPlatform } from './adapters/tauriDesktopPlatform';
 export { webDesktopPlatform } from './adapters/webDesktopPlatform';
 export { sanitizeDiagnosticsContext, sanitizeDiagnosticsValue } from './diagnostics';
 export type {
+  AppDataAdmission,
   DesktopClipboard,
   DesktopCloseRequestedEvent,
   DesktopDeepLinks,
@@ -35,4 +36,9 @@ export type {
   TauriMenuBuilderApi,
   TauriTrayBuilderApi,
 } from './types';
-export { PROJECT_VALIDATE_CONTRACT_VERSION, ProjectValidationResultSchema } from './types';
+export {
+  APP_DATA_ADMISSION_CONTRACT_VERSION,
+  AppDataAdmissionSchema,
+  PROJECT_VALIDATE_CONTRACT_VERSION,
+  ProjectValidationResultSchema,
+} from './types';
