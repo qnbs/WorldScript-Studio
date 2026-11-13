@@ -17,6 +17,12 @@
 //! must not write at all, because a later process could then reclaim its live locks.
 //!
 //! The lock file must outlive every writer: Factory Reset skips it (`APP_DATA_WRITERS_LOCK_FILE`).
+//!
+//! Known limit: builds from before this protocol create project locks without holding `writers.lock`.
+//! If such a build runs at the same time as a newer one on the same app data (possible only where the
+//! single-instance plugin fails, see above), the newer build cannot see it and may reclaim its live
+//! project lock. The updater ends the old process before the new one starts, so an ordinary update does
+//! not hit this; running two installed versions side by side on such a system can.
 //! The module uses only `std`, so `rustc --test` runs its tests on every OS without the Tauri build
 //! (`.github/workflows/instance-lock-platforms.yml`).
 
@@ -120,14 +126,27 @@ fn take_shared(file: &File) -> io::Result<()> {
 
 /// Removes every regular `*.lock` file directly inside `project-locks/`; only called under the
 /// exclusive lock. Subdirectories, symlinks and other files stay, and the first failure stops it.
+/// A `project-locks` that is not a real directory (a symlink or junction to elsewhere, or a file) is
+/// never read: `read_dir` would follow the link and delete lock files outside the app data.
 fn reclaim_orphaned_project_locks(app_data: &Path) -> Result<usize, ReclaimError> {
     let mut removed = 0;
     let fail = |removed, source| ReclaimError { removed, source };
-    let entries = match fs::read_dir(app_data.join(PROJECT_LOCKS_DIR)) {
-        Ok(entries) => entries,
+    let locks_dir = app_data.join(PROJECT_LOCKS_DIR);
+    match fs::symlink_metadata(&locks_dir) {
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        Ok(_) => {
+            return Err(fail(
+                0,
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "project-locks is not a real directory; nothing was reclaimed",
+                ),
+            ))
+        }
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(0),
         Err(error) => return Err(fail(0, error)),
-    };
+    }
+    let entries = fs::read_dir(&locks_dir).map_err(|error| fail(0, error))?;
     for entry in entries {
         let entry = entry.map_err(|error| fail(removed, error))?;
         let is_lock_name = entry
@@ -328,5 +347,22 @@ mod tests {
         assert!(fs::symlink_metadata(locks.join("link.lock")).is_ok());
         drop(held);
         fs::remove_dir_all(&dir).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reclaim_never_reads_a_symlinked_locks_directory() {
+        let dir = temp_app_data("symlinked-dir");
+        let outside = temp_app_data("outside");
+        let outside_lock = outside.join("elsewhere.lock");
+        fs::write(&outside_lock, b"keep").unwrap();
+        fs::remove_dir_all(dir.join(PROJECT_LOCKS_DIR)).unwrap();
+        std::os::unix::fs::symlink(&outside, dir.join(PROJECT_LOCKS_DIR)).unwrap();
+        let (held, joined) = join_writers(&dir).unwrap();
+        assert!(matches!(&joined, Joined::Alone(Err(error)) if error.removed == 0));
+        assert!(outside_lock.exists());
+        drop(held);
+        fs::remove_dir_all(&dir).ok();
+        fs::remove_dir_all(&outside).ok();
     }
 }
