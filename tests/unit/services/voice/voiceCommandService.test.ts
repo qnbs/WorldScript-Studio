@@ -76,6 +76,7 @@ vi.mock('../../../../services/voice/wakeWordEngine', () => ({
 // Mock Redux actions
 vi.mock('../../../../features/voice/voiceSlice', () => ({
   appendVoiceTranscript: vi.fn(),
+  reportVoiceIssue: vi.fn(),
   setActiveSttEngine: vi.fn(),
   setActiveTtsEngine: vi.fn(),
   setDictationActive: vi.fn(),
@@ -103,6 +104,7 @@ import { appStoreRef } from '../../../../app/storeRef';
 import { setVoiceError } from '../../../../features/voice/voiceSlice';
 import { ConsentRequiredError, createSttEngine } from '../../../../services/voice/sttEngine';
 import { VoiceCommandService } from '../../../../services/voice/voiceCommandService';
+import { RecoverableSttError } from '../../../../services/voice/voiceTypes';
 import { registerWebSpeechConsentPrompt } from '../../../../services/voice/webSpeechConsent';
 
 /** initialize() asks for the microphone; each case gets its own stub instead of relying on one an earlier case left. */
@@ -1030,5 +1032,163 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
 
     expect(engine.start).toHaveBeenCalledTimes(2);
     await service.stopListening();
+  });
+
+  // #1265, deferred from #1279: an engine change released the old engines only when ending the session succeeded.
+  it('a failing session end during an engine change still releases the old engines', async () => {
+    storeConsent(true);
+    const old = buildsNext(sttEngine());
+    await service.initialize();
+    old.stop.mockRejectedValueOnce(new Error('stop failed'));
+    service.updateConfig({ preferredSttEngine: 'whisper' });
+    const fresh = buildsNext(sttEngine());
+
+    await service.startDictation();
+
+    expect(old.dispose).toHaveBeenCalled();
+    expect(fresh.start).toHaveBeenCalledTimes(1);
+  });
+
+  // #1265, deferred from #1279: a start after a dispose joined the setup the dispose had voided, and failed.
+  it('a dictation started right after a dispose builds fresh engines instead of joining the voided setup', async () => {
+    storeConsent(true);
+    const stale = sttEngine();
+    let build: () => void = () => {};
+    vi.mocked(createSttEngine).mockReturnValueOnce(
+      new Promise((resolve) => {
+        build = () => resolve(stale);
+      }) as never,
+    );
+    const first = service.startDictation();
+    await vi.waitFor(() => expect(createSttEngine).toHaveBeenCalled());
+    await service.dispose();
+    const fresh = buildsNext(sttEngine());
+
+    const second = service.startDictation();
+    build();
+    await first;
+    await second;
+
+    expect(fresh.start).toHaveBeenCalledTimes(1);
+    expect(stale.start).not.toHaveBeenCalled();
+    expect(stale.dispose).toHaveBeenCalled();
+  });
+
+  // #1265, deferred from #1279: a start the user had stopped reported ConsentRequiredError once they declined.
+  it.each(['listening', 'dictation'] as const)(
+    '%s: a start stopped while the consent dialog is open ends quietly when the user then declines',
+    async (kind) => {
+      const voice = storeConsent(false);
+      const engine = buildsNext(sttEngine());
+      let answer: (granted: boolean) => void = () => {};
+      const ask = dialog(
+        voice,
+        new Promise<boolean>((resolve) => {
+          answer = resolve;
+        }),
+      );
+
+      const run = start(service, kind);
+      await vi.waitFor(() => expect(ask).toHaveBeenCalled());
+      await (kind === 'listening' ? service.stopListening() : service.stopDictation());
+      answer(false);
+
+      await expect(run).resolves.toBeUndefined();
+      expect(engine.start).not.toHaveBeenCalled();
+      expect(setVoiceError).not.toHaveBeenCalledWith(new ConsentRequiredError().message);
+    },
+  );
+});
+
+// #1265: review wave 4 on #1260 — dictation state must follow the session that really owns the engine.
+describe('VoiceCommandService dictation races (#1265)', () => {
+  let service: VoiceCommandService;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    stubMicrophone();
+    // The default engine mock declares no isLocal, so it counts as a cloud engine and needs the stored consent.
+    storeConsent(true);
+    service = new VoiceCommandService({ enableVoiceWasm: false });
+    service.setDispatch(vi.fn() as never, vi.fn() as never);
+    await service.initialize();
+  });
+
+  afterEach(async () => {
+    await service.dispose();
+    appStoreRef.current = null;
+  });
+
+  async function sttEngine() {
+    const { createSttEngine } = await import('../../../../services/voice/sttEngine');
+    return vi.mocked(createSttEngine).mock.results.at(-1)?.value;
+  }
+
+  it('a recoverable window error is reported without ending dictation', async () => {
+    const { reportVoiceIssue, setVoiceError, setDictationActive } = await import(
+      '../../../../features/voice/voiceSlice'
+    );
+    await service.startDictation();
+    const engine = await sttEngine();
+    const onError = vi.mocked(engine.start).mock.calls.at(-1)?.[1] as (error: Error) => void;
+    vi.mocked(setDictationActive).mockClear();
+
+    onError(new RecoverableSttError('A recording window was skipped'));
+
+    expect(reportVoiceIssue).toHaveBeenCalledWith('A recording window was skipped');
+    expect(setVoiceError).not.toHaveBeenCalledWith('A recording window was skipped');
+    expect(setDictationActive).not.toHaveBeenCalled();
+    expect(engine.stop).not.toHaveBeenCalled();
+  });
+
+  it('a stop issued while a start waits for the previous drain wins', async () => {
+    await service.startDictation();
+    const engine = await sttEngine();
+    let finishDrain!: () => void;
+    vi.mocked(engine.stop).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishDrain = resolve)),
+    );
+    const firstStop = service.stopDictation();
+    const restart = service.startDictation(); // waits for the drain
+    const newerStop = service.stopDictation(); // pressed after the restart
+    finishDrain();
+    await Promise.all([firstStop, restart, newerStop]);
+    expect(engine.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('a stale failed start does not roll back a newer session', async () => {
+    const { setDictationActive, setVoiceError } = await import(
+      '../../../../features/voice/voiceSlice'
+    );
+    const engine = await sttEngine();
+    let failFirst!: (error: Error) => void;
+    vi.mocked(engine.start).mockImplementationOnce(
+      () => new Promise<void>((_, reject) => (failFirst = reject)),
+    );
+    const first = service.startDictation().catch(() => undefined);
+    await vi.waitFor(() => expect(engine.start).toHaveBeenCalledTimes(1));
+    await service.stopDictation();
+    await service.startDictation(); // the newer session starts normally
+    vi.mocked(setDictationActive).mockClear();
+
+    failFirst(new Error('model failed to load'));
+    await first;
+
+    expect(setDictationActive).not.toHaveBeenCalledWith(false);
+    expect(setVoiceError).not.toHaveBeenCalledWith('model failed to load');
+  });
+
+  it('concurrent command stops share one teardown', async () => {
+    await service.startListening();
+    const engine = await sttEngine();
+    let release!: () => void;
+    vi.mocked(engine.stop).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    const first = service.stopListening();
+    const second = service.stopListening();
+    release();
+    await Promise.all([first, second]);
+    expect(engine.stop).toHaveBeenCalledTimes(1);
   });
 });

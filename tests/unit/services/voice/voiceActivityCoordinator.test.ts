@@ -386,3 +386,40 @@ describe('VoiceActivityCoordinator stop during start (#1261)', () => {
     expect(mockAudioCtxInstance.createScriptProcessor).not.toHaveBeenCalled();
   });
 });
+
+// #1265: stop() waited for the whole flush chain, including a restart that can sit on a microphone prompt.
+describe('VoiceActivityCoordinator stop during a restart (#1265)', () => {
+  it('stop() returns after the drain and a late restart stops the engine again', async () => {
+    let finishRestart!: () => void;
+    const vad = makeVad({
+      processChunk: vi
+        .fn()
+        .mockResolvedValueOnce({ startMs: 0, endMs: 20, isSpeech: true })
+        .mockResolvedValueOnce({ startMs: 20, endMs: 40, isSpeech: false })
+        .mockResolvedValue(null),
+    });
+    const stt = makeStt({
+      start: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockImplementationOnce(() => new Promise<void>((resolve) => (finishRestart = resolve))),
+    });
+    const coordinator = new VoiceActivityCoordinator(vad, stt);
+    await coordinator.start(vi.fn(), vi.fn());
+    const frame = new Float32Array(4096).fill(0.1);
+    const fire = () =>
+      (mockScriptProcessor.onaudioprocess as (e: unknown) => void)({
+        inputBuffer: { getChannelData: () => frame },
+      });
+    fire();
+    await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(1));
+    fire(); // silence: drain, then a restart that waits
+    await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(2));
+
+    await coordinator.stop(); // must not wait for the pending restart
+    expect(stt.stop).toHaveBeenCalledTimes(1);
+
+    finishRestart();
+    await vi.waitFor(() => expect(stt.stop).toHaveBeenCalledTimes(2));
+  });
+});

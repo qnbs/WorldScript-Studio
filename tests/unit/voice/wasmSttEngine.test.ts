@@ -7,7 +7,7 @@ vi.mock('@huggingface/transformers', () => ({
 }));
 
 import { pipeline } from '@huggingface/transformers';
-import type { SttResult } from '../../../services/voice/voiceTypes';
+import { RecoverableSttError, type SttResult } from '../../../services/voice/voiceTypes';
 import { WasmSttEngine } from '../../../services/voice/wasmSttEngine';
 
 const WINDOW_MS = 3_500;
@@ -406,6 +406,8 @@ describe('WasmSttEngine failure handling (#556)', () => {
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Unable to decode audio data' }),
     );
+    // #1265: capture goes on after one unreadable window, so the report must not end the session.
+    expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(RecoverableSttError);
     expect(onResult).not.toHaveBeenCalled();
   });
 
@@ -430,6 +432,7 @@ describe('WasmSttEngine failure handling (#556)', () => {
     await vi.advanceTimersByTimeAsync(WINDOW_MS * 6 + 300);
     const skipped = onError.mock.calls.filter(([error]) => /falling behind/.test(String(error)));
     expect(skipped.length).toBeGreaterThanOrEqual(2);
+    for (const [error] of skipped) expect(error).toBeInstanceOf(RecoverableSttError);
     expect(whisper).toHaveBeenCalledTimes(1);
     stalled.resolve({ text: ' first' });
     await stopEngine(engine);
@@ -448,6 +451,8 @@ describe('WasmSttEngine failure handling (#556)', () => {
       ),
     );
     expect(onResult).toHaveBeenCalledTimes(1);
+    // The session ended here, so this report is not a recoverable one.
+    expect(onError.mock.calls.at(-1)?.[0]).not.toBeInstanceOf(RecoverableSttError);
     expect(track.stop).toHaveBeenCalled();
     expect(FakeAudioContext.instances[0]?.close).toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(WINDOW_MS * 2);

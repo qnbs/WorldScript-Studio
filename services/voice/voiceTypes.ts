@@ -39,6 +39,18 @@ export interface SttResult {
   language?: string;
 }
 
+/**
+ * A problem with one recording window (skipped, unreadable or not transcribed) while capture continues. It is
+ * reported to the user but must not end the session, or the UI would show the microphone as off while it records
+ * (#1265). Every other STT error ends the session.
+ */
+export class RecoverableSttError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecoverableSttError';
+  }
+}
+
 export interface SttEngine {
   readonly id: VoiceSttEngine;
   readonly name: string;

@@ -35,8 +35,8 @@ export class VoiceActivityCoordinator {
   private lastVadSpeechState = false;
   // QNBS-v3: guard prevents overlapping flush cycles (stop + restart) on Whisper WASM
   private isFlushing = false;
-  // QNBS-v3 (#556): stop() waits for this, so a flush result arrives before another consumer takes the STT engine.
-  private flushing: Promise<void> = Promise.resolve();
+  // QNBS-v3 (#556, #1265): stop() waits for the drain, so a flush result arrives before another consumer takes the STT engine; never for the restart after it, which can wait on a microphone prompt.
+  private draining: Promise<void> = Promise.resolve();
   // QNBS-v3: engines are initialized once per coordinator lifetime, not per start() call
   private isEngineInitialized = false;
   // QNBS-v3 (#1261): bumped by stop(), so a start it overtook never keeps a microphone stream nobody will release.
@@ -73,7 +73,7 @@ export class VoiceActivityCoordinator {
     this.generation += 1;
     this.running = false;
     this.teardownAudioCapture();
-    await this.flushing;
+    await this.draining;
     if (this.isSttActive) {
       try {
         await this.stt.stop();
@@ -235,18 +235,15 @@ export class VoiceActivityCoordinator {
     this.isSttActive = false;
     this.resetBufferState();
 
-    this.flushing = this.stt
-      .stop()
-      .catch((err) => {
-        log.warn('stt.stop() failed during flush', { err });
-      })
+    this.draining = this.stt.stop().catch((err) => {
+      log.warn('stt.stop() failed during flush', { err });
+    });
+    void this.draining
       .then(() => {
         this.isFlushing = false;
         if (!this.running) return;
         // Restart STT for the next utterance only after stop() has fully resolved
-        return this.stt.start(onResult, onError).then(() => {
-          this.isSttActive = true;
-        });
+        return this.stt.start(onResult, onError).then(() => this.afterRestart());
       })
       .catch((err) => {
         this.isFlushing = false;
@@ -256,6 +253,15 @@ export class VoiceActivityCoordinator {
         );
         onError(err instanceof Error ? err : new Error(String(err)));
       });
+  }
+
+  /** A stop() that came during the restart did not wait for it; the restarted engine must not keep capturing. */
+  private async afterRestart(): Promise<void> {
+    if (this.running) {
+      this.isSttActive = true;
+      return;
+    }
+    await this.stt.stop();
   }
 
   private resetBufferState(): void {
