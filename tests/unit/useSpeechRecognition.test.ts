@@ -62,7 +62,7 @@ describe('useSpeechRecognition (no browser API available)', () => {
 
 /** Installs a SpeechRecognition stand-in and returns how often recognition was started. */
 function installSpeechRecognition() {
-  const started = { count: 0 };
+  const started = { count: 0, stops: 0 };
   function speechRecognitionConstructor(this: Record<string, unknown>) {
     this['continuous'] = false;
     this['interimResults'] = false;
@@ -73,7 +73,9 @@ function installSpeechRecognition() {
     this['start'] = () => {
       started.count += 1;
     };
-    this['stop'] = vi.fn();
+    this['stop'] = vi.fn(() => {
+      started.stops += 1;
+    });
   }
   (window as { SpeechRecognition?: unknown }).SpeechRecognition = speechRecognitionConstructor;
   return started;
@@ -220,6 +222,23 @@ describe('useSpeechRecognition (with mocked SpeechRecognition)', () => {
           payload: expect.objectContaining({ title: WEB_SPEECH_LOCAL_ONLY_MESSAGE }),
         }),
       );
+    } finally {
+      setActiveAiMode('hybrid');
+    }
+  });
+
+  // The listening flag used to follow only through an effect, so a stop right after the start missed the capture.
+  it('a switch to a local-only AI mode right after the start stops the recognition', async () => {
+    const started = installSpeechRecognition();
+    consentStore(true);
+    try {
+      const { result } = renderHook(() => useSpeechRecognition());
+      await act(async () => {
+        await result.current.startListening();
+        setActiveAiMode('eco'); // before React runs the listening effect
+      });
+      expect(started.count).toBe(1);
+      expect(started.stops).toBe(1);
     } finally {
       setActiveAiMode('hybrid');
     }

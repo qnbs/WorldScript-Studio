@@ -150,6 +150,8 @@ export const useSpeechRecognition = () => {
       setMicError(null);
       try {
         recognition.start();
+        // QNBS-v3 (#1261): set at once, not by the effect, so a stop (e.g. a local-only switch) right after the start sees it.
+        isListeningRef.current = true;
         setIsListening(true);
 
         timeoutRef.current = setTimeout(() => {
@@ -171,6 +173,7 @@ export const useSpeechRecognition = () => {
     startRequestRef.current += 1; // a start still waiting for the consent dialog never begins capture
     if (recognitionRef.current && isListeningRef.current) {
       recognitionRef.current.stop();
+      isListeningRef.current = false;
       setIsListening(false);
     }
   }, [clearMicTimeout]);

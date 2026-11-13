@@ -111,6 +111,8 @@ export class VoiceCommandService {
   private sttUnavailable: string | null = null;
   /** Bumped by dispose(): an engine setup still running then releases what it built instead of publishing it. */
   private lifecycle = 0;
+  /** Unsubscribes from local-only switches; held from the first engine setup until dispose(). */
+  private webSpeechWatch: (() => void) | null = null;
   private eventListeners: VoiceEventListener[] = [];
 
   constructor(config: Partial<VoiceServiceConfig> = {}) {
@@ -133,8 +135,6 @@ export class VoiceCommandService {
     this.feedbackService = new FeedbackService();
     this.feedbackService.setFeedbackLevel(this.config.feedbackLevel);
     this.feedbackService.setMuted(this.config.ttsMuted);
-    // QNBS-v3 (#1261): local-only outranks consent, so a switch to it ends a running Web Speech session at once.
-    onWebSpeechBlocked(() => this.endWebSpeechSession());
   }
 
   /** Ends a running or starting session on an engine that is not declared local; a local engine keeps running. */
@@ -220,6 +220,8 @@ export class VoiceCommandService {
         this.initWakeWord(),
       ]);
       if (!(await this.adoptEngines(lifecycle, engines))) return false;
+      // QNBS-v3 (#1261): sessions exist only from here on; a local-only switch ends a running Web Speech session, dispose() unsubscribes.
+      this.webSpeechWatch ??= onWebSpeechBlocked(() => this.endWebSpeechSession());
 
       this.isInitialized = true;
       logger.info('Voice Command Service initialized successfully');
@@ -724,6 +726,8 @@ export class VoiceCommandService {
 
   async dispose(): Promise<void> {
     this.lifecycle += 1;
+    this.webSpeechWatch?.();
+    this.webSpeechWatch = null;
     await this.stopListening();
     this.isDictating = false;
     this.cancelSpeech();

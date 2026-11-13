@@ -760,6 +760,24 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     },
   );
 
+  it('dispose releases its subscription to AI-mode switches', async () => {
+    storeConsent(true);
+    buildsNext(sttEngine());
+    await service.initialize();
+    const end = vi.spyOn(
+      service as unknown as { endWebSpeechSession: () => void },
+      'endWebSpeechSession',
+    );
+    setActiveAiMode('eco');
+    expect(end).toHaveBeenCalledTimes(1);
+
+    await service.dispose();
+    setActiveAiMode('hybrid');
+    setActiveAiMode('local');
+
+    expect(end).toHaveBeenCalledTimes(1);
+  });
+
   it('a switch to a local-only AI mode keeps a local engine running', async () => {
     storeConsent(false);
     const engine = buildsNext(sttEngine(true));
