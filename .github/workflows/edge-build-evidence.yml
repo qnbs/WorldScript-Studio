@@ -1,0 +1,35 @@
+# Evidence branch only (never merged), #1272: the Vercel/Cloudflare edge build of main failed the worker-bundle guard
+# (assets/duckdbMigration-*.js inlines TypeScript as data:video/mp2t) while the Pages build passes. This builds both
+# targets on the same commit and reports which source each inlined data URL holds.
+name: Edge build evidence (#1272)
+
+on:
+  push:
+    branches: [evidence/edge-build-1272]
+
+permissions:
+  contents: read
+
+jobs:
+  builds:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [edge, pages]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Build
+        id: build
+        continue-on-error: true
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [ "$TARGET" = "edge" ]; then pnpm run build:edge; else pnpm run build; fi
+      - name: Report inlined TypeScript and worker files
+        if: always()
+        run: node scripts/evidence/inline-report.mjs dist
