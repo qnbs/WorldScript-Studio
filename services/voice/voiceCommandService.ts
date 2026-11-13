@@ -43,7 +43,11 @@ import type {
   WakeWordEngine,
 } from './voiceTypes';
 import { createWakeWordEngine } from './wakeWordEngine';
-import { ensureWebSpeechConsent } from './webSpeechConsent';
+import {
+  ensureWebSpeechConsent,
+  isWebSpeechBlocked,
+  WEB_SPEECH_LOCAL_ONLY_MESSAGE,
+} from './webSpeechConsent';
 
 export type GetStateFn = () => RootState;
 
@@ -441,7 +445,12 @@ export class VoiceCommandService {
       return this.refuseStart(new Error(this.sttUnavailable ?? 'No STT engine available'));
     // QNBS-v3 (#1261): fail closed, only an engine that declares itself local starts without the stored Web Speech consent.
     if (engine.isLocal !== true && !(await ensureWebSpeechConsent()))
-      return this.refuseStart(new ConsentRequiredError());
+      return this.refuseStart(
+        // A local-only AI mode outranks any stored consent; say so instead of asking for consent.
+        isWebSpeechBlocked()
+          ? new Error(WEB_SPEECH_LOCAL_ONLY_MESSAGE)
+          : new ConsentRequiredError(),
+      );
     return engine;
   }
 

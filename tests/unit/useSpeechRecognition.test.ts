@@ -2,7 +2,11 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { appStoreRef } from '../../app/storeRef';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
-import { registerWebSpeechConsentPrompt } from '../../services/voice/webSpeechConsent';
+import { setActiveAiMode } from '../../services/ai/aiModeService';
+import {
+  registerWebSpeechConsentPrompt,
+  WEB_SPEECH_LOCAL_ONLY_MESSAGE,
+} from '../../services/voice/webSpeechConsent';
 
 beforeEach(() => {
   // jsdom has no SpeechRecognition — ensure it's absent
@@ -180,6 +184,39 @@ describe('useSpeechRecognition (with mocked SpeechRecognition)', () => {
       expect(result.current.isListening).toBe(false);
     },
   );
+
+  // #1261, maintainer decision of 2026-11-13: a local-only AI mode outranks the stored consent at every editor
+  // microphone (dictation button, text fields, command palette), whether it starts or toggles.
+  it.each(['start', 'toggle'] as const)(
+    'in a local-only AI mode the mic never starts Web Speech (%s)',
+    async (via) => {
+      setActiveAiMode('local');
+      try {
+        expect(await start(true, grantInDialog, via)).toEqual({
+          started: 0,
+          listening: false,
+          asked: 0,
+        });
+      } finally {
+        setActiveAiMode('hybrid');
+      }
+    },
+  );
+
+  it('in a local-only AI mode the mic says why it stays off', async () => {
+    installSpeechRecognition();
+    consentStore(true);
+    setActiveAiMode('eco');
+    try {
+      const { result } = renderHook(() => useSpeechRecognition());
+      await act(async () => {
+        await result.current.startListening();
+      });
+      expect(result.current.micError).toBe(WEB_SPEECH_LOCAL_ONLY_MESSAGE);
+    } finally {
+      setActiveAiMode('hybrid');
+    }
+  });
 
   it('the mic toggle asks for consent the same way', async () => {
     expect(await start(false, async () => false, 'toggle')).toEqual({

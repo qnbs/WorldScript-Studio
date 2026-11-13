@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { logger } from '../services/logger';
-import { ensureWebSpeechConsent } from '../services/voice/webSpeechConsent';
+import {
+  ensureWebSpeechConsent,
+  isWebSpeechBlocked,
+  WEB_SPEECH_LOCAL_ONLY_MESSAGE,
+} from '../services/voice/webSpeechConsent';
 import type { ISpeechRecognition } from '../types';
 
 const LANG_PREFERENCES = ['de-DE', 'de-AT', 'en-US', 'en-GB'];
@@ -124,6 +128,11 @@ export const useSpeechRecognition = () => {
   const startListening = useCallback(async () => {
     const recognition = recognitionRef.current;
     if (!recognition || isListeningRef.current) return;
+    // QNBS-v3 (#1261): a local-only AI mode blocks Web Speech outright, whatever consent is stored; tell the user why.
+    if (isWebSpeechBlocked()) {
+      setMicError(WEB_SPEECH_LOCAL_ONLY_MESSAGE);
+      return;
+    }
     const request = ++startRequestRef.current;
     // QNBS-v3 (#1261): Web Speech sends the audio to the browser vendor; no start without the stored consent.
     if (!(await ensureWebSpeechConsent())) return;
