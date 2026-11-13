@@ -9,5 +9,4 @@
 export const DUCKDB_ANALYTICS_AVAILABLE = false;
 
 /** Why every DuckDB call is refused in this build. */
-export const DUCKDB_UNAVAILABLE_REASON =
-  'DuckDB analytics are not available in this version (#716).';
+export const DUCKDB_UNAVAILABLE_REASON = 'DuckDB analytics are not available in this version.';
