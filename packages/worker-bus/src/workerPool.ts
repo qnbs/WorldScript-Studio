@@ -103,6 +103,14 @@ export class WorkerPool {
     return worker;
   }
 
+  /**
+   * A worker of this pool answered a task: its script runs, so earlier crashes and a pool failure no longer count.
+   * A release alone proves nothing (a cancelled task is released without an answer, #1278).
+   */
+  markWorkerHealthy(workerId: string): void {
+    if (this.entries.some((entry) => entry.instance.workerId === workerId)) this.markHealthy();
+  }
+
   onAvailable(listener: () => void): () => void {
     this.availabilityListeners.add(listener);
     return () => this.availabilityListeners.delete(listener);
@@ -116,7 +124,6 @@ export class WorkerPool {
       return;
     }
     this.setIdle(worker.workerId);
-    this.markHealthy();
     entry.idleTimer = setTimeout(() => {
       if (this.entries.length > this.options.minWorkers) {
         this.terminateEntry(entry);
