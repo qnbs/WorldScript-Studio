@@ -1,0 +1,46 @@
+# Throwaway evidence workflow for the v1.29.7 qualification. It lives only on an evidence branch and is never merged.
+# It repeats instance-lock-platforms.yml on the candidate's unchanged instance_lock.rs, compiled with rustc 1.100.0, the compiler of the desktop bundles.
+name: Instance lock evidence
+
+on:
+  push:
+    branches:
+      - 'evidence/instance-lock-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: instance-lock-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  instance-lock:
+    name: Writers lock on rustc 1.100.0 (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-26-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install rustc 1.100.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.100.0 --profile minimal
+          rustup default 1.100.0
+          rustc --version | grep -F 'rustc 1.100.0'
+      - name: Compile and run the instance-lock tests (std only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --version
+          ext=""
+          if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
+          bin="${RUNNER_TEMP}/instance_lock_tests${ext}"
+          rustc --edition 2021 --test src-tauri/src/instance_lock.rs -o "$bin"
+          "$bin" --test-threads=1
