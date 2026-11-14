@@ -195,6 +195,70 @@ describe('workerBusManager', () => {
     expect(mockShutdown).not.toHaveBeenCalled();
   });
 
+  it('shutdown invalidates a pending start before it can allocate or publish a bus', async () => {
+    const manager = await import('../../services/workerBusManager');
+    const starting = manager.initWorkerBus();
+    await manager.shutdownWorkerBus();
+    await starting;
+    expect(manager.getWorkerBus()).toBeNull();
+    expect(manager.getLegacyAdapter()).toBeNull();
+    expect(MockWorkBus).not.toHaveBeenCalled();
+    expect(mockInstall).not.toHaveBeenCalled();
+  });
+
+  it('a fresh start after a stop does not share the invalidated initialization', async () => {
+    const manager = await import('../../services/workerBusManager');
+    const oldStart = manager.initWorkerBus();
+    await manager.shutdownWorkerBus();
+    const newStart = manager.initWorkerBus();
+    const concurrentStart = manager.initWorkerBus();
+    await Promise.all([oldStart, newStart, concurrentStart]);
+    expect(manager.isWorkerBusReady()).toBe(true);
+    expect(MockWorkBus).toHaveBeenCalledOnce();
+    expect(mockInstall).toHaveBeenCalledOnce();
+    await manager.shutdownWorkerBus();
+  });
+
+  it('repeated stops invalidate a pending start and still allow on-demand inference later', async () => {
+    const manager = await import('../../services/workerBusManager');
+    const starting = manager.initWorkerBus();
+    await manager.shutdownWorkerBus();
+    await manager.shutdownWorkerBus();
+    await starting;
+    expect(manager.isWorkerBusReady()).toBe(false);
+    const bus = await manager.ensureInferencePool();
+    expect(bus).not.toBeNull();
+    expect(MockWorkBus).toHaveBeenCalledOnce();
+    await manager.shutdownWorkerBus();
+  });
+
+  it.each(['ensureDuckDbPool', 'ensureInferencePool'] as const)(
+    '%s does not re-register a pool on a bus stopped while options were loading',
+    async (ensurePool) => {
+      const manager = await import('../../services/workerBusManager');
+      await manager.initWorkerBus();
+      mockHasPool.mockReturnValue(false);
+      const ensuring = manager[ensurePool]();
+      await manager.shutdownWorkerBus();
+      expect(await ensuring).toBeNull();
+      expect(mockRegisterPool).not.toHaveBeenCalled();
+    },
+  );
+
+  it('cleans up a partially installed bus and permits a later retry', async () => {
+    const manager = await import('../../services/workerBusManager');
+    mockInstall.mockImplementationOnce(() => {
+      throw new Error('pool installation failed');
+    });
+    await manager.initWorkerBus();
+    expect(manager.isWorkerBusReady()).toBe(false);
+    expect(manager.getLegacyAdapter()).toBeNull();
+    expect(mockShutdown).toHaveBeenCalledOnce();
+    await manager.initWorkerBus();
+    expect(manager.isWorkerBusReady()).toBe(true);
+    await manager.shutdownWorkerBus();
+  });
+
   it('initWorkerBusOnStartup(false) does not initialize', async () => {
     const { initWorkerBusOnStartup, isWorkerBusReady } = await import(
       '../../services/workerBusManager'

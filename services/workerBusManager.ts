@@ -13,6 +13,7 @@ let _adapter: LegacyWorkerBusAdapter | null = null;
 // QNBS-v3: CodeAnt — hold the in-flight init promise so concurrent callers AWAIT it instead of
 //          returning early while `_bus` is still null (which caused sporadic main-thread fallback).
 let _initPromise: Promise<void> | null = null;
+let _generation = 0;
 
 /** Returns the active WorkerBus v2 instance, or null if not yet initialized. */
 export function getWorkerBus(): WorkerBus | null {
@@ -49,11 +50,13 @@ export async function initWorkerBus(): Promise<void> {
   // QNBS-v3: CodeAnt — concurrent callers share the single in-flight init promise (and await it),
   //          so none returns before `_bus` is set.
   if (_initPromise) return _initPromise;
-  _initPromise = doInitWorkerBus();
+  const initialization = doInitWorkerBus(_generation);
+  _initPromise = initialization;
   try {
-    await _initPromise;
+    await initialization;
   } finally {
-    _initPromise = null;
+    // QNBS-v3: an invalidated start may finish after a new start; only its own promise may be cleared.
+    if (_initPromise === initialization) _initPromise = null;
   }
 }
 
@@ -75,6 +78,7 @@ async function duckDbPoolOptions() {
 async function reRegisterDuckDbPool(bus: WorkerBus): Promise<void> {
   if (bus.hasPool('duckdb')) return;
   const options = await duckDbPoolOptions();
+  if (bus !== _bus) return;
   bus.registerPool('duckdb', options.capabilities, options);
 }
 
@@ -113,10 +117,12 @@ async function resolveInferenceMaxWorkers(): Promise<number> {
 async function reRegisterInferencePool(bus: WorkerBus): Promise<void> {
   if (bus.hasPool('inference')) return;
   const options = await inferencePoolOptions();
+  if (bus !== _bus) return;
   bus.registerPool('inference', options.capabilities, options);
 }
 
-async function doInitWorkerBus(): Promise<void> {
+async function doInitWorkerBus(generation: number): Promise<void> {
+  let candidate: WorkerBus | null = null;
   try {
     const {
       WorkerBus,
@@ -130,6 +136,10 @@ async function doInitWorkerBus(): Promise<void> {
       MAX_PREEMPTIONS,
     } = await import('@domain/worker-bus');
 
+    const inferenceOptions = await inferencePoolOptions();
+    const duckdbOptions = await duckDbPoolOptions();
+    // QNBS-v3: resolve asynchronous options before allocating resources, and refuse a start invalidated by shutdown.
+    if (generation !== _generation) return;
     const bus = new WorkerBus({
       maxQueueSize: MAX_QUEUE_SIZE,
       maxPreemptions: MAX_PREEMPTIONS,
@@ -141,17 +151,16 @@ async function doInitWorkerBus(): Promise<void> {
       deadLetterCapacity: DEAD_LETTER_CAPACITY,
       enableTracing: false,
     });
+    candidate = bus;
 
     const registry = new WorkerRegistry();
 
-    const inferenceOptions = await inferencePoolOptions();
     registry.register({
       poolId: 'inference',
       capabilities: inferenceOptions.capabilities,
       options: inferenceOptions,
     });
 
-    const duckdbOptions = await duckDbPoolOptions();
     registry.register({
       poolId: 'duckdb',
       capabilities: duckdbOptions.capabilities,
@@ -188,11 +197,17 @@ async function doInitWorkerBus(): Promise<void> {
     });
 
     registry.install(bus);
+    const adapter = new LegacyWorkerBusAdapter(bus);
     _bus = bus;
-    _adapter = new LegacyWorkerBusAdapter(bus);
+    _adapter = adapter;
 
     log.info('WorkerBus v2 initialized', { pools: ['inference', 'webllm', 'duckdb', 'plugin'] });
   } catch (err) {
+    try {
+      await candidate?.shutdown();
+    } catch (cleanupError) {
+      log.warn('WorkerBus v2 initialization cleanup failed', cleanupError);
+    }
     log.error(
       'WorkerBus v2 initialization failed',
       err instanceof Error ? err : new Error(String(err)),
@@ -264,6 +279,9 @@ export async function ensureInferencePool(): Promise<WorkerBus | null> {
  * Called when the feature flag is disabled or the app unmounts.
  */
 export async function shutdownWorkerBus(): Promise<void> {
+  // QNBS-v3: stop invalidates pending initialization even before a bus exists; a later explicit start gets a fresh promise.
+  _generation += 1;
+  _initPromise = null;
   if (_bus === null) return;
   const bus = _bus;
   _bus = null;

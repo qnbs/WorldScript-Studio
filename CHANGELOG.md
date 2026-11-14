@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Background worker lifecycle:** Stopping the worker bus while it is still starting now cancels that start, so it cannot become active again after the stop. A later explicit start still works. Pool registration that finishes after shutdown is discarded, and a failed initialization releases its partially installed bus (#552).
+
 - **Release records:** The v1.29.7 evidence record is now `VERIFIED`: signed tag, the three tag runs (all succeeded on the first attempt), 25 release assets whose SHA-256 digests match the GitHub asset digests and whose sizes and CRC32 values match the tag build, all seven `latest.json` entries checked against the shipped updater key and bound to `version:1.29.7`, the served updater endpoint byte-identical to the release asset, both macOS payloads thin `arm64` and `x86_64`, and the GHCR image (`1.29.7`, `1.29` and `latest` on one digest, DOMPurify 3.4.17 inside). The README release badge shows v1.29.7. Installed-app self-update and functional checks are not part of this evidence (#1217) (PR #1291).
 
 ## [1.29.7] — 2026-11-14
