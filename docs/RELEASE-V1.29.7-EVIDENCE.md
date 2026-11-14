@@ -14,8 +14,8 @@ and separate maintainer authorization (#1277).
 - **Desktop saving after a crash (#831):** a project lock left behind by a crash blocked saving.
   The desktop app now recovers it through an app-data instance lock (#1270).
 - **Voice privacy (#1261, #556, #1265):**
-  - browser speech recognition (Web Speech), which sends audio to the browser vendor, asks for
-    consent before every start (#1276, #1279);
+  - browser speech recognition (Web Speech), which sends audio to the browser vendor, checks the
+    stored consent before every start and asks only when none is stored (#1276, #1279);
   - the Local and Eco AI modes block Web Speech whatever consent is stored (#1284);
   - an explicit offline engine choice is honoured, and Kokoro is reported as unavailable (#1279);
   - local Whisper dictation works in the published app: ONNX Runtime loads its WASM from the app
