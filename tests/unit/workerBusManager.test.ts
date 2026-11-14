@@ -259,6 +259,26 @@ describe('workerBusManager', () => {
     await manager.shutdownWorkerBus();
   });
 
+  it('settles a failed initialization even when cleanup rejects and permits a later retry', async () => {
+    const manager = await import('../../services/workerBusManager');
+    const installationError = new Error('pool installation failed');
+    mockInstall.mockImplementationOnce(() => {
+      throw installationError;
+    });
+    mockShutdown.mockRejectedValueOnce(new Error('candidate shutdown failed'));
+    await expect(manager.initWorkerBus()).resolves.toBeUndefined();
+    expect(mockShutdown).toHaveBeenCalledOnce();
+    expect(manager.isWorkerBusReady()).toBe(false);
+    expect(manager.getLegacyAdapter()).toBeNull();
+    expect(mockLogError).toHaveBeenCalledWith(
+      'WorkerBus v2 initialization failed',
+      installationError,
+    );
+    await manager.initWorkerBus();
+    expect(manager.isWorkerBusReady()).toBe(true);
+    await manager.shutdownWorkerBus();
+  });
+
   it('initWorkerBusOnStartup(false) does not initialize', async () => {
     const { initWorkerBusOnStartup, isWorkerBusReady } = await import(
       '../../services/workerBusManager'
