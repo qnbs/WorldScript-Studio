@@ -5910,7 +5910,7 @@ dependencies = [
 
 [[package]]
 name = "worldscript-studio"
-version = "1.29.6"
+version = "1.29.7"
 dependencies = [
  "base64 0.23.1",
  "log",
