@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- release-candidate: v1.29.7 -->
+- **Release records:** The v1.29.7 evidence record is now `VERIFIED`: signed tag, the three tag runs (all succeeded on the first attempt), 25 release assets whose SHA-256 digests match the GitHub asset digests and whose sizes and CRC32 values match the tag build, all seven `latest.json` entries checked against the shipped updater key and bound to `version:1.29.7`, the served updater endpoint byte-identical to the release asset, both macOS payloads thin `arm64` and `x86_64`, and the GHCR image (`1.29.7`, `1.29` and `latest` on one digest, DOMPurify 3.4.17 inside). The README release badge shows v1.29.7. Installed-app self-update and functional checks are not part of this evidence (#1217) (PR #1291).
 
 ## [1.29.7] — 2026-11-14
+
+_Published on 2026-11-14: desktop installers for Linux, Windows, macOS Apple Silicon and macOS Intel, the updater, and the container image (GHCR `1.29.7`, `1.29` and `latest`)._
 
 - **Release status:** 1.29.7 is an interim stabilization release after 1.29.6. The background workers of the published app now ship as bundled JavaScript and restart only within a limit; they had shipped as raw TypeScript and restarted without end. The desktop app recovers a project lock that a crash left behind, so saving works again. Voice privacy is tighter: browser speech recognition (Web Speech), which sends audio to the browser vendor, checks the stored consent before every start, asks only when none is stored, and never runs in the Local or Eco AI mode; an explicit offline engine choice is honoured; local Whisper dictation works in the published app, because its runtime no longer loads from a CDN that the security policy blocks; and dictation and listening sessions no longer take over each other's microphone state. Voice stays off by default. DuckDB analytics are switched off in this version, because their start-up never finished in the published app; analytics files already in the browser are left as they are. New security advisories in the desktop app's QUIC library and in the basic-ftp dependency are fixed. Voice error messages are still shown in English (#1282). The container image is rebuilt from the same commit. The installers are still not OS-signed: Apple notarization, Developer ID and Windows Authenticode are deferred by maintainer decision (#574), and the README explains how to verify a download and allow one launch. The version is prepared in PR #1289.
 
