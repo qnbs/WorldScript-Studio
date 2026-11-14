@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import voiceSliceReducer, {
   appendVoiceTranscript,
+  reportVoiceIssue,
   resetVoiceState,
   setDictationActive,
   setLastConfidence,
@@ -56,6 +57,14 @@ describe('voiceSlice', () => {
     const s2 = voiceSliceReducer(s1, setVoiceError('microphone denied'));
     expect(s2.error).toBe('microphone denied');
     expect(s2.mode).toBe('inactive');
+  });
+
+  // #1265: a skipped window ended the session in the UI while the microphone kept recording.
+  it('reports a recoverable issue without ending the session', () => {
+    const dictating = voiceSliceReducer(initialState, setVoiceMode('dictating'));
+    const next = voiceSliceReducer(dictating, reportVoiceIssue('a recording window was skipped'));
+    expect(next.error).toBe('a recording window was skipped');
+    expect(next.mode).toBe('dictating');
   });
 
   it('sets confidence', () => {

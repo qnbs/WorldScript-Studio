@@ -79,6 +79,10 @@ export const voiceSlice = createSlice({
         state.processing = false;
       }
     },
+    /** Shows a message without ending the session: capture continues after a skipped or unreadable window (#1265). */
+    reportVoiceIssue: (state, action: PayloadAction<string>) => {
+      state.error = action.payload;
+    },
     setVoiceTranscript: (state, action: PayloadAction<string>) => {
       state.transcript = action.payload;
     },
@@ -138,6 +142,7 @@ export const voiceSlice = createSlice({
 export const {
   setVoiceMode,
   setVoiceError,
+  reportVoiceIssue,
   setVoiceTranscript,
   appendVoiceTranscript,
   setVoiceProcessing,

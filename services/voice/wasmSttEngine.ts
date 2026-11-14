@@ -7,7 +7,7 @@
 import type { VoiceSttEngine } from '../../types';
 import { logger } from '../logger';
 import type { AudioStreamConfig, SttEngine, SttResult } from './voiceTypes';
-import { DEFAULT_AUDIO_CONFIG } from './voiceTypes';
+import { DEFAULT_AUDIO_CONFIG, RecoverableSttError } from './voiceTypes';
 
 const MODEL_ID = 'Xenova/whisper-tiny.en';
 /** Length of one recording window; every window is transcribed on its own. */
@@ -123,6 +123,11 @@ async function decodeWindow(ctx: AudioContext, chunks: Blob[]): Promise<Float32A
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
+}
+
+/** A failure of one window; capture goes on, so the session stays active (#1265). */
+function windowError(error: unknown): RecoverableSttError {
+  return new RecoverableSttError(toError(error).message);
 }
 
 /** Runs a consumer callback; a throwing consumer must not break the transcription queue. */
@@ -299,7 +304,9 @@ export class WasmSttEngine implements SttEngine {
   private queueTranscription(session: CaptureSession, chunks: Blob[]): Promise<void> {
     if (this.queuedWindows >= MAX_QUEUED_WINDOWS) {
       // QNBS-v3 (#556): a bounded backlog; a skipped window is reported instead of letting the queue and the stop latency grow.
-      if (this.isLive(session)) deliver(() => session.onError(new Error(BACKLOG_MESSAGE)));
+      if (this.isLive(session)) {
+        deliver(() => session.onError(new RecoverableSttError(BACKLOG_MESSAGE)));
+      }
       return this.transcription;
     }
     this.queuedWindows += 1;
@@ -329,7 +336,7 @@ export class WasmSttEngine implements SttEngine {
     } catch (error) {
       // QNBS-v3 (#556): a window that cannot be decoded is reported, not dropped without a word.
       logger.warn('[WasmSttEngine] Audio decode error:', error);
-      if (this.isLive(session)) deliver(() => session.onError(toError(error)));
+      if (this.isLive(session)) deliver(() => session.onError(windowError(error)));
       return;
     }
     // QNBS-v3 (#556): a window without speech never reaches Whisper, which writes "you" for silence.
@@ -347,7 +354,7 @@ export class WasmSttEngine implements SttEngine {
       text = transcriptOf(await transcribe(audioData, { sampling_rate: this.config.sampleRate }));
     } catch (err) {
       logger.warn('[WasmSttEngine] Whisper inference error:', err);
-      if (this.isLive(session)) deliver(() => session.onError(toError(err)));
+      if (this.isLive(session)) deliver(() => session.onError(windowError(err)));
       return;
     }
     if (text && this.isLive(session)) {

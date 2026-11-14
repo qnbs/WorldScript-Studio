@@ -386,3 +386,203 @@ describe('VoiceActivityCoordinator stop during start (#1261)', () => {
     expect(mockAudioCtxInstance.createScriptProcessor).not.toHaveBeenCalled();
   });
 });
+
+// #1265: stop() waited for the whole flush chain, including a restart that can sit on a microphone prompt.
+describe('VoiceActivityCoordinator stop during a restart (#1265)', () => {
+  it.each([
+    ['the late restart finishes after it', false, false],
+    ['another session takes the engine over first', false, true],
+    // The restart's completion is queued before stop() resumes from its await on the drain.
+    ['the restart finishes right as stop() begins', true, false],
+  ] as const)(
+    'stop() cancels a pending restart and the engine is left alone afterwards: %s',
+    async (_case, finishFirst, anotherSession) => {
+      let finishRestart!: () => void;
+      const vad = makeVad({
+        processChunk: vi
+          .fn()
+          .mockResolvedValueOnce({ startMs: 0, endMs: 20, isSpeech: true })
+          .mockResolvedValueOnce({ startMs: 20, endMs: 40, isSpeech: false })
+          .mockResolvedValue(null),
+      });
+      const stt = makeStt({
+        start: vi
+          .fn()
+          .mockResolvedValueOnce(undefined)
+          .mockImplementationOnce(() => new Promise<void>((resolve) => (finishRestart = resolve))),
+      });
+      const coordinator = new VoiceActivityCoordinator(vad, stt);
+      await coordinator.start(vi.fn(), vi.fn());
+      const frame = new Float32Array(4096).fill(0.1);
+      const fire = () =>
+        (mockScriptProcessor.onaudioprocess as (e: unknown) => void)({
+          inputBuffer: { getChannelData: () => frame },
+        });
+      fire();
+      await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(1));
+      fire(); // silence: drain, then a restart that waits
+      await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(2));
+
+      if (finishFirst) finishRestart();
+      await coordinator.stop(); // must not wait for the pending restart, but stops the engine itself
+      expect(stt.stop).toHaveBeenCalledTimes(2); // the drain, then the cancel of the pending restart
+
+      // e.g. dictation takes the engine over right after the stop
+      if (anotherSession) await stt.start(vi.fn(), vi.fn());
+      finishRestart();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(stt.stop).toHaveBeenCalledTimes(2);
+    },
+  );
+});
+
+// #1265: once stop() cancelled a pending restart, a newer session may own the engine; the old start's failure is not its error.
+describe('VoiceActivityCoordinator failed restart (#1265)', () => {
+  // CodeAnt on 56c25efb: a synchronous throw was handled with the generation current when the catch ran, after a stop.
+  it.each([
+    ['after a stop cancelled it', 'reject', true, 0],
+    ['while the coordinator still runs', 'reject', false, 1],
+    ['with a stop queued before its error is handled', 'throw', true, 0],
+    ['while the coordinator still runs', 'throw', false, 1],
+  ] as const)(
+    'a restart that fails %s (start: %s, stopped first: %s) reports the error %i times',
+    async (_when, failure, stopFirst, reported) => {
+      let failRestart: (error: Error) => void = () => {};
+      let coordinator: VoiceActivityCoordinator | null = null;
+      const throwing = () => {
+        if (stopFirst) queueMicrotask(() => void coordinator?.stop());
+        throw new Error('microphone request failed');
+      };
+      const rejecting = () => new Promise<void>((_resolve, reject) => (failRestart = reject));
+      const vad = makeVad({
+        processChunk: vi
+          .fn()
+          .mockResolvedValueOnce({ startMs: 0, endMs: 20, isSpeech: true })
+          .mockResolvedValueOnce({ startMs: 20, endMs: 40, isSpeech: false })
+          .mockResolvedValue(null),
+      });
+      const stt = makeStt({
+        start: vi
+          .fn()
+          .mockResolvedValueOnce(undefined)
+          .mockImplementationOnce(failure === 'throw' ? throwing : rejecting),
+      });
+      const onError = vi.fn();
+      coordinator = new VoiceActivityCoordinator(vad, stt);
+      await coordinator.start(vi.fn(), onError);
+      const frame = new Float32Array(4096).fill(0.1);
+      const fire = () =>
+        (mockScriptProcessor.onaudioprocess as (e: unknown) => void)({
+          inputBuffer: { getChannelData: () => frame },
+        });
+      fire();
+      await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(1));
+      fire(); // silence: drain, then a restart that will fail
+      await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(2));
+
+      if (failure === 'reject') {
+        if (stopFirst) await coordinator.stop();
+        failRestart(new Error('microphone request failed'));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(onError).toHaveBeenCalledTimes(reported);
+    },
+  );
+
+  // CodeRabbit on 36522c36: a cancelled restart that settled late cleared the flag of a newer restart, so stop() skipped it.
+  it.each(['finishes', 'fails'] as const)(
+    'a cancelled restart that %s after a newer restart began leaves that restart to the next stop()',
+    async (settling) => {
+      let settleOld: () => void = () => {};
+      const vad = makeVad({
+        processChunk: vi
+          .fn()
+          .mockResolvedValueOnce({ startMs: 0, endMs: 20, isSpeech: true })
+          .mockResolvedValueOnce({ startMs: 20, endMs: 40, isSpeech: false })
+          .mockResolvedValueOnce({ startMs: 40, endMs: 60, isSpeech: true })
+          .mockResolvedValueOnce({ startMs: 60, endMs: 80, isSpeech: false })
+          .mockResolvedValue(null),
+      });
+      const oldRestart = () =>
+        new Promise<void>((resolve, reject) => {
+          settleOld = () => (settling === 'finishes' ? resolve() : reject(new Error('late')));
+        });
+      const stt = makeStt({
+        start: vi
+          .fn()
+          .mockResolvedValueOnce(undefined)
+          .mockImplementationOnce(oldRestart) // restart A, e.g. waiting on a microphone prompt
+          .mockResolvedValueOnce(undefined)
+          .mockImplementationOnce(() => new Promise<void>(() => {})), // restart B, pending at the last stop
+      });
+      const coordinator = new VoiceActivityCoordinator(vad, stt);
+      const frame = new Float32Array(4096).fill(0.1);
+      const fire = () =>
+        (mockScriptProcessor.onaudioprocess as (e: unknown) => void)({
+          inputBuffer: { getChannelData: () => frame },
+        });
+      const utterance = async (starts: number) => {
+        fire();
+        await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(starts));
+        fire(); // silence: drain, then a restart that waits
+        await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(starts + 1));
+      };
+      await coordinator.start(vi.fn(), vi.fn());
+      await utterance(1);
+      await coordinator.stop(); // cancels restart A
+      await coordinator.start(vi.fn(), vi.fn());
+      await utterance(3);
+      settleOld();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const stops = vi.mocked(stt.stop).mock.calls.length;
+
+      await coordinator.stop();
+
+      expect(stt.stop).toHaveBeenCalledTimes(stops + 1); // restart B is cancelled as well
+    },
+  );
+
+  // CodeRabbit on cf80f07f: a speech frame during a drain or a pending restart started the engine a second time.
+  it.each(['drain', 'pending restart'] as const)(
+    'a speech frame during a %s does not start the engine a second time',
+    async (phase) => {
+      let release: () => void = () => {};
+      const held = () => new Promise<void>((resolve) => (release = resolve));
+      const vad = makeVad({
+        processChunk: vi
+          .fn()
+          .mockResolvedValueOnce({ startMs: 0, endMs: 20, isSpeech: true })
+          .mockResolvedValueOnce({ startMs: 20, endMs: 40, isSpeech: false })
+          .mockResolvedValueOnce({ startMs: 40, endMs: 60, isSpeech: true })
+          .mockResolvedValue(null),
+      });
+      const stt =
+        phase === 'drain'
+          ? makeStt({ stop: vi.fn().mockImplementationOnce(held).mockResolvedValue(undefined) })
+          : makeStt({
+              start: vi.fn().mockResolvedValueOnce(undefined).mockImplementationOnce(held),
+            });
+      const starts = phase === 'drain' ? 1 : 2; // the drain holds the restart back; a pending restart is a start
+      const coordinator = new VoiceActivityCoordinator(vad, stt);
+      await coordinator.start(vi.fn(), vi.fn());
+      const frame = new Float32Array(4096).fill(0.1);
+      const fire = () =>
+        (mockScriptProcessor.onaudioprocess as (e: unknown) => void)({
+          inputBuffer: { getChannelData: () => frame },
+        });
+      fire();
+      await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(1));
+      fire(); // silence: a drain, then a restart
+      await vi.waitFor(() => expect(stt.stop).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(stt.start).toHaveBeenCalledTimes(starts));
+
+      fire(); // speech while the drain or the restart is still pending
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(stt.start).toHaveBeenCalledTimes(starts);
+      release();
+      await coordinator.stop();
+    },
+  );
+});

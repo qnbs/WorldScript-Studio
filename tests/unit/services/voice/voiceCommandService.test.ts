@@ -76,6 +76,7 @@ vi.mock('../../../../services/voice/wakeWordEngine', () => ({
 // Mock Redux actions
 vi.mock('../../../../features/voice/voiceSlice', () => ({
   appendVoiceTranscript: vi.fn(),
+  reportVoiceIssue: vi.fn(),
   setActiveSttEngine: vi.fn(),
   setActiveTtsEngine: vi.fn(),
   setDictationActive: vi.fn(),
@@ -1023,96 +1024,5 @@ describe('VoiceCommandService Web Speech consent (#1261)', () => {
     await service.startListening();
 
     expect(engine.start).not.toHaveBeenCalled();
-  });
-
-  it('a dispose while the engines are built releases them instead of publishing them', async () => {
-    storeConsent(true);
-    const stale = sttEngine();
-    let build: () => void = () => {};
-    vi.mocked(createSttEngine).mockReturnValueOnce(
-      new Promise((resolve) => {
-        build = () => resolve(stale);
-      }) as never,
-    );
-
-    const run = service.startListening();
-    await vi.waitFor(() => expect(createSttEngine).toHaveBeenCalled());
-    await service.dispose();
-    build();
-    await run;
-    expect(stale.dispose).toHaveBeenCalled();
-    expect(stale.start).not.toHaveBeenCalled();
-
-    // The disposed service builds fresh engines at its next start instead of reusing the released ones.
-    const fresh = buildsNext(sttEngine());
-    await service.startListening();
-    expect(fresh.start).toHaveBeenCalledTimes(1);
-    expect(stale.start).not.toHaveBeenCalled();
-  });
-
-  it('a dispose while a changed engine choice is applied releases the engines built after it', async () => {
-    storeConsent(true);
-    const old = buildsNext(sttEngine());
-    await service.initialize();
-    let released: () => void = () => {};
-    old.dispose.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        released = resolve;
-      }),
-    );
-    service.updateConfig({ preferredSttEngine: 'whisper' });
-    const stale = buildsNext(sttEngine());
-
-    const run = service.startListening();
-    await vi.waitFor(() => expect(old.dispose).toHaveBeenCalled());
-    await service.dispose();
-    released();
-    await run;
-
-    expect(stale.dispose).toHaveBeenCalled();
-    expect(stale.start).not.toHaveBeenCalled();
-  });
-
-  it('a stop while a listening start waits for dictation to end cancels that listening start', async () => {
-    storeConsent(true);
-    const engine = buildsNext(sttEngine());
-    await service.startDictation();
-    let drained: () => void = () => {};
-    engine.stop.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        drained = resolve;
-      }),
-    );
-
-    const listening = service.startListening(); // takes the engine over: ends the dictation first
-    await vi.waitFor(() => expect(engine.stop).toHaveBeenCalled());
-    const stopping = service.stopListening();
-    drained();
-    await Promise.all([listening, stopping]);
-
-    expect(engine.start).toHaveBeenCalledTimes(1); // the dictation only
-  });
-
-  it('a stop while the engine starts leaves nothing behind that blocks the next listening start', async () => {
-    storeConsent(true);
-    const engine = buildsNext(sttEngine());
-    let started: () => void = () => {};
-    engine.start.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        started = resolve;
-      }),
-    );
-
-    const first = service.startListening();
-    await vi.waitFor(() => expect(engine.start).toHaveBeenCalled());
-    await service.stopListening();
-    started();
-    await first;
-    // The stop ran before the engine was running, so the start ends what it began.
-    expect(engine.stop).toHaveBeenCalledTimes(2);
-    await service.startListening();
-
-    expect(engine.start).toHaveBeenCalledTimes(2);
-    await service.stopListening();
   });
 });

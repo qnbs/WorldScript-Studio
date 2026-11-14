@@ -7,6 +7,7 @@ import type { AppDispatch, RootState } from '../../app/store';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import {
   appendVoiceTranscript,
+  reportVoiceIssue,
   setActiveSttEngine,
   setActiveTtsEngine,
   setDictationActive,
@@ -42,6 +43,7 @@ import type {
   VoiceEventListener,
   WakeWordEngine,
 } from './voiceTypes';
+import { RecoverableSttError } from './voiceTypes';
 import { createWakeWordEngine } from './wakeWordEngine';
 import {
   ensureWebSpeechConsent,
@@ -53,6 +55,8 @@ import {
 export type GetStateFn = () => RootState;
 
 type BuiltEngines = [SttEngine | null, TtsEngine | null, VadEngine | null, WakeWordEngine | null];
+/** Applies one store write of an engine setup, or drops it once a dispose voided that setup (#1265). */
+type SetupWrite = (write: () => void) => void;
 
 /** Config keys that decide which engines exist; changing one rebuilds the engines on the next start. */
 const ENGINE_CONFIG_KEYS = [
@@ -103,6 +107,8 @@ export class VoiceCommandService {
   /** Bumped by every dictation stop: a dictation start that is still preparing then never starts the engine. */
   private dictationClaim = 0;
   private dictationStop: Promise<void> | null = null;
+  /** The command-listening stop in progress; a second stop awaits it instead of tearing down again. */
+  private commandStop: Promise<void> | null = null;
   /** Settles when a command-listening start finishes, so a dictation start can take over only afterwards. */
   private listeningStart: Promise<void> | null = null;
   /** Bumped by every command-listening stop: a start still building engines or waiting for consent then never starts the engine. */
@@ -187,48 +193,53 @@ export class VoiceCommandService {
   private ensureEngines(): Promise<boolean> {
     // Taken before the engine-choice change, so a dispose during that change also voids the engines built after it.
     const lifecycle = this.lifecycle;
-    this.engineSetup ??= this.applyEngineChoice()
-      .then(() => this.initialize(lifecycle))
-      .finally(() => {
-        this.engineSetup = null;
-      });
+    if (!this.engineSetup) {
+      const setup: Promise<boolean> = this.applyEngineChoice()
+        .then(() => this.initialize(lifecycle))
+        .finally(() => {
+          // QNBS-v3 (#1265): dispose() drops a pending setup, so a stale one must not clear the setup that replaced it.
+          if (this.engineSetup === setup) this.engineSetup = null;
+        });
+      this.engineSetup = setup;
+    }
     return this.engineSetup;
   }
 
   async initialize(lifecycle = this.lifecycle): Promise<boolean> {
+    // QNBS-v3 (#1265): a setup a dispose voided is never ready, builds nothing and leaves the engine-choice flag alone.
+    if (lifecycle !== this.lifecycle) return false;
     if (this.isInitialized) return true;
     // A change from here on (even while the engines below are being built) is applied by the next start.
     this.engineChoiceChanged = false;
 
     try {
       await this.intentEngine.initialize();
+      const write = this.writesFor(lifecycle);
 
       // Request microphone permission early
       const permission = await this.requestMicrophonePermission();
       if (permission !== 'granted') {
         logger.warn('Microphone permission not granted');
-        this.d(setMicrophonePermission(permission));
+        write(() => this.d(setMicrophonePermission(permission)));
         return false;
       }
-      this.d(setMicrophonePermission('granted'));
+      write(() => this.d(setMicrophonePermission('granted')));
 
       // Initialize engines in parallel
       const engines: BuiltEngines = await Promise.all([
-        this.initStt(),
-        this.initTts(),
-        this.initVad(),
-        this.initWakeWord(),
+        this.initStt(write),
+        this.initTts(write),
+        this.initVad(write),
+        this.initWakeWord(write),
       ]);
       if (!(await this.adoptEngines(lifecycle, engines))) return false;
-      // QNBS-v3 (#1261): sessions exist only from here on; a local-only switch ends a running Web Speech session, dispose() unsubscribes.
-      this.webSpeechWatch ??= onWebSpeechBlocked(() => this.endWebSpeechSession());
-
-      this.isInitialized = true;
       logger.info('Voice Command Service initialized successfully');
       return true;
     } catch (err) {
       logger.error('Voice initialization failed:', err);
-      this.d(setVoiceError(err instanceof Error ? err.message : 'Voice initialization failed'));
+      // QNBS-v3 (#1265): a setup a dispose voided must not report against the session that replaced it.
+      if (lifecycle === this.lifecycle)
+        this.d(setVoiceError(err instanceof Error ? err.message : 'Voice initialization failed'));
       return false;
     }
   }
@@ -237,17 +248,29 @@ export class VoiceCommandService {
   private async adoptEngines(lifecycle: number, engines: BuiltEngines): Promise<boolean> {
     // QNBS-v3 (#1261): the disposed service owns none of these, so publishing them would leak them and revive the service.
     if (lifecycle !== this.lifecycle) {
-      await Promise.all(engines.map((engine) => engine?.dispose()));
+      // A voided setup's cleanup failure belongs to no session, so it is only logged (#1265).
+      await this.disposeAll(engines, 'Releasing engines from a voided setup failed');
       return false;
     }
     [this.sttEngine, this.ttsEngine, this.vadEngine, this.wakeWordEngine] = engines;
+    // QNBS-v3 (#1265): set with the engines, before any await, so a dispose right after adoption is never undone.
+    this.isInitialized = true;
+    // QNBS-v3 (#1261): sessions exist only from here on; a local-only switch ends a running Web Speech session, dispose() unsubscribes.
+    this.webSpeechWatch ??= onWebSpeechBlocked(() => this.endWebSpeechSession());
     if (engines[1]) this.feedbackService.setTtsEngine(engines[1]);
     return true;
   }
 
-  private async initStt(): Promise<SttEngine | null> {
+  /** The store writes of one setup: a voided setup must not overwrite the status of the session that replaced it (#1265). */
+  private writesFor(lifecycle: number): SetupWrite {
+    return (write) => {
+      if (lifecycle === this.lifecycle) write();
+    };
+  }
+
+  private async initStt(write: SetupWrite): Promise<SttEngine | null> {
     try {
-      this.d(setSttStatus('loading'));
+      write(() => this.d(setSttStatus('loading')));
       // QNBS-v3: B5 — eco-mode overrides STT to lightweight WebSpeech to save power
       const eco = ecoModeService.isEcoMode();
       const engine = await createSttEngine({
@@ -256,60 +279,66 @@ export class VoiceCommandService {
         enableVoiceWasm: this.config.enableVoiceWasm,
         allowCloudFallback: this.config.allowCloudFallback,
       });
-      this.d(setActiveSttEngine(engine.id));
-      this.d(setSttStatus('ready'));
-      this.sttUnavailable = null;
+      write(() => {
+        this.d(setActiveSttEngine(engine.id));
+        this.d(setSttStatus('ready'));
+        this.sttUnavailable = null;
+      });
       return engine;
     } catch (err) {
       logger.warn('STT initialization failed:', err);
-      this.d(setSttStatus('error'));
-      // e.g. LOCAL_STT_UNAVAILABLE_MESSAGE: a local-only choice with Whisper off says why, and how to recover.
-      this.sttUnavailable = err instanceof Error ? err.message : null;
+      write(() => {
+        this.d(setSttStatus('error'));
+        // e.g. LOCAL_STT_UNAVAILABLE_MESSAGE: a local-only choice with Whisper off says why, and how to recover.
+        this.sttUnavailable = err instanceof Error ? err.message : null;
+      });
       return null;
     }
   }
 
-  private async initTts(): Promise<TtsEngine | null> {
+  private async initTts(write: SetupWrite): Promise<TtsEngine | null> {
     try {
-      this.d(setTtsStatus('loading'));
+      write(() => this.d(setTtsStatus('loading')));
       // QNBS-v3: B5 — eco-mode overrides TTS to WebSpeech to avoid heavy Kokoro/Piper models
       const eco = ecoModeService.isEcoMode();
       const engine = await createTtsEngine({
         preferredEngine: eco ? 'webSpeech' : this.config.preferredTtsEngine,
         enableVoiceWasm: this.config.enableVoiceWasm,
       });
-      this.d(setActiveTtsEngine(engine.id));
-      this.d(setTtsStatus('ready'));
+      write(() => {
+        this.d(setActiveTtsEngine(engine.id));
+        this.d(setTtsStatus('ready'));
+      });
       return engine;
     } catch (err) {
       logger.warn('TTS initialization failed:', err);
-      this.d(setTtsStatus('error'));
+      write(() => this.d(setTtsStatus('error')));
       return null;
     }
   }
 
-  private async initVad(): Promise<VadEngine | null> {
+  private async initVad(write: SetupWrite): Promise<VadEngine | null> {
     try {
-      this.d(setVadStatus('loading'));
+      write(() => this.d(setVadStatus('loading')));
       const engine = await createVadEngine(this.config.enableVoiceWasm);
-      this.d(setVadStatus('ready'));
+      write(() => this.d(setVadStatus('ready')));
       return engine;
     } catch (err) {
       logger.warn('VAD initialization failed:', err);
-      this.d(setVadStatus('error'));
+      write(() => this.d(setVadStatus('error')));
       return null;
     }
   }
 
-  private async initWakeWord(): Promise<WakeWordEngine | null> {
+  private async initWakeWord(write: SetupWrite): Promise<WakeWordEngine | null> {
     try {
-      this.d(setWakeWordStatus('loading'));
+      write(() => this.d(setWakeWordStatus('loading')));
       const engine = await createWakeWordEngine(this.config.wakeWordPhrase);
-      this.d(setWakeWordStatus('ready'));
+      write(() => this.d(setWakeWordStatus('ready')));
       return engine;
     } catch (err) {
       logger.warn('Wake-word initialization failed:', err);
-      this.d(setWakeWordStatus('error'));
+      write(() => this.d(setWakeWordStatus('error')));
       return null;
     }
   }
@@ -407,9 +436,11 @@ export class VoiceCommandService {
   }
 
   async startDictation(): Promise<void> {
+    // QNBS-v3 (#1265): a stop issued while this start waits for the previous drain is newer and wins.
+    const claimBeforeDrain = this.dictationClaim;
     await this.dictationStop;
     // QNBS-v3 (#556): claimed before any await, so a second start cannot pass this check while the first prepares.
-    if (this.isDictating) return;
+    if (this.isDictating || this.dictationClaim !== claimBeforeDrain) return;
     this.isDictating = true;
     const claim = ++this.dictationClaim;
     try {
@@ -422,7 +453,7 @@ export class VoiceCommandService {
       this.d(setDictationActive(true));
       this.d(setVoiceError(null));
       this.emit({ type: 'dictation-started', timestamp: Date.now() });
-      await this.startDictationEngine(engine);
+      await this.startDictationEngine(engine, claim);
     } catch (err) {
       if (claim === this.dictationClaim) this.isDictating = false;
       throw err;
@@ -434,17 +465,19 @@ export class VoiceCommandService {
     const ready = await this.ensureEngines();
     if (claim !== this.dictationClaim) return null; // stopped or released during the setup: never ask for consent
     if (!ready) throw new Error('Voice service could not be initialized');
-    return this.admitStt();
+    return this.admitStt(() => claim === this.dictationClaim);
   }
 
   /** The engine a listening start may use, or null when a stop or release came in while it was preparing. */
   private async prepareListening(claim: number): Promise<SttEngine | null> {
     // A running dictation ends before the engine setup may replace the engines it uses.
     await this.endDictationBeforeListening();
+    // QNBS-v3 (#1265): a direct-STT teardown may still be draining; a start in that window would open a session no stop ends.
+    await this.commandStop;
     const ready = await this.ensureEngines();
     if (claim !== this.listeningClaim) return null; // stopped or released during the setup: never ask for consent
     if (!ready) throw new Error('Voice service could not be initialized');
-    const stt = await this.admitStt();
+    const stt = await this.admitStt(() => claim === this.listeningClaim);
     return claim === this.listeningClaim ? stt : null;
   }
 
@@ -453,19 +486,22 @@ export class VoiceCommandService {
    * stored consent, read right before the start; the consent dialog asks when none is stored. A stop or release while
    * the dialog is open bumps the caller's claim, so that start then ends without the engine.
    */
-  private async admitStt(): Promise<SttEngine> {
+  private async admitStt(isCurrent: () => boolean): Promise<SttEngine | null> {
     const engine = this.sttEngine;
     if (!engine)
       return this.refuseStart(new Error(this.sttUnavailable ?? 'No STT engine available'));
     // QNBS-v3 (#1261): fail closed, only an engine that declares itself local starts without the stored Web Speech consent.
     if (engine.isLocal !== true && !(await ensureWebSpeechConsent()))
-      return this.refuseStart(
-        // A local-only AI mode outranks any stored consent; say so instead of asking for consent.
-        isWebSpeechBlocked()
-          ? new Error(WEB_SPEECH_LOCAL_ONLY_MESSAGE)
-          : new ConsentRequiredError(),
-      );
+      // QNBS-v3 (#1265): a start the user already stopped while the dialog was open ends quietly instead of failing.
+      return isCurrent() ? this.refuseStart(this.webSpeechRefusal()) : null;
     return engine;
+  }
+
+  /** Why Web Speech may not start: a local-only AI mode outranks any stored consent; otherwise consent is missing. */
+  private webSpeechRefusal(): Error {
+    return isWebSpeechBlocked()
+      ? new Error(WEB_SPEECH_LOCAL_ONLY_MESSAGE)
+      : new ConsentRequiredError();
   }
 
   /** Reports why a start cannot use an engine (listening and dictation alike), then fails that start. */
@@ -478,6 +514,8 @@ export class VoiceCommandService {
   private async endListeningBeforeDictation(): Promise<void> {
     await this.listeningStart;
     if (this.coordinator || this.listeningTimer) await this.stopCommandListening();
+    // A direct-STT teardown may still be draining; dictation must not open a session during it (#1265).
+    await this.commandStop;
   }
 
   /** Listening takes the engine over from a running dictation instead of sharing its session. */
@@ -485,17 +523,19 @@ export class VoiceCommandService {
     if (this.isDictating || this.dictationStop) await this.stopDictation();
   }
 
-  private async startDictationEngine(engine: SttEngine): Promise<void> {
+  private async startDictationEngine(engine: SttEngine, claim: number): Promise<void> {
     try {
       await engine.start(
         (result) => this.handleDictationResult(result),
         (error) => this.handleSttError(error),
       );
     } catch (err) {
-      // QNBS-v3 (#556): a failed start (e.g. the Whisper model cannot load offline) must not leave dictation shown as active.
-      this.isDictating = false;
-      this.d(setDictationActive(false));
-      this.d(setVoiceError(err instanceof Error ? err.message : 'Dictation could not start'));
+      // QNBS-v3 (#556, #1265): a failed start must not leave dictation shown as active, but only while it still owns the session.
+      if (claim === this.dictationClaim) {
+        this.isDictating = false;
+        this.d(setDictationActive(false));
+        this.d(setVoiceError(err instanceof Error ? err.message : 'Dictation could not start'));
+      }
       throw err;
     }
   }
@@ -510,13 +550,24 @@ export class VoiceCommandService {
     await this.stopCommandListening();
   }
 
-  private async stopCommandListening(): Promise<void> {
+  /** Ends command listening and cancels a start that is still preparing. */
+  private stopCommandListening(): Promise<void> {
     this.listeningClaim += 1;
-    await this.endCommandListening();
+    return this.endCommandListening();
   }
 
-  /** Ends a running command-listening session; unlike a stop it leaves a start that is still preparing alone. */
-  private async endCommandListening(): Promise<void> {
+  /**
+   * Ends a running command-listening session; unlike a stop it leaves a start that is still preparing alone.
+   * QNBS-v3 (#1265): concurrent calls (a timeout and a dictation hand-off) share one teardown.
+   */
+  private endCommandListening(): Promise<void> {
+    this.commandStop ??= this.teardownCommandListening().finally(() => {
+      this.commandStop = null;
+    });
+    return this.commandStop;
+  }
+
+  private async teardownCommandListening(): Promise<void> {
     if (this.listeningTimer) {
       clearTimeout(this.listeningTimer);
       this.listeningTimer = null;
@@ -580,6 +631,12 @@ export class VoiceCommandService {
   }
 
   private handleSttError(error: Error): void {
+    // QNBS-v3 (#1265): capture goes on after a window problem, so the session must stay shown as active.
+    if (error instanceof RecoverableSttError) {
+      logger.warn('STT window problem:', error.message);
+      this.d(reportVoiceIssue(error.message));
+      return;
+    }
     logger.error('STT error:', error);
     this.d(setVoiceError(error.message));
     this.emit({ type: 'error', payload: error.message, timestamp: Date.now() });
@@ -715,10 +772,33 @@ export class VoiceCommandService {
       // Ends command listening and waits for a draining dictation; never stops the start that is calling this.
       await this.endCommandListening();
       await this.dictationStop;
-      this.cancelSpeech();
-      await Promise.all(engines.map((engine) => engine?.dispose()));
     } catch (error) {
-      logger.warn('Releasing the previous voice engines failed', error);
+      logger.warn('Ending the voice session before an engine change failed', error);
+    }
+    // QNBS-v3 (#1265): released even when ending the session failed; the replacements built next would orphan them.
+    await this.releaseEngines(engines);
+  }
+
+  /** Cancels speech and disposes every given engine; one failure neither stops the others nor the caller. */
+  private async releaseEngines(
+    engines: readonly ({ dispose(): Promise<void> } | null)[],
+  ): Promise<void> {
+    try {
+      this.cancelSpeech();
+    } catch (error) {
+      logger.warn('Cancelling speech before an engine change failed', error);
+    }
+    await this.disposeAll(engines, 'Releasing the previous voice engines failed');
+  }
+
+  /** Disposes every given engine; one failure neither stops the others nor the caller, it is logged. */
+  private async disposeAll(
+    engines: readonly ({ dispose(): Promise<void> } | null)[],
+    failure: string,
+  ): Promise<void> {
+    const released = await Promise.allSettled(engines.map((engine) => engine?.dispose()));
+    for (const result of released) {
+      if (result.status === 'rejected') logger.warn(failure, result.reason);
     }
   }
 
@@ -726,27 +806,40 @@ export class VoiceCommandService {
 
   async dispose(): Promise<void> {
     this.lifecycle += 1;
+    // A start after this builds fresh engines instead of joining a setup this dispose voided (#1265).
+    this.engineSetup = null;
+    // QNBS-v3 (#1265): set before the first await, so a start during this dispose builds fresh engines, never these.
+    this.isInitialized = false;
+    const coordinator = this.coordinator;
+    const engines: BuiltEngines = [
+      this.sttEngine,
+      this.ttsEngine,
+      this.vadEngine,
+      this.wakeWordEngine,
+    ];
     this.webSpeechWatch?.();
     this.webSpeechWatch = null;
-    await this.stopListening();
+    const stopping = this.stopListening();
+    // QNBS-v3 (#1265): cleared before the first await, so a dictation started during this dispose keeps its own state.
     this.isDictating = false;
     this.cancelSpeech();
-
-    // QNBS-v3: coordinator.dispose() handles its own engine teardown when active
-    if (this.coordinator) {
-      await this.coordinator.dispose();
-      this.coordinator = null;
-    } else {
-      await Promise.all([
-        this.sttEngine?.dispose(),
-        this.ttsEngine?.dispose(),
-        this.vadEngine?.dispose(),
-        this.wakeWordEngine?.dispose(),
-      ]);
-    }
-
-    this.isInitialized = false;
+    await stopping;
+    await this.releaseDisposed(coordinator, engines);
     this.eventListeners = [];
+  }
+
+  /** Releases what a dispose took over; engines a start built meanwhile belong to that start and stay. */
+  private async releaseDisposed(
+    coordinator: VoiceActivityCoordinator | null,
+    engines: BuiltEngines,
+  ): Promise<void> {
+    // QNBS-v3: coordinator.dispose() handles its own engine teardown when active
+    if (coordinator && this.coordinator === coordinator) {
+      await coordinator.dispose();
+      this.coordinator = null;
+      return;
+    }
+    await Promise.all(engines.map((engine) => engine?.dispose()));
   }
 
   // ── Onboarding ─────────────────────────────────────────────────────────────

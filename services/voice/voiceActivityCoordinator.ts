@@ -35,8 +35,10 @@ export class VoiceActivityCoordinator {
   private lastVadSpeechState = false;
   // QNBS-v3: guard prevents overlapping flush cycles (stop + restart) on Whisper WASM
   private isFlushing = false;
-  // QNBS-v3 (#556): stop() waits for this, so a flush result arrives before another consumer takes the STT engine.
-  private flushing: Promise<void> = Promise.resolve();
+  // QNBS-v3 (#1265): set while a restart's stt.start() is pending, so stop() cancels it instead of waiting for it.
+  private restarting = false;
+  // QNBS-v3 (#556, #1265): stop() waits for the drain, so a flush result arrives before another consumer takes the STT engine; never for the restart after it, which can wait on a microphone prompt.
+  private draining: Promise<void> = Promise.resolve();
   // QNBS-v3: engines are initialized once per coordinator lifetime, not per start() call
   private isEngineInitialized = false;
   // QNBS-v3 (#1261): bumped by stop(), so a start it overtook never keeps a microphone stream nobody will release.
@@ -72,15 +74,19 @@ export class VoiceActivityCoordinator {
   async stop(): Promise<void> {
     this.generation += 1;
     this.running = false;
+    // Taken before the await: a restart that completes while the drain settles must still be stopped below.
+    const pendingRestart = this.restarting;
     this.teardownAudioCapture();
-    await this.flushing;
-    if (this.isSttActive) {
+    await this.draining;
+    // A pending restart is cancelled here: stopping the engine turns its start into a no-op, so the engine is free.
+    if (this.isSttActive || pendingRestart) {
       try {
         await this.stt.stop();
       } catch (err) {
         log.warn('stt.stop() failed on coordinator stop', { err });
       }
       this.isSttActive = false;
+      this.restarting = false;
     }
     this.resetBufferState();
     this.lastVadSpeechState = false;
@@ -198,7 +204,7 @@ export class VoiceActivityCoordinator {
           this.bufferedDurationMs += chunk.durationMs;
 
           // Activate STT after MIN_SPEECH_CHUNKS of confirmed speech-start events
-          if (!this.isSttActive && this.speechChunkCount >= MIN_SPEECH_CHUNKS) {
+          if (this.mayStartStt()) {
             this.isSttActive = true;
             this.stt.start(onResult, onError).catch((err) => {
               log.error(
@@ -226,6 +232,12 @@ export class VoiceActivityCoordinator {
       });
   }
 
+  /** A new utterance may start STT; never during a drain or a pending restart, which already owns the next start (#1265). */
+  private mayStartStt(): boolean {
+    if (this.isSttActive || this.restarting) return false;
+    return !this.isFlushing && this.speechChunkCount >= MIN_SPEECH_CHUNKS;
+  }
+
   private flushStt(onResult: (result: SttResult) => void, onError: (error: Error) => void): void {
     // QNBS-v3: Guard against overlapping flush cycles. WasmSttEngine.stop() is async
     // (150 ms drain + cleanupAudio); starting STT before stop() resolves races over
@@ -235,27 +247,50 @@ export class VoiceActivityCoordinator {
     this.isSttActive = false;
     this.resetBufferState();
 
-    this.flushing = this.stt
-      .stop()
-      .catch((err) => {
-        log.warn('stt.stop() failed during flush', { err });
-      })
+    this.draining = this.stt.stop().catch((err) => {
+      log.warn('stt.stop() failed during flush', { err });
+    });
+    void this.draining
       .then(() => {
         this.isFlushing = false;
         if (!this.running) return;
         // Restart STT for the next utterance only after stop() has fully resolved
-        return this.stt.start(onResult, onError).then(() => {
-          this.isSttActive = true;
-        });
-      })
-      .catch((err) => {
-        this.isFlushing = false;
-        log.error(
-          'stt.start() failed after flush',
-          err instanceof Error ? err : new Error(String(err)),
+        const generation = this.generation;
+        this.restarting = true;
+        // A start() that throws synchronously rejects this promise, so its failure keeps the restart's generation too.
+        return new Promise<void>((resolve) => resolve(this.stt.start(onResult, onError))).then(
+          () => this.afterRestart(generation),
+          (err: unknown) => this.restartFailed(generation, err, onError),
         );
-        onError(err instanceof Error ? err : new Error(String(err)));
-      });
+      })
+      // Only a throwing error callback lands here; it is logged instead of becoming an unhandled rejection.
+      .catch((err: unknown) => log.warn('Handling a failed restart threw', { err }));
+  }
+
+  /**
+   * A restart whose start failed. Once a stop cancelled it, the engine may serve another session, so it stays quiet,
+   * and it leaves `restarting` alone: that stop already cleared it, and it may now mark a newer restart (#1265).
+   */
+  private restartFailed(generation: number, err: unknown, onError: (error: Error) => void): void {
+    const error = err instanceof Error ? err : new Error(String(err));
+    if (generation !== this.generation) {
+      log.warn('A cancelled restart failed after its stop', { err: error.message });
+      return;
+    }
+    this.restarting = false;
+    log.error('stt.start() failed after flush', error);
+    onError(error);
+  }
+
+  /**
+   * A restart that finished. When a stop came in meanwhile, that stop already stopped the engine, cancelled this start
+   * and cleared `restarting`, which may now mark a newer restart; the engine may serve another session, so all of it
+   * is left alone (#1265).
+   */
+  private afterRestart(generation: number): void {
+    if (generation !== this.generation) return;
+    this.restarting = false;
+    if (this.running) this.isSttActive = true;
   }
 
   private resetBufferState(): void {
