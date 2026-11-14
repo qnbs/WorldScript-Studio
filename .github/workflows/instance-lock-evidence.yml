@@ -38,7 +38,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rustc --version
+          rustc --version --verbose
+          echo "rustc on PATH: $(command -v rustc)"
+          echo "rustup resolves: $(rustup which rustc)"
           ext=""
           if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
           bin="${RUNNER_TEMP}/instance_lock_tests${ext}"
